@@ -19,6 +19,7 @@ const SHIPPED = [
   '0009_listing_content',
   '0010_deleted_identity',
   '0011_ai_controls',
+  '0013_trust_metric_indexes',
 ];
 const LATEST = SHIPPED.at(-1) ?? '';
 

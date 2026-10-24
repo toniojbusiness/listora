@@ -1276,6 +1276,14 @@
           "Name"
         ]
       }
+    },
+    "PublishOutputFnGetAttClusterEB0386A7Arn0CAA3DA3": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ClusterEB0386A7",
+          "Arn"
+        ]
+      }
     }
   },
   "Parameters": {

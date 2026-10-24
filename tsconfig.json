@@ -13,6 +13,7 @@
     { "path": "packages/pricing" },
     { "path": "packages/marketplaces" },
     { "path": "packages/operations" },
+    { "path": "packages/observability" },
     { "path": "packages/tag-parse" },
     { "path": "packages/analysis" },
     { "path": "packages/eval" },

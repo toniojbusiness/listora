@@ -2,6 +2,7 @@ import { assertNever } from '@listora/shared';
 import { Duration } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import type * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -10,6 +11,9 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import type { Construct } from 'constructs';
 
+import { METRIC_NAMESPACE, type TrustMetricName } from '@listora/observability/catalog';
+
+import type { EnvironmentSettings } from '../config.ts';
 import { ListoraStack, type ListoraStackProps } from './common.ts';
 import type { ApiEndpoint, ListoraService } from './compute-stack.ts';
 
@@ -21,17 +25,48 @@ export interface ObservabilityStackProps extends ListoraStackProps {
 
 const GIB = 1024 ** 3;
 
+interface AlarmOptions {
+  comparison?: cloudwatch.ComparisonOperator;
+  evaluationPeriods?: number;
+  datapointsToAlarm?: number;
+  missingData?: cloudwatch.TreatMissingData;
+}
+
+/** Creates the alarm `listora-<environment>-<id>`, notifying the topic on alarm and recovery. */
+type AlarmFactory = (
+  id: string,
+  description: string,
+  metric: cloudwatch.IMetric,
+  threshold: number,
+  options?: AlarmOptions,
+) => void;
+
+/** The fewest tasks the named service (api, worker, or app) runs. */
+function serviceMinimum(settings: EnvironmentSettings, name: string): number {
+  const layout = settings.services;
+  switch (layout.layout) {
+    case 'separate':
+      if (name === 'api' || name === 'worker') return layout[name].minTasks;
+      break;
+    case 'combined':
+      if (name === 'app') return layout.app.minTasks;
+      break;
+    default:
+      assertNever(layout);
+  }
+  throw new Error(`no service named ${name}`);
+}
+
 /**
  * Baseline alarms on the platform: API errors, health, and latency (from the load balancer or
- * the HTTP API, whichever serves the API); service CPU and memory; database CPU, storage,
- * and memory. Every alarm notifies the alarm topic when it fires and
- * when it recovers. Database storage has two signals: the free-storage alarm (autoscaling is
- * not keeping up) and RDS's own low-storage events, which include storage autoscaling
- * reaching its ceiling, so the ceiling alerts well before writes stop. Behind the HTTP API,
- * every unplanned task stop (a crash, an exited container, a failed container health check) is
- * also sent to the topic. Log groups live next to what writes them (compute, migrate, data, network)
- * with the environment's retention. Product SLO alarms (delist latency, verified-success
- * rate, unverified operations, AI cost) are T-32.
+ * the HTTP API, whichever serves the API); running tasks, CPU, and memory per service; database
+ * CPU, storage, and memory. Then the product's trust alarms, on the metrics the worker
+ * publishes (`trustAlarms`). Every alarm notifies the alarm topic when it fires and when it
+ * recovers. Database storage has two signals: the free-storage alarm (autoscaling is not
+ * keeping up) and RDS's own low-storage events, which include storage autoscaling reaching its
+ * ceiling, so the ceiling alerts well before writes stop. Every unplanned task stop (a crash,
+ * an exited container, a failed health check) is also sent to the topic. Log groups live next
+ * to what writes them (compute, migrate, data, network) with the environment's retention.
  */
 export class ObservabilityStack extends ListoraStack {
   readonly alarmTopic: sns.Topic;
@@ -50,18 +85,7 @@ export class ObservabilityStack extends ListoraStack {
     }
     const notify = new cloudwatchActions.SnsAction(this.alarmTopic);
 
-    const alarm = (
-      id: string,
-      description: string,
-      metric: cloudwatch.IMetric,
-      threshold: number,
-      options: {
-        comparison?: cloudwatch.ComparisonOperator;
-        evaluationPeriods?: number;
-        datapointsToAlarm?: number;
-        missingData?: cloudwatch.TreatMissingData;
-      } = {},
-    ): void => {
+    const alarm: AlarmFactory = (id, description, metric, threshold, options = {}) => {
       const created = new cloudwatch.Alarm(this, id, {
         alarmName: `${prefix}-${id}`,
         alarmDescription: description,
@@ -139,26 +163,6 @@ export class ObservabilityStack extends ListoraStack {
           2000,
           { comparison: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD },
         );
-        // No load balancer counts healthy tasks. ECS reports a service's CPU every minute
-        // while a task runs, so minutes without a sample mean no task is running.
-        const apiService = props.services.find(({ service }) =>
-          service.taskDefinition.findContainer('api'),
-        );
-        if (apiService === undefined) throw new Error('no service runs the api container');
-        alarm(
-          'api-no-running-task',
-          `No ${apiService.name} task, so no API, has run for 3 minutes.`,
-          apiService.service.metricCpuUtilization({
-            period: Duration.minutes(1),
-            statistic: 'SampleCount',
-          }),
-          1,
-          {
-            comparison: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-            missingData: cloudwatch.TreatMissingData.BREACHING,
-          },
-        );
-        this.alertOnUnplannedTaskStops(prefix, props.services);
         break;
       }
       default:
@@ -166,6 +170,7 @@ export class ObservabilityStack extends ListoraStack {
     }
 
     for (const { name, service } of props.services) {
+      this.runningTasksAlarm(alarm, settings, name, service);
       alarm(
         `${name}-cpu`,
         `The ${name} service averaged over 85% CPU for 15 minutes (at maximum scale or not scaling).`,
@@ -181,6 +186,9 @@ export class ObservabilityStack extends ListoraStack {
         { comparison: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD },
       );
     }
+
+    this.alertOnUnplannedTaskStops(prefix, props.services);
+    this.trustAlarms(alarm, settings);
 
     const db = props.database;
     // Storage autoscaling grows the volume whenever free space falls below 10% of its size, so
@@ -239,6 +247,112 @@ export class ObservabilityStack extends ListoraStack {
       db.metricFreeableMemory({ period: fiveMinutes, statistic: 'Minimum' }),
       64 * 1024 ** 2,
       { comparison: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD },
+    );
+  }
+
+  /**
+   * `<service>-running-tasks`: the service ran fewer tasks than it should for 3 minutes (a
+   * worker that stops leaves operations unverified while every API alarm stays quiet). With
+   * Container Insights, running is compared with desired. Without it, ECS still reports a
+   * service's CPU every minute from each running task, so the number of samples is the number
+   * of running tasks, held against the service's minimum. Deploys never drop below either:
+   * they start new tasks before stopping old ones (minimum healthy 100%).
+   */
+  private runningTasksAlarm(
+    alarm: AlarmFactory,
+    settings: EnvironmentSettings,
+    name: string,
+    service: ecs.FargateService,
+  ): void {
+    const minute = Duration.minutes(1);
+    const id = `${name}-running-tasks`;
+    if (settings.containerInsights) {
+      const taskCount = (metricName: string, statistic: string): cloudwatch.Metric =>
+        new cloudwatch.Metric({
+          namespace: 'ECS/ContainerInsights',
+          metricName,
+          dimensionsMap: {
+            ClusterName: service.cluster.clusterName,
+            ServiceName: service.serviceName,
+          },
+          statistic,
+          period: minute,
+        });
+      alarm(
+        id,
+        `The ${name} service ran fewer tasks than desired for 3 minutes.`,
+        new cloudwatch.MathExpression({
+          expression: 'desired - running',
+          usingMetrics: {
+            desired: taskCount('DesiredTaskCount', 'Maximum'),
+            running: taskCount('RunningTaskCount', 'Minimum'),
+          },
+          period: minute,
+          label: 'Tasks short of desired',
+        }),
+        1,
+        { missingData: cloudwatch.TreatMissingData.BREACHING },
+      );
+      return;
+    }
+    const minimum = serviceMinimum(settings, name);
+    alarm(
+      id,
+      `The ${name} service ran fewer than its ${String(minimum)} minimum tasks for 3 minutes.`,
+      service.metricCpuUtilization({ period: minute, statistic: 'SampleCount' }),
+      minimum,
+      {
+        comparison: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+        // No samples means no task: exactly the failure this alarm exists for.
+        missingData: cloudwatch.TreatMissingData.BREACHING,
+      },
+    );
+  }
+
+  /**
+   * The product's trust alarms, on the metrics the worker publishes (@listora/observability):
+   * an operation unverified for over 30 minutes, any failed delist, an account's AI cost today
+   * over the threshold, and a connection the seller must link again. Missing data is not
+   * breaching: the worker publishes nothing while it is down, which the running-tasks alarm
+   * covers.
+   */
+  private trustAlarms(alarm: AlarmFactory, settings: EnvironmentSettings): void {
+    const fiveMinutes = Duration.minutes(5);
+    const trust = (metricName: TrustMetricName, statistic: string): cloudwatch.Metric =>
+      new cloudwatch.Metric({
+        namespace: METRIC_NAMESPACE,
+        metricName,
+        statistic,
+        period: fiveMinutes,
+      });
+    alarm(
+      'operation-unverified',
+      'A marketplace operation has gone 30 minutes without a verified result (queued, running, ' +
+        'retrying, or verifying): its status may be wrong or stuck.',
+      trust('OldestUnverifiedOperationAge', 'Maximum'),
+      30 * 60,
+      { evaluationPeriods: 1 },
+    );
+    alarm(
+      'delist-failed',
+      'A delist (end or mark-sold) failed on a marketplace: the item may still be for sale there.',
+      trust('DelistFailed', 'Sum'),
+      1,
+      { evaluationPeriods: 1 },
+    );
+    alarm(
+      'ai-daily-cost',
+      `An account's AI cost today (UTC) reached $${settings.aiDailyCostAlarmUsd.toFixed(2)}.`,
+      trust('AiDailyCostUsd', 'Maximum'),
+      settings.aiDailyCostAlarmUsd,
+      { evaluationPeriods: 1 },
+    );
+    alarm(
+      'connection-needs-relink',
+      'A marketplace connection needs the seller to link it again (reauth_required or revoked).',
+      trust('ConnectionsNeedingRelink', 'Maximum'),
+      1,
+      { evaluationPeriods: 1 },
     );
   }
 

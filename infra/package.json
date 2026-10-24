@@ -11,6 +11,7 @@
   "devDependencies": {
     "@listora/api": "*",
     "@listora/db": "*",
+    "@listora/observability": "*",
     "@listora/shared": "*",
     "@listora/worker": "*",
     "aws-cdk": "^2.1146.1",
