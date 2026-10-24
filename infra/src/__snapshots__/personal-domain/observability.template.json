@@ -148,7 +148,7 @@
         "TreatMissingData": "notBreaching"
       }
     },
-    "apinorunningtask02381CC7": {
+    "apprunningtasks514D0732": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmActions": [
@@ -156,8 +156,8 @@
             "Ref": "Alarms04B5A0BF"
           }
         ],
-        "AlarmDescription": "No app task, so no API, has run for 3 minutes.",
-        "AlarmName": "listora-personal-api-no-running-task",
+        "AlarmDescription": "The app service ran fewer than its 1 minimum tasks for 3 minutes.",
+        "AlarmName": "listora-personal-app-running-tasks",
         "ComparisonOperator": "LessThanThreshold",
         "Dimensions": [
           {
@@ -193,63 +193,6 @@
         "Statistic": "SampleCount",
         "Threshold": 1,
         "TreatMissingData": "breaching"
-      }
-    },
-    "TaskStopped92FAA25A": {
-      "Type": "AWS::Events::Rule",
-      "Properties": {
-        "Description": "Unplanned ECS task stops: crashes, exited containers, failed health checks.",
-        "EventPattern": {
-          "source": [
-            "aws.ecs"
-          ],
-          "detail-type": [
-            "ECS Task State Change"
-          ],
-          "detail": {
-            "clusterArn": [
-              {
-                "Fn::GetStackOutput": {
-                  "StackName": "listora-personal-compute",
-                  "Region": "us-east-1",
-                  "OutputName": "PublishOutputFnGetAttClusterEB0386A7Arn0CAA3DA3"
-                }
-              }
-            ],
-            "group": [
-              "service:app"
-            ],
-            "lastStatus": [
-              "STOPPED"
-            ],
-            "stoppedReason": [
-              {
-                "anything-but": {
-                  "prefix": "Scaling activity initiated by"
-                }
-              }
-            ]
-          }
-        },
-        "Name": "listora-personal-task-stopped",
-        "State": "ENABLED",
-        "Targets": [
-          {
-            "Arn": {
-              "Ref": "Alarms04B5A0BF"
-            },
-            "Id": "Target0",
-            "InputTransformer": {
-              "InputPathsMap": {
-                "detail-group": "$.detail.group",
-                "detail-stoppedReason": "$.detail.stoppedReason",
-                "detail-stopCode": "$.detail.stopCode",
-                "detail-taskArn": "$.detail.taskArn"
-              },
-              "InputTemplate": "\"ECS stopped a <detail-group> task in listora-personal: <detail-stoppedReason> (stop code <detail-stopCode>, task <detail-taskArn>).\""
-            }
-          }
-        ]
       }
     },
     "appcpuF4F70E94": {
@@ -343,6 +286,163 @@
         "Period": 300,
         "Statistic": "Average",
         "Threshold": 85,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "TaskStopped92FAA25A": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Unplanned ECS task stops: crashes, exited containers, failed health checks.",
+        "EventPattern": {
+          "source": [
+            "aws.ecs"
+          ],
+          "detail-type": [
+            "ECS Task State Change"
+          ],
+          "detail": {
+            "clusterArn": [
+              {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-personal-compute",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputFnGetAttClusterEB0386A7Arn0CAA3DA3"
+                }
+              }
+            ],
+            "group": [
+              "service:app"
+            ],
+            "lastStatus": [
+              "STOPPED"
+            ],
+            "stoppedReason": [
+              {
+                "anything-but": {
+                  "prefix": "Scaling activity initiated by"
+                }
+              }
+            ]
+          }
+        },
+        "Name": "listora-personal-task-stopped",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "Alarms04B5A0BF"
+            },
+            "Id": "Target0",
+            "InputTransformer": {
+              "InputPathsMap": {
+                "detail-group": "$.detail.group",
+                "detail-stoppedReason": "$.detail.stoppedReason",
+                "detail-stopCode": "$.detail.stopCode",
+                "detail-taskArn": "$.detail.taskArn"
+              },
+              "InputTemplate": "\"ECS stopped a <detail-group> task in listora-personal: <detail-stoppedReason> (stop code <detail-stopCode>, task <detail-taskArn>).\""
+            }
+          }
+        ]
+      }
+    },
+    "operationunverified5F6E7766": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "A marketplace operation has gone 30 minutes without a verified result (queued, running, retrying, or verifying): its status may be wrong or stuck.",
+        "AlarmName": "listora-personal-operation-unverified",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "MetricName": "OldestUnverifiedOperationAge",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Maximum",
+        "Threshold": 1800,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "delistfailed4FD4395F": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "A delist (end or mark-sold) failed on a marketplace: the item may still be for sale there.",
+        "AlarmName": "listora-personal-delist-failed",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "MetricName": "DelistFailed",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Sum",
+        "Threshold": 1,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "aidailycostF0901007": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "An account's AI cost today (UTC) reached $0.80.",
+        "AlarmName": "listora-personal-ai-daily-cost",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "MetricName": "AiDailyCostUsd",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Maximum",
+        "Threshold": 0.8,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "connectionneedsrelink120D2670": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "A marketplace connection needs the seller to link it again (reauth_required or revoked).",
+        "AlarmName": "listora-personal-connection-needs-relink",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "MetricName": "ConnectionsNeedingRelink",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Maximum",
+        "Threshold": 1,
         "TreatMissingData": "notBreaching"
       }
     },

@@ -936,6 +936,30 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     }
   });
 
+  it('also runs the other jobs it is given, and refuses one named like an engine task', async () => {
+    const payloads: unknown[] = [];
+    const extra = await harness.startWorker({
+      tasks: {
+        extra_job: async (payload) => {
+          payloads.push(payload);
+        },
+      },
+    });
+    await sql`select graphile_worker.add_job('extra_job', json_build_object('n', 1))`.execute(
+      harness.db,
+    );
+    const deadline = Date.now() + 10_000;
+    while (payloads.length === 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    await extra.stop();
+    expect(payloads).toEqual([{ n: 1 }]);
+
+    await expect(
+      harness.startWorker({ tasks: { marketplace_operation: () => Promise.resolve() } }),
+    ).rejects.toThrow("task marketplace_operation is the worker's own");
+  });
+
   it('keeps every history event redacted and in step with the operation row', async () => {
     const listing = await harness.createListing();
     harness.fake.inject({ action: 'create', sku: listing.id, fault: { type: 'server_error' } });

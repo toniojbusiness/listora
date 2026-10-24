@@ -107,8 +107,22 @@ export interface EnvironmentSettings {
   readonly browserRunner: ServiceSize;
   /** CloudWatch Logs retention for service, database, and VPC logs. */
   readonly logRetention: RetentionDays;
+  /**
+   * ECS Container Insights: per-service task counts (and more) at a CloudWatch charge. With
+   * it, the running-tasks alarms compare running with desired tasks; without it, they count
+   * the tasks that report CPU against the service's minimum.
+   */
   readonly containerInsights: boolean;
+  /**
+   * The `ai-daily-cost` alarm fires when one account's AI cost today (UTC) reaches this many
+   * US dollars: before the default daily circuit breaker (`AI_DAILY_BUDGET_USD`, $1) refuses
+   * that account's next call.
+   */
+  readonly aiDailyCostAlarmUsd: number;
 }
+
+/** Most of the default $1 daily AI budget per account (packages/ai). */
+const AI_DAILY_COST_ALARM_USD = 0.8;
 
 /** Headless Chromium wants about a gigabyte per busy page; four leave room for a few. */
 const BROWSER_RUNNER: ServiceSize = { cpu: 1024, memoryMiB: 4096, minTasks: 0, maxTasks: 1 };
@@ -138,6 +152,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.ONE_MONTH,
     containerInsights: false,
+    aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
   },
   prod: {
     protectData: true,
@@ -163,6 +178,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.THREE_MONTHS,
     containerInsights: true,
+    aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
   },
   // One reseller, around 500 items, light traffic, every service running 24/7, at the lowest
   // monthly cost (docs/costs.md has the estimate and the alternatives it beat). The data is
@@ -199,6 +215,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.ONE_WEEK,
     containerInsights: false,
+    aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
   },
 };
 
