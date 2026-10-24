@@ -37,7 +37,8 @@ export function containerEnvironment(
   const common = { DATABASE_URL: databaseUrl, LOG_LEVEL: 'info' };
   switch (container) {
     case 'api':
-      return { API_HOST: '0.0.0.0', API_PORT: String(API_PORT), ...common };
+      // `dev` is the only auth driver this build has; T-31 switches deployed APIs to `cognito`.
+      return { API_HOST: '0.0.0.0', API_PORT: String(API_PORT), AUTH_DRIVER: 'dev', ...common };
     case 'worker':
     case 'migrate':
       return common;

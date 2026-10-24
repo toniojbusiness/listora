@@ -127,6 +127,10 @@
                 "Value": "3000"
               },
               {
+                "Name": "AUTH_DRIVER",
+                "Value": "dev"
+              },
+              {
                 "Name": "DATABASE_URL",
                 "Value": {
                   "Fn::Join": [
