@@ -21,6 +21,12 @@ struct PaletteTests {
     ]
 
     @Test
+    func `controls on photos are readable on the media background`() {
+        #expect(Palette.onMedia.light.contrastRatio(with: Palette.mediaBackground.light) >= Self.minimumTextContrast)
+        #expect(Palette.onMedia.dark.contrastRatio(with: Palette.mediaBackground.dark) >= Self.minimumTextContrast)
+    }
+
+    @Test
     func `RGB parses 0xRRGGBB channels`() {
         let rgb = RGB(hex: 0xFF8000)
         #expect(rgb.red == 1)

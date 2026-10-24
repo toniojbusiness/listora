@@ -65,29 +65,24 @@ which takes the method and URL from `openapi.yaml` and validates every request a
 contract's own schemas, loaded with `loadContractDocument()` (see the API section of
 [docs/architecture.md](../../docs/architecture.md#the-api-appsapi)).
 
-**iOS (Swift).** The app depends on the local package by path, plus a transport. With
-XcodeGen (`apps/ios/project.yml`):
+**iOS (Swift).** The app's `APIClient` package (`apps/ios/Packages/APIClient`) depends on this
+package by local path (its package identity is `swift`, the last path component) and on
+swift-openapi-urlsession for the transport. `APIClient` builds the generated `Client` with the
+signed-in session's bearer token and a timestamp transcoder that accepts the server's
+fractional seconds, and converts error responses to `APIFailure`:
 
-```yaml
-packages:
-  ListoraAPI:
-    path: ../../packages/api-contract/swift
-  OpenAPIURLSession:
-    url: https://github.com/apple/swift-openapi-urlsession
-    from: 1.4.0
-targets:
-  APIClient:
-    dependencies:
-      - package: ListoraAPI
-      - package: OpenAPIURLSession
+```swift
+// apps/ios/Packages/APIClient/Package.swift
+.package(path: "../../../../packages/api-contract/swift"),
+.product(name: "ListoraAPI", package: "swift"),
 ```
 
 ```swift
+import APIClient
 import ListoraAPI
-import OpenAPIURLSession
 
-let client = Client(serverURL: apiBaseURL, transport: URLSessionTransport())
-let output = try await client.createItem(
+let api = APIClient(baseURL: apiBaseURL, accessTokens: tokens)
+let output = try await api.client.createItem(
     headers: .init(idempotencyKey: UUID().uuidString),
     body: .json(.init(details: .init(title: "Vintage denim jacket")))
 )

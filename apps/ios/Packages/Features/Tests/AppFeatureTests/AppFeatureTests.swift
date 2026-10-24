@@ -1,3 +1,4 @@
+import APIClient
 import AppFeature
 import Core
 import Foundation
@@ -17,17 +18,34 @@ struct AppTabTests {
     }
 }
 
+@MainActor
 struct AppDependenciesTests {
-    @Test
-    func `builds the API client from the configured base URL`() throws {
-        let info: [String: Any] = [
-            AppConfiguration.InfoKey.environment: "staging",
-            AppConfiguration.InfoKey.apiBaseURL: "https://api.staging.example.com",
+    private let data = FileManager.default.temporaryDirectory
+        .appending(path: "AppDependenciesTests-\(UUID().uuidString)")
+
+    private func dependencies(
+        environment: String = "staging",
+        url: String = "https://api.staging.example.com",
+        storage: InMemoryAccessGrantStorage = InMemoryAccessGrantStorage(),
+        launchOptions: DebugLaunchOptions = .none,
+    ) throws -> AppDependencies {
+        let bundle = try InfoBundle([
+            AppConfiguration.InfoKey.environment: environment,
+            AppConfiguration.InfoKey.apiBaseURL: url,
             "CFBundleShortVersionString": "1.0",
             "CFBundleVersion": "3",
-        ]
-        let bundle = try InfoBundle(info)
-        let dependencies = try AppDependencies(bundle: bundle.bundle)
+        ])
+        return try AppDependencies(
+            bundle: bundle.bundle,
+            dataDirectory: data,
+            accessGrantStorage: storage,
+            launchOptions: launchOptions,
+        )
+    }
+
+    @Test
+    func `builds the API client from the configured base URL`() throws {
+        let dependencies = try dependencies()
         #expect(dependencies.configuration.environment == .staging)
         #expect(dependencies.apiClient.baseURL.absoluteString == "https://api.staging.example.com")
         #expect(dependencies.version.description == "1.0 (3)")
@@ -37,8 +55,32 @@ struct AppDependenciesTests {
     func `a bundle without configuration fails instead of falling back to a default`() throws {
         let bundle = try InfoBundle([:])
         #expect(throws: ConfigurationError.missing(key: AppConfiguration.InfoKey.environment)) {
-            try AppDependencies(bundle: bundle.bundle)
+            try AppDependencies(
+                bundle: bundle.bundle,
+                dataDirectory: data,
+                accessGrantStorage: InMemoryAccessGrantStorage(),
+            )
         }
+    }
+
+    @Test
+    func `only Dev builds offer the developer sign-in`() throws {
+        #expect(try dependencies().devSignIn == nil)
+        #expect(try dependencies(environment: "dev", url: "http://127.0.0.1:3000").devSignIn != nil)
+    }
+
+    @Test
+    func `the reset launch option starts with no drafts and signed out`() throws {
+        try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: data.appending(path: "leftover"))
+        let grant = AccessGrant(accessToken: "t", expiresAt: .distantFuture, email: "a@b.c")
+        let storage = InMemoryAccessGrantStorage(grant)
+
+        let dependencies = try dependencies(storage: storage, launchOptions: DebugLaunchOptions(resetLocalData: true))
+
+        #expect(dependencies.accessTokens.grant == nil)
+        #expect(!FileManager.default.fileExists(atPath: data.appending(path: "leftover").path(percentEncoded: false)))
+        try? FileManager.default.removeItem(at: data)
     }
 }
 

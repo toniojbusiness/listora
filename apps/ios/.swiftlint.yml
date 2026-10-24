@@ -52,6 +52,11 @@ line_length:
 
 identifier_name:
   excluded:
+    # GRDB's name for the database connection in every closure it passes one to.
+    - db
+    # Drag translations in geometry code.
+    - dx
+    - dy
     - id
     - qr
     - x

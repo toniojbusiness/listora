@@ -69,6 +69,7 @@ targets:
         ListoraEnvironment: $(LISTORA_ENVIRONMENT)
         ListoraAPIBaseURL: $(API_BASE_URL)
         ITSAppUsesNonExemptEncryption: false
+        NSCameraUsageDescription: Listora uses the camera to photograph the items you sell.
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UIApplicationSceneManifest:
@@ -133,7 +134,13 @@ targets:
     type: bundle.ui-testing
     platform: iOS
     sources:
-      - ListoraUITests
+      - path: ListoraUITests
+        excludes:
+          - Fixtures
+      # Photos the UI tests import through the app's debug fixture import, kept as one folder.
+      - path: ListoraUITests/Fixtures
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: Listora
     settings:
@@ -158,6 +165,7 @@ schemes:
         - package: DesignSystem/DesignSystemTests
         - package: APIClient/APIClientTests
         - package: Features/AppFeatureTests
+        - package: Features/AddItemFeatureTests
         - package: Features/SettingsFeatureTests
         - package: Features/TagReadingFeatureTests
     profile:

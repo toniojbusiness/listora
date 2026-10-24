@@ -1,3 +1,4 @@
+import APIClient
 import AppFeature
 import Core
 import Foundation
@@ -5,6 +6,7 @@ import Testing
 
 /// Runs inside the Dev app, so `Bundle.main` is the real app bundle built from project.yml and
 /// Config/Dev.xcconfig.
+@MainActor
 struct AppConfigurationIntegrationTests {
     @Test
     func `the Dev build is configured for the local API`() throws {
@@ -35,5 +37,25 @@ struct AppConfigurationIntegrationTests {
         #expect(primary["CFBundleIconName"] as? String == "AppIcon")
         let assets = try #require(Bundle.main.url(forResource: "Assets", withExtension: "car"))
         #expect(FileManager.default.fileExists(atPath: assets.path))
+    }
+}
+
+/// Runs inside the app, which has the Keychain entitlement the package tests lack.
+struct KeychainAccessGrantStorageTests {
+    @Test
+    func `keeps the session in the Keychain across instances and removes it on sign-out`() {
+        let service = "com.listora.tests.\(UUID().uuidString)"
+        let grant = AccessGrant(
+            accessToken: "token-1",
+            expiresAt: Date(timeIntervalSince1970: 2_000_000_000),
+            email: "a@b.c",
+        )
+        defer { KeychainAccessGrantStorage(service: service).save(nil) }
+
+        KeychainAccessGrantStorage(service: service).save(grant)
+        #expect(KeychainAccessGrantStorage(service: service).load() == grant)
+
+        KeychainAccessGrantStorage(service: service).save(nil)
+        #expect(KeychainAccessGrantStorage(service: service).load() == nil)
     }
 }

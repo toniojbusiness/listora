@@ -80,4 +80,10 @@ public enum Palette {
     public static let success = ColorToken(light: 0x15753A, dark: 0x4ADE80)
     public static let warning = ColorToken(light: 0xA84D08, dark: 0xFBBF24)
     public static let danger = ColorToken(light: 0xB91C1C, dark: 0xF87171)
+
+    // Media: the camera and the crop screen show photos edge to edge on black in both modes, with
+    // white controls on top. `scrim` (used translucent) dims the parts of a photo being cut away.
+    public static let mediaBackground = ColorToken(light: 0x000000, dark: 0x000000)
+    public static let onMedia = ColorToken(light: 0xFFFFFF, dark: 0xFFFFFF)
+    public static let scrim = ColorToken(light: 0x000000, dark: 0x000000)
 }

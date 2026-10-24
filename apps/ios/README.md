@@ -66,13 +66,14 @@ Packages/
   Core/          Models and utilities with no UI: AppConfiguration, AppEnvironment, AppVersion,
                  and the TagReader protocol with its TagReading model
   DesignSystem/  Palette (light and dark colors), Typography, Spacing, Radius, components
-  APIClient/     Listora API client (placeholder until T-03 generates it from OpenAPI)
+  APIClient/     The generated ListoraAPI client over URLSession, the signed-in session (Keychain),
+                 APIFailure (the contract's error model), and the dev sign-in client
   Features/      One library per feature:
     AppFeature        Root tab shell and AppDependencies (composes the features)
     InventoryFeature  Inventory tab
-    AddItemFeature    Add Item tab
+    AddItemFeature    Add Item tab: guided capture, library import, drafts (GRDB), upload queue
     TasksFeature      Tasks tab
-    SettingsFeature   Settings tab
+    SettingsFeature   Settings tab, with the developer sign-in in Dev builds
     TagReadingFeature On-device tag reading with Vision (VisionTagReader); no UI
 ```
 
@@ -100,7 +101,7 @@ the upright photo, then a size-tab pass. That pass re-reads the photo in overlap
 because the whole-photo pass skips or misreads small isolated sizes such as "M", "8", or "XS".
 The result, `TagReading`, holds each line and barcode with its bounding box, and the time each
 pass took. `TagReading.upload` is the `ocrLines` and `barcodes` of the contract's `PhotoCreate`,
-which the capture flow (T-12) sends with the photo. Reading is cancellable: cancel the task and it
+which the upload queue sends with each tag photo. Reading is cancellable: cancel the task and it
 throws `CancellationError` at the next pass or tile.
 
 Vision quirks it handles:
@@ -138,6 +139,52 @@ The current icon is a placeholder: a price tag on the brand teal, drawn by
 ship a real design, export the three PNGs above from the design file, replace the files (keep
 the names, or update `Contents.json`), delete the tool and the `ios-app-icon` target, and run
 `make ios-test` and `make ios-archive`. Both check that the built app names the `AppIcon` asset.
+
+## Add Item: capture, drafts, and uploads
+
+`AddItemFeature` turns photos into a draft on the phone and uploads it in the background.
+`AppDependencies` builds its `AddItemEnvironment`.
+
+- **Capture.** On a device, "Take photos" opens a guided camera (AVFoundation): front, back,
+  tag, then any number of flaws and details, each shot getting its step's role. The simulator
+  has no camera, so it offers "Import photos" (PhotosPicker) only; imported photos get roles from
+  their order (front, back, then detail).
+- **Preparation** (`PhotoPreparation`): every photo is decoded upright, resized to at most 2048
+  px on the long edge, and re-encoded as JPEG without any metadata, so no GPS location leaves
+  the phone. `BlurDetector` scores sharpness (variance of the Laplacian at 1024 px) and capture
+  asks "Retake or keep?" for a blurry shot; the editor marks it.
+- **Editing.** The draft editor reorders (drag, or "Make cover"), removes, crops, and sets each
+  photo's role. Cropping replaces the photo with a new one.
+- **Drafts** live in a GRDB (SQLite) database with the photo files in Application Support
+  (`DraftDatabase`; schema changes only through new migrations). A draft and its upload progress
+  survive the app being closed.
+- **Upload queue** (`PhotoUploader`, steps chosen by the pure `UploadPlanner`). For each draft it
+  creates the server item (`createItem`), and for each photo it reads tag photos on the device
+  (`TagReader`), requests an upload session, sends the bytes from the file through a background
+  `URLSession` (they keep going while the app is suspended), and attaches the file with its role
+  and tag reads. Then it sends role and order changes and deletes what the user removed (a
+  `serverDeletion` row records each). Every request has a stored `Idempotency-Key`, so after a
+  relaunch the queue resumes where it stopped: a photo whose transfer was interrupted first asks
+  `getUploadSession` what arrived. Failures retry by `RetryPolicy` (2 s doubling to 5 minutes,
+  with jitter, 8 attempts), then stop with the server's reason and a Retry button. Nothing is
+  sent while signed out; a `401` signs out and the queue waits for the next sign-in.
+- **Status.** Each photo shows Waiting to upload, Reading tag, Uploading, Retrying (n of 8), Sign
+  in to upload, Upload failed, or Uploaded; "Uploaded" means the server attached the photo with
+  its current role. The draft says "Saved to Listora" only when every photo is attached in order.
+
+The queue's tests (`AddItemFeatureTests`) run the real generated client and URLSession transport
+against `FakeListoraServer` through a `URLProtocol` stub, including resume after a relaunch,
+retries, and failures that stop. The UI tests import the photos in `ListoraUITests/Fixtures`
+through two debug-only launch variables: `LISTORA_FIXTURE_PHOTOS=<folder>` makes "Import photos"
+add that folder's JPEGs, and `LISTORA_RESET_LOCAL_DATA=1` starts with no drafts, signed out.
+
+### Signing in (Dev)
+
+Uploads need a session. Until production sign-in (Cognito, T-31), Dev builds have a developer
+sign-in in Settings: enter an email, tap "Send code", and enter the code the API prints to its
+log (`AUTH_DRIVER=dev`). The session is kept in the Keychain. These `/dev/auth` endpoints are
+outside the OpenAPI contract, so `DevSignInClient` is the one place the app calls the API without
+the generated client.
 
 ## Environments
 

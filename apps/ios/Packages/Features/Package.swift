@@ -1,8 +1,8 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-/// One library per feature. A feature depends on Core and DesignSystem, never on another
-/// feature; AppFeature composes them into the tab shell.
+/// One library per feature. A feature depends on Core, DesignSystem, and (when it talks to the API)
+/// APIClient, never on another feature; AppFeature composes them into the tab shell.
 let package = Package(
     name: "Features",
     platforms: [.iOS(.v18)],
@@ -18,6 +18,10 @@ let package = Package(
         .package(path: "../Core"),
         .package(path: "../DesignSystem"),
         .package(path: "../APIClient"),
+        // The generated contract types (ListoraAPI); the package identity of a local path is its
+        // last path component.
+        .package(path: "../../../../packages/api-contract/swift"),
+        .package(url: "https://github.com/groue/GRDB.swift", from: "7.11.1"),
     ],
     targets: [
         .target(
@@ -34,12 +38,32 @@ let package = Package(
             ],
         ),
         .target(name: "InventoryFeature", dependencies: ["DesignSystem"]),
-        .target(name: "AddItemFeature", dependencies: ["DesignSystem"]),
+        .target(
+            name: "AddItemFeature",
+            dependencies: [
+                "Core",
+                "DesignSystem",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
+        ),
         .target(name: "TasksFeature", dependencies: ["DesignSystem"]),
-        .target(name: "SettingsFeature", dependencies: ["Core", "DesignSystem"]),
+        .target(name: "SettingsFeature", dependencies: ["Core", "DesignSystem", "APIClient"]),
         .target(name: "TagReadingFeature", dependencies: ["Core"]),
-        .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core"]),
-        .testTarget(name: "SettingsFeatureTests", dependencies: ["SettingsFeature", "Core"]),
+        .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient"]),
+        .testTarget(
+            name: "AddItemFeatureTests",
+            dependencies: [
+                "AddItemFeature",
+                "Core",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ],
+            resources: [.copy("Fixtures")],
+        ),
+        .testTarget(name: "SettingsFeatureTests", dependencies: ["SettingsFeature", "Core", "APIClient"]),
         .testTarget(
             name: "TagReadingFeatureTests",
             dependencies: ["TagReadingFeature", "Core"],
