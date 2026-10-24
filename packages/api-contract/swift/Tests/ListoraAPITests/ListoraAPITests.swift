@@ -25,7 +25,8 @@ import Testing
 
         let item = try output.created.body.json
         #expect(item.sku == "AJ-000184")
-        #expect(item.status == .draft)
+        #expect(item.status.value1 == .draft)
+        #expect(item.storageLocation?.code == "B-12")
         #expect(item.details.listPrice?.amountCents == 3400)
         #expect(item.details.listPrice?.currency == .usd)
         #expect(item.listings.first?.statusDisplay.label == "Active (confirmed by eBay)")
@@ -70,6 +71,60 @@ import Testing
         #expect(error.code.value2 == "code_added_later")
         #expect(error.retryable)
         #expect(error.retryAfterSeconds == 30)
+    }
+
+    @Test func unknownEnumValuesDecodeWithoutFailing() async throws {
+        // A marketplace, status, tone, mode, or action added to the server after this client
+        // was built must not break decoding of the listing (and so of every item).
+        let transport = StubTransport(status: .ok, body: futureListingJSON)
+        let client = Client(serverURL: try Servers.Server1.url(), transport: transport)
+
+        let output = try await client.getListing(path: .init(listingId: "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d"))
+
+        let listing = try output.ok.body.json
+        #expect(listing.marketplace.value1 == nil)
+        #expect(listing.marketplace.value2 == "vinted")
+        #expect(listing.mode.value2 == "partner_api")
+        #expect(listing.status.value1 == nil)
+        #expect(listing.status.value2 == "paused")
+        #expect(listing.statusDisplay.tone.value1 == nil)
+        #expect(listing.statusDisplay.label == "Paused on Vinted")
+        #expect(listing.availableActions.map(\.action.value1) == [nil, .end])
+        #expect(listing.availableActions.first?.action.value2 == "share")
+    }
+
+    @Test func unknownMarketplacesAndCapabilitiesKeepTheConnectionList() async throws {
+        let transport = StubTransport(status: .ok, body: connectionsJSON)
+        let client = Client(serverURL: try Servers.Server1.url(), transport: transport)
+
+        let output = try await client.listConnections()
+
+        let connections = try output.ok.body.json.data
+        #expect(connections.map(\.marketplace.value2) == ["ebay", "vinted"])
+        #expect(connections.first?.marketplace.value1 == .ebay)
+        let future = try #require(connections.last)
+        #expect(future.status.value2 == "waitlisted")
+        #expect(future.capabilities.create.value1 == nil)
+        #expect(future.capabilities.create.value2 == "partner_feed")
+        #expect(future.capabilities.saleDetection.map(\.value1) == [.webhook, nil])
+    }
+
+    @Test func bundleSaleDecodesItemsFeesAndProfit() async throws {
+        let transport = StubTransport(status: .ok, body: bundleSaleJSON)
+        let client = Client(serverURL: try Servers.Server1.url(), transport: transport)
+
+        let output = try await client.getSale(path: .init(saleId: "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b"))
+
+        let sale = try output.ok.body.json
+        #expect(sale.items.count == 2)
+        #expect(sale.items.first?.listingId == "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d")
+        #expect(sale.items.last?.listingId == nil)
+        #expect(sale.salePrice.amountCents == 6000)
+        #expect(sale.fees?.map(\._type.value1) == [.marketplace, nil])
+        #expect(sale.fees?.first?.source == .actual)
+        #expect(sale.netProceeds?.amountCents == 5100)
+        #expect(sale.profit?.amountCents == 3100)
+        #expect(sale.shippingCost == nil)
     }
 
     @Test func readinessFailureDecodesAs503() async throws {
@@ -131,8 +186,10 @@ private let itemJSON = """
       "details": {
         "title": "Vintage denim jacket",
         "listPrice": { "amountCents": 3400, "currency": "USD" },
-        "fieldProvenance": { "title": "user" }
+        "fieldProvenance": { "title": "user" },
+        "storageLocationId": "3c2b1a0f-9e8d-4c7b-8a6f-5e4d3c2b1a0f"
       },
+      "storageLocation": { "id": "3c2b1a0f-9e8d-4c7b-8a6f-5e4d3c2b1a0f", "code": "B-12", "label": "Garage shelf 3, bin 12" },
       "photos": [],
       "listings": [
         {
@@ -155,5 +212,85 @@ private let itemJSON = """
       ],
       "createdAt": "2026-10-24T12:00:00Z",
       "updatedAt": "2026-10-24T12:00:00Z"
+    }
+    """
+
+private let futureListingJSON = """
+    {
+      "id": "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d",
+      "itemId": "0b9d4e8a-1c2f-4a5b-8c7d-6e5f4a3b2c1d",
+      "marketplace": "vinted",
+      "mode": "partner_api",
+      "status": "paused",
+      "statusDisplay": { "tone": "paused", "label": "Paused on Vinted" },
+      "variant": {
+        "title": "Levi's Vintage Denim Trucker Jacket Mens M Blue",
+        "description": "Classic trucker jacket.",
+        "price": { "amountCents": 3400, "currency": "USD" }
+      },
+      "availableActions": [{ "action": "share", "mode": "api" }, { "action": "end", "mode": "api" }],
+      "createdAt": "2026-10-24T12:00:00Z",
+      "updatedAt": "2026-10-24T12:00:14Z"
+    }
+    """
+
+private let connectionsJSON = """
+    {
+      "data": [
+        {
+          "marketplace": "ebay",
+          "mode": "api",
+          "status": "connected",
+          "statusDisplay": { "tone": "success", "label": "Connected" },
+          "capabilities": {
+            "connect": "oauth", "create": "api", "updatePrice": "api", "updateDetails": "api",
+            "delist": "api", "relist": "api", "markSold": "not_needed", "verifyRead": "api",
+            "importListings": "api", "saleDetection": ["webhook", "poll"], "imageTransport": "url_fetch"
+          }
+        },
+        {
+          "marketplace": "vinted",
+          "mode": "assisted",
+          "status": "waitlisted",
+          "statusDisplay": { "tone": "neutral", "label": "Coming soon" },
+          "capabilities": {
+            "connect": "none", "create": "partner_feed", "updatePrice": "none", "updateDetails": "none",
+            "delist": "assisted", "relist": "none", "markSold": "assisted", "verifyRead": "user_confirm",
+            "importListings": "none", "saleDetection": ["webhook", "push"], "imageTransport": "user_saves_photos"
+          }
+        }
+      ]
+    }
+    """
+
+private let bundleSaleJSON = """
+    {
+      "id": "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b",
+      "marketplace": "depop",
+      "externalOrderId": "D-1001",
+      "items": [
+        {
+          "itemId": "0b9d4e8a-1c2f-4a5b-8c7d-6e5f4a3b2c1d",
+          "listingId": "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d",
+          "salePrice": { "amountCents": 3400, "currency": "USD" }
+        },
+        {
+          "itemId": "1c0e5f9b-2d3a-4b6c-9d8e-7f6a5b4c3d2e",
+          "salePrice": { "amountCents": 2600, "currency": "USD" }
+        }
+      ],
+      "soldAt": "2026-10-24T13:00:00Z",
+      "salePrice": { "amountCents": 6000, "currency": "USD" },
+      "fees": [
+        { "type": "marketplace", "amount": { "amountCents": 600, "currency": "USD" }, "source": "actual" },
+        { "type": "boost", "amount": { "amountCents": 300, "currency": "USD" }, "source": "estimated" }
+      ],
+      "netProceeds": { "amountCents": 5100, "currency": "USD" },
+      "profit": { "amountCents": 3100, "currency": "USD" },
+      "detectionSource": "webhook",
+      "status": "detected",
+      "isDoubleSale": false,
+      "createdAt": "2026-10-24T13:00:05Z",
+      "updatedAt": "2026-10-24T13:00:05Z"
     }
     """

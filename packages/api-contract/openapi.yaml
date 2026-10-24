@@ -20,6 +20,9 @@ info:
     - **Every POST** requires an `Idempotency-Key` header, so retries after a lost response
       never create a second item, listing, or marketplace action.
     - **Absent means no value.** The server omits a property instead of sending `null`.
+    - **Open enums.** A response value that can grow (marketplaces, statuses, actions,
+      capabilities) is a `Known*` value or any other string, so a new value never breaks an
+      installed app. Clients handle values they do not know.
   contact:
     name: Listora engineering
 servers:
@@ -99,7 +102,7 @@ paths:
           schema:
             type: array
             items:
-              $ref: '#/components/schemas/ItemStatus'
+              $ref: '#/components/schemas/KnownItemStatus'
           style: form
           explode: true
         - name: q
@@ -560,13 +563,13 @@ paths:
         - name: marketplace
           in: query
           schema:
-            $ref: '#/components/schemas/Marketplace'
+            $ref: '#/components/schemas/KnownMarketplace'
         - name: status
           in: query
           schema:
             type: array
             items:
-              $ref: '#/components/schemas/ListingStatus'
+              $ref: '#/components/schemas/KnownListingStatus'
           style: form
           explode: true
         - $ref: '#/components/parameters/Cursor'
@@ -807,7 +810,7 @@ paths:
           schema:
             type: array
             items:
-              $ref: '#/components/schemas/OperationStatus'
+              $ref: '#/components/schemas/KnownOperationStatus'
           style: form
           explode: true
         - $ref: '#/components/parameters/Cursor'
@@ -1086,6 +1089,7 @@ paths:
       parameters:
         - name: itemId
           in: query
+          description: Only sales whose order contains this item.
           schema:
             $ref: '#/components/schemas/Id'
         - name: status
@@ -1093,7 +1097,7 @@ paths:
           schema:
             type: array
             items:
-              $ref: '#/components/schemas/SaleStatus'
+              $ref: '#/components/schemas/KnownSaleStatus'
           style: form
           explode: true
         - $ref: '#/components/parameters/Cursor'
@@ -1114,10 +1118,12 @@ paths:
       operationId: createSale
       summary: Record a sale manually ("Mark sold")
       description: |
-        For sales Listora did not detect itself. Starts the same automatic delist run as a
-        detected sale: every other listing of the item gets a delist operation or an urgent
-        assisted task. A second sale of an already-sold item is recorded with
-        `isDoubleSale: true`.
+        For sales Listora did not detect itself. One sale is one order; a bundle lists several
+        items. Starts the same automatic delist run as a detected sale: every other listing
+        of every item in the order gets a delist operation or an urgent assisted task. A
+        sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+        `422 validation_failed` when an item appears twice or a `listingId` does not belong
+        to its item on `marketplace`.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1373,7 +1379,7 @@ components:
       in: path
       required: true
       schema:
-        $ref: '#/components/schemas/Marketplace'
+        $ref: '#/components/schemas/KnownMarketplace'
 
   responses:
     DefaultError:
@@ -1466,9 +1472,25 @@ components:
         currency:
           $ref: '#/components/schemas/CurrencyCode'
     Marketplace:
+      description: |
+        A `KnownMarketplace`, or a marketplace added after this client was built. Clients show
+        an unknown marketplace generically (its raw id and the server's `statusDisplay`).
+      anyOf:
+        - $ref: '#/components/schemas/KnownMarketplace'
+        - type: string
+          maxLength: 64
+    KnownMarketplace:
       type: string
       enum: [ebay, depop, poshmark, mercari]
     IntegrationMode:
+      description: |
+        A `KnownIntegrationMode`, or a mode added after this client was built. Clients offer
+        nothing that depends on an unknown mode.
+      anyOf:
+        - $ref: '#/components/schemas/KnownIntegrationMode'
+        - type: string
+          maxLength: 64
+    KnownIntegrationMode:
       type: string
       description: |
         `api`: Listora acts through the marketplace's official API and verifies by read-back.
@@ -1476,6 +1498,14 @@ components:
         marketplace app, then confirms.
       enum: [api, assisted]
     StatusTone:
+      description: |
+        A `KnownStatusTone`, or a tone added after this client was built. Clients style an
+        unknown tone like `neutral` and still show the `label`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownStatusTone'
+        - type: string
+          maxLength: 64
+    KnownStatusTone:
       type: string
       description: |
         How to style a status. `success` is used only for states verified by an API read-back
@@ -1513,6 +1543,15 @@ components:
         verifiedAt:
           $ref: '#/components/schemas/Timestamp'
     Provenance:
+      description: |
+        A `KnownProvenance`, or a source added after this client was built. Clients treat an
+        unknown source as not entered by the user (highlight it for review) and send it back
+        unchanged.
+      anyOf:
+        - $ref: '#/components/schemas/KnownProvenance'
+        - type: string
+          maxLength: 64
+    KnownProvenance:
       type: string
       description: Where a field value came from.
       enum: [ai, ocr, barcode, user]
@@ -1635,6 +1674,14 @@ components:
 
     # ---------------------------------------------------------------- items
     ItemStatus:
+      description: |
+        A `KnownItemStatus`, or a status added after this client was built. Clients show an
+        unknown status generically and offer no status-specific action for it.
+      anyOf:
+        - $ref: '#/components/schemas/KnownItemStatus'
+        - type: string
+          maxLength: 64
+    KnownItemStatus:
       type: string
       description: |
         `draft` and `ready` are set by the user; `archived` by the user for an item with no
@@ -1774,6 +1821,9 @@ components:
           minimum: 1
           maximum: 10000
           default: 1
+        storageLocationId:
+          $ref: '#/components/schemas/Id'
+          description: The storage location where the item is kept (for example a bin or shelf).
         acceptedAnalysisId:
           $ref: '#/components/schemas/Id'
         fieldProvenance:
@@ -1818,6 +1868,9 @@ components:
           description: Increases on every change; send it back as `expectedVersion`.
         details:
           $ref: '#/components/schemas/ItemDetails'
+        storageLocation:
+          $ref: '#/components/schemas/StorageLocationSummary'
+          description: Read-only; the location `details.storageLocationId` refers to.
         photos:
           type: array
           description: In display order; the first is the cover.
@@ -1827,10 +1880,54 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Listing'
+        saleSummary:
+          $ref: '#/components/schemas/ItemSaleSummary'
         createdAt:
           $ref: '#/components/schemas/Timestamp'
         updatedAt:
           $ref: '#/components/schemas/Timestamp'
+    StorageLocationSummary:
+      type: object
+      description: Where an item is kept.
+      required: [id, code, label]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+          maxLength: 32
+          description: The short code printed on the bin or shelf, for example `B-12`.
+        label:
+          type: string
+          maxLength: 120
+          description: For example "Garage shelf 3, bin 12".
+    ItemSaleSummary:
+      type: object
+      description: |
+        Read-only result of the item's sale. Present only when the item has sold (status
+        `sold_pending_delist`, `sold`, or `shipped`). For an item sold in a bundle, the
+        order's fees and shipping cost are split across its items in proportion to each
+        item's `salePrice`. A value is absent until it is known.
+      required: [saleId, soldAt, salePrice]
+      properties:
+        saleId:
+          $ref: '#/components/schemas/Id'
+        soldAt:
+          $ref: '#/components/schemas/Timestamp'
+        salePrice:
+          $ref: '#/components/schemas/Money'
+        netProceeds:
+          $ref: '#/components/schemas/Money'
+          description: This item's share of the sale's `netProceeds`.
+        profit:
+          $ref: '#/components/schemas/Money'
+          description: This item's share of `netProceeds`, minus its share of `shippingCost`, minus its `cost`.
+        roiBasisPoints:
+          type: integer
+          format: int32
+          description: |
+            Return on investment, `profit` divided by the item's `cost`, in basis points
+            (12550 is 125.5%). Absent when `profit` is absent or the cost is zero.
     ItemSummary:
       type: object
       description: The item as shown in inventory lists.
@@ -2119,6 +2216,14 @@ components:
       type: string
       enum: [queued, running, completed, failed]
     AnalysisProvenance:
+      description: |
+        A `KnownAnalysisProvenance`, or a source added after this client was built. Clients
+        treat an unknown source like `ai`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownAnalysisProvenance'
+        - type: string
+          maxLength: 64
+    KnownAnalysisProvenance:
       type: string
       description: Where an analyzed value came from (users are not a source inside an analysis).
       enum: [ai, ocr, barcode]
@@ -2295,6 +2400,14 @@ components:
         confidence:
           $ref: '#/components/schemas/Confidence'
     SoldDataSource:
+      description: |
+        A `KnownSoldDataSource`, or a source of real sold data added after this client was
+        built. Clients show the comparables' `label` for an unknown source.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSoldDataSource'
+        - type: string
+          maxLength: 64
+    KnownSoldDataSource:
       type: string
       description: |
         Sources of real sold data. `ai_estimate` and `cost_floor` are deliberately not in this
@@ -2330,6 +2443,14 @@ components:
       type: string
       enum: [quick_sale, recommended, higher_profit]
     PriceBasis:
+      description: |
+        A `KnownPriceBasis`, or a basis added after this client was built. Clients show the
+        tier's `label` for an unknown basis and never present it as sold data.
+      anyOf:
+        - $ref: '#/components/schemas/KnownPriceBasis'
+        - type: string
+          maxLength: 64
+    KnownPriceBasis:
       type: string
       description: What a suggested price is derived from.
       enum: [sold_data, ai_estimate, cost_floor]
@@ -2416,6 +2537,14 @@ components:
 
     # ---------------------------------------------------------------- listings
     ListingStatus:
+      description: |
+        A `KnownListingStatus`, or a status added after this client was built. Clients show
+        the listing's `statusDisplay` for an unknown status and never treat it as success.
+      anyOf:
+        - $ref: '#/components/schemas/KnownListingStatus'
+        - type: string
+          maxLength: 64
+    KnownListingStatus:
       type: string
       description: |
         Lifecycle of one listing. `active` and `ended` are set only after verification
@@ -2423,6 +2552,14 @@ components:
       enum:
         [draft, queued, publishing, active, ending, ended, sold, error, unknown, needs_user_action]
     ListingAction:
+      description: |
+        A `KnownListingAction`, or an action added after this client was built. Clients hide
+        actions they do not know.
+      anyOf:
+        - $ref: '#/components/schemas/KnownListingAction'
+        - type: string
+          maxLength: 64
+    KnownListingAction:
       type: string
       enum: [publish, revise, change_price, end, relist, verify]
     ListingActionAvailability:
@@ -2488,7 +2625,7 @@ components:
       required: [marketplace, variant]
       properties:
         marketplace:
-          $ref: '#/components/schemas/Marketplace'
+          $ref: '#/components/schemas/KnownMarketplace'
         variant:
           $ref: '#/components/schemas/ListingVariant'
     ListingVariantReplace:
@@ -2613,9 +2750,25 @@ components:
 
     # ---------------------------------------------------------------- operations
     OperationKind:
+      description: |
+        A `KnownOperationKind`, or a kind added after this client was built. Clients describe
+        an unknown kind generically using the operation's `statusDisplay`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownOperationKind'
+        - type: string
+          maxLength: 64
+    KnownOperationKind:
       type: string
       enum: [create, revise, price, end, relist, mark_sold, verify]
     OperationStatus:
+      description: |
+        A `KnownOperationStatus`, or a status added after this client was built. Clients show
+        the operation's `statusDisplay` for an unknown status and never treat it as success.
+      anyOf:
+        - $ref: '#/components/schemas/KnownOperationStatus'
+        - type: string
+          maxLength: 64
+    KnownOperationStatus:
       type: string
       description: |
         `succeeded` only after an API read-back confirms the desired state or the user
@@ -2624,6 +2777,14 @@ components:
         blindly. `retrying`: a transient failure, retried with backoff.
       enum: [queued, running, retrying, verifying, succeeded, failed, needs_user_action, canceled]
     OperationOriginType:
+      description: |
+        A `KnownOperationOriginType`, or an origin added after this client was built. Clients
+        show an unknown origin generically.
+      anyOf:
+        - $ref: '#/components/schemas/KnownOperationOriginType'
+        - type: string
+          maxLength: 64
+    KnownOperationOriginType:
       type: string
       enum: [user, auto_delist, reprice_rule]
     OperationOrigin:
@@ -2779,17 +2940,86 @@ components:
 
     # ---------------------------------------------------------------- connections
     ConnectionStatus:
+      description: |
+        A `KnownConnectionStatus`, or a status added after this client was built. Clients
+        show the connection's `statusDisplay` for an unknown status.
+      anyOf:
+        - $ref: '#/components/schemas/KnownConnectionStatus'
+        - type: string
+          maxLength: 64
+    KnownConnectionStatus:
       type: string
       description: |
         State of the API connection. Assisted marketplaces (`mode: assisted`) have no account
         connection and report `not_connected`; their `statusDisplay` says so.
       enum: [not_connected, connected, degraded, reauth_required, revoked]
     CapabilityMode:
+      description: |
+        A `KnownCapabilityMode`, or a mode added after this client was built. Clients treat
+        an unknown mode like `none` (the capability is not offered).
+      anyOf:
+        - $ref: '#/components/schemas/KnownCapabilityMode'
+        - type: string
+          maxLength: 64
+    KnownCapabilityMode:
       type: string
       enum: [api, assisted, bulk_file, none]
     MarkSoldMode:
+      description: |
+        A `KnownMarkSoldMode`, or a mode added after this client was built. Clients treat an
+        unknown mode like `none`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownMarkSoldMode'
+        - type: string
+          maxLength: 64
+    KnownMarkSoldMode:
       type: string
       enum: [api, assisted, bulk_file, none, not_needed]
+    ConnectMethod:
+      description: |
+        A `KnownConnectMethod`, or a method added after this client was built. Clients treat
+        an unknown method like `none` (no connect button).
+      anyOf:
+        - $ref: '#/components/schemas/KnownConnectMethod'
+        - type: string
+          maxLength: 64
+    KnownConnectMethod:
+      type: string
+      enum: [oauth, none]
+    VerifyReadMode:
+      description: |
+        A `KnownVerifyReadMode`, or a mode added after this client was built. Clients offer no
+        "check again" action for an unknown mode.
+      anyOf:
+        - $ref: '#/components/schemas/KnownVerifyReadMode'
+        - type: string
+          maxLength: 64
+    KnownVerifyReadMode:
+      type: string
+      description: How success is established.
+      enum: [api, user_confirm]
+    ImportListingsMode:
+      description: |
+        A `KnownImportListingsMode`, or a mode added after this client was built. Clients
+        treat an unknown mode like `none`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownImportListingsMode'
+        - type: string
+          maxLength: 64
+    KnownImportListingsMode:
+      type: string
+      enum: [api, share_sheet, bulk_file, none]
+    ImageTransportMode:
+      description: |
+        A `KnownImageTransportMode`, or a mode added after this client was built. Clients
+        treat an unknown mode like `user_saves_photos`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownImageTransportMode'
+        - type: string
+          maxLength: 64
+    KnownImageTransportMode:
+      type: string
+      enum: [url_fetch, upload, user_saves_photos]
     MarketplaceCapabilities:
       type: object
       description: |
@@ -2811,8 +3041,7 @@ components:
         ]
       properties:
         connect:
-          type: string
-          enum: [oauth, none]
+          $ref: '#/components/schemas/ConnectMethod'
         create:
           $ref: '#/components/schemas/CapabilityMode'
         updatePrice:
@@ -2826,20 +3055,15 @@ components:
         markSold:
           $ref: '#/components/schemas/MarkSoldMode'
         verifyRead:
-          type: string
-          description: How success is established.
-          enum: [api, user_confirm]
+          $ref: '#/components/schemas/VerifyReadMode'
         importListings:
-          type: string
-          enum: [api, share_sheet, bulk_file, none]
+          $ref: '#/components/schemas/ImportListingsMode'
         saleDetection:
           type: array
           items:
-            type: string
-            enum: [webhook, poll, email, manual]
+            $ref: '#/components/schemas/SaleDetectionSource'
         imageTransport:
-          type: string
-          enum: [url_fetch, upload, user_saves_photos]
+          $ref: '#/components/schemas/ImageTransportMode'
     ConnectionIssue:
       type: object
       required: [code, message, occurredAt]
@@ -2923,9 +3147,25 @@ components:
 
     # ---------------------------------------------------------------- sales
     SaleStatus:
+      description: |
+        A `KnownSaleStatus`, or a status added after this client was built. Clients show an
+        unknown status generically.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSaleStatus'
+        - type: string
+          maxLength: 64
+    KnownSaleStatus:
       type: string
       enum: [detected, confirmed, canceled, returned]
     SaleDetectionSource:
+      description: |
+        A `KnownSaleDetectionSource`, or a source added after this client was built. Clients
+        show an unknown source generically.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSaleDetectionSource'
+        - type: string
+          maxLength: 64
+    KnownSaleDetectionSource:
       type: string
       enum: [webhook, poll, email, manual]
     DelistRunStatus:
@@ -2933,14 +3173,25 @@ components:
       description: '`completed`: every other listing is verified ended or confirmed by the user. `needs_attention`: something failed or waits for the user.'
       enum: [in_progress, completed, needs_attention]
     DelistResultState:
+      description: |
+        A `KnownDelistResultState`, or a state added after this client was built. Clients
+        show the result's `statusDisplay` for an unknown state and never treat it as delisted.
+      anyOf:
+        - $ref: '#/components/schemas/KnownDelistResultState'
+        - type: string
+          maxLength: 64
+    KnownDelistResultState:
       type: string
       enum: [pending, verifying, delisted, user_confirmed, needs_user_action, failed]
     DelistResult:
       type: object
-      required: [listingId, marketplace, mode, state, statusDisplay]
+      required: [listingId, itemId, marketplace, mode, state, statusDisplay]
       properties:
         listingId:
           $ref: '#/components/schemas/Id'
+        itemId:
+          $ref: '#/components/schemas/Id'
+          description: The sold item this listing belongs to (a bundle has several).
         marketplace:
           $ref: '#/components/schemas/Marketplace'
         mode:
@@ -2955,7 +3206,7 @@ components:
           $ref: '#/components/schemas/Id'
     DelistRun:
       type: object
-      description: The automatic delist of every other listing after a sale.
+      description: The automatic delist of every other listing of the sold items after a sale.
       required: [id, status, statusDisplay, results, startedAt]
       properties:
         id:
@@ -2972,16 +3223,59 @@ components:
           $ref: '#/components/schemas/Timestamp'
         completedAt:
           $ref: '#/components/schemas/Timestamp'
-    SaleCreate:
+    SaleItem:
       type: object
-      required: [itemId, marketplace, salePrice]
+      description: One item of an order.
+      required: [itemId, salePrice]
       properties:
         itemId:
           $ref: '#/components/schemas/Id'
-        marketplace:
-          $ref: '#/components/schemas/Marketplace'
+        listingId:
+          $ref: '#/components/schemas/Id'
+          description: The listing the item sold through, when known. Absent for a sale recorded without one.
         salePrice:
           $ref: '#/components/schemas/Money'
+          description: This item's part of the order's sale price (for a bundle, its share of the bundle price).
+    KnownFeeType:
+      type: string
+      enum: [marketplace, payment, shipping_label, promotion, tax, other]
+    FeeType:
+      description: |
+        A `KnownFeeType`, or a type added after this client was built. Clients show an unknown
+        type like `other`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownFeeType'
+        - type: string
+          maxLength: 64
+    FeeSource:
+      type: string
+      description: "`actual`: reported by the marketplace. `estimated`: from Listora's fee table until the marketplace reports the actual fee."
+      enum: [actual, estimated]
+    FeeLine:
+      type: object
+      description: One fee deducted from the sale.
+      required: [type, amount, source]
+      properties:
+        type:
+          $ref: '#/components/schemas/FeeType'
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: A positive amount the seller pays.
+        source:
+          $ref: '#/components/schemas/FeeSource'
+    SaleCreate:
+      type: object
+      required: [marketplace, items]
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/KnownMarketplace'
+        items:
+          type: array
+          description: The items of the order, each at most once; more than one for a bundle.
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/SaleItem'
         shippingCharged:
           $ref: '#/components/schemas/Money'
         soldAt:
@@ -2992,11 +3286,14 @@ components:
           maxLength: 128
     Sale:
       type: object
+      description: |
+        One marketplace order. It has one or more items (a bundle has several). Money values
+        that depend on fees are absent until they are known.
       required:
         [
           id,
-          itemId,
           marketplace,
+          items,
           soldAt,
           salePrice,
           detectionSource,
@@ -3008,21 +3305,42 @@ components:
       properties:
         id:
           $ref: '#/components/schemas/Id'
-        itemId:
-          $ref: '#/components/schemas/Id'
-        listingId:
-          $ref: '#/components/schemas/Id'
         marketplace:
           $ref: '#/components/schemas/Marketplace'
         externalOrderId:
           type: string
           maxLength: 128
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SaleItem'
         soldAt:
           $ref: '#/components/schemas/Timestamp'
         salePrice:
           $ref: '#/components/schemas/Money'
+          description: The order's sale price before fees, the sum of `items[].salePrice`.
         shippingCharged:
           $ref: '#/components/schemas/Money'
+          description: What the buyer paid for shipping.
+        fees:
+          type: array
+          description: Every fee deducted from the payout. Absent until known.
+          items:
+            $ref: '#/components/schemas/FeeLine'
+        shippingCost:
+          $ref: '#/components/schemas/Money'
+          description: |
+            What the seller paid to ship outside the payout, for example a label bought
+            separately. A label the marketplace deducts is a `shipping_label` fee instead.
+        netProceeds:
+          $ref: '#/components/schemas/Money'
+          description: The payout, `salePrice` plus `shippingCharged` minus `fees`. Absent until the fees are known.
+        profit:
+          $ref: '#/components/schemas/Money'
+          description: |
+            `netProceeds` minus `shippingCost` minus the items' `cost`. Absent until
+            `netProceeds` is known and every item has a cost.
         detectionSource:
           $ref: '#/components/schemas/SaleDetectionSource'
         status:
@@ -3031,7 +3349,7 @@ components:
           $ref: '#/components/schemas/Timestamp'
         isDoubleSale:
           type: boolean
-          description: True when the item had already sold elsewhere; the user must cancel one sale.
+          description: True when an item of the order had already sold elsewhere; the user must cancel one sale.
         delistRun:
           $ref: '#/components/schemas/DelistRun'
         createdAt:
@@ -3052,6 +3370,15 @@ components:
 
     # ---------------------------------------------------------------- tasks
     UserTaskKind:
+      description: |
+        A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
+        unknown task's `title`, `instructions`, and `deepLink`, and ask the user to update
+        the app to complete it.
+      anyOf:
+        - $ref: '#/components/schemas/KnownUserTaskKind'
+        - type: string
+          maxLength: 64
+    KnownUserTaskKind:
       type: string
       enum: [list_manually, delist_manually, confirm_sale, reconnect, review_match]
     UserTaskStatus:
@@ -3113,6 +3440,9 @@ components:
           $ref: '#/components/schemas/Id'
         operationId:
           $ref: '#/components/schemas/Id'
+        saleId:
+          $ref: '#/components/schemas/Id'
+          description: For `confirm_sale`, the sale to confirm.
         deepLink:
           type: string
           format: uri
@@ -3127,14 +3457,44 @@ components:
           $ref: '#/components/schemas/Timestamp'
     UserTaskCompletion:
       type: object
+      description: |
+        The user's confirmation and, for some kinds, their decision. Which properties apply
+        depends on the task's `kind`; a property that does not apply is
+        `422 validation_failed`.
+
+        - `list_manually`: `externalUrl`, the new listing's URL (links the listing).
+        - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
+          `rejectMatch: true` when nothing matches. Exactly one of the two is required.
+        - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+        - `delist_manually`, `reconnect`: nothing besides `note`.
+        - Every kind: optional `note`.
       properties:
         externalUrl:
           type: string
           format: uri
-          description: For `list_manually`, the new listing's URL (links the listing).
+        matchedItemId:
+          $ref: '#/components/schemas/Id'
+        matchedListingId:
+          $ref: '#/components/schemas/Id'
+        rejectMatch:
+          type: boolean
+        saleCorrection:
+          $ref: '#/components/schemas/SaleCorrection'
         note:
           type: string
           maxLength: 1000
+    SaleCorrection:
+      type: object
+      description: Corrected sale details; a property that is absent keeps the detected value.
+      properties:
+        salePrice:
+          $ref: '#/components/schemas/Money'
+          description: The order's sale price; for a bundle it is split across the items in proportion.
+        soldAt:
+          $ref: '#/components/schemas/Timestamp'
+        externalOrderId:
+          type: string
+          maxLength: 128
     UserTaskPage:
       type: object
       required: [data]

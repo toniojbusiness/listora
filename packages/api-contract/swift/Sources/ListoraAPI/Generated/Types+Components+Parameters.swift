@@ -44,6 +44,6 @@ extension Components {
         /// - Remark: Generated from `#/components/parameters/TaskId`.
         public typealias TaskId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/MarketplacePath`.
-        public typealias MarketplacePath = Components.Schemas.Marketplace
+        public typealias MarketplacePath = Components.Schemas.KnownMarketplace
     }
 }

@@ -296,7 +296,7 @@ public enum Operations {
                 /// Only items in one of these statuses.
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/status`.
-                public var status: [Components.Schemas.ItemStatus]?
+                public var status: [Components.Schemas.KnownItemStatus]?
                 /// Free-text search over SKU, title, brand, and keywords.
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/q`.
@@ -317,7 +317,7 @@ public enum Operations {
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
-                    status: [Components.Schemas.ItemStatus]? = nil,
+                    status: [Components.Schemas.KnownItemStatus]? = nil,
                     q: Swift.String? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
@@ -3895,9 +3895,9 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/listings/GET/query`.
             public struct Query: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/v1/listings/GET/query/marketplace`.
-                public var marketplace: Components.Schemas.Marketplace?
+                public var marketplace: Components.Schemas.KnownMarketplace?
                 /// - Remark: Generated from `#/paths/v1/listings/GET/query/status`.
-                public var status: [Components.Schemas.ListingStatus]?
+                public var status: [Components.Schemas.KnownListingStatus]?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/listings/GET/query/cursor`.
@@ -3914,8 +3914,8 @@ public enum Operations {
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
-                    marketplace: Components.Schemas.Marketplace? = nil,
-                    status: [Components.Schemas.ListingStatus]? = nil,
+                    marketplace: Components.Schemas.KnownMarketplace? = nil,
+                    status: [Components.Schemas.KnownListingStatus]? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
@@ -5696,7 +5696,7 @@ public enum Operations {
                 /// - Remark: Generated from `#/paths/v1/operations/GET/query/listingId`.
                 public var listingId: Components.Schemas.Id?
                 /// - Remark: Generated from `#/paths/v1/operations/GET/query/status`.
-                public var status: [Components.Schemas.OperationStatus]?
+                public var status: [Components.Schemas.KnownOperationStatus]?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/operations/GET/query/cursor`.
@@ -5716,7 +5716,7 @@ public enum Operations {
                 public init(
                     itemId: Components.Schemas.Id? = nil,
                     listingId: Components.Schemas.Id? = nil,
-                    status: [Components.Schemas.OperationStatus]? = nil,
+                    status: [Components.Schemas.KnownOperationStatus]? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
@@ -7767,10 +7767,12 @@ public enum Operations {
         public struct Input: Sendable, Hashable {
             /// - Remark: Generated from `#/paths/v1/sales/GET/query`.
             public struct Query: Sendable, Hashable {
+                /// Only sales whose order contains this item.
+                ///
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/itemId`.
                 public var itemId: Components.Schemas.Id?
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/status`.
-                public var status: [Components.Schemas.SaleStatus]?
+                public var status: [Components.Schemas.KnownSaleStatus]?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/cursor`.
@@ -7782,13 +7784,13 @@ public enum Operations {
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
-                ///   - itemId:
+                ///   - itemId: Only sales whose order contains this item.
                 ///   - status:
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
                     itemId: Components.Schemas.Id? = nil,
-                    status: [Components.Schemas.SaleStatus]? = nil,
+                    status: [Components.Schemas.KnownSaleStatus]? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
@@ -7951,10 +7953,12 @@ public enum Operations {
     }
     /// Record a sale manually ("Mark sold")
     ///
-    /// For sales Listora did not detect itself. Starts the same automatic delist run as a
-    /// detected sale: every other listing of the item gets a delist operation or an urgent
-    /// assisted task. A second sale of an already-sold item is recorded with
-    /// `isDoubleSale: true`.
+    /// For sales Listora did not detect itself. One sale is one order; a bundle lists several
+    /// items. Starts the same automatic delist run as a detected sale: every other listing
+    /// of every item in the order gets a delist operation or an urgent assisted task. A
+    /// sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+    /// `422 validation_failed` when an item appears twice or a `listingId` does not belong
+    /// to its item on `marketplace`.
     ///
     ///
     /// - Remark: HTTP `POST /v1/sales`.

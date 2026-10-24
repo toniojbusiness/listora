@@ -38,20 +38,21 @@ gitignored `.build/` at the repository root.
 3. Run `npm run check`. `src/contract-rules.test.ts` fails when a change breaks a convention.
 4. Commit the spec and the generated code together.
 
-Adding an optional property, a new operation, or a new `KnownErrorCode` is backward
-compatible. Removing or renaming anything, making a property required, or adding a value to
-any other enum breaks app builds that are already installed: the generated Swift decoder
-rejects an enum value it does not know. Ship such changes only together with a plan for
-installed app versions.
+Adding an optional property, a new operation, or a value to a `Known*` enum (an
+[open enum](#open-enums)) is backward compatible. Removing or renaming anything, making a
+property required, or adding a value to a closed enum breaks app builds that are already
+installed: the generated Swift decoder rejects a closed enum value it does not know. Ship
+such changes only together with a plan for installed app versions.
 
 ## Using the contract
 
 **Server (TypeScript).** Import types from `@listora/api-contract`. Schemas are exported by
-name, operations through `paths` and `operations`, and every enum also as a value array:
+name, operations through `paths` and `operations`, and every closed or `Known*` enum also as
+a value array:
 
 ```ts
 import type { HealthReady, Item, operations } from '@listora/api-contract';
-import { IDEMPOTENCY_KEY_HEADER, listingStatusValues } from '@listora/api-contract';
+import { IDEMPOTENCY_KEY_HEADER, knownListingStatusValues } from '@listora/api-contract';
 
 type ListItemsQuery = operations['listItems']['parameters']['query'];
 app.get<{ Reply: HealthReady }>('/health/ready', handler);
@@ -127,3 +128,50 @@ These are checked by `src/contract-rules.test.ts` where a test can check them.
   verbs (`publishListing`). OAuth callback query parameters keep their standard names.
 - **Pricing labels.** `SoldDataSource` lists only real sold data, so an AI estimate or a
   cost floor can never be presented as sold comparables.
+- **Sales are orders.** A `Sale` is one marketplace order with one or more `items` (a bundle
+  has several). Fees (`FeeLine`, `actual` or `estimated`), `netProceeds`, and `profit` are
+  absent until known. An item's own share is in `Item.saleSummary`.
+
+### Open enums
+
+A response enum that grows with marketplaces, integrations, or workflows is open: the schema
+`X` is `anyOf: [KnownX, string]`, like `ErrorCode`. `KnownX` lists today's values. Request
+bodies and query and path parameters use `KnownX` directly, so the server still rejects
+values it does not know. Schemas shared by requests and responses (such as `ItemDetails`)
+keep `X`, so the app can send back a value it does not know unchanged.
+
+In Swift an open enum decodes to a struct with `value1` (the `KnownX` case, `nil` for a new
+value) and `value2` (the raw string), so a new value never fails decoding:
+
+```swift
+switch listing.status.value1 {
+case .active?: showActive()
+case nil: showGeneric(listing.statusDisplay) // a status added after this build
+default: break
+}
+```
+
+The app treats values it does not know like this:
+
+- **Statuses and states** (`ListingStatus`, `OperationStatus`, `ConnectionStatus`,
+  `DelistResultState`, `ItemStatus`, `SaleStatus`): show the server's `statusDisplay`
+  (`label` as given) and never treat the value as success.
+- **`StatusTone`**: style it like `neutral` and still show the `label`.
+- **`ListingAction`**: hide the action.
+- **Capability modes** (`IntegrationMode`, `CapabilityMode`, `MarkSoldMode`,
+  `ConnectMethod`, `VerifyReadMode`, `ImportListingsMode`): treat like `none` (offer
+  nothing that depends on it). `ImageTransportMode`: treat like `user_saves_photos`.
+- **`Marketplace`**: show it generically (its raw id and the server's `statusDisplay`), with
+  no marketplace-specific branding.
+- **`UserTaskKind`**: show the task's `title`, `instructions`, and `deepLink`, and ask the
+  user to update the app to complete it.
+- **Sources and types** (`SaleDetectionSource`, `OperationKind`, `OperationOriginType`,
+  `FeeType`, `SoldDataSource`, `PriceBasis`, `Provenance`, `AnalysisProvenance`): show them
+  generically (`FeeType` like `other`); never present an unknown pricing basis as sold data,
+  and treat an unknown provenance as not entered by the user.
+
+The remaining response enums are closed on purpose: Listora's own lifecycles (for example
+`PhotoStatus`), fixed product sets (`PriceTierName`), values the client itself chooses
+(`PhotoRole`, `ItemCondition`), `CurrencyCode`, and `VerificationMethod` (success is
+established only by API read-back or user confirmation). `src/contract-rules.test.ts` lists
+them, so a new closed enum in a response is a deliberate, reviewed decision.

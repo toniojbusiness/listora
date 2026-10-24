@@ -800,10 +800,12 @@ export interface paths {
         put?: never;
         /**
          * Record a sale manually ("Mark sold")
-         * @description For sales Listora did not detect itself. Starts the same automatic delist run as a
-         *     detected sale: every other listing of the item gets a delist operation or an urgent
-         *     assisted task. A second sale of an already-sold item is recorded with
-         *     `isDoubleSale: true`.
+         * @description For sales Listora did not detect itself. One sale is one order; a bundle lists several
+         *     items. Starts the same automatic delist run as a detected sale: every other listing
+         *     of every item in the order gets a delist operation or an urgent assisted task. A
+         *     sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+         *     `422 validation_failed` when an item appears twice or a `listingId` does not belong
+         *     to its item on `marketplace`.
          */
         post: operations["createSale"];
         delete?: never;
@@ -947,21 +949,36 @@ export interface components {
             amountCents: number;
             currency: components["schemas"]["CurrencyCode"];
         };
+        /**
+         * @description A `KnownMarketplace`, or a marketplace added after this client was built. Clients show
+         *     an unknown marketplace generically (its raw id and the server's `statusDisplay`).
+         */
+        Marketplace: components["schemas"]["KnownMarketplace"] | string;
         /** @enum {string} */
-        Marketplace: "ebay" | "depop" | "poshmark" | "mercari";
+        KnownMarketplace: "ebay" | "depop" | "poshmark" | "mercari";
+        /**
+         * @description A `KnownIntegrationMode`, or a mode added after this client was built. Clients offer
+         *     nothing that depends on an unknown mode.
+         */
+        IntegrationMode: components["schemas"]["KnownIntegrationMode"] | string;
         /**
          * @description `api`: Listora acts through the marketplace's official API and verifies by read-back.
          *     `assisted`: Listora prepares the work and the user does the final step in the
          *     marketplace app, then confirms.
          * @enum {string}
          */
-        IntegrationMode: "api" | "assisted";
+        KnownIntegrationMode: "api" | "assisted";
+        /**
+         * @description A `KnownStatusTone`, or a tone added after this client was built. Clients style an
+         *     unknown tone like `neutral` and still show the `label`.
+         */
+        StatusTone: components["schemas"]["KnownStatusTone"] | string;
         /**
          * @description How to style a status. `success` is used only for states verified by an API read-back
          *     or confirmed by the user.
          * @enum {string}
          */
-        StatusTone: "success" | "in_progress" | "checking" | "failed" | "action_needed" | "neutral";
+        KnownStatusTone: "success" | "in_progress" | "checking" | "failed" | "action_needed" | "neutral";
         /**
          * @description Server-rendered honest status, for example `Active (confirmed by eBay)`,
          *     `Delisting... retry 2 of 6`, `Delist failed - Retry`, `Checking...`,
@@ -985,10 +1002,16 @@ export interface components {
             verifiedAt: components["schemas"]["Timestamp"];
         };
         /**
+         * @description A `KnownProvenance`, or a source added after this client was built. Clients treat an
+         *     unknown source as not entered by the user (highlight it for review) and send it back
+         *     unchanged.
+         */
+        Provenance: components["schemas"]["KnownProvenance"] | string;
+        /**
          * @description Where a field value came from.
          * @enum {string}
          */
-        Provenance: "ai" | "ocr" | "barcode" | "user";
+        KnownProvenance: "ai" | "ocr" | "barcode" | "user";
         /** @description The body of every error response. */
         ErrorResponse: {
             error: components["schemas"]["ApiError"];
@@ -1044,12 +1067,17 @@ export interface components {
             };
         };
         /**
+         * @description A `KnownItemStatus`, or a status added after this client was built. Clients show an
+         *     unknown status generically and offer no status-specific action for it.
+         */
+        ItemStatus: components["schemas"]["KnownItemStatus"] | string;
+        /**
          * @description `draft` and `ready` are set by the user; `archived` by the user for an item with no
          *     live listing. `listed`, `sold_pending_delist`, `sold`, and `shipped` are set by the
          *     server from listings and sales.
          * @enum {string}
          */
-        ItemStatus: "draft" | "ready" | "listed" | "sold_pending_delist" | "sold" | "shipped" | "archived";
+        KnownItemStatus: "draft" | "ready" | "listed" | "sold_pending_delist" | "sold" | "shipped" | "archived";
         /**
          * @description The item statuses a client may set directly.
          * @enum {string}
@@ -1109,6 +1137,8 @@ export interface components {
              * @default 1
              */
             quantity: number;
+            /** @description The storage location where the item is kept (for example a bin or shelf). */
+            storageLocationId?: components["schemas"]["Id"];
             acceptedAnalysisId?: components["schemas"]["Id"];
             /** @description Where each detail came from, keyed by property name, for example `{"brand": "ocr"}`. */
             fieldProvenance?: {
@@ -1137,11 +1167,43 @@ export interface components {
              */
             version: number;
             details: components["schemas"]["ItemDetails"];
+            /** @description Read-only; the location `details.storageLocationId` refers to. */
+            storageLocation?: components["schemas"]["StorageLocationSummary"];
             /** @description In display order; the first is the cover. */
             photos: components["schemas"]["Photo"][];
             listings: components["schemas"]["Listing"][];
+            saleSummary?: components["schemas"]["ItemSaleSummary"];
             createdAt: components["schemas"]["Timestamp"];
             updatedAt: components["schemas"]["Timestamp"];
+        };
+        /** @description Where an item is kept. */
+        StorageLocationSummary: {
+            id: components["schemas"]["Id"];
+            /** @description The short code printed on the bin or shelf, for example `B-12`. */
+            code: string;
+            /** @description For example "Garage shelf 3, bin 12". */
+            label: string;
+        };
+        /**
+         * @description Read-only result of the item's sale. Present only when the item has sold (status
+         *     `sold_pending_delist`, `sold`, or `shipped`). For an item sold in a bundle, the
+         *     order's fees and shipping cost are split across its items in proportion to each
+         *     item's `salePrice`. A value is absent until it is known.
+         */
+        ItemSaleSummary: {
+            saleId: components["schemas"]["Id"];
+            soldAt: components["schemas"]["Timestamp"];
+            salePrice: components["schemas"]["Money"];
+            /** @description This item's share of the sale's `netProceeds`. */
+            netProceeds?: components["schemas"]["Money"];
+            /** @description This item's share of `netProceeds`, minus its share of `shippingCost`, minus its `cost`. */
+            profit?: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description Return on investment, `profit` divided by the item's `cost`, in basis points
+             *     (12550 is 125.5%). Absent when `profit` is absent or the cost is zero.
+             */
+            roiBasisPoints?: number;
         };
         /** @description The item as shown in inventory lists. */
         ItemSummary: {
@@ -1292,10 +1354,15 @@ export interface components {
         /** @enum {string} */
         AnalysisStatus: "queued" | "running" | "completed" | "failed";
         /**
+         * @description A `KnownAnalysisProvenance`, or a source added after this client was built. Clients
+         *     treat an unknown source like `ai`.
+         */
+        AnalysisProvenance: components["schemas"]["KnownAnalysisProvenance"] | string;
+        /**
          * @description Where an analyzed value came from (users are not a source inside an analysis).
          * @enum {string}
          */
-        AnalysisProvenance: "ai" | "ocr" | "barcode";
+        KnownAnalysisProvenance: "ai" | "ocr" | "barcode";
         /** @description 0 to 1. Clients highlight low-confidence fields for review. */
         Confidence: number;
         AnalyzedText: {
@@ -1378,11 +1445,16 @@ export interface components {
             confidence: components["schemas"]["Confidence"];
         };
         /**
+         * @description A `KnownSoldDataSource`, or a source of real sold data added after this client was
+         *     built. Clients show the comparables' `label` for an unknown source.
+         */
+        SoldDataSource: components["schemas"]["KnownSoldDataSource"] | string;
+        /**
          * @description Sources of real sold data. `ai_estimate` and `cost_floor` are deliberately not in this
          *     list: the words "comps" and "sold" are only ever shown next to real sold data.
          * @enum {string}
          */
-        SoldDataSource: "depop_inspiration" | "ebay_mi" | "own_history";
+        KnownSoldDataSource: "depop_inspiration" | "ebay_mi" | "own_history";
         /** @description Real sold data. Absent from a suggestion when none is available. */
         SoldComparables: {
             source: components["schemas"]["SoldDataSource"];
@@ -1400,10 +1472,15 @@ export interface components {
         /** @enum {string} */
         PriceTierName: "quick_sale" | "recommended" | "higher_profit";
         /**
+         * @description A `KnownPriceBasis`, or a basis added after this client was built. Clients show the
+         *     tier's `label` for an unknown basis and never present it as sold data.
+         */
+        PriceBasis: components["schemas"]["KnownPriceBasis"] | string;
+        /**
          * @description What a suggested price is derived from.
          * @enum {string}
          */
-        PriceBasis: "sold_data" | "ai_estimate" | "cost_floor";
+        KnownPriceBasis: "sold_data" | "ai_estimate" | "cost_floor";
         PriceTier: {
             tier: components["schemas"]["PriceTierName"];
             price: components["schemas"]["Money"];
@@ -1443,13 +1520,23 @@ export interface components {
             generatedAt: components["schemas"]["Timestamp"];
         };
         /**
+         * @description A `KnownListingStatus`, or a status added after this client was built. Clients show
+         *     the listing's `statusDisplay` for an unknown status and never treat it as success.
+         */
+        ListingStatus: components["schemas"]["KnownListingStatus"] | string;
+        /**
          * @description Lifecycle of one listing. `active` and `ended` are set only after verification
          *     (see `verification`); `unknown` means an outcome is being checked.
          * @enum {string}
          */
-        ListingStatus: "draft" | "queued" | "publishing" | "active" | "ending" | "ended" | "sold" | "error" | "unknown" | "needs_user_action";
+        KnownListingStatus: "draft" | "queued" | "publishing" | "active" | "ending" | "ended" | "sold" | "error" | "unknown" | "needs_user_action";
+        /**
+         * @description A `KnownListingAction`, or an action added after this client was built. Clients hide
+         *     actions they do not know.
+         */
+        ListingAction: components["schemas"]["KnownListingAction"] | string;
         /** @enum {string} */
-        ListingAction: "publish" | "revise" | "change_price" | "end" | "relist" | "verify";
+        KnownListingAction: "publish" | "revise" | "change_price" | "end" | "relist" | "verify";
         /** @description An action the user can take now, and whether Listora or the user performs it. */
         ListingActionAvailability: {
             action: components["schemas"]["ListingAction"];
@@ -1473,7 +1560,7 @@ export interface components {
             hashtags?: string[];
         };
         ListingCreate: {
-            marketplace: components["schemas"]["Marketplace"];
+            marketplace: components["schemas"]["KnownMarketplace"];
             variant: components["schemas"]["ListingVariant"];
         };
         ListingVariantReplace: {
@@ -1527,8 +1614,18 @@ export interface components {
             listing: components["schemas"]["Listing"];
             operation: components["schemas"]["Operation"];
         };
+        /**
+         * @description A `KnownOperationKind`, or a kind added after this client was built. Clients describe
+         *     an unknown kind generically using the operation's `statusDisplay`.
+         */
+        OperationKind: components["schemas"]["KnownOperationKind"] | string;
         /** @enum {string} */
-        OperationKind: "create" | "revise" | "price" | "end" | "relist" | "mark_sold" | "verify";
+        KnownOperationKind: "create" | "revise" | "price" | "end" | "relist" | "mark_sold" | "verify";
+        /**
+         * @description A `KnownOperationStatus`, or a status added after this client was built. Clients show
+         *     the operation's `statusDisplay` for an unknown status and never treat it as success.
+         */
+        OperationStatus: components["schemas"]["KnownOperationStatus"] | string;
         /**
          * @description `succeeded` only after an API read-back confirms the desired state or the user
          *     confirms an assisted task. `verifying`: the outcome is unknown (for example a timeout
@@ -1536,9 +1633,14 @@ export interface components {
          *     blindly. `retrying`: a transient failure, retried with backoff.
          * @enum {string}
          */
-        OperationStatus: "queued" | "running" | "retrying" | "verifying" | "succeeded" | "failed" | "needs_user_action" | "canceled";
+        KnownOperationStatus: "queued" | "running" | "retrying" | "verifying" | "succeeded" | "failed" | "needs_user_action" | "canceled";
+        /**
+         * @description A `KnownOperationOriginType`, or an origin added after this client was built. Clients
+         *     show an unknown origin generically.
+         */
+        OperationOriginType: components["schemas"]["KnownOperationOriginType"] | string;
         /** @enum {string} */
-        OperationOriginType: "user" | "auto_delist" | "reprice_rule";
+        KnownOperationOriginType: "user" | "auto_delist" | "reprice_rule";
         OperationOrigin: {
             type: components["schemas"]["OperationOriginType"];
             /** @description Set for `auto_delist`. */
@@ -1614,38 +1716,77 @@ export interface components {
             nextCursor?: string;
         };
         /**
+         * @description A `KnownConnectionStatus`, or a status added after this client was built. Clients
+         *     show the connection's `statusDisplay` for an unknown status.
+         */
+        ConnectionStatus: components["schemas"]["KnownConnectionStatus"] | string;
+        /**
          * @description State of the API connection. Assisted marketplaces (`mode: assisted`) have no account
          *     connection and report `not_connected`; their `statusDisplay` says so.
          * @enum {string}
          */
-        ConnectionStatus: "not_connected" | "connected" | "degraded" | "reauth_required" | "revoked";
+        KnownConnectionStatus: "not_connected" | "connected" | "degraded" | "reauth_required" | "revoked";
+        /**
+         * @description A `KnownCapabilityMode`, or a mode added after this client was built. Clients treat
+         *     an unknown mode like `none` (the capability is not offered).
+         */
+        CapabilityMode: components["schemas"]["KnownCapabilityMode"] | string;
         /** @enum {string} */
-        CapabilityMode: "api" | "assisted" | "bulk_file" | "none";
+        KnownCapabilityMode: "api" | "assisted" | "bulk_file" | "none";
+        /**
+         * @description A `KnownMarkSoldMode`, or a mode added after this client was built. Clients treat an
+         *     unknown mode like `none`.
+         */
+        MarkSoldMode: components["schemas"]["KnownMarkSoldMode"] | string;
         /** @enum {string} */
-        MarkSoldMode: "api" | "assisted" | "bulk_file" | "none" | "not_needed";
+        KnownMarkSoldMode: "api" | "assisted" | "bulk_file" | "none" | "not_needed";
+        /**
+         * @description A `KnownConnectMethod`, or a method added after this client was built. Clients treat
+         *     an unknown method like `none` (no connect button).
+         */
+        ConnectMethod: components["schemas"]["KnownConnectMethod"] | string;
+        /** @enum {string} */
+        KnownConnectMethod: "oauth" | "none";
+        /**
+         * @description A `KnownVerifyReadMode`, or a mode added after this client was built. Clients offer no
+         *     "check again" action for an unknown mode.
+         */
+        VerifyReadMode: components["schemas"]["KnownVerifyReadMode"] | string;
+        /**
+         * @description How success is established.
+         * @enum {string}
+         */
+        KnownVerifyReadMode: "api" | "user_confirm";
+        /**
+         * @description A `KnownImportListingsMode`, or a mode added after this client was built. Clients
+         *     treat an unknown mode like `none`.
+         */
+        ImportListingsMode: components["schemas"]["KnownImportListingsMode"] | string;
+        /** @enum {string} */
+        KnownImportListingsMode: "api" | "share_sheet" | "bulk_file" | "none";
+        /**
+         * @description A `KnownImageTransportMode`, or a mode added after this client was built. Clients
+         *     treat an unknown mode like `user_saves_photos`.
+         */
+        ImageTransportMode: components["schemas"]["KnownImageTransportMode"] | string;
+        /** @enum {string} */
+        KnownImageTransportMode: "url_fetch" | "upload" | "user_saves_photos";
         /**
          * @description What Listora can do on this marketplace for this account. Clients branch on these
          *     flags, never on the marketplace name; they can change when access is granted.
          */
         MarketplaceCapabilities: {
-            /** @enum {string} */
-            connect: "oauth" | "none";
+            connect: components["schemas"]["ConnectMethod"];
             create: components["schemas"]["CapabilityMode"];
             updatePrice: components["schemas"]["CapabilityMode"];
             updateDetails: components["schemas"]["CapabilityMode"];
             delist: components["schemas"]["CapabilityMode"];
             relist: components["schemas"]["CapabilityMode"];
             markSold: components["schemas"]["MarkSoldMode"];
-            /**
-             * @description How success is established.
-             * @enum {string}
-             */
-            verifyRead: "api" | "user_confirm";
-            /** @enum {string} */
-            importListings: "api" | "share_sheet" | "bulk_file" | "none";
-            saleDetection: ("webhook" | "poll" | "email" | "manual")[];
-            /** @enum {string} */
-            imageTransport: "url_fetch" | "upload" | "user_saves_photos";
+            verifyRead: components["schemas"]["VerifyReadMode"];
+            importListings: components["schemas"]["ImportListingsMode"];
+            saleDetection: components["schemas"]["SaleDetectionSource"][];
+            imageTransport: components["schemas"]["ImageTransportMode"];
         };
         ConnectionIssue: {
             code: string;
@@ -1690,19 +1831,36 @@ export interface components {
             createdAt: components["schemas"]["Timestamp"];
             completedAt?: components["schemas"]["Timestamp"];
         };
+        /**
+         * @description A `KnownSaleStatus`, or a status added after this client was built. Clients show an
+         *     unknown status generically.
+         */
+        SaleStatus: components["schemas"]["KnownSaleStatus"] | string;
         /** @enum {string} */
-        SaleStatus: "detected" | "confirmed" | "canceled" | "returned";
+        KnownSaleStatus: "detected" | "confirmed" | "canceled" | "returned";
+        /**
+         * @description A `KnownSaleDetectionSource`, or a source added after this client was built. Clients
+         *     show an unknown source generically.
+         */
+        SaleDetectionSource: components["schemas"]["KnownSaleDetectionSource"] | string;
         /** @enum {string} */
-        SaleDetectionSource: "webhook" | "poll" | "email" | "manual";
+        KnownSaleDetectionSource: "webhook" | "poll" | "email" | "manual";
         /**
          * @description `completed`: every other listing is verified ended or confirmed by the user. `needs_attention`: something failed or waits for the user.
          * @enum {string}
          */
         DelistRunStatus: "in_progress" | "completed" | "needs_attention";
+        /**
+         * @description A `KnownDelistResultState`, or a state added after this client was built. Clients
+         *     show the result's `statusDisplay` for an unknown state and never treat it as delisted.
+         */
+        DelistResultState: components["schemas"]["KnownDelistResultState"] | string;
         /** @enum {string} */
-        DelistResultState: "pending" | "verifying" | "delisted" | "user_confirmed" | "needs_user_action" | "failed";
+        KnownDelistResultState: "pending" | "verifying" | "delisted" | "user_confirmed" | "needs_user_action" | "failed";
         DelistResult: {
             listingId: components["schemas"]["Id"];
+            /** @description The sold item this listing belongs to (a bundle has several). */
+            itemId: components["schemas"]["Id"];
             marketplace: components["schemas"]["Marketplace"];
             mode: components["schemas"]["IntegrationMode"];
             state: components["schemas"]["DelistResultState"];
@@ -1710,7 +1868,7 @@ export interface components {
             operationId?: components["schemas"]["Id"];
             userTaskId?: components["schemas"]["Id"];
         };
-        /** @description The automatic delist of every other listing after a sale. */
+        /** @description The automatic delist of every other listing of the sold items after a sale. */
         DelistRun: {
             id: components["schemas"]["Id"];
             status: components["schemas"]["DelistRunStatus"];
@@ -1719,28 +1877,74 @@ export interface components {
             startedAt: components["schemas"]["Timestamp"];
             completedAt?: components["schemas"]["Timestamp"];
         };
-        SaleCreate: {
+        /** @description One item of an order. */
+        SaleItem: {
             itemId: components["schemas"]["Id"];
-            marketplace: components["schemas"]["Marketplace"];
+            /** @description The listing the item sold through, when known. Absent for a sale recorded without one. */
+            listingId?: components["schemas"]["Id"];
+            /** @description This item's part of the order's sale price (for a bundle, its share of the bundle price). */
             salePrice: components["schemas"]["Money"];
+        };
+        /** @enum {string} */
+        KnownFeeType: "marketplace" | "payment" | "shipping_label" | "promotion" | "tax" | "other";
+        /**
+         * @description A `KnownFeeType`, or a type added after this client was built. Clients show an unknown
+         *     type like `other`.
+         */
+        FeeType: components["schemas"]["KnownFeeType"] | string;
+        /**
+         * @description `actual`: reported by the marketplace. `estimated`: from Listora's fee table until the marketplace reports the actual fee.
+         * @enum {string}
+         */
+        FeeSource: "actual" | "estimated";
+        /** @description One fee deducted from the sale. */
+        FeeLine: {
+            type: components["schemas"]["FeeType"];
+            /** @description A positive amount the seller pays. */
+            amount: components["schemas"]["Money"];
+            source: components["schemas"]["FeeSource"];
+        };
+        SaleCreate: {
+            marketplace: components["schemas"]["KnownMarketplace"];
+            /** @description The items of the order, each at most once; more than one for a bundle. */
+            items: components["schemas"]["SaleItem"][];
             shippingCharged?: components["schemas"]["Money"];
             /** @description Defaults to now. */
             soldAt?: components["schemas"]["Timestamp"];
             externalOrderId?: string;
         };
+        /**
+         * @description One marketplace order. It has one or more items (a bundle has several). Money values
+         *     that depend on fees are absent until they are known.
+         */
         Sale: {
             id: components["schemas"]["Id"];
-            itemId: components["schemas"]["Id"];
-            listingId?: components["schemas"]["Id"];
             marketplace: components["schemas"]["Marketplace"];
             externalOrderId?: string;
+            items: components["schemas"]["SaleItem"][];
             soldAt: components["schemas"]["Timestamp"];
+            /** @description The order's sale price before fees, the sum of `items[].salePrice`. */
             salePrice: components["schemas"]["Money"];
+            /** @description What the buyer paid for shipping. */
             shippingCharged?: components["schemas"]["Money"];
+            /** @description Every fee deducted from the payout. Absent until known. */
+            fees?: components["schemas"]["FeeLine"][];
+            /**
+             * @description What the seller paid to ship outside the payout, for example a label bought
+             *     separately. A label the marketplace deducts is a `shipping_label` fee instead.
+             */
+            shippingCost?: components["schemas"]["Money"];
+            /** @description The payout, `salePrice` plus `shippingCharged` minus `fees`. Absent until the fees are known. */
+            netProceeds?: components["schemas"]["Money"];
+            /**
+             * @description `netProceeds` minus `shippingCost` minus the items' `cost`. Absent until
+             *     `netProceeds` is known and every item has a cost.
+             */
+            profit?: components["schemas"]["Money"];
             detectionSource: components["schemas"]["SaleDetectionSource"];
             status: components["schemas"]["SaleStatus"];
             shipBy?: components["schemas"]["Timestamp"];
-            /** @description True when the item had already sold elsewhere; the user must cancel one sale. */
+            /** @description True when an item of the order had already sold elsewhere; the user must cancel one sale. */
             isDoubleSale: boolean;
             delistRun?: components["schemas"]["DelistRun"];
             createdAt: components["schemas"]["Timestamp"];
@@ -1751,8 +1955,14 @@ export interface components {
             /** @description Present when there are more results. */
             nextCursor?: string;
         };
+        /**
+         * @description A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
+         *     unknown task's `title`, `instructions`, and `deepLink`, and ask the user to update
+         *     the app to complete it.
+         */
+        UserTaskKind: components["schemas"]["KnownUserTaskKind"] | string;
         /** @enum {string} */
-        UserTaskKind: "list_manually" | "delist_manually" | "confirm_sale" | "reconnect" | "review_match";
+        KnownUserTaskKind: "list_manually" | "delist_manually" | "confirm_sale" | "reconnect" | "review_match";
         /** @enum {string} */
         UserTaskStatus: "open" | "completed" | "dismissed";
         /**
@@ -1783,6 +1993,8 @@ export interface components {
             itemId?: components["schemas"]["Id"];
             listingId?: components["schemas"]["Id"];
             operationId?: components["schemas"]["Id"];
+            /** @description For `confirm_sale`, the sale to confirm. */
+            saleId?: components["schemas"]["Id"];
             /**
              * Format: uri
              * @description Opens the right screen in the marketplace app or site.
@@ -1793,13 +2005,33 @@ export interface components {
             createdAt: components["schemas"]["Timestamp"];
             completedAt?: components["schemas"]["Timestamp"];
         };
+        /**
+         * @description The user's confirmation and, for some kinds, their decision. Which properties apply
+         *     depends on the task's `kind`; a property that does not apply is
+         *     `422 validation_failed`.
+         *
+         *     - `list_manually`: `externalUrl`, the new listing's URL (links the listing).
+         *     - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
+         *       `rejectMatch: true` when nothing matches. Exactly one of the two is required.
+         *     - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+         *     - `delist_manually`, `reconnect`: nothing besides `note`.
+         *     - Every kind: optional `note`.
+         */
         UserTaskCompletion: {
-            /**
-             * Format: uri
-             * @description For `list_manually`, the new listing's URL (links the listing).
-             */
+            /** Format: uri */
             externalUrl?: string;
+            matchedItemId?: components["schemas"]["Id"];
+            matchedListingId?: components["schemas"]["Id"];
+            rejectMatch?: boolean;
+            saleCorrection?: components["schemas"]["SaleCorrection"];
             note?: string;
+        };
+        /** @description Corrected sale details; a property that is absent keeps the detected value. */
+        SaleCorrection: {
+            /** @description The order's sale price; for a bundle it is split across the items in proportion. */
+            salePrice?: components["schemas"]["Money"];
+            soldAt?: components["schemas"]["Timestamp"];
+            externalOrderId?: string;
         };
         UserTaskPage: {
             data: components["schemas"]["UserTask"][];
@@ -1915,7 +2147,7 @@ export interface components {
         AuthorizationId: components["schemas"]["Id"];
         SaleId: components["schemas"]["Id"];
         TaskId: components["schemas"]["Id"];
-        MarketplacePath: components["schemas"]["Marketplace"];
+        MarketplacePath: components["schemas"]["KnownMarketplace"];
     };
     requestBodies: never;
     headers: never;
@@ -1927,12 +2159,16 @@ export type Sku = components['schemas']['Sku'];
 export type CurrencyCode = components['schemas']['CurrencyCode'];
 export type Money = components['schemas']['Money'];
 export type Marketplace = components['schemas']['Marketplace'];
+export type KnownMarketplace = components['schemas']['KnownMarketplace'];
 export type IntegrationMode = components['schemas']['IntegrationMode'];
+export type KnownIntegrationMode = components['schemas']['KnownIntegrationMode'];
 export type StatusTone = components['schemas']['StatusTone'];
+export type KnownStatusTone = components['schemas']['KnownStatusTone'];
 export type StatusDisplay = components['schemas']['StatusDisplay'];
 export type VerificationMethod = components['schemas']['VerificationMethod'];
 export type Verification = components['schemas']['Verification'];
 export type Provenance = components['schemas']['Provenance'];
+export type KnownProvenance = components['schemas']['KnownProvenance'];
 export type ErrorResponse = components['schemas']['ErrorResponse'];
 export type ApiError = components['schemas']['ApiError'];
 export type FieldError = components['schemas']['FieldError'];
@@ -1942,6 +2178,7 @@ export type HealthCheckStatus = components['schemas']['HealthCheckStatus'];
 export type HealthLive = components['schemas']['HealthLive'];
 export type HealthReady = components['schemas']['HealthReady'];
 export type ItemStatus = components['schemas']['ItemStatus'];
+export type KnownItemStatus = components['schemas']['KnownItemStatus'];
 export type UserSettableItemStatus = components['schemas']['UserSettableItemStatus'];
 export type ItemCondition = components['schemas']['ItemCondition'];
 export type MeasurementUnit = components['schemas']['MeasurementUnit'];
@@ -1950,6 +2187,8 @@ export type ItemDetails = components['schemas']['ItemDetails'];
 export type ItemCreate = components['schemas']['ItemCreate'];
 export type ItemReplace = components['schemas']['ItemReplace'];
 export type Item = components['schemas']['Item'];
+export type StorageLocationSummary = components['schemas']['StorageLocationSummary'];
+export type ItemSaleSummary = components['schemas']['ItemSaleSummary'];
 export type ItemSummary = components['schemas']['ItemSummary'];
 export type ItemPage = components['schemas']['ItemPage'];
 export type PhotoRole = components['schemas']['PhotoRole'];
@@ -1974,6 +2213,7 @@ export type UploadSession = components['schemas']['UploadSession'];
 export type AnalysisTier = components['schemas']['AnalysisTier'];
 export type AnalysisStatus = components['schemas']['AnalysisStatus'];
 export type AnalysisProvenance = components['schemas']['AnalysisProvenance'];
+export type KnownAnalysisProvenance = components['schemas']['KnownAnalysisProvenance'];
 export type Confidence = components['schemas']['Confidence'];
 export type AnalyzedText = components['schemas']['AnalyzedText'];
 export type AnalyzedTextList = components['schemas']['AnalyzedTextList'];
@@ -1985,16 +2225,20 @@ export type AnalysisFailure = components['schemas']['AnalysisFailure'];
 export type Analysis = components['schemas']['Analysis'];
 export type AiPriceEstimate = components['schemas']['AiPriceEstimate'];
 export type SoldDataSource = components['schemas']['SoldDataSource'];
+export type KnownSoldDataSource = components['schemas']['KnownSoldDataSource'];
 export type SoldComparables = components['schemas']['SoldComparables'];
 export type PriceTierName = components['schemas']['PriceTierName'];
 export type PriceBasis = components['schemas']['PriceBasis'];
+export type KnownPriceBasis = components['schemas']['KnownPriceBasis'];
 export type PriceTier = components['schemas']['PriceTier'];
 export type FloorBreakdown = components['schemas']['FloorBreakdown'];
 export type MarketplaceFloor = components['schemas']['MarketplaceFloor'];
 export type ResearchLink = components['schemas']['ResearchLink'];
 export type PricingSuggestion = components['schemas']['PricingSuggestion'];
 export type ListingStatus = components['schemas']['ListingStatus'];
+export type KnownListingStatus = components['schemas']['KnownListingStatus'];
 export type ListingAction = components['schemas']['ListingAction'];
+export type KnownListingAction = components['schemas']['KnownListingAction'];
 export type ListingActionAvailability = components['schemas']['ListingActionAvailability'];
 export type ListingAspect = components['schemas']['ListingAspect'];
 export type ListingVariant = components['schemas']['ListingVariant'];
@@ -2009,8 +2253,11 @@ export type ListingList = components['schemas']['ListingList'];
 export type ListingPage = components['schemas']['ListingPage'];
 export type ListingOperationAccepted = components['schemas']['ListingOperationAccepted'];
 export type OperationKind = components['schemas']['OperationKind'];
+export type KnownOperationKind = components['schemas']['KnownOperationKind'];
 export type OperationStatus = components['schemas']['OperationStatus'];
+export type KnownOperationStatus = components['schemas']['KnownOperationStatus'];
 export type OperationOriginType = components['schemas']['OperationOriginType'];
+export type KnownOperationOriginType = components['schemas']['KnownOperationOriginType'];
 export type OperationOrigin = components['schemas']['OperationOrigin'];
 export type OperationError = components['schemas']['OperationError'];
 export type Operation = components['schemas']['Operation'];
@@ -2018,8 +2265,19 @@ export type OperationPage = components['schemas']['OperationPage'];
 export type OperationEvent = components['schemas']['OperationEvent'];
 export type OperationEventPage = components['schemas']['OperationEventPage'];
 export type ConnectionStatus = components['schemas']['ConnectionStatus'];
+export type KnownConnectionStatus = components['schemas']['KnownConnectionStatus'];
 export type CapabilityMode = components['schemas']['CapabilityMode'];
+export type KnownCapabilityMode = components['schemas']['KnownCapabilityMode'];
 export type MarkSoldMode = components['schemas']['MarkSoldMode'];
+export type KnownMarkSoldMode = components['schemas']['KnownMarkSoldMode'];
+export type ConnectMethod = components['schemas']['ConnectMethod'];
+export type KnownConnectMethod = components['schemas']['KnownConnectMethod'];
+export type VerifyReadMode = components['schemas']['VerifyReadMode'];
+export type KnownVerifyReadMode = components['schemas']['KnownVerifyReadMode'];
+export type ImportListingsMode = components['schemas']['ImportListingsMode'];
+export type KnownImportListingsMode = components['schemas']['KnownImportListingsMode'];
+export type ImageTransportMode = components['schemas']['ImageTransportMode'];
+export type KnownImageTransportMode = components['schemas']['KnownImageTransportMode'];
 export type MarketplaceCapabilities = components['schemas']['MarketplaceCapabilities'];
 export type ConnectionIssue = components['schemas']['ConnectionIssue'];
 export type Connection = components['schemas']['Connection'];
@@ -2027,21 +2285,31 @@ export type ConnectionList = components['schemas']['ConnectionList'];
 export type ConnectionAuthorizationStatus = components['schemas']['ConnectionAuthorizationStatus'];
 export type ConnectionAuthorization = components['schemas']['ConnectionAuthorization'];
 export type SaleStatus = components['schemas']['SaleStatus'];
+export type KnownSaleStatus = components['schemas']['KnownSaleStatus'];
 export type SaleDetectionSource = components['schemas']['SaleDetectionSource'];
+export type KnownSaleDetectionSource = components['schemas']['KnownSaleDetectionSource'];
 export type DelistRunStatus = components['schemas']['DelistRunStatus'];
 export type DelistResultState = components['schemas']['DelistResultState'];
+export type KnownDelistResultState = components['schemas']['KnownDelistResultState'];
 export type DelistResult = components['schemas']['DelistResult'];
 export type DelistRun = components['schemas']['DelistRun'];
+export type SaleItem = components['schemas']['SaleItem'];
+export type KnownFeeType = components['schemas']['KnownFeeType'];
+export type FeeType = components['schemas']['FeeType'];
+export type FeeSource = components['schemas']['FeeSource'];
+export type FeeLine = components['schemas']['FeeLine'];
 export type SaleCreate = components['schemas']['SaleCreate'];
 export type Sale = components['schemas']['Sale'];
 export type SalePage = components['schemas']['SalePage'];
 export type UserTaskKind = components['schemas']['UserTaskKind'];
+export type KnownUserTaskKind = components['schemas']['KnownUserTaskKind'];
 export type UserTaskStatus = components['schemas']['UserTaskStatus'];
 export type UserTaskUrgency = components['schemas']['UserTaskUrgency'];
 export type CopyField = components['schemas']['CopyField'];
 export type CopyAssist = components['schemas']['CopyAssist'];
 export type UserTask = components['schemas']['UserTask'];
 export type UserTaskCompletion = components['schemas']['UserTaskCompletion'];
+export type SaleCorrection = components['schemas']['SaleCorrection'];
 export type UserTaskPage = components['schemas']['UserTaskPage'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
@@ -2120,7 +2388,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Only items in one of these statuses. */
-                status?: components["schemas"]["ItemStatus"][];
+                status?: components["schemas"]["KnownItemStatus"][];
                 /** @description Free-text search over SKU, title, brand, and keywords. */
                 q?: string;
                 /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
@@ -2650,8 +2918,8 @@ export interface operations {
     listListings: {
         parameters: {
             query?: {
-                marketplace?: components["schemas"]["Marketplace"];
-                status?: components["schemas"]["ListingStatus"][];
+                marketplace?: components["schemas"]["KnownMarketplace"];
+                status?: components["schemas"]["KnownListingStatus"][];
                 /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Page size. */
@@ -2906,7 +3174,7 @@ export interface operations {
             query?: {
                 itemId?: components["schemas"]["Id"];
                 listingId?: components["schemas"]["Id"];
-                status?: components["schemas"]["OperationStatus"][];
+                status?: components["schemas"]["KnownOperationStatus"][];
                 /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Page size. */
@@ -3214,8 +3482,9 @@ export interface operations {
     listSales: {
         parameters: {
             query?: {
+                /** @description Only sales whose order contains this item. */
                 itemId?: components["schemas"]["Id"];
-                status?: components["schemas"]["SaleStatus"][];
+                status?: components["schemas"]["KnownSaleStatus"][];
                 /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Page size. */
@@ -3437,14 +3706,14 @@ type ReadonlyArray<T> = [
     unknown[]
 ] ? Readonly<Exclude<T, undefined>> : Readonly<Exclude<T, undefined>[]>;
 export const currencyCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["CurrencyCode"]> = ["USD"];
-export const marketplaceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Marketplace"]> = ["ebay", "depop", "poshmark", "mercari"];
-export const integrationModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["IntegrationMode"]> = ["api", "assisted"];
-export const statusToneValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["StatusTone"]> = ["success", "in_progress", "checking", "failed", "action_needed", "neutral"];
+export const knownMarketplaceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplace"]> = ["ebay", "depop", "poshmark", "mercari"];
+export const knownIntegrationModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownIntegrationMode"]> = ["api", "assisted"];
+export const knownStatusToneValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownStatusTone"]> = ["success", "in_progress", "checking", "failed", "action_needed", "neutral"];
 export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["marketplace_api", "user_confirmation"];
-export const provenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provenance"]> = ["ai", "ocr", "barcode", "user"];
+export const knownProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownProvenance"]> = ["ai", "ocr", "barcode", "user"];
 export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownErrorCode"]> = ["invalid_request", "unauthenticated", "quota_exceeded", "forbidden", "not_found", "version_conflict", "invalid_state_transition", "already_exists", "idempotency_key_in_progress", "upload_incomplete", "upload_expired", "marketplace_not_connected", "marketplace_reauth_required", "marketplace_action_unavailable", "payload_too_large", "validation_failed", "idempotency_key_reused", "rate_limited", "ai_budget_exceeded", "internal_error", "service_unavailable", "marketplace_authorization_denied", "marketplace_authorization_failed"];
 export const healthCheckStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["HealthCheckStatus"]> = ["ok", "unavailable"];
-export const itemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ItemStatus"]> = ["draft", "ready", "listed", "sold_pending_delist", "sold", "shipped", "archived"];
+export const knownItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownItemStatus"]> = ["draft", "ready", "listed", "sold_pending_delist", "sold", "shipped", "archived"];
 export const userSettableItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserSettableItemStatus"]> = ["draft", "ready", "archived"];
 export const itemConditionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ItemCondition"]> = ["new_with_tags", "new_without_tags", "new_with_defects", "pre_owned_excellent", "pre_owned_good", "pre_owned_fair"];
 export const measurementUnitValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MeasurementUnit"]> = ["in", "cm"];
@@ -3455,29 +3724,30 @@ export const uploadFileStatusValues: ReadonlyArray<FlattenedDeepRequired<compone
 export const uploadTargetMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UploadTarget"]["method"]> = ["PUT"];
 export const analysisTierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnalysisTier"]> = ["fast", "premium"];
 export const analysisStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnalysisStatus"]> = ["queued", "running", "completed", "failed"];
-export const analysisProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnalysisProvenance"]> = ["ai", "ocr", "barcode"];
-export const soldDataSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SoldDataSource"]> = ["depop_inspiration", "ebay_mi", "own_history"];
+export const knownAnalysisProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownAnalysisProvenance"]> = ["ai", "ocr", "barcode"];
+export const knownSoldDataSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSoldDataSource"]> = ["depop_inspiration", "ebay_mi", "own_history"];
 export const priceTierNameValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PriceTierName"]> = ["quick_sale", "recommended", "higher_profit"];
-export const priceBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PriceBasis"]> = ["sold_data", "ai_estimate", "cost_floor"];
-export const listingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ListingStatus"]> = ["draft", "queued", "publishing", "active", "ending", "ended", "sold", "error", "unknown", "needs_user_action"];
-export const listingActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ListingAction"]> = ["publish", "revise", "change_price", "end", "relist", "verify"];
+export const knownPriceBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPriceBasis"]> = ["sold_data", "ai_estimate", "cost_floor"];
+export const knownListingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingStatus"]> = ["draft", "queued", "publishing", "active", "ending", "ended", "sold", "error", "unknown", "needs_user_action"];
+export const knownListingActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingAction"]> = ["publish", "revise", "change_price", "end", "relist", "verify"];
 export const listingEndReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ListingEndReason"]> = ["sold_elsewhere", "not_available", "other"];
-export const operationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OperationKind"]> = ["create", "revise", "price", "end", "relist", "mark_sold", "verify"];
-export const operationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OperationStatus"]> = ["queued", "running", "retrying", "verifying", "succeeded", "failed", "needs_user_action", "canceled"];
-export const operationOriginTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OperationOriginType"]> = ["user", "auto_delist", "reprice_rule"];
-export const connectionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ConnectionStatus"]> = ["not_connected", "connected", "degraded", "reauth_required", "revoked"];
-export const capabilityModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["CapabilityMode"]> = ["api", "assisted", "bulk_file", "none"];
-export const markSoldModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MarkSoldMode"]> = ["api", "assisted", "bulk_file", "none", "not_needed"];
-export const marketplaceCapabilitiesConnectValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MarketplaceCapabilities"]["connect"]> = ["oauth", "none"];
-export const marketplaceCapabilitiesVerifyReadValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MarketplaceCapabilities"]["verifyRead"]> = ["api", "user_confirm"];
-export const marketplaceCapabilitiesImportListingsValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MarketplaceCapabilities"]["importListings"]> = ["api", "share_sheet", "bulk_file", "none"];
-export const marketplaceCapabilitiesSaleDetectionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MarketplaceCapabilities"]["saleDetection"]> = ["webhook", "poll", "email", "manual"];
-export const marketplaceCapabilitiesImageTransportValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MarketplaceCapabilities"]["imageTransport"]> = ["url_fetch", "upload", "user_saves_photos"];
+export const knownOperationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOperationKind"]> = ["create", "revise", "price", "end", "relist", "mark_sold", "verify"];
+export const knownOperationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOperationStatus"]> = ["queued", "running", "retrying", "verifying", "succeeded", "failed", "needs_user_action", "canceled"];
+export const knownOperationOriginTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOperationOriginType"]> = ["user", "auto_delist", "reprice_rule"];
+export const knownConnectionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionStatus"]> = ["not_connected", "connected", "degraded", "reauth_required", "revoked"];
+export const knownCapabilityModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownCapabilityMode"]> = ["api", "assisted", "bulk_file", "none"];
+export const knownMarkSoldModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarkSoldMode"]> = ["api", "assisted", "bulk_file", "none", "not_needed"];
+export const knownConnectMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectMethod"]> = ["oauth", "none"];
+export const knownVerifyReadModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownVerifyReadMode"]> = ["api", "user_confirm"];
+export const knownImportListingsModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImportListingsMode"]> = ["api", "share_sheet", "bulk_file", "none"];
+export const knownImageTransportModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImageTransportMode"]> = ["url_fetch", "upload", "user_saves_photos"];
 export const connectionAuthorizationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ConnectionAuthorizationStatus"]> = ["pending", "completed", "failed", "expired"];
-export const saleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SaleStatus"]> = ["detected", "confirmed", "canceled", "returned"];
-export const saleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
+export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "canceled", "returned"];
+export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];
-export const delistResultStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistResultState"]> = ["pending", "verifying", "delisted", "user_confirmed", "needs_user_action", "failed"];
-export const userTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskKind"]> = ["list_manually", "delist_manually", "confirm_sale", "reconnect", "review_match"];
+export const knownDelistResultStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownDelistResultState"]> = ["pending", "verifying", "delisted", "user_confirmed", "needs_user_action", "failed"];
+export const knownFeeTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeType"]> = ["marketplace", "payment", "shipping_label", "promotion", "tax", "other"];
+export const feeSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FeeSource"]> = ["actual", "estimated"];
+export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "confirm_sale", "reconnect", "review_match"];
 export const userTaskStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskStatus"]> = ["open", "completed", "dismissed"];
 export const userTaskUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskUrgency"]> = ["normal", "urgent"];

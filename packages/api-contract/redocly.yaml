@@ -1,4 +1,4 @@
-# Redocly CLI configuration for `npm run contract:lint` (part of `npm run contract:check`).
+# Redocly CLI configuration for this package's `npm run lint` (part of `npm run contract:check`).
 # recommended-strict turns every recommended rule into an error. Listora-specific rules
 # (Idempotency-Key on every POST, a default ErrorResponse, cursor pagination, Money) are
 # checked by src/contract-rules.test.ts.

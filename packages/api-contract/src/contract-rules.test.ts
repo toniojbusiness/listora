@@ -1,6 +1,7 @@
 /**
- * Listora-specific rules for openapi.yaml that a generic linter cannot know. Redocly
- * (`npm run contract:lint`) checks that the document is valid OpenAPI; these tests check
+ * Listora-specific rules for openapi.yaml that a generic linter cannot know. Redocly (the
+ * package's `npm run lint`, part of `npm run contract:check`) checks that the document is
+ * valid OpenAPI; these tests check
  * that it follows the conventions in README.md, so new endpoints cannot quietly drop them.
  */
 import { readFileSync } from 'node:fs';
@@ -27,9 +28,13 @@ interface Parameter {
   name?: string;
   in?: string;
   required?: boolean;
+  schema?: Schema;
 }
 interface Response {
   $ref?: string;
+  content?: Record<string, { schema?: Schema }>;
+}
+interface RequestBody {
   content?: Record<string, { schema?: Schema }>;
 }
 interface Operation {
@@ -38,6 +43,7 @@ interface Operation {
   tags?: string[];
   security?: unknown[];
   parameters?: Parameter[];
+  requestBody?: RequestBody;
   responses: Record<string, Response>;
 }
 interface Document {
@@ -215,12 +221,17 @@ describe('schemas', () => {
 
   it('represent every amount of money as Money (integer cents plus currency)', () => {
     // Judged by the last word of the camelCase name: listPrice, estimatedFees, shippingCharged.
-    const money = /(price|cost|amount|fees|profit|shipping|charged|median|low|mid|high)$/i;
+    const money = /(price|cost|amount|fees|profit|proceeds|shipping|charged|median|low|mid|high)$/i;
     for (const { at, schema, property } of walkSchemas()) {
       const lastWord = property?.split(/(?=[A-Z])/).at(-1) ?? '';
       if (!money.test(lastWord) || at.startsWith('Money.')) continue;
       // Capability flags such as `updatePrice` say how a price is changed, not what it is.
       if (at.startsWith('MarketplaceCapabilities.')) continue;
+      // A list of fees holds FeeLines, each with a Money `amount`.
+      if (schema.type === 'array') {
+        expect(schema.items?.$ref, at).toBe('#/components/schemas/FeeLine');
+        continue;
+      }
       expect(schema.$ref, at).toBe('#/components/schemas/Money');
     }
     const amountCents = doc.components.schemas['Money']?.properties?.['amountCents'];
@@ -237,19 +248,151 @@ describe('schemas', () => {
   });
 });
 
+/** `{ anyOf: [Known*, string] }`: a response value that may grow without breaking old clients. */
+function isOpenEnum(schema: Schema): boolean {
+  const [known, other] = schema.anyOf ?? [];
+  return (
+    schema.anyOf?.length === 2 &&
+    /^#\/components\/schemas\/Known[A-Z]\w*$/.test(known?.$ref ?? '') &&
+    other?.type === 'string' &&
+    other.enum === undefined
+  );
+}
+
+/**
+ * Every closed enum a response can contain, by component name or inline location. Each was
+ * chosen to stay closed: adding a value to one breaks installed apps (see README.md).
+ */
+const CLOSED_RESPONSE_ENUMS = [
+  // Listora's own lifecycles, independent of marketplaces.
+  'AnalysisStatus',
+  'ConnectionAuthorizationStatus',
+  'DelistRunStatus',
+  'PhotoStatus',
+  'UploadFileStatus',
+  'UserTaskStatus',
+  // Fixed by the product or by definition.
+  'AnalysisTier',
+  'FeeSource',
+  'PriceTierName',
+  'UserTaskUrgency',
+  // Values the client chooses and the server echoes.
+  'ImageContentType',
+  'ItemCondition',
+  'MeasurementUnit',
+  'PhotoRole',
+  // US-only launch; a new currency ships with app support for it.
+  'CurrencyCode',
+  // Infrastructure probes, not read by the app.
+  'HealthCheckStatus',
+  // HTTP protocol value.
+  'UploadTarget.method',
+  // The never-false-success invariant: success is established only these two ways.
+  'VerificationMethod',
+].sort();
+
+/** Walks a schema, following $refs once each; reports closed enums and open enums found. */
+function collectEnums(roots: Schema[]): {
+  closed: Set<string>;
+  open: Set<string>;
+  known: Set<string>;
+} {
+  const closed = new Set<string>();
+  const open = new Set<string>();
+  const known = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (schema: Schema, at: string): void => {
+    if (schema.$ref) {
+      const name = schema.$ref.replace('#/components/schemas/', '');
+      if (name.startsWith('Known')) known.add(name);
+      if (visited.has(name)) return;
+      visited.add(name);
+      visit(resolve(schema), name);
+      return;
+    }
+    if (isOpenEnum(schema)) {
+      open.add(at);
+      return;
+    }
+    if (schema.enum) closed.add(at);
+    for (const [name, child] of Object.entries(schema.properties ?? {})) {
+      visit(child, `${at}.${name}`);
+    }
+    if (schema.items) visit(schema.items, `${at}[]`);
+    if (typeof schema.additionalProperties === 'object') {
+      visit(schema.additionalProperties, `${at}{}`);
+    }
+    for (const child of [
+      ...(schema.anyOf ?? []),
+      ...(schema.oneOf ?? []),
+      ...(schema.allOf ?? []),
+    ]) {
+      visit(child, at);
+    }
+  };
+  for (const root of roots) visit(root, '(root)');
+  return { closed, open, known };
+}
+
+const responseSchemas = operations.flatMap(({ op }) =>
+  Object.values(op.responses).flatMap((response) =>
+    Object.values(resolve(response).content ?? {}).flatMap(({ schema }) =>
+      schema ? [schema] : [],
+    ),
+  ),
+);
+
+describe('enums', () => {
+  it('keep every growable response enum open (a Known* value or any string)', () => {
+    const { closed } = collectEnums(responseSchemas);
+    expect([...closed].sort()).toEqual(CLOSED_RESPONSE_ENUMS);
+  });
+
+  it('pair every Known* enum with an open schema of the same name', () => {
+    const schemas = doc.components.schemas;
+    const knownNames = Object.keys(schemas).filter((name) => name.startsWith('Known'));
+    expect(knownNames.length).toBeGreaterThan(0);
+    for (const name of knownNames) {
+      expect(schemas[name]?.type, name).toBe('string');
+      expect(schemas[name]?.enum?.length, name).toBeGreaterThan(0);
+      const wrapper = schemas[name.slice('Known'.length)];
+      expect(wrapper?.anyOf, name).toEqual([
+        { $ref: `#/components/schemas/${name}` },
+        { type: 'string', maxLength: 64 },
+      ]);
+    }
+  });
+
+  it('accept only known values in query and path parameters', () => {
+    const parameters = operations.flatMap(({ parameters: list }) =>
+      list.map((parameter) => resolve(parameter)),
+    );
+    const { open } = collectEnums(parameters.flatMap(({ schema }) => (schema ? [schema] : [])));
+    expect([...open]).toEqual([]);
+  });
+
+  it('accept only known values in request-only enums', () => {
+    // Shared schemas (ItemDetails, ...) keep open values so clients can send them back.
+    for (const name of ['ListingCreate', 'SaleCreate']) {
+      const marketplace = doc.components.schemas[name]?.properties?.['marketplace'];
+      expect(marketplace?.$ref, name).toBe('#/components/schemas/KnownMarketplace');
+    }
+  });
+});
+
 describe('vocabulary', () => {
   const values = (name: string): string[] | undefined => doc.components.schemas[name]?.enum;
 
   // These sets mirror the data model (docs/architecture.md section 9). Changing one is a
   // contract change: update the database, the server, and the iOS app together.
   it.each([
-    ['Marketplace', ['ebay', 'depop', 'poshmark', 'mercari']],
+    ['KnownMarketplace', ['ebay', 'depop', 'poshmark', 'mercari']],
     [
-      'ItemStatus',
+      'KnownItemStatus',
       ['draft', 'ready', 'listed', 'sold_pending_delist', 'sold', 'shipped', 'archived'],
     ],
     [
-      'ListingStatus',
+      'KnownListingStatus',
       [
         'draft',
         'queued',
@@ -263,9 +406,9 @@ describe('vocabulary', () => {
         'needs_user_action',
       ],
     ],
-    ['OperationKind', ['create', 'revise', 'price', 'end', 'relist', 'mark_sold', 'verify']],
+    ['KnownOperationKind', ['create', 'revise', 'price', 'end', 'relist', 'mark_sold', 'verify']],
     [
-      'OperationStatus',
+      'KnownOperationStatus',
       [
         'queued',
         'running',
@@ -278,13 +421,14 @@ describe('vocabulary', () => {
       ],
     ],
     [
-      'UserTaskKind',
+      'KnownUserTaskKind',
       ['list_manually', 'delist_manually', 'confirm_sale', 'reconnect', 'review_match'],
     ],
-    ['SaleStatus', ['detected', 'confirmed', 'canceled', 'returned']],
-    ['SaleDetectionSource', ['webhook', 'poll', 'email', 'manual']],
-    ['Provenance', ['ai', 'ocr', 'barcode', 'user']],
+    ['KnownSaleStatus', ['detected', 'confirmed', 'canceled', 'returned']],
+    ['KnownSaleDetectionSource', ['webhook', 'poll', 'email', 'manual']],
+    ['KnownProvenance', ['ai', 'ocr', 'barcode', 'user']],
     ['PhotoRole', ['front', 'back', 'tag', 'flaw', 'detail']],
+    ['KnownFeeType', ['marketplace', 'payment', 'shipping_label', 'promotion', 'tax', 'other']],
   ])('%s matches the data model', (name, expected) => {
     expect(values(name)).toEqual(expected);
   });
@@ -299,7 +443,7 @@ describe('vocabulary', () => {
   });
 
   it('never labels an AI estimate or cost floor as sold data', () => {
-    expect(values('SoldDataSource')).toEqual(['depop_inspiration', 'ebay_mi', 'own_history']);
+    expect(values('KnownSoldDataSource')).toEqual(['depop_inspiration', 'ebay_mi', 'own_history']);
     const soldComparables = doc.components.schemas['SoldComparables']?.properties ?? {};
     expect(soldComparables['source']?.$ref).toBe('#/components/schemas/SoldDataSource');
   });

@@ -22,6 +22,9 @@ import HTTPTypes
 /// - **Every POST** requires an `Idempotency-Key` header, so retries after a lost response
 ///   never create a second item, listing, or marketplace action.
 /// - **Absent means no value.** The server omits a property instead of sending `null`.
+/// - **Open enums.** A response value that can grow (marketplaces, statuses, actions,
+///   capabilities) is a `Known*` value or any other string, so a new value never breaks an
+///   installed app. Clients handle values they do not know.
 ///
 public struct Client: APIProtocol {
     /// The underlying HTTP client.
@@ -5147,10 +5150,12 @@ public struct Client: APIProtocol {
     }
     /// Record a sale manually ("Mark sold")
     ///
-    /// For sales Listora did not detect itself. Starts the same automatic delist run as a
-    /// detected sale: every other listing of the item gets a delist operation or an urgent
-    /// assisted task. A second sale of an already-sold item is recorded with
-    /// `isDoubleSale: true`.
+    /// For sales Listora did not detect itself. One sale is one order; a bundle lists several
+    /// items. Starts the same automatic delist run as a detected sale: every other listing
+    /// of every item in the order gets a delist operation or an urgent assisted task. A
+    /// sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+    /// `422 validation_failed` when an item appears twice or a `listingId` does not belong
+    /// to its item on `marketplace`.
     ///
     ///
     /// - Remark: HTTP `POST /v1/sales`.

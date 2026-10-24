@@ -343,10 +343,12 @@ public protocol APIProtocol: Sendable {
     func listSales(_ input: Operations.ListSales.Input) async throws -> Operations.ListSales.Output
     /// Record a sale manually ("Mark sold")
     ///
-    /// For sales Listora did not detect itself. Starts the same automatic delist run as a
-    /// detected sale: every other listing of the item gets a delist operation or an urgent
-    /// assisted task. A second sale of an already-sold item is recorded with
-    /// `isDoubleSale: true`.
+    /// For sales Listora did not detect itself. One sale is one order; a bundle lists several
+    /// items. Starts the same automatic delist run as a detected sale: every other listing
+    /// of every item in the order gets a delist operation or an urgent assisted task. A
+    /// sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+    /// `422 validation_failed` when an item appears twice or a `listingId` does not belong
+    /// to its item on `marketplace`.
     ///
     ///
     /// - Remark: HTTP `POST /v1/sales`.
@@ -1060,10 +1062,12 @@ extension APIProtocol {
     }
     /// Record a sale manually ("Mark sold")
     ///
-    /// For sales Listora did not detect itself. Starts the same automatic delist run as a
-    /// detected sale: every other listing of the item gets a delist operation or an urgent
-    /// assisted task. A second sale of an already-sold item is recorded with
-    /// `isDoubleSale: true`.
+    /// For sales Listora did not detect itself. One sale is one order; a bundle lists several
+    /// items. Starts the same automatic delist run as a detected sale: every other listing
+    /// of every item in the order gets a delist operation or an urgent assisted task. A
+    /// sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+    /// `422 validation_failed` when an item appears twice or a `listingId` does not belong
+    /// to its item on `marketplace`.
     ///
     ///
     /// - Remark: HTTP `POST /v1/sales`.

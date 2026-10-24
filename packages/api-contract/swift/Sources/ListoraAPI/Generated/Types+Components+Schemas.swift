@@ -53,29 +53,182 @@ extension Components {
                 case currency
             }
         }
+        /// A `KnownMarketplace`, or a marketplace added after this client was built. Clients show
+        /// an unknown marketplace generically (its raw id and the server's `statusDisplay`).
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/Marketplace`.
-        @frozen public enum Marketplace: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct Marketplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Marketplace/value1`.
+            public var value1: Components.Schemas.KnownMarketplace?
+            /// - Remark: Generated from `#/components/schemas/Marketplace/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `Marketplace`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownMarketplace? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownMarketplace`.
+        @frozen public enum KnownMarketplace: String, Codable, Hashable, Sendable, CaseIterable {
             case ebay = "ebay"
             case depop = "depop"
             case poshmark = "poshmark"
             case mercari = "mercari"
+        }
+        /// A `KnownIntegrationMode`, or a mode added after this client was built. Clients offer
+        /// nothing that depends on an unknown mode.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/IntegrationMode`.
+        public struct IntegrationMode: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/IntegrationMode/value1`.
+            public var value1: Components.Schemas.KnownIntegrationMode?
+            /// - Remark: Generated from `#/components/schemas/IntegrationMode/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `IntegrationMode`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownIntegrationMode? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
         }
         /// `api`: Listora acts through the marketplace's official API and verifies by read-back.
         /// `assisted`: Listora prepares the work and the user does the final step in the
         /// marketplace app, then confirms.
         ///
         ///
-        /// - Remark: Generated from `#/components/schemas/IntegrationMode`.
-        @frozen public enum IntegrationMode: String, Codable, Hashable, Sendable, CaseIterable {
+        /// - Remark: Generated from `#/components/schemas/KnownIntegrationMode`.
+        @frozen public enum KnownIntegrationMode: String, Codable, Hashable, Sendable, CaseIterable {
             case api = "api"
             case assisted = "assisted"
+        }
+        /// A `KnownStatusTone`, or a tone added after this client was built. Clients style an
+        /// unknown tone like `neutral` and still show the `label`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/StatusTone`.
+        public struct StatusTone: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StatusTone/value1`.
+            public var value1: Components.Schemas.KnownStatusTone?
+            /// - Remark: Generated from `#/components/schemas/StatusTone/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `StatusTone`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownStatusTone? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
         }
         /// How to style a status. `success` is used only for states verified by an API read-back
         /// or confirmed by the user.
         ///
         ///
-        /// - Remark: Generated from `#/components/schemas/StatusTone`.
-        @frozen public enum StatusTone: String, Codable, Hashable, Sendable, CaseIterable {
+        /// - Remark: Generated from `#/components/schemas/KnownStatusTone`.
+        @frozen public enum KnownStatusTone: String, Codable, Hashable, Sendable, CaseIterable {
             case success = "success"
             case inProgress = "in_progress"
             case checking = "checking"
@@ -152,10 +305,62 @@ extension Components {
                 case verifiedAt
             }
         }
-        /// Where a field value came from.
+        /// A `KnownProvenance`, or a source added after this client was built. Clients treat an
+        /// unknown source as not entered by the user (highlight it for review) and send it back
+        /// unchanged.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/Provenance`.
-        @frozen public enum Provenance: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct Provenance: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Provenance/value1`.
+            public var value1: Components.Schemas.KnownProvenance?
+            /// - Remark: Generated from `#/components/schemas/Provenance/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `Provenance`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownProvenance? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Where a field value came from.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownProvenance`.
+        @frozen public enum KnownProvenance: String, Codable, Hashable, Sendable, CaseIterable {
             case ai = "ai"
             case ocr = "ocr"
             case barcode = "barcode"
@@ -406,13 +611,64 @@ extension Components {
                 case checks
             }
         }
+        /// A `KnownItemStatus`, or a status added after this client was built. Clients show an
+        /// unknown status generically and offer no status-specific action for it.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemStatus`.
+        public struct ItemStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemStatus/value1`.
+            public var value1: Components.Schemas.KnownItemStatus?
+            /// - Remark: Generated from `#/components/schemas/ItemStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ItemStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownItemStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
         /// `draft` and `ready` are set by the user; `archived` by the user for an item with no
         /// live listing. `listed`, `sold_pending_delist`, `sold`, and `shipped` are set by the
         /// server from listings and sales.
         ///
         ///
-        /// - Remark: Generated from `#/components/schemas/ItemStatus`.
-        @frozen public enum ItemStatus: String, Codable, Hashable, Sendable, CaseIterable {
+        /// - Remark: Generated from `#/components/schemas/KnownItemStatus`.
+        @frozen public enum KnownItemStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case draft = "draft"
             case ready = "ready"
             case listed = "listed"
@@ -544,6 +800,10 @@ extension Components {
             public var purchaseSource: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ItemDetails/quantity`.
             public var quantity: Swift.Int32?
+            /// The storage location where the item is kept (for example a bin or shelf).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemDetails/storageLocationId`.
+            public var storageLocationId: Components.Schemas.Id?
             /// - Remark: Generated from `#/components/schemas/ItemDetails/acceptedAnalysisId`.
             public var acceptedAnalysisId: Components.Schemas.Id?
             /// Where each detail came from, keyed by property name, for example `{"brand": "ocr"}`.
@@ -598,6 +858,7 @@ extension Components {
             ///   - purchaseDate:
             ///   - purchaseSource:
             ///   - quantity:
+            ///   - storageLocationId: The storage location where the item is kept (for example a bin or shelf).
             ///   - acceptedAnalysisId:
             ///   - fieldProvenance: Where each detail came from, keyed by property name, for example `{"brand": "ocr"}`.
             public init(
@@ -626,6 +887,7 @@ extension Components {
                 purchaseDate: Swift.String? = nil,
                 purchaseSource: Swift.String? = nil,
                 quantity: Swift.Int32? = nil,
+                storageLocationId: Components.Schemas.Id? = nil,
                 acceptedAnalysisId: Components.Schemas.Id? = nil,
                 fieldProvenance: Components.Schemas.ItemDetails.FieldProvenancePayload? = nil
             ) {
@@ -654,6 +916,7 @@ extension Components {
                 self.purchaseDate = purchaseDate
                 self.purchaseSource = purchaseSource
                 self.quantity = quantity
+                self.storageLocationId = storageLocationId
                 self.acceptedAnalysisId = acceptedAnalysisId
                 self.fieldProvenance = fieldProvenance
             }
@@ -683,6 +946,7 @@ extension Components {
                 case purchaseDate
                 case purchaseSource
                 case quantity
+                case storageLocationId
                 case acceptedAnalysisId
                 case fieldProvenance
             }
@@ -747,12 +1011,18 @@ extension Components {
             public var version: Swift.Int64
             /// - Remark: Generated from `#/components/schemas/Item/details`.
             public var details: Components.Schemas.ItemDetails
+            /// Read-only; the location `details.storageLocationId` refers to.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/storageLocation`.
+            public var storageLocation: Components.Schemas.StorageLocationSummary?
             /// In display order; the first is the cover.
             ///
             /// - Remark: Generated from `#/components/schemas/Item/photos`.
             public var photos: [Components.Schemas.Photo]
             /// - Remark: Generated from `#/components/schemas/Item/listings`.
             public var listings: [Components.Schemas.Listing]
+            /// - Remark: Generated from `#/components/schemas/Item/saleSummary`.
+            public var saleSummary: Components.Schemas.ItemSaleSummary?
             /// - Remark: Generated from `#/components/schemas/Item/createdAt`.
             public var createdAt: Components.Schemas.Timestamp
             /// - Remark: Generated from `#/components/schemas/Item/updatedAt`.
@@ -765,8 +1035,10 @@ extension Components {
             ///   - status:
             ///   - version: Increases on every change; send it back as `expectedVersion`.
             ///   - details:
+            ///   - storageLocation: Read-only; the location `details.storageLocationId` refers to.
             ///   - photos: In display order; the first is the cover.
             ///   - listings:
+            ///   - saleSummary:
             ///   - createdAt:
             ///   - updatedAt:
             public init(
@@ -775,8 +1047,10 @@ extension Components {
                 status: Components.Schemas.ItemStatus,
                 version: Swift.Int64,
                 details: Components.Schemas.ItemDetails,
+                storageLocation: Components.Schemas.StorageLocationSummary? = nil,
                 photos: [Components.Schemas.Photo],
                 listings: [Components.Schemas.Listing],
+                saleSummary: Components.Schemas.ItemSaleSummary? = nil,
                 createdAt: Components.Schemas.Timestamp,
                 updatedAt: Components.Schemas.Timestamp
             ) {
@@ -785,8 +1059,10 @@ extension Components {
                 self.status = status
                 self.version = version
                 self.details = details
+                self.storageLocation = storageLocation
                 self.photos = photos
                 self.listings = listings
+                self.saleSummary = saleSummary
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
             }
@@ -796,10 +1072,108 @@ extension Components {
                 case status
                 case version
                 case details
+                case storageLocation
                 case photos
                 case listings
+                case saleSummary
                 case createdAt
                 case updatedAt
+            }
+        }
+        /// Where an item is kept.
+        ///
+        /// - Remark: Generated from `#/components/schemas/StorageLocationSummary`.
+        public struct StorageLocationSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StorageLocationSummary/id`.
+            public var id: Components.Schemas.Id
+            /// The short code printed on the bin or shelf, for example `B-12`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocationSummary/code`.
+            public var code: Swift.String
+            /// For example "Garage shelf 3, bin 12".
+            ///
+            /// - Remark: Generated from `#/components/schemas/StorageLocationSummary/label`.
+            public var label: Swift.String
+            /// Creates a new `StorageLocationSummary`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - code: The short code printed on the bin or shelf, for example `B-12`.
+            ///   - label: For example "Garage shelf 3, bin 12".
+            public init(
+                id: Components.Schemas.Id,
+                code: Swift.String,
+                label: Swift.String
+            ) {
+                self.id = id
+                self.code = code
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case code
+                case label
+            }
+        }
+        /// Read-only result of the item's sale. Present only when the item has sold (status
+        /// `sold_pending_delist`, `sold`, or `shipped`). For an item sold in a bundle, the
+        /// order's fees and shipping cost are split across its items in proportion to each
+        /// item's `salePrice`. A value is absent until it is known.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemSaleSummary`.
+        public struct ItemSaleSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/saleId`.
+            public var saleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/soldAt`.
+            public var soldAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/salePrice`.
+            public var salePrice: Components.Schemas.Money
+            /// This item's share of the sale's `netProceeds`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/netProceeds`.
+            public var netProceeds: Components.Schemas.Money?
+            /// This item's share of `netProceeds`, minus its share of `shippingCost`, minus its `cost`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/profit`.
+            public var profit: Components.Schemas.Money?
+            /// Return on investment, `profit` divided by the item's `cost`, in basis points
+            /// (12550 is 125.5%). Absent when `profit` is absent or the cost is zero.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/roiBasisPoints`.
+            public var roiBasisPoints: Swift.Int32?
+            /// Creates a new `ItemSaleSummary`.
+            ///
+            /// - Parameters:
+            ///   - saleId:
+            ///   - soldAt:
+            ///   - salePrice:
+            ///   - netProceeds: This item's share of the sale's `netProceeds`.
+            ///   - profit: This item's share of `netProceeds`, minus its share of `shippingCost`, minus its `cost`.
+            ///   - roiBasisPoints: Return on investment, `profit` divided by the item's `cost`, in basis points
+            public init(
+                saleId: Components.Schemas.Id,
+                soldAt: Components.Schemas.Timestamp,
+                salePrice: Components.Schemas.Money,
+                netProceeds: Components.Schemas.Money? = nil,
+                profit: Components.Schemas.Money? = nil,
+                roiBasisPoints: Swift.Int32? = nil
+            ) {
+                self.saleId = saleId
+                self.soldAt = soldAt
+                self.salePrice = salePrice
+                self.netProceeds = netProceeds
+                self.profit = profit
+                self.roiBasisPoints = roiBasisPoints
+            }
+            public enum CodingKeys: String, CodingKey {
+                case saleId
+                case soldAt
+                case salePrice
+                case netProceeds
+                case profit
+                case roiBasisPoints
             }
         }
         /// The item as shown in inventory lists.
@@ -1411,10 +1785,61 @@ extension Components {
             case completed = "completed"
             case failed = "failed"
         }
-        /// Where an analyzed value came from (users are not a source inside an analysis).
+        /// A `KnownAnalysisProvenance`, or a source added after this client was built. Clients
+        /// treat an unknown source like `ai`.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/AnalysisProvenance`.
-        @frozen public enum AnalysisProvenance: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct AnalysisProvenance: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AnalysisProvenance/value1`.
+            public var value1: Components.Schemas.KnownAnalysisProvenance?
+            /// - Remark: Generated from `#/components/schemas/AnalysisProvenance/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `AnalysisProvenance`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownAnalysisProvenance? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Where an analyzed value came from (users are not a source inside an analysis).
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownAnalysisProvenance`.
+        @frozen public enum KnownAnalysisProvenance: String, Codable, Hashable, Sendable, CaseIterable {
             case ai = "ai"
             case ocr = "ocr"
             case barcode = "barcode"
@@ -1856,12 +2281,63 @@ extension Components {
                 case confidence
             }
         }
+        /// A `KnownSoldDataSource`, or a source of real sold data added after this client was
+        /// built. Clients show the comparables' `label` for an unknown source.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SoldDataSource`.
+        public struct SoldDataSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SoldDataSource/value1`.
+            public var value1: Components.Schemas.KnownSoldDataSource?
+            /// - Remark: Generated from `#/components/schemas/SoldDataSource/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SoldDataSource`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSoldDataSource? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
         /// Sources of real sold data. `ai_estimate` and `cost_floor` are deliberately not in this
         /// list: the words "comps" and "sold" are only ever shown next to real sold data.
         ///
         ///
-        /// - Remark: Generated from `#/components/schemas/SoldDataSource`.
-        @frozen public enum SoldDataSource: String, Codable, Hashable, Sendable, CaseIterable {
+        /// - Remark: Generated from `#/components/schemas/KnownSoldDataSource`.
+        @frozen public enum KnownSoldDataSource: String, Codable, Hashable, Sendable, CaseIterable {
             case depopInspiration = "depop_inspiration"
             case ebayMi = "ebay_mi"
             case ownHistory = "own_history"
@@ -1937,10 +2413,61 @@ extension Components {
             case recommended = "recommended"
             case higherProfit = "higher_profit"
         }
-        /// What a suggested price is derived from.
+        /// A `KnownPriceBasis`, or a basis added after this client was built. Clients show the
+        /// tier's `label` for an unknown basis and never present it as sold data.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/PriceBasis`.
-        @frozen public enum PriceBasis: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct PriceBasis: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PriceBasis/value1`.
+            public var value1: Components.Schemas.KnownPriceBasis?
+            /// - Remark: Generated from `#/components/schemas/PriceBasis/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `PriceBasis`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownPriceBasis? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// What a suggested price is derived from.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownPriceBasis`.
+        @frozen public enum KnownPriceBasis: String, Codable, Hashable, Sendable, CaseIterable {
             case soldData = "sold_data"
             case aiEstimate = "ai_estimate"
             case costFloor = "cost_floor"
@@ -2138,12 +2665,63 @@ extension Components {
                 case generatedAt
             }
         }
+        /// A `KnownListingStatus`, or a status added after this client was built. Clients show
+        /// the listing's `statusDisplay` for an unknown status and never treat it as success.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ListingStatus`.
+        public struct ListingStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingStatus/value1`.
+            public var value1: Components.Schemas.KnownListingStatus?
+            /// - Remark: Generated from `#/components/schemas/ListingStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ListingStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownListingStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
         /// Lifecycle of one listing. `active` and `ended` are set only after verification
         /// (see `verification`); `unknown` means an outcome is being checked.
         ///
         ///
-        /// - Remark: Generated from `#/components/schemas/ListingStatus`.
-        @frozen public enum ListingStatus: String, Codable, Hashable, Sendable, CaseIterable {
+        /// - Remark: Generated from `#/components/schemas/KnownListingStatus`.
+        @frozen public enum KnownListingStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case draft = "draft"
             case queued = "queued"
             case publishing = "publishing"
@@ -2155,8 +2733,59 @@ extension Components {
             case unknown = "unknown"
             case needsUserAction = "needs_user_action"
         }
+        /// A `KnownListingAction`, or an action added after this client was built. Clients hide
+        /// actions they do not know.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/ListingAction`.
-        @frozen public enum ListingAction: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct ListingAction: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingAction/value1`.
+            public var value1: Components.Schemas.KnownListingAction?
+            /// - Remark: Generated from `#/components/schemas/ListingAction/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ListingAction`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownListingAction? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownListingAction`.
+        @frozen public enum KnownListingAction: String, Codable, Hashable, Sendable, CaseIterable {
             case publish = "publish"
             case revise = "revise"
             case changePrice = "change_price"
@@ -2276,7 +2905,7 @@ extension Components {
         /// - Remark: Generated from `#/components/schemas/ListingCreate`.
         public struct ListingCreate: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ListingCreate/marketplace`.
-            public var marketplace: Components.Schemas.Marketplace
+            public var marketplace: Components.Schemas.KnownMarketplace
             /// - Remark: Generated from `#/components/schemas/ListingCreate/variant`.
             public var variant: Components.Schemas.ListingVariant
             /// Creates a new `ListingCreate`.
@@ -2285,7 +2914,7 @@ extension Components {
             ///   - marketplace:
             ///   - variant:
             public init(
-                marketplace: Components.Schemas.Marketplace,
+                marketplace: Components.Schemas.KnownMarketplace,
                 variant: Components.Schemas.ListingVariant
             ) {
                 self.marketplace = marketplace
@@ -2570,8 +3199,59 @@ extension Components {
                 case operation
             }
         }
+        /// A `KnownOperationKind`, or a kind added after this client was built. Clients describe
+        /// an unknown kind generically using the operation's `statusDisplay`.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/OperationKind`.
-        @frozen public enum OperationKind: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct OperationKind: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OperationKind/value1`.
+            public var value1: Components.Schemas.KnownOperationKind?
+            /// - Remark: Generated from `#/components/schemas/OperationKind/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `OperationKind`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownOperationKind? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownOperationKind`.
+        @frozen public enum KnownOperationKind: String, Codable, Hashable, Sendable, CaseIterable {
             case create = "create"
             case revise = "revise"
             case price = "price"
@@ -2580,14 +3260,65 @@ extension Components {
             case markSold = "mark_sold"
             case verify = "verify"
         }
+        /// A `KnownOperationStatus`, or a status added after this client was built. Clients show
+        /// the operation's `statusDisplay` for an unknown status and never treat it as success.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/OperationStatus`.
+        public struct OperationStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OperationStatus/value1`.
+            public var value1: Components.Schemas.KnownOperationStatus?
+            /// - Remark: Generated from `#/components/schemas/OperationStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `OperationStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownOperationStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
         /// `succeeded` only after an API read-back confirms the desired state or the user
         /// confirms an assisted task. `verifying`: the outcome is unknown (for example a timeout
         /// after sending) and is being checked by read-back; the request is never re-sent
         /// blindly. `retrying`: a transient failure, retried with backoff.
         ///
         ///
-        /// - Remark: Generated from `#/components/schemas/OperationStatus`.
-        @frozen public enum OperationStatus: String, Codable, Hashable, Sendable, CaseIterable {
+        /// - Remark: Generated from `#/components/schemas/KnownOperationStatus`.
+        @frozen public enum KnownOperationStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case queued = "queued"
             case running = "running"
             case retrying = "retrying"
@@ -2597,8 +3328,59 @@ extension Components {
             case needsUserAction = "needs_user_action"
             case canceled = "canceled"
         }
+        /// A `KnownOperationOriginType`, or an origin added after this client was built. Clients
+        /// show an unknown origin generically.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/OperationOriginType`.
-        @frozen public enum OperationOriginType: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct OperationOriginType: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/OperationOriginType/value1`.
+            public var value1: Components.Schemas.KnownOperationOriginType?
+            /// - Remark: Generated from `#/components/schemas/OperationOriginType/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `OperationOriginType`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownOperationOriginType? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownOperationOriginType`.
+        @frozen public enum KnownOperationOriginType: String, Codable, Hashable, Sendable, CaseIterable {
             case user = "user"
             case autoDelist = "auto_delist"
             case repriceRule = "reprice_rule"
@@ -2957,32 +3739,414 @@ extension Components {
                 case nextCursor
             }
         }
+        /// A `KnownConnectionStatus`, or a status added after this client was built. Clients
+        /// show the connection's `statusDisplay` for an unknown status.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ConnectionStatus`.
+        public struct ConnectionStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectionStatus/value1`.
+            public var value1: Components.Schemas.KnownConnectionStatus?
+            /// - Remark: Generated from `#/components/schemas/ConnectionStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ConnectionStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownConnectionStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
         /// State of the API connection. Assisted marketplaces (`mode: assisted`) have no account
         /// connection and report `not_connected`; their `statusDisplay` says so.
         ///
         ///
-        /// - Remark: Generated from `#/components/schemas/ConnectionStatus`.
-        @frozen public enum ConnectionStatus: String, Codable, Hashable, Sendable, CaseIterable {
+        /// - Remark: Generated from `#/components/schemas/KnownConnectionStatus`.
+        @frozen public enum KnownConnectionStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case notConnected = "not_connected"
             case connected = "connected"
             case degraded = "degraded"
             case reauthRequired = "reauth_required"
             case revoked = "revoked"
         }
+        /// A `KnownCapabilityMode`, or a mode added after this client was built. Clients treat
+        /// an unknown mode like `none` (the capability is not offered).
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/CapabilityMode`.
-        @frozen public enum CapabilityMode: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct CapabilityMode: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CapabilityMode/value1`.
+            public var value1: Components.Schemas.KnownCapabilityMode?
+            /// - Remark: Generated from `#/components/schemas/CapabilityMode/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `CapabilityMode`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownCapabilityMode? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownCapabilityMode`.
+        @frozen public enum KnownCapabilityMode: String, Codable, Hashable, Sendable, CaseIterable {
             case api = "api"
             case assisted = "assisted"
             case bulkFile = "bulk_file"
             case none = "none"
         }
+        /// A `KnownMarkSoldMode`, or a mode added after this client was built. Clients treat an
+        /// unknown mode like `none`.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/MarkSoldMode`.
-        @frozen public enum MarkSoldMode: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct MarkSoldMode: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarkSoldMode/value1`.
+            public var value1: Components.Schemas.KnownMarkSoldMode?
+            /// - Remark: Generated from `#/components/schemas/MarkSoldMode/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `MarkSoldMode`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownMarkSoldMode? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownMarkSoldMode`.
+        @frozen public enum KnownMarkSoldMode: String, Codable, Hashable, Sendable, CaseIterable {
             case api = "api"
             case assisted = "assisted"
             case bulkFile = "bulk_file"
             case none = "none"
             case notNeeded = "not_needed"
+        }
+        /// A `KnownConnectMethod`, or a method added after this client was built. Clients treat
+        /// an unknown method like `none` (no connect button).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ConnectMethod`.
+        public struct ConnectMethod: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectMethod/value1`.
+            public var value1: Components.Schemas.KnownConnectMethod?
+            /// - Remark: Generated from `#/components/schemas/ConnectMethod/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ConnectMethod`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownConnectMethod? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownConnectMethod`.
+        @frozen public enum KnownConnectMethod: String, Codable, Hashable, Sendable, CaseIterable {
+            case oauth = "oauth"
+            case none = "none"
+        }
+        /// A `KnownVerifyReadMode`, or a mode added after this client was built. Clients offer no
+        /// "check again" action for an unknown mode.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/VerifyReadMode`.
+        public struct VerifyReadMode: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/VerifyReadMode/value1`.
+            public var value1: Components.Schemas.KnownVerifyReadMode?
+            /// - Remark: Generated from `#/components/schemas/VerifyReadMode/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `VerifyReadMode`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownVerifyReadMode? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// How success is established.
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownVerifyReadMode`.
+        @frozen public enum KnownVerifyReadMode: String, Codable, Hashable, Sendable, CaseIterable {
+            case api = "api"
+            case userConfirm = "user_confirm"
+        }
+        /// A `KnownImportListingsMode`, or a mode added after this client was built. Clients
+        /// treat an unknown mode like `none`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ImportListingsMode`.
+        public struct ImportListingsMode: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImportListingsMode/value1`.
+            public var value1: Components.Schemas.KnownImportListingsMode?
+            /// - Remark: Generated from `#/components/schemas/ImportListingsMode/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ImportListingsMode`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownImportListingsMode? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownImportListingsMode`.
+        @frozen public enum KnownImportListingsMode: String, Codable, Hashable, Sendable, CaseIterable {
+            case api = "api"
+            case shareSheet = "share_sheet"
+            case bulkFile = "bulk_file"
+            case none = "none"
+        }
+        /// A `KnownImageTransportMode`, or a mode added after this client was built. Clients
+        /// treat an unknown mode like `user_saves_photos`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ImageTransportMode`.
+        public struct ImageTransportMode: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImageTransportMode/value1`.
+            public var value1: Components.Schemas.KnownImageTransportMode?
+            /// - Remark: Generated from `#/components/schemas/ImageTransportMode/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ImageTransportMode`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownImageTransportMode? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownImageTransportMode`.
+        @frozen public enum KnownImageTransportMode: String, Codable, Hashable, Sendable, CaseIterable {
+            case urlFetch = "url_fetch"
+            case upload = "upload"
+            case userSavesPhotos = "user_saves_photos"
         }
         /// What Listora can do on this marketplace for this account. Clients branch on these
         /// flags, never on the marketplace name; they can change when access is granted.
@@ -2991,12 +4155,7 @@ extension Components {
         /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities`.
         public struct MarketplaceCapabilities: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/connect`.
-            @frozen public enum ConnectPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case oauth = "oauth"
-                case none = "none"
-            }
-            /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/connect`.
-            public var connect: Components.Schemas.MarketplaceCapabilities.ConnectPayload
+            public var connect: Components.Schemas.ConnectMethod
             /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/create`.
             public var create: Components.Schemas.CapabilityMode
             /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/updatePrice`.
@@ -3009,45 +4168,14 @@ extension Components {
             public var relist: Components.Schemas.CapabilityMode
             /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/markSold`.
             public var markSold: Components.Schemas.MarkSoldMode
-            /// How success is established.
-            ///
             /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/verifyRead`.
-            @frozen public enum VerifyReadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case api = "api"
-                case userConfirm = "user_confirm"
-            }
-            /// How success is established.
-            ///
-            /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/verifyRead`.
-            public var verifyRead: Components.Schemas.MarketplaceCapabilities.VerifyReadPayload
+            public var verifyRead: Components.Schemas.VerifyReadMode
             /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/importListings`.
-            @frozen public enum ImportListingsPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case api = "api"
-                case shareSheet = "share_sheet"
-                case bulkFile = "bulk_file"
-                case none = "none"
-            }
-            /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/importListings`.
-            public var importListings: Components.Schemas.MarketplaceCapabilities.ImportListingsPayload
-            /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/SaleDetectionPayload`.
-            @frozen public enum SaleDetectionPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case webhook = "webhook"
-                case poll = "poll"
-                case email = "email"
-                case manual = "manual"
-            }
+            public var importListings: Components.Schemas.ImportListingsMode
             /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/saleDetection`.
-            public typealias SaleDetectionPayload = [Components.Schemas.MarketplaceCapabilities.SaleDetectionPayloadPayload]
-            /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/saleDetection`.
-            public var saleDetection: Components.Schemas.MarketplaceCapabilities.SaleDetectionPayload
+            public var saleDetection: [Components.Schemas.SaleDetectionSource]
             /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/imageTransport`.
-            @frozen public enum ImageTransportPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case urlFetch = "url_fetch"
-                case upload = "upload"
-                case userSavesPhotos = "user_saves_photos"
-            }
-            /// - Remark: Generated from `#/components/schemas/MarketplaceCapabilities/imageTransport`.
-            public var imageTransport: Components.Schemas.MarketplaceCapabilities.ImageTransportPayload
+            public var imageTransport: Components.Schemas.ImageTransportMode
             /// Creates a new `MarketplaceCapabilities`.
             ///
             /// - Parameters:
@@ -3058,22 +4186,22 @@ extension Components {
             ///   - delist:
             ///   - relist:
             ///   - markSold:
-            ///   - verifyRead: How success is established.
+            ///   - verifyRead:
             ///   - importListings:
             ///   - saleDetection:
             ///   - imageTransport:
             public init(
-                connect: Components.Schemas.MarketplaceCapabilities.ConnectPayload,
+                connect: Components.Schemas.ConnectMethod,
                 create: Components.Schemas.CapabilityMode,
                 updatePrice: Components.Schemas.CapabilityMode,
                 updateDetails: Components.Schemas.CapabilityMode,
                 delist: Components.Schemas.CapabilityMode,
                 relist: Components.Schemas.CapabilityMode,
                 markSold: Components.Schemas.MarkSoldMode,
-                verifyRead: Components.Schemas.MarketplaceCapabilities.VerifyReadPayload,
-                importListings: Components.Schemas.MarketplaceCapabilities.ImportListingsPayload,
-                saleDetection: Components.Schemas.MarketplaceCapabilities.SaleDetectionPayload,
-                imageTransport: Components.Schemas.MarketplaceCapabilities.ImageTransportPayload
+                verifyRead: Components.Schemas.VerifyReadMode,
+                importListings: Components.Schemas.ImportListingsMode,
+                saleDetection: [Components.Schemas.SaleDetectionSource],
+                imageTransport: Components.Schemas.ImageTransportMode
             ) {
                 self.connect = connect
                 self.create = create
@@ -3306,15 +4434,117 @@ extension Components {
                 case completedAt
             }
         }
+        /// A `KnownSaleStatus`, or a status added after this client was built. Clients show an
+        /// unknown status generically.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/SaleStatus`.
-        @frozen public enum SaleStatus: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct SaleStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleStatus/value1`.
+            public var value1: Components.Schemas.KnownSaleStatus?
+            /// - Remark: Generated from `#/components/schemas/SaleStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SaleStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSaleStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownSaleStatus`.
+        @frozen public enum KnownSaleStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case detected = "detected"
             case confirmed = "confirmed"
             case canceled = "canceled"
             case returned = "returned"
         }
+        /// A `KnownSaleDetectionSource`, or a source added after this client was built. Clients
+        /// show an unknown source generically.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/SaleDetectionSource`.
-        @frozen public enum SaleDetectionSource: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct SaleDetectionSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleDetectionSource/value1`.
+            public var value1: Components.Schemas.KnownSaleDetectionSource?
+            /// - Remark: Generated from `#/components/schemas/SaleDetectionSource/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SaleDetectionSource`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSaleDetectionSource? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownSaleDetectionSource`.
+        @frozen public enum KnownSaleDetectionSource: String, Codable, Hashable, Sendable, CaseIterable {
             case webhook = "webhook"
             case poll = "poll"
             case email = "email"
@@ -3328,8 +4558,59 @@ extension Components {
             case completed = "completed"
             case needsAttention = "needs_attention"
         }
+        /// A `KnownDelistResultState`, or a state added after this client was built. Clients
+        /// show the result's `statusDisplay` for an unknown state and never treat it as delisted.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/DelistResultState`.
-        @frozen public enum DelistResultState: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct DelistResultState: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DelistResultState/value1`.
+            public var value1: Components.Schemas.KnownDelistResultState?
+            /// - Remark: Generated from `#/components/schemas/DelistResultState/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `DelistResultState`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownDelistResultState? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownDelistResultState`.
+        @frozen public enum KnownDelistResultState: String, Codable, Hashable, Sendable, CaseIterable {
             case pending = "pending"
             case verifying = "verifying"
             case delisted = "delisted"
@@ -3341,6 +4622,10 @@ extension Components {
         public struct DelistResult: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/DelistResult/listingId`.
             public var listingId: Components.Schemas.Id
+            /// The sold item this listing belongs to (a bundle has several).
+            ///
+            /// - Remark: Generated from `#/components/schemas/DelistResult/itemId`.
+            public var itemId: Components.Schemas.Id
             /// - Remark: Generated from `#/components/schemas/DelistResult/marketplace`.
             public var marketplace: Components.Schemas.Marketplace
             /// - Remark: Generated from `#/components/schemas/DelistResult/mode`.
@@ -3357,6 +4642,7 @@ extension Components {
             ///
             /// - Parameters:
             ///   - listingId:
+            ///   - itemId: The sold item this listing belongs to (a bundle has several).
             ///   - marketplace:
             ///   - mode:
             ///   - state:
@@ -3365,6 +4651,7 @@ extension Components {
             ///   - userTaskId:
             public init(
                 listingId: Components.Schemas.Id,
+                itemId: Components.Schemas.Id,
                 marketplace: Components.Schemas.Marketplace,
                 mode: Components.Schemas.IntegrationMode,
                 state: Components.Schemas.DelistResultState,
@@ -3373,6 +4660,7 @@ extension Components {
                 userTaskId: Components.Schemas.Id? = nil
             ) {
                 self.listingId = listingId
+                self.itemId = itemId
                 self.marketplace = marketplace
                 self.mode = mode
                 self.state = state
@@ -3382,6 +4670,7 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case listingId
+                case itemId
                 case marketplace
                 case mode
                 case state
@@ -3390,7 +4679,7 @@ extension Components {
                 case userTaskId
             }
         }
-        /// The automatic delist of every other listing after a sale.
+        /// The automatic delist of every other listing of the sold items after a sale.
         ///
         /// - Remark: Generated from `#/components/schemas/DelistRun`.
         public struct DelistRun: Codable, Hashable, Sendable {
@@ -3439,14 +4728,149 @@ extension Components {
                 case completedAt
             }
         }
+        /// One item of an order.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleItem`.
+        public struct SaleItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleItem/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// The listing the item sold through, when known. Absent for a sale recorded without one.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleItem/listingId`.
+            public var listingId: Components.Schemas.Id?
+            /// This item's part of the order's sale price (for a bundle, its share of the bundle price).
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleItem/salePrice`.
+            public var salePrice: Components.Schemas.Money
+            /// Creates a new `SaleItem`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - listingId: The listing the item sold through, when known. Absent for a sale recorded without one.
+            ///   - salePrice: This item's part of the order's sale price (for a bundle, its share of the bundle price).
+            public init(
+                itemId: Components.Schemas.Id,
+                listingId: Components.Schemas.Id? = nil,
+                salePrice: Components.Schemas.Money
+            ) {
+                self.itemId = itemId
+                self.listingId = listingId
+                self.salePrice = salePrice
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case listingId
+                case salePrice
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownFeeType`.
+        @frozen public enum KnownFeeType: String, Codable, Hashable, Sendable, CaseIterable {
+            case marketplace = "marketplace"
+            case payment = "payment"
+            case shippingLabel = "shipping_label"
+            case promotion = "promotion"
+            case tax = "tax"
+            case other = "other"
+        }
+        /// A `KnownFeeType`, or a type added after this client was built. Clients show an unknown
+        /// type like `other`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/FeeType`.
+        public struct FeeType: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/FeeType/value1`.
+            public var value1: Components.Schemas.KnownFeeType?
+            /// - Remark: Generated from `#/components/schemas/FeeType/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `FeeType`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownFeeType? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `actual`: reported by the marketplace. `estimated`: from Listora's fee table until the marketplace reports the actual fee.
+        ///
+        /// - Remark: Generated from `#/components/schemas/FeeSource`.
+        @frozen public enum FeeSource: String, Codable, Hashable, Sendable, CaseIterable {
+            case actual = "actual"
+            case estimated = "estimated"
+        }
+        /// One fee deducted from the sale.
+        ///
+        /// - Remark: Generated from `#/components/schemas/FeeLine`.
+        public struct FeeLine: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/FeeLine/type`.
+            public var _type: Components.Schemas.FeeType
+            /// A positive amount the seller pays.
+            ///
+            /// - Remark: Generated from `#/components/schemas/FeeLine/amount`.
+            public var amount: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/FeeLine/source`.
+            public var source: Components.Schemas.FeeSource
+            /// Creates a new `FeeLine`.
+            ///
+            /// - Parameters:
+            ///   - _type:
+            ///   - amount: A positive amount the seller pays.
+            ///   - source:
+            public init(
+                _type: Components.Schemas.FeeType,
+                amount: Components.Schemas.Money,
+                source: Components.Schemas.FeeSource
+            ) {
+                self._type = _type
+                self.amount = amount
+                self.source = source
+            }
+            public enum CodingKeys: String, CodingKey {
+                case _type = "type"
+                case amount
+                case source
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/SaleCreate`.
         public struct SaleCreate: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/SaleCreate/itemId`.
-            public var itemId: Components.Schemas.Id
             /// - Remark: Generated from `#/components/schemas/SaleCreate/marketplace`.
-            public var marketplace: Components.Schemas.Marketplace
-            /// - Remark: Generated from `#/components/schemas/SaleCreate/salePrice`.
-            public var salePrice: Components.Schemas.Money
+            public var marketplace: Components.Schemas.KnownMarketplace
+            /// The items of the order, each at most once; more than one for a bundle.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleCreate/items`.
+            public var items: [Components.Schemas.SaleItem]
             /// - Remark: Generated from `#/components/schemas/SaleCreate/shippingCharged`.
             public var shippingCharged: Components.Schemas.Money?
             /// Defaults to now.
@@ -3458,61 +4882,83 @@ extension Components {
             /// Creates a new `SaleCreate`.
             ///
             /// - Parameters:
-            ///   - itemId:
             ///   - marketplace:
-            ///   - salePrice:
+            ///   - items: The items of the order, each at most once; more than one for a bundle.
             ///   - shippingCharged:
             ///   - soldAt: Defaults to now.
             ///   - externalOrderId:
             public init(
-                itemId: Components.Schemas.Id,
-                marketplace: Components.Schemas.Marketplace,
-                salePrice: Components.Schemas.Money,
+                marketplace: Components.Schemas.KnownMarketplace,
+                items: [Components.Schemas.SaleItem],
                 shippingCharged: Components.Schemas.Money? = nil,
                 soldAt: Components.Schemas.Timestamp? = nil,
                 externalOrderId: Swift.String? = nil
             ) {
-                self.itemId = itemId
                 self.marketplace = marketplace
-                self.salePrice = salePrice
+                self.items = items
                 self.shippingCharged = shippingCharged
                 self.soldAt = soldAt
                 self.externalOrderId = externalOrderId
             }
             public enum CodingKeys: String, CodingKey {
-                case itemId
                 case marketplace
-                case salePrice
+                case items
                 case shippingCharged
                 case soldAt
                 case externalOrderId
             }
         }
+        /// One marketplace order. It has one or more items (a bundle has several). Money values
+        /// that depend on fees are absent until they are known.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/Sale`.
         public struct Sale: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/Sale/id`.
             public var id: Components.Schemas.Id
-            /// - Remark: Generated from `#/components/schemas/Sale/itemId`.
-            public var itemId: Components.Schemas.Id
-            /// - Remark: Generated from `#/components/schemas/Sale/listingId`.
-            public var listingId: Components.Schemas.Id?
             /// - Remark: Generated from `#/components/schemas/Sale/marketplace`.
             public var marketplace: Components.Schemas.Marketplace
             /// - Remark: Generated from `#/components/schemas/Sale/externalOrderId`.
             public var externalOrderId: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Sale/items`.
+            public var items: [Components.Schemas.SaleItem]
             /// - Remark: Generated from `#/components/schemas/Sale/soldAt`.
             public var soldAt: Components.Schemas.Timestamp
+            /// The order's sale price before fees, the sum of `items[].salePrice`.
+            ///
             /// - Remark: Generated from `#/components/schemas/Sale/salePrice`.
             public var salePrice: Components.Schemas.Money
+            /// What the buyer paid for shipping.
+            ///
             /// - Remark: Generated from `#/components/schemas/Sale/shippingCharged`.
             public var shippingCharged: Components.Schemas.Money?
+            /// Every fee deducted from the payout. Absent until known.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sale/fees`.
+            public var fees: [Components.Schemas.FeeLine]?
+            /// What the seller paid to ship outside the payout, for example a label bought
+            /// separately. A label the marketplace deducts is a `shipping_label` fee instead.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sale/shippingCost`.
+            public var shippingCost: Components.Schemas.Money?
+            /// The payout, `salePrice` plus `shippingCharged` minus `fees`. Absent until the fees are known.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sale/netProceeds`.
+            public var netProceeds: Components.Schemas.Money?
+            /// `netProceeds` minus `shippingCost` minus the items' `cost`. Absent until
+            /// `netProceeds` is known and every item has a cost.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sale/profit`.
+            public var profit: Components.Schemas.Money?
             /// - Remark: Generated from `#/components/schemas/Sale/detectionSource`.
             public var detectionSource: Components.Schemas.SaleDetectionSource
             /// - Remark: Generated from `#/components/schemas/Sale/status`.
             public var status: Components.Schemas.SaleStatus
             /// - Remark: Generated from `#/components/schemas/Sale/shipBy`.
             public var shipBy: Components.Schemas.Timestamp?
-            /// True when the item had already sold elsewhere; the user must cancel one sale.
+            /// True when an item of the order had already sold elsewhere; the user must cancel one sale.
             ///
             /// - Remark: Generated from `#/components/schemas/Sale/isDoubleSale`.
             public var isDoubleSale: Swift.Bool
@@ -3526,29 +4972,35 @@ extension Components {
             ///
             /// - Parameters:
             ///   - id:
-            ///   - itemId:
-            ///   - listingId:
             ///   - marketplace:
             ///   - externalOrderId:
+            ///   - items:
             ///   - soldAt:
-            ///   - salePrice:
-            ///   - shippingCharged:
+            ///   - salePrice: The order's sale price before fees, the sum of `items[].salePrice`.
+            ///   - shippingCharged: What the buyer paid for shipping.
+            ///   - fees: Every fee deducted from the payout. Absent until known.
+            ///   - shippingCost: What the seller paid to ship outside the payout, for example a label bought
+            ///   - netProceeds: The payout, `salePrice` plus `shippingCharged` minus `fees`. Absent until the fees are known.
+            ///   - profit: `netProceeds` minus `shippingCost` minus the items' `cost`. Absent until
             ///   - detectionSource:
             ///   - status:
             ///   - shipBy:
-            ///   - isDoubleSale: True when the item had already sold elsewhere; the user must cancel one sale.
+            ///   - isDoubleSale: True when an item of the order had already sold elsewhere; the user must cancel one sale.
             ///   - delistRun:
             ///   - createdAt:
             ///   - updatedAt:
             public init(
                 id: Components.Schemas.Id,
-                itemId: Components.Schemas.Id,
-                listingId: Components.Schemas.Id? = nil,
                 marketplace: Components.Schemas.Marketplace,
                 externalOrderId: Swift.String? = nil,
+                items: [Components.Schemas.SaleItem],
                 soldAt: Components.Schemas.Timestamp,
                 salePrice: Components.Schemas.Money,
                 shippingCharged: Components.Schemas.Money? = nil,
+                fees: [Components.Schemas.FeeLine]? = nil,
+                shippingCost: Components.Schemas.Money? = nil,
+                netProceeds: Components.Schemas.Money? = nil,
+                profit: Components.Schemas.Money? = nil,
                 detectionSource: Components.Schemas.SaleDetectionSource,
                 status: Components.Schemas.SaleStatus,
                 shipBy: Components.Schemas.Timestamp? = nil,
@@ -3558,13 +5010,16 @@ extension Components {
                 updatedAt: Components.Schemas.Timestamp
             ) {
                 self.id = id
-                self.itemId = itemId
-                self.listingId = listingId
                 self.marketplace = marketplace
                 self.externalOrderId = externalOrderId
+                self.items = items
                 self.soldAt = soldAt
                 self.salePrice = salePrice
                 self.shippingCharged = shippingCharged
+                self.fees = fees
+                self.shippingCost = shippingCost
+                self.netProceeds = netProceeds
+                self.profit = profit
                 self.detectionSource = detectionSource
                 self.status = status
                 self.shipBy = shipBy
@@ -3575,13 +5030,16 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case id
-                case itemId
-                case listingId
                 case marketplace
                 case externalOrderId
+                case items
                 case soldAt
                 case salePrice
                 case shippingCharged
+                case fees
+                case shippingCost
+                case netProceeds
+                case profit
                 case detectionSource
                 case status
                 case shipBy
@@ -3616,8 +5074,60 @@ extension Components {
                 case nextCursor
             }
         }
+        /// A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
+        /// unknown task's `title`, `instructions`, and `deepLink`, and ask the user to update
+        /// the app to complete it.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/UserTaskKind`.
-        @frozen public enum UserTaskKind: String, Codable, Hashable, Sendable, CaseIterable {
+        public struct UserTaskKind: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/UserTaskKind/value1`.
+            public var value1: Components.Schemas.KnownUserTaskKind?
+            /// - Remark: Generated from `#/components/schemas/UserTaskKind/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `UserTaskKind`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownUserTaskKind? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/KnownUserTaskKind`.
+        @frozen public enum KnownUserTaskKind: String, Codable, Hashable, Sendable, CaseIterable {
             case listManually = "list_manually"
             case delistManually = "delist_manually"
             case confirmSale = "confirm_sale"
@@ -3713,6 +5223,10 @@ extension Components {
             public var listingId: Components.Schemas.Id?
             /// - Remark: Generated from `#/components/schemas/UserTask/operationId`.
             public var operationId: Components.Schemas.Id?
+            /// For `confirm_sale`, the sale to confirm.
+            ///
+            /// - Remark: Generated from `#/components/schemas/UserTask/saleId`.
+            public var saleId: Components.Schemas.Id?
             /// Opens the right screen in the marketplace app or site.
             ///
             /// - Remark: Generated from `#/components/schemas/UserTask/deepLink`.
@@ -3738,6 +5252,7 @@ extension Components {
             ///   - itemId:
             ///   - listingId:
             ///   - operationId:
+            ///   - saleId: For `confirm_sale`, the sale to confirm.
             ///   - deepLink: Opens the right screen in the marketplace app or site.
             ///   - copyAssist:
             ///   - dueAt:
@@ -3754,6 +5269,7 @@ extension Components {
                 itemId: Components.Schemas.Id? = nil,
                 listingId: Components.Schemas.Id? = nil,
                 operationId: Components.Schemas.Id? = nil,
+                saleId: Components.Schemas.Id? = nil,
                 deepLink: Swift.String? = nil,
                 copyAssist: Components.Schemas.CopyAssist? = nil,
                 dueAt: Components.Schemas.Timestamp? = nil,
@@ -3770,6 +5286,7 @@ extension Components {
                 self.itemId = itemId
                 self.listingId = listingId
                 self.operationId = operationId
+                self.saleId = saleId
                 self.deepLink = deepLink
                 self.copyAssist = copyAssist
                 self.dueAt = dueAt
@@ -3787,6 +5304,7 @@ extension Components {
                 case itemId
                 case listingId
                 case operationId
+                case saleId
                 case deepLink
                 case copyAssist
                 case dueAt
@@ -3794,29 +5312,96 @@ extension Components {
                 case completedAt
             }
         }
+        /// The user's confirmation and, for some kinds, their decision. Which properties apply
+        /// depends on the task's `kind`; a property that does not apply is
+        /// `422 validation_failed`.
+        ///
+        /// - `list_manually`: `externalUrl`, the new listing's URL (links the listing).
+        /// - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
+        ///   `rejectMatch: true` when nothing matches. Exactly one of the two is required.
+        /// - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+        /// - `delist_manually`, `reconnect`: nothing besides `note`.
+        /// - Every kind: optional `note`.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/UserTaskCompletion`.
         public struct UserTaskCompletion: Codable, Hashable, Sendable {
-            /// For `list_manually`, the new listing's URL (links the listing).
-            ///
             /// - Remark: Generated from `#/components/schemas/UserTaskCompletion/externalUrl`.
             public var externalUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/UserTaskCompletion/matchedItemId`.
+            public var matchedItemId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/UserTaskCompletion/matchedListingId`.
+            public var matchedListingId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/UserTaskCompletion/rejectMatch`.
+            public var rejectMatch: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/UserTaskCompletion/saleCorrection`.
+            public var saleCorrection: Components.Schemas.SaleCorrection?
             /// - Remark: Generated from `#/components/schemas/UserTaskCompletion/note`.
             public var note: Swift.String?
             /// Creates a new `UserTaskCompletion`.
             ///
             /// - Parameters:
-            ///   - externalUrl: For `list_manually`, the new listing's URL (links the listing).
+            ///   - externalUrl:
+            ///   - matchedItemId:
+            ///   - matchedListingId:
+            ///   - rejectMatch:
+            ///   - saleCorrection:
             ///   - note:
             public init(
                 externalUrl: Swift.String? = nil,
+                matchedItemId: Components.Schemas.Id? = nil,
+                matchedListingId: Components.Schemas.Id? = nil,
+                rejectMatch: Swift.Bool? = nil,
+                saleCorrection: Components.Schemas.SaleCorrection? = nil,
                 note: Swift.String? = nil
             ) {
                 self.externalUrl = externalUrl
+                self.matchedItemId = matchedItemId
+                self.matchedListingId = matchedListingId
+                self.rejectMatch = rejectMatch
+                self.saleCorrection = saleCorrection
                 self.note = note
             }
             public enum CodingKeys: String, CodingKey {
                 case externalUrl
+                case matchedItemId
+                case matchedListingId
+                case rejectMatch
+                case saleCorrection
                 case note
+            }
+        }
+        /// Corrected sale details; a property that is absent keeps the detected value.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleCorrection`.
+        public struct SaleCorrection: Codable, Hashable, Sendable {
+            /// The order's sale price; for a bundle it is split across the items in proportion.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleCorrection/salePrice`.
+            public var salePrice: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/SaleCorrection/soldAt`.
+            public var soldAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/SaleCorrection/externalOrderId`.
+            public var externalOrderId: Swift.String?
+            /// Creates a new `SaleCorrection`.
+            ///
+            /// - Parameters:
+            ///   - salePrice: The order's sale price; for a bundle it is split across the items in proportion.
+            ///   - soldAt:
+            ///   - externalOrderId:
+            public init(
+                salePrice: Components.Schemas.Money? = nil,
+                soldAt: Components.Schemas.Timestamp? = nil,
+                externalOrderId: Swift.String? = nil
+            ) {
+                self.salePrice = salePrice
+                self.soldAt = soldAt
+                self.externalOrderId = externalOrderId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case salePrice
+                case soldAt
+                case externalOrderId
             }
         }
         /// - Remark: Generated from `#/components/schemas/UserTaskPage`.
