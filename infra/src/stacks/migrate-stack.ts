@@ -1,5 +1,5 @@
 import { CfnOutput, Fn } from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import type * as ec2 from 'aws-cdk-lib/aws-ec2';
 import type * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -8,7 +8,7 @@ import type * as rds from 'aws-cdk-lib/aws-rds';
 import type { Construct } from 'constructs';
 
 import { containerEnvironment, MIGRATE_COMMAND } from '../containers.ts';
-import { ListoraStack, removalPolicyFor, type ListoraStackProps } from './common.ts';
+import { ListoraStack, removalPolicyFor, taskPlacement, type ListoraStackProps } from './common.ts';
 import { containerSecrets, databaseUrl } from './task-config.ts';
 
 export interface MigrateStackProps extends ListoraStackProps {
@@ -35,7 +35,11 @@ export function migrateTaskNames(environment: string) {
 }
 
 /** CloudFormation outputs the deploy workflow passes to `ecs run-task`. */
-export const MIGRATE_OUTPUTS = { subnetIds: 'SubnetIds', securityGroupId: 'SecurityGroupId' };
+export const MIGRATE_OUTPUTS = {
+  subnetIds: 'SubnetIds',
+  securityGroupId: 'SecurityGroupId',
+  assignPublicIp: 'AssignPublicIp',
+};
 
 /**
  * The one-off ECS task that applies schema migrations (`MIGRATE_COMMAND`). The deploy
@@ -45,7 +49,7 @@ export const MIGRATE_OUTPUTS = { subnetIds: 'SubnetIds', securityGroupId: 'Secur
  * running (expand, then contract: infra/README.md).
  *
  * The task is the worker's twin for the database: the same image tag, `DATABASE_URL` without a
- * password plus `PGPASSWORD` from the RDS secret, the app subnets, and the worker security
+ * password plus `PGPASSWORD` from the RDS secret, the task subnets, and the worker security
  * group, the one the database admits besides the API's. Its task role has no permissions. It
  * has a cluster of its own because the compute stack's does not exist yet on a first deploy.
  */
@@ -100,10 +104,15 @@ export class MigrateStack extends ListoraStack {
       readonlyRootFilesystem: true,
     });
 
-    const subnets = props.vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS });
+    const placement = taskPlacement(settings);
+    const subnets = props.vpc.selectSubnets(placement.subnets);
     new CfnOutput(this, MIGRATE_OUTPUTS.subnetIds, { value: Fn.join(',', subnets.subnetIds) });
     new CfnOutput(this, MIGRATE_OUTPUTS.securityGroupId, {
       value: props.workerSecurityGroup.securityGroupId,
+    });
+    // `ecs run-task` wants ENABLED in public subnets, where the address is the only way out.
+    new CfnOutput(this, MIGRATE_OUTPUTS.assignPublicIp, {
+      value: placement.assignPublicIp ? 'ENABLED' : 'DISABLED',
     });
   }
 }

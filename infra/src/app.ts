@@ -83,10 +83,11 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
     props('storage', 'photo bucket and CloudFront'),
   );
   const email = new EmailStack(app, id('email'), props('email', 'SES inbound sale email'));
+  const front = settings.ingress === 'load-balancer' ? 'an ALB' : 'an API Gateway HTTP API';
   const compute = new ComputeStack(app, id('compute'), {
-    ...props('compute', 'ECS Fargate api and worker behind an ALB'),
+    ...props('compute', `ECS Fargate api and worker behind ${front}`),
     vpc: network.vpc,
-    loadBalancerSecurityGroup: network.loadBalancerSecurityGroup,
+    ingressSecurityGroup: network.ingressSecurityGroup,
     apiSecurityGroup: network.apiSecurityGroup,
     workerSecurityGroup: network.workerSecurityGroup,
     database: data.database,
@@ -99,10 +100,8 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
   compute.addStackDependency(secrets, 'app secrets must exist before tasks read them');
   const observability = new ObservabilityStack(app, id('observability'), {
     ...props('observability', 'alarms'),
-    loadBalancer: compute.loadBalancer,
-    apiTargetGroup: compute.apiTargetGroup,
-    apiService: compute.apiService,
-    workerService: compute.workerService,
+    endpoint: compute.endpoint,
+    services: compute.services,
     database: data.database,
   });
 

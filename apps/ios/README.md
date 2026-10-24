@@ -145,11 +145,11 @@ Each build configuration reads one xcconfig file in `Config/`, and `AppConfigura
 values from Info.plist at launch. A missing or invalid value stops the app at launch with an
 error that names the key.
 
-| Configuration     | xcconfig                  | `API_BASE_URL`                      | Bundle id suffix |
-| ----------------- | ------------------------- | ----------------------------------- | ---------------- |
-| `Dev-Debug`       | `Config/Dev.xcconfig`     | `http://127.0.0.1:3000` (local API) | `.dev`           |
-| `Staging-Release` | `Config/Staging.xcconfig` | placeholder `.invalid` host         | `.staging`       |
-| `Prod-Release`    | `Config/Prod.xcconfig`    | placeholder `.invalid` host         | none             |
+| Configuration     | xcconfig                  | `API_BASE_URL`                                                                           | Bundle id suffix |
+| ----------------- | ------------------------- | ---------------------------------------------------------------------------------------- | ---------------- |
+| `Dev-Debug`       | `Config/Dev.xcconfig`     | `http://127.0.0.1:3000` (local API)                                                      | `.dev`           |
+| `Staging-Release` | `Config/Staging.xcconfig` | placeholder `.invalid` host                                                              | `.staging`       |
+| `Prod-Release`    | `Config/Prod.xcconfig`    | the personal environment's `ApiUrl` (placeholder `.invalid` host until its first deploy) | none             |
 
 - Run and test use `Dev-Debug`; archive uses `Prod-Release`. The build type is part of each
   name because Xcode gives Swift packages debug settings only for configurations whose name
@@ -159,8 +159,12 @@ error that names the key.
 - Only the Dev Info.plist carries the ATS local-networking exception
   (`NSAllowsLocalNetworking`). XcodeGen derives it from the shared plist, and
   `make ios-check-ats` (part of `make ios-test`) fails if Staging or Prod would ship it.
-- The Staging and Prod hosts end in `.invalid` and never resolve. The real domains arrive with
-  the AWS accounts (gate G-AWS, T-30).
+- The Staging and Prod hosts end in `.invalid` and never resolve until they are set. Prod
+  points at the personal environment, which is production for now (there is no separate
+  Personal configuration): at that environment's first deploy, set its `API_BASE_URL` to the
+  compute stack's `ApiUrl` output, `https://api.<domain>`
+  ([infra/README.md](../../infra/README.md#the-personal-environment)). Staging's domain arrives
+  with the staging AWS account (gate G-AWS, T-30).
 - To point Dev at a different port or host (for example a LAN address for a physical device),
   copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` (gitignored) and set
   `API_BASE_URL` there.

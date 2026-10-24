@@ -9,7 +9,7 @@ on:
       environment:
         description: Environment to deploy
         type: choice
-        options: [staging, prod]
+        options: [staging, prod, personal]
         required: true
 
 permissions:
@@ -40,6 +40,7 @@ jobs:
       LISTORA_DOMAIN: ${{ vars.DOMAIN }}
       LISTORA_HOSTED_ZONE_ID: ${{ vars.HOSTED_ZONE_ID }}
       LISTORA_ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
+      LISTORA_AVAILABILITY_ZONES: ${{ vars.AVAILABILITY_ZONES }}
       # Images are tagged with the commit they are built from; tags are immutable in ECR.
       LISTORA_IMAGE_TAG: ${{ github.sha }}
     steps:
@@ -106,9 +107,10 @@ jobs:
           output() { jq --raw-output --arg key "$1" '.[] | select(.OutputKey == $key) | .OutputValue' <<<"$outputs"; }
           subnets=$(output SubnetIds)
           group=$(output SecurityGroupId)
+          public_ip=$(output AssignPublicIp)
           started=$(aws ecs run-task --cluster "$cluster" --task-definition "listora-$LISTORA_ENV-migrate" \
             --launch-type FARGATE --count 1 --started-by "deploy-$GITHUB_RUN_ID" \
-            --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$group],assignPublicIp=DISABLED}" \
+            --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$group],assignPublicIp=$public_ip}" \
             --output json)
           task=$(jq --raw-output '.tasks[0].taskArn // empty' <<<"$started")
           if [[ -z "$task" ]]; then

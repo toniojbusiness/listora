@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { APP_SECRETS, ENVIRONMENT_NAMES, ENVIRONMENT_SETTINGS, SERVICE_NAMES } from './config.ts';
 import { containerEnvironment, containerSecretNames, MIGRATE_COMMAND } from './containers.ts';
 import type { ListoraStacks } from './app.ts';
-import { migrateTaskNames } from './stacks/migrate-stack.ts';
+import { HTTP_API_THROTTLE } from './stacks/compute-stack.ts';
+import { MIGRATE_OUTPUTS, migrateTaskNames } from './stacks/migrate-stack.ts';
 import { stackList, synthesize } from './test-support.ts';
 
 type Resource = { Type: string; Properties?: Record<string, unknown> } & Record<string, unknown>;
@@ -37,12 +38,12 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   const settings = ENVIRONMENT_SETTINGS[environment];
   const { stacks, target } = synthesized[environment];
 
-  it('deploys every stack to the target account and region, protected in prod', () => {
+  it('deploys every stack to the target account and region, protected with its data', () => {
     for (const stack of stackList(stacks)) {
       expect(stack.account).toBe(target.account);
       expect(stack.region).toBe(target.region);
       expect(stack.stackName).toMatch(new RegExp(`^listora-${environment}-[a-z-]+$`));
-      expect(stack.terminationProtection).toBe(environment === 'prod');
+      expect(stack.terminationProtection).toBe(settings.protectData);
       expect(stack.tags.tagValues()).toEqual({ project: 'listora', environment });
     }
   });
@@ -50,15 +51,30 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   describe('network', () => {
     const t = template(environment, 'network');
 
-    it('spans two zones with public, app (NAT egress), and isolated data subnets', () => {
+    const egress = settings.network.taskEgress;
+
+    it('spans two zones with public, app (NAT egress only), and isolated data subnets', () => {
       t.hasResourceProperties('AWS::EC2::VPC', { CidrBlock: settings.network.cidr });
-      t.resourceCountIs('AWS::EC2::Subnet', 6);
-      t.resourceCountIs('AWS::EC2::NatGateway', settings.network.natGateways);
+      const tiers = Object.keys(t.findResources('AWS::EC2::Subnet')).map((id) =>
+        id.replace(/Subnet\d+Subnet[0-9A-F]+$/, ''),
+      );
+      expect(tiers.sort()).toEqual(
+        (egress.via === 'nat'
+          ? ['Vpcapp', 'Vpcapp', 'Vpcdata', 'Vpcdata', 'Vpcpublic', 'Vpcpublic']
+          : ['Vpcdata', 'Vpcdata', 'Vpcpublic', 'Vpcpublic']
+        ).sort(),
+      );
+      t.resourceCountIs('AWS::EC2::NatGateway', egress.via === 'nat' ? egress.natGateways : 0);
       t.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Gateway',
         ServiceName: Match.objectLike({ 'Fn::Join': Match.anyValue() }),
       });
-      t.hasResourceProperties('AWS::EC2::FlowLog', { TrafficType: 'REJECT' });
+      t.resourceCountIs('AWS::EC2::VPCEndpoint', 1);
+      if (settings.network.rejectedFlowLogs) {
+        t.hasResourceProperties('AWS::EC2::FlowLog', { TrafficType: 'REJECT' });
+      } else {
+        t.resourceCountIs('AWS::EC2::FlowLog', 0);
+      }
     });
 
     it('gives the isolated data subnets no route out of the VPC', () => {
@@ -73,15 +89,15 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
       }
     });
 
-    it('opens only the load balancer to the internet, and the database only to the tasks', () => {
+    it('opens only a load balancer to the internet, and the database only to the tasks', () => {
       const groups = t.findResources('AWS::EC2::SecurityGroup');
       const groupId = (prefix: string) => {
         const id = Object.keys(groups).find((key) => key.startsWith(prefix));
         if (id === undefined) throw new Error(`no ${prefix} security group`);
         return id;
       };
-      const [lb, api, worker, db] = [
-        'LoadBalancerSecurityGroup',
+      const [ingressGroup, api, worker, db] = [
+        settings.ingress === 'load-balancer' ? 'LoadBalancerSecurityGroup' : 'VpcLinkSecurityGroup',
         'ApiSecurityGroup',
         'WorkerSecurityGroup',
         'DatabaseSecurityGroup',
@@ -94,10 +110,15 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
         })),
       );
       const open = inline.filter(({ rule }) => rule['CidrIp'] === '0.0.0.0/0');
-      expect(open.map(({ id, rule }) => [id, rule['FromPort']])).toEqual([
-        [lb, 443],
-        [lb, 80],
-      ]);
+      // Tasks in public subnets have public addresses, but no group admits the internet.
+      expect(open.map(({ id, rule }) => [id, rule['FromPort']])).toEqual(
+        settings.ingress === 'load-balancer'
+          ? [
+              [ingressGroup, 443],
+              [ingressGroup, 80],
+            ]
+          : [],
+      );
 
       const ingress = resources(t, 'AWS::EC2::SecurityGroupIngress').map(
         (rule) => rule.Properties ?? {},
@@ -117,7 +138,23 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
         [worker, 5432, 5432],
       ]);
       expect(into(worker)).toEqual([]);
-      expect(into(api).map((rule) => rule['FromPort'])).toEqual([3000]);
+      expect(
+        into(api).map((rule) => [
+          (rule['SourceSecurityGroupId'] as { 'Fn::GetAtt': string[] })['Fn::GetAtt'][0],
+          rule['FromPort'],
+        ]),
+      ).toEqual([[ingressGroup, 3000]]);
+      // The ingress group may connect only to the API tasks' port.
+      const egressRules = resources(t, 'AWS::EC2::SecurityGroupEgress').map(
+        (rule) => rule.Properties ?? {},
+      );
+      expect(
+        egressRules.map((rule) => [
+          (rule['GroupId'] as { 'Fn::GetAtt': string[] })['Fn::GetAtt'][0],
+          (rule['DestinationSecurityGroupId'] as { 'Fn::GetAtt': string[] })['Fn::GetAtt'][0],
+          rule['FromPort'],
+        ]),
+      ).toEqual([[ingressGroup, api, 3000]]);
     });
   });
 
@@ -311,13 +348,45 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   describe('compute', () => {
     const t = template(environment, 'compute');
     const taskDefinitions = resources(t, 'AWS::ECS::TaskDefinition');
-    const container = (service: string) => {
-      const found = taskDefinitions.find(
-        (task) => task.Properties?.['Family'] === `listora-${environment}-${service}`,
-      );
-      if (found === undefined) throw new Error(`no ${service} task definition`);
-      return (found.Properties?.['ContainerDefinitions'] as Record<string, unknown>[])[0] ?? {};
+    const layout = settings.services;
+    /** Each ECS service of the layout, the containers its task runs, and its size. */
+    const expectedServices =
+      layout.layout === 'separate'
+        ? [
+            { name: 'api', containers: ['api'], size: layout.api },
+            { name: 'worker', containers: ['worker'], size: layout.worker },
+          ]
+        : [{ name: 'app', containers: ['api', 'worker'], size: layout.app }];
+    const containerDefinitions = (task: Resource) =>
+      task.Properties?.['ContainerDefinitions'] as Record<string, unknown>[];
+    const container = (name: string) => {
+      const found = taskDefinitions
+        .flatMap(containerDefinitions)
+        .find((definition) => definition['Name'] === name);
+      if (found === undefined) throw new Error(`no ${name} container`);
+      return found;
     };
+
+    it('runs the api and worker containers as the services and task sizes of the layout', () => {
+      expect(
+        taskDefinitions.map((task) => [
+          task.Properties?.['Family'],
+          containerDefinitions(task).map((definition) => definition['Name']),
+          task.Properties?.['Cpu'],
+          task.Properties?.['Memory'],
+        ]),
+      ).toEqual(
+        expectedServices.map(({ name, containers, size }) => [
+          `listora-${environment}-${name}`,
+          containers,
+          String(size.cpu),
+          String(size.memoryMiB),
+        ]),
+      );
+      expect(
+        resources(t, 'AWS::ECS::Service').map((service) => service.Properties?.['ServiceName']),
+      ).toEqual(expectedServices.map(({ name }) => name));
+    });
 
     it('runs api and worker from the deployed image tag, with a read-only root file system', () => {
       for (const [service, command] of [
@@ -327,6 +396,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
         const definition = container(service);
         expect(definition['Command']).toEqual(command);
         expect(definition['ReadonlyRootFilesystem']).toBe(true);
+        expect(definition['Essential']).toBe(true);
         expect(JSON.stringify(definition['Image'])).toContain(`:${target.imageTag}"`);
       }
     });
@@ -351,24 +421,31 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
       }
     });
 
-    it('runs tasks in private subnets with rollback on failed deploys', () => {
+    it('runs tasks where the task egress places them, with rollback on failed deploys', () => {
+      const publicIp = settings.network.taskEgress.via === 'public-ip';
       for (const service of resources(t, 'AWS::ECS::Service')) {
         // Autoscaling owns the task count; a template count would reset it on every deploy.
         expect(service.Properties?.['DesiredCount']).toBeUndefined();
         expect(service.Properties).toMatchObject({
           LaunchType: 'FARGATE',
-          NetworkConfiguration: { AwsvpcConfiguration: { AssignPublicIp: 'DISABLED' } },
+          NetworkConfiguration: {
+            AwsvpcConfiguration: { AssignPublicIp: publicIp ? 'ENABLED' : 'DISABLED' },
+          },
           DeploymentConfiguration: {
             DeploymentCircuitBreaker: { Enable: true, Rollback: true },
             MinimumHealthyPercent: 100,
             MaximumPercent: 200,
           },
         });
+        const subnets = JSON.stringify(
+          (service.Properties?.['NetworkConfiguration'] as Record<string, Record<string, unknown>>)[
+            'AwsvpcConfiguration'
+          ]?.['Subnets'],
+        );
+        expect(subnets).toContain(publicIp ? 'RefVpcpublicSubnet' : 'RefVpcappSubnet');
+        expect(subnets).not.toContain(publicIp ? 'Vpcapp' : 'Vpcpublic');
       }
-      for (const [service, size] of [
-        ['api', settings.api],
-        ['worker', settings.worker],
-      ] as const) {
+      for (const { name, size } of expectedServices) {
         t.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
           MinCapacity: size.minTasks,
           MaxCapacity: size.maxTasks,
@@ -376,54 +453,17 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
             'Fn::Join': [
               '',
               Match.arrayWith([
-                { 'Fn::GetAtt': [Match.stringLikeRegexp(`^${service}service`), 'Name'] },
+                { 'Fn::GetAtt': [Match.stringLikeRegexp(`^${name}service`), 'Name'] },
               ]),
             ],
           },
         });
       }
-    });
-
-    it('serves the API over HTTPS only, health-checked on /health/live', () => {
-      t.hasResourceProperties('AWS::CertificateManager::Certificate', {
-        DomainName: `api.${target.domain}`,
-        ValidationMethod: 'DNS',
-      });
-      t.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
-        Port: 443,
-        Protocol: 'HTTPS',
-        SslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
-      });
-      t.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
-        Port: 80,
-        DefaultActions: [
-          Match.objectLike({
-            Type: 'redirect',
-            RedirectConfig: Match.objectLike({ Port: '443', Protocol: 'HTTPS' }),
-          }),
-        ],
-      });
-      t.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        Port: 3000,
-        HealthCheckPath: '/health/live',
-        Matcher: { HttpCode: '200' },
-      });
-      t.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Scheme: 'internet-facing',
-        LoadBalancerAttributes: Match.arrayWith([
-          { Key: 'routing.http.drop_invalid_header_fields.enabled', Value: 'true' },
-        ]),
-      });
-      const attributes = JSON.stringify(
-        resources(t, 'AWS::ElasticLoadBalancingV2::LoadBalancer')[0]?.Properties,
+      // A scaling policy only where the range leaves room to scale.
+      t.resourceCountIs(
+        'AWS::ApplicationAutoScaling::ScalingPolicy',
+        expectedServices.filter(({ size }) => size.maxTasks > size.minTasks).length,
       );
-      expect(attributes.includes('{"Key":"deletion_protection.enabled","Value":"true"}')).toBe(
-        settings.protectData,
-      );
-      t.hasResourceProperties('AWS::Route53::RecordSet', {
-        Name: `api.${target.domain}.`,
-        Type: 'A',
-      });
     });
 
     it('keeps service logs for the environment retention', () => {
@@ -442,13 +482,12 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
         if (found === undefined) throw new Error(`no policy ${prefix}`);
         return JSON.stringify(found[1]);
       };
-      const apiTask = policyOf('apitaskTaskRole');
-      const workerTask = policyOf('workertaskTaskRole');
-      expect(apiTask).toContain('Photos');
-      expect(apiTask).not.toContain('InboundMail');
-      expect(workerTask).toContain('Photos');
-      expect(workerTask).toContain('/inbound/*');
-      for (const policy of [apiTask, workerTask]) {
+      for (const { name, containers } of expectedServices) {
+        const policy = policyOf(`${name}taskTaskRole`);
+        expect(policy).toContain('Photos');
+        // Raw sale email only for a task that runs the worker.
+        expect(policy.includes('InboundMail')).toBe(containers.includes('worker'));
+        if (containers.includes('worker')) expect(policy).toContain('/inbound/*');
         expect(policy).toContain('"kms:Decrypt","kms:GenerateDataKey"');
         expect(policy).not.toContain('kms:*');
         expect(policy).not.toContain('secretsmanager');
@@ -462,6 +501,119 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
         }
       }
     });
+
+    it('serves the API at https://api.<domain> only, with a certificate validated in DNS', () => {
+      t.hasResourceProperties('AWS::CertificateManager::Certificate', {
+        DomainName: `api.${target.domain}`,
+        ValidationMethod: 'DNS',
+      });
+      t.hasResourceProperties('AWS::Route53::RecordSet', {
+        Name: `api.${target.domain}.`,
+        Type: 'A',
+      });
+      // The iOS Prod configuration's API_BASE_URL is personal's ApiUrl (infra/README.md), and
+      // the HTTP API's execute-api URL is disabled, so this output is the only endpoint.
+      t.hasOutput('ApiUrl', { Value: `https://api.${target.domain}` });
+    });
+
+    if (settings.ingress === 'load-balancer') {
+      it('serves the API through the load balancer over HTTPS only, checked on /health/live', () => {
+        t.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+          Port: 443,
+          Protocol: 'HTTPS',
+          SslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
+        });
+        t.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+          Port: 80,
+          DefaultActions: [
+            Match.objectLike({
+              Type: 'redirect',
+              RedirectConfig: Match.objectLike({ Port: '443', Protocol: 'HTTPS' }),
+            }),
+          ],
+        });
+        t.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+          Port: 3000,
+          HealthCheckPath: '/health/live',
+          Matcher: { HttpCode: '200' },
+        });
+        t.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+          Scheme: 'internet-facing',
+          LoadBalancerAttributes: Match.arrayWith([
+            { Key: 'routing.http.drop_invalid_header_fields.enabled', Value: 'true' },
+          ]),
+        });
+        const attributes = JSON.stringify(
+          resources(t, 'AWS::ElasticLoadBalancingV2::LoadBalancer')[0]?.Properties,
+        );
+        expect(attributes.includes('{"Key":"deletion_protection.enabled","Value":"true"}')).toBe(
+          settings.protectData,
+        );
+        t.resourceCountIs('AWS::ApiGatewayV2::Api', 0);
+        // The load balancer checks the API, so the container defines no check of its own.
+        expect(container('api')['HealthCheck']).toBeUndefined();
+      });
+    } else {
+      it('serves the API through an HTTP API and a VPC link, with no other endpoint', () => {
+        t.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 0);
+        t.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+          ProtocolType: 'HTTP',
+          DisableExecuteApiEndpoint: true,
+        });
+        t.hasResourceProperties('AWS::ApiGatewayV2::DomainName', {
+          DomainName: `api.${target.domain}`,
+          DomainNameConfigurations: [
+            Match.objectLike({ EndpointType: 'REGIONAL', SecurityPolicy: 'TLS_1_2' }),
+          ],
+        });
+        t.hasResourceProperties('AWS::ApiGatewayV2::ApiMapping', { Stage: Match.anyValue() });
+        // Every path and method goes to the API tasks, through the VPC link.
+        t.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: '$default' });
+        t.resourceCountIs('AWS::ApiGatewayV2::Route', 1);
+        t.hasResourceProperties('AWS::ApiGatewayV2::Integration', {
+          IntegrationType: 'HTTP_PROXY',
+          ConnectionType: 'VPC_LINK',
+          IntegrationMethod: 'ANY',
+          IntegrationUri: { 'Fn::GetAtt': [Match.stringLikeRegexp('CloudmapService'), 'Arn'] },
+        });
+        t.hasResourceProperties('AWS::ApiGatewayV2::VpcLink', {
+          SecurityGroupIds: [
+            {
+              'Fn::GetStackOutput': Match.objectLike({
+                OutputName: Match.stringLikeRegexp('VpcLinkSecurityGroup'),
+              }),
+            },
+          ],
+        });
+        // The $default stage serves at the root (no stage prefix in paths), throttled.
+        t.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+          StageName: '$default',
+          AutoDeploy: true,
+          DefaultRouteSettings: {
+            ThrottlingRateLimit: HTTP_API_THROTTLE.rateLimit,
+            ThrottlingBurstLimit: HTTP_API_THROTTLE.burstLimit,
+          },
+        });
+      });
+
+      it('registers the API container in Cloud Map and has ECS check its /health/live', () => {
+        // SRV records carry the port; ECS keeps the registrations to healthy tasks.
+        t.hasResourceProperties('AWS::ServiceDiscovery::Service', {
+          Name: 'api',
+          DnsConfig: Match.objectLike({ DnsRecords: [{ TTL: 10, Type: 'SRV' }] }),
+          HealthCheckCustomConfig: { FailureThreshold: 1 },
+        });
+        t.hasResourceProperties('AWS::ECS::Service', {
+          ServiceRegistries: [Match.objectLike({ ContainerName: 'api', ContainerPort: 3000 })],
+        });
+        const check = container('api')['HealthCheck'] as Record<string, unknown>;
+        const command = check['Command'] as string[];
+        expect(command.slice(0, 3)).toEqual(['CMD', 'node', '-e']);
+        expect(command[3]).toContain("fetch('http://127.0.0.1:3000/health/live')");
+        expect(check).toMatchObject({ Interval: 15, Timeout: 5, Retries: 3, StartPeriod: 30 });
+        expect(container('worker')['HealthCheck']).toBeUndefined();
+      });
+    }
   });
 
   describe('migrate', () => {
@@ -488,8 +640,16 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
           },
         });
       }
-      t.hasOutput('SubnetIds', Match.anyValue());
-      t.hasOutput('SecurityGroupId', Match.anyValue());
+      t.hasOutput(MIGRATE_OUTPUTS.subnetIds, Match.anyValue());
+      t.hasOutput(MIGRATE_OUTPUTS.securityGroupId, Match.anyValue());
+    });
+
+    it('starts the migration task where the services run (task subnets, public IP or not)', () => {
+      const publicIp = settings.network.taskEgress.via === 'public-ip';
+      t.hasOutput(MIGRATE_OUTPUTS.assignPublicIp, { Value: publicIp ? 'ENABLED' : 'DISABLED' });
+      const subnets = JSON.stringify(t.findOutputs(MIGRATE_OUTPUTS.subnetIds));
+      expect(subnets).toContain(publicIp ? 'RefVpcpublicSubnet' : 'RefVpcappSubnet');
+      expect(subnets).not.toContain(publicIp ? 'Vpcapp' : 'Vpcpublic');
     });
 
     it('runs the migrate CLI from the deployed image with the worker database access', () => {
@@ -541,16 +701,15 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
     it('defines baseline alarms that notify the alarm topic on alarm and recovery', () => {
       const alarms = resources(t, 'AWS::CloudWatch::Alarm');
       const names = alarms.map((alarm) => alarm.Properties?.['AlarmName']);
+      const endpointAlarms =
+        settings.ingress === 'load-balancer'
+          ? ['api-5xx', 'load-balancer-5xx', 'api-unhealthy-tasks', 'api-latency-p95']
+          : ['api-5xx', 'api-latency-p95', 'api-no-running-task'];
+      const serviceNames = settings.services.layout === 'separate' ? ['api', 'worker'] : ['app'];
       expect(names).toEqual(
         [
-          'api-5xx',
-          'load-balancer-5xx',
-          'api-unhealthy-tasks',
-          'api-latency-p95',
-          'api-cpu',
-          'api-memory',
-          'worker-cpu',
-          'worker-memory',
+          ...endpointAlarms,
+          ...serviceNames.flatMap((name) => [`${name}-cpu`, `${name}-memory`]),
           'database-cpu',
           'database-free-storage',
           'database-free-memory',
@@ -564,6 +723,113 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
       }
       t.resourceCountIs('AWS::SNS::Subscription', 0);
     });
+
+    if (settings.ingress === 'http-api') {
+      const alarmNamed = (name: string) => {
+        const found = resources(t, 'AWS::CloudWatch::Alarm').find(
+          (alarm) => alarm.Properties?.['AlarmName'] === `listora-${environment}-${name}`,
+        );
+        if (found === undefined) throw new Error(`no ${name} alarm`);
+        return found.Properties ?? {};
+      };
+
+      it('alarms on server errors and latency (in milliseconds) of the HTTP API', () => {
+        // One user sends few requests: any server error counts, in 2 of 3 periods.
+        expect(alarmNamed('api-5xx')).toMatchObject({
+          Namespace: 'AWS/ApiGateway',
+          MetricName: '5xx',
+          Statistic: 'Sum',
+          Period: 300,
+          Threshold: 1,
+          ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+          EvaluationPeriods: 3,
+          DatapointsToAlarm: 2,
+        });
+        expect(alarmNamed('api-latency-p95')).toMatchObject({
+          Namespace: 'AWS/ApiGateway',
+          MetricName: 'IntegrationLatency',
+          ExtendedStatistic: 'p95',
+          Threshold: 2000,
+        });
+      });
+
+      it('alarms when no task runs the API, since no load balancer counts healthy hosts', () => {
+        const service = settings.services.layout === 'separate' ? 'api' : 'app';
+        expect(alarmNamed('api-no-running-task')).toMatchObject({
+          Namespace: 'AWS/ECS',
+          MetricName: 'CPUUtilization',
+          Statistic: 'SampleCount',
+          Period: 60,
+          Threshold: 1,
+          ComparisonOperator: 'LessThanThreshold',
+          EvaluationPeriods: 3,
+          // No samples is exactly the failure this alarm exists for.
+          TreatMissingData: 'breaching',
+        });
+        const dimensions = JSON.stringify(alarmNamed('api-no-running-task')['Dimensions']);
+        expect(dimensions).toContain(`PublishOutputFnGetAtt${service}service`);
+      });
+
+      it('sends unplanned task stops (crash loops) to the alarm topic, not deploy stops', () => {
+        const serviceNames = settings.services.layout === 'separate' ? ['api', 'worker'] : ['app'];
+        const topic = { Ref: Match.stringLikeRegexp('^Alarms') };
+        t.resourceCountIs('AWS::Events::Rule', 1);
+        const [rule] = resources(t, 'AWS::Events::Rule');
+        expect(rule?.Properties).toMatchObject({
+          Name: `listora-${environment}-task-stopped`,
+          State: 'ENABLED',
+          EventPattern: {
+            source: ['aws.ecs'],
+            'detail-type': ['ECS Task State Change'],
+            detail: {
+              clusterArn: [
+                {
+                  'Fn::GetStackOutput': expect.objectContaining({
+                    StackName: `listora-${environment}-compute`,
+                    OutputName: expect.stringMatching(/^PublishOutputFnGetAttCluster/) as unknown,
+                  }) as unknown,
+                },
+              ],
+              group: serviceNames.map((name) => `service:${name}`),
+              lastStatus: ['STOPPED'],
+              stoppedReason: [{ 'anything-but': { prefix: 'Scaling activity initiated by' } }],
+            },
+          },
+        });
+        const targets = rule?.Properties?.['Targets'] as Record<string, unknown>[];
+        expect(targets).toHaveLength(1);
+        expect(targets[0]).toMatchObject({
+          Arn: { Ref: expect.stringMatching(/^Alarms/) as unknown },
+        });
+        expect(JSON.stringify(targets[0]?.['InputTransformer'])).toContain(
+          '$.detail.stoppedReason',
+        );
+        t.hasResourceProperties('AWS::SNS::TopicPolicy', {
+          PolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Sid: 'TaskStoppedEvents',
+                Effect: 'Allow',
+                Action: 'sns:Publish',
+                Principal: { Service: 'events.amazonaws.com' },
+                Resource: topic,
+                Condition: {
+                  ArnEquals: {
+                    'aws:SourceArn': {
+                      'Fn::GetAtt': [Match.stringLikeRegexp('^TaskStopped'), 'Arn'],
+                    },
+                  },
+                },
+              }),
+            ]),
+          },
+        });
+      });
+    } else {
+      it('leaves task stops to the load balancer health alarms', () => {
+        t.resourceCountIs('AWS::Events::Rule', 0);
+      });
+    }
 
     it('forwards the database low-storage events, including the autoscaling ceiling', () => {
       const topic = { Ref: Match.stringLikeRegexp('^Alarms') };

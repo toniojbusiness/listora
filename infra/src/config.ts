@@ -10,7 +10,12 @@ import { RetentionDays } from 'aws-cdk-lib/aws-logs';
  *   variables, and `loadDeployTarget` fails fast, naming the bad key but not its value.
  */
 
-export const ENVIRONMENT_NAMES = ['staging', 'prod'] as const;
+/**
+ * `staging` and `prod` are the product's environments, each in its own AWS account.
+ * `personal` is the smallest footprint that still runs every service around the clock, for
+ * one reseller running Listora in their own AWS account (docs/costs.md prices it).
+ */
+export const ENVIRONMENT_NAMES = ['staging', 'prod', 'personal'] as const;
 export type EnvironmentName = (typeof ENVIRONMENT_NAMES)[number];
 
 export function isEnvironmentName(value: string): value is EnvironmentName {
@@ -25,6 +30,40 @@ export interface ServiceSize {
   readonly maxTasks: number;
 }
 
+/**
+ * How the API and the worker run on ECS:
+ *
+ * - `separate`: one Fargate service each, with its own size, scaling, and task role.
+ * - `combined`: one Fargate service whose task runs both containers (the same image with the
+ *   two commands), sharing one task size and one task role (the union of both grants). Half
+ *   the tasks and public addresses; a crash of either container replaces the whole task.
+ */
+export type ServiceLayout =
+  | { readonly layout: 'separate'; readonly api: ServiceSize; readonly worker: ServiceSize }
+  | { readonly layout: 'combined'; readonly app: ServiceSize };
+
+/**
+ * How tasks reach the internet (marketplace, AI, and AWS APIs):
+ *
+ * - `nat`: tasks run in private `app` subnets behind NAT gateways. One gateway is the
+ *   cheapest working setup; one per availability zone survives the loss of a zone.
+ * - `public-ip`: tasks run in the public subnets with a public IPv4 address and no NAT. Their
+ *   security groups admit nothing from the internet, so the address is only an egress path.
+ */
+export type TaskEgress =
+  { readonly via: 'nat'; readonly natGateways: number } | { readonly via: 'public-ip' };
+
+/**
+ * How `https://api.<domain>` reaches the API tasks:
+ *
+ * - `load-balancer`: an internet-facing Application Load Balancer that health-checks the
+ *   tasks (`/health/live`) and redirects HTTP to HTTPS.
+ * - `http-api`: an API Gateway HTTP API with a VPC link to the tasks, found through Cloud Map.
+ *   No hourly charge, but requests are limited to 30 seconds and 10 MB (photo uploads go to
+ *   S3 directly), and ECS health-checks the API container itself.
+ */
+export type ApiIngress = 'load-balancer' | 'http-api';
+
 export interface EnvironmentSettings {
   /**
    * Guards against losing data: RDS deletion protection, CloudFormation termination
@@ -35,13 +74,11 @@ export interface EnvironmentSettings {
   readonly network: {
     /** VPC address range; distinct per environment so the networks can be peered later. */
     readonly cidr: string;
-    /**
-     * NAT gateways for the private subnets' internet egress (marketplace and AI APIs). One is
-     * the cheapest working setup; one per availability zone survives the loss of a zone.
-     * S3 traffic (photos, image layers) bypasses NAT through a free gateway endpoint.
-     */
-    readonly natGateways: number;
+    readonly taskEgress: TaskEgress;
+    /** Rejected-traffic VPC flow logs (CloudWatch Logs ingestion is billed per GB). */
+    readonly rejectedFlowLogs: boolean;
   };
+  readonly ingress: ApiIngress;
   readonly database: {
     /** RDS instance class, for example `t4g.micro` (Graviton burstable). */
     readonly instanceType: string;
@@ -52,17 +89,32 @@ export interface EnvironmentSettings {
     readonly backupRetentionDays: number;
     readonly performanceInsights: boolean;
   };
-  readonly api: ServiceSize;
-  readonly worker: ServiceSize;
+  readonly services: ServiceLayout;
+  /**
+   * Reserved size of the on-demand headless-Chromium runner, a later task, that automates
+   * Poshmark, Mercari, and Depop (decision D1 in docs/architecture.md): started per batch of
+   * listing actions and per scheduled sale check, zero tasks while idle. Nothing is
+   * provisioned from it yet; it fixes the size that docs/costs.md prices, and the runner task
+   * builds on it.
+   */
+  readonly browserRunner: ServiceSize;
   /** CloudWatch Logs retention for service, database, and VPC logs. */
   readonly logRetention: RetentionDays;
   readonly containerInsights: boolean;
 }
 
+/** Headless Chromium wants about a gigabyte per busy page; four leave room for a few. */
+const BROWSER_RUNNER: ServiceSize = { cpu: 1024, memoryMiB: 4096, minTasks: 0, maxTasks: 1 };
+
 export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentSettings>> = {
   staging: {
     protectData: false,
-    network: { cidr: '10.10.0.0/16', natGateways: 1 },
+    network: {
+      cidr: '10.10.0.0/16',
+      taskEgress: { via: 'nat', natGateways: 1 },
+      rejectedFlowLogs: true,
+    },
+    ingress: 'load-balancer',
     database: {
       instanceType: 't4g.micro',
       multiAz: false,
@@ -71,14 +123,23 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       backupRetentionDays: 7,
       performanceInsights: false,
     },
-    api: { cpu: 256, memoryMiB: 512, minTasks: 1, maxTasks: 2 },
-    worker: { cpu: 256, memoryMiB: 512, minTasks: 1, maxTasks: 2 },
+    services: {
+      layout: 'separate',
+      api: { cpu: 256, memoryMiB: 512, minTasks: 1, maxTasks: 2 },
+      worker: { cpu: 256, memoryMiB: 512, minTasks: 1, maxTasks: 2 },
+    },
+    browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.ONE_MONTH,
     containerInsights: false,
   },
   prod: {
     protectData: true,
-    network: { cidr: '10.20.0.0/16', natGateways: 2 },
+    network: {
+      cidr: '10.20.0.0/16',
+      taskEgress: { via: 'nat', natGateways: 2 },
+      rejectedFlowLogs: true,
+    },
+    ingress: 'load-balancer',
     database: {
       instanceType: 't4g.medium',
       multiAz: true,
@@ -87,10 +148,48 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       backupRetentionDays: 30,
       performanceInsights: true,
     },
-    api: { cpu: 512, memoryMiB: 1024, minTasks: 2, maxTasks: 6 },
-    worker: { cpu: 512, memoryMiB: 1024, minTasks: 2, maxTasks: 4 },
+    services: {
+      layout: 'separate',
+      api: { cpu: 512, memoryMiB: 1024, minTasks: 2, maxTasks: 6 },
+      worker: { cpu: 512, memoryMiB: 1024, minTasks: 2, maxTasks: 4 },
+    },
+    browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.THREE_MONTHS,
     containerInsights: true,
+  },
+  // One reseller, around 500 items, light traffic, every service running 24/7, at the lowest
+  // monthly cost (docs/costs.md has the estimate and the alternatives it beat). The data is
+  // real, so it is protected like prod's; everything else is the minimum that works.
+  personal: {
+    protectData: true,
+    network: {
+      cidr: '10.30.0.0/16',
+      // No NAT gateway (about $33 a month before data); interface endpoints would cost more
+      // and still leave the marketplace and AI APIs unreachable.
+      taskEgress: { via: 'public-ip' },
+      // Public subnets draw constant scanner traffic; logging every rejected packet would
+      // cost more than the rest of the network.
+      rejectedFlowLogs: false,
+    },
+    // An ALB costs about $24 a month with its two public addresses; the HTTP API costs cents.
+    ingress: 'http-api',
+    database: {
+      // Single-AZ Graviton RDS beats Aurora Serverless v2: the worker keeps connections open,
+      // so Aurora never pauses and bills at least 0.5 ACU around the clock.
+      instanceType: 't4g.micro',
+      multiAz: false,
+      allocatedStorageGiB: 20,
+      maxAllocatedStorageGiB: 50,
+      // Backup storage up to the database's size is free.
+      backupRetentionDays: 7,
+      performanceInsights: false,
+    },
+    // One task runs both processes: 0.25 vCPU is the smallest Fargate size, and 1 GiB leaves
+    // the worker room to decode full-size photos.
+    services: { layout: 'combined', app: { cpu: 256, memoryMiB: 1024, minTasks: 1, maxTasks: 1 } },
+    browserRunner: BROWSER_RUNNER,
+    logRetention: RetentionDays.ONE_WEEK,
+    containerInsights: false,
   },
 };
 
@@ -128,7 +227,7 @@ export function secretName(environment: EnvironmentName, name: string): string {
 /** Where one environment is deployed. Nothing here is committed to the repository. */
 export interface DeployTarget {
   readonly environment: EnvironmentName;
-  /** 12-digit AWS account id; staging and prod are separate accounts. */
+  /** 12-digit AWS account id; each environment has its own account. */
   readonly account: string;
   readonly region: string;
   /**
@@ -144,6 +243,13 @@ export interface DeployTarget {
   readonly githubRepository: string;
   /** Optional address subscribed to the alarm topic. */
   readonly alarmEmail: string | undefined;
+  /**
+   * The two availability zones the VPC spans, when they must be chosen: some services skip
+   * a zone (in us-east-1, API Gateway VPC links and Graviton instances are not offered in
+   * `use1-az3`), and zone names map to different zone ids in every account. Unset means the
+   * region's first two zones, resolved at deploy time.
+   */
+  readonly availabilityZones: readonly string[] | undefined;
 }
 
 export class DeployConfigError extends Error {
@@ -171,6 +277,7 @@ const SOURCES = {
   imageTag: { context: 'imageTag', env: 'LISTORA_IMAGE_TAG' },
   githubRepository: { context: 'githubRepository', env: 'LISTORA_GITHUB_REPOSITORY' },
   alarmEmail: { context: 'alarmEmail', env: 'LISTORA_ALARM_EMAIL' },
+  availabilityZones: { context: 'availabilityZones', env: 'LISTORA_AVAILABILITY_ZONES' },
 } as const satisfies Record<keyof DeployTarget, Source>;
 
 /** SES receives email only in some regions; us-east-1 also hosts CloudFront certificates. */
@@ -186,6 +293,12 @@ const HOSTED_ZONE_ID = /^Z[A-Z0-9]{1,31}$/;
 const IMAGE_TAG = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
 const GITHUB_REPOSITORY = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Every environment spans two availability zones. */
+export const AVAILABILITY_ZONE_COUNT = 2;
+
+/** `staging, prod, or personal`, for messages. */
+const ENVIRONMENT_CHOICES = `${ENVIRONMENT_NAMES.slice(0, -1).join(', ')}, or ${String(ENVIRONMENT_NAMES.at(-1))}`;
 
 /** Reads one CDK context value (`node.tryGetContext`) or `undefined`. */
 export type ContextReader = (key: string) => unknown;
@@ -225,11 +338,11 @@ export function loadDeployTarget(
   const environmentValue = read(SOURCES.environment);
   let environment: EnvironmentName = 'staging';
   if (environmentValue === undefined) {
-    issues.push(`${describe(SOURCES.environment)} is required (${ENVIRONMENT_NAMES.join(' or ')})`);
+    issues.push(`${describe(SOURCES.environment)} is required (${ENVIRONMENT_CHOICES})`);
   } else if (isEnvironmentName(environmentValue)) {
     environment = environmentValue;
   } else {
-    issues.push(`${describe(SOURCES.environment)} must be ${ENVIRONMENT_NAMES.join(' or ')}`);
+    issues.push(`${describe(SOURCES.environment)} must be ${ENVIRONMENT_CHOICES}`);
   }
 
   const account = required(SOURCES.account, ACCOUNT, 'a 12-digit AWS account id');
@@ -254,6 +367,20 @@ export function loadDeployTarget(
     issues.push(`${describe(SOURCES.alarmEmail)} must be an email address`);
   }
 
+  const zonesValue = read(SOURCES.availabilityZones);
+  const availabilityZones = zonesValue?.split(',').map((zone) => zone.trim());
+  if (
+    availabilityZones !== undefined &&
+    (availabilityZones.length !== AVAILABILITY_ZONE_COUNT ||
+      new Set(availabilityZones).size !== availabilityZones.length ||
+      !availabilityZones.every((zone) => new RegExp(`^${region}[a-z]$`).test(zone)))
+  ) {
+    issues.push(
+      `${describe(SOURCES.availabilityZones)} must be ${String(AVAILABILITY_ZONE_COUNT)} distinct ` +
+        'zones of the region, comma-separated (for example us-east-1a,us-east-1b)',
+    );
+  }
+
   if (issues.length > 0) throw new DeployConfigError(issues);
   return {
     environment,
@@ -264,5 +391,6 @@ export function loadDeployTarget(
     imageTag,
     githubRepository,
     alarmEmail,
+    availabilityZones,
   };
 }

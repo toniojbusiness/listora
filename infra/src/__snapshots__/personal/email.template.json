@@ -1,0 +1,324 @@
+{
+  "Description": "Listora personal: SES inbound sale email",
+  "Resources": {
+    "DomainIdentity034B48F5": {
+      "Type": "AWS::SES::EmailIdentity",
+      "Properties": {
+        "EmailIdentity": "personal.example.com"
+      }
+    },
+    "DomainIdentityDkimDnsToken1F913005C": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": "Z000000000PERSONAL",
+        "Name": {
+          "Fn::GetAtt": [
+            "DomainIdentity034B48F5",
+            "DkimDNSTokenName1"
+          ]
+        },
+        "ResourceRecords": [
+          {
+            "Fn::GetAtt": [
+              "DomainIdentity034B48F5",
+              "DkimDNSTokenValue1"
+            ]
+          }
+        ],
+        "TTL": "1800",
+        "Type": "CNAME"
+      }
+    },
+    "DomainIdentityDkimDnsToken252631100": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": "Z000000000PERSONAL",
+        "Name": {
+          "Fn::GetAtt": [
+            "DomainIdentity034B48F5",
+            "DkimDNSTokenName2"
+          ]
+        },
+        "ResourceRecords": [
+          {
+            "Fn::GetAtt": [
+              "DomainIdentity034B48F5",
+              "DkimDNSTokenValue2"
+            ]
+          }
+        ],
+        "TTL": "1800",
+        "Type": "CNAME"
+      }
+    },
+    "DomainIdentityDkimDnsToken3762490AB": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": "Z000000000PERSONAL",
+        "Name": {
+          "Fn::GetAtt": [
+            "DomainIdentity034B48F5",
+            "DkimDNSTokenName3"
+          ]
+        },
+        "ResourceRecords": [
+          {
+            "Fn::GetAtt": [
+              "DomainIdentity034B48F5",
+              "DkimDNSTokenValue3"
+            ]
+          }
+        ],
+        "TTL": "1800",
+        "Type": "CNAME"
+      }
+    },
+    "InboundMx1D48CF11": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "HostedZoneId": "Z000000000PERSONAL",
+        "Name": "in.personal.example.com.",
+        "ResourceRecords": [
+          "10 inbound-smtp.us-east-1.amazonaws.com"
+        ],
+        "TTL": "1800",
+        "Type": "MX"
+      }
+    },
+    "InboundMailDA244C94": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "ExpirationInDays": 90,
+              "Id": "expire-raw-mail",
+              "Prefix": "inbound/",
+              "Status": "Enabled"
+            }
+          ]
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        }
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "InboundMailPolicy2369D1F0": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "InboundMailDA244C94"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "InboundMailDA244C94",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "InboundMailDA244C94",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": "s3:*",
+              "Condition": {
+                "NumericLessThan": {
+                  "s3:TlsVersion": 1.2
+                }
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "InboundMailDA244C94",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "InboundMailDA244C94",
+                          "Arn"
+                        ]
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": "s3:PutObject",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ses.amazonaws.com"
+              },
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "InboundMailDA244C94",
+                        "Arn"
+                      ]
+                    },
+                    "/inbound/*"
+                  ]
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      }
+    },
+    "ReceiptRules259D9F96": {
+      "Type": "AWS::SES::ReceiptRuleSet",
+      "Properties": {
+        "RuleSetName": "listora-personal"
+      }
+    },
+    "ReceiptRulesStoreSaleEmailFBD05F58": {
+      "Type": "AWS::SES::ReceiptRule",
+      "Properties": {
+        "Rule": {
+          "Actions": [
+            {
+              "S3Action": {
+                "BucketName": {
+                  "Ref": "InboundMailDA244C94"
+                },
+                "ObjectKeyPrefix": "inbound/"
+              }
+            }
+          ],
+          "Enabled": true,
+          "Recipients": [
+            "in.personal.example.com"
+          ],
+          "ScanEnabled": true,
+          "TlsPolicy": "Require"
+        },
+        "RuleSetName": {
+          "Ref": "ReceiptRules259D9F96"
+        }
+      },
+      "DependsOn": [
+        "InboundMailPolicy2369D1F0"
+      ]
+    }
+  },
+  "Outputs": {
+    "InboundMailDomain": {
+      "Value": "in.personal.example.com"
+    },
+    "ReceiptRuleSetName": {
+      "Value": {
+        "Ref": "ReceiptRules259D9F96"
+      }
+    },
+    "PublishOutputFnGetAttInboundMailDA244C94Arn018032F9": {
+      "Value": {
+        "Fn::GetAtt": [
+          "InboundMailDA244C94",
+          "Arn"
+        ]
+      }
+    }
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+    }
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  {
+                    "Ref": "BootstrapVersion"
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+        }
+      ]
+    }
+  }
+}

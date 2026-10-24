@@ -62,7 +62,7 @@ Send the token as `Authorization: Bearer <accessToken>` on every `/v1` request, 
 | `npm run typecheck`          | `tsc --build` over every workspace (type check only; no JS output)                                                  |
 | `npm run contract:generate`  | Regenerate the TypeScript types and Swift client from `packages/api-contract/openapi.yaml`                          |
 | `npm run contract:check`     | Lint the API spec, fail if generated code is stale, and test the Swift client package                               |
-| `npm run infra:synth`        | `cdk synth` of the AWS stacks for staging and prod, offline with placeholder settings (see `infra/README.md`)       |
+| `npm run infra:synth`        | `cdk synth` of the AWS stacks for every environment, offline with placeholder settings (see `infra/README.md`)      |
 | `npm run test:unit`          | Unit tests (`*.test.ts`, no external services)                                                                      |
 | `npm run test:integration`   | Integration tests (`*.int.test.ts`) against the local Postgres                                                      |
 | `npm run dev:api`            | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                            |
@@ -111,7 +111,7 @@ scripts/               dev-db.sh (local PostgreSQL 18 cluster), container-smoke.
                        ios-release.sh (iOS archive and TestFlight upload)
 Dockerfile             Application image: one image runs the API and the worker
 Makefile               iOS commands (make ios-*)
-docs/                  Architecture overview and roadmap
+docs/                  Architecture overview, roadmap, personal environment cost estimate
 ```
 
 ## CI
@@ -154,7 +154,8 @@ cancelled, so every merged commit gets a full result. Every job has a `timeout-m
 limit.
 
 Deploys are separate: `.github/workflows/deploy.yml` runs only when started by hand for
-`staging` or `prod`, inside the protected GitHub environment of that name, and reaches AWS
+`staging`, `prod`, or `personal` (one reseller's own low-cost setup, priced in
+[docs/costs.md](docs/costs.md)), inside the protected GitHub environment of that name, and reaches AWS
 through OIDC with no stored keys. Setup and the first deploy are described in
 [infra/README.md](infra/README.md).
 

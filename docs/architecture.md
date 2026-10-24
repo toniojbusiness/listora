@@ -9,14 +9,17 @@ here wrong, fix this file in the same PR. The task list is in [roadmap.md](roadm
 
 These two rules from the product owner override every other design choice.
 
-1. **Authorized integrations only.** Listora uses official marketplace APIs or authorized
-   partner channels. It never stores marketplace passwords or sessions, never solves CAPTCHAs,
+1. **Authorized integrations only.** Listora uses official marketplace APIs, authorized
+   partner channels, or browser automation the marketplace has permitted (decision D1, section
+   4). It never stores marketplace passwords, never solves or bypasses CAPTCHAs or bot checks,
    never works around anti-bot protection, and never automates a marketplace in ways that put a
-   seller's account at risk. If a marketplace has no authorized channel, Listora uses
-   **assisted mode**: it prepares the work and the user does the final step.
+   seller's account at risk. Where none of these channels is available, or automation meets a
+   check it must not pass, Listora uses **assisted mode**: it prepares the work and the user
+   does the final step.
 2. **Never report false success.** A marketplace action is shown as done only after one of two
-   things: an API read-back confirms the desired state, or the user explicitly confirms an
-   assisted task. Every failure is visible and can be retried. See section 6.
+   things: a read-back from the marketplace (its API, or the automated browser session)
+   confirms the desired state, or the user explicitly confirms an assisted task. Every failure
+   is visible and can be retried. See section 6.
 
 ## 2. Stack
 
@@ -114,7 +117,7 @@ scripts/
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
   ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
 Dockerfile      Application image; the API and the worker run from the same image
-docs/           This overview and the roadmap
+docs/           This overview, the roadmap, and the personal environment's cost estimate
 Makefile        iOS commands (make ios-test, ios-lint, ...)
 ```
 
@@ -207,8 +210,8 @@ src/
 
 All marketplace logic lives behind one `MarketplaceAdapter` interface. The engine and the UI
 never branch on the marketplace name. They branch on **capability flags**, which can change
-for a single connection; for example, Depop switches from assisted to API once partner access
-is granted.
+for a single connection; for example, Depop switches from browser automation to API once
+partner access is granted.
 
 ```ts
 type Mode = 'api' | 'assisted' | 'bulk_file' | 'none';
@@ -241,16 +244,33 @@ interface MarketplaceAdapter {
 }
 ```
 
-| Marketplace | Mode                                            | Listing lifecycle                                                                                                 | Sale detection                               |
-| ----------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| eBay        | API                                             | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs | `ORDER_CONFIRMATION` webhook + 5-minute poll |
-| Depop       | API after partner approval; assisted until then | `PUT` by per-attempt external SKU, `PATCH`, `DELETE`/mark-as-sold; verify with `GET`                              | `v1:order.*` webhooks + poll                 |
-| Poshmark    | Assisted only (the guidelines ban automation)   | Copy-assist, photos saved in order, deep link, user confirms                                                      | DKIM-verified forwarded emails, manual       |
-| Mercari     | Assisted only (no public API)                   | Same as Poshmark                                                                                                  | Forwarded emails, manual                     |
+| Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
+| ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| eBay        | API                                                                          | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs                          | `ORDER_CONFIRMATION` webhook + 5-minute poll                    |
+| Depop       | API after partner approval; browser automation until then, assisted fallback | `PUT` by per-attempt external SKU, `PATCH`, `DELETE`/mark-as-sold; verify with `GET`                                                       | `v1:order.*` webhooks + poll                                    |
+| Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms | DKIM-verified forwarded emails, scheduled browser check, manual |
+| Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark                                                                                                                           | Forwarded emails, scheduled browser check, manual               |
 
 Assisted adapters implement `execute` by creating a `user_task` (deep link plus copy-assist
 payload) and returning `pendingUser`. An assisted operation can finish only through a user
 confirmation event.
+
+**Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
+only". The marketplaces granted the product owner permission to automate where no API exists,
+Listora is for the product owner's personal use, and everything runs in the cloud. So
+Poshmark, Mercari, and Depop (until its partner API is granted) use cloud browser automation:
+the headless-Chromium browser runner (`browserRunner` in `infra/src/config.ts`) acts on
+sessions the user logs into from the iPhone app.
+
+- Session cookies are stored encrypted with the token key, by the same KMS envelope
+  encryption as OAuth tokens. Passwords never are.
+- Actions are human-paced.
+- The runner never solves or bypasses a CAPTCHA or bot check: it pauses and falls back to an
+  assisted task.
+- Every action is still confirmed by read-back (section 6), never reported as a false success.
+
+The runner, its adapter mode, and session storage are later tasks; until they land, these
+marketplaces run assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
 
 ## 5. Pricing data rules
 
@@ -501,20 +521,23 @@ read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
 
 ## 10. Hosting and deploys
 
-Each environment (`staging`, `prod`) is its own AWS account, defined by the CDK app in
-`infra/` and documented in [infra/README.md](../infra/README.md). In short:
+Each environment (`staging`, `prod`, and `personal`, the low-cost layout for one reseller in
+their own account, priced in [costs.md](costs.md)) is its own AWS account, defined by the CDK
+app in `infra/` and documented in [infra/README.md](../infra/README.md). In short:
 
 - **One image, two services.** The root `Dockerfile` installs production dependencies and
   the sources; ECS runs `node apps/api/src/main.ts` or `node apps/worker/src/main.ts` from it,
   on Fargate in private subnets, with a read-only root file system. The API is behind an
   HTTPS load balancer at `api.<domain>` that health-checks `/health/live`. ECS replaces
   tasks that fail it, so it checks no dependency: a database failover must not restart every
-  task. `/health/ready` (database reachable) is for deploy checks and operators.
+  task. `/health/ready` (database reachable) is for deploy checks and operators. `personal`
+  runs both containers in one task in public subnets (no NAT) behind an API Gateway HTTP API
+  instead of the load balancer, and ECS runs the same `/health/live` check in the container.
 - **Configuration.** Containers get exactly the environment in `infra/src/containers.ts`, and
   a test runs the API's and worker's config loaders on it. A task that adds a required config
   key adds it there (and, for a secret, to `APP_SECRETS` in `infra/src/config.ts`). The
   database password reaches the processes only as `PGPASSWORD` from the RDS secret.
-- **Data.** RDS PostgreSQL 18 (Multi-AZ, deletion protection in prod), a private photo bucket
+- **Data.** RDS PostgreSQL 18 (Multi-AZ in prod; deletion protection in prod and personal), a private photo bucket
   whose `public/` prefix CloudFront serves by exact key, SES inbound mail for `in.<domain>`
   stored in a private bucket, and a KMS key for token envelope encryption.
 - **Deploys** run only from the manual Deploy workflow, on `main`, inside the protected GitHub
@@ -528,14 +551,15 @@ Each environment (`staging`, `prod`) is its own AWS account, defined by the CDK 
   contract (add first and use in a later release; stop using first and drop in a later
   release).
 - **Offline.** Synthesis never calls AWS: no `fromLookup`, zones resolve at deploy time, and
-  `npm run infra:synth` (part of `npm run check`) runs `cdk synth` with credentials hidden.
+  `npm run infra:synth` (part of `npm run check`) runs `cdk synth` of every environment with
+  credentials hidden.
   Template snapshots in `infra/src/__snapshots__/` make every infrastructure change a
   reviewable diff.
 
 ## 11. Testing and CI
 
 - `npm run check` runs the format check, lint (ESLint and shellcheck), type check, the API
-  contract check, the offline `cdk synth` of both environments, unit tests, and integration
+  contract check, the offline `cdk synth` of every environment, unit tests, and integration
   tests. It must pass before merge. When iOS code
   is touched, `make ios-lint` and `make ios-test` must pass too. `make ios-test` runs the
   package, unit, and UI tests on an existing iPhone 17 simulator and keeps DerivedData in
