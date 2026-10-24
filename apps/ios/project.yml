@@ -9,6 +9,11 @@ options:
   developmentLanguage: en
   createIntermediateGroups: true
   groupSortPosition: top
+  # Dev reaches the API on the developer's Mac over plain HTTP, so only the Dev Info.plist carries
+  # the ATS local-networking exception. It is derived from the shared plist after generation.
+  postGenCommand: >-
+    plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}'
+    -o Generated/Listora-Dev-Info.plist Generated/Listora-Info.plist
 
 # One configuration per environment. The build type is part of the name because Xcode builds
 # Swift packages with debug settings (testability, no optimization, active arch only) only for
@@ -70,13 +75,12 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        # Lets Dev reach the API on the developer's Mac over plain HTTP. It covers only local
-        # addresses, and AppConfiguration rejects http outside Dev.
-        NSAppTransportSecurity:
-          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(BASE_BUNDLE_IDENTIFIER)$(BUNDLE_ID_SUFFIX)
+      configs:
+        Dev-Debug:
+          INFOPLIST_FILE: Generated/Listora-Dev-Info.plist
 
   ShareExtension:
     type: app-extension

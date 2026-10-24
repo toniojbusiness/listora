@@ -95,6 +95,9 @@ error that names the key.
   contains "Debug".
 - Dev uses plain HTTP so the simulator can reach `npm run dev:api` on this Mac. Staging and
   Prod must use HTTPS; `AppConfiguration` rejects anything else.
+- Only the Dev Info.plist carries the ATS local-networking exception
+  (`NSAllowsLocalNetworking`). XcodeGen derives it from the shared plist, and
+  `make ios-check-ats` (part of `make ios-test`) fails if Staging or Prod would ship it.
 - The Staging and Prod hosts end in `.invalid` and never resolve. The real domains arrive with
   the AWS accounts (gate G-AWS, T-30).
 - To point Dev at a different port or host (for example a LAN address for a physical device),

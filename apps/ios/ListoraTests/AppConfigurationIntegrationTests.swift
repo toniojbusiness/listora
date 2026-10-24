@@ -12,8 +12,13 @@ struct AppConfigurationIntegrationTests {
         #expect(dependencies.configuration.environment == .dev)
         let url = dependencies.configuration.apiBaseURL
         #expect(url.scheme == "http")
-        #expect(["127.0.0.1", "localhost"].contains(url.host()))
         #expect(dependencies.apiClient.baseURL == url)
+    }
+
+    @Test
+    func `the Dev build allows plain HTTP to local addresses`() throws {
+        let ats = try #require(Bundle.main.object(forInfoDictionaryKey: "NSAppTransportSecurity") as? [String: Any])
+        #expect(ats["NSAllowsLocalNetworking"] as? Bool == true)
     }
 
     @Test

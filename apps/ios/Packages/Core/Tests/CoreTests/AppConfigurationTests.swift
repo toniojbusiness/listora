@@ -88,6 +88,22 @@ struct AppConfigurationTests {
         }
     }
 
+    @Test(arguments: [
+        ("dev", "http://user@127.0.0.1:3000"),
+        ("dev", "http://:hunter2@127.0.0.1:3000"),
+        ("prod", "https://user:hunter2@api.example.com"),
+    ])
+    func `rejects a user or password without echoing it`(environment: String, value: String) {
+        do {
+            _ = try AppConfiguration(infoDictionary: info(environment: environment, url: value))
+            Issue.record("expected an error")
+        } catch {
+            #expect(error == .invalid(key: "ListoraAPIBaseURL", reason: "must not contain a user or password"))
+            #expect(!error.description.contains("hunter2"))
+            #expect(!error.description.contains("user@"))
+        }
+    }
+
     @Test
     func `rejects a value of the wrong type`() {
         var dictionary = info()

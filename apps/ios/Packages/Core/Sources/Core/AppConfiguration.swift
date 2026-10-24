@@ -65,6 +65,9 @@ public struct AppConfiguration: Equatable, Sendable {
         default:
             throw .invalid(key: key, reason: notAnHTTPURL)
         }
+        guard url.user() == nil, url.password() == nil else {
+            throw .invalid(key: key, reason: "must not contain a user or password")
+        }
         guard url.query() == nil, url.fragment() == nil else {
             throw .invalid(key: key, reason: "must not have a query or fragment")
         }

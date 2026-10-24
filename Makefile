@@ -23,7 +23,7 @@ XCODEBUILD := xcodebuild \
 # Fails with an install hint when a command-line tool is missing.
 require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Install it with: brew install $(2)" >&2; exit 1; }
 
-.PHONY: ios-generate ios-build ios-test ios-lint ios-format ios-open ios-clean ios-simulator
+.PHONY: ios-generate ios-build ios-test ios-check-ats ios-lint ios-format ios-open ios-clean ios-simulator
 
 ## Generate Listora.xcodeproj from apps/ios/project.yml.
 ios-generate:
@@ -40,9 +40,23 @@ ios-simulator:
 ios-build: ios-generate ios-simulator
 	$(XCODEBUILD) build
 
+## Check that only the Dev app Info.plist carries the ATS exception, so Staging and Prod ship
+## without it.
+ios-check-ats: ios-generate
+	@for config in Dev-Debug Staging-Release Prod-Release; do \
+		plist=$$(xcodebuild -project $(IOS_PROJECT) -target Listora -configuration $$config -showBuildSettings 2>/dev/null \
+			| awk -F ' = ' '$$1 ~ /^ *INFOPLIST_FILE$$/ { print $$2 }'); \
+		[ -n "$$plist" ] || { echo "error: no INFOPLIST_FILE for $$config" >&2; exit 1; }; \
+		if plutil -extract NSAppTransportSecurity xml1 -o /dev/null "$(IOS_DIR)/$$plist" 2>/dev/null; then ats=yes; else ats=no; fi; \
+		case "$$config:$$ats" in \
+			Dev-Debug:yes|Staging-Release:no|Prod-Release:no) ;; \
+			*) echo "error: $$config Info.plist ($$plist) NSAppTransportSecurity present: $$ats. Only the Dev-Debug Info.plist must have it." >&2; exit 1 ;; \
+		esac; \
+	done
+
 ## Run unit, package, and UI tests on the simulator. Results: .build/ios/Test.xcresult.
 ## Parallel testing is off because it would clone the simulator.
-ios-test: ios-generate ios-simulator
+ios-test: ios-generate ios-simulator ios-check-ats
 	rm -rf $(IOS_BUILD_DIR)/Test.xcresult
 	$(XCODEBUILD) test -parallel-testing-enabled NO -resultBundlePath $(IOS_BUILD_DIR)/Test.xcresult
 
