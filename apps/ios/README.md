@@ -320,8 +320,8 @@ the new one everywhere below.
 
 3. **App Groups.** Register `group.com.listora.app` and `group.com.listora.app.staging`, and
    enable the App Groups capability with its environment's group on both the app id and the
-   Share Extension id. The app and the Share Extension share data through it; the entitlement
-   arrives with the Share Extension work (T-22). Later tasks enable more capabilities on the app
+   Share Extension id. The app and the Share Extension share the signed-in session through it
+   (see [Share Extension](#share-extension)). Later tasks enable more capabilities on the app
    ids the same way (Sign in with Apple with the app's Cognito sign-in, In-App Purchase in T-28,
    Push Notifications).
 4. **App records.** In App Store Connect > Apps > New App, create two iOS apps: **Listora** with
