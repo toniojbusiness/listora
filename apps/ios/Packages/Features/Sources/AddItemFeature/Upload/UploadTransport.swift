@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 /// How one photo's bytes transfer ended.
 enum TransferResult: Equatable, Sendable {
@@ -16,17 +15,22 @@ struct TransferEvent: Equatable, Sendable {
     let result: TransferResult
 }
 
+enum TransportEvent: Equatable, Sendable {
+    case transfer(TransferEvent)
+    /// The system has delivered every event it woke the app for; they all come before this one.
+    case backgroundEventsDelivered
+}
+
 /// Sends photo bytes to their upload targets. The bytes go from the photo's file, so the system
 /// can keep sending while the app is suspended or not running.
 protocol UploadTransport: Sendable {
-    /// Every finished transfer, including ones that finished while the app was not running.
-    var events: AsyncStream<TransferEvent> { get }
+    /// Every finished transfer, including ones that finished while the app was not running, in
+    /// order with the end of each system wake's events.
+    var events: AsyncStream<TransportEvent> { get }
     func start(_ request: URLRequest, fromFile file: URL, photoID: String)
     /// Photos whose transfer is still running, for example after the app was relaunched.
     func activePhotoIDs() async -> Set<String>
     func cancel(photoID: String) async
-    /// Waits until the system has delivered the events it woke the app for.
-    func waitForBackgroundEvents() async
 }
 
 /// ``UploadTransport`` over URLSession upload tasks. In the app the session is a background
@@ -34,12 +38,12 @@ protocol UploadTransport: Sendable {
 /// terminated by the system, and their results reach this delegate when the app runs again with
 /// the same identifier. Tests use a foreground configuration with a `URLProtocol` stub.
 final class URLSessionUploadTransport: UploadTransport {
-    let events: AsyncStream<TransferEvent>
+    let events: AsyncStream<TransportEvent>
     private let session: URLSession
     private let delegate: Delegate
 
     init(configuration: URLSessionConfiguration) {
-        let (events, continuation) = AsyncStream.makeStream(of: TransferEvent.self)
+        let (events, continuation) = AsyncStream.makeStream(of: TransportEvent.self)
         self.events = events
         delegate = Delegate(events: continuation)
         session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
@@ -72,21 +76,17 @@ final class URLSessionUploadTransport: UploadTransport {
         }
     }
 
-    func waitForBackgroundEvents() async {
-        await delegate.waitForBackgroundEvents()
-    }
-
     /// Stops the session; tests call this so sessions do not outlive them.
     func invalidate() {
         session.invalidateAndCancel()
     }
 
+    /// Delegate callbacks arrive one at a time on the session's queue, so the events keep their
+    /// order in the stream.
     private final class Delegate: NSObject, URLSessionTaskDelegate, Sendable {
-        private let events: AsyncStream<TransferEvent>.Continuation
-        /// Waiters for `urlSessionDidFinishEvents`, and whether it already happened.
-        private let backgroundEvents = Mutex<(finished: Bool, waiters: [CheckedContinuation<Void, Never>])>((false, []))
+        private let events: AsyncStream<TransportEvent>.Continuation
 
-        init(events: AsyncStream<TransferEvent>.Continuation) {
+        init(events: AsyncStream<TransportEvent>.Continuation) {
             self.events = events
         }
 
@@ -99,34 +99,11 @@ final class URLSessionUploadTransport: UploadTransport {
             } else {
                 .failed
             }
-            events.yield(TransferEvent(photoID: photoID, result: result))
+            events.yield(.transfer(TransferEvent(photoID: photoID, result: result)))
         }
 
         func urlSessionDidFinishEvents(forBackgroundURLSession _: URLSession) {
-            let waiters = backgroundEvents.withLock { state in
-                state.finished = true
-                defer { state.waiters = [] }
-                return state.waiters
-            }
-            for waiter in waiters {
-                waiter.resume()
-            }
-        }
-
-        func waitForBackgroundEvents() async {
-            await withCheckedContinuation { continuation in
-                let finished = backgroundEvents.withLock { state in
-                    if state.finished {
-                        state.finished = false
-                        return true
-                    }
-                    state.waiters.append(continuation)
-                    return false
-                }
-                if finished {
-                    continuation.resume()
-                }
-            }
+            events.yield(.backgroundEventsDelivered)
         }
     }
 }

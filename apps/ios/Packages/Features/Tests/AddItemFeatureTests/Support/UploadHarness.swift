@@ -15,6 +15,8 @@ final class UploadHarness {
     let tagReader = FakeTagReader()
     let activity = UploadActivity()
     let policy: RetryPolicy
+    /// The transport every launch uses, or nil for a new URLSession transport per launch.
+    private let fixedTransport: (any UploadTransport)?
     private var wiring: Wiring
 
     var store: DraftStore {
@@ -25,9 +27,15 @@ final class UploadHarness {
         wiring.uploader
     }
 
-    init(server: FakeListoraServer = FakeListoraServer(), signedIn: Bool = true, policy: RetryPolicy = .test) throws {
+    init(
+        server: FakeListoraServer = FakeListoraServer(),
+        signedIn: Bool = true,
+        policy: RetryPolicy = .test,
+        transport: (any UploadTransport)? = nil,
+    ) throws {
         self.server = server
         self.policy = policy
+        fixedTransport = transport
         directory = try TemporaryDirectory()
         grants = InMemoryAccessGrantStorage(signedIn ? Self.grant : nil)
         tokens = AccessTokenStore(storage: grants)
@@ -35,7 +43,7 @@ final class UploadHarness {
             directory: directory.url,
             server: server,
             tokens: tokens,
-            parts: Parts(tagReader: tagReader, activity: activity, policy: policy),
+            parts: Parts(tagReader: tagReader, activity: activity, policy: policy, transport: transport),
         )
     }
 
@@ -49,19 +57,19 @@ final class UploadHarness {
     /// store, and session over the same database.
     func relaunch() async throws {
         await uploader.stop()
-        wiring.transport.invalidate()
+        wiring.invalidate()
         wiring = try Wiring(
             directory: directory.url,
             server: server,
             tokens: tokens,
-            parts: Parts(tagReader: tagReader, activity: activity, policy: policy),
+            parts: Parts(tagReader: tagReader, activity: activity, policy: policy, transport: fixedTransport),
         )
         await uploader.start()
     }
 
     func stop() async {
         await uploader.stop()
-        wiring.transport.invalidate()
+        wiring.invalidate()
     }
 
     /// A new draft with one photo per role, prepared as the app prepares them.
@@ -88,17 +96,18 @@ final class UploadHarness {
         var tagReader: FakeTagReader
         var activity: UploadActivity
         var policy: RetryPolicy
+        var transport: (any UploadTransport)?
     }
 
     /// What a launch builds: the store over the database, the transport, and the queue.
     private struct Wiring {
         let store: DraftStore
-        let transport: URLSessionUploadTransport
+        let transport: any UploadTransport
         let uploader: PhotoUploader
 
         init(directory: URL, server: FakeListoraServer, tokens: AccessTokenStore, parts: Parts) throws {
             store = try DraftStore(database: DraftDatabase(directory: directory))
-            transport = URLSessionUploadTransport(configuration: StubURLProtocol.configuration())
+            transport = parts.transport ?? URLSessionUploadTransport(configuration: StubURLProtocol.configuration())
             let api = APIClient(
                 baseURL: server.baseURL,
                 accessTokens: tokens,
@@ -113,6 +122,10 @@ final class UploadHarness {
                 activity: parts.activity,
                 policy: parts.policy,
             )
+        }
+
+        func invalidate() {
+            (transport as? URLSessionUploadTransport)?.invalidate()
         }
     }
 }

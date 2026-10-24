@@ -15,7 +15,16 @@ extension PhotoUploader {
         transport.start(request, fromFile: store.fileURL(for: photo), photoID: photo.id)
     }
 
-    func handle(_ event: TransferEvent) async {
+    func handle(_ event: TransportEvent) async {
+        switch event {
+        case let .transfer(transfer):
+            await handle(transfer)
+        case .backgroundEventsDelivered:
+            backgroundEventsWereDelivered()
+        }
+    }
+
+    private func handle(_ event: TransferEvent) async {
         // The result is recorded before the photo leaves `transferring`, with no suspension in
         // between, so the loop never sees it as neither in flight nor finished and sends it twice.
         record(event)
@@ -34,7 +43,7 @@ extension PhotoUploader {
                 guard photo.step == .transfer else { return }
                 photo.step = .attach
                 photo.target = nil
-                photo.retry.retryAt = nil
+                photo.retry = RetryState()
             }
             return
         case let .response(statusCode):

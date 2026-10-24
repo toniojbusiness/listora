@@ -46,7 +46,7 @@ extension PhotoUploader {
             record.uploadFileID = session.file.id
             record.target = session.file.target
             record.step = session.file.status == .pending ? .transfer : .attach
-            record.retry.retryAt = nil
+            record.retry = RetryState()
         }
     }
 
@@ -63,12 +63,14 @@ extension PhotoUploader {
             recordPhotoFailure(photo.id, error)
             return
         }
+        let now = now()
         try store.updatePhoto(photo.id) { record in
             guard record.step == .transfer, record.sessionID == sessionID else { return }
             switch file?.status {
             case .pending:
-                // A pending file without a target belongs to an expired session.
-                if let target = file?.target {
+                // A pending file without a usable target belongs to a session that has expired,
+                // or is about to.
+                if let target = file?.target, target.isUsable(at: now) {
                     record.target = target
                 } else {
                     record.restartUpload()
@@ -216,7 +218,7 @@ extension PhotoUploader {
         try store.updatePhoto(photo.id) { record in
             guard record.serverPhotoID == serverPhotoID else { return }
             record.serverRole = role
-            record.retry.retryAt = nil
+            record.retry = RetryState()
         }
     }
 
@@ -273,6 +275,9 @@ extension PhotoUploader {
         } else if let key = deletion.createItemKey {
             // Replaying the create returns the item it made, or makes it now; either way the next
             // pass deletes it by id.
+            if now().timeIntervalSince(deletion.createdAt) > Self.idempotencyWindow {
+                log.warning("Replaying an item create after the server forgot its key; an empty item may remain")
+            }
             let item = try await api.createItem(idempotencyKey: key)
             try? store.updateDeletion(deletion.id) { $0.serverItemID = item.id }
         } else {
@@ -289,15 +294,34 @@ extension PhotoUploader {
             try await api.deletePhoto(itemID: itemID, photoID: photoID)
             try? store.removeDeletion(deletion.id)
         } else if let key = deletion.attachKey, let request = deletion.attachRequest {
+            let photoID: String?
             do {
-                let photoID = try await api.attachPhoto(itemID: itemID, idempotencyKey: key, request: request)
-                try? store.updateDeletion(deletion.id) { $0.serverPhotoID = photoID }
+                photoID = try await api.attachPhoto(itemID: itemID, idempotencyKey: key, request: request)
+            } catch where error.knownCode == .alreadyExists {
+                photoID = try await attachedPhoto(of: deletion, itemID: itemID)
             } catch where !error.retryable && !error.isUnauthenticated {
                 // The attach cannot succeed (expired, gone, or invalid), so nothing is on the server.
+                photoID = nil
+            }
+            if let photoID {
+                try? store.updateDeletion(deletion.id) { $0.serverPhotoID = photoID }
+            } else {
                 try? store.removeDeletion(deletion.id)
             }
         } else {
             try? store.removeDeletion(deletion.id)
         }
+    }
+
+    /// How long the server keeps an `Idempotency-Key`'s answer.
+    static let idempotencyWindow: TimeInterval = 24 * 60 * 60
+
+    /// The removed photo is attached, but the replay's stored answer is gone: finds it by its
+    /// SHA-256 among the item's photos this phone does not know, as the same bytes may be attached
+    /// again under a new photo (a photo that became a tag uploads again).
+    private func attachedPhoto(of deletion: ServerDeletionRecord, itemID: String) async throws(APIFailure) -> String? {
+        guard let sha256 = deletion.sha256 else { return nil }
+        let known = Set((try? store.uploadSnapshot().photos.compactMap(\.serverPhotoID)) ?? [])
+        return try await api.photos(itemID: itemID).first { $0.sha256 == sha256 && !known.contains($0.id) }?.id
     }
 }

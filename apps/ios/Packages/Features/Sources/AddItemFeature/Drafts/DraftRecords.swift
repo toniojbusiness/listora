@@ -202,6 +202,8 @@ struct ServerDeletionRecord: Codable, Equatable, Identifiable, Sendable, Fetchab
     /// For a photo whose `addItemPhoto` answer never arrived: replaying it returns the photo's id.
     var attachKey: String?
     var attachRequest: AttachRequest?
+    /// The removed photo's SHA-256, to find it on the item once the replay's answer is gone.
+    var sha256: String?
     var retry = RetryState()
 
     static func item(_ draft: DraftRecord, now: Date) -> ServerDeletionRecord {
@@ -223,6 +225,7 @@ struct ServerDeletionRecord: Codable, Equatable, Identifiable, Sendable, Fetchab
             serverPhotoID: photo.serverPhotoID,
             attachKey: photo.serverPhotoID == nil ? photo.attachKey : nil,
             attachRequest: photo.serverPhotoID == nil ? photo.attachRequest : nil,
+            sha256: photo.sha256,
         )
     }
 }

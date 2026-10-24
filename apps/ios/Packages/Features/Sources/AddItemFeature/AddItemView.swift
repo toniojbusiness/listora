@@ -1,4 +1,5 @@
 import DesignSystem
+import PhotosUI
 import SwiftUI
 
 /// The Add Item tab: start a new item from the camera or the photo library, and the drafts saved
@@ -32,6 +33,7 @@ struct DraftListView: View {
     let environment: AddItemEnvironment
     @State private var path: [String] = []
     @State private var isCapturing = false
+    @State private var unloadedPhotos: PickedPhotos<PhotosPickerItem>?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -107,6 +109,7 @@ struct DraftListView: View {
                 .accessibilityIdentifier("addItem.takePhotos")
             }
             importButton
+            UnloadedPhotosNotice(picked: $unloadedPhotos, onPicked: importPhotos)
             if model.isPreparingPhotos {
                 ProgressView("Preparing photos")
                     .foregroundStyle(Palette.textSecondary)
@@ -121,11 +124,9 @@ struct DraftListView: View {
         let button = PhotoLibraryButton(
             maxCount: DraftStore.maxPhotosPerDraft,
             fixturePhotosDirectory: environment.fixturePhotosDirectory,
-        ) { images in
-            if let id = await model.addPhotos(images) {
-                path.append(id)
-            }
-        } label: {
+            unloaded: $unloadedPhotos,
+            onPicked: importPhotos,
+        ) {
             Label("Import photos", systemImage: "photo.on.rectangle")
         }
         .disabled(model.isPreparingPhotos)
@@ -134,6 +135,12 @@ struct DraftListView: View {
             button.buttonStyle(.listoraSecondary)
         } else {
             button.buttonStyle(.listoraPrimary)
+        }
+    }
+
+    private func importPhotos(_ images: [Data]) async {
+        if let id = await model.addPhotos(images) {
+            path.append(id)
         }
     }
 
@@ -199,7 +206,7 @@ struct DraftRow: View {
 extension DraftUploadSummary.Tone {
     var color: ColorToken {
         switch self {
-        case .neutral: Palette.textSecondary
+        case .neutral, .empty: Palette.textSecondary
         case .success: Palette.success
         case .warning: Palette.warning
         case .danger: Palette.danger

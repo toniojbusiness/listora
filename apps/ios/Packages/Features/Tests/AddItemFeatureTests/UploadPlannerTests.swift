@@ -136,10 +136,39 @@ struct UploadPlannerTests {
         let snapshot = try UploadSnapshot(drafts: [draft()], photos: [waiting, stopped], deletions: [])
 
         #expect(next(snapshot) == nil)
-        #expect(UploadPlanner.nextRetry(in: snapshot) == now.addingTimeInterval(5))
+        #expect(UploadPlanner.nextRetry(in: snapshot, now: now) == now.addingTimeInterval(5))
         waiting.retry.retryAt = now
         #expect(next(UploadSnapshot(drafts: snapshot.drafts, photos: [waiting, stopped], deletions: [])) ==
             .createSession(photoID: "p1"))
+    }
+
+    @Test
+    func `a retry time that has passed is no reason to wake, so a blocked row does not spin the queue`() throws {
+        var signedOut = try photo("p1")
+        signedOut.retry = RetryState(attempt: 0, retryAt: now.addingTimeInterval(-2))
+        var draft = draft(itemID: nil)
+        draft.retry = RetryState(attempt: 1, retryAt: now.addingTimeInterval(-1))
+        let snapshot = UploadSnapshot(drafts: [draft], photos: [signedOut], deletions: [])
+
+        #expect(next(snapshot, signedIn: false) == nil)
+        #expect(UploadPlanner.nextRetry(in: snapshot, now: now) == nil)
+    }
+
+    @Test
+    func `removed photos are deleted on the server before new ones are attached`() throws {
+        let replacement = try photo("p1", step: .attach)
+        let deletion = ServerDeletionRecord(
+            id: "x1",
+            kind: .photo,
+            createdAt: now,
+            serverItemID: "item-1",
+            serverPhotoID: "server-old",
+        )
+
+        #expect(try next(UploadSnapshot(drafts: [draft()], photos: [replacement], deletions: [deletion])) ==
+            .deleteOnServer(deletionID: "x1"))
+        #expect(try next(UploadSnapshot(drafts: [draft()], photos: [replacement], deletions: [])) ==
+            .attach(photoID: "p1"))
     }
 
     @Test

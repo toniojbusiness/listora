@@ -10,13 +10,22 @@ struct CameraCaptureView: View {
     let onFinish: @MainActor ([(PreparedPhoto, PhotoRole)]) async -> Void
 
     @State private var camera = CameraSession()
-    @State private var guide = CaptureGuide()
+    @State private var guide: CaptureGuide
     @State private var blurryShot: PreparedPhoto?
     @State private var isTakingPhoto = false
     @State private var cameraProblem: String?
     @State private var isConfirmingDiscard = false
     /// A one-off problem with the last shot, shown instead of the step's instruction.
     @State private var notice: String?
+
+    /// `capacity`: how many more photos the draft has room for.
+    init(
+        capacity: Int = DraftStore.maxPhotosPerDraft,
+        onFinish: @escaping @MainActor ([(PreparedPhoto, PhotoRole)]) async -> Void,
+    ) {
+        self.onFinish = onFinish
+        _guide = State(initialValue: CaptureGuide(capacity: capacity))
+    }
 
     var body: some View {
         ZStack {
@@ -110,7 +119,7 @@ struct CameraCaptureView: View {
 
     private var bottomBar: some View {
         VStack(spacing: Spacing.sm) {
-            Text(notice ?? guide.step.instruction)
+            Text(notice ?? instruction)
                 .font(Typography.callout)
                 .multilineTextAlignment(.center)
             if guide.step == .details {
@@ -138,6 +147,10 @@ struct CameraCaptureView: View {
         }
         .padding(Spacing.md)
         .background(Palette.scrim.color.opacity(0.45))
+    }
+
+    private var instruction: String {
+        guide.canTakeMore ? guide.step.instruction : "That's all the photos this item can have. Tap Done."
     }
 
     @ViewBuilder

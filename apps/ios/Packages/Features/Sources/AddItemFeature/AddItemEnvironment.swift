@@ -112,15 +112,12 @@ public final class AddItemEnvironment {
     public func handleBackgroundSessionEvents() async {
         guard case let .ready(_, uploader) = state else { return }
         start()
-        let transport = uploader.transport
         // Whichever finishes first: the waits do not end on cancellation, so they are raced
         // rather than run in a task group that would wait for both.
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let resume = ResumeOnce(continuation)
             Task {
-                await transport.waitForBackgroundEvents()
-                await uploader.wake()
-                await uploader.waitUntilIdle()
+                await uploader.finishBackgroundEvents()
                 resume()
             }
             Task {

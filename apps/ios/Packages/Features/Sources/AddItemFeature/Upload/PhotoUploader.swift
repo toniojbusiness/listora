@@ -36,6 +36,9 @@ actor PhotoUploader {
     private var wakePending = false
     private var isIdle = false
     private var idleWaiters: [CheckedContinuation<Void, Never>] = []
+    /// True when the transport delivered a system wake's events before anyone waited for them.
+    private var backgroundEventsDelivered = false
+    private var backgroundEventWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(
         store: DraftStore,
@@ -82,6 +85,7 @@ actor PhotoUploader {
 
     /// Looks for work now: something changed (a new draft, an edit, a sign-in, a Retry).
     func wake() {
+        isIdle = false
         if let continuation = wakeContinuation {
             wakeContinuation = nil
             continuation.resume()
@@ -104,6 +108,19 @@ actor PhotoUploader {
         await withCheckedContinuation { idleWaiters.append($0) }
     }
 
+    /// For a system wake of the background session: returns once the transport has delivered the
+    /// events the system woke the app for, every one of them is recorded, and the queue has acted
+    /// on them (attached the uploaded photos).
+    func finishBackgroundEvents() async {
+        if backgroundEventsDelivered {
+            backgroundEventsDelivered = false
+        } else {
+            await withCheckedContinuation { backgroundEventWaiters.append($0) }
+        }
+        wake()
+        await waitUntilIdle()
+    }
+
     // MARK: The loop
 
     private func run() async {
@@ -113,8 +130,12 @@ actor PhotoUploader {
             if await performNextStep() {
                 continue
             }
+            if wakePending {
+                wakePending = false
+                continue
+            }
             setIdle(true)
-            let nextRetry = (try? store.uploadSnapshot()).flatMap(UploadPlanner.nextRetry(in:))
+            let nextRetry = (try? store.uploadSnapshot()).flatMap { UploadPlanner.nextRetry(in: $0, now: now()) }
             await sleep(until: nextRetry)
             setIdle(false)
         }
@@ -188,10 +209,6 @@ actor PhotoUploader {
     }
 
     private func sleep(until date: Date?) async {
-        if wakePending {
-            wakePending = false
-            return
-        }
         let timer = date.map { date in
             let delay = max(0, date.timeIntervalSince(now()))
             return Task { [weak self] in
@@ -208,6 +225,18 @@ actor PhotoUploader {
         guard idle else { return }
         let waiters = idleWaiters
         idleWaiters = []
+        for waiter in waiters {
+            waiter.resume()
+        }
+    }
+
+    func backgroundEventsWereDelivered() {
+        guard !backgroundEventWaiters.isEmpty else {
+            backgroundEventsDelivered = true
+            return
+        }
+        let waiters = backgroundEventWaiters
+        backgroundEventWaiters = []
         for waiter in waiters {
             waiter.resume()
         }
@@ -252,7 +281,7 @@ actor PhotoUploader {
         return { state in
             var state = state
             guard !failure.isUnauthenticated else {
-                state.retryAt = now.addingTimeInterval(TimeInterval(policy.baseDelay.components.seconds))
+                state.retryAt = now.addingTimeInterval(policy.baseDelay.timeInterval)
                 return state
             }
             state.attempt += 1

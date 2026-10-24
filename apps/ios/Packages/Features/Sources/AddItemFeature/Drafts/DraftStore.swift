@@ -202,19 +202,23 @@ final class DraftStore: Sendable {
             to: database.fileURL(for: replacement),
             options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication],
         )
+        let old: DraftPhotoRecord
         do {
-            try writer.write { db in
-                guard try DraftPhotoRecord.exists(db, key: photoID) else { throw DraftStoreError.notFound }
-                try recordServerDeletion(of: current, in: db)
-                try current.delete(db)
+            old = try writer.write { db in
+                guard let latest = try DraftPhotoRecord.fetchOne(db, key: photoID) else {
+                    throw DraftStoreError.notFound
+                }
+                try recordServerDeletion(of: latest, in: db)
+                try latest.delete(db)
                 try replacement.insert(db)
+                return latest
             }
         } catch {
             removeFiles(of: [replacement])
             throw error
         }
-        removeFiles(of: [current])
-        return (current, replacement)
+        removeFiles(of: [old])
+        return (old, replacement)
     }
 
     /// Deletes a draft and its photos; its server item is deleted by the upload queue. Returns the

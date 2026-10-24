@@ -59,6 +59,8 @@ enum PhotoUploadStatus: Equatable, Sendable {
 struct DraftUploadSummary: Equatable, Sendable {
     enum Tone: Equatable, Sendable {
         case neutral
+        /// Nothing to upload yet.
+        case empty
         case success
         case warning
         case danger
@@ -84,6 +86,8 @@ struct DraftUploadSummary: Equatable, Sendable {
         })
         if let failure = draft.record.retry.failure {
             self.init(text: "Couldn't save the draft to Listora: \(failure)", tone: .danger, canRetry: true)
+        } else if total == 0 {
+            self.init(text: "No photos yet. Add photos to continue.", tone: .empty, canRetry: false)
         } else if failed > 0 {
             let photos = failed == 1 ? "1 photo" : "\(failed) photos"
             self.init(text: "\(photos) failed to upload", tone: .danger, canRetry: true)

@@ -80,6 +80,7 @@ final class DraftDatabase: Sendable {
                 table.column("serverPhotoID", .text)
                 table.column("attachKey", .text)
                 table.column("attachRequest", .jsonText)
+                table.column("sha256", .text)
                 table.column("retry", .jsonText).notNull()
             }
         }

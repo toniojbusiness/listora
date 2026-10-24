@@ -30,6 +30,18 @@ struct CaptureGuideTests {
         #expect(guide.shots.map(\.role) == [.back])
         #expect(guide.step == .tag)
     }
+
+    @Test
+    func `the guide takes only as many shots as the draft has room for`() throws {
+        var guide = CaptureGuide(capacity: 2)
+        try guide.accept(TestImages.prepared(seed: 1))
+        try guide.accept(TestImages.prepared(seed: 2))
+        #expect(!guide.canTakeMore)
+
+        try guide.accept(TestImages.prepared(seed: 3))
+
+        #expect(guide.shots.map(\.role) == [.front, .back])
+    }
 }
 
 struct CropGeometryTests {
@@ -124,5 +136,16 @@ struct UploadStatusTests {
         let pending = try Draft(record: record, photos: [photo()])
         #expect(DraftUploadSummary(draft: pending, transferring: [], isSignedIn: false)
             .text == "Saved on this phone. Sign in to upload.")
+    }
+
+    @Test
+    func `a draft with no photos asks for photos instead of counting uploads`() {
+        let empty = Draft(record: DraftRecord.new(now: .now), photos: [])
+
+        let summary = DraftUploadSummary(draft: empty, transferring: [], isSignedIn: true)
+
+        #expect(summary.text == "No photos yet. Add photos to continue.")
+        #expect(summary.tone == .empty)
+        #expect(!summary.canRetry)
     }
 }

@@ -44,6 +44,46 @@ struct PhotoUploaderEditTests {
     }
 
     @Test
+    func `a removed photo whose attach answer was lost is found by its SHA-256 once the server forgot the key`(
+    ) async throws {
+        let harness = try UploadHarness()
+        let draft = try harness.createDraft(roles: [.front, .back])
+        await harness.start()
+        #expect(try await eventually { try harness.isFullyUploaded(draft.id) })
+        let removed = try #require(try harness.draft(draft.id)?.photos.last)
+        // The attach reached the server but its answer did not reach the phone, and a day passed.
+        try harness.store.updatePhoto(removed.id) { $0.serverPhotoID = nil }
+        harness.server.forgetIdempotencyKeys()
+
+        try harness.store.deletePhoto(removed.id)
+        await harness.uploader.wake()
+
+        #expect(try await eventually { try harness.store.uploadSnapshot().deletions.isEmpty })
+        #expect(harness.server.items.first?.photos.map(\.role) == ["front"])
+        #expect(try await eventually { try harness.isFullyUploaded(draft.id) })
+        await harness.stop()
+    }
+
+    @Test
+    func `cropping a photo of an item with the most photos replaces it without hitting the limit`() async throws {
+        let harness = try UploadHarness()
+        let draft = try harness.createDraft(roles: Array(repeating: .detail, count: DraftStore.maxPhotosPerDraft))
+        await harness.start()
+        #expect(try await eventually { try harness.isFullyUploaded(draft.id) })
+        let photo = try #require(try harness.draft(draft.id)?.photos.first)
+
+        let replaced = try harness.store.replaceImage(of: photo.id, with: TestImages.prepared(seed: 99))
+        await harness.uploader.wake()
+
+        #expect(try await eventually { try harness.isFullyUploaded(draft.id) })
+        let item = try #require(harness.server.items.first)
+        #expect(item.photos.count == DraftStore.maxPhotosPerDraft)
+        #expect(item.photos.first?.sha256 == replaced.new.sha256)
+        #expect(!item.photos.contains { $0.id == photo.serverPhotoID })
+        await harness.stop()
+    }
+
+    @Test
     func `a photo changed to a tag after upload is uploaded again with its tag reads`() async throws {
         let harness = try UploadHarness()
         let draft = try harness.createDraft(roles: [.front, .detail])

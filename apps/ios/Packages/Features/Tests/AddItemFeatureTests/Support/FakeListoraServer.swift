@@ -29,6 +29,7 @@ final class FakeListoraServer: StubServer {
         var sha256: String
         var status = "pending"
         var bytes: Data?
+        var targetExpiresAt = "2099-01-01T00:00:00.000Z"
     }
 
     struct Fault {
@@ -101,6 +102,18 @@ final class FakeListoraServer: StubServer {
             state.files[fileID]?.status = "uploaded"
             state.files[fileID]?.bytes = bytes
         }
+    }
+
+    /// Drops every stored `Idempotency-Key` answer, as the server does after 24 hours.
+    func forgetIdempotencyKeys() {
+        state.withLock { $0.replays = [:] }
+    }
+
+    /// Makes a file's upload target expire at `date`, as the server caps it at the session's
+    /// expiry.
+    func expireTarget(ofFile fileID: String, at date: Date) {
+        let expiresAt = date.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
+        state.withLock { $0.files[fileID]?.targetExpiresAt = expiresAt }
     }
 
     // MARK: Serving
@@ -227,6 +240,9 @@ extension FakeListoraServer {
             return .error(422, code: "validation_failed", retryable: false)
         }
         guard let file = state.files[fileID] else { return notFound }
+        guard item.photos.count < 24 else {
+            return .error(422, code: "validation_failed", message: "An item has at most 24 photos.", retryable: false)
+        }
         switch file.status {
         case "pending":
             return .error(409, code: "upload_incomplete", message: "Upload it again.", retryable: false)
@@ -349,7 +365,7 @@ extension FakeListoraServer {
                         ["name": "Content-Type", "value": "image/jpeg"],
                         ["name": "x-amz-checksum-sha256", "value": Data(hex: file.sha256).base64EncodedString()],
                     ],
-                    "expiresAt": "2099-01-01T00:00:00.000Z",
+                    "expiresAt": file.targetExpiresAt,
                 ]
             }
             return json

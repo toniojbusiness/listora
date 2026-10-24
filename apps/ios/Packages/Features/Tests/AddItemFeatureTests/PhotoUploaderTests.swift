@@ -57,6 +57,27 @@ struct PhotoUploaderTests {
     }
 
     @Test
+    func `each step that succeeds starts the photo's failure count over`() async throws {
+        let harness = try UploadHarness()
+        harness.server.fail(
+            { $0.method == "POST" && $0.path == "/v1/upload-sessions" },
+            times: RetryPolicy.test.maxAttempts - 1,
+            with: .error(503, code: "service_unavailable", retryable: true),
+        )
+        harness.server.fail(
+            { $0.method == "PUT" && $0.url.host() == harness.server.storageHost },
+            times: RetryPolicy.test.maxAttempts - 1,
+            with: StubReply(status: 503),
+        )
+        let draft = try harness.createDraft(roles: [.front])
+        await harness.start()
+
+        #expect(try await eventually { try harness.isFullyUploaded(draft.id) })
+        #expect(try harness.draft(draft.id)?.photos.first?.retry == RetryState())
+        await harness.stop()
+    }
+
+    @Test
     func `retries stop after the policy's attempts with a visible failure, and Retry starts again`() async throws {
         let harness = try UploadHarness()
         let attach: @Sendable (StubRequest) -> Bool = { $0.method == "POST" && $0.path.hasSuffix("/photos") }
@@ -148,6 +169,46 @@ struct PhotoUploaderTests {
         #expect(try await eventually { try harness.isFullyUploaded(draft.id) })
         #expect(harness.server.requests("PUT", "/uploads/").count == 1)
         #expect(harness.server.items.first?.photos.first?.uploadFileID == fileID)
+        await harness.stop()
+    }
+
+    @Test
+    func `a refreshed target that is about to expire starts the upload over instead of asking again`() async throws {
+        let harness = try UploadHarness()
+        harness.server.fail({ $0.method == "PUT" }, with: nil)
+        let draft = try harness.createDraft(roles: [.front])
+        await harness.start()
+        #expect(try await eventually { await !harness.uploader.transferring.isEmpty })
+        let fileID = try #require(try harness.draft(draft.id)?.photos.first?.uploadFileID)
+        // The session ends in 30 seconds, and the server caps its targets there.
+        harness.server.expireTarget(ofFile: fileID, at: .now.addingTimeInterval(30))
+
+        try await harness.relaunch()
+
+        #expect(try await eventually { try harness.isFullyUploaded(draft.id) })
+        #expect(harness.server.requests("GET", "/v1/upload-sessions/").count == 1)
+        #expect(harness.server.requests("POST", "/v1/upload-sessions").count == 2)
+        await harness.stop()
+    }
+
+    @Test
+    func `a system wake ends only once the queue has attached the photos whose transfers it delivered`(
+    ) async throws {
+        let transport = FakeUploadTransport()
+        let harness = try UploadHarness(transport: transport)
+        let draft = try harness.createDraft(roles: [.front])
+        await harness.start()
+        #expect(try await eventually { !transport.running.isEmpty })
+        let photo = try #require(try harness.draft(draft.id)?.photos.first)
+        let fileID = try #require(photo.uploadFileID)
+        // The system sent the bytes while the app was suspended, then wakes it with the result.
+        try harness.server.markUploaded(fileID: fileID, bytes: harness.store.imageData(of: photo))
+        transport.finish(photo.id, with: .response(statusCode: 200))
+        transport.finishBackgroundEvents()
+
+        await harness.uploader.finishBackgroundEvents()
+
+        #expect(try harness.isFullyUploaded(draft.id))
         await harness.stop()
     }
 

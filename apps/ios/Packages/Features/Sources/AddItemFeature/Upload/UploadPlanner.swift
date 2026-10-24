@@ -25,7 +25,8 @@ enum UploadWork: Equatable, Sendable {
 
 /// Decides the next step from a snapshot. Pure, so every rule is unit-tested without a server.
 ///
-/// Byte transfers start first so they run while the queue sends the API calls one at a time. A
+/// Byte transfers start first so they run while the queue sends the API calls one at a time. Server
+/// removals run before attaches, because the server limits how many photos an item has. A
 /// row that failed waits for its `retryAt`, and one whose retries stopped waits for the user. With
 /// nobody signed in, only on-device work (tag reading) runs.
 enum UploadPlanner {
@@ -41,10 +42,12 @@ enum UploadPlanner {
         return network ?? photos.first(where: needsTagRead).map { .readTag(photoID: $0.id) }
     }
 
-    /// The earliest time a waiting row becomes runnable again.
-    static func nextRetry(in snapshot: UploadSnapshot) -> Date? {
+    /// The earliest time after `now` a waiting row becomes runnable again. A row whose time has
+    /// passed but that `next` did not pick is blocked (no sign-in, or an earlier step), and a
+    /// sign-in or an edit wakes the queue for it.
+    static func nextRetry(in snapshot: UploadSnapshot, now: Date) -> Date? {
         let states = snapshot.drafts.map(\.retry) + snapshot.photos.map(\.retry) + snapshot.deletions.map(\.retry)
-        return states.filter { $0.failure == nil }.compactMap(\.retryAt).min()
+        return states.filter { $0.failure == nil }.compactMap(\.retryAt).filter { $0 > now }.min()
     }
 
     private static func nextNetworkWork(
@@ -64,13 +67,13 @@ enum UploadPlanner {
         if let draft = runnableDrafts.first(where: { $0.serverItemID == nil }) {
             return .createItem(draftID: draft.id)
         }
+        if let deletion = snapshot.deletions.first(where: { $0.retry.isRunnable(at: now) }) {
+            return .deleteOnServer(deletionID: deletion.id)
+        }
         if let photo = photos.first(where: { photo in
             photo.step == .attach && drafts[photo.draftID]?.serverItemID != nil && !needsTagRead(photo)
         }) {
             return .attach(photoID: photo.id)
-        }
-        if let deletion = snapshot.deletions.first(where: { $0.retry.isRunnable(at: now) }) {
-            return .deleteOnServer(deletionID: deletion.id)
         }
         if let photo = photos.first(where: { $0.step == .done && $0.serverRole != $0.role }) {
             return .syncRole(photoID: photo.id)

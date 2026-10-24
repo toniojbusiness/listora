@@ -31,10 +31,16 @@ struct CaptureGuide: Equatable {
         let role: PhotoRole
     }
 
+    /// How many shots fit: the draft's remaining room for photos.
+    let capacity: Int
     private(set) var step: Step = .front
     private(set) var shots: [Shot] = []
     /// What a shot in the details step shows; the seller switches between flaw and detail.
     var detailRole: PhotoRole = .flaw
+
+    init(capacity: Int = DraftStore.maxPhotosPerDraft) {
+        self.capacity = capacity
+    }
 
     var role: PhotoRole {
         switch step {
@@ -46,7 +52,7 @@ struct CaptureGuide: Equatable {
     }
 
     var canTakeMore: Bool {
-        shots.count < DraftStore.maxPhotosPerDraft
+        shots.count < capacity
     }
 
     func count(of step: Step) -> Int {

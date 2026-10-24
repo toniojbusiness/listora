@@ -1,4 +1,5 @@
 import DesignSystem
+import PhotosUI
 import SwiftUI
 
 /// One draft's photos: their order (the first is the cover), roles, and upload status. Tap a
@@ -12,6 +13,7 @@ struct DraftEditorView: View {
     @State private var selection: PhotoSelection?
     @State private var isCapturing = false
     @State private var isConfirmingDelete = false
+    @State private var unloadedPhotos: PickedPhotos<PhotosPickerItem>?
     @Environment(\.dismiss) private var dismiss
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.xs), count: 3)
@@ -66,7 +68,7 @@ struct DraftEditorView: View {
             }
         }
         .fullScreenCover(isPresented: $isCapturing) {
-            CameraCaptureView { shots in
+            CameraCaptureView(capacity: DraftStore.maxPhotosPerDraft - (draft?.photos.count ?? 0)) { shots in
                 isCapturing = false
                 _ = await model.save(shots, to: draftID)
             }
@@ -116,28 +118,35 @@ struct DraftEditorView: View {
 
     private func addPhotoButtons(_ draft: Draft) -> some View {
         let remaining = DraftStore.maxPhotosPerDraft - draft.photos.count
-        return HStack(spacing: Spacing.sm) {
-            if environment.isCameraAvailable {
-                Button {
-                    isCapturing = true
-                } label: {
-                    Label("Camera", systemImage: "camera")
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.sm) {
+                if environment.isCameraAvailable {
+                    Button {
+                        isCapturing = true
+                    } label: {
+                        Label("Camera", systemImage: "camera")
+                    }
+                    .buttonStyle(.listoraSecondary)
+                    .disabled(remaining <= 0)
+                }
+                PhotoLibraryButton(
+                    maxCount: remaining,
+                    fixturePhotosDirectory: environment.fixturePhotosDirectory,
+                    unloaded: $unloadedPhotos,
+                    onPicked: addPhotos,
+                ) {
+                    Label("Add photos", systemImage: "photo.badge.plus")
                 }
                 .buttonStyle(.listoraSecondary)
-                .disabled(remaining <= 0)
+                .disabled(remaining <= 0 || model.isPreparingPhotos)
+                .accessibilityIdentifier("draft.addPhotos")
             }
-            PhotoLibraryButton(
-                maxCount: remaining,
-                fixturePhotosDirectory: environment.fixturePhotosDirectory,
-            ) { images in
-                _ = await model.addPhotos(images, to: draftID)
-            } label: {
-                Label("Add photos", systemImage: "photo.badge.plus")
-            }
-            .buttonStyle(.listoraSecondary)
-            .disabled(remaining <= 0 || model.isPreparingPhotos)
-            .accessibilityIdentifier("draft.addPhotos")
+            UnloadedPhotosNotice(picked: $unloadedPhotos, onPicked: addPhotos)
         }
+    }
+
+    private func addPhotos(_ images: [Data]) async {
+        _ = await model.addPhotos(images, to: draftID)
     }
 }
 
@@ -174,6 +183,7 @@ struct UploadSummaryBanner: View {
     private var icon: String {
         switch summary.tone {
         case .neutral: "arrow.up.circle"
+        case .empty: "photo.badge.plus"
         case .success: "checkmark.circle.fill"
         case .warning: "person.crop.circle.badge.exclamationmark"
         case .danger: "exclamationmark.triangle.fill"
