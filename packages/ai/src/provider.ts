@@ -11,7 +11,12 @@ export interface ProviderRequest<T> {
   readonly system: string;
   /** The per-request text, for example the parsed tag facts. */
   readonly prompt: string;
-  /** In order; the order is part of the photo-set hash. */
+  /**
+   * The item's photo-set hash (`ai_analysis.photo_set_hash`): `photoSetHash` over the ordered
+   * upload sha256s, not over the bytes in `images`. The fake provider keys its fixtures by it.
+   */
+  readonly photoSetHash: string;
+  /** In order; usually the photos' `ai` derivatives. */
   readonly images: readonly AiImage[];
   readonly output: OutputSchema<T>;
   readonly maxOutputTokens: number;

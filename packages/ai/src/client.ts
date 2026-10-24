@@ -1,4 +1,4 @@
-import type { Logger } from '@listora/shared';
+import { isSha256Hex, type Logger } from '@listora/shared';
 
 import { AiCallError, AiGuardError, AiProviderError } from './errors.ts';
 import {
@@ -30,6 +30,8 @@ export interface AiCall<T> {
   readonly tier: AiTier;
   readonly system: string;
   readonly prompt: string;
+  /** The photo-set hash of the photos `images` were derived from (`itemPhotoSet().hash`). */
+  readonly photoSetHash: string;
   readonly images: readonly AiImage[];
   readonly output: OutputSchema<T>;
   /** The reseller unit this call uses up when it succeeds; omit for calls no plan limits. */
@@ -106,6 +108,9 @@ export class AiClient {
     if (!PURPOSE.test(context.purpose)) {
       throw new TypeError('AI call purpose must be snake_case, for example item_analysis');
     }
+    if (!isSha256Hex(call.photoSetHash)) {
+      throw new TypeError('AI call photoSetHash must be lowercase sha256 hex');
+    }
     if (
       call.quota !== undefined &&
       (!Number.isSafeInteger(call.quota.units) || call.quota.units < 1)
@@ -126,6 +131,7 @@ export class AiClient {
       effort: settings.effort,
       system: call.system,
       prompt: call.prompt,
+      photoSetHash: call.photoSetHash,
       images: call.images,
       output: call.output,
       maxOutputTokens: settings.maxOutputTokens,

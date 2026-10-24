@@ -371,8 +371,9 @@ and guards (budget alarms are T-29):
   monthly table or index.
 - **Timeouts.** `AI_REQUEST_TIMEOUT_MS` defaults to 600000 (the SDK's own default), so long
   Premium calls are not cut off. A timed-out call may still be billed but is metered at zero.
-- **Providers.** `FakeAiProvider` answers from fixture JSON keyed by photo-set hash and output
-  schema name (`packages/ai/fixtures/README.md`), validates it against the schema, and
+- **Providers.** `FakeAiProvider` answers from fixture JSON keyed by the request's
+  `photoSetHash` (the item's `ai_analysis.photo_set_hash`, not a hash of the images sent) and
+  output schema name (`packages/ai/fixtures/README.md`), validates it against the schema, and
   estimates usage the way the API counts it. Fake calls are metered at the configured model's
   real prices so budgets behave the same in development. `AnthropicProvider` uses the official
   SDK with strict structured output (`output_config.format` from the Zod schema), base64

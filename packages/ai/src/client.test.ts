@@ -27,6 +27,7 @@ function call(overrides: Partial<AiCall<typeof ANSWER>> = {}): AiCall<typeof ANS
     tier: 'standard',
     system: 'Name the dominant color.',
     prompt: 'Answer in JSON.',
+    photoSetHash: HASH,
     images: PHOTOS,
     output: COLOR_OUTPUT,
     ...overrides,
@@ -123,7 +124,7 @@ describe('AiClient metering', () => {
     expect(result.model).toBe('claude-sonnet-5-5');
     expect(result.costMicros).toBe(28_600);
     expect(generate).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'claude-sonnet-5-5', effort: 'medium' }),
+      expect.objectContaining({ model: 'claude-sonnet-5-5', effort: 'medium', photoSetHash: HASH }),
     );
     expect(store.events[0]).toMatchObject({ tier: 'premium', model: 'claude-sonnet-5-5' });
   });
@@ -186,6 +187,7 @@ describe('AiClient metering', () => {
     await expect(
       client.generate(call({ context: { accountId: ACCOUNT, purpose: 'Item Analysis' } })),
     ).rejects.toThrow(TypeError);
+    await expect(client.generate(call({ photoSetHash: 'not a hash' }))).rejects.toThrow(TypeError);
     expect(generate).not.toHaveBeenCalled();
     expect(store.events).toEqual([]);
   });

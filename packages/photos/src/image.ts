@@ -43,7 +43,8 @@ export interface ProcessImageOptions {
  * Verifies that `bytes` is a readable JPEG and derives every image in `DERIVATIVES`. The EXIF
  * orientation is applied to the pixels, and every output is re-encoded without any metadata:
  * no EXIF (so no GPS position, camera serial, or capture time), XMP, IPTC, or ICC profile.
- * Throws `UnusableImageError` for files that cannot become a photo.
+ * Throws `UnusableImageError` for files that cannot become a photo; any other error (out of
+ * memory, a bug) is thrown as is, since retrying may succeed.
  */
 export async function processImage(
   bytes: Uint8Array,
@@ -58,63 +59,78 @@ export async function processImage(
   try {
     ({ format } = await sharp(bytes, input).metadata());
   } catch (error) {
-    throw unreadable(error);
+    throw asUnusable(error);
   }
   if (format !== 'jpeg') {
     throw new UnusableImageError('not_jpeg', 'This file is not a JPEG image. Upload a JPEG photo.');
   }
 
+  let derived: DerivedImage[];
+  let grey: Buffer;
   try {
     const upright = sharp(bytes, input).autoOrient();
-    const derived = await Promise.all(
-      DERIVATIVE_KINDS.map(async (kind): Promise<DerivedImage> => {
-        const { maxEdge, quality } = DERIVATIVES[kind];
-        let pipeline = upright.clone();
-        if (maxEdge !== undefined) {
-          pipeline = pipeline.resize({
-            width: maxEdge,
-            height: maxEdge,
-            fit: 'inside',
-            withoutEnlargement: true,
-          });
-        }
-        const { data, info } = await pipeline
-          .toColourspace('srgb')
-          .jpeg({ quality })
-          .toBuffer({ resolveWithObject: true });
-        const output = new Uint8Array(data);
-        return {
-          kind,
-          bytes: output,
-          width: info.width,
-          height: info.height,
-          sha256: sha256Hex(output),
-        };
-      }),
-    );
-    const grey = await upright
-      .clone()
-      .greyscale()
-      .resize(PHASH_SAMPLE_SIZE, PHASH_SAMPLE_SIZE, { fit: 'fill' })
-      .raw()
-      .toBuffer();
-    const derivatives = Object.fromEntries(derived.map((image) => [image.kind, image])) as Record<
-      DerivativeKind,
-      DerivedImage
-    >;
-    return {
-      width: derivatives.original.width,
-      height: derivatives.original.height,
-      phash: perceptualHash(new Uint8Array(grey)),
-      derivatives,
-    };
+    [derived, grey] = await Promise.all([
+      Promise.all(
+        DERIVATIVE_KINDS.map(async (kind): Promise<DerivedImage> => {
+          const { maxEdge, quality } = DERIVATIVES[kind];
+          let pipeline = upright.clone();
+          if (maxEdge !== undefined) {
+            pipeline = pipeline.resize({
+              width: maxEdge,
+              height: maxEdge,
+              fit: 'inside',
+              withoutEnlargement: true,
+            });
+          }
+          const { data, info } = await pipeline
+            .toColourspace('srgb')
+            .jpeg({ quality })
+            .toBuffer({ resolveWithObject: true });
+          const output = new Uint8Array(data);
+          return {
+            kind,
+            bytes: output,
+            width: info.width,
+            height: info.height,
+            sha256: sha256Hex(output),
+          };
+        }),
+      ),
+      upright
+        .clone()
+        .greyscale()
+        .resize(PHASH_SAMPLE_SIZE, PHASH_SAMPLE_SIZE, { fit: 'fill' })
+        .raw()
+        .toBuffer(),
+    ]);
   } catch (error) {
-    throw unreadable(error);
+    throw asUnusable(error);
   }
+  const derivatives = Object.fromEntries(derived.map((image) => [image.kind, image])) as Record<
+    DerivativeKind,
+    DerivedImage
+  >;
+  return {
+    width: derivatives.original.width,
+    height: derivatives.original.height,
+    phash: perceptualHash(new Uint8Array(grey)),
+    derivatives,
+  };
 }
 
-function unreadable(error: unknown): UnusableImageError {
-  if (error instanceof Error && /pixel limit/i.test(error.message)) {
+/**
+ * How libvips reports a file it cannot decode: the loader's own errors (`VipsJpeg: ...`) and
+ * sharp's input checks (`Input buffer has corrupt header`, `Input image exceeds pixel limit`).
+ */
+const INPUT_ERROR = /^(?:Input (?:buffer|file|image)\b|VipsJpeg:)/;
+
+/**
+ * The `UnusableImageError` for an error about the file itself. Any other error (out of memory,
+ * a bad option, a bug) is returned unchanged, so the job is retried and the upload kept.
+ */
+function asUnusable(error: unknown): unknown {
+  if (!(error instanceof Error) || !INPUT_ERROR.test(error.message)) return error;
+  if (/pixel limit/i.test(error.message)) {
     return new UnusableImageError(
       'too_large',
       'This photo has too many pixels. Upload one of at most 50 megapixels.',

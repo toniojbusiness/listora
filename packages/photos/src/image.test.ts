@@ -1,11 +1,23 @@
 import { sha256Hex } from '@listora/shared';
 import sharp from 'sharp';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { DERIVATIVE_KINDS } from './derivatives.ts';
 import { processImage, UnusableImageError, type ProcessedImage } from './image.ts';
-import { hammingDistance } from './phash.ts';
+import { hammingDistance, type perceptualHash } from './phash.ts';
 import { fixtureJpeg, readMetadata } from './test-support.ts';
+
+const phashFailure = vi.hoisted(() => ({ error: undefined as Error | undefined }));
+vi.mock('./phash.ts', async (importOriginal) => {
+  const actual = await importOriginal<{ perceptualHash: typeof perceptualHash }>();
+  return {
+    ...actual,
+    perceptualHash: (grey: Uint8Array) => {
+      if (phashFailure.error) throw phashFailure.error;
+      return actual.perceptualHash(grey);
+    },
+  };
+});
 
 async function unusable(bytes: Uint8Array, options?: Parameters<typeof processImage>[1]) {
   const error = await processImage(bytes, options).then(
@@ -125,5 +137,27 @@ describe('processImage', () => {
   it('rejects an image with more pixels than allowed', async () => {
     const error = await unusable(landscape, { maxInputPixels: 1_000_000 });
     expect(error.code).toBe('too_large');
+  });
+
+  describe('an error that is not about the file', () => {
+    afterEach(() => {
+      phashFailure.error = undefined;
+    });
+
+    it('is thrown as is, not reported as an unusable upload', async () => {
+      const bug = new RangeError('pHash needs 1024 grey pixels, got 2048');
+      phashFailure.error = bug;
+      await expect(processImage(landscape)).rejects.toBe(bug);
+    });
+
+    it('includes a sharp error that is not a decode error', async () => {
+      const error = await processImage(landscape, { maxInputPixels: -1 }).then(
+        () => undefined,
+        (thrown: unknown) => thrown,
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(UnusableImageError);
+      expect((error as Error).message).toMatch(/limitInputPixels/);
+    });
   });
 });

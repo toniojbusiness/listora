@@ -6,7 +6,7 @@ import { createDatabase, createInventoryItem, SchemaMigrator, type Db } from '@l
 import { createLogger, photoSetHash, sha256Hex } from '@listora/shared';
 import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
 import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
-import { sql } from 'kysely';
+import { sql, UpdateQueryNode, type KyselyPlugin } from 'kysely';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { DERIVATIVE_KINDS, parsePhotoDerivatives, storageKeys } from './derivatives.ts';
@@ -227,6 +227,57 @@ describe('processPhoto (real Postgres and local storage)', () => {
     expect(await listKeys(rootDir)).toEqual([storageKey]);
 
     // The queue runs the job again, and this time it succeeds.
+    expect(await processPhoto(deps(), { accountId, photoId })).toBe('ready');
+  });
+
+  /** A database whose next photo update fails once: before it runs, or after it commits. */
+  function failingUpdate(when: 'before' | 'after'): Db {
+    let failed = false;
+    const fail = (isUpdate: boolean) => {
+      if (!isUpdate || failed) return;
+      failed = true;
+      throw new Error('connection lost');
+    };
+    const updates = new WeakSet<object>();
+    const plugin: KyselyPlugin = {
+      transformQuery: ({ node, queryId }) => {
+        if (UpdateQueryNode.is(node)) updates.add(queryId);
+        if (when === 'before') fail(UpdateQueryNode.is(node));
+        return node;
+      },
+      transformResult: ({ result, queryId }) => {
+        if (when === 'after') fail(updates.has(queryId));
+        return Promise.resolve(result);
+      },
+    };
+    return db.withPlugin(plugin);
+  }
+
+  it('keeps the images when the update committed but its reply was lost', async () => {
+    const { photoId, storageKey } = await attachedPhoto(gpsPhoto);
+    await expect(
+      processPhoto(deps({ db: failingUpdate('after') }), { accountId, photoId }),
+    ).rejects.toThrow('connection lost');
+    const row = await photoRow(photoId);
+    expect(row.status).toBe('ready');
+    const derivatives = parsePhotoDerivatives(row.derivatives);
+    if (!derivatives) throw new Error('derivatives missing');
+    const keys = DERIVATIVE_KINDS.map((kind) => derivatives[kind].key);
+    expect(await listKeys(rootDir)).toEqual([...keys, storageKey].sort());
+
+    // The retry finds the photo ready and only deletes the upload; every image it shows exists.
+    expect(await processPhoto(deps(), { accountId, photoId })).toBe('skipped');
+    expect(await listKeys(rootDir)).toEqual([...keys].sort());
+  });
+
+  it('discards the images when the update failed before it could commit', async () => {
+    const { photoId, storageKey } = await attachedPhoto(gpsPhoto);
+    await expect(
+      processPhoto(deps({ db: failingUpdate('before') }), { accountId, photoId }),
+    ).rejects.toThrow('connection lost');
+    expect((await photoRow(photoId)).status).toBe('processing');
+    expect(await listKeys(rootDir)).toEqual([storageKey]);
+
     expect(await processPhoto(deps(), { accountId, photoId })).toBe('ready');
   });
 
