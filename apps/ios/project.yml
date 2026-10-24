@@ -150,6 +150,7 @@ schemes:
         - package: APIClient/APIClientTests
         - package: Features/AppFeatureTests
         - package: Features/SettingsFeatureTests
+        - package: Features/TagReadingFeatureTests
     profile:
       config: Prod-Release
     analyze:

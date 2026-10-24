@@ -1,0 +1,179 @@
+{
+  "blank-fabric" : {
+    "barcodes" : [
+
+    ],
+    "file" : "blank-fabric.jpg",
+    "lines" : [
+
+    ],
+    "purpose" : "No text and no barcode: the reader returns nothing rather than noise.",
+    "sizeTabs" : [
+
+    ]
+  },
+  "care-label" : {
+    "barcodes" : [
+
+    ],
+    "file" : "care-label.jpg",
+    "lines" : [
+      "ACME OUTFITTERS",
+      "RN 12345",
+      "CA 54321",
+      "60% COTTON 40% POLYESTER",
+      "MADE IN VIETNAM",
+      "STYLE NO. AB1234",
+      "MACHINE WASH COLD"
+    ],
+    "purpose" : "Multi-line care label: RN, CA, fiber, origin, style. Vision reads the C and E of ACME as Cyrillic letters, so it also covers folding them back to Latin.",
+    "sizeTabs" : [
+
+    ]
+  },
+  "care-label-exif-right" : {
+    "barcodes" : [
+
+    ],
+    "file" : "care-label-exif-right.jpg",
+    "lines" : [
+      "ACME OUTFITTERS",
+      "RN 12345",
+      "CA 54321",
+      "60% COTTON 40% POLYESTER",
+      "MADE IN VIETNAM",
+      "STYLE NO. AB1234",
+      "MACHINE WASH COLD"
+    ],
+    "purpose" : "The care label stored sideways with EXIF orientation 6, as the camera writes it.",
+    "sizeTabs" : [
+
+    ]
+  },
+  "hang-tag-code-128" : {
+    "barcodes" : [
+      {
+        "payload" : "STY-AB1234-BLK",
+        "symbology" : "code128"
+      }
+    ],
+    "file" : "hang-tag-code-128.jpg",
+    "lines" : [
+      "STYLE STY-AB1234"
+    ],
+    "purpose" : "Code 128 style barcode, as retailers print on internal tags.",
+    "sizeTabs" : [
+
+    ]
+  },
+  "hang-tag-ean-13" : {
+    "barcodes" : [
+      {
+        "payload" : "4006381333931",
+        "symbology" : "ean13"
+      }
+    ],
+    "file" : "hang-tag-ean-13.jpg",
+    "lines" : [
+      "MAISON LUNE"
+    ],
+    "purpose" : "EAN-13 hang tag.",
+    "sizeTabs" : [
+
+    ]
+  },
+  "hang-tag-ean-8" : {
+    "barcodes" : [
+      {
+        "payload" : "96385074",
+        "symbology" : "ean8"
+      }
+    ],
+    "file" : "hang-tag-ean-8.jpg",
+    "lines" : [
+      "KIDS CORNER"
+    ],
+    "purpose" : "EAN-8 hang tag (small items).",
+    "sizeTabs" : [
+
+    ]
+  },
+  "hang-tag-qr" : {
+    "barcodes" : [
+      {
+        "payload" : "https://example.com/p/AB1234",
+        "symbology" : "qr"
+      }
+    ],
+    "file" : "hang-tag-qr.jpg",
+    "lines" : [
+      "SCAN FOR CARE"
+    ],
+    "purpose" : "QR code on a hang tag.",
+    "sizeTabs" : [
+
+    ]
+  },
+  "hang-tag-upc-a" : {
+    "barcodes" : [
+      {
+        "payload" : "0036000291452",
+        "symbology" : "ean13"
+      }
+    ],
+    "file" : "hang-tag-upc-a.jpg",
+    "lines" : [
+      "BLUE HARBOR",
+      "$24.99"
+    ],
+    "purpose" : "UPC-A hang tag; Vision reports it as EAN-13 with a leading zero.",
+    "sizeTabs" : [
+
+    ]
+  },
+  "neck-label-size-tab-8" : {
+    "barcodes" : [
+
+    ],
+    "file" : "neck-label-size-tab-8.jpg",
+    "lines" : [
+      "NORTHWIND",
+      "100% COTTON",
+      "MADE IN PERU"
+    ],
+    "purpose" : "Single-digit size tab (8).",
+    "sizeTabs" : [
+      "8"
+    ]
+  },
+  "neck-label-size-tab-m" : {
+    "barcodes" : [
+
+    ],
+    "file" : "neck-label-size-tab-m.jpg",
+    "lines" : [
+      "NORTHWIND",
+      "100% COTTON",
+      "MADE IN PERU"
+    ],
+    "purpose" : "Single-letter size tab (M).",
+    "sizeTabs" : [
+      "M"
+    ]
+  },
+  "neck-label-size-tab-xs" : {
+    "barcodes" : [
+
+    ],
+    "file" : "neck-label-size-tab-xs.jpg",
+    "lines" : [
+      "NORTHWIND",
+      "100% COTTON",
+      "MADE IN PERU"
+    ],
+    "purpose" : "Two-letter size tab (XS).",
+    "sizeTabs" : [
+      "XS"
+    ]
+  }
+}

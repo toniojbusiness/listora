@@ -23,7 +23,8 @@ XCODEBUILD := xcodebuild \
 # Fails with an install hint when a command-line tool is missing.
 require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Install it with: brew install $(2)" >&2; exit 1; }
 
-.PHONY: ios-generate ios-build ios-test ios-check-ats ios-lint ios-format ios-open ios-clean ios-simulator
+.PHONY: ios-generate ios-build ios-test ios-check-ats ios-lint ios-format ios-open ios-clean ios-simulator \
+	ios-tag-fixtures
 
 ## Generate Listora.xcodeproj from apps/ios/project.yml.
 ios-generate:
@@ -73,6 +74,12 @@ ios-format:
 	$(call require,swiftformat,swiftformat)
 	cd $(IOS_DIR) && swiftformat --quiet .
 	cd $(IOS_DIR) && swiftlint lint --fix --quiet
+
+## Re-render the synthetic tag photos and manifest that TagReadingFeatureTests reads.
+ios-tag-fixtures:
+	mkdir -p $(IOS_BUILD_DIR)/tools
+	xcrun swiftc -O -o $(IOS_BUILD_DIR)/tools/generate-tag-fixtures $(IOS_DIR)/Tools/generate-tag-fixtures.swift
+	$(IOS_BUILD_DIR)/tools/generate-tag-fixtures
 
 ## Generate the project and open it in Xcode.
 ios-open: ios-generate
