@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config';
 // Two projects so `npm run check` can report unit and integration results separately.
 // Unit tests (`*.test.ts`) need no external services. Integration tests (`*.int.test.ts`)
 // run against the real Postgres from `scripts/dev-db.sh` (or TEST_DATABASE_URL when set).
-const sources = ['apps/*/src/**', 'packages/*/src/**'];
+const sources = ['apps/*/src/**', 'packages/*/src/**', 'packages/*/tools/**'];
 
 export default defineConfig({
   test: {

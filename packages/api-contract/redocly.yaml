@@ -1,0 +1,12 @@
+# Redocly CLI configuration for `npm run contract:lint` (part of `npm run contract:check`).
+# recommended-strict turns every recommended rule into an error. Listora-specific rules
+# (Idempotency-Key on every POST, a default ErrorResponse, cursor pagination, Money) are
+# checked by src/contract-rules.test.ts.
+extends:
+  - recommended-strict
+rules:
+  # The API is private and unpublished; there is no license to declare.
+  info-license: off
+  # Every /v1 operation has a `default` ErrorResponse (enforced by contract-rules.test.ts),
+  # and only some have a 4XX worth listing separately. Health probes have no client errors.
+  operation-4xx-response: off

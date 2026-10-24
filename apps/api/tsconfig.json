@@ -6,5 +6,9 @@
     "tsBuildInfoFile": ".tsbuild/tsconfig.tsbuildinfo"
   },
   "include": ["src"],
-  "references": [{ "path": "../../packages/shared" }, { "path": "../../packages/testing" }]
+  "references": [
+    { "path": "../../packages/api-contract" },
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/testing" }
+  ]
 }
