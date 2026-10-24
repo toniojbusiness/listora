@@ -30,6 +30,27 @@
               "Action": "sns:Publish",
               "Condition": {
                 "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "TaskStopped92FAA25A",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "TaskStoppedEvents"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "ArnEquals": {
                   "aws:SourceArn": "arn:aws:rds:us-east-1:333333333333:es:listora-personal-database-storage"
                 }
               },
@@ -60,9 +81,10 @@
             "Ref": "Alarms04B5A0BF"
           }
         ],
-        "AlarmDescription": "The API answered at least 10 server errors in each of 3 consecutive 5-minute periods.",
+        "AlarmDescription": "The API answered server errors in at least 2 of 3 consecutive 5-minute periods.",
         "AlarmName": "listora-personal-api-5xx",
         "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "DatapointsToAlarm": 2,
         "Dimensions": [
           {
             "Name": "ApiId",
@@ -85,7 +107,7 @@
         ],
         "Period": 300,
         "Statistic": "Sum",
-        "Threshold": 10,
+        "Threshold": 1,
         "TreatMissingData": "notBreaching"
       }
     },
@@ -171,6 +193,63 @@
         "Statistic": "SampleCount",
         "Threshold": 1,
         "TreatMissingData": "breaching"
+      }
+    },
+    "TaskStopped92FAA25A": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Unplanned ECS task stops: crashes, exited containers, failed health checks.",
+        "EventPattern": {
+          "source": [
+            "aws.ecs"
+          ],
+          "detail-type": [
+            "ECS Task State Change"
+          ],
+          "detail": {
+            "clusterArn": [
+              {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-personal-compute",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputFnGetAttClusterEB0386A7Arn0CAA3DA3"
+                }
+              }
+            ],
+            "group": [
+              "service:app"
+            ],
+            "lastStatus": [
+              "STOPPED"
+            ],
+            "stoppedReason": [
+              {
+                "anything-but": {
+                  "prefix": "Scaling activity initiated by"
+                }
+              }
+            ]
+          }
+        },
+        "Name": "listora-personal-task-stopped",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "Alarms04B5A0BF"
+            },
+            "Id": "Target0",
+            "InputTransformer": {
+              "InputPathsMap": {
+                "detail-group": "$.detail.group",
+                "detail-stoppedReason": "$.detail.stoppedReason",
+                "detail-stopCode": "$.detail.stopCode",
+                "detail-taskArn": "$.detail.taskArn"
+              },
+              "InputTemplate": "\"ECS stopped a <detail-group> task in listora-personal: <detail-stoppedReason> (stop code <detail-stopCode>, task <detail-taskArn>).\""
+            }
+          }
+        ]
       }
     },
     "appcpuF4F70E94": {

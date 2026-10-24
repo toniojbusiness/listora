@@ -6,7 +6,7 @@ page estimates its monthly AWS bill, explains the choices that keep it low, and 
 levers that would cut it further. The design is described in
 [infra/README.md](../infra/README.md#the-personal-environment).
 
-**Estimate: about $33 a month**, before any Free Tier credit. A copy of the staging layout
+**Estimate: about $32 a month**, before any Free Tier credit. A copy of the staging layout
 (NAT gateway, load balancer, two services) would cost about $100.
 
 Prices were read on 2026-10-24 for US East (N. Virginia), on demand, from the AWS pricing
@@ -41,10 +41,11 @@ domain registration, and the Anthropic API bill are not included.
 | Secrets Manager                      | 2 secrets (database, Anthropic key) at $0.40                     |      $0.80 |
 | KMS token key                        | 1 key at $1.00 (each yearly rotation adds $1, for two years)     |      $1.00 |
 | CloudWatch Logs                      | 1 GB ingested at $0.50, kept 7 days at $0.03 per GB              |      $0.51 |
-| CloudWatch alarms                    | 8 standard alarms at $0.10 (the always-free tier covers 10)      |      $0.80 |
+| CloudWatch alarms                    | 8 standard alarms, within the always-free 10                     |      $0.00 |
+| EventBridge task-stopped rule        | AWS service events delivered to SNS have no EventBridge charge   |      $0.00 |
 | ECR image storage                    | About 1 GB at $0.10 per GB                                       |      $0.10 |
 | ACM certificate, SNS email, data out | Free (public certificates; SNS and data transfer free tiers)     |      $0.00 |
-| **Total**                            |                                                                  | **$33.00** |
+| **Total**                            |                                                                  | **$32.20** |
 
 ## What the design avoids
 
@@ -95,14 +96,13 @@ $0.004446), plus $0.005 an hour for its public address: about $1.27 for 20 hours
    away the reliability of auto-delist; not recommended.
 4. **Commitments.** A Compute Savings Plan covers Fargate, and an RDS reserved instance covers
    the `db.t4g.micro`, each for a one- or three-year commitment.
-5. **Fewer alarms.** Ten alarms are free; the environment has eight. Adding more costs $0.10
-   each.
-6. **Quieter logs.** `LOG_LEVEL=warn` cuts ingestion, already only about $0.50.
+5. **Quieter logs.** `LOG_LEVEL=warn` cuts ingestion, already only about $0.50.
 
 Costs to watch: the `db.t4g.micro` bills $0.075 per vCPU-hour if its average CPU stays above
 its baseline for a day (unlimited burst mode; the `database-cpu` alarm fires first), photo
-storage grows by about $0.02 per 100 items a month, and each KMS key rotation adds $1 a month
-for the first two years.
+storage grows by about $0.02 per 100 items a month, each KMS key rotation adds $1 a month
+for the first two years, and alarms beyond the always-free ten cost $0.10 each (the
+environment has eight).
 
 ## Sources (read 2026-10-24)
 
@@ -127,4 +127,5 @@ for the first two years.
 - [AWS Secrets Manager pricing](https://aws.amazon.com/secrets-manager/pricing/)
 - [AWS KMS pricing](https://aws.amazon.com/kms/pricing/)
 - [Amazon CloudWatch pricing](https://aws.amazon.com/cloudwatch/pricing/)
+- [Amazon EventBridge pricing](https://aws.amazon.com/eventbridge/pricing/)
 - [Amazon ECR pricing](https://aws.amazon.com/ecr/pricing/)

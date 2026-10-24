@@ -3,6 +3,7 @@ import { Duration } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as events from 'aws-cdk-lib/aws-events';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -26,7 +27,9 @@ const GIB = 1024 ** 3;
  * and memory. Every alarm notifies the alarm topic when it fires and
  * when it recovers. Database storage has two signals: the free-storage alarm (autoscaling is
  * not keeping up) and RDS's own low-storage events, which include storage autoscaling
- * reaching its ceiling, so the ceiling alerts well before writes stop. Log groups live next to what writes them (compute, migrate, data, network)
+ * reaching its ceiling, so the ceiling alerts well before writes stop. Behind the HTTP API,
+ * every unplanned task stop (a crash, an exited container, a failed container health check) is
+ * also sent to the topic. Log groups live next to what writes them (compute, migrate, data, network)
  * with the environment's retention. Product SLO alarms (delist latency, verified-success
  * rate, unverified operations, AI cost) are T-32.
  */
@@ -55,6 +58,7 @@ export class ObservabilityStack extends ListoraStack {
       options: {
         comparison?: cloudwatch.ComparisonOperator;
         evaluationPeriods?: number;
+        datapointsToAlarm?: number;
         missingData?: cloudwatch.TreatMissingData;
       } = {},
     ): void => {
@@ -66,6 +70,9 @@ export class ObservabilityStack extends ListoraStack {
         comparisonOperator:
           options.comparison ?? cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         evaluationPeriods: options.evaluationPeriods ?? 3,
+        ...(options.datapointsToAlarm === undefined
+          ? {}
+          : { datapointsToAlarm: options.datapointsToAlarm }),
         // No data means no traffic or no samples, which is not an outage by itself.
         treatMissingData: options.missingData ?? cloudwatch.TreatMissingData.NOT_BREACHING,
       });
@@ -116,12 +123,14 @@ export class ObservabilityStack extends ListoraStack {
       case 'http-api': {
         const api = endpoint.httpApi;
         // The HTTP API counts the API's own server errors and its own (503 when no API task
-        // is registered, 504 after 30 seconds) together.
+        // is registered, 504 after 30 seconds) together. One user sends few requests, so any
+        // server error counts; 2 of 3 periods keeps a single blip quiet.
         alarm(
           'api-5xx',
-          'The API answered at least 10 server errors in each of 3 consecutive 5-minute periods.',
+          'The API answered server errors in at least 2 of 3 consecutive 5-minute periods.',
           api.metricServerError({ period: fiveMinutes, statistic: 'Sum' }),
-          10,
+          1,
+          { datapointsToAlarm: 2 },
         );
         alarm(
           'api-latency-p95',
@@ -149,6 +158,7 @@ export class ObservabilityStack extends ListoraStack {
             missingData: cloudwatch.TreatMissingData.BREACHING,
           },
         );
+        this.alertOnUnplannedTaskStops(prefix, props.services);
         break;
       }
       default:
@@ -229,6 +239,51 @@ export class ObservabilityStack extends ListoraStack {
       db.metricFreeableMemory({ period: fiveMinutes, statistic: 'Minimum' }),
       64 * 1024 ** 2,
       { comparison: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD },
+    );
+  }
+
+  /**
+   * Sends every task stop that no deploy or scale-in asked for to the alarm topic. A crash
+   * loop keeps the services' CPU samples coming from each replacement task, so no alarm sees
+   * it; the stop events do. Deploys and scale-ins stop tasks with a reason that starts with
+   * `Scaling activity initiated by`. AWS service events reach SNS at no EventBridge charge.
+   */
+  private alertOnUnplannedTaskStops(prefix: string, services: readonly ListoraService[]): void {
+    const cluster = services[0]?.service.cluster;
+    if (cluster === undefined) throw new Error('no service to watch');
+    const rule = new events.Rule(this, 'TaskStopped', {
+      ruleName: `${prefix}-task-stopped`,
+      description: 'Unplanned ECS task stops: crashes, exited containers, failed health checks.',
+      eventPattern: {
+        source: ['aws.ecs'],
+        detailType: ['ECS Task State Change'],
+        detail: {
+          clusterArn: [cluster.clusterArn],
+          group: services.map(({ name }) => `service:${name}`),
+          lastStatus: ['STOPPED'],
+          stoppedReason: events.Match.anythingButPrefix('Scaling activity initiated by'),
+        },
+      },
+    });
+    const field = (path: string): string => events.EventField.fromPath(`$.detail.${path}`);
+    const topic = this.alarmTopic;
+    rule.addTarget({
+      bind: () => ({
+        arn: topic.topicArn,
+        input: events.RuleTargetInput.fromText(
+          `ECS stopped a ${field('group')} task in ${prefix}: ${field('stoppedReason')} ` +
+            `(stop code ${field('stopCode')}, task ${field('taskArn')}).`,
+        ),
+      }),
+    });
+    topic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'TaskStoppedEvents',
+        actions: ['sns:Publish'],
+        principals: [new iam.ServicePrincipal('events.amazonaws.com')],
+        resources: [topic.topicArn],
+        conditions: { ArnEquals: { 'aws:SourceArn': rule.ruleArn } },
+      }),
     );
   }
 }

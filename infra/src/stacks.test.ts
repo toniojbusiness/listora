@@ -732,12 +732,16 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
       };
 
       it('alarms on server errors and latency (in milliseconds) of the HTTP API', () => {
+        // One user sends few requests: any server error counts, in 2 of 3 periods.
         expect(alarmNamed('api-5xx')).toMatchObject({
           Namespace: 'AWS/ApiGateway',
           MetricName: '5xx',
           Statistic: 'Sum',
-          Threshold: 10,
+          Period: 300,
+          Threshold: 1,
+          ComparisonOperator: 'GreaterThanOrEqualToThreshold',
           EvaluationPeriods: 3,
+          DatapointsToAlarm: 2,
         });
         expect(alarmNamed('api-latency-p95')).toMatchObject({
           Namespace: 'AWS/ApiGateway',
@@ -762,6 +766,66 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
         });
         const dimensions = JSON.stringify(alarmNamed('api-no-running-task')['Dimensions']);
         expect(dimensions).toContain(`PublishOutputFnGetAtt${service}service`);
+      });
+
+      it('sends unplanned task stops (crash loops) to the alarm topic, not deploy stops', () => {
+        const serviceNames = settings.services.layout === 'separate' ? ['api', 'worker'] : ['app'];
+        const topic = { Ref: Match.stringLikeRegexp('^Alarms') };
+        t.resourceCountIs('AWS::Events::Rule', 1);
+        const [rule] = resources(t, 'AWS::Events::Rule');
+        expect(rule?.Properties).toMatchObject({
+          Name: `listora-${environment}-task-stopped`,
+          State: 'ENABLED',
+          EventPattern: {
+            source: ['aws.ecs'],
+            'detail-type': ['ECS Task State Change'],
+            detail: {
+              clusterArn: [
+                {
+                  'Fn::GetStackOutput': expect.objectContaining({
+                    StackName: `listora-${environment}-compute`,
+                    OutputName: expect.stringMatching(/^PublishOutputFnGetAttCluster/) as unknown,
+                  }) as unknown,
+                },
+              ],
+              group: serviceNames.map((name) => `service:${name}`),
+              lastStatus: ['STOPPED'],
+              stoppedReason: [{ 'anything-but': { prefix: 'Scaling activity initiated by' } }],
+            },
+          },
+        });
+        const targets = rule?.Properties?.['Targets'] as Record<string, unknown>[];
+        expect(targets).toHaveLength(1);
+        expect(targets[0]).toMatchObject({
+          Arn: { Ref: expect.stringMatching(/^Alarms/) as unknown },
+        });
+        expect(JSON.stringify(targets[0]?.['InputTransformer'])).toContain(
+          '$.detail.stoppedReason',
+        );
+        t.hasResourceProperties('AWS::SNS::TopicPolicy', {
+          PolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Sid: 'TaskStoppedEvents',
+                Effect: 'Allow',
+                Action: 'sns:Publish',
+                Principal: { Service: 'events.amazonaws.com' },
+                Resource: topic,
+                Condition: {
+                  ArnEquals: {
+                    'aws:SourceArn': {
+                      'Fn::GetAtt': [Match.stringLikeRegexp('^TaskStopped'), 'Arn'],
+                    },
+                  },
+                },
+              }),
+            ]),
+          },
+        });
+      });
+    } else {
+      it('leaves task stops to the load balancer health alarms', () => {
+        t.resourceCountIs('AWS::Events::Rule', 0);
       });
     }
 
