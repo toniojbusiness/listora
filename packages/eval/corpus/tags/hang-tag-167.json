@@ -1,0 +1,65 @@
+{
+  "id": "hang-tag-167",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Juniper Co."
+    },
+    {
+      "text": "ONE SIZE FITS MOST"
+    },
+    {
+      "text": "$39.99"
+    },
+    {
+      "barcode": "125409135594"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Juniper Co.",
+        "confidence": 1
+      },
+      {
+        "text": "ONE SIZE FITS MOST",
+        "confidence": 1
+      },
+      {
+        "text": "$39.99",
+        "confidence": 1
+      },
+      {
+        "text": "1 25409 13559 4",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "125409135594"
+      }
+    ],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-167.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 360,
+    "pixelSha256": "934efaf956d0d93b463cd4d2c04d12a5b40a12312815a23f89e8d3e609e487c9"
+  }
+}

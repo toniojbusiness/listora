@@ -1,0 +1,88 @@
+{
+  "id": "care-label-069",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "COPPER FOX"
+    },
+    {
+      "text": "100% POLYESTER"
+    },
+    {
+      "text": "MADE IN EL SALVADOR"
+    },
+    {
+      "text": "HECHO EN EL SALVADOR"
+    },
+    {
+      "text": "RN#121437  CA#81134"
+    },
+    {
+      "text": "WASH INSIDE OUT"
+    },
+    {
+      "text": "COOL IRON IF NEEDED"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "COPPER FOX",
+        "confidence": 1
+      },
+      {
+        "text": "1O0% POLYESTER",
+        "confidence": 0.5
+      },
+      {
+        "text": "made in el salvador",
+        "confidence": 0.5
+      },
+      {
+        "text": "HECHO EN EL SALVADOR",
+        "confidence": 1
+      },
+      {
+        "text": "RN#121437  CA#81134",
+        "confidence": 1
+      },
+      {
+        "text": "WASH INSIDE OUT",
+        "confidence": 1
+      },
+      {
+        "text": "COOL IRON IF NEEDED",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "121437"
+    ],
+    "ca": [
+      "81134"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "SV"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-069.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 315,
+    "pixelSha256": "12238d45acf85635ab712df474df42d2ae16c3d8416a4d955034f5cb1198a01a"
+  }
+}

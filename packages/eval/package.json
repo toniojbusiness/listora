@@ -1,0 +1,17 @@
+{
+  "name": "@listora/eval",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Synthetic tag corpus and evaluation harness for tag parsing and AI attribute extraction.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "eval": "node src/cli.ts",
+    "corpus:render": "node src/corpus/render-corpus.ts"
+  },
+  "dependencies": {
+    "@listora/tag-parse": "*"
+  }
+}

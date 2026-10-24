@@ -1,0 +1,105 @@
+{
+  "id": "care-label-077",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "LITTLE ATLAS"
+    },
+    {
+      "text": "60% COTTON, 35% POLYESTER, 5% ELASTANE"
+    },
+    {
+      "text": "MADE IN UNITED STATES"
+    },
+    {
+      "text": "RN 117111 / CA 89817"
+    },
+    {
+      "text": "MACHINE WASH COLD"
+    },
+    {
+      "text": "LAVER A LA MACHINE A FROID"
+    },
+    {
+      "text": "DO NOT BLEACH"
+    },
+    {
+      "text": "SAN DIEGO, CA 92175"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "LITTLE ATLAS",
+        "confidence": 1
+      },
+      {
+        "text": "60% COTTON, 35% POLYESTER, 5% ELASTANE",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN UNITED STATES",
+        "confidence": 1
+      },
+      {
+        "text": "RN 117111 / CA 89817",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD",
+        "confidence": 1
+      },
+      {
+        "text": "LAVER A LA MACHINE A FROID",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT BLEACH",
+        "confidence": 1
+      },
+      {
+        "text": "SAN DIEGO, CA 92175",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "117111"
+    ],
+    "ca": [
+      "89817"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 35
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-077.png",
+    "mediaType": "image/png",
+    "width": 753,
+    "height": 351,
+    "pixelSha256": "4ef2cbf5162772639d9c9b369ffad9d44e3d26d8fdd3291ec9f1e6d232cbdda6"
+  }
+}

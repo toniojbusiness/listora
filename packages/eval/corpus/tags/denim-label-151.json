@@ -1,0 +1,91 @@
+{
+  "id": "denim-label-151",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "WAIST 33 INSEAM 32"
+    },
+    {
+      "text": "STYLE # 8845-92"
+    },
+    {
+      "text": "COTTON 60% / POLYESTER 40%"
+    },
+    {
+      "text": "MADE IN SOUTH KOREA"
+    },
+    {
+      "text": "RN 139398"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STONE RIVER DENIM",
+        "confidence": 1
+      },
+      {
+        "text": "WAIST 33 INSEAM 32",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE # 8845-92",
+        "confidence": 1
+      },
+      {
+        "text": "cotton 60% / polyester 40%",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN SOUTH KOREA",
+        "confidence": 1
+      },
+      {
+        "text": "RN 139398",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "139398"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "33x32"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 40
+      }
+    ],
+    "origin": [
+      "KR"
+    ],
+    "style": [
+      "8845-92"
+    ]
+  },
+  "image": {
+    "file": "denim-label-151.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 279,
+    "pixelSha256": "ad286268ab52b8b7ec4c4376dc053da12c7c46b299596af6f57da2e28a3084a4"
+  }
+}

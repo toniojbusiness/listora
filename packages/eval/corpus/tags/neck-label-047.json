@@ -1,0 +1,64 @@
+{
+  "id": "neck-label-047",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "SIZE XL"
+    },
+    {
+      "text": "MADE IN CHINA"
+    },
+    {
+      "text": "RN 148527"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE XL",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN CHINA",
+        "confidence": 1
+      },
+      {
+        "text": "RN 148527",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "148527"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-047.png",
+    "mediaType": "image/png",
+    "width": 375,
+    "height": 207,
+    "pixelSha256": "829bcb1bd434f789e644db9e3c47c1bed4e60ac3446e22177c1b478b9f972b70"
+  }
+}

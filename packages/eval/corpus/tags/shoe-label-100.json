@@ -1,0 +1,82 @@
+{
+  "id": "shoe-label-100",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US 11.5 UK 10.5 EUR 45"
+    },
+    {
+      "text": "ART. NO. FP8869-329"
+    },
+    {
+      "text": "MADE IN GUATEMALA"
+    },
+    {
+      "barcode": "735062502963"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 11.5 UK 10.5 EUR 45",
+        "confidence": 1
+      },
+      {
+        "text": "ART. NO. FP8869-329",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN GUATEMALA",
+        "confidence": 1
+      },
+      {
+        "text": "7 35062 50296 3",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0735062502963",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "735062502963"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "11.5"
+      },
+      {
+        "system": "uk",
+        "value": "10.5"
+      },
+      {
+        "system": "eu",
+        "value": "45"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "GT"
+    ],
+    "style": [
+      "FP8869-329"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-100.png",
+    "mediaType": "image/png",
+    "width": 465,
+    "height": 327,
+    "pixelSha256": "052894c9daac6aebedb9ebc5018cf7ad399c4baa2707801548fad0453a8b16d0"
+  }
+}

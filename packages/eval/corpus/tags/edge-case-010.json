@@ -1,0 +1,56 @@
+{
+  "id": "edge-case-010",
+  "kind": "edge_case",
+  "description": "A multilingual size label wrapped onto its own line",
+  "printed": [
+    {
+      "text": "TALLA/SIZE/TAILLE"
+    },
+    {
+      "text": "M"
+    },
+    {
+      "text": "MADE IN BANGLADESH"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "TALLA/SIZE/TAILLE",
+        "confidence": 1
+      },
+      {
+        "text": "M",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN BANGLADESH",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "BD"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-010.png",
+    "mediaType": "image/png",
+    "width": 393,
+    "height": 171,
+    "pixelSha256": "b2a31742ff3efef7db7583ccf9d2f2761fd8f5f906006ed4a424afbf0c351314"
+  }
+}

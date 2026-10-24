@@ -1,0 +1,56 @@
+{
+  "id": "edge-case-005",
+  "kind": "edge_case",
+  "description": "A style label followed by words is not a style number",
+  "printed": [
+    {
+      "text": "STYLE MEETS COMFORT"
+    },
+    {
+      "text": "ITEM # 20931-004"
+    },
+    {
+      "text": "ONE SIZE"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STYLE MEETS COMFORT",
+        "confidence": 1
+      },
+      {
+        "text": "ITEM # 20931-004",
+        "confidence": 1
+      },
+      {
+        "text": "ONE SIZE",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "20931-004"
+    ]
+  },
+  "image": {
+    "file": "edge-case-005.png",
+    "mediaType": "image/png",
+    "width": 411,
+    "height": 171,
+    "pixelSha256": "4b916d93ac917212cfe6bddf7e5d47e52b1c02948f76beeb04ea327044753b71"
+  }
+}

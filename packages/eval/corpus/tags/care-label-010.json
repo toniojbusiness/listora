@@ -1,0 +1,109 @@
+{
+  "id": "care-label-010",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "L"
+    },
+    {
+      "text": "55% LINEN 45% COTTON"
+    },
+    {
+      "text": "55% LIN / 45% COTON"
+    },
+    {
+      "text": "55% LINO, 45% ALGODON"
+    },
+    {
+      "text": "MADE IN UNITED STATES"
+    },
+    {
+      "text": "RN 31473 / CA 38094"
+    },
+    {
+      "text": "LINE DRY"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "L",
+        "confidence": 1
+      },
+      {
+        "text": "55% LINEN 45% COTTON",
+        "confidence": 1
+      },
+      {
+        "text": "55% LIN / 45% COTON",
+        "confidence": 1
+      },
+      {
+        "text": "55% LINO",
+        "confidence": 0.5
+      },
+      {
+        "text": "45% ALGODON",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN UNITED STATES",
+        "confidence": 1
+      },
+      {
+        "text": "RN 31473 / CA 38094",
+        "confidence": 1
+      },
+      {
+        "text": "LINE DRY",
+        "confidence": 1
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "31473"
+    ],
+    "ca": [
+      "38094"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "linen",
+        "percent": 55
+      },
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 45
+      }
+    ],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-010.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 351,
+    "pixelSha256": "693f41344236901c77c24b9eab6c88b5e9cd186ca29676182a6859b4bb6dbb4b"
+  }
+}

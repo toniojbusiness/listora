@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-039",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Salt Flats Supply"
+    },
+    {
+      "text": "REF. G-62053"
+    },
+    {
+      "text": "L/G/G"
+    },
+    {
+      "text": "$128.99"
+    },
+    {
+      "barcode": "017334741165"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Salt Flats Supply",
+        "confidence": 1
+      },
+      {
+        "text": "REF. G-62053",
+        "confidence": 1
+      },
+      {
+        "text": "L/G/G",
+        "confidence": 1
+      },
+      {
+        "text": "$128.99",
+        "confidence": 1
+      },
+      {
+        "text": "0 17334 74116 5",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0017334741165",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "017334741165"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "G-62053"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-039.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "b522ae491708ebbc1305b77eca73c21399fe9cd2024dd2bbba643af3419b0382"
+  }
+}

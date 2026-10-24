@@ -1,0 +1,69 @@
+{
+  "id": "hang-tag-113",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "COPPER FOX"
+    },
+    {
+      "text": "ART. NO. C-95667"
+    },
+    {
+      "text": "SIZE: OS"
+    },
+    {
+      "text": "$39.99"
+    },
+    {
+      "barcode": "135128752662"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "COPPER FOX",
+        "confidence": 1
+      },
+      {
+        "text": "ART. NO. C-95667",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE: OS",
+        "confidence": 1
+      },
+      {
+        "text": "$39.99",
+        "confidence": 1
+      },
+      {
+        "text": "1 35128 75266 2",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "C-95667"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-113.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "56e57102a57f7ac4296e3f2475e99aba5b7b4ff9896d4789e8c05e8225d00619"
+  }
+}

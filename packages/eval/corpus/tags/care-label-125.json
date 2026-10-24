@@ -1,0 +1,117 @@
+{
+  "id": "care-label-125",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "65% POLYESTER"
+    },
+    {
+      "text": "30% RAYON"
+    },
+    {
+      "text": "5% SPANDEX"
+    },
+    {
+      "text": "MADE IN U.S.A. / FABRIQUE EN ETATS-UNIS / HECHO EN ESTADOS UNIDOS"
+    },
+    {
+      "text": "CA NO. 32375"
+    },
+    {
+      "text": "HAND WASH COLD"
+    },
+    {
+      "text": "COOL IRON IF NEEDED"
+    },
+    {
+      "text": "DO NOT BLEACH"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    },
+    {
+      "text": "QUALITY SINCE 1987"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "65% POLYESTER",
+        "confidence": 1
+      },
+      {
+        "text": "30% RAYON",
+        "confidence": 1
+      },
+      {
+        "text": "5% SPANDEX",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN U.S.A. / FABRIQUE EN ETATS-UNIS / HECHO EN ESTADOS UNIDOS",
+        "confidence": 1
+      },
+      {
+        "text": "CA NO.",
+        "confidence": 0.5
+      },
+      {
+        "text": "32375",
+        "confidence": 0.5
+      },
+      {
+        "text": "HAND  WASH COLD COOL IRON IF NEEDED",
+        "confidence": 0.5
+      },
+      {
+        "text": "DO NOT BLEACH",
+        "confidence": 1
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      },
+      {
+        "text": "quality since 1987",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "32375"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 65
+      },
+      {
+        "part": null,
+        "material": "rayon",
+        "percent": 30
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-125.png",
+    "mediaType": "image/png",
+    "width": 1239,
+    "height": 423,
+    "pixelSha256": "ba806b37e476a5562099d590b7ddbe24cc193da57ab31c17c0c931fdc861c7c1"
+  }
+}

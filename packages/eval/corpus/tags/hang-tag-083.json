@@ -1,0 +1,76 @@
+{
+  "id": "hang-tag-083",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Little Atlas"
+    },
+    {
+      "text": "ART. NO. 542476"
+    },
+    {
+      "text": "M (8-10)"
+    },
+    {
+      "text": "$39.99"
+    },
+    {
+      "barcode": "051318539735"
+    },
+    {
+      "text": "SAN FRANCISCO, CA 94189"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Little Atlas",
+        "confidence": 1
+      },
+      {
+        "text": "ART. NO. 542476",
+        "confidence": 1
+      },
+      {
+        "text": "M (8-10)",
+        "confidence": 1
+      },
+      {
+        "text": "$39.99",
+        "confidence": 1
+      },
+      {
+        "text": "0 51318 53973 5",
+        "confidence": 1
+      },
+      {
+        "text": "SAN FRANCISCO, CA 94189",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "542476"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-083.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 432,
+    "pixelSha256": "941366c9728dde784c299e8ed12003a57030cf2a90bcaa5cabd13fad765fd887"
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "id": "care-label-106",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "OAK HOLLOW"
+    },
+    {
+      "text": "100% LYOCELL / LYOCELL / LYOCELL"
+    },
+    {
+      "text": "MADE IN VIETNAM / FABRIQUE EN VIETNAM / HECHO EN VIETNAM"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    },
+    {
+      "text": "HAND WASH COLD"
+    },
+    {
+      "text": "LINE DRY"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    },
+    {
+      "text": "OAKLAND, CA 94605 USA"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "OAK HOLLOW",
+        "confidence": 1
+      },
+      {
+        "text": "1O0% LYOCELL / LYOCELL / LYOCELL",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN VIETNAM / FABRIQUE EN VIETNAM / HECHO EN VIETNAM",
+        "confidence": 1
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      },
+      {
+        "text": "HAND WASH COLD",
+        "confidence": 1
+      },
+      {
+        "text": "LINE DRY",
+        "confidence": 1
+      },
+      {
+        "text": "LAVAR A MAQUINA EN FRIO",
+        "confidence": 1
+      },
+      {
+        "text": "OAKLAND, CA 94605 USA",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "lyocell",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-106.png",
+    "mediaType": "image/png",
+    "width": 1077,
+    "height": 351,
+    "pixelSha256": "8bb89442eaad9305d019d348221458c3fdc688b3d4d359cdc0c78ad3c6c47f3b"
+  }
+}

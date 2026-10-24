@@ -1,0 +1,50 @@
+{
+  "id": "edge-case-008",
+  "kind": "edge_case",
+  "description": "\"Exclusive of trim\" does not create a trim part",
+  "printed": [
+    {
+      "text": "100% COTTON EXCLUSIVE OF TRIM"
+    },
+    {
+      "text": "MADE IN INDIA"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "100% COTTON EXCLUSIVE OF TRIM",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN INDIA",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "IN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-008.png",
+    "mediaType": "image/png",
+    "width": 591,
+    "height": 135,
+    "pixelSha256": "aeed399d5a753be6d0db0c53925f9e026088f046c22770c75c8c6d0645a067b2"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "id": "neck-label-152",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "HARBOR LANE"
+    },
+    {
+      "text": "SIZE: S"
+    },
+    {
+      "text": "MADE IN VIETNAM"
+    },
+    {
+      "text": "RN# 84258"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "HARBOR LANE",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE: S MADE IN VIETNAM",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN# 84258",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "84258"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "VN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-152.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 207,
+    "pixelSha256": "973adbc17aad14c31320b78bf9c8d87cc4ca3908980503e75674a849e61cd2de"
+  }
+}

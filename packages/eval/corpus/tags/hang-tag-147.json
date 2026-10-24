@@ -1,0 +1,73 @@
+{
+  "id": "hang-tag-147",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "BLUE CEDAR"
+    },
+    {
+      "text": "US 14 / UK 18 / EU 46"
+    },
+    {
+      "text": "PRICE $65"
+    },
+    {
+      "barcode": "8473572947745"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "BLUE CEDAR",
+        "confidence": 1
+      },
+      {
+        "text": "US 14 / UK 18 / EU 46",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE $65",
+        "confidence": 1
+      },
+      {
+        "text": "8 476572 947745",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "8473572947745"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "14"
+      },
+      {
+        "system": "uk",
+        "value": "18"
+      },
+      {
+        "system": "eu",
+        "value": "46"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-147.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 360,
+    "pixelSha256": "67ff5a76481966ba386ceb3edec770e57d8e32582996a1aa8550da3ba2226c3a"
+  }
+}

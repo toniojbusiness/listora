@@ -1,0 +1,90 @@
+{
+  "id": "care-label-049",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "TALLA/SIZE/TAILLE: XL"
+    },
+    {
+      "text": "65% POLYESTER / 30% RAYON / 5% SPANDEX"
+    },
+    {
+      "text": "MADE IN INDONESIA"
+    },
+    {
+      "text": "CA NO. 88051"
+    },
+    {
+      "text": "LAY FLAT TO DRY"
+    },
+    {
+      "text": "DESIGNED IN CALIFORNIA"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "TALLA/SIZE/TAILLE: XL",
+        "confidence": 1
+      },
+      {
+        "text": "65% POLYESTER / 30% RAYON / 5% SPANDEX MADE IN INDONESIA",
+        "confidence": 0.5
+      },
+      {
+        "text": "CA NO. 88051",
+        "confidence": 1
+      },
+      {
+        "text": "LAY FLAT TO DRY",
+        "confidence": 1
+      },
+      {
+        "text": "DESIGNED IN CALIFORNIA",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "88051"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 65
+      },
+      {
+        "part": null,
+        "material": "rayon",
+        "percent": 30
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "ID"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-049.png",
+    "mediaType": "image/png",
+    "width": 753,
+    "height": 279,
+    "pixelSha256": "740e5860e9388984c3c0b1062508374673ed82ce565bfe8e4f482a85ba707562"
+  }
+}

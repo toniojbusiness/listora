@@ -1,0 +1,105 @@
+{
+  "id": "care-label-172",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "HARBOR LANE"
+    },
+    {
+      "text": "SIZE XS"
+    },
+    {
+      "text": "100% CASHMERE EXCLUSIVE OF TRIM"
+    },
+    {
+      "text": "MADE IN UNITED STATES / FABRIQUE EN ETATS-UNIS / HECHO EN ESTADOS UNIDOS"
+    },
+    {
+      "text": "R.N. 102962"
+    },
+    {
+      "text": "SEE REVERSE FOR CARE"
+    },
+    {
+      "text": "TUMBLE DRY LOW"
+    },
+    {
+      "text": "DO NOT BLEACH"
+    },
+    {
+      "text": "FITS LIKE A LARGE"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "HARBOR  LANE",
+        "confidence": 0.5
+      },
+      {
+        "text": "SIZE XS",
+        "confidence": 1
+      },
+      {
+        "text": "100% CASHMERE EXCLUSIVE OF TRIM",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN UNITED STATES / FABRIQUE EN ETATS-UNIS / HECHO EN ESTADOS UNIDOS",
+        "confidence": 1
+      },
+      {
+        "text": "R.N. 102962",
+        "confidence": 1
+      },
+      {
+        "text": "SEE REVERSE FOR CARE",
+        "confidence": 1
+      },
+      {
+        "text": "TUMBLE DRY LOW",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT BLEACH",
+        "confidence": 1
+      },
+      {
+        "text": "FITS LIKE A LARGE",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "102962"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XS"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cashmere",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-172.png",
+    "mediaType": "image/png",
+    "width": 1365,
+    "height": 387,
+    "pixelSha256": "b809fd673cdadc591ca089f818065ade90357e30055e86dcd00186e9a3dece67"
+  }
+}

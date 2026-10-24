@@ -1,0 +1,57 @@
+{
+  "id": "edge-case-013",
+  "kind": "edge_case",
+  "description": "Women's size in US, UK, and EU systems",
+  "printed": [
+    {
+      "text": "US 8 / UK 12 / EU 40"
+    },
+    {
+      "text": "MADE IN TURKEY"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 8 / UK 12 / EU 40",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN TURKEY",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "8"
+      },
+      {
+        "system": "uk",
+        "value": "12"
+      },
+      {
+        "system": "eu",
+        "value": "40"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "TR"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-013.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 135,
+    "pixelSha256": "d9cee40a82a80965c85747966ce2dc028d641463d04a43a778bcbd31f9d82647"
+  }
+}

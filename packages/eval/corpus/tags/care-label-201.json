@@ -1,0 +1,111 @@
+{
+  "id": "care-label-201",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "US 6 / UK 10 / EU 38"
+    },
+    {
+      "text": "80% NYLON / POLYAMIDE / NAILON"
+    },
+    {
+      "text": "20% ELASTANE / ELASTHANNE / ELASTANO"
+    },
+    {
+      "text": "MADE IN ROMANIA"
+    },
+    {
+      "text": "RN 134358"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    },
+    {
+      "text": "DRY CLEAN ONLY"
+    },
+    {
+      "text": "LOS ANGELES, CA 90036"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 6 / UK 10 / EU 38",
+        "confidence": 1
+      },
+      {
+        "text": "80% NYLON / POLYAMIDE / NAILON",
+        "confidence": 1
+      },
+      {
+        "text": "2O% ELASTANE / ELASTHANNE / ELASTANO",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN ROMANIA",
+        "confidence": 1
+      },
+      {
+        "text": "RN 134358",
+        "confidence": 1
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      },
+      {
+        "text": "DRY CLEAN ONLY",
+        "confidence": 1
+      },
+      {
+        "text": "los angeles, ca 90036",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "134358"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "6"
+      },
+      {
+        "system": "uk",
+        "value": "10"
+      },
+      {
+        "system": "eu",
+        "value": "38"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 80
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 20
+      }
+    ],
+    "origin": [
+      "RO"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-201.png",
+    "mediaType": "image/png",
+    "width": 717,
+    "height": 351,
+    "pixelSha256": "82fac0e380e1dc11cb150d849a40dfb00e852466f0149a9274d0f83d82c7da04"
+  }
+}

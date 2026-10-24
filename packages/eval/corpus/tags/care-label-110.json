@@ -1,0 +1,91 @@
+{
+  "id": "care-label-110",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "80% WOOL / 20% POLYAMIDE"
+    },
+    {
+      "text": "MADE IN EL SALVADOR"
+    },
+    {
+      "text": "R.N. 154847"
+    },
+    {
+      "text": "WASH INSIDE OUT"
+    },
+    {
+      "text": "HAND WASH COLD"
+    },
+    {
+      "text": "DO NOT DRY CLEAN"
+    },
+    {
+      "text": "LINE DRY"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "80% WOOL / 20% POLYAMIDE",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN EL SALVADOR",
+        "confidence": 1
+      },
+      {
+        "text": "R.N. 1S4847",
+        "confidence": 0.5
+      },
+      {
+        "text": "WASH INSIDE OUT",
+        "confidence": 1
+      },
+      {
+        "text": "HAND WASH COLD",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT DRY CLEAN",
+        "confidence": 1
+      },
+      {
+        "text": "LINE DRY",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "154847"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "wool",
+        "percent": 80
+      },
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 20
+      }
+    ],
+    "origin": [
+      "SV"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-110.png",
+    "mediaType": "image/png",
+    "width": 501,
+    "height": 315,
+    "pixelSha256": "ec94ec4cfd42ecb5fc637f69a1f26bd376a1b4f76d162dde009795faaf485ece"
+  }
+}

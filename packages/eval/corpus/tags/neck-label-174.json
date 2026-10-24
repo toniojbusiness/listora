@@ -1,0 +1,55 @@
+{
+  "id": "neck-label-174",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "NORTHWIND APPAREL"
+    },
+    {
+      "text": "SIZE: S"
+    },
+    {
+      "text": "MADE IN BANGLADESH"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "NORTHWIND APPAREL",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE:  S",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN BANGLADESH",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "BD"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-174.png",
+    "mediaType": "image/png",
+    "width": 393,
+    "height": 171,
+    "pixelSha256": "d4173ac39dc50661b2be2e55c3cca3989922a76b6a168cf97abba8d03147492d"
+  }
+}

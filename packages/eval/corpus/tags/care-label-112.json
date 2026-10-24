@@ -1,0 +1,95 @@
+{
+  "id": "care-label-112",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "SIZE XXL"
+    },
+    {
+      "text": "88% POLYESTER / POLYESTER / POLIESTER"
+    },
+    {
+      "text": "12% SPANDEX / ELASTHANNE / ELASTANO"
+    },
+    {
+      "text": "MADE IN PORTUGAL"
+    },
+    {
+      "text": "HECHO EN PORTUGAL"
+    },
+    {
+      "text": "RN#117752"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    },
+    {
+      "text": "MACHINE WASH COLD WITH LIKE COLORS"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SIZE XXL",
+        "confidence": 1
+      },
+      {
+        "text": "88% POLYESTER / POLYESTER / POLIESTER",
+        "confidence": 1
+      },
+      {
+        "text": "12% SPANDEX / ELASTHANNE / ELASTANO",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN PORTUGAL HECHO EN PORTUGAL",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN#117752 LAVAR A MAQUINA EN FRIO",
+        "confidence": 0.5
+      },
+      {
+        "text": "MACHINE WASH COLD WITH LIKE COLORS",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "117752"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XXL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 88
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 12
+      }
+    ],
+    "origin": [
+      "PT"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-112.png",
+    "mediaType": "image/png",
+    "width": 735,
+    "height": 351,
+    "pixelSha256": "5f67ac9d789054789f59b4dc0a431f7b9febb5b748da5444e3a4583e67ba22b0"
+  }
+}

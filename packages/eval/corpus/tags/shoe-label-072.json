@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-072",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "Parallel Athletic"
+    },
+    {
+      "text": "US 5.5 UK 4.5 EUR 39"
+    },
+    {
+      "text": "STYLE # IP9421"
+    },
+    {
+      "text": "Made in Sri Lanka"
+    },
+    {
+      "barcode": "081570390517"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Parallel Athletic",
+        "confidence": 1
+      },
+      {
+        "text": "US 5.5 UK 4.5 EUR 39",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE # IP9421",
+        "confidence": 1
+      },
+      {
+        "text": "Made  in Sri Lanka",
+        "confidence": 0.5
+      },
+      {
+        "text": "0 81570 39051 7",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0081570390517",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "081570390517"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "5.5"
+      },
+      {
+        "system": "uk",
+        "value": "4.5"
+      },
+      {
+        "system": "eu",
+        "value": "39"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "LK"
+    ],
+    "style": [
+      "IP9421"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-072.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 363,
+    "pixelSha256": "c1a11fe9811697a49bd40a7bd3c3d341d995af9807b4525b79774031c1b317ac"
+  }
+}

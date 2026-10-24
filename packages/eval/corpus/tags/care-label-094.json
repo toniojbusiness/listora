@@ -1,0 +1,118 @@
+{
+  "id": "care-label-094",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "NORTHWIND APPAREL"
+    },
+    {
+      "text": "SIZE SMALL"
+    },
+    {
+      "text": "SHELL"
+    },
+    {
+      "text": "100% NYLON"
+    },
+    {
+      "text": "LINING"
+    },
+    {
+      "text": "100% POLYESTER"
+    },
+    {
+      "text": "MADE IN P.R.C."
+    },
+    {
+      "text": "LINE DRY"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    },
+    {
+      "text": "NE PAS BLANCHIR"
+    },
+    {
+      "text": "RETURN POLICY 30 DAYS"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "NORTHWIND APPAREL SIZE SMALL",
+        "confidence": 0.5
+      },
+      {
+        "text": "SHELL",
+        "confidence": 1
+      },
+      {
+        "text": "100% NYLON",
+        "confidence": 1
+      },
+      {
+        "text": "lining",
+        "confidence": 0.5
+      },
+      {
+        "text": "100% POLYESTER",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN P.R.C.",
+        "confidence": 1
+      },
+      {
+        "text": "LINE DRY",
+        "confidence": 1
+      },
+      {
+        "text": "LAVAR A MAQUINA EN FRIO",
+        "confidence": 1
+      },
+      {
+        "text": "NE PAS BLANCHIR",
+        "confidence": 1
+      },
+      {
+        "text": "RETURN POLICY 30 DAYS",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [
+      {
+        "part": "shell",
+        "material": "nylon",
+        "percent": 100
+      },
+      {
+        "part": "lining",
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-094.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 459,
+    "pixelSha256": "668672c2815e1d42540292fa74b451802581b50c73860c6fde08c9e94227f2e2"
+  }
+}

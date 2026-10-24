@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-092",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Salt Flats Supply"
+    },
+    {
+      "text": "REF. 5083-29"
+    },
+    {
+      "text": "SIZE M"
+    },
+    {
+      "text": "$39.00"
+    },
+    {
+      "barcode": "090415765755"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Salt Flats Supply",
+        "confidence": 1
+      },
+      {
+        "text": "REF. 5083-29",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE M",
+        "confidence": 1
+      },
+      {
+        "text": "$39.00",
+        "confidence": 1
+      },
+      {
+        "text": "0 98415 76575 5",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0090415765755",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "090415765755"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "5083-29"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-092.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "b33960ffa369dac8555e9a4ce98e781d3009aa00393f8598e6d44d74a1949fd5"
+  }
+}

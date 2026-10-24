@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-159",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "BLUE CEDAR"
+    },
+    {
+      "text": "PROD. NO. 743950"
+    },
+    {
+      "text": "SIZE 8"
+    },
+    {
+      "text": "$65.99"
+    },
+    {
+      "barcode": "8077410598276"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "BLUE CEDAR",
+        "confidence": 1
+      },
+      {
+        "text": "PROD. NO. 743950",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE 8",
+        "confidence": 1
+      },
+      {
+        "text": "$65.99",
+        "confidence": 1
+      },
+      {
+        "text": "8 071410 598276",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "8077410598276",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "8077410598276"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "8"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "743950"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-159.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "737a9d4917ed377d309e45d7074139fb41e52b07377ba5d9c470516617113a54"
+  }
+}

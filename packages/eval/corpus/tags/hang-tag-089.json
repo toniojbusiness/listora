@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-089",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "OAK HOLLOW"
+    },
+    {
+      "text": "ITEM # ZI1232-078"
+    },
+    {
+      "text": "ONE SIZE"
+    },
+    {
+      "text": "$98.99"
+    },
+    {
+      "barcode": "080538200523"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "OAK HOLLOW",
+        "confidence": 1
+      },
+      {
+        "text": "ITEM # ZI1232-078",
+        "confidence": 1
+      },
+      {
+        "text": "ONE SIZE",
+        "confidence": 1
+      },
+      {
+        "text": "$98.99",
+        "confidence": 1
+      },
+      {
+        "text": "0 80538 20052 3",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0080538200523",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "080538200523"
+      }
+    ],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "ZI1232-078"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-089.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "5954ac5b2f69401de24a60447f4decd50d57471bc6e85ec589b29a3c023a4470"
+  }
+}

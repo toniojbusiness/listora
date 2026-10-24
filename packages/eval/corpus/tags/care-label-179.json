@@ -1,0 +1,85 @@
+{
+  "id": "care-label-179",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "HARBOR LANE"
+    },
+    {
+      "text": "40% MOHAIR / 40% ACRYLIC / 20% NYLON"
+    },
+    {
+      "text": "MADE IN VIET NAM / FABRIQUE EN VIETNAM / HECHO EN VIETNAM"
+    },
+    {
+      "text": "CA 37589"
+    },
+    {
+      "text": "LAY FLAT TO DRY"
+    },
+    {
+      "text": "HAND WASH COLD"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "HARBOR  LANE",
+        "confidence": 0.5
+      },
+      {
+        "text": "40% MOHAIR / 40% ACRYLIC / 20% NYLON",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN VIET NAM / FABRIQUE EN VIETNAM / HECHO EN VIETNAM",
+        "confidence": 1
+      },
+      {
+        "text": "CA 37589 LAY FLAT TO DRY",
+        "confidence": 0.5
+      },
+      {
+        "text": "HAND WASH COLD",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "37589"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "mohair",
+        "percent": 40
+      },
+      {
+        "part": null,
+        "material": "acrylic",
+        "percent": 40
+      },
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 20
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-179.png",
+    "mediaType": "image/png",
+    "width": 1095,
+    "height": 279,
+    "pixelSha256": "eee1f84b9cbe1bd41e6c2f7afe74dff83a85729c60d06f5ee8a4462bf49f0b75"
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "id": "denim-label-155",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "Stone River Denim"
+    },
+    {
+      "text": "SIZE: 38X28"
+    },
+    {
+      "text": "STYLE 1161-81"
+    },
+    {
+      "text": "95% COTTON, 5% OTHER FIBERS"
+    },
+    {
+      "text": "95% COTON, 5% AUTRES FIBRES"
+    },
+    {
+      "text": "95% ALGODON 5% OTRAS FIBRAS"
+    },
+    {
+      "text": "Made in Vietnam"
+    },
+    {
+      "text": "RN #47692"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Stone River Denim",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE:",
+        "confidence": 0.5
+      },
+      {
+        "text": "38X28",
+        "confidence": 0.5
+      },
+      {
+        "text": "STYLE 1161-81",
+        "confidence": 1
+      },
+      {
+        "text": "95% COTTON, 5% OTHER FIBERS",
+        "confidence": 1
+      },
+      {
+        "text": "95% COTON, 5% AUTRES FIBRES",
+        "confidence": 1
+      },
+      {
+        "text": "95% ALGODON 5% OTRAS FIBRAS Made in Vietnam",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN  #47692",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "47692"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "38x28"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 95
+      },
+      {
+        "part": null,
+        "material": "other",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": [
+      "1161-81"
+    ]
+  },
+  "image": {
+    "file": "denim-label-155.png",
+    "mediaType": "image/png",
+    "width": 555,
+    "height": 351,
+    "pixelSha256": "0d722616872eaec6176a1fa5a2e225641311d367e46e480d75d3087ebf4e083c"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "id": "edge-case-004",
+  "kind": "edge_case",
+  "description": "\"Imported\" names no country",
+  "printed": [
+    {
+      "text": "WILLOW STREET"
+    },
+    {
+      "text": "IMPORTED"
+    },
+    {
+      "text": "SIZE L"
+    },
+    {
+      "text": "RN 52114"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "WILLOW STREET",
+        "confidence": 1
+      },
+      {
+        "text": "IMPORTED",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE L",
+        "confidence": 1
+      },
+      {
+        "text": "RN 52114",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "52114"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-004.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 207,
+    "pixelSha256": "8a357fe8d6b660d6790e7bd7c55e3fead705f060572e1e2b21b1c943be3fa434"
+  }
+}

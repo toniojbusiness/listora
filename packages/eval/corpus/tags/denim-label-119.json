@@ -1,0 +1,105 @@
+{
+  "id": "denim-label-119",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "Stone River Denim"
+    },
+    {
+      "text": "33 x 28"
+    },
+    {
+      "text": "STYLE: 502677"
+    },
+    {
+      "text": "50% COTTON / COTON / ALGODON"
+    },
+    {
+      "text": "50% POLYESTER / POLYESTER / POLIESTER"
+    },
+    {
+      "text": "Made in Canada"
+    },
+    {
+      "text": "RN NO. 148488"
+    },
+    {
+      "text": "Do Not Bleach"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Stone  River Denim",
+        "confidence": 0.5
+      },
+      {
+        "text": "33 x 28",
+        "confidence": 1
+      },
+      {
+        "text": "style: 502677",
+        "confidence": 0.5
+      },
+      {
+        "text": "50% COTTON / COTON / ALGODON",
+        "confidence": 1
+      },
+      {
+        "text": "50% POLYESTER / POLYESTER / POLIESTER",
+        "confidence": 1
+      },
+      {
+        "text": "Made in Canada",
+        "confidence": 1
+      },
+      {
+        "text": "RN NO. 148488",
+        "confidence": 1
+      },
+      {
+        "text": "Do Not Bleach",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "148488"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "33x28"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 50
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 50
+      }
+    ],
+    "origin": [
+      "CA"
+    ],
+    "style": [
+      "502677"
+    ]
+  },
+  "image": {
+    "file": "denim-label-119.png",
+    "mediaType": "image/png",
+    "width": 735,
+    "height": 351,
+    "pixelSha256": "52d9d0467278518032402c4546f3589d35c6e34556fcdd67ab2e1f0fd317c4c6"
+  }
+}

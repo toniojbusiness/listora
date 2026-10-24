@@ -1,0 +1,96 @@
+{
+  "id": "care-label-035",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Copper Fox"
+    },
+    {
+      "text": "100% SILK"
+    },
+    {
+      "text": "100% SOIE"
+    },
+    {
+      "text": "100% SEDA"
+    },
+    {
+      "text": "Made in China"
+    },
+    {
+      "text": "RN 85673"
+    },
+    {
+      "text": "See Reverse For Care"
+    },
+    {
+      "text": "Line Dry"
+    },
+    {
+      "text": "Ne Pas Blanchir"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Copper Fox",
+        "confidence": 1
+      },
+      {
+        "text": "100% SILK",
+        "confidence": 1
+      },
+      {
+        "text": "100% SOIE",
+        "confidence": 1
+      },
+      {
+        "text": "100% SEDA",
+        "confidence": 1
+      },
+      {
+        "text": "Made in China",
+        "confidence": 1
+      },
+      {
+        "text": "RN 85673 see reverse for care",
+        "confidence": 0.5
+      },
+      {
+        "text": "Line Dry",
+        "confidence": 1
+      },
+      {
+        "text": "ne pas blanchir",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "85673"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "silk",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-035.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 387,
+    "pixelSha256": "2a3cacb99d03dd8fa9e26e606a68c409bfdbf5b766850311d4804d2e57f0b4d4"
+  }
+}

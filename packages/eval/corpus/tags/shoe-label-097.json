@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-097",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US 6.5 / UK 5.5 / EU 40"
+    },
+    {
+      "text": "STYLE # JF8992-957"
+    },
+    {
+      "text": "MADE IN UNITED STATES / FABRIQUE EN ETATS-UNIS / HECHO EN ESTADOS UNIDOS"
+    },
+    {
+      "barcode": "8997520884673"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US 6.5 / UK 5.5 / EU 40",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE # JF8992-957",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN UNITED STATES / FABRIQUE EN ETATS-UNIS / HECHO EN ESTADOS UNIDOS",
+        "confidence": 1
+      },
+      {
+        "text": "8 997520 884673",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "8997520884673",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "8997520884673"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "6.5"
+      },
+      {
+        "system": "uk",
+        "value": "5.5"
+      },
+      {
+        "system": "eu",
+        "value": "40"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "US"
+    ],
+    "style": [
+      "JF8992-957"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-097.png",
+    "mediaType": "image/png",
+    "width": 1365,
+    "height": 363,
+    "pixelSha256": "f0839eb556492d014156a474c08b65fb59065f769ddc4a709cf7b501b7112201"
+  }
+}

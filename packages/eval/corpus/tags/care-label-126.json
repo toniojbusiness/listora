@@ -1,0 +1,92 @@
+{
+  "id": "care-label-126",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "SALT FLATS SUPPLY"
+    },
+    {
+      "text": "SHELL: 70% WOOL / 30% NYLON"
+    },
+    {
+      "text": "LINING: 100% ACETATE"
+    },
+    {
+      "text": "MADE IN JORDAN"
+    },
+    {
+      "text": "CA NO. 78627"
+    },
+    {
+      "text": "LAY FLAT TO DRY"
+    },
+    {
+      "text": "QUALITY SINCE 1987"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SALT FLATS SUPPLY",
+        "confidence": 1
+      },
+      {
+        "text": "SHELL: 70% WOOL / 30% NYLON",
+        "confidence": 1
+      },
+      {
+        "text": "LINING:  100% ACETATE MADE IN JORDAN",
+        "confidence": 0.5
+      },
+      {
+        "text": "CA NO. 78627",
+        "confidence": 1
+      },
+      {
+        "text": "LAY FLAT TO DRY",
+        "confidence": 1
+      },
+      {
+        "text": "QUALITY SINCE 1987",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "78627"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": "shell",
+        "material": "wool",
+        "percent": 70
+      },
+      {
+        "part": "shell",
+        "material": "nylon",
+        "percent": 30
+      },
+      {
+        "part": "lining",
+        "material": "acetate",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "JO"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-126.png",
+    "mediaType": "image/png",
+    "width": 555,
+    "height": 315,
+    "pixelSha256": "98a78ce565347baf48809ffd9556e0defbed536333879424c1fad4b1422fca53"
+  }
+}

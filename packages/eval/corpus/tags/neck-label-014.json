@@ -1,0 +1,50 @@
+{
+  "id": "neck-label-014",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "SIZE M"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "parallel athletic",
+        "confidence": 0.5
+      },
+      {
+        "text": "SIZE",
+        "confidence": 0.5
+      },
+      {
+        "text": "M",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-014.png",
+    "mediaType": "image/png",
+    "width": 375,
+    "height": 135,
+    "pixelSha256": "75f16943f5ca584f8f75cffd60237abbace9f5336d16d4a2f4a574af4192f14e"
+  }
+}

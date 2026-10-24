@@ -1,0 +1,77 @@
+{
+  "id": "shoe-label-182",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US 12 UK 11 EUR 45.5"
+    },
+    {
+      "text": "ITEM # X-96767"
+    },
+    {
+      "text": "MADE IN JAPAN"
+    },
+    {
+      "barcode": "7627560229387"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 12 UK 11 EUR 45.5",
+        "confidence": 1
+      },
+      {
+        "text": "ITEM # X-96767",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN JAPAN",
+        "confidence": 1
+      },
+      {
+        "text": "7 627560 229387",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "7627560229387"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "12"
+      },
+      {
+        "system": "uk",
+        "value": "11"
+      },
+      {
+        "system": "eu",
+        "value": "45.5"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "JP"
+    ],
+    "style": [
+      "X-96767"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-182.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 327,
+    "pixelSha256": "63dc0c4dc30f20c6f3c81dc1d1834dae7a6fdd3f29d7a11adbcdbbd7e8a8e9c2"
+  }
+}

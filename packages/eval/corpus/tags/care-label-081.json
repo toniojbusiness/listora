@@ -1,0 +1,77 @@
+{
+  "id": "care-label-081",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "M (8-10)"
+    },
+    {
+      "text": "70% VISCOSE 30% NYLON"
+    },
+    {
+      "text": "MADE IN MEXICO / FABRIQUE EN MEXIQUE / HECHO EN MEXICO"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "M (8-10)",
+        "confidence": 1
+      },
+      {
+        "text": "70% VISCOSE",
+        "confidence": 0.5
+      },
+      {
+        "text": "30% NYLON",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN MEXICO / FABRIQUE EN MEXIQUE / HECHO EN MEXICO",
+        "confidence": 1
+      },
+      {
+        "text": "LAVAR A MAQUINA EN FRIO",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "viscose",
+        "percent": 70
+      },
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 30
+      }
+    ],
+    "origin": [
+      "MX"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-081.png",
+    "mediaType": "image/png",
+    "width": 1041,
+    "height": 207,
+    "pixelSha256": "f2a1c4d4fb9de591f4b86b05a90c55751d7e21a29c54777b6a497cbd37344c5e"
+  }
+}

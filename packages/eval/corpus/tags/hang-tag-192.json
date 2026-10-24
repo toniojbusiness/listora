@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-192",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "LITTLE ATLAS"
+    },
+    {
+      "text": "PROD. NO. SB5691"
+    },
+    {
+      "text": "M/M/M"
+    },
+    {
+      "text": "PRICE $28"
+    },
+    {
+      "barcode": "019403835171"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "LITTLE ATLAS",
+        "confidence": 1
+      },
+      {
+        "text": "PROD. NO. SB5691",
+        "confidence": 1
+      },
+      {
+        "text": "M/M/M",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE $28",
+        "confidence": 1
+      },
+      {
+        "text": "0 19403 83517 1",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0019403835171",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "019403835171"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "SB5691"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-192.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "6b272b52519e78ab09d02f909e974a22c40610f24191f54932254be8669224b0"
+  }
+}

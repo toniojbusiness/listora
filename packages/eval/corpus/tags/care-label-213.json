@@ -1,0 +1,102 @@
+{
+  "id": "care-label-213",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "SIZE MEDIUM"
+    },
+    {
+      "text": "95% COTTON, 5% OTHER FIBERS"
+    },
+    {
+      "text": "PRODUCT OF VIETNAM"
+    },
+    {
+      "text": "RN#127814  CA#57972"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    },
+    {
+      "text": "LAVER A LA MACHINE A FROID"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SIZE MEDIUM",
+        "confidence": 1
+      },
+      {
+        "text": "95% COTTON",
+        "confidence": 0.5
+      },
+      {
+        "text": "5% OTHER FIBERS",
+        "confidence": 0.5
+      },
+      {
+        "text": "PRODUCT OF VIETNAM",
+        "confidence": 1
+      },
+      {
+        "text": "RN#127814  CA#57972",
+        "confidence": 1
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      },
+      {
+        "text": "LAVER A LA MACHINE A FROID",
+        "confidence": 1
+      },
+      {
+        "text": "LAVAR A MAQUINA EN FRIO",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "127814"
+    ],
+    "ca": [
+      "57972"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 95
+      },
+      {
+        "part": null,
+        "material": "other",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-213.png",
+    "mediaType": "image/png",
+    "width": 555,
+    "height": 315,
+    "pixelSha256": "a9dc574ef3baab476c85d7149f52d1499b6530a87312f5e948ac89b76bb709d2"
+  }
+}

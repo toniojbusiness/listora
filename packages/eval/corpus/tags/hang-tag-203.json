@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-203",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "NORTHWIND APPAREL"
+    },
+    {
+      "text": "STYLE NO. WQ2327"
+    },
+    {
+      "text": "SIZE: 4"
+    },
+    {
+      "text": "PRICE $24"
+    },
+    {
+      "barcode": "649222380684"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "NORTHWIND APPAREL",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. WQ2327",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE:  4",
+        "confidence": 0.5
+      },
+      {
+        "text": "PRICE $24",
+        "confidence": 1
+      },
+      {
+        "text": "6 49222 38068 4",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0649222380684",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "649222380684"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "4"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "WQ2327"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-203.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "b7e4dc7da0696b4368c6f03e88da153cc2b11db0e22ae3488fd200c47a4a5b9e"
+  }
+}

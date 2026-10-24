@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-160",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US 10.5 / UK 9.5 / EU 44"
+    },
+    {
+      "text": "STYLE: JL1046-482"
+    },
+    {
+      "text": "PRODUCT OF MALAYSIA"
+    },
+    {
+      "barcode": "082892952544"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US 10.5 / UK 9.5 / EU 44",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE: JL1046-4B2",
+        "confidence": 0.5
+      },
+      {
+        "text": "PRODUCT OF MALAYSIA",
+        "confidence": 1
+      },
+      {
+        "text": "0 82892 95254 4",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0082892952544",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "082892952544"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "10.5"
+      },
+      {
+        "system": "uk",
+        "value": "9.5"
+      },
+      {
+        "system": "eu",
+        "value": "44"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "MY"
+    ],
+    "style": [
+      "JL1046-482"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-160.png",
+    "mediaType": "image/png",
+    "width": 501,
+    "height": 363,
+    "pixelSha256": "b92ccbea0486eab4514bb7587c9e834a0bfc468669ccdef9c879c9ba5fc7240e"
+  }
+}

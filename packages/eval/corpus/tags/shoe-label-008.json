@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-008",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US 10.5 UK 9.5 EUR 44"
+    },
+    {
+      "text": "PROD. NO. FU2398-184"
+    },
+    {
+      "text": "PRODUCT OF PHILIPPINES"
+    },
+    {
+      "barcode": "082665639832"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US 10.5 UK 9.5 EUR 44",
+        "confidence": 1
+      },
+      {
+        "text": "PROD. NO. FU2398-184",
+        "confidence": 1
+      },
+      {
+        "text": "PRODUCT OF PHILIPPINES",
+        "confidence": 1
+      },
+      {
+        "text": "0 81665 63983 2",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0082665639832",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "082665639832"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "10.5"
+      },
+      {
+        "system": "uk",
+        "value": "9.5"
+      },
+      {
+        "system": "eu",
+        "value": "44"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "PH"
+    ],
+    "style": [
+      "FU2398-184"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-008.png",
+    "mediaType": "image/png",
+    "width": 465,
+    "height": 363,
+    "pixelSha256": "274ff383447743d0f96763af894a2cca6a9dca954477ea11be3767f4a4bb7b47"
+  }
+}

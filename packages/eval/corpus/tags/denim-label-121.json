@@ -1,0 +1,82 @@
+{
+  "id": "denim-label-121",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "W26/L30"
+    },
+    {
+      "text": "100% COTTON"
+    },
+    {
+      "text": "100% COTON"
+    },
+    {
+      "text": "100% ALGODON"
+    },
+    {
+      "text": "MADE IN ITALY"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STONE RIVER DENIM",
+        "confidence": 1
+      },
+      {
+        "text": "W26/L30",
+        "confidence": 1
+      },
+      {
+        "text": "1O0% COTTON",
+        "confidence": 0.5
+      },
+      {
+        "text": "100%  COTON",
+        "confidence": 0.5
+      },
+      {
+        "text": "100% ALGODON",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN ITALY",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "26x30"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "IT"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "denim-label-121.png",
+    "mediaType": "image/png",
+    "width": 375,
+    "height": 279,
+    "pixelSha256": "b59ea7b118c0f41001b5f63d43ada65d28cee5c120d66ff59816fc9b9f9a8d20"
+  }
+}

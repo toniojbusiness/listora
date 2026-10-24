@@ -1,0 +1,70 @@
+{
+  "id": "hang-tag-087",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "FIELD AND FERN"
+    },
+    {
+      "text": "SIZE 14"
+    },
+    {
+      "text": "$48.99"
+    },
+    {
+      "barcode": "025274019787"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "FIELD AND FERN",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE 14",
+        "confidence": 1
+      },
+      {
+        "text": "$48.99",
+        "confidence": 1
+      },
+      {
+        "text": "0 25274 01978 7",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0025274019787",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "025274019787"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "14"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-087.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 360,
+    "pixelSha256": "056812e8be6c759a44fa5b229e8d1a2781f111bf1a4d3c4f5beb11e2ca319a7e"
+  }
+}

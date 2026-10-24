@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-185",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "STYLE # ZM0131"
+    },
+    {
+      "text": "S"
+    },
+    {
+      "text": "$39.00"
+    },
+    {
+      "barcode": "721994269494"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STONE RIVER DENIM",
+        "confidence": 1
+      },
+      {
+        "text": "style # zm0131",
+        "confidence": 0.5
+      },
+      {
+        "text": "S",
+        "confidence": 1
+      },
+      {
+        "text": "$39.00",
+        "confidence": 1
+      },
+      {
+        "text": "7 21994 26949 4",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0721994269494",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "721994269494"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "ZM0131"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-185.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "4bad1e3aa1fa8700a3ebb7112834e1fb92a5f001f4117acb8e6766649988da24"
+  }
+}

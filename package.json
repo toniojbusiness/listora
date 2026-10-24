@@ -24,7 +24,9 @@
     "test:integration": "vitest run --project integration",
     "dev:api": "npm run dev --workspace @listora/api",
     "dev:worker": "npm run dev --workspace @listora/worker",
-    "db:migrate": "npm run migrate --workspace @listora/db --"
+    "db:migrate": "npm run migrate --workspace @listora/db --",
+    "eval": "npm run eval --workspace @listora/eval --",
+    "corpus:render": "npm run corpus:render --workspace @listora/eval"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

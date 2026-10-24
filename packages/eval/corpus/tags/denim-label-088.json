@@ -1,0 +1,77 @@
+{
+  "id": "denim-label-088",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "W26 L28"
+    },
+    {
+      "text": "100% COTTON"
+    },
+    {
+      "text": "MADE IN CHINA"
+    },
+    {
+      "text": "R.N. 35017"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STONE RIVER DENIM",
+        "confidence": 1
+      },
+      {
+        "text": "W26 L28",
+        "confidence": 1
+      },
+      {
+        "text": "100% COTTON",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN CHINA",
+        "confidence": 1
+      },
+      {
+        "text": "R.N. 350I7",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "35017"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "26x28"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "denim-label-088.png",
+    "mediaType": "image/png",
+    "width": 375,
+    "height": 243,
+    "pixelSha256": "0224906bc9406a0396699df8b901007ac1bcb0f5b5bf3631758f2e337be878bc"
+  }
+}

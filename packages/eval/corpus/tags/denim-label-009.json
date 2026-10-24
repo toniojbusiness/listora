@@ -1,0 +1,105 @@
+{
+  "id": "denim-label-009",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "Stone River Denim"
+    },
+    {
+      "text": "WAIST 26 INSEAM 32"
+    },
+    {
+      "text": "ITEM # 5022-11"
+    },
+    {
+      "text": "98% Cotton"
+    },
+    {
+      "text": "2% Elastane"
+    },
+    {
+      "text": "Made in Vietnam"
+    },
+    {
+      "text": "RN NO. 127175"
+    },
+    {
+      "text": "Machine Wash Cold With Like Colors"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Stone River Denim",
+        "confidence": 1
+      },
+      {
+        "text": "WAIST 26 INSEAM 32",
+        "confidence": 1
+      },
+      {
+        "text": "ITEM # 5022-11",
+        "confidence": 1
+      },
+      {
+        "text": "98% Cotton",
+        "confidence": 1
+      },
+      {
+        "text": "2% Elastane",
+        "confidence": 1
+      },
+      {
+        "text": "Made in Vietnam",
+        "confidence": 1
+      },
+      {
+        "text": "RN NO. 127175",
+        "confidence": 1
+      },
+      {
+        "text": "Machine Wash Cold With Like Colors",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "127175"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "26x32"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 98
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 2
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": [
+      "5022-11"
+    ]
+  },
+  "image": {
+    "file": "denim-label-009.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 351,
+    "pixelSha256": "5f10637b22843b3fb2385df194172ae607b0b1aecaad68305f1329db56b90072"
+  }
+}

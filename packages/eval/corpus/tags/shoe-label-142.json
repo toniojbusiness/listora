@@ -1,0 +1,72 @@
+{
+  "id": "shoe-label-142",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "Parallel Athletic"
+    },
+    {
+      "text": "US 11 / UK 10 / EU 44.5"
+    },
+    {
+      "text": "REF. LO4981"
+    },
+    {
+      "text": "Made in U.S.A."
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Parallel Athletic",
+        "confidence": 1
+      },
+      {
+        "text": "US 11 / UK 10 / EU 44.5",
+        "confidence": 1
+      },
+      {
+        "text": "REF. LO4981",
+        "confidence": 1
+      },
+      {
+        "text": "Made in U.S.A.",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "11"
+      },
+      {
+        "system": "uk",
+        "value": "10"
+      },
+      {
+        "system": "eu",
+        "value": "44.5"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "US"
+    ],
+    "style": [
+      "LO4981"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-142.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 207,
+    "pixelSha256": "909d2df5ccee79d3b306a618435ffa3e1e4838b28cd21b29df82e02c2d69de48"
+  }
+}

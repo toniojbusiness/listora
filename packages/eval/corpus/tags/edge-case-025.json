@@ -1,0 +1,65 @@
+{
+  "id": "edge-case-025",
+  "kind": "edge_case",
+  "description": "A composition continued on the next line keeps its part",
+  "printed": [
+    {
+      "text": "SHELL: 60% COTTON"
+    },
+    {
+      "text": "40% POLYESTER"
+    },
+    {
+      "text": "LINING: 100% POLYESTER"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SHELL: 60% COTTON",
+        "confidence": 1
+      },
+      {
+        "text": "40% POLYESTER",
+        "confidence": 1
+      },
+      {
+        "text": "LINING: 100% POLYESTER",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": "shell",
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": "shell",
+        "material": "polyester",
+        "percent": 40
+      },
+      {
+        "part": "lining",
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-025.png",
+    "mediaType": "image/png",
+    "width": 465,
+    "height": 171,
+    "pixelSha256": "91734a0604da8f844053acdab31a283b9e3d1c8c34b90c8a37955a0023120c31"
+  }
+}

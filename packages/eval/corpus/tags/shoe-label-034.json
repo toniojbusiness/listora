@@ -1,0 +1,86 @@
+{
+  "id": "shoe-label-034",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US 11.5 UK 10.5 EUR 45"
+    },
+    {
+      "text": "STYLE NO. 1538-16"
+    },
+    {
+      "text": "MADE IN JORDAN"
+    },
+    {
+      "barcode": "9338510524084"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 11.5 UK 10.5 EUR 45",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. 1538-16",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN",
+        "confidence": 0.5
+      },
+      {
+        "text": "JORDAN",
+        "confidence": 0.5
+      },
+      {
+        "text": "9 338510 524084",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "9338510524084",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "9338510524084"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "11.5"
+      },
+      {
+        "system": "uk",
+        "value": "10.5"
+      },
+      {
+        "system": "eu",
+        "value": "45"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "JO"
+    ],
+    "style": [
+      "1538-16"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-034.png",
+    "mediaType": "image/png",
+    "width": 465,
+    "height": 327,
+    "pixelSha256": "5dc1493057930f26947a69890ed32ff96f161324df46b6f27c74cfa9aa0d8756"
+  }
+}

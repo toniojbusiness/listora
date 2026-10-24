@@ -1,0 +1,67 @@
+{
+  "id": "hang-tag-098",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "HARBOR LANE"
+    },
+    {
+      "text": "TALLA 16"
+    },
+    {
+      "text": "$48.99"
+    },
+    {
+      "barcode": "000158661039"
+    },
+    {
+      "text": "SAN DIEGO, CA 92168"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "HARBOR LANE",
+        "confidence": 1
+      },
+      {
+        "text": "TALLA 16",
+        "confidence": 1
+      },
+      {
+        "text": "$48.99",
+        "confidence": 1
+      },
+      {
+        "text": "0 00158 66103 9",
+        "confidence": 1
+      },
+      {
+        "text": "SAN DIEGO, CA 92168",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "16"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-098.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "a6ab4bbfaeb75c2096438788450558f449238df9d5019bc95c20ae0ea4aa61ee"
+  }
+}

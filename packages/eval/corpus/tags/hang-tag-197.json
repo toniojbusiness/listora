@@ -1,0 +1,70 @@
+{
+  "id": "hang-tag-197",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Oak Hollow"
+    },
+    {
+      "text": "SIZE 14"
+    },
+    {
+      "text": "$98.99"
+    },
+    {
+      "barcode": "756738847041"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "oak hollow",
+        "confidence": 0.5
+      },
+      {
+        "text": "SIZE 14",
+        "confidence": 1
+      },
+      {
+        "text": "$98.99",
+        "confidence": 1
+      },
+      {
+        "text": "7 56738 84704 1",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0756738847041",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "756738847041"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "14"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-197.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 360,
+    "pixelSha256": "7a82da8438335e29341a03be38e1994c3b944c5c4b040098134639e4bd5a3d28"
+  }
+}

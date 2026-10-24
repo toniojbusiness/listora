@@ -1,0 +1,141 @@
+{
+  "id": "care-label-200",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "JUNIPER CO."
+    },
+    {
+      "text": "US 6 / UK 10 / EU 38"
+    },
+    {
+      "text": "65% POLYESTER / 30% RAYON / 5% ELASTANE"
+    },
+    {
+      "text": "65% POLYESTER, 30% RAYONNE, 5% ELASTHANNE"
+    },
+    {
+      "text": "65% POLIESTER 30% RAYON 5% ELASTANO"
+    },
+    {
+      "text": "MADE IN P.R.C. / FABRIQUE EN CHINE / HECHO EN CHINA"
+    },
+    {
+      "text": "CA#26702"
+    },
+    {
+      "text": "DO NOT BLEACH"
+    },
+    {
+      "text": "DO NOT DRY CLEAN"
+    },
+    {
+      "text": "WASH INSIDE OUT"
+    },
+    {
+      "text": "MACHINE WASH COLD"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "JUNIPER CO.",
+        "confidence": 1
+      },
+      {
+        "text": "US  6 / UK 10 / EU 38",
+        "confidence": 0.5
+      },
+      {
+        "text": "65%POLYESTER / 30% RAYON / 5% ELASTANE",
+        "confidence": 0.5
+      },
+      {
+        "text": "65% POLYESTER, 30% RAYONNE, 5% ELASTHANNE",
+        "confidence": 1
+      },
+      {
+        "text": "65% POLIESTER 30% RAYON 5% ELASTANO",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN P.R.C. / FABRIQUE EN CHINE / HECHO EN CHINA",
+        "confidence": 1
+      },
+      {
+        "text": "CA#",
+        "confidence": 0.5
+      },
+      {
+        "text": "26702",
+        "confidence": 0.5
+      },
+      {
+        "text": "DO NOT BLEACH",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT DRY CLEAN",
+        "confidence": 1
+      },
+      {
+        "text": "WASH INSIDE OUT",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "26702"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "6"
+      },
+      {
+        "system": "uk",
+        "value": "10"
+      },
+      {
+        "system": "eu",
+        "value": "38"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 65
+      },
+      {
+        "part": null,
+        "material": "rayon",
+        "percent": 30
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-200.png",
+    "mediaType": "image/png",
+    "width": 987,
+    "height": 459,
+    "pixelSha256": "eb0c9edd99c0a81823c639a8abb2ae718e6a359c3e8911657a6104b083a441ef"
+  }
+}

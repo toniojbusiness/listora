@@ -1,0 +1,56 @@
+{
+  "id": "edge-case-016",
+  "kind": "edge_case",
+  "description": "A brand containing a size word is not a size",
+  "printed": [
+    {
+      "text": "XL ATHLETICS"
+    },
+    {
+      "text": "SIZE S"
+    },
+    {
+      "text": "MADE IN PAKISTAN"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "XL ATHLETICS",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE S",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN PAKISTAN",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "PK"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-016.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 171,
+    "pixelSha256": "28b84892e9affdd9956feccfbbe7ab339576f3b06eeb587ee579c3da8bd5bf8c"
+  }
+}

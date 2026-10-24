@@ -1,0 +1,82 @@
+{
+  "id": "shoe-label-079",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US 6.5 / UK 5.5 / EU 40"
+    },
+    {
+      "text": "ITEM # 649151"
+    },
+    {
+      "text": "PRODUCT OF SRI LANKA"
+    },
+    {
+      "barcode": "735950641675"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 6.5 / UK 5.5 / EU 40",
+        "confidence": 1
+      },
+      {
+        "text": "ITEM # 649151",
+        "confidence": 1
+      },
+      {
+        "text": "PRODUCT OF SRI LANKA",
+        "confidence": 1
+      },
+      {
+        "text": "7 35950 64167 5",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0735950641675",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "735950641675"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "6.5"
+      },
+      {
+        "system": "uk",
+        "value": "5.5"
+      },
+      {
+        "system": "eu",
+        "value": "40"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "LK"
+    ],
+    "style": [
+      "649151"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-079.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 327,
+    "pixelSha256": "689d6ca1f65ac5581b67a395702278a16e6b7f9e723bb162fb49f8772fe35f1d"
+  }
+}

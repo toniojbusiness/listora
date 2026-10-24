@@ -1,0 +1,64 @@
+{
+  "id": "neck-label-122",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "BLUE CEDAR"
+    },
+    {
+      "text": "SIZE XXL"
+    },
+    {
+      "text": "MADE IN MEXICO"
+    },
+    {
+      "text": "R.N. 32831"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "BLUE CEDAR",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE XXL",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN MEXICO",
+        "confidence": 1
+      },
+      {
+        "text": "R.N.  32831",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "32831"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XXL"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "MX"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-122.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 207,
+    "pixelSha256": "3da2ab6633cf42998d3f868101cf9afe0f18870eee001da343969f64bc47f5f5"
+  }
+}

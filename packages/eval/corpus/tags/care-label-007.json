@@ -1,0 +1,107 @@
+{
+  "id": "care-label-007",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "MERIDIAN WORKS"
+    },
+    {
+      "text": "SIZE XX-LARGE"
+    },
+    {
+      "text": "88% POLYESTER / 12% SPANDEX"
+    },
+    {
+      "text": "88% POLYESTER / 12% ELASTHANNE"
+    },
+    {
+      "text": "88% POLIESTER, 12% ELASTANO"
+    },
+    {
+      "text": "MADE IN ITALY"
+    },
+    {
+      "text": "CA# 22810"
+    },
+    {
+      "text": "HAND WASH COLD"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "MERIDIAN WORKS",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE XX-LARGE",
+        "confidence": 1
+      },
+      {
+        "text": "88% POLYESTER",
+        "confidence": 0.5
+      },
+      {
+        "text": "12% SPANDEX",
+        "confidence": 0.5
+      },
+      {
+        "text": "88% POLYESTER / 12% ELASTHANNE",
+        "confidence": 1
+      },
+      {
+        "text": "88% POLIESTER, 12% ELASTANO",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN ITALY",
+        "confidence": 1
+      },
+      {
+        "text": "CA# 22810",
+        "confidence": 1
+      },
+      {
+        "text": "HAND WASH COLD",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "22810"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XXL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 88
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 12
+      }
+    ],
+    "origin": [
+      "IT"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-007.png",
+    "mediaType": "image/png",
+    "width": 609,
+    "height": 351,
+    "pixelSha256": "49fd626c14287aa88265741794386dd0824542681c86abe61f77164177d0d6ae"
+  }
+}

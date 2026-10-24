@@ -1,0 +1,110 @@
+{
+  "id": "hang-tag-053",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "FIELD AND FERN"
+    },
+    {
+      "text": "MODEL: 6837-15"
+    },
+    {
+      "text": "US 14 UK 18 EUR 46"
+    },
+    {
+      "text": "MSRP $34.00"
+    },
+    {
+      "text": "60% COTTON / 35% POLYESTER / 5% ELASTANE"
+    },
+    {
+      "barcode": "5742148860218"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "FIELD  AND FERN",
+        "confidence": 0.5
+      },
+      {
+        "text": "MODEL: 6837-15",
+        "confidence": 1
+      },
+      {
+        "text": "US 14 UK 18 EUR 46",
+        "confidence": 1
+      },
+      {
+        "text": "MSRP $34.00",
+        "confidence": 1
+      },
+      {
+        "text": "60% COTTON / 35% POLYESTER / 5% ELASTANE",
+        "confidence": 1
+      },
+      {
+        "text": "5 742148 860218",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "5742148860218",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "5742148860218"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "14"
+      },
+      {
+        "system": "uk",
+        "value": "18"
+      },
+      {
+        "system": "eu",
+        "value": "46"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 35
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [],
+    "style": [
+      "6837-15"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-053.png",
+    "mediaType": "image/png",
+    "width": 789,
+    "height": 432,
+    "pixelSha256": "87a9159691a0f1a968269aa02a6a2a594f5e8d3b13b2419697649843a871f5be"
+  }
+}

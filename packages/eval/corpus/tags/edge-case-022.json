@@ -1,0 +1,48 @@
+{
+  "id": "edge-case-022",
+  "kind": "edge_case",
+  "description": "RN and CA numbers on one line",
+  "printed": [
+    {
+      "text": "RN 62914 CA 18823"
+    },
+    {
+      "text": "PRODUCT OF CANADA"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "RN 62914 CA 18823",
+        "confidence": 1
+      },
+      {
+        "text": "PRODUCT OF CANADA",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "62914"
+    ],
+    "ca": [
+      "18823"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [],
+    "origin": [
+      "CA"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-022.png",
+    "mediaType": "image/png",
+    "width": 375,
+    "height": 135,
+    "pixelSha256": "eb5f3f8f43b97fc0b6d16d227940ef2ede1c4983bb61a54123c0dc40dd2e88dc"
+  }
+}

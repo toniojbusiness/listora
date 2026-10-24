@@ -1,0 +1,114 @@
+{
+  "id": "care-label-195",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "WILLOW STREET"
+    },
+    {
+      "text": "SIZE LARGE"
+    },
+    {
+      "text": "95% COTTON, 5% OTHER FIBERS"
+    },
+    {
+      "text": "MADE IN MOROCCO"
+    },
+    {
+      "text": "RN #24381"
+    },
+    {
+      "text": "TUMBLE DRY LOW"
+    },
+    {
+      "text": "SEE REVERSE FOR CARE"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    },
+    {
+      "text": "ORDER 5512 BATCH 7"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "WILLOW STREET",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE LARGE",
+        "confidence": 1
+      },
+      {
+        "text": "95% COTTON, 5% OTHER FIBERS",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN MOROCCO",
+        "confidence": 1
+      },
+      {
+        "text": "RN #",
+        "confidence": 0.5
+      },
+      {
+        "text": "24381",
+        "confidence": 0.5
+      },
+      {
+        "text": "TUMBLE DRY LOW",
+        "confidence": 1
+      },
+      {
+        "text": "SEE REVERSE FOR CARE",
+        "confidence": 1
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      },
+      {
+        "text": "ORDER 5512 BATCH 7",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "24381"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 95
+      },
+      {
+        "part": null,
+        "material": "other",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "MA"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-195.png",
+    "mediaType": "image/png",
+    "width": 555,
+    "height": 387,
+    "pixelSha256": "2929c93f6e542a8d3936ef9cf7e6714e28b1c034d2811e6022f92f6a3d4d61f6"
+  }
+}

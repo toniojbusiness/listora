@@ -1,0 +1,72 @@
+{
+  "id": "shoe-label-187",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US: 6.5  UK: 5.5  EUR: 40"
+    },
+    {
+      "text": "PROD. NO. KJ0194"
+    },
+    {
+      "text": "MADE IN PORTUGAL"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US: 6.5  UK: 5.5  EUR: 40",
+        "confidence": 1
+      },
+      {
+        "text": "PROD. NO. KJ0194",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN PORTUGAL",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "6.5"
+      },
+      {
+        "system": "uk",
+        "value": "5.5"
+      },
+      {
+        "system": "eu",
+        "value": "40"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "PT"
+    ],
+    "style": [
+      "KJ0194"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-187.png",
+    "mediaType": "image/png",
+    "width": 519,
+    "height": 207,
+    "pixelSha256": "1b64d69488efe23fd71fa9ba9b76ff806eff8443fae1c7f13c9c36def17848b9"
+  }
+}

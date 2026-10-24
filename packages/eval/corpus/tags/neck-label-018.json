@@ -1,0 +1,55 @@
+{
+  "id": "neck-label-018",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "OAK HOLLOW"
+    },
+    {
+      "text": "SIZE X-SMALL"
+    },
+    {
+      "text": "R.N. 123950"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "OAK HOLLOW",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE X-SMALL",
+        "confidence": 1
+      },
+      {
+        "text": "R.N. 123950",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "123950"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XS"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-018.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 171,
+    "pixelSha256": "fe3a9c5d61822fb9eca2c21e321a857c4abeb7efda0232504341e8f3d8e4a89b"
+  }
+}

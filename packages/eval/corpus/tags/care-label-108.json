@@ -1,0 +1,87 @@
+{
+  "id": "care-label-108",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "BLUE CEDAR"
+    },
+    {
+      "text": "98% COTTON, 2% ELASTANE"
+    },
+    {
+      "text": "MADE IN EL SALVADOR"
+    },
+    {
+      "text": "REF. SM6825-724"
+    },
+    {
+      "text": "DO NOT DRY CLEAN"
+    },
+    {
+      "text": "MACHINE WASH COLD WITH LIKE COLORS"
+    },
+    {
+      "text": "DRY CLEAN ONLY"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "BLUE CEDAR",
+        "confidence": 1
+      },
+      {
+        "text": "98% COTTON, 2% ELASTANE",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN EL SALVADOR",
+        "confidence": 1
+      },
+      {
+        "text": "REF. SM6825-724",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT DRY CLEAN machine wash cold with like colors",
+        "confidence": 0.5
+      },
+      {
+        "text": "DRY CLEAN ONLY",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 98
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 2
+      }
+    ],
+    "origin": [
+      "SV"
+    ],
+    "style": [
+      "SM6825-724"
+    ]
+  },
+  "image": {
+    "file": "care-label-108.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 315,
+    "pixelSha256": "aa885a990a541d8570cd36ac2868e0908589aef5ac4631915b229666f34fd738"
+  }
+}

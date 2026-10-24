@@ -1,0 +1,115 @@
+{
+  "id": "care-label-173",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "JUNIPER CO."
+    },
+    {
+      "text": "80% WOOL 20% POLYAMIDE"
+    },
+    {
+      "text": "80% LAINE 20% POLYAMIDE"
+    },
+    {
+      "text": "80% LANA / 20% NAILON"
+    },
+    {
+      "text": "MADE IN TURKEY"
+    },
+    {
+      "text": "CA# 46564"
+    },
+    {
+      "text": "STYLE F-88052"
+    },
+    {
+      "text": "TUMBLE DRY LOW"
+    },
+    {
+      "text": "DO NOT DRY CLEAN"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "JUNIPER CO.",
+        "confidence": 1
+      },
+      {
+        "text": "80%WOOL 20% POLYAMIDE",
+        "confidence": 0.5
+      },
+      {
+        "text": "80% LAINE 20% POLYAMIDE",
+        "confidence": 1
+      },
+      {
+        "text": "80% LANA / 20% NAILON",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN",
+        "confidence": 0.5
+      },
+      {
+        "text": "TURKEY",
+        "confidence": 0.5
+      },
+      {
+        "text": "CA#",
+        "confidence": 0.5
+      },
+      {
+        "text": "46564",
+        "confidence": 0.5
+      },
+      {
+        "text": "STYLE F-88052",
+        "confidence": 1
+      },
+      {
+        "text": "TUMBLE DRY LOW",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT DRY CLEAN",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "46564"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "wool",
+        "percent": 80
+      },
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 20
+      }
+    ],
+    "origin": [
+      "TR"
+    ],
+    "style": [
+      "F-88052"
+    ]
+  },
+  "image": {
+    "file": "care-label-173.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 387,
+    "pixelSha256": "3016c88d93f2503b9a8c8a6a6eaa2c4385b1b47cf864b632ec2c6b2648cffba1"
+  }
+}

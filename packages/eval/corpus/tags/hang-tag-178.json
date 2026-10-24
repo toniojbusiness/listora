@@ -1,0 +1,112 @@
+{
+  "id": "hang-tag-178",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "SALT FLATS SUPPLY"
+    },
+    {
+      "text": "ART. NO. IQ0333-894"
+    },
+    {
+      "text": "US 12 UK 16 EUR 44"
+    },
+    {
+      "text": "$28.00"
+    },
+    {
+      "text": "98% COTTON"
+    },
+    {
+      "text": "2% SPANDEX"
+    },
+    {
+      "barcode": "8029408419537"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SALT FLATS SUPPLY",
+        "confidence": 1
+      },
+      {
+        "text": "ART. NO. IQ0333-894",
+        "confidence": 1
+      },
+      {
+        "text": "US 12 UK 16 EUR 44",
+        "confidence": 1
+      },
+      {
+        "text": "$28.00",
+        "confidence": 1
+      },
+      {
+        "text": "98% COTTON",
+        "confidence": 1
+      },
+      {
+        "text": "2 SPANDEX",
+        "confidence": 0.5
+      },
+      {
+        "text": "8 029408 419537",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "8029408419537",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "8029408419537"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "12"
+      },
+      {
+        "system": "uk",
+        "value": "16"
+      },
+      {
+        "system": "eu",
+        "value": "44"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 98
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 2
+      }
+    ],
+    "origin": [],
+    "style": [
+      "IQ0333-894"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-178.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 468,
+    "pixelSha256": "ff52f1912ed8dd086c635559172786b48cf1435053bdb5d6429ac3d3525a858c"
+  }
+}

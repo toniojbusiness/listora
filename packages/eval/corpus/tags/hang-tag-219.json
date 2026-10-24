@@ -1,0 +1,100 @@
+{
+  "id": "hang-tag-219",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "QUIET HARBOR"
+    },
+    {
+      "text": "PROD. NO. 4772-17"
+    },
+    {
+      "text": "SIZE 12"
+    },
+    {
+      "text": "PRICE $58"
+    },
+    {
+      "text": "80% POLYAMIDE"
+    },
+    {
+      "text": "20% ELASTANE"
+    },
+    {
+      "barcode": "4004939057728"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "QUIET HARBOR",
+        "confidence": 1
+      },
+      {
+        "text": "PROD. NO. 4772-17 SIZE 12",
+        "confidence": 0.5
+      },
+      {
+        "text": "PRICE $58",
+        "confidence": 1
+      },
+      {
+        "text": "80% polyamide",
+        "confidence": 0.5
+      },
+      {
+        "text": "20% ELASTANE",
+        "confidence": 1
+      },
+      {
+        "text": "4 004939 057728",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "4004939057728",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "4004939057728"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "12"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 80
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 20
+      }
+    ],
+    "origin": [],
+    "style": [
+      "4772-17"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-219.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 468,
+    "pixelSha256": "47e597d2011a27b1294c542fa9da401d2ddb04c181509afbbd94b7305aa447ce"
+  }
+}

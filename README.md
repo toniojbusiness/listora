@@ -49,6 +49,8 @@ configuration key is documented there. Never commit `.env`.
 | `npm run dev:api`            | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                            |
 | `npm run dev:worker`         | Run the worker with reload on change                                                                                |
 | `npm run db:migrate`         | Apply pending migrations to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one         |
+| `npm run eval`               | Score the tag parsers and the AI provider (a stub until T-08) on the synthetic corpus; see `-- --help`              |
+| `npm run corpus:render`      | Regenerate the synthetic tag corpus in `packages/eval/corpus` after changing its generator                          |
 | `scripts/dev-db.sh start`    | Initialize if needed and start the cluster; create the `listora` and `listora_test` databases (the default command) |
 | `scripts/dev-db.sh stop`     | Stop the cluster                                                                                                    |
 | `scripts/dev-db.sh reset`    | Delete all local data and start a fresh cluster                                                                     |
@@ -79,6 +81,8 @@ packages/api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listo
 packages/db/           SQL migrations, migration runner, Kysely types (@listora/db)
 packages/shared/       Shared types and utilities (@listora/shared)
 packages/testing/      Test-only helpers (@listora/testing)
+packages/tag-parse/    Deterministic tag-text parsers (@listora/tag-parse)
+packages/eval/         Synthetic tag corpus and eval harness CLI (@listora/eval)
 infra/                 AWS CDK (placeholder until T-30)
 scripts/dev-db.sh      Local PostgreSQL 18 cluster
 Makefile               iOS commands (make ios-*)

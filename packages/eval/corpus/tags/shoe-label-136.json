@@ -1,0 +1,82 @@
+{
+  "id": "shoe-label-136",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US: 12  UK: 11  EUR: 45.5"
+    },
+    {
+      "text": "REF. N-38886"
+    },
+    {
+      "text": "MADE IN CHINA"
+    },
+    {
+      "barcode": "153140497107"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US: 12  UK: 11  EUR: 45.5",
+        "confidence": 1
+      },
+      {
+        "text": "REF. N-38886",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN CHINA",
+        "confidence": 1
+      },
+      {
+        "text": "1 53140 49710 7",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0153140497107",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "153140497107"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "12"
+      },
+      {
+        "system": "uk",
+        "value": "11"
+      },
+      {
+        "system": "eu",
+        "value": "45.5"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "CN"
+    ],
+    "style": [
+      "N-38886"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-136.png",
+    "mediaType": "image/png",
+    "width": 519,
+    "height": 327,
+    "pixelSha256": "d6bb6ed29004aaacef87701360b777ff90e2c966b168d6e07cf9a09d3654c64e"
+  }
+}

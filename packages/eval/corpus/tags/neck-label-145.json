@@ -1,0 +1,55 @@
+{
+  "id": "neck-label-145",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "QUIET HARBOR"
+    },
+    {
+      "text": "0"
+    },
+    {
+      "text": "MADE IN PERU"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "QUIET HARBOR",
+        "confidence": 1
+      },
+      {
+        "text": "0",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN PERU",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "0"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "PE"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-145.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 171,
+    "pixelSha256": "ff6eba2eaed18bf4c456f5ee63c2955f269e81ec7c8e61d022b9cd53c9d56d72"
+  }
+}

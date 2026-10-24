@@ -1,0 +1,66 @@
+{
+  "id": "care-label-181",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "60% Cotton 40% Polyester"
+    },
+    {
+      "text": "Made in Bangladesh"
+    },
+    {
+      "text": "CA#88280"
+    },
+    {
+      "text": "Lavar A Maquina en Frio"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "60% Cotton 40% Polyester Made in Bangladesh",
+        "confidence": 0.5
+      },
+      {
+        "text": "CA#88280",
+        "confidence": 1
+      },
+      {
+        "text": "Lavar A Maquina en Frio",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "88280"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 40
+      }
+    ],
+    "origin": [
+      "BD"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-181.png",
+    "mediaType": "image/png",
+    "width": 501,
+    "height": 207,
+    "pixelSha256": "b7be1c3aa15e9ac0aa3687f896805f9684e56d3769e3fe48e813f0d3220e8817"
+  }
+}

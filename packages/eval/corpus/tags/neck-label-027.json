@@ -1,0 +1,55 @@
+{
+  "id": "neck-label-027",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "WILLOW STREET"
+    },
+    {
+      "text": "0"
+    },
+    {
+      "text": "MADE IN HONDURAS"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "WILLOW STREET",
+        "confidence": 1
+      },
+      {
+        "text": "0",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN HONDURAS",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "0"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "HN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-027.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 171,
+    "pixelSha256": "2465e54f3369742f1c87b5aac70e450bda7396df68a3b60488c20cbf95c09e27"
+  }
+}

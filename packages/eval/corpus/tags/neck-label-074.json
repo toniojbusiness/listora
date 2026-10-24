@@ -1,0 +1,55 @@
+{
+  "id": "neck-label-074",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "Northwind Apparel"
+    },
+    {
+      "text": "10"
+    },
+    {
+      "text": "Made in Bangladesh"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Northwind Apparel",
+        "confidence": 1
+      },
+      {
+        "text": "10",
+        "confidence": 1
+      },
+      {
+        "text": "Made in Bangladesh",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "10"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "BD"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-074.png",
+    "mediaType": "image/png",
+    "width": 393,
+    "height": 171,
+    "pixelSha256": "9cbe802edbd12ffd2f4941a1dee4424d0c213a6530f26ff94863d3ff5bdf360e"
+  }
+}

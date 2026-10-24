@@ -1,0 +1,86 @@
+{
+  "id": "hang-tag-132",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Willow Street"
+    },
+    {
+      "text": "MODEL: 903676"
+    },
+    {
+      "text": "TALLA 14"
+    },
+    {
+      "text": "$39.99"
+    },
+    {
+      "barcode": "029104212522"
+    },
+    {
+      "text": "Designed in Brooklyn"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Willow Street",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL: 903676",
+        "confidence": 1
+      },
+      {
+        "text": "TALLA 14",
+        "confidence": 1
+      },
+      {
+        "text": "$39.99",
+        "confidence": 1
+      },
+      {
+        "text": "0 29104 21252 2",
+        "confidence": 1
+      },
+      {
+        "text": "Designed in Brooklyn",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0029104212522",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "029104212522"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "14"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "903676"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-132.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 432,
+    "pixelSha256": "907436bca9ac9ecd7867a004f3ee70556cea3dd041800efb35b33518ebaa132b"
+  }
+}

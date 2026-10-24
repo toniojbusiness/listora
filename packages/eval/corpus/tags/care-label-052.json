@@ -1,0 +1,115 @@
+{
+  "id": "care-label-052",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "JUNIPER CO."
+    },
+    {
+      "text": "SIZE: 0"
+    },
+    {
+      "text": "SHELL: 70% WOOL / 30% NYLON"
+    },
+    {
+      "text": "LINING: 100% ACETATE"
+    },
+    {
+      "text": "MADE IN VIET NAM / FABRIQUE EN VIETNAM / HECHO EN VIETNAM"
+    },
+    {
+      "text": "RN NO. 168746"
+    },
+    {
+      "text": "WASH INSIDE OUT"
+    },
+    {
+      "text": "MACHINE WASH COLD"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "juniper co.",
+        "confidence": 0.5
+      },
+      {
+        "text": "SIZE: 0",
+        "confidence": 1
+      },
+      {
+        "text": "SHELL: 70% WOOL / 30% NYLON",
+        "confidence": 1
+      },
+      {
+        "text": "LINING: 100% ACETATE",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN VIET NAM / FABRIQUE EN VIETNAM / HECHO EN VIETNAM",
+        "confidence": 1
+      },
+      {
+        "text": "RN NO. 168746",
+        "confidence": 1
+      },
+      {
+        "text": "WASH INSIDE OUT",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD",
+        "confidence": 1
+      },
+      {
+        "text": "lavar a maquina en frio",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "168746"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "0"
+      }
+    ],
+    "fiber": [
+      {
+        "part": "shell",
+        "material": "wool",
+        "percent": 70
+      },
+      {
+        "part": "shell",
+        "material": "nylon",
+        "percent": 30
+      },
+      {
+        "part": "lining",
+        "material": "acetate",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-052.png",
+    "mediaType": "image/png",
+    "width": 1095,
+    "height": 387,
+    "pixelSha256": "df4e7b6cef44db960a503076806308b84942cdc3e4cf3a670e53216d3dd6f432"
+  }
+}

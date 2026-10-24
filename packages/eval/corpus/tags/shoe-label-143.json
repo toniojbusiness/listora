@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-143",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "Parallel Athletic"
+    },
+    {
+      "text": "US: 7.5  UK: 6.5  EUR: 41"
+    },
+    {
+      "text": "STYLE # Z-38139"
+    },
+    {
+      "text": "Made in Peru"
+    },
+    {
+      "barcode": "645745519976"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Parallel Athletic",
+        "confidence": 1
+      },
+      {
+        "text": "US: 7.5  UK: 6.5  EUR: 41",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE # Z-38139",
+        "confidence": 1
+      },
+      {
+        "text": "Made in Peru",
+        "confidence": 1
+      },
+      {
+        "text": "6 45745 51997 6",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0645745519976",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "645745519976"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "7.5"
+      },
+      {
+        "system": "uk",
+        "value": "6.5"
+      },
+      {
+        "system": "eu",
+        "value": "41"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "PE"
+    ],
+    "style": [
+      "Z-38139"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-143.png",
+    "mediaType": "image/png",
+    "width": 519,
+    "height": 363,
+    "pixelSha256": "4a627680268955927457b5248901e36bf571c41a9acab7ab005390ca8922dd19"
+  }
+}

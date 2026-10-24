@@ -1,0 +1,56 @@
+{
+  "id": "shoe-label-050",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US 5.5 UK 4.5 EUR 39"
+    },
+    {
+      "text": "MADE IN P.R.C."
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 5.5 UK 4.5 EUR 39",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN P.R.C.",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "5.5"
+      },
+      {
+        "system": "uk",
+        "value": "4.5"
+      },
+      {
+        "system": "eu",
+        "value": "39"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "shoe-label-050.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 135,
+    "pixelSha256": "a0498e187662a43e754335444e493ba8cef142bacdfdbe763282c9092cad3520"
+  }
+}

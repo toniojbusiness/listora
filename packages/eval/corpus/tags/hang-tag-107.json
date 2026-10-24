@@ -1,0 +1,73 @@
+{
+  "id": "hang-tag-107",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Meridian Works"
+    },
+    {
+      "text": "O/S"
+    },
+    {
+      "text": "$58.00"
+    },
+    {
+      "text": "100% Tencel"
+    },
+    {
+      "barcode": "848361215618"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Meridian Works",
+        "confidence": 1
+      },
+      {
+        "text": "O/S",
+        "confidence": 1
+      },
+      {
+        "text": "$58.00",
+        "confidence": 1
+      },
+      {
+        "text": "100% Tencel",
+        "confidence": 1
+      },
+      {
+        "text": "8 48361 21561 8",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "lyocell",
+        "percent": 100
+      }
+    ],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-107.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "e00b4429d88bf4006087462171fa9b0834864c18d727e7c6bdaa710032f06ec4"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-056",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "MERIDIAN WORKS"
+    },
+    {
+      "text": "STYLE NO. 410361"
+    },
+    {
+      "text": "SIZE: 8"
+    },
+    {
+      "text": "MSRP $58.00"
+    },
+    {
+      "barcode": "871286332624"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "meridian works",
+        "confidence": 0.5
+      },
+      {
+        "text": "STYLE NO. 410361",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE:  8",
+        "confidence": 0.5
+      },
+      {
+        "text": "MSRP $58.00",
+        "confidence": 1
+      },
+      {
+        "text": "8 71286 33262 4",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0871286332624",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "871286332624"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "8"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "410361"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-056.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "9a94d43e2f53737940f3da5d8fa6f23e0b95d45df050fb066585867767d0450c"
+  }
+}

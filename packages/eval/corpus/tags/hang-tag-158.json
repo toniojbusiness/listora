@@ -1,0 +1,96 @@
+{
+  "id": "hang-tag-158",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US 2  UK 6  EU 34"
+    },
+    {
+      "text": "PRICE $48"
+    },
+    {
+      "text": "80% NYLON / 20% SPANDEX"
+    },
+    {
+      "barcode": "149162732470"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US 2  UK 6  EU 34",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE $48",
+        "confidence": 1
+      },
+      {
+        "text": "80% NYLON / 20% SPANDEX",
+        "confidence": 1
+      },
+      {
+        "text": "1 49162 73247 0",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0149162732470",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "149162732470"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "2"
+      },
+      {
+        "system": "uk",
+        "value": "6"
+      },
+      {
+        "system": "eu",
+        "value": "34"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 80
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 20
+      }
+    ],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-158.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 396,
+    "pixelSha256": "6906938aca57657776efa13539b9c2b22765a584fcf46a8a16137993868f6000"
+  }
+}

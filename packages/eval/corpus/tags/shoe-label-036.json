@@ -1,0 +1,77 @@
+{
+  "id": "shoe-label-036",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US: 11.5  UK: 10.5  EUR: 45"
+    },
+    {
+      "text": "STYLE NO. Z-93800"
+    },
+    {
+      "text": "Made in Bangladesh"
+    },
+    {
+      "barcode": "820408401823"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US: 11.5  UK: 10.5  EUR: 45",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. Z-93800",
+        "confidence": 1
+      },
+      {
+        "text": "Made  in Bangladesh",
+        "confidence": 0.5
+      },
+      {
+        "text": "8 20408 40182 3",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "820408401823"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "11.5"
+      },
+      {
+        "system": "uk",
+        "value": "10.5"
+      },
+      {
+        "system": "eu",
+        "value": "45"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "BD"
+    ],
+    "style": [
+      "Z-93800"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-036.png",
+    "mediaType": "image/png",
+    "width": 555,
+    "height": 327,
+    "pixelSha256": "c5707ed9ffc237b8f3bd19c223497f78469142ecf73b4f8622523a7b63c05d06"
+  }
+}

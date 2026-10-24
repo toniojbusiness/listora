@@ -1,0 +1,92 @@
+{
+  "id": "denim-label-062",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "Stone River Denim"
+    },
+    {
+      "text": "WAIST 36 INSEAM 28"
+    },
+    {
+      "text": "60% Cotton"
+    },
+    {
+      "text": "35% Polyester"
+    },
+    {
+      "text": "5% Elastane"
+    },
+    {
+      "text": "Made in Cambodia"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Stone River Denim",
+        "confidence": 1
+      },
+      {
+        "text": "WAIST  36 INSEAM 28",
+        "confidence": 0.5
+      },
+      {
+        "text": "60% Cotton",
+        "confidence": 1
+      },
+      {
+        "text": "35% Polyester",
+        "confidence": 1
+      },
+      {
+        "text": "5 Elastane",
+        "confidence": 0.5
+      },
+      {
+        "text": "Made  in Cambodia",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "36x28"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 35
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "KH"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "denim-label-062.png",
+    "mediaType": "image/png",
+    "width": 393,
+    "height": 279,
+    "pixelSha256": "da962834ad0ec098dcf8eaed868b527cd17c28988770f0b4fd5f2ade6cafb9d8"
+  }
+}

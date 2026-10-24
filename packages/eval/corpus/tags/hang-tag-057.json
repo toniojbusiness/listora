@@ -1,0 +1,74 @@
+{
+  "id": "hang-tag-057",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Harbor Lane"
+    },
+    {
+      "text": "STYLE AI0230"
+    },
+    {
+      "text": "XXL"
+    },
+    {
+      "text": "PRICE $98"
+    },
+    {
+      "barcode": "761622731917"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Harbor Lane",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE AI0230",
+        "confidence": 1
+      },
+      {
+        "text": "XXL",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE $98",
+        "confidence": 1
+      },
+      {
+        "text": "7 61622 73191 7",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "761622731917"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XXL"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "AI0230"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-057.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "5fe397ef1e6ad9b9272f086b6b5e9bff1f40ce13037b37275e21b03d00a20f35"
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-041",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US 5 / UK 4 / EU 38"
+    },
+    {
+      "text": "REF. Z-92788"
+    },
+    {
+      "text": "MADE IN P.R.C."
+    },
+    {
+      "barcode": "5074208610656"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US 5 / UK 4 / EU 38",
+        "confidence": 1
+      },
+      {
+        "text": "REF. Z-92788",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN P.R.C.",
+        "confidence": 1
+      },
+      {
+        "text": "5 074208 610656",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "5074208610656",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "5074208610656"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "5"
+      },
+      {
+        "system": "uk",
+        "value": "4"
+      },
+      {
+        "system": "eu",
+        "value": "38"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "CN"
+    ],
+    "style": [
+      "Z-92788"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-041.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 363,
+    "pixelSha256": "2b990af8b12cdf410a35d88093312441841494f75798a9272942a3e0ea8ac121"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "id": "denim-label-099",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "Stone River Denim"
+    },
+    {
+      "text": "WAIST 32 INSEAM 28"
+    },
+    {
+      "text": "STYLE NE5690-382"
+    },
+    {
+      "text": "95% Cotton, 5% Other Fibers"
+    },
+    {
+      "text": "Made in Portugal"
+    },
+    {
+      "text": "Hecho en Portugal"
+    },
+    {
+      "text": "Wash Inside Out"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Stone River Denim",
+        "confidence": 1
+      },
+      {
+        "text": "WAIST 32 INSEAM 28",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NE5690-3B2",
+        "confidence": 0.5
+      },
+      {
+        "text": "95% Cotton, 5% Other Fibers",
+        "confidence": 1
+      },
+      {
+        "text": "Made in Portugal",
+        "confidence": 1
+      },
+      {
+        "text": "Hecho en Portugal",
+        "confidence": 1
+      },
+      {
+        "text": "Wash Inside Out",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "32x28"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 95
+      },
+      {
+        "part": null,
+        "material": "other",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "PT"
+    ],
+    "style": [
+      "NE5690-382"
+    ]
+  },
+  "image": {
+    "file": "denim-label-099.png",
+    "mediaType": "image/png",
+    "width": 555,
+    "height": 315,
+    "pixelSha256": "b6dd98230fbc091cc4eebae74f5b4fcd7b83817b2b7b6feb5469ffb852d9c8c1"
+  }
+}

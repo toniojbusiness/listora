@@ -1,0 +1,89 @@
+{
+  "id": "hang-tag-016",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Salt Flats Supply"
+    },
+    {
+      "text": "REF. JE9598-172"
+    },
+    {
+      "text": "L"
+    },
+    {
+      "text": "$58.00"
+    },
+    {
+      "text": "100% Linen Exclusive of Trim"
+    },
+    {
+      "barcode": "030535752476"
+    },
+    {
+      "text": "Style Meets Comfort"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Salt Flats Supply",
+        "confidence": 1
+      },
+      {
+        "text": "REF. JE9598-172",
+        "confidence": 1
+      },
+      {
+        "text": "L",
+        "confidence": 1
+      },
+      {
+        "text": "$58.00",
+        "confidence": 1
+      },
+      {
+        "text": "100% Linen Exclusive of Trim",
+        "confidence": 1
+      },
+      {
+        "text": "0 30535 75247 6",
+        "confidence": 1
+      },
+      {
+        "text": "Style Meets Comfort",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "linen",
+        "percent": 100
+      }
+    ],
+    "origin": [],
+    "style": [
+      "JE9598-172"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-016.png",
+    "mediaType": "image/png",
+    "width": 573,
+    "height": 468,
+    "pixelSha256": "af023ff1691f62856993ebe3ad48f9d1a52a2b95171a99dd8af5940bf2620343"
+  }
+}

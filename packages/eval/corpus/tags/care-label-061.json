@@ -1,0 +1,90 @@
+{
+  "id": "care-label-061",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "TALLA 2"
+    },
+    {
+      "text": "95% RAYON, 5% SPANDEX"
+    },
+    {
+      "text": "95% RAYONNE, 5% ELASTHANNE"
+    },
+    {
+      "text": "95% RAYON, 5% ELASTANO"
+    },
+    {
+      "text": "MADE IN JORDAN"
+    },
+    {
+      "text": "LINE DRY"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC TALLA 2",
+        "confidence": 0.5
+      },
+      {
+        "text": "95% RAYON, 5% SPANDEX",
+        "confidence": 1
+      },
+      {
+        "text": "95% RAYONNE, 5% ELASTHANNE",
+        "confidence": 1
+      },
+      {
+        "text": "95% RAYON, 5% ELASTANO",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN JORDAN",
+        "confidence": 1
+      },
+      {
+        "text": "LINE DRY",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "2"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "rayon",
+        "percent": 95
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "JO"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-061.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 315,
+    "pixelSha256": "ba756b12fc5da8792d703949199e99bff698472be1f5d4a65986289a3ed87929"
+  }
+}

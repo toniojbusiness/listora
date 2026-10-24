@@ -1,0 +1,96 @@
+{
+  "id": "denim-label-170",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "33W 32L"
+    },
+    {
+      "text": "MODEL: HZ2512"
+    },
+    {
+      "text": "60% COTTON / 35% POLYESTER / 5% ELASTANE"
+    },
+    {
+      "text": "MADE IN P.R.C."
+    },
+    {
+      "text": "RN #31404"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STONE RIVER DENIM",
+        "confidence": 1
+      },
+      {
+        "text": "33W 32L",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL: HZ2512",
+        "confidence": 1
+      },
+      {
+        "text": "6O% COTTON / 35% POLYESTER / 5% ELASIANE",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN P.R.C.",
+        "confidence": 1
+      },
+      {
+        "text": "RN #31404",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "31404"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "33x32"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 35
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": [
+      "HZ2512"
+    ]
+  },
+  "image": {
+    "file": "denim-label-170.png",
+    "mediaType": "image/png",
+    "width": 789,
+    "height": 279,
+    "pixelSha256": "6981bfd597727f60b880fc4f46c575c39727ade8ab381e014c996cf83e36f91f"
+  }
+}

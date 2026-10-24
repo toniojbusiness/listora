@@ -1,0 +1,64 @@
+{
+  "id": "neck-label-055",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "Harbor Lane"
+    },
+    {
+      "text": "SIZE: S"
+    },
+    {
+      "text": "Made in Cambodia"
+    },
+    {
+      "text": "RN NO. 147035"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Harbor Lane",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE: S",
+        "confidence": 1
+      },
+      {
+        "text": "Made in Cambodia",
+        "confidence": 1
+      },
+      {
+        "text": "RN NO. 147035",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "147035"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "KH"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-055.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 207,
+    "pixelSha256": "0e53826c893d3bfaa51fd00933a940854e5857e1469e7d6204d6918a5c0d14a3"
+  }
+}

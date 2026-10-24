@@ -1,0 +1,117 @@
+{
+  "id": "care-label-217",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "FIELD AND FERN"
+    },
+    {
+      "text": "SIZE EXTRA LARGE"
+    },
+    {
+      "text": "98% COTTON / COTON / ALGODON"
+    },
+    {
+      "text": "2% ELASTANE / ELASTHANNE / ELASTANO"
+    },
+    {
+      "text": "MADE IN CHINA"
+    },
+    {
+      "text": "HECHO EN CHINA"
+    },
+    {
+      "text": "RN: 167428"
+    },
+    {
+      "text": "DO NOT BLEACH"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    },
+    {
+      "text": "DO NOT DRY CLEAN"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "FIELD AND FERN",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE EXTRA LARGE",
+        "confidence": 1
+      },
+      {
+        "text": "98% COTTON / COTON / ALGODON",
+        "confidence": 1
+      },
+      {
+        "text": "2% ELASTANE / ELASTHANNE / ELASTANO",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN CHINA",
+        "confidence": 1
+      },
+      {
+        "text": "HECHO EN CHINA",
+        "confidence": 1
+      },
+      {
+        "text": "RN:167428",
+        "confidence": 0.5
+      },
+      {
+        "text": "DO NOT BLEACH",
+        "confidence": 1
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      },
+      {
+        "text": "do not dry clean",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "167428"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 98
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 2
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-217.png",
+    "mediaType": "image/png",
+    "width": 699,
+    "height": 423,
+    "pixelSha256": "15443bc313803208f16ac47ec8bfad95bb5636e130cd418e42c05fdf146ea073"
+  }
+}

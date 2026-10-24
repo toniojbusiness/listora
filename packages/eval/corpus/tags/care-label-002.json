@@ -1,0 +1,118 @@
+{
+  "id": "care-label-002",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Little Atlas"
+    },
+    {
+      "text": "US 4 UK 8 EUR 36"
+    },
+    {
+      "text": "Shell: 100% Cotton"
+    },
+    {
+      "text": "Lining: 100% Polyester"
+    },
+    {
+      "text": "Made in Pakistan"
+    },
+    {
+      "text": "RN NO. 91459"
+    },
+    {
+      "text": "Dry Clean Only"
+    },
+    {
+      "text": "Do Not Bleach"
+    },
+    {
+      "text": "NEW YORK, NY 10018"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Little  Atlas",
+        "confidence": 0.5
+      },
+      {
+        "text": "US 4 UK 8 EUR 36",
+        "confidence": 1
+      },
+      {
+        "text": "Shell: 100% Cotton",
+        "confidence": 1
+      },
+      {
+        "text": "Lining: 100% Polyester",
+        "confidence": 1
+      },
+      {
+        "text": "Made in Pakistan",
+        "confidence": 1
+      },
+      {
+        "text": "RN NO. 91459",
+        "confidence": 1
+      },
+      {
+        "text": "dry clean only",
+        "confidence": 0.5
+      },
+      {
+        "text": "Do Not Bleach",
+        "confidence": 1
+      },
+      {
+        "text": "NEW YORK, NY 10018",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "91459"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "4"
+      },
+      {
+        "system": "uk",
+        "value": "8"
+      },
+      {
+        "system": "eu",
+        "value": "36"
+      }
+    ],
+    "fiber": [
+      {
+        "part": "shell",
+        "material": "cotton",
+        "percent": 100
+      },
+      {
+        "part": "lining",
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "PK"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-002.png",
+    "mediaType": "image/png",
+    "width": 465,
+    "height": 387,
+    "pixelSha256": "7784fbf4e18842e1f79fabf059669800d2d660ca79f160fc290f140172637e30"
+  }
+}

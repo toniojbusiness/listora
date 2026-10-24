@@ -1,0 +1,103 @@
+{
+  "id": "hang-tag-032",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Little Atlas"
+    },
+    {
+      "text": "US 0 / UK 4 / EU 32"
+    },
+    {
+      "text": "MSRP $18.00"
+    },
+    {
+      "text": "60% COTTON / COTON / ALGODON"
+    },
+    {
+      "text": "40% POLYESTER / POLYESTER / POLIESTER"
+    },
+    {
+      "barcode": "022919014411"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Little Atlas",
+        "confidence": 1
+      },
+      {
+        "text": "US 0 / UK 4 / EU 32",
+        "confidence": 1
+      },
+      {
+        "text": "MSRP $18.00",
+        "confidence": 1
+      },
+      {
+        "text": "60% COTTON / COTON / ALGODON",
+        "confidence": 1
+      },
+      {
+        "text": "40% POLYESTER / POLYESTER / POLIESTER",
+        "confidence": 1
+      },
+      {
+        "text": "0 22919 01441 1",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0022919014411",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "022919014411"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "0"
+      },
+      {
+        "system": "uk",
+        "value": "4"
+      },
+      {
+        "system": "eu",
+        "value": "32"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 40
+      }
+    ],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-032.png",
+    "mediaType": "image/png",
+    "width": 735,
+    "height": 432,
+    "pixelSha256": "71806485ca5cdab2485020d1b169d3bf910b94a98deacef307caa16c9b081174"
+  }
+}

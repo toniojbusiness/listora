@@ -1,0 +1,70 @@
+{
+  "id": "care-label-066",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "100% Tencel"
+    },
+    {
+      "text": "MADE IN CHINA / FABRIQUE EN CHINE / HECHO EN CHINA"
+    },
+    {
+      "text": "RN#69211  CA#69285"
+    },
+    {
+      "text": "Ne Pas Blanchir"
+    },
+    {
+      "text": "NO Usar Blanqueador"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "100% Tencel",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN CHINA / FABRIQUE EN CHINE / HECHO EN CHINA RN#69211  CA#69285",
+        "confidence": 0.5
+      },
+      {
+        "text": "Ne Pas Blanchir",
+        "confidence": 1
+      },
+      {
+        "text": "NO Usar Blanqueador",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "69211"
+    ],
+    "ca": [
+      "69285"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "lyocell",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-066.png",
+    "mediaType": "image/png",
+    "width": 969,
+    "height": 243,
+    "pixelSha256": "be0ebe225937974602e05e258543f753f6382b56fcbfe86564367b96ae62d488"
+  }
+}

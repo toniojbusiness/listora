@@ -1,0 +1,83 @@
+{
+  "id": "denim-label-003",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "Stone River Denim"
+    },
+    {
+      "text": "W32/L32"
+    },
+    {
+      "text": "Cotton 50% / Polyester 50%"
+    },
+    {
+      "text": "Made in Guatemala"
+    },
+    {
+      "text": "Hecho en Guatemala"
+    },
+    {
+      "text": "NO Usar Blanqueador"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Stone River Denim",
+        "confidence": 1
+      },
+      {
+        "text": "W32/L32",
+        "confidence": 1
+      },
+      {
+        "text": "Cotton 5O% / Polyester 50%",
+        "confidence": 0.5
+      },
+      {
+        "text": "made in guatemala",
+        "confidence": 0.5
+      },
+      {
+        "text": "Hecho en Guatemala NO Usar Blanqueador",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "32x32"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 50
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 50
+      }
+    ],
+    "origin": [
+      "GT"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "denim-label-003.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 279,
+    "pixelSha256": "38347e9a771472a95da210958666b030154a1a8bce956eb37fd9f6c62459a499"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "id": "denim-label-022",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "Stone River Denim"
+    },
+    {
+      "text": "WAIST 31 INSEAM 34"
+    },
+    {
+      "text": "100% Cotton Exclusive of Trim"
+    },
+    {
+      "text": "Made in China"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Stone River Denim",
+        "confidence": 1
+      },
+      {
+        "text": "WAIST 31 INSEAM 34",
+        "confidence": 1
+      },
+      {
+        "text": "100% Cotton Exclusive of Trim",
+        "confidence": 1
+      },
+      {
+        "text": "Made in China",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "31x34"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "denim-label-022.png",
+    "mediaType": "image/png",
+    "width": 591,
+    "height": 207,
+    "pixelSha256": "59bb2df7490fd141e1586b972e7ba3b989a5d1dc9dd90cfc22d26c60f7c6d21b"
+  }
+}

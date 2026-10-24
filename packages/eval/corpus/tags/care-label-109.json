@@ -1,0 +1,77 @@
+{
+  "id": "care-label-109",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "98% Cotton, 2% Elastane"
+    },
+    {
+      "text": "Product of Bangladesh"
+    },
+    {
+      "text": "CA NO. 19054"
+    },
+    {
+      "text": "Machine Wash Cold With Like Colors"
+    },
+    {
+      "text": "Lavar A Maquina en Frio"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "98% Cotton, 2% Elastane",
+        "confidence": 1
+      },
+      {
+        "text": "Product of Bangladesh",
+        "confidence": 1
+      },
+      {
+        "text": "CA NO. 19054",
+        "confidence": 1
+      },
+      {
+        "text": "Machine Wash Cold With Like Colors",
+        "confidence": 1
+      },
+      {
+        "text": "Lavar A Maquina en Frio",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "19054"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 98
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 2
+      }
+    ],
+    "origin": [
+      "BD"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-109.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 243,
+    "pixelSha256": "441a67a4976e4ec097b8910b02375d5e7c48a2abf3658bfb4b936118dec9e18b"
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "id": "care-label-011",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "95% RAYON, 5% SPANDEX"
+    },
+    {
+      "text": "MADE IN INDIA"
+    },
+    {
+      "text": "LAY FLAT TO DRY"
+    },
+    {
+      "text": "MACHINE WASH COLD WITH LIKE COLORS"
+    },
+    {
+      "text": "LAVER A LA MACHINE A FROID"
+    },
+    {
+      "text": "SEATTLE, WA 98104"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "95% RAYON, 5% SPANDEX",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN INDIA",
+        "confidence": 1
+      },
+      {
+        "text": "LAY FLAT TO DRY",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD WITH LIKE COLORS",
+        "confidence": 1
+      },
+      {
+        "text": "LAVER A LA MACHINE A FROID",
+        "confidence": 1
+      },
+      {
+        "text": "SEATTLE, WA 98104",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "rayon",
+        "percent": 95
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "IN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-011.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 279,
+    "pixelSha256": "5fdfaecb40b1e11384cd20612c7f9ebac5607cefec20be275b0d3597a2f57934"
+  }
+}

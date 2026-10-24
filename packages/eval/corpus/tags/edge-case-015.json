@@ -1,0 +1,49 @@
+{
+  "id": "edge-case-015",
+  "kind": "edge_case",
+  "description": "Words that contain \"RN\" are not RN numbers",
+  "printed": [
+    {
+      "text": "PATTERN 20817"
+    },
+    {
+      "text": "RETURN POLICY 30 DAYS"
+    },
+    {
+      "text": "BRN 22145"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PATTERN 20817",
+        "confidence": 1
+      },
+      {
+        "text": "RETURN POLICY 30 DAYS",
+        "confidence": 1
+      },
+      {
+        "text": "BRN 22145",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-015.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 171,
+    "pixelSha256": "59200bafca805aaecc259443258157a544d67a3f2cb666ecf66629b911e8bfe1"
+  }
+}

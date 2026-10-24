@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-218",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Parallel Athletic"
+    },
+    {
+      "text": "STYLE # OM0227-806"
+    },
+    {
+      "text": "M"
+    },
+    {
+      "text": "$28.00"
+    },
+    {
+      "barcode": "032353350884"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Parallel Athletic",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE # OM0227-806",
+        "confidence": 1
+      },
+      {
+        "text": "M",
+        "confidence": 1
+      },
+      {
+        "text": "$28.00",
+        "confidence": 1
+      },
+      {
+        "text": "0 32353 35788 4",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0032353350884",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "032353350884"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "OM0227-806"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-218.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "e62c0ae2c01a5deebcddf1261e79d2b9b4e09a0f1d2671ab7ad5867a69dfc01e"
+  }
+}

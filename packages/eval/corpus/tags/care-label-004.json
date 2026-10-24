@@ -1,0 +1,101 @@
+{
+  "id": "care-label-004",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Body: 95% Cotton 5% Spandex"
+    },
+    {
+      "text": "Rib: 100% Cotton"
+    },
+    {
+      "text": "Product of Pakistan"
+    },
+    {
+      "text": "RN# 87215"
+    },
+    {
+      "text": "STYLE NO. S-10190"
+    },
+    {
+      "text": "Do Not Dry Clean"
+    },
+    {
+      "text": "Lavar A Maquina en Frio"
+    },
+    {
+      "text": "Do Not Bleach"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Body:95% Cotton 5% Spandex",
+        "confidence": 0.5
+      },
+      {
+        "text": "Rib:  100% Cotton",
+        "confidence": 0.5
+      },
+      {
+        "text": "Product of Pakistan RN# B7215",
+        "confidence": 0.5
+      },
+      {
+        "text": "STYLE NO. S-10190",
+        "confidence": 1
+      },
+      {
+        "text": "Do Not Dry Clean",
+        "confidence": 1
+      },
+      {
+        "text": "Lavar A Maquina en Frio",
+        "confidence": 1
+      },
+      {
+        "text": "Do Not Bleach",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "87215"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": "body",
+        "material": "cotton",
+        "percent": 95
+      },
+      {
+        "part": "body",
+        "material": "spandex",
+        "percent": 5
+      },
+      {
+        "part": "rib",
+        "material": "cotton",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "PK"
+    ],
+    "style": [
+      "S-10190"
+    ]
+  },
+  "image": {
+    "file": "care-label-004.png",
+    "mediaType": "image/png",
+    "width": 555,
+    "height": 351,
+    "pixelSha256": "c2f402ca45d44beab7291fc73c323190351fa9605342794a846ee6f7ce9082d6"
+  }
+}

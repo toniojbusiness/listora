@@ -1,0 +1,76 @@
+{
+  "id": "shoe-label-075",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "Parallel Athletic"
+    },
+    {
+      "text": "US: 11  UK: 10  EUR: 44.5"
+    },
+    {
+      "text": "STYLE NO. W-87947"
+    },
+    {
+      "text": "Made in Cambodia"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Parallel Athletic",
+        "confidence": 1
+      },
+      {
+        "text": "US: 11  UK: 10  EUR: 44.5",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. W-87947",
+        "confidence": 1
+      },
+      {
+        "text": "Made in",
+        "confidence": 0.5
+      },
+      {
+        "text": "Cambodia",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "11"
+      },
+      {
+        "system": "uk",
+        "value": "10"
+      },
+      {
+        "system": "eu",
+        "value": "44.5"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "KH"
+    ],
+    "style": [
+      "W-87947"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-075.png",
+    "mediaType": "image/png",
+    "width": 519,
+    "height": 207,
+    "pixelSha256": "37bd3402deeb00d5168e5d8e646bcdad2b3a8e7536573a598758388c550bc1f5"
+  }
+}

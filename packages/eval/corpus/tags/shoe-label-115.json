@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-115",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US 11.5 UK 10.5 EUR 45"
+    },
+    {
+      "text": "STYLE: 130670"
+    },
+    {
+      "text": "MADE IN CANADA"
+    },
+    {
+      "text": "HECHO EN CANADA"
+    },
+    {
+      "barcode": "084354254470"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 11.5 UK 10.5 EUR 45",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE: 130670",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN CANADA",
+        "confidence": 1
+      },
+      {
+        "text": "HECHO EN CANADA",
+        "confidence": 1
+      },
+      {
+        "text": "0 84354 25447 0",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0084354254470",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "084354254470"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "11.5"
+      },
+      {
+        "system": "uk",
+        "value": "10.5"
+      },
+      {
+        "system": "eu",
+        "value": "45"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "CA"
+    ],
+    "style": [
+      "130670"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-115.png",
+    "mediaType": "image/png",
+    "width": 465,
+    "height": 363,
+    "pixelSha256": "d69c3a3ba5be3353bccb3e4947845dc712ae5870b8beeb5db4044c3434cae60b"
+  }
+}
