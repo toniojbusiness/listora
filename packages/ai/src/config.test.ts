@@ -204,6 +204,7 @@ describe('createAiProvider', () => {
         tier: 'standard',
         system: 's',
         prompt: 'p',
+        photoSetHash: 'e'.repeat(64),
         images: [],
         output: COLOR_OUTPUT,
       });
@@ -224,6 +225,7 @@ describe('createAiProvider', () => {
         tier: 'standard',
         system: 's',
         prompt: 'p',
+        photoSetHash: 'e'.repeat(64),
         images: [],
         output: COLOR_OUTPUT,
       }),

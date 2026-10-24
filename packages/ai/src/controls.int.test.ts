@@ -291,6 +291,7 @@ describe('AiClient with the Postgres controls (real Postgres)', () => {
       tier: 'standard',
       system: 'Name the dominant color.',
       prompt: 'Answer in JSON.',
+      photoSetHash: photoSetHashOfImages(photos),
       images: photos,
       output: COLOR_OUTPUT,
     });
