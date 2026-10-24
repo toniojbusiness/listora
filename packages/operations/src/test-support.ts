@@ -55,8 +55,9 @@ export interface EngineHarness {
   /** Errors workers reported through `onFatalError`; tests expect none. */
   fatalErrors: Error[];
   /**
-   * eBay and Depop use the fake marketplace's API, Poshmark behaves as an assisted marketplace,
-   * and Mercari has no adapter.
+   * eBay and Depop use the fake marketplace's API (eBay's reads carry revisions, Depop's carry
+   * no freshness marker), Poshmark behaves as an assisted marketplace, and Mercari has no
+   * adapter.
    */
   adapters: AdapterLookup;
   startWorker(options?: Partial<OperationWorkerOptions>): Promise<OperationWorker>;
@@ -88,15 +89,19 @@ export async function createEngineHarness(prefix: string): Promise<EngineHarness
   const fatalErrors: Error[] = [];
   let sequence = 0;
 
-  const api = (marketplace: Marketplace): FakeMarketplaceAdapter =>
+  const api = (
+    marketplace: Marketplace,
+    readFreshness: 'revision' | 'none',
+  ): FakeMarketplaceAdapter =>
     new FakeMarketplaceAdapter({
       marketplace,
       baseUrl: fake.url,
       requestTimeoutMs: FAKE_REQUEST_TIMEOUT_MS,
+      readFreshness,
     });
   const registered = new Map<Marketplace, FakeMarketplaceAdapter>([
-    ['ebay', api('ebay')],
-    ['depop', api('depop')],
+    ['ebay', api('ebay', 'revision')],
+    ['depop', api('depop', 'none')],
     [
       'poshmark',
       new FakeMarketplaceAdapter({ marketplace: 'poshmark', baseUrl: fake.url, mode: 'assisted' }),

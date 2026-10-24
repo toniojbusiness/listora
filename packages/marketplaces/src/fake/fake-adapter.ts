@@ -31,6 +31,11 @@ export interface FakeAdapterOptions {
    * like Poshmark: every write becomes a user task, confirmed by the user.
    */
   mode?: 'api' | 'assisted';
+  /**
+   * `revision` (default) reports the fake's listing revisions. `none` hides them, like a
+   * marketplace whose reads carry no freshness marker.
+   */
+  readFreshness?: MarketplaceCapabilities['readFreshness'];
 }
 
 const API_CAPABILITIES: MarketplaceCapabilities = {
@@ -42,6 +47,7 @@ const API_CAPABILITIES: MarketplaceCapabilities = {
   relist: 'api',
   markSold: 'api',
   verifyRead: 'api',
+  readFreshness: 'revision',
   importListings: 'api',
   saleDetection: ['poll'],
   imageTransport: 'url_fetch',
@@ -60,6 +66,7 @@ const ASSISTED_CAPABILITIES: MarketplaceCapabilities = {
   relist: 'assisted',
   markSold: 'not_needed',
   verifyRead: 'user_confirm',
+  readFreshness: 'none',
   importListings: 'share_sheet',
   saleDetection: ['email', 'manual'],
   imageTransport: 'user_saves_photos',
@@ -77,6 +84,7 @@ interface FakeListingBody {
   description: string;
   priceCents: number;
   currency: CurrencyCode;
+  revision: number;
 }
 
 export class FakeMarketplaceAdapter implements MarketplaceAdapter {
@@ -84,6 +92,7 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
   readonly #baseUrl: string;
   readonly #timeoutMs: number;
   readonly #mode: 'api' | 'assisted';
+  readonly #capabilities: MarketplaceCapabilities;
   readonly #name: string;
 
   constructor(options: FakeAdapterOptions) {
@@ -91,11 +100,15 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
     this.#baseUrl = `${options.baseUrl.replace(/\/+$/, '')}/${options.marketplace}`;
     this.#timeoutMs = options.requestTimeoutMs ?? 10_000;
     this.#mode = options.mode ?? 'api';
+    this.#capabilities =
+      this.#mode === 'api'
+        ? { ...API_CAPABILITIES, readFreshness: options.readFreshness ?? 'revision' }
+        : ASSISTED_CAPABILITIES;
     this.#name = MARKETPLACE_NAMES[options.marketplace];
   }
 
   capabilities(): MarketplaceCapabilities {
-    return this.#mode === 'api' ? API_CAPABILITIES : ASSISTED_CAPABILITIES;
+    return this.#capabilities;
   }
 
   async execute(op: OperationRequest, ctx: AdapterContext): Promise<Outcome> {
@@ -161,6 +174,7 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
       description: listing.description,
       priceCents: listing.priceCents,
       currency: listing.currency,
+      revision: this.#revision(listing.revision),
     };
   }
 
@@ -233,10 +247,13 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
     const { status } = result;
     const error = (result.body as { error?: { code?: string; message?: string } } | null)?.error;
     if (status >= 200 && status < 300) {
-      const listing = (result.body as { listing?: { id?: string } } | null)?.listing;
+      const listing = (result.body as { listing?: { id?: unknown; revision?: unknown } } | null)
+        ?.listing;
+      const revision = this.#revision(listing?.revision);
       return {
         type: 'confirmed',
         ...(typeof listing?.id === 'string' ? { externalListingId: listing.id } : {}),
+        ...(revision === null ? {} : { revision }),
         excerpt,
       };
     }
@@ -280,6 +297,12 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
       fixHint: 'Fix the listing details, then retry.',
       excerpt,
     };
+  }
+
+  /** A revision from the fake, or `null` when it is missing or this adapter hides revisions. */
+  #revision(value: unknown): number | null {
+    if (this.#capabilities.readFreshness === 'none') return null;
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
   }
 
   #send(

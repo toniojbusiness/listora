@@ -39,13 +39,17 @@ function pick<T>(rng: () => number, choices: readonly (readonly [number, T])[]):
   return last[1];
 }
 
-/** A plausible sequence of changes for one listing: create, then edits, an end, a relist. */
+/**
+ * A plausible sequence of changes for one listing: create, then edits, ends, and relists. Up to
+ * four follow-ups, so a listing can be ended, relisted, and ended again, where a stale read of
+ * the first end could pass for the second.
+ */
 function planOperations(rng: () => number): [OperationKind, DesiredListingState][] {
   const plan: [OperationKind, DesiredListingState][] = [
     ['create', { status: 'active', title: 'Chaos jacket', priceCents: 5000 }],
   ];
   let active = true;
-  const followUps = 1 + Math.floor(rng() * 3);
+  const followUps = 1 + Math.floor(rng() * 4);
   for (let index = 0; index < followUps; index += 1) {
     if (!active) {
       plan.push(['relist', { status: 'active' }]);
@@ -102,6 +106,7 @@ describe('chaos: injected faults never produce a false success', () => {
     [11, 0.3],
     [23, 0.5],
     [47, 0.8],
+    [61, 0.6],
   ])(
     'seed %i, fault rate %f: every success is verified, nothing is duplicated, nothing is left unfinished',
     async (seed, rate) => {
@@ -146,6 +151,9 @@ describe('chaos: injected faults never produce a false success', () => {
         // A create is never applied twice, whatever was retried or verified.
         expect(harness.fake.listings('ebay', listing.id).length).toBeLessThanOrEqual(1);
 
+        // Operations on a listing run in order, so each success is proven by a read no older
+        // than the one that proved the success before it.
+        let provenRevision = 0;
         for (const created of operations) {
           const op = await harness.operation(created.id);
           const events = await harness.events(op.id);
@@ -168,6 +176,9 @@ describe('chaos: injected faults never produce a false success', () => {
             expect(op.success_evidence).toBe('read_back');
             const evidence = events.at(-1)?.detail as { remote?: Record<string, unknown> };
             expect(evidence.remote).toMatchObject(op.desired);
+            const revision = evidence.remote?.['revision'];
+            expect(revision).toBeGreaterThanOrEqual(provenRevision);
+            provenRevision = Number(revision);
           } else {
             expect(op).toMatchObject({ status: 'failed', success_evidence: null });
             expect(op.error_message).toEqual(expect.any(String));

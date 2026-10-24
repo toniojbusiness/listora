@@ -228,6 +228,7 @@ interface MarketplaceCapabilities {
   relist: Mode;
   markSold: Mode | 'not_needed';
   verifyRead: 'api' | 'user_confirm'; // how success is established
+  readFreshness: 'revision' | 'none'; // whether reads carry a revision (see section 6)
   importListings: 'api' | 'share_sheet' | 'bulk_file' | 'none';
   saleDetection: Array<'webhook' | 'poll' | 'email' | 'manual'>;
   imageTransport: 'url_fetch' | 'upload' | 'user_saves_photos';
@@ -260,6 +261,13 @@ interface MarketplaceAdapter {
 without changing those members. `execute` never throws for a marketplace error; it returns an
 outcome. `readListing` throws when the marketplace cannot be read, and must find the effect of
 an earlier attempt even when that attempt's outcome was unknown (by external id or SKU).
+
+Reads may be stale (eventually consistent APIs), so a read carries a freshness marker: a
+`revision`, a non-negative integer that grows with every change to the marketplace listing (a
+remote revision, or a last-modified time in milliseconds that differs for every change). A
+`confirmed` outcome also returns the revision the write produced, when the marketplace says. An
+adapter whose marketplace has no such marker declares `readFreshness: 'none'` and returns
+`revision: null`.
 
 Assisted adapters implement `execute` by returning `pendingUser` with the user task (deep link
 plus copy-assist payload); the engine records the `user_task` in the same transaction as the
@@ -363,28 +371,45 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
 4. **Idempotent re-execution.** An operation that was sent before is read back before every
    later send, and succeeds without sending again when the change already took effect (a 5xx
    can hide an applied write). Adapters also pass the operation's idempotency key to the
-   marketplace's own duplicate protection where it has one.
-5. **Crash recovery.** Each worker holds a Postgres session named `listora-worker:<pool id>`,
+   marketplace's own duplicate protection where it has one. A listing id a send returns (eBay's
+   `RelistItem` issues a new one) is kept on the operation (`external_listing_id`), so its
+   later read-backs read the new listing, not the ended one. The listing row takes a new id
+   once a read-back verifies it (a listing without an id yet takes the first one at once).
+5. **Read freshness.** A stale read can show an older state that happens to match (after end,
+   relist, end, the first end), so a read-back confirms only when it is current
+   (`confirmByReadBack` in `evidence.ts`, the only maker of read-back proofs). Listora keeps the
+   newest revision it has seen of each marketplace listing, from reads and confirmed sends:
+   `marketplace_listing.remote_revision`, and `marketplace_operation.remote_revision` for the
+   listing an operation targets, which also holds the revision its send was confirmed with, so
+   the rule survives a crash. A read older than that revision is stale and decides nothing,
+   neither success nor a resend; another read follows after the backoff delay. With
+   `readFreshness: 'none'`, a matching read confirms only when the operation's previous read, a
+   delay earlier and with no send in between, matched too (the operation waits in `verifying`
+   with code `confirming`). That assumes staleness lasts less than the delay; adapters should
+   provide a revision wherever the marketplace has one.
+6. **Crash recovery.** Each worker holds a Postgres session named `listora-worker:<pool id>`,
    which the operating system closes when the process dies, even on SIGKILL. Live workers
    release the job locks of pools that have no session within about 10 seconds (Graphile
    Worker alone waits 4 hours). The job runs again, finds its step `running`, and reads the
    listing back. A worker that loses its own session exits at once. So every Graphile Worker
    runner must be started through `startOperationWorker`, with the same database role, on a
    direct connection (not a transaction pooler).
-6. **Listing truth.** A verified success records what the marketplace showed on the
-   `marketplace_listing`: status, external id and URL, `remote_snapshot`, `last_verified_at`.
+7. **Listing truth.** A verified success records what the marketplace showed on the
+   `marketplace_listing`: status, external id and URL, `remote_snapshot` (with its revision),
+   `remote_revision`, `last_verified_at`.
    A user confirmation changes only the status.
-7. **History.** Every transition appends an `operation_event` with a redacted request/response
+8. **History.** Every transition appends an `operation_event` with a redacted request/response
    excerpt (`redactForStorage` in `@listora/shared`), error code, and attempt number.
-8. **Invariant, enforced in code and tests:** no code path sets `succeeded` without a verified
+9. **Invariant, enforced in code and tests:** no code path sets `succeeded` without a verified
    read-back or a user confirmation event. `transitionOperation` is the only code that writes
    operation rows, and it sets `succeeded` only with a `SuccessProof`, which only `evidence.ts`
-   can create; a test scans the code for any other writer. Chaos tests inject 429s, 5xx errors
-   (also after the change was applied), timeouts after send, stale reads, and a worker killed
-   mid-operation.
-9. **Concurrency (T-16, T-24).** Token refresh is single-flight per connection; Depop rotates
-   refresh tokens, so a lost write disconnects the seller. Rate limits use per-seller and
-   app-wide token buckets.
+   can create, and only for a current read; a test scans the code for any other writer. Chaos
+   tests inject 429s, 5xx errors (also after the change was applied), timeouts after send,
+   stale reads, and a worker killed mid-operation, over listings that are ended and relisted
+   more than once.
+10. **Concurrency (T-16, T-24).** Token refresh is single-flight per connection; Depop rotates
+    refresh tokens, so a lost write disconnects the seller. Rate limits use per-seller and
+    app-wide token buckets.
 
 **Auto-delist.** A sale event (webhook, poll, email, or manual entry) is deduplicated by
 its order (see `sale` in section 9). Then, in one transaction, Listora records the sale, sets
@@ -534,8 +559,8 @@ Tables by area:
   `ai_usage_daily`, which a trigger on `ai_usage_event` keeps in step per account and UTC day.
   Monthly totals come from `UsageStore.monthlyUsage` (section 8).
 - **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
-  `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot,
-  desired/applied version), `marketplace_operation`, and the append-only `operation_event`.
+  `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot and
+  newest seen revision, desired/applied version), `marketplace_operation`, and the append-only `operation_event`.
 - **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
   provider event id, so an id that repeats in another account or on another marketplace is
   never dropped as a duplicate). `sale` is one marketplace order (unique per account,

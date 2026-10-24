@@ -44,16 +44,13 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     issues.push('WORKER_CONCURRENCY must be an integer from 1 to 100');
   }
 
-  const fakeMarketplaceUrl = env['FAKE_MARKETPLACE_URL'];
+  // Empty means unset, as `FAKE_MARKETPLACE_URL=` in an env file.
+  const rawFakeMarketplaceUrl = env['FAKE_MARKETPLACE_URL'];
+  const fakeMarketplaceUrl = rawFakeMarketplaceUrl === '' ? undefined : rawFakeMarketplaceUrl;
   if (fakeMarketplaceUrl !== undefined && !/^https?:\/\/[^\s]+$/.test(fakeMarketplaceUrl)) {
     issues.push('FAKE_MARKETPLACE_URL must be an http:// or https:// URL');
   }
 
   if (issues.length > 0 || !isLogLevel(logLevel)) throw new ConfigError(issues);
-  return {
-    databaseUrl,
-    logLevel,
-    concurrency,
-    fakeMarketplaceUrl: fakeMarketplaceUrl === '' ? undefined : fakeMarketplaceUrl,
-  };
+  return { databaseUrl, logLevel, concurrency, fakeMarketplaceUrl };
 }

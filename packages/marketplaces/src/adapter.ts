@@ -30,6 +30,12 @@ export interface MarketplaceCapabilities {
   markSold: Mode | 'not_needed';
   /** How success is established: an API read-back, or the user's confirmation. */
   verifyRead: 'api' | 'user_confirm';
+  /**
+   * How a read-back shows it is current. `revision`: every read carries the listing's
+   * `revision`. `none`: the marketplace has no such marker, so the engine confirms a change only
+   * after two matching reads separated by a delay.
+   */
+  readFreshness: 'revision' | 'none';
   importListings: 'api' | 'share_sheet' | 'bulk_file' | 'none';
   saleDetection: ('webhook' | 'poll' | 'email' | 'manual')[];
   imageTransport: 'url_fetch' | 'upload' | 'user_saves_photos';
@@ -122,6 +128,12 @@ export type RemoteListingState =
       description: string | null;
       priceCents: number | null;
       currency: CurrencyCode | null;
+      /**
+       * A non-negative integer that grows with every change to the listing (a remote revision,
+       * or a last-modified time in milliseconds that differs for every change), so a stale read
+       * can be told from a current one. Required when `readFreshness` is `revision`, else `null`.
+       */
+      revision: number | null;
     };
 
 /**
@@ -142,8 +154,11 @@ export interface UserTaskSpec {
  * are stable machine-readable identifiers; messages are user-readable and name the marketplace.
  */
 export type Outcome =
-  /** The marketplace accepted the write. The engine still reads the listing back to verify. */
-  | { type: 'confirmed'; externalListingId?: string; excerpt?: Excerpt }
+  /**
+   * The marketplace accepted the write. The engine still reads the listing back to verify.
+   * `revision` is the listing's revision after the write, when the marketplace returns it.
+   */
+  | { type: 'confirmed'; externalListingId?: string; revision?: number; excerpt?: Excerpt }
   /** Validation or another permanent error: retrying the same request cannot succeed. */
   | { type: 'rejected'; code: string; message: string; fixHint?: string; excerpt?: Excerpt }
   /** A temporary failure (429, 5xx, network failure before sending). Safe to try again. */
@@ -161,6 +176,7 @@ export interface MarketplaceAdapter {
   /**
    * Reads the listing back. Must observe the effect of any earlier attempt of an operation on
    * this listing, including one whose outcome was unknown (find it by external SKU or id).
+   * A read may be stale; its `revision` (see `readFreshness`) lets the engine tell.
    * Throws when the marketplace cannot be read.
    */
   readListing(ref: ListingRef, ctx: AdapterContext): Promise<RemoteListingState>;

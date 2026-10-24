@@ -34,7 +34,18 @@ export interface OperationError {
   message: string;
 }
 
-export type OperationChange =
+/**
+ * What a step learned about the marketplace listing the operation targets, kept on the
+ * operation for its later steps (`external_listing_id`, `remote_revision`).
+ */
+export interface TargetLearned {
+  /** A listing id the send returned that the listing row does not hold. */
+  externalListingId?: string;
+  /** The newest revision the step saw of the targeted marketplace listing. */
+  revision?: number;
+}
+
+type StatusChange =
   /** A step starts; its request may be sent from now on. Adds one attempt. */
   | { to: 'running' }
   /** The next attempt runs after `delayMs`. */
@@ -47,6 +58,8 @@ export type OperationChange =
   /** The user retries a failed operation: a fresh set of attempts, starting now. */
   | { to: 'queued' }
   | { to: 'canceled' };
+
+export type OperationChange = StatusChange & { learned?: TargetLearned };
 
 /** Delists after a sale run ahead of routine changes on other listings. */
 export function operationPriority(op: Pick<OperationRow, 'origin'>): number {
@@ -66,7 +79,7 @@ export async function transitionOperation(
 
   const updated = await trx
     .updateTable('marketplace_operation')
-    .set(update.columns)
+    .set({ ...update.columns, ...learnedColumns(op, change.learned) })
     .where('account_id', '=', op.account_id)
     .where('id', '=', op.id)
     .where('status', '=', op.status)
@@ -133,6 +146,23 @@ export async function wakeNextOperation(trx: DbTransaction, op: OperationRow): P
     priority: operationPriority(next),
     runAt: null,
   });
+}
+
+/**
+ * The target columns for what a step learned. A newly learned listing id starts its own
+ * revisions; otherwise the newest revision is kept.
+ */
+function learnedColumns(
+  op: OperationRow,
+  learned: TargetLearned | undefined,
+): { external_listing_id?: string; remote_revision?: number | null | RawBuilder<number> } {
+  if (learned === undefined) return {};
+  const { externalListingId, revision } = learned;
+  if (externalListingId !== undefined && externalListingId !== op.external_listing_id) {
+    return { external_listing_id: externalListingId, remote_revision: revision ?? null };
+  }
+  if (revision === undefined) return {};
+  return { remote_revision: sql<number>`greatest(remote_revision, ${revision}::bigint)` };
 }
 
 interface ColumnUpdate {

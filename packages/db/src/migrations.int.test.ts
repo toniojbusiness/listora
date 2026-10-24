@@ -47,6 +47,7 @@ const MIGRATIONS = [
   '0003_idempotency',
   '0004_item_pre_archive_status',
   '0005_photo_pipeline',
+  '0006_read_freshness',
 ];
 
 describe('schema migrations (real Postgres)', () => {

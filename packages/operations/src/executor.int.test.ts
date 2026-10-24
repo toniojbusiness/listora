@@ -28,6 +28,7 @@ const CAPABILITIES: MarketplaceCapabilities = {
   relist: 'api',
   markSold: 'api',
   verifyRead: 'api',
+  readFreshness: 'revision',
   importListings: 'none',
   saleDetection: ['poll'],
   imageTransport: 'url_fetch',
@@ -46,15 +47,18 @@ const ACTIVE: RemoteListingState = {
   description: null,
   priceCents: 4500,
   currency: 'USD',
+  revision: 1,
 };
 
 function stubAdapter(behavior: {
   execute: () => Promise<Outcome>;
   read?: () => Promise<RemoteListingState>;
+  readFreshness?: MarketplaceCapabilities['readFreshness'];
 }): MarketplaceAdapter {
+  const capabilities = { ...CAPABILITIES, readFreshness: behavior.readFreshness ?? 'revision' };
   return {
     id: 'depop',
-    capabilities: () => CAPABILITIES,
+    capabilities: () => capabilities,
     execute: behavior.execute,
     readListing: behavior.read ?? (() => Promise.resolve(ACTIVE)),
   };
@@ -131,6 +135,93 @@ describe('operation step executor (real Postgres)', () => {
     // The id the marketplace returned is kept, so later read-backs can find the listing.
     const listing = await harness.listing(op.listing_id);
     expect(listing).toMatchObject({ external_listing_id: 'STUB-2', last_verified_at: null });
+  });
+
+  it('without a freshness marker, succeeds only after a second matching read', async () => {
+    const { op, payload } = await newCreate();
+    let sends = 0;
+    let reads = 0;
+    const adapter = stubAdapter({
+      readFreshness: 'none',
+      execute: () => {
+        sends += 1;
+        return Promise.resolve({ type: 'confirmed', externalListingId: 'STUB-4' });
+      },
+      read: () => {
+        reads += 1;
+        return Promise.resolve({ ...ACTIVE, externalListingId: 'STUB-4', revision: null });
+      },
+    });
+
+    // The first matching read only schedules a second one, a delay later.
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    const first = await harness.operation(op.id);
+    expect(first).toMatchObject({
+      status: 'verifying',
+      error_code: 'confirming',
+      success_evidence: null,
+    });
+    expect(first.next_attempt_at).toBeInstanceOf(Date);
+
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'succeeded',
+      success_evidence: 'read_back',
+    });
+    expect({ sends, reads }).toEqual({ sends: 1, reads: 2 });
+    expect((await harness.events(op.id)).map((event) => event.to_status)).toEqual([
+      'queued',
+      'running',
+      'verifying',
+      'succeeded',
+    ]);
+  });
+
+  it('without a freshness marker, lets a second read that disagrees overrule the first', async () => {
+    const { op, payload } = await newCreate();
+    const answers: RemoteListingState[] = [{ ...ACTIVE, revision: null }, { found: false }];
+    const adapter = stubAdapter({
+      readFreshness: 'none',
+      execute: () => Promise.resolve({ type: 'confirmed', externalListingId: 'STUB-5' }),
+      read: () => Promise.resolve(answers.shift() ?? { found: false }),
+    });
+
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'retrying',
+      error_code: 'not_applied',
+      success_evidence: null,
+    });
+  });
+
+  it('never confirms a read older than the revision the send was confirmed with', async () => {
+    const { op, payload } = await newCreate();
+    const adapter = stubAdapter({
+      execute: () =>
+        Promise.resolve({ type: 'confirmed', externalListingId: 'STUB-6', revision: 3 }),
+      read: () => Promise.resolve({ ...ACTIVE, externalListingId: 'STUB-6', revision: 2 }),
+    });
+
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'verifying',
+      error_code: 'stale_read',
+      success_evidence: null,
+      external_listing_id: 'STUB-6',
+      remote_revision: 3,
+    });
+    // After the step, the stored revision still rules out the stale read.
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'verifying',
+      error_code: 'stale_read',
+      success_evidence: null,
+    });
+    expect(await harness.listing(op.listing_id)).toMatchObject({
+      external_listing_id: 'STUB-6',
+      remote_revision: 3,
+    });
   });
 
   it('discards a step result when another worker took the operation over', async () => {

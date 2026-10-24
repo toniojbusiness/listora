@@ -194,6 +194,7 @@ const COLUMNS = {
     'applied_version',
     'created_at',
     'updated_at',
+    'remote_revision',
   ],
   marketplace_operation: [
     'id',
@@ -212,6 +213,8 @@ const COLUMNS = {
     'delist_run_id',
     'created_at',
     'updated_at',
+    'external_listing_id',
+    'remote_revision',
   ],
   operation_event: [
     'id',

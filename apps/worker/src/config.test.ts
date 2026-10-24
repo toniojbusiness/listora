@@ -29,6 +29,12 @@ describe('loadWorkerConfig', () => {
     });
   });
 
+  it('treats an empty FAKE_MARKETPLACE_URL as unset', () => {
+    expect(loadWorkerConfig({ DATABASE_URL, FAKE_MARKETPLACE_URL: '' })).toMatchObject({
+      fakeMarketplaceUrl: undefined,
+    });
+  });
+
   it('reports every invalid key at once', () => {
     expect(
       captureConfigError({

@@ -15,6 +15,9 @@
  *
  * Like eBay's `AddFixedPriceItem`, create is not idempotent by itself: sending it twice without
  * the same `Idempotency-Key` creates two listings, which is what the chaos tests look for.
+ *
+ * Every listing has a `revision` that starts at 1 and grows by one with every applied change; a
+ * stale read serves the older revision along with the older state.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -33,6 +36,7 @@ export interface FakeListing {
   priceCents: number;
   currency: CurrencyCode;
   url: string;
+  revision: number;
 }
 
 export type FakeAction = 'create' | 'update' | 'end' | 'relist' | 'mark_sold' | 'read';
@@ -115,6 +119,7 @@ export class FakeMarketplace {
   readonly #inFlight = new Map<string, number>();
   readonly #timers = new Set<NodeJS.Timeout>();
   #chaos: FaultPicker | undefined;
+  #relistIssuesNewId = false;
   #maxInFlightPerSku = 0;
   #latencyMs = 0;
   #nextId = 1;
@@ -176,6 +181,14 @@ export class FakeMarketplace {
     this.#chaos = picker;
   }
 
+  /**
+   * Relists under a new listing id, like eBay's `RelistItem`; the ended listing keeps its id.
+   * Off by default (relisting keeps the id).
+   */
+  setRelistIssuesNewId(enabled: boolean): void {
+    this.#relistIssuesNewId = enabled;
+  }
+
   /** Delays every answer, so concurrent requests overlap. */
   setLatency(ms: number): void {
     this.#latencyMs = ms;
@@ -189,7 +202,10 @@ export class FakeMarketplace {
   }
 
   /** Adds a listing directly, as if it had been created on the marketplace earlier. */
-  seed(marketplace: Marketplace, listing: Omit<FakeListing, 'id' | 'url'>): FakeListing {
+  seed(
+    marketplace: Marketplace,
+    listing: Omit<FakeListing, 'id' | 'url' | 'revision'>,
+  ): FakeListing {
     const created = this.#create(marketplace, listing, null);
     created.previous = created.current;
     return { ...created.current };
@@ -402,12 +418,22 @@ export class FakeMarketplace {
         }
         this.#change(stored, { status: 'ended' });
         return { status: 200, body: { listing: stored.current } };
-      case 'relist':
+      case 'relist': {
         if (stored.current.status !== 'ended') {
           throw new HttpError(409, 'not_ended', 'Only ended listings can be relisted');
         }
+        if (this.#relistIssuesNewId) {
+          const { sku, title, description, priceCents, currency } = stored.current;
+          const relisted = this.#create(
+            marketplace,
+            { sku, status: 'active', title, description, priceCents, currency },
+            null,
+          );
+          return { status: 200, body: { listing: relisted.current } };
+        }
         this.#change(stored, { status: 'active' });
         return { status: 200, body: { listing: stored.current } };
+      }
       case 'mark_sold':
         if (stored.current.status === 'sold') {
           throw new HttpError(409, 'already_sold', 'The listing is already sold');
@@ -419,12 +445,12 @@ export class FakeMarketplace {
 
   #create(
     marketplace: Marketplace,
-    fields: Omit<FakeListing, 'id' | 'url'>,
+    fields: Omit<FakeListing, 'id' | 'url' | 'revision'>,
     idempotencyKey: string | null,
   ): StoredListing {
     const id = `${marketplace.toUpperCase()}-${String(this.#nextId++).padStart(6, '0')}`;
     const stored: StoredListing = {
-      current: { ...fields, id, url: `${this.#url}/${marketplace}/listings/${id}` },
+      current: { ...fields, id, url: `${this.#url}/${marketplace}/listings/${id}`, revision: 1 },
       previous: null,
       idempotencyKey,
     };
@@ -436,7 +462,7 @@ export class FakeMarketplace {
 
   #change(stored: StoredListing, changes: Partial<FakeListing>): void {
     stored.previous = { ...stored.current };
-    stored.current = { ...stored.current, ...changes };
+    stored.current = { ...stored.current, ...changes, revision: stored.current.revision + 1 };
   }
 
   #all(marketplace: Marketplace): StoredListing[] {
@@ -514,7 +540,9 @@ function resolveRoute(
   return undefined;
 }
 
-function validateCreate(body: Record<string, unknown>): Omit<FakeListing, 'id' | 'url'> {
+function validateCreate(
+  body: Record<string, unknown>,
+): Omit<FakeListing, 'id' | 'url' | 'revision'> {
   const { sku, title, description = '', priceCents, currency = 'USD', status = 'active' } = body;
   if (typeof sku !== 'string' || sku === '') {
     throw new HttpError(400, 'validation_failed', 'sku is required');

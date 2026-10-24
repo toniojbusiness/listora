@@ -15,7 +15,12 @@
  *   a read-back, never by a blind resend;
  * - an operation that was sent before is read back first on every later attempt, and succeeds
  *   without sending again if the change already took effect;
- * - a step found `running` was interrupted, so its result is read back as if it were unknown.
+ * - a step found `running` was interrupted, so its result is read back as if it were unknown;
+ * - a read-back decides only when it is current: one older than a revision already seen of the
+ *   listing is stale and is followed by another read (with no freshness marker, a match must
+ *   repeat in a later read);
+ * - a listing id a send returned (a relist can issue a new one) is kept on the operation, and
+ *   its later read-backs read that id.
  */
 import type { Selectable } from 'kysely';
 import { sql } from 'kysely';
@@ -42,7 +47,13 @@ import {
 import { assertNever, type Logger } from '@listora/shared';
 
 import { validateDesiredState } from './desired.ts';
-import { confirmByReadBack, remoteSnapshot, type SuccessProof } from './evidence.ts';
+import {
+  confirmByReadBack,
+  remoteSnapshot,
+  type Freshness,
+  type ReadBackResult,
+  type SuccessProof,
+} from './evidence.ts';
 import type { OperationJobPayload } from './jobs.ts';
 import { scheduleOperationJob } from './jobs.ts';
 import { createdBefore } from './ordering.ts';
@@ -53,6 +64,7 @@ import {
   transitionOperation,
   type OperationError,
   type OperationRow,
+  type TargetLearned,
 } from './transitions.ts';
 
 export interface StepDependencies {
@@ -77,9 +89,16 @@ interface StepContext {
   connection: ConnectionRef | null;
   desired: DesiredListingState;
   canReadBack: boolean;
+  /** How a read-back shows it is current (the adapter's `readFreshness`). */
+  freshness: 'revision' | 'none';
+  /** The marketplace listing the operation targets: a listing id it learned, else the listing's. */
+  ref: ListingRef;
   /** The marketplace's display name, for messages. */
   name: string;
 }
+
+/** The newest revision seen per marketplace listing id: stored ones, then this step's. */
+type SeenRevisions = Map<string, number>;
 
 type Step =
   /** Send the operation (after reading the listing back first, if it was sent before). */
@@ -114,11 +133,12 @@ export async function runOperationStep(
 ): Promise<void> {
   const step = await claimStep(deps, payload);
   if (step === null) return;
+  const seen = storedRevisions(step.ctx);
   const result =
     step.type === 'send'
-      ? await performSend(deps, step, signal)
-      : await performCheck(deps, step, signal);
-  await recordResult(deps, step, result);
+      ? await performSend(deps, step, seen, signal)
+      : await performCheck(deps, step, seen, signal);
+  await recordResult(deps, step, result, seen);
 }
 
 // Claim -----------------------------------------------------------------------------------
@@ -195,8 +215,22 @@ async function claimStep(
       return null;
     }
     const connection = await loadConnection(trx, listing);
-    const canReadBack = adapter.capabilities(connection ?? undefined).verifyRead === 'api';
-    const base = { listing, adapter, connection, desired, canReadBack, name };
+    const capabilities = adapter.capabilities(connection ?? undefined);
+    const canReadBack = capabilities.verifyRead === 'api';
+    const base = {
+      listing,
+      adapter,
+      connection,
+      desired,
+      canReadBack,
+      freshness: capabilities.readFreshness,
+      ref: {
+        listingId: listing.id,
+        externalListingId: op.external_listing_id ?? listing.external_listing_id,
+        externalSku: listing.external_sku,
+      },
+      name,
+    };
     const max = maxAttempts(deps.policy);
 
     if (op.status === 'running') {
@@ -332,25 +366,30 @@ async function wasSentBefore(trx: DbTransaction, op: OperationRow): Promise<bool
 async function performSend(
   deps: StepDependencies,
   step: Extract<Step, { type: 'send' }>,
+  seen: SeenRevisions,
   signal: AbortSignal,
 ): Promise<StepResult> {
   const { ctx } = step;
-  const ref = listingRef(ctx.listing);
 
   if (step.precheck) {
-    const read = await readOnce(deps, ctx, ref, signal);
+    const read = await readOnce(deps, ctx, ctx.ref, signal);
     if (!read.ok) {
       return {
         resolution: { type: 'verify', error: cannotCheck(ctx.name), unknownResult: false },
         detail: { step: 'send', precheck: { error: read.error } },
       };
     }
-    const comparison = confirmByReadBack(ctx.desired, read.remote);
+    const comparison = compareReadBack(ctx, read.remote, seen, false);
     if (comparison.matches && read.remote.found) {
       return {
         resolution: { type: 'succeeded', proof: comparison.proof, remote: read.remote },
         detail: { step: 'send', precheck: { matches: true }, sent: false },
       };
+    }
+    // A stale or unrepeated read shows nothing for certain, so read again rather than send.
+    const undecided = undecidedRead(ctx, comparison, false);
+    if (undecided !== undefined) {
+      return { resolution: undecided, detail: { step: 'send', precheck: comparison } };
     }
   }
 
@@ -362,7 +401,7 @@ async function performSend(
     idempotencyKey: ctx.op.idempotency_key,
     attempt: step.attempt,
     desired: ctx.desired,
-    listing: ref,
+    listing: ctx.ref,
   };
   const outcome = await executeOnce(deps, ctx, request, signal);
   const detail: Record<string, unknown> = {
@@ -383,12 +422,12 @@ async function performSend(
           ...withId,
         };
       }
-      const read = await readOnce(
-        deps,
-        ctx,
-        { ...ref, externalListingId: learned ?? ref.externalListingId },
-        signal,
-      );
+      const target = { ...ctx.ref, externalListingId: learned ?? ctx.ref.externalListingId };
+      // The read-back must not be older than the write it verifies.
+      if (ctx.freshness === 'revision') {
+        noteRevision(seen, target.externalListingId, outcome.revision);
+      }
+      const read = await readOnce(deps, ctx, target, signal);
       if (!read.ok) {
         return {
           resolution: { type: 'verify', error: cannotCheck(ctx.name), unknownResult: true },
@@ -396,7 +435,7 @@ async function performSend(
           ...withId,
         };
       }
-      const comparison = confirmByReadBack(ctx.desired, read.remote);
+      const comparison = compareReadBack(ctx, read.remote, seen, false);
       if (comparison.matches && read.remote.found) {
         return {
           resolution: { type: 'succeeded', proof: comparison.proof, remote: read.remote },
@@ -405,7 +444,7 @@ async function performSend(
         };
       }
       return {
-        resolution: {
+        resolution: undecidedRead(ctx, comparison, true) ?? {
           type: 'verify',
           error: notShown(ctx.name, comparison.matches ? [] : comparison.fields),
           unknownResult: true,
@@ -458,25 +497,31 @@ async function performSend(
 async function performCheck(
   deps: StepDependencies,
   step: Extract<Step, { type: 'check' }>,
+  seen: SeenRevisions,
   signal: AbortSignal,
 ): Promise<StepResult> {
   const { ctx } = step;
-  const read = await readOnce(deps, ctx, listingRef(ctx.listing), signal);
+  const read = await readOnce(deps, ctx, ctx.ref, signal);
   if (!read.ok) {
     return {
       resolution: { type: 'verify', error: cannotCheck(ctx.name), unknownResult: false },
       detail: { step: 'check', readBack: { error: read.error } },
     };
   }
-  const comparison = confirmByReadBack(ctx.desired, read.remote);
+  // The step before this one read a match and scheduled this read to repeat it.
+  const previousReadMatched =
+    ctx.op.status === 'verifying' && ctx.op.error_code === UNREPEATED_READ_CODE;
+  const comparison = compareReadBack(ctx, read.remote, seen, previousReadMatched);
   if (comparison.matches && read.remote.found) {
     return {
       resolution: { type: 'succeeded', proof: comparison.proof, remote: read.remote },
       detail: { step: 'check' },
     };
   }
-  const fields = comparison.matches ? [] : comparison.fields;
   const detail = { step: 'check', readBack: comparison.matches ? {} : comparison };
+  const undecided = undecidedRead(ctx, comparison, false);
+  if (undecided !== undefined) return { resolution: undecided, detail };
+  const fields = comparison.matches ? [] : comparison.fields;
   if (ctx.op.kind === 'verify') {
     return {
       resolution: {
@@ -491,6 +536,70 @@ async function performCheck(
   }
   // Read back and not applied: sending again is no longer blind.
   return { resolution: { type: 'retry', error: notShown(ctx.name, fields) }, detail };
+}
+
+/**
+ * Compares a read-back with the desired state under the adapter's freshness rule, and notes the
+ * read's revision as seen.
+ */
+function compareReadBack(
+  ctx: StepContext,
+  remote: RemoteListingState,
+  seen: SeenRevisions,
+  previousReadMatched: boolean,
+): ReadBackResult {
+  const freshness: Freshness =
+    ctx.freshness === 'revision'
+      ? {
+          kind: 'revision',
+          newestSeen: remote.found ? (seen.get(remote.externalListingId) ?? null) : null,
+        }
+      : { kind: 'repeat', previousReadMatched };
+  const comparison = confirmByReadBack(ctx.desired, remote, freshness);
+  if (ctx.freshness === 'revision' && remote.found) {
+    noteRevision(seen, remote.externalListingId, remote.revision);
+  }
+  return comparison;
+}
+
+/** A read that decides nothing (stale, or a match still to repeat): read again later. */
+function undecidedRead(
+  ctx: StepContext,
+  comparison: ReadBackResult,
+  unknownResult: boolean,
+): Extract<Resolution, { type: 'verify' }> | undefined {
+  if (comparison.matches) return undefined;
+  switch (comparison.reason) {
+    case 'stale':
+      return { type: 'verify', error: notCurrent(ctx.name), unknownResult };
+    case 'unrepeated':
+      return { type: 'verify', error: confirmingAgain(ctx.name), unknownResult };
+    case 'not_found':
+    case 'mismatch':
+    case 'nothing_desired':
+      return undefined;
+    default:
+      return assertNever(comparison.reason, 'read-back reason');
+  }
+}
+
+/** The revisions stored for the listing and for the operation's target, when they are used. */
+function storedRevisions(ctx: StepContext): SeenRevisions {
+  const seen: SeenRevisions = new Map();
+  if (ctx.freshness !== 'revision') return seen;
+  noteRevision(seen, ctx.listing.external_listing_id, ctx.listing.remote_revision);
+  noteRevision(seen, ctx.ref.externalListingId, ctx.op.remote_revision);
+  return seen;
+}
+
+function noteRevision(
+  seen: SeenRevisions,
+  externalListingId: string | null,
+  revision: number | null | undefined,
+): void {
+  if (externalListingId === null || revision === null || revision === undefined) return;
+  const known = seen.get(externalListingId);
+  if (known === undefined || revision > known) seen.set(externalListingId, revision);
 }
 
 type ReadResult = { ok: true; remote: RemoteListingState } | { ok: false; error: string };
@@ -572,7 +681,12 @@ async function withDeadline<T>(
 
 // Record ----------------------------------------------------------------------------------
 
-async function recordResult(deps: StepDependencies, step: Step, result: StepResult): Promise<void> {
+async function recordResult(
+  deps: StepDependencies,
+  step: Step,
+  result: StepResult,
+  seen: SeenRevisions,
+): Promise<void> {
   const { ctx } = step;
   const log = deps.logger.child({ accountId: ctx.op.account_id, operationId: ctx.op.id });
   await deps.db.transaction().execute(async (trx) => {
@@ -591,12 +705,25 @@ async function recordResult(deps: StepDependencies, step: Step, result: StepResu
       return;
     }
 
-    if (result.externalListingId !== undefined && ctx.listing.external_listing_id === null) {
+    // What the step learned about the marketplace listing it targets, for the operation's
+    // later steps: a listing id the send returned, and the newest revision seen of it.
+    const targetId = result.externalListingId ?? ctx.ref.externalListingId;
+    const targetRevision = targetId === null ? undefined : seen.get(targetId);
+    const learned: TargetLearned = {
+      ...(result.externalListingId !== undefined &&
+      result.externalListingId !== ctx.ref.externalListingId
+        ? { externalListingId: result.externalListingId }
+        : {}),
+      ...(targetRevision === undefined ? {} : { revision: targetRevision }),
+    };
+
+    let listingExternalId = ctx.listing.external_listing_id;
+    if (result.externalListingId !== undefined && listingExternalId === null) {
       if (await externalIdTaken(trx, ctx.listing, result.externalListingId)) {
         await transitionOperation(
           trx,
           op,
-          { to: 'failed', attempts: step.attempt, error: linkedElsewhere(ctx.name) },
+          { to: 'failed', attempts: step.attempt, error: linkedElsewhere(ctx.name), learned },
           result.detail,
         );
         return;
@@ -607,9 +734,22 @@ async function recordResult(deps: StepDependencies, step: Step, result: StepResu
         .where('account_id', '=', op.account_id)
         .where('id', '=', op.listing_id)
         .execute();
+      listingExternalId = result.externalListingId;
+    }
+    // The newest revision seen of the listing's marketplace listing, kept for every later read.
+    const listingRevision = listingExternalId === null ? undefined : seen.get(listingExternalId);
+    if (listingRevision !== undefined) {
+      await trx
+        .updateTable('marketplace_listing')
+        .set({
+          remote_revision: sql<number>`greatest(remote_revision, ${listingRevision}::bigint)`,
+        })
+        .where('account_id', '=', op.account_id)
+        .where('id', '=', op.listing_id)
+        .execute();
     }
 
-    const to = await applyResolution(deps, trx, step, op, result);
+    const to = await applyResolution(deps, trx, step, op, result, learned);
     log.info(
       { kind: op.kind, from: op.status, to, attempt: step.attempt },
       'operation step recorded',
@@ -623,6 +763,7 @@ async function applyResolution(
   step: Step,
   op: OperationRow,
   result: StepResult,
+  learned: TargetLearned,
 ): Promise<OperationStatus> {
   const { ctx } = step;
   const { resolution, detail } = result;
@@ -639,7 +780,7 @@ async function applyResolution(
         await transitionOperation(
           trx,
           op,
-          { to: 'failed', attempts, error: linkedElsewhere(ctx.name) },
+          { to: 'failed', attempts, error: linkedElsewhere(ctx.name), learned },
           detail,
         );
         return 'failed';
@@ -647,7 +788,7 @@ async function applyResolution(
       await transitionOperation(
         trx,
         op,
-        { to: 'succeeded', attempts, proof: resolution.proof },
+        { to: 'succeeded', attempts, proof: resolution.proof, learned },
         detail,
       );
       await applyVerifiedListing(trx, ctx.listing, remote);
@@ -658,7 +799,7 @@ async function applyResolution(
         await transitionOperation(
           trx,
           op,
-          { to: 'failed', attempts, error: resolution.error },
+          { to: 'failed', attempts, error: resolution.error, learned },
           detail,
         );
         return 'failed';
@@ -667,7 +808,7 @@ async function applyResolution(
       await transitionOperation(
         trx,
         op,
-        { to: 'retrying', attempts, delayMs, error: resolution.error },
+        { to: 'retrying', attempts, delayMs, error: resolution.error, learned },
         detail,
       );
       return 'retrying';
@@ -677,7 +818,7 @@ async function applyResolution(
         await transitionOperation(
           trx,
           op,
-          { to: 'failed', attempts, error: cannotConfirm(ctx.name) },
+          { to: 'failed', attempts, error: cannotConfirm(ctx.name), learned },
           { ...detail, lastError: resolution.error },
         );
         return 'failed';
@@ -686,7 +827,7 @@ async function applyResolution(
       await transitionOperation(
         trx,
         op,
-        { to: 'verifying', attempts, delayMs, error: resolution.error },
+        { to: 'verifying', attempts, delayMs, error: resolution.error, learned },
         detail,
       );
       return 'verifying';
@@ -695,12 +836,12 @@ async function applyResolution(
       await transitionOperation(
         trx,
         op,
-        { to: 'failed', attempts, error: resolution.error },
+        { to: 'failed', attempts, error: resolution.error, learned },
         detail,
       );
       return 'failed';
     case 'user': {
-      await transitionOperation(trx, op, { to: 'needs_user_action' }, detail);
+      await transitionOperation(trx, op, { to: 'needs_user_action', learned }, detail);
       await trx
         .insertInto('user_task')
         .values({
@@ -722,7 +863,10 @@ async function applyResolution(
   }
 }
 
-/** Records what the marketplace confirmed on the listing row. */
+/**
+ * Records what the marketplace confirmed on the listing row. A marketplace listing id that is
+ * new to the row (a relist can issue one) starts its own revisions.
+ */
 async function applyVerifiedListing(
   trx: DbTransaction,
   listing: ListingRow,
@@ -736,6 +880,10 @@ async function applyVerifiedListing(
       external_listing_id: remote.externalListingId,
       external_url: remote.externalUrl,
       remote_snapshot: jsonb(remoteSnapshot(remote)),
+      remote_revision: sql<number | null>`
+        case when external_listing_id = ${remote.externalListingId}
+          then greatest(remote_revision, ${remote.revision}::bigint)
+          else ${remote.revision}::bigint end`,
       last_verified_at: sql<Date>`now()`,
       ...(active
         ? { listed_at: sql<Date>`coalesce(listed_at, now())`, ended_at: null }
@@ -764,14 +912,6 @@ async function externalIdTaken(
 }
 
 // Helpers ---------------------------------------------------------------------------------
-
-function listingRef(listing: ListingRow): ListingRef {
-  return {
-    listingId: listing.id,
-    externalListingId: listing.external_listing_id,
-    externalSku: listing.external_sku,
-  };
-}
 
 function outcomeSummary(outcome: Outcome): Record<string, unknown> {
   switch (outcome.type) {
@@ -806,6 +946,23 @@ function notShown(name: string, fields: readonly (keyof DesiredListingState)[]):
         code: 'read_back_mismatch',
         message: `${name} doesn't show the change${describeFields(fields)}.`,
       };
+}
+
+/** Set on a `verifying` operation whose last read matched without a freshness marker. */
+const UNREPEATED_READ_CODE = 'confirming';
+
+function confirmingAgain(name: string): OperationError {
+  return {
+    code: UNREPEATED_READ_CODE,
+    message: `Listora is checking the listing on ${name} once more to be sure.`,
+  };
+}
+
+function notCurrent(name: string): OperationError {
+  return {
+    code: 'stale_read',
+    message: `${name} showed an older version of the listing. Listora is checking again.`,
+  };
 }
 
 function cannotCheck(name: string): OperationError {

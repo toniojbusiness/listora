@@ -58,6 +58,7 @@ describe('FakeMarketplaceAdapter against the fake marketplace', () => {
     const outcome = await adapter.execute(create(ref), ctx());
     expect(outcome).toMatchObject({
       type: 'confirmed',
+      revision: 1,
       excerpt: { request: { method: 'POST', path: '/listings' }, response: { status: 201 } },
     });
     const externalListingId = outcome.type === 'confirmed' ? outcome.externalListingId : undefined;
@@ -73,6 +74,7 @@ describe('FakeMarketplaceAdapter against the fake marketplace', () => {
       description: '',
       priceCents: 4500,
       currency: 'USD',
+      revision: 1,
     });
     const byId = await adapter.readListing(
       { ...ref, externalListingId: bySku.found ? bySku.externalListingId : null },
@@ -213,10 +215,53 @@ describe('FakeMarketplaceAdapter against the fake marketplace', () => {
 
   it('serves stale reads when told to, like an eventually consistent API', async () => {
     const ref = await created();
-    await adapter.execute({ ...create(ref), kind: 'price', desired: { priceCents: 2500 } }, ctx());
+    expect(
+      await adapter.execute(
+        { ...create(ref), kind: 'price', desired: { priceCents: 2500 } },
+        ctx(),
+      ),
+    ).toMatchObject({ type: 'confirmed', revision: 2 });
     fake.inject({ action: 'read', fault: { type: 'stale_read' } });
-    expect(await adapter.readListing(ref, ctx())).toMatchObject({ priceCents: 4500 });
-    expect(await adapter.readListing(ref, ctx())).toMatchObject({ priceCents: 2500 });
+    // The stale read carries the older revision, so the engine can tell it is stale.
+    expect(await adapter.readListing(ref, ctx())).toMatchObject({ priceCents: 4500, revision: 1 });
+    expect(await adapter.readListing(ref, ctx())).toMatchObject({ priceCents: 2500, revision: 2 });
+  });
+
+  it('hides revisions when it plays a marketplace without a freshness marker', async () => {
+    const plain = new FakeMarketplaceAdapter({
+      marketplace: 'ebay',
+      baseUrl: fake.url,
+      readFreshness: 'none',
+    });
+    expect(plain.capabilities().readFreshness).toBe('none');
+    const ref = newRef();
+    const outcome = await plain.execute(create(ref), ctx());
+    expect(outcome).toMatchObject({ type: 'confirmed' });
+    expect(outcome).not.toHaveProperty('revision');
+    expect(await plain.readListing(ref, ctx())).toMatchObject({ found: true, revision: null });
+  });
+
+  it('relists under a new id when the marketplace issues one', async () => {
+    const ref = await created();
+    const end = { ...create(ref), kind: 'end' as const, desired: { status: 'ended' as const } };
+    await adapter.execute(end, ctx());
+    fake.setRelistIssuesNewId(true);
+    try {
+      const relisted = await adapter.execute(
+        { ...end, kind: 'relist', desired: { status: 'active' } },
+        ctx(),
+      );
+      expect(relisted).toMatchObject({ type: 'confirmed', revision: 1 });
+      const newId = relisted.type === 'confirmed' ? relisted.externalListingId : undefined;
+      expect(newId).toMatch(/^EBAY-/);
+      expect(newId).not.toBe(ref.externalListingId);
+      expect(await adapter.readListing(ref, ctx())).toMatchObject({ status: 'ended' });
+      expect(
+        await adapter.readListing({ ...ref, externalListingId: newId ?? null }, ctx()),
+      ).toMatchObject({ status: 'active', externalListingId: newId, revision: 1 });
+    } finally {
+      fake.setRelistIssuesNewId(false);
+    }
   });
 
   it('turns every write into a user task in assisted mode', async () => {

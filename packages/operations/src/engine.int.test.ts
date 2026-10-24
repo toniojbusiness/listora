@@ -48,6 +48,7 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     worker = undefined;
     harness.fake.clearFaults();
     harness.fake.setLatency(0);
+    harness.fake.setRelistIssuesNewId(false);
     expect(harness.fatalErrors).toEqual([]);
   });
 
@@ -219,19 +220,98 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
 
     const done = await harness.waitForStatus(op.id, SETTLED);
     expect(done).toMatchObject({ status: 'succeeded', success_evidence: 'read_back' });
+    // Each stale read (older than the revision the update returned) is followed by another read.
     expect(await transitions(op.id)).toEqual([
       'new>queued',
       'queued>running',
       'running>verifying',
-      'verifying>retrying',
-      'retrying>running',
-      'running>succeeded',
+      'verifying>verifying',
+      'verifying>succeeded',
     ]);
     const events = await harness.events(op.id);
-    expect(events[2]).toMatchObject({ error_code: 'read_back_mismatch' });
-    expect(events.at(-1)?.detail).toMatchObject({ remote: { priceCents: 3900 } });
-    // The change was sent once; the second attempt found it applied and did not resend.
+    expect(events.slice(2, 4)).toEqual([
+      expect.objectContaining({ error_code: 'stale_read' }),
+      expect.objectContaining({ error_code: 'stale_read' }),
+    ]);
+    expect(events.at(-1)?.detail).toMatchObject({ remote: { priceCents: 3900, revision: 2 } });
+    // The change was sent once.
     expect(requests(listing, 'update')).toHaveLength(1);
+    expect(await harness.listing(listing.id)).toMatchObject({ remote_revision: 2 });
+  });
+
+  // Regression: a stale read of the listing as it was after the first end used to confirm the
+  // second end while the listing was live again on the marketplace.
+  it.each([
+    ['ebay', 'stale_read'],
+    ['depop', 'confirming'],
+  ] as const)(
+    'never confirms an end from a stale read of an earlier end (%s)',
+    async (marketplace, undecidedCode) => {
+      const listing = await harness.createListing(marketplace);
+      const lifecycle = [
+        ['create', { status: 'active', title: 'Rain jacket', priceCents: 3000 }],
+        ['end', { status: 'ended' }],
+        ['relist', { status: 'active' }],
+      ] as const;
+      for (const [kind, desired] of lifecycle) {
+        const op = await harness.enqueue(listing, kind, desired);
+        expect(await harness.waitForStatus(op.id, SETTLED)).toMatchObject({ status: 'succeeded' });
+      }
+      // The next end is rate-limited, so its second attempt reads the listing back first, and
+      // that read is stale: it shows the listing ended, as it was before the relist.
+      harness.fake.inject({ action: 'end', sku: listing.id, fault: { type: 'rate_limited' } });
+      harness.fake.inject({ action: 'read', sku: listing.id, fault: { type: 'stale_read' } });
+      const end = await harness.enqueue(listing, 'end', { status: 'ended' });
+
+      expect(await harness.waitForStatus(end.id, SETTLED)).toMatchObject({
+        status: 'succeeded',
+        success_evidence: 'read_back',
+      });
+      // The success is real: the listing is ended on the marketplace, by an end sent after the
+      // stale read.
+      expect(harness.fake.listings(marketplace, listing.id)).toEqual([
+        expect.objectContaining({ status: 'ended' }),
+      ]);
+      const events = await harness.events(end.id);
+      expect(events.map((event) => event.error_code)).toContain(undecidedCode);
+      expect(events.at(-1)?.detail).not.toHaveProperty('sent');
+      const ends = harness.fake.requests.filter(
+        (request) => request.sku === listing.id && request.action === 'end',
+      );
+      expect(ends.map((request) => request.status)).toEqual([200, 429, 200]);
+    },
+  );
+
+  it('reads back the new listing id a relist returned, and never relists twice', async () => {
+    const listing = await liveListing(1000);
+    const end = await harness.enqueue(listing, 'end', { status: 'ended' });
+    await harness.waitForStatus(end.id, ['succeeded']);
+    harness.fake.setRelistIssuesNewId(true);
+    // The read-back right after the relist fails, so a later step has to find the new listing.
+    harness.fake.inject({ action: 'read', sku: listing.id, fault: { type: 'server_error' } });
+    const relist = await harness.enqueue(listing, 'relist', { status: 'active' });
+
+    const done = await harness.waitForStatus(relist.id, SETTLED);
+    expect(done).toMatchObject({ status: 'succeeded', success_evidence: 'read_back' });
+    expect(await transitions(relist.id)).toEqual([
+      'new>queued',
+      'queued>running',
+      'running>verifying',
+      'verifying>succeeded',
+    ]);
+    const live = harness.fake
+      .listings('ebay', listing.id)
+      .filter((remote) => remote.status === 'active');
+    expect(live).toHaveLength(1);
+    expect(live[0]?.id).not.toBe(listing.external_listing_id);
+    expect(requests(listing, 'relist')).toHaveLength(1);
+    expect(await harness.operation(relist.id)).toMatchObject({ external_listing_id: live[0]?.id });
+    // Verified, so the listing now points at the new marketplace listing and its revisions.
+    expect(await harness.listing(listing.id)).toMatchObject({
+      status: 'active',
+      external_listing_id: live[0]?.id,
+      remote_revision: 1,
+    });
   });
 
   it('stops cleanly mid-operation and leaves the step to be verified, not guessed', async () => {
