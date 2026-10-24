@@ -1,22 +1,22 @@
 import { randomUUID } from 'node:crypto';
 
+import { subjectSha256 } from '@listora/accounts';
+import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestApi, type TestApi } from '../test-support.ts';
 import { CognitoAuthDriver } from './cognito-driver.ts';
-import { FakeCognitoPool, FakeCognitoUserAdmin, TEST_POOL } from './cognito-test-support.ts';
+import { FakeCognitoPool, nowSeconds, TEST_POOL } from './cognito-test-support.ts';
 
 /** The API with `AUTH_DRIVER=cognito`, against a fake user pool and the real database. */
 describe('Cognito sign-in through the API (real Postgres)', () => {
   let pool: FakeCognitoPool;
-  let userAdmin: FakeCognitoUserAdmin;
   let api: TestApi;
 
   beforeAll(async () => {
     pool = await FakeCognitoPool.start();
-    userAdmin = new FakeCognitoUserAdmin();
     api = await createTestApi('cognito', {
-      auth: new CognitoAuthDriver({ config: TEST_POOL, userAdmin, jwksUrl: pool.jwksUrl }),
+      auth: new CognitoAuthDriver({ config: TEST_POOL, jwksUrl: pool.jwksUrl }),
     });
   });
 
@@ -93,7 +93,7 @@ describe('Cognito sign-in through the API (real Postgres)', () => {
   it('answers a retryable 503, never a pass, while the signing keys cannot be fetched', async () => {
     // A new driver has no cached keys, so it must fetch them.
     const isolated = await createTestApi('cognito_jwks', {
-      auth: new CognitoAuthDriver({ config: TEST_POOL, userAdmin, jwksUrl: pool.jwksUrl }),
+      auth: new CognitoAuthDriver({ config: TEST_POOL, jwksUrl: pool.jwksUrl }),
     });
     pool.jwksStatus = 503;
     try {
@@ -107,7 +107,7 @@ describe('Cognito sign-in through the API (real Postgres)', () => {
     }
   });
 
-  it('deletes the Cognito user with the account, and ends every earlier token', async () => {
+  it('deletes the Cognito user after the account, and ends every earlier token', async () => {
     const sub = randomUUID();
     const idToken = await pool.idToken(sub, 'ada.lovelace@example.com');
     const accessToken = await pool.accessToken(sub);
@@ -115,11 +115,26 @@ describe('Cognito sign-in through the API (real Postgres)', () => {
 
     const deleted = await api.call('deleteAccount', { token: accessToken });
     expect(deleted.status).toBe(200);
-    expect(userAdmin.deleted).toContain(`signinwithapple_${sub}`);
     expect(await userOf(sub)).toEqual([]);
-    for (const token of [idToken, accessToken]) {
+    // The worker deletes the Cognito user. Until then Cognito can still issue tokens, for
+    // example on a refresh, and none of them may provision a new account. (Moving the
+    // deletion 10 seconds back lets the test issue such a token after it.)
+    expect(api.accountDeletions.cognito.deleted).toEqual([]);
+    await sql`
+      update deleted_identity set deleted_at = deleted_at - interval '10 seconds'
+      where auth_subject_sha256 = ${subjectSha256(sub)}
+    `.execute(api.db);
+    const refreshed = await pool.accessToken(sub, {}, { issuedAt: nowSeconds() - 5 });
+    for (const token of [idToken, accessToken, refreshed]) {
       expect((await api.call('listItems', { token })).status).toBe(401);
     }
+
+    expect(await api.accountDeletions.runAll()).toEqual(['completed']);
+    expect(api.accountDeletions.cognito.deleted).toEqual([`signinwithapple_${sub}`]);
+    for (const token of [idToken, accessToken, refreshed]) {
+      expect((await api.call('listItems', { token })).status).toBe(401);
+    }
+    expect(await userOf(sub)).toEqual([]);
 
     // Signing in again creates a new Cognito user (a new `sub`) and a new, empty account.
     const again = await pool.idToken(randomUUID(), 'ada.lovelace@example.com');
@@ -128,20 +143,32 @@ describe('Cognito sign-in through the API (real Postgres)', () => {
     expect(items.body.data).toEqual([]);
   });
 
-  it('keeps the account when Cognito cannot delete the user', async () => {
+  it('keeps trying to delete the Cognito user while Cognito fails', async () => {
     const sub = randomUUID();
     const token = await pool.idToken(sub, 'carl.cognito@example.com');
     await api.call('createItem', { token, body: {} });
-    userAdmin.failWith = new Error('AccessDeniedException');
+    const { cognito } = api.accountDeletions;
+    cognito.failWith = new Error('AccessDeniedException');
     try {
-      const response = await api.call('deleteAccount', { token });
-      expect(response.status).toBe(503);
-      expect(response.error.retryable).toBe(true);
-      expect(await userOf(sub)).toHaveLength(1);
+      // The deletion does not depend on Cognito: the data is gone at once.
+      expect((await api.call('deleteAccount', { token })).status).toBe(200);
+      expect(await userOf(sub)).toEqual([]);
+      expect(await api.accountDeletions.runAll()).toEqual(['retrying']);
+      const [job] = await api.accountDeletions.jobs();
+      expect(job?.runAt.getTime()).toBeGreaterThan(Date.now() + 30_000);
+      const later = await pool.idToken(
+        sub,
+        'carl.cognito@example.com',
+        {},
+        { issuedAt: nowSeconds() + 2 },
+      );
+      expect((await api.call('listItems', { token: later })).status).toBe(401);
+      expect(await userOf(sub)).toEqual([]);
     } finally {
-      userAdmin.failWith = undefined;
+      cognito.failWith = undefined;
     }
-    expect((await api.call('deleteAccount', { token })).status).toBe(200);
-    expect(await userOf(sub)).toEqual([]);
+    expect(await api.accountDeletions.runAll()).toEqual(['completed']);
+    expect(cognito.deleted).toContain(`signinwithapple_${sub}`);
+    expect(await api.accountDeletions.jobs()).toEqual([]);
   });
 });

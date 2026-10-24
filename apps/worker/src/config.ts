@@ -1,3 +1,4 @@
+import { USER_POOL_ID_PATTERN, userPoolRegion } from '@listora/accounts';
 import { AiConfigError, loadAiConfig, type AiConfig } from '@listora/ai';
 import { AnalysisConfigError, loadAnalysisConfig, type AnalysisConfig } from '@listora/analysis';
 import { isLogLevel, type LogLevel } from '@listora/shared';
@@ -18,6 +19,11 @@ export interface WorkerConfig {
   ai: AiConfig;
   /** AI_AUTO_ESCALATE, read by @listora/analysis. */
   analysis: AnalysisConfig;
+  /**
+   * The Cognito user pool whose users account deletion deletes (COGNITO_USER_POOL_ID; its
+   * region comes from the id). Undefined without one: Cognito account deletions then wait.
+   */
+  cognitoUserPool: { region: string; userPoolId: string } | undefined;
 }
 
 export class ConfigError extends Error {
@@ -59,6 +65,12 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     issues.push('FAKE_MARKETPLACE_URL must be an http:// or https:// URL');
   }
 
+  const rawUserPoolId = env['COGNITO_USER_POOL_ID'];
+  const userPoolId = rawUserPoolId === '' ? undefined : rawUserPoolId;
+  if (userPoolId !== undefined && !USER_POOL_ID_PATTERN.test(userPoolId)) {
+    issues.push('COGNITO_USER_POOL_ID must be a user pool id such as us-east-1_AbC123xyZ');
+  }
+
   const storage = collect(issues, StorageConfigError, () => loadStorageConfig(env));
   const ai = collect(issues, AiConfigError, () => loadAiConfig(env));
   const analysis = collect(issues, AnalysisConfigError, () => loadAnalysisConfig(env));
@@ -81,6 +93,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     storage,
     ai,
     analysis,
+    cognitoUserPool:
+      userPoolId === undefined ? undefined : { region: userPoolRegion(userPoolId), userPoolId },
   };
 }
 

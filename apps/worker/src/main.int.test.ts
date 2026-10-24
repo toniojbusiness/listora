@@ -7,6 +7,7 @@ import { sql } from 'kysely';
 import sharp from 'sharp';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { startAccountDeletion } from '@listora/accounts';
 import {
   encodeAnalysisAnswer,
   graphileAnalysisJobs,
@@ -343,6 +344,28 @@ describe('worker process (real Postgres)', () => {
       },
     ]);
     expect(fake.requests.filter((request) => request.sku === listing.id)).toEqual([]);
+  });
+
+  it('finishes an account deletion the API committed', async () => {
+    await startWorker();
+    const { deletionId } = await database.db.transaction().execute((trx) =>
+      startAccountDeletion(trx, {
+        identity: { provider: 'dev', subject: 'wendy.worker@example.com' },
+        grants: [],
+      }),
+    );
+
+    const deadline = Date.now() + 20_000;
+    for (;;) {
+      const left = await database.db
+        .selectFrom('account_deletion')
+        .select('id')
+        .where('id', '=', deletionId)
+        .executeTakeFirst();
+      if (!left) break;
+      if (Date.now() > deadline) throw new Error('the account deletion did not finish');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   });
 
   it('exits at once when it loses its liveness session', async () => {

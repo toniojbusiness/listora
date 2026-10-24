@@ -135,12 +135,6 @@ export class DevAuthDriver implements AuthDriver {
     }
   }
 
-  /** Dev users exist only as signed tokens; this forgets a pending code for their email. */
-  deleteUser(identity: Identity): Promise<void> {
-    this.#codes.delete(identity.subject);
-    return Promise.resolve();
-  }
-
   registerRoutes(app: FastifyInstance): void {
     registerDevAuthRoutes(app, this);
   }

@@ -1,7 +1,7 @@
 /**
  * Test-only stand-ins for a Cognito user pool (not part of the app): a JWKS endpoint on
- * 127.0.0.1 whose keys the test signs tokens with, rotates, or takes down, and a recording
- * user admin. Nothing here talks to AWS.
+ * 127.0.0.1 whose keys the test signs tokens with, rotates, or takes down. Nothing here talks
+ * to AWS.
  */
 import { randomUUID } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
@@ -11,7 +11,6 @@ import { exportJWK, generateKeyPair, SignJWT, type JWK, type JWTPayload } from '
 
 import type { CognitoConfig } from '../config.ts';
 import { cognitoIssuer } from './cognito-driver.ts';
-import type { CognitoUserAdmin } from './cognito-user-admin.ts';
 
 export const TEST_POOL: CognitoConfig = {
   region: 'us-east-1',
@@ -157,18 +156,6 @@ export class FakeCognitoPool {
         else resolve();
       });
     });
-  }
-}
-
-/** Records deleted usernames; `failWith` makes the next deletions throw. */
-export class FakeCognitoUserAdmin implements CognitoUserAdmin {
-  readonly deleted: string[] = [];
-  failWith: Error | undefined;
-
-  deleteUser(username: string): Promise<void> {
-    if (this.failWith) return Promise.reject(this.failWith);
-    this.deleted.push(username);
-    return Promise.resolve();
   }
 }
 

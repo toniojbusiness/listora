@@ -1,7 +1,8 @@
 # Sign-in and account deletion
 
 How people sign in to Listora and delete their account (plan task T-31, decision D10). The
-API side is in `apps/api/src/auth/` and `apps/api/src/account/`; the overview is in
+API side is in `apps/api/src/auth/` and `apps/api/src/account/`, and the account deletion job
+the worker runs is in `packages/accounts`; the overview is in
 [architecture.md](architecture.md#the-api-appsapi).
 
 ## Drivers
@@ -102,46 +103,71 @@ and G-Apple).
 
 **API configuration**: `AUTH_DRIVER=cognito` (`containerEnvironment` in `infra/src/containers.ts`
 still sets `dev` until the pool exists), `COGNITO_USER_POOL_ID`, and
-`COGNITO_CLIENT_IDS` (the app client's id; a later web client is added to the list). The ECS
-task role needs `cognito-idp:AdminDeleteUser` on the pool for account deletion. The API needs
-outbound HTTPS to `cognito-idp.<region>.amazonaws.com` for the JWKS and the admin API.
+`COGNITO_CLIENT_IDS` (the app client's id; a later web client is added to the list). The API
+needs outbound HTTPS to `cognito-idp.<region>.amazonaws.com` for the JWKS.
+
+**Worker configuration**: `COGNITO_USER_POOL_ID` too, for account deletion. The worker's ECS
+task role needs `cognito-idp:AdminDeleteUser` on the pool, and the worker needs outbound HTTPS to
+`cognito-idp.<region>.amazonaws.com`. Without the setting, Cognito deletions wait (and the
+worker logs an error on every try) until it is set.
 
 ## Account deletion
 
 App Store Review Guideline 5.1.1(v) requires in-app account deletion. The app calls
 `DELETE /v1/account` (`deleteAccount` in the contract) after asking the person to confirm. The
-API, in this order:
+deletion must complete without the app, so the API does everything that needs only the
+database at once, and leaves the rest to a job:
 
-1. Asks each marketplace with an API connection to revoke Listora's access, through the
-   `MarketplaceAccessRevoker` the marketplace adapters provide (eBay in T-16, Depop in T-24).
-   A confirmed revocation is recorded at once. The response lists every API connection with
-   `revoked: true` only when the marketplace confirmed it; for the others the app tells the
-   person to remove Listora in that marketplace's settings. Until an adapter can revoke, every
-   connection that holds tokens is reported as not revoked.
-2. Deletes the person from the identity provider (`AdminDeleteUser` for Cognito, a no-op for
-   dev), so they cannot sign in to the deleted account again. A user that is already gone
-   counts as deleted. If this fails, nothing in the database is deleted yet, and the answer
-   is a retryable `503`.
-3. In one transaction, deletes the account with all of its data (every tenant table
-   cascades from `account`) and the user, and records the identity in `deleted_identity`.
-4. After the commit, deletes the stored objects of the account's photos (derived images and
-   any upload not yet processed) and of uploads no photo used. A failed object deletion is
-   logged and does not fail the request, as for `deleteItem`: no row references the object
-   any more.
+1. **The API, in one transaction:** deletes the account with all of its data (every tenant
+   table cascades from `account`) and the user; records the identity in `deleted_identity`;
+   leaves a minimal tombstone in `account_deletion` (the identity's SHA-256, the provider's
+   username for it, and, in `account_deletion_grant`, the still-encrypted OAuth tokens of each
+   API connection the marketplace has not revoked yet); and enqueues the tombstone's
+   `account_deletion` job in Graphile Worker. Either all of it commits or none of it does, so
+   any error (a retryable `500` or `503` included) means nothing was deleted, and the app
+   retries with the same token. After the commit, the API deletes the stored objects of the
+   account's photos and uploads (a failure is logged, as for `deleteItem`: no row references
+   the object any more) and answers `200`.
+2. **The worker's job** (`completeAccountDeletion` in `packages/accounts/src/job.ts`), until
+   it is done:
+   - deletes the person at the identity provider (`AdminDeleteUser` for Cognito; dev users
+     exist only as signed tokens). A user that is already gone counts as deleted.
+   - asks each pending grant's marketplace to revoke Listora's access, through the
+     `MarketplaceAccessRevoker` the marketplace adapters provide (eBay in T-16, Depop in T-24).
+     A confirmed revocation deletes the grant's tokens at once. After 7 days the job gives up on
+     the rest: it deletes their tokens too and records them as `manual` (the log line says
+     which marketplaces the seller must revoke themselves). Until an adapter can revoke, every
+     grant ends this way.
+   - then deletes the tombstone. While anything is open, it runs again later (after 1 m, 5 m,
+     15 m, 1 h, 3 h, then every 6 h; revocations get a last try when the 7 days end).
 
-A token stays cryptographically valid until it expires, so the tenancy guard refuses a token
-whose identity was deleted at or after the token was issued (`401`), instead of provisioning a
-new account for it. A later sign-in works and gets a new, empty account (for Cognito it is a
-new user with a new `sub`). `deleted_identity` stores only a SHA-256 of the subject (the dev
-subject is an email address), and rows older than 48 hours are purged by later deletions,
-since every token issued before the deletion has expired by then.
+   Each step's result is committed before the next one, and each step is safe to repeat, so a
+   crash or a database failure between steps only means the next run (Graphile retries a job
+   that failed) repeats the step that was not recorded.
 
-If step 3 fails after step 2, the same token still verifies, so the app's retry finds the
-Cognito user already gone and finishes the deletion. A retry after a lost success response
-gets `401`, which means the account is gone.
+The response lists every API connection with `revoked: true` only when the marketplace had
+confirmed it before the deletion. For the others the app tells the person that Listora is
+asking the marketplace to revoke its access, and that removing Listora in that marketplace's
+settings makes sure.
+
+A token stays cryptographically valid until it expires, and until the job has deleted the
+Cognito user, Cognito can still issue new ones (on a refresh, or a new sign-in). The tenancy
+guard therefore refuses to provision a user (`401`) for a token of an identity whose deletion
+still waits for the identity provider, or whose deletion happened at or after the token was
+issued: when the job deletes the user, it moves `deleted_at` to that moment. The guard checks
+this inside the provisioning transaction, after taking the advisory lock every deletion of the
+identity takes, so a deletion that commits meanwhile cannot be missed. A later sign-in works
+and gets a new, empty account (for Cognito it is a new user with a new `sub`).
+`deleted_identity` and the tombstone store only a SHA-256 of the subject (the dev subject is an
+email address), and `deleted_identity` rows older than 48 hours are purged by later deletions,
+since every token issued before the provider deleted the user has expired by then.
+
+A retry after a lost success response gets `401`, which means the account is gone; so does a
+second deletion that raced the first.
 
 An owner can delete their account only while they are its only member (`403 forbidden`
-otherwise). A non-owner member's deletion removes only their user and membership.
+otherwise). A non-owner member's deletion removes only their user and membership (and the job
+deletes them at the identity provider).
 
 **Not covered yet (follow-up):**
 

@@ -2,7 +2,6 @@ import { createRemoteJWKSet, errors, jwtVerify, type JWTPayload, type JWTVerifyG
 
 import type { CognitoConfig } from '../config.ts';
 import { ApiError } from '../errors.ts';
-import type { CognitoUserAdmin } from './cognito-user-admin.ts';
 import type { AuthDriver, Identity } from './driver.ts';
 
 /** Cognito access and ID tokens live at most one day; anything older is refused outright. */
@@ -35,8 +34,6 @@ const INVALID_TOKEN_CODES: ReadonlySet<string> = new Set([
 
 export interface CognitoAuthOptions {
   config: CognitoConfig;
-  /** Deletes users at Cognito (account deletion). */
-  userAdmin: CognitoUserAdmin;
   /** Where the signing keys are fetched; defaults to the pool's published JWKS. Tests serve their own. */
   jwksUrl?: URL;
   /** How long fetched keys are used before they are fetched again (default 10 minutes). */
@@ -69,7 +66,6 @@ export class CognitoAuthDriver implements AuthDriver {
   readonly #issuer: string;
   readonly #clientIds: ReadonlySet<string>;
   readonly #keys: JWTVerifyGetKey;
-  readonly #userAdmin: CognitoUserAdmin;
   readonly #now: () => number;
 
   constructor(options: CognitoAuthOptions) {
@@ -86,7 +82,6 @@ export class CognitoAuthDriver implements AuthDriver {
           : { cooldownDuration: options.jwksCooldownMs }),
       },
     );
-    this.#userAdmin = options.userAdmin;
     this.#now = options.now ?? Date.now;
   }
 
@@ -113,13 +108,6 @@ export class CognitoAuthDriver implements AuthDriver {
       );
     }
     return this.#identity(payload);
-  }
-
-  async deleteUser(identity: Identity): Promise<void> {
-    if (identity.username === undefined) {
-      throw new Error('a Cognito identity without a username cannot be deleted');
-    }
-    await this.#userAdmin.deleteUser(identity.username);
   }
 
   /** The identity of a token whose signature, issuer, and lifetime already checked out. */

@@ -26,19 +26,26 @@ public protocol APIProtocol: Sendable {
     /// In-app account deletion (App Store Review Guideline 5.1.1(v)). Deletes the signed-in
     /// person and, when they own their account, the account with all of its data: items,
     /// photos, listing records, sales, and history. Live listings themselves stay on the
-    /// marketplaces. Before that, Listora asks each connected marketplace to revoke its access
-    /// and deletes the stored tokens, and it deletes the person from the sign-in provider, so
-    /// they cannot sign in to the deleted account again.
+    /// marketplaces.
     ///
-    /// The deletion is final, and the bearer token stops working at once (any other token
-    /// issued before the deletion too). Signing in again later creates a new, empty account.
-    /// A `503 service_unavailable` means nothing was deleted yet; retry with the same token.
-    /// A retry after a lost success response gets `401 unauthenticated`, which means the
-    /// account is gone.
+    /// A success means the deletion is committed and final: the data is gone, and the bearer
+    /// token stops working at once (any other token issued before the deletion too). Listora
+    /// then finishes on its own, whether or not the app is still running: it deletes the
+    /// person from the sign-in provider, so they cannot sign in to the deleted account again,
+    /// and asks each connected marketplace to revoke its access, retrying for up to 7 days.
+    /// Until the sign-in provider has deleted the person, signing in again is refused; after
+    /// that, it creates a new, empty account.
+    ///
+    /// Any error, including a retryable `500` or `503`, means nothing was deleted; retry with
+    /// the same token. A retry after a lost success response gets `401 unauthenticated`, which
+    /// means the account is gone.
     ///
     /// `marketplaceAccess` reports each API marketplace connection honestly: `revoked` is
-    /// true only when the marketplace confirmed it. For any other entry the app tells the user
-    /// to remove Listora in that marketplace's connected-apps settings.
+    /// true only when the marketplace had confirmed it before the deletion. For any other
+    /// entry the revocation is not confirmed (Listora keeps the encrypted tokens only to keep
+    /// asking, and deletes them once the marketplace confirms or after 7 days), so the app
+    /// tells the user to remove Listora in that marketplace's connected-apps settings to be
+    /// sure.
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/account`.
@@ -470,19 +477,26 @@ extension APIProtocol {
     /// In-app account deletion (App Store Review Guideline 5.1.1(v)). Deletes the signed-in
     /// person and, when they own their account, the account with all of its data: items,
     /// photos, listing records, sales, and history. Live listings themselves stay on the
-    /// marketplaces. Before that, Listora asks each connected marketplace to revoke its access
-    /// and deletes the stored tokens, and it deletes the person from the sign-in provider, so
-    /// they cannot sign in to the deleted account again.
+    /// marketplaces.
     ///
-    /// The deletion is final, and the bearer token stops working at once (any other token
-    /// issued before the deletion too). Signing in again later creates a new, empty account.
-    /// A `503 service_unavailable` means nothing was deleted yet; retry with the same token.
-    /// A retry after a lost success response gets `401 unauthenticated`, which means the
-    /// account is gone.
+    /// A success means the deletion is committed and final: the data is gone, and the bearer
+    /// token stops working at once (any other token issued before the deletion too). Listora
+    /// then finishes on its own, whether or not the app is still running: it deletes the
+    /// person from the sign-in provider, so they cannot sign in to the deleted account again,
+    /// and asks each connected marketplace to revoke its access, retrying for up to 7 days.
+    /// Until the sign-in provider has deleted the person, signing in again is refused; after
+    /// that, it creates a new, empty account.
+    ///
+    /// Any error, including a retryable `500` or `503`, means nothing was deleted; retry with
+    /// the same token. A retry after a lost success response gets `401 unauthenticated`, which
+    /// means the account is gone.
     ///
     /// `marketplaceAccess` reports each API marketplace connection honestly: `revoked` is
-    /// true only when the marketplace confirmed it. For any other entry the app tells the user
-    /// to remove Listora in that marketplace's connected-apps settings.
+    /// true only when the marketplace had confirmed it before the deletion. For any other
+    /// entry the revocation is not confirmed (Listora keeps the encrypted tokens only to keep
+    /// asking, and deletes them once the marketplace confirms or after 7 days), so the app
+    /// tells the user to remove Listora in that marketplace's connected-apps settings to be
+    /// sure.
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/account`.

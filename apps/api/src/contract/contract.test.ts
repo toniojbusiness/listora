@@ -139,7 +139,6 @@ describe('contractRoute', () => {
     const auth = {
       provider: 'dev' as const,
       verifyAccessToken: () => Promise.resolve(undefined),
-      deleteUser: () => Promise.resolve(),
     };
     expect(() => {
       contractRoute(app, { db, auth }, 'getLiveness', () =>

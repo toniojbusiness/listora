@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { USER_POOL_ID_PATTERN, userPoolRegion } from '@listora/accounts';
 import { AiConfigError, loadAiConfig, type AiConfig } from '@listora/ai';
 import { assertNever, LOG_LEVELS, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
@@ -11,11 +12,6 @@ export type AuthDriverName = (typeof AUTH_DRIVERS)[number];
 /** Shortest accepted AUTH_DEV_SECRET: 32 characters, about 256 bits when random. */
 export const MIN_DEV_SECRET_LENGTH = 32;
 
-/**
- * A Cognito user pool id: the AWS region, an underscore, and the pool's own id
- * (`us-east-1_AbC123xyZ`).
- */
-const USER_POOL_ID = /^[a-z]{2}(-[a-z]+)+-\d_[A-Za-z0-9]+$/;
 /** A Cognito app client id: 1-128 word characters (in practice 26 lowercase alphanumerics). */
 const APP_CLIENT_ID = /^[\w+]{1,128}$/;
 
@@ -85,7 +81,7 @@ const envSchema = z.object({
     .optional(),
   COGNITO_USER_POOL_ID: z
     .string()
-    .regex(USER_POOL_ID, {
+    .regex(USER_POOL_ID_PATTERN, {
       error: 'COGNITO_USER_POOL_ID must be a user pool id such as us-east-1_AbC123xyZ',
     })
     .optional(),
@@ -119,8 +115,10 @@ function authConfig(values: Env): AuthConfig | string[] {
           ...(clientIds === undefined ? ['COGNITO_CLIENT_IDS'] : []),
         ].map((key) => `${key} is required when AUTH_DRIVER=cognito`);
       }
-      const [region = ''] = userPoolId.split('_');
-      return { driver: 'cognito', cognito: { region, userPoolId, clientIds } };
+      return {
+        driver: 'cognito',
+        cognito: { region: userPoolRegion(userPoolId), userPoolId, clientIds },
+      };
     }
     default:
       return assertNever(values.AUTH_DRIVER, 'AUTH_DRIVER');

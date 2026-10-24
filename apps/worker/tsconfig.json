@@ -8,6 +8,7 @@
   "include": ["src"],
   "references": [
     { "path": "../../packages/shared" },
+    { "path": "../../packages/accounts" },
     { "path": "../../packages/testing" },
     { "path": "../../packages/db" },
     { "path": "../../packages/marketplaces" },

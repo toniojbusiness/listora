@@ -1,3 +1,9 @@
+import {
+  ACCOUNT_DELETION_TASK,
+  accountDeletionTask,
+  AwsCognitoUserAdmin,
+  noMarketplaceAccessRevocation,
+} from '@listora/accounts';
 import { createAiClient, PostgresQuotaPolicy, PostgresUsageStore } from '@listora/ai';
 import { createDatabase } from '@listora/db';
 import { startOperationWorker } from '@listora/operations';
@@ -20,17 +26,26 @@ try {
     connectionString: config.databaseUrl,
     db,
     adapters: createAdapters(config).lookup,
-    tasks: createWorkerTasks({
-      db,
-      storage: createStorage(config.storage),
-      ai: createAiClient(config.ai, {
-        usageStore: new PostgresUsageStore(db),
-        quota: new PostgresQuotaPolicy(db),
+    tasks: {
+      ...createWorkerTasks({
+        db,
+        storage: createStorage(config.storage),
+        ai: createAiClient(config.ai, {
+          usageStore: new PostgresUsageStore(db),
+          quota: new PostgresQuotaPolicy(db),
+          logger,
+        }),
+        logger,
+        autoEscalate: config.analysis.autoEscalate,
+      }),
+      [ACCOUNT_DELETION_TASK]: accountDeletionTask({
+        db,
+        cognito: config.cognitoUserPool && new AwsCognitoUserAdmin(config.cognitoUserPool),
+        // Marketplace adapters revoke their grants once they add OAuth connections (T-16, T-24).
+        marketplaceAccess: noMarketplaceAccessRevocation,
         logger,
       }),
-      logger,
-      autoEscalate: config.analysis.autoEscalate,
-    }),
+    },
     logger,
     concurrency: config.concurrency,
     taskConcurrency: config.taskConcurrency,
@@ -56,6 +71,7 @@ try {
       taskPoolId: worker.taskPoolId,
       fakeMarketplace: config.fakeMarketplaceUrl !== undefined,
       aiProvider: config.ai.provider,
+      cognitoUserPool: config.cognitoUserPool?.userPoolId,
     },
     'worker ready',
   );

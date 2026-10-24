@@ -3,13 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ApiError } from '../errors.ts';
 import { CognitoAuthDriver, type CognitoAuthOptions } from './cognito-driver.ts';
-import {
-  FakeCognitoPool,
-  FakeCognitoUserAdmin,
-  IOS_CLIENT_ID,
-  nowSeconds,
-  TEST_POOL,
-} from './cognito-test-support.ts';
+import { FakeCognitoPool, IOS_CLIENT_ID, nowSeconds, TEST_POOL } from './cognito-test-support.ts';
 
 const SUB = '8a1b2c3d-0000-4000-8000-000000000001';
 
@@ -25,14 +19,12 @@ describe('CognitoAuthDriver', () => {
   });
 
   function driver(options: Partial<CognitoAuthOptions> = {}) {
-    const userAdmin = new FakeCognitoUserAdmin();
     const instance = new CognitoAuthDriver({
       config: TEST_POOL,
-      userAdmin,
       jwksUrl: pool.jwksUrl,
       ...options,
     });
-    return { instance, userAdmin };
+    return { instance };
   }
 
   describe('valid tokens', () => {
@@ -268,24 +260,6 @@ describe('CognitoAuthDriver', () => {
         await instance.verifyAccessToken(await pool.accessToken(SUB, {}, { kid: newKid })),
       ).toBeDefined();
       expect(pool.jwksRequests - before).toBe(1);
-    });
-  });
-
-  describe('deleteUser', () => {
-    it('deletes the user by their Cognito username', async () => {
-      const { instance, userAdmin } = driver();
-      const identity = await instance.verifyAccessToken(await pool.accessToken(SUB));
-      if (!identity) throw new Error('expected the token to verify');
-      await instance.deleteUser(identity);
-      expect(userAdmin.deleted).toEqual([`signinwithapple_${SUB}`]);
-    });
-
-    it('refuses to guess when the token carried no username', async () => {
-      const { instance, userAdmin } = driver();
-      await expect(
-        instance.deleteUser({ provider: 'cognito', subject: SUB, issuedAt: nowSeconds() }),
-      ).rejects.toThrow(/without a username/);
-      expect(userAdmin.deleted).toEqual([]);
     });
   });
 });

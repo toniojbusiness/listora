@@ -585,9 +585,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/MarketplaceAccessRevocation/displayName`.
             public var displayName: Swift.String?
-            /// True only when the marketplace confirmed that Listora's access is revoked (or had
-            /// already revoked it). False means Listora deleted its tokens but could not confirm
-            /// the revocation, so the user should remove Listora in the marketplace's settings.
+            /// True only when the marketplace had confirmed, before the deletion, that Listora's
+            /// access is revoked. False means it is not confirmed: Listora keeps asking the
+            /// marketplace for up to 7 days (when it still holds the connection's tokens), so the
+            /// user should remove Listora in the marketplace's settings to be sure.
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/MarketplaceAccessRevocation/revoked`.
@@ -597,7 +598,7 @@ extension Components {
             /// - Parameters:
             ///   - marketplace:
             ///   - displayName: The seller's name on the marketplace.
-            ///   - revoked: True only when the marketplace confirmed that Listora's access is revoked (or had
+            ///   - revoked: True only when the marketplace had confirmed, before the deletion, that Listora's
             public init(
                 marketplace: Components.Schemas.Marketplace,
                 displayName: Swift.String? = nil,

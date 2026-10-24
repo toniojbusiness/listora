@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 
+import { lockIdentity, rememberDeletedIdentity } from '@listora/accounts';
 import { jsonb, type Db, type Marketplace } from '@listora/db';
 import { sql } from 'kysely';
 import sharp from 'sharp';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { photoObjectKeys } from '../photos/stored-objects.ts';
 import { createTestApi, type TestApi } from '../test-support.ts';
-import type { Tenant } from '../tenancy.ts';
+import { resolveTenant, type Tenant } from '../tenancy.ts';
 
 /** Every table with an `account_id`, so a test can prove an account left nothing behind. */
 async function tenantTables(db: Db): Promise<string[]> {
@@ -42,6 +43,34 @@ async function userCount(db: Db, subject: string): Promise<number> {
     .where('auth_subject', '=', subject)
     .execute();
   return rows.length;
+}
+
+async function tombstones(db: Db) {
+  return db.selectFrom('account_deletion').selectAll().execute();
+}
+
+interface GrantRow {
+  connection_id: string;
+  outcome: string;
+  token: string | null;
+}
+
+/** Every kept marketplace grant, with its token as text. */
+async function grantsOf(db: Db): Promise<GrantRow[]> {
+  const rows = await db
+    .selectFrom('account_deletion_grant')
+    .select(['connection_id', 'outcome', 'token_ciphertext'])
+    .orderBy('connection_id')
+    .execute();
+  return rows.map((row) => ({
+    connection_id: row.connection_id,
+    outcome: row.outcome,
+    token: row.token_ciphertext?.toString() ?? null,
+  }));
+}
+
+function byConnection(a: GrantRow, b: GrantRow): number {
+  return a.connection_id.localeCompare(b.connection_id);
 }
 
 /** The keys of every stored object the account's photos and uploads reference. */
@@ -205,7 +234,8 @@ describe('deleteAccount (real Postgres)', () => {
     const response = await api.call('deleteAccount', { token });
     expect(response.status).toBe(200);
     expect(Date.parse(response.body.deletedAt)).toBeGreaterThan(Date.now() - 60_000);
-    expect(response.body.marketplaceAccess).toEqual([{ marketplace: 'ebay', revoked: true }]);
+    // Asking eBay is the job's work, so the revocation is not confirmed yet.
+    expect(response.body.marketplaceAccess).toEqual([{ marketplace: 'ebay', revoked: false }]);
 
     expect(await rowsOf(api.db, tenant.accountId)).toEqual({});
     const account = await api.db
@@ -219,6 +249,15 @@ describe('deleteAccount (real Postgres)', () => {
     expect(await stored(neighborKeys)).toEqual(neighborStored);
     expect(await rowsOf(api.db, neighborTenant.accountId)).toEqual(neighborRows);
     expect((await api.call('listItems', { token: neighborToken })).body.data).toHaveLength(1);
+
+    // The job finishes the deletion: the grant is revoked, and the tombstone is gone.
+    expect(await api.accountDeletions.jobs()).toHaveLength(1);
+    expect(await api.accountDeletions.runAll()).toEqual(['completed']);
+    expect(
+      api.accountDeletions.marketplaceAccess.revoked.map((grant) => grant.marketplace),
+    ).toEqual(['ebay']);
+    expect(await tombstones(api.db)).toEqual([]);
+    expect(await api.accountDeletions.jobs()).toEqual([]);
   });
 
   it('ends every session issued before the deletion without provisioning a new account', async () => {
@@ -235,6 +274,7 @@ describe('deleteAccount (real Postgres)', () => {
       expect((await api.call('deleteAccount', { token })).status).toBe(401);
     }
     expect(await userCount(api.db, email)).toBe(0);
+    expect(await api.accountDeletions.runAll()).toEqual(['completed']);
   });
 
   it('lets the person sign up again later, into a new empty account', async () => {
@@ -246,6 +286,13 @@ describe('deleteAccount (real Postgres)', () => {
 
     api.clock.now = Date.now() + 2000;
     try {
+      // Not before the job has deleted the person at the identity provider.
+      const early = await api.signIn(email);
+      expect((await api.call('listItems', { token: early })).status).toBe(401);
+      expect(await userCount(api.db, email)).toBe(0);
+      expect(await api.accountDeletions.runAll()).toEqual(['completed']);
+
+      api.clock.now = Date.now() + 4000;
       const again = await api.signIn(email);
       const items = await api.call('listItems', { token: again });
       expect(items.status).toBe(200);
@@ -286,10 +333,42 @@ describe('deleteAccount (real Postgres)', () => {
       ) as found
     `.execute(api.db);
     expect(plain[0]?.found).toBe(false);
+    // The tombstone keeps the same hash, and no username for a dev identity.
+    expect(
+      (await tombstones(api.db)).filter((row) => row.auth_subject_sha256.equals(sha256(email))),
+    ).toEqual([expect.objectContaining({ auth_provider: 'dev', provider_username: null })]);
+    await api.accountDeletions.runAll();
+  });
+
+  it('refuses to provision a user while a deletion of the identity is committing', async () => {
+    const email = 'rory.race@example.com';
+    const identity = {
+      provider: 'dev' as const,
+      subject: email,
+      issuedAt: Math.floor(Date.now() / 1000) - 1,
+    };
+    // A deletion holds the identity's lock; a request with an earlier token arrives and
+    // finds no user, so it would provision one.
+    const deletion = await api.db.startTransaction().execute();
+    let provisioned: Promise<Tenant> | undefined;
+    try {
+      await lockIdentity(deletion, identity);
+      provisioned = resolveTenant(api.db, identity);
+      provisioned.catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(await userCount(api.db, email)).toBe(0);
+      await rememberDeletedIdentity(deletion, 'dev', sha256(email));
+      await deletion.commit().execute();
+    } catch (error) {
+      await deletion.rollback().execute();
+      throw error;
+    }
+    await expect(provisioned).rejects.toMatchObject({ code: 'unauthenticated' });
+    expect(await userCount(api.db, email)).toBe(0);
   });
 
   describe('marketplace access', () => {
-    it('revokes each API grant and reports only confirmed revocations as revoked', async () => {
+    it('reports only confirmed revocations, and keeps revoking until confirmed or given up', async () => {
       const email = 'mia.markets@example.com';
       const token = await api.signIn(email);
       const tenant = await api.tenantOf(email);
@@ -307,8 +386,9 @@ describe('deleteAccount (real Postgres)', () => {
       });
       const tokenless = await addConnection(tenant, { marketplace: 'ebay', token: false });
       await addConnection(tenant, { marketplace: 'poshmark', mode: 'assisted' });
-      api.marketplaceAccess.answer(unconfirmed, false);
-      api.marketplaceAccess.answer(failing, new Error('eBay is down'));
+      const { marketplaceAccess } = api.accountDeletions;
+      marketplaceAccess.answer(unconfirmed, false);
+      marketplaceAccess.answer(failing, new Error('eBay is down'));
 
       const response = await api.call('deleteAccount', { token });
       expect(response.status).toBe(200);
@@ -319,17 +399,13 @@ describe('deleteAccount (real Postgres)', () => {
         ]),
       );
       expect(response.body.marketplaceAccess).toHaveLength(5);
+      // Only the revocation the marketplace confirmed before the deletion is reported as done.
       expect(byId.get(confirmed)).toEqual({
         marketplace: 'ebay',
         displayName: 'mia_e',
-        revoked: true,
-      });
-      expect(byId.get(unconfirmed)).toEqual({ marketplace: 'depop', revoked: false });
-      expect(byId.get(failing)).toEqual({
-        marketplace: 'ebay',
-        displayName: 'mia_shop2',
         revoked: false,
       });
+      expect(byId.get(unconfirmed)).toEqual({ marketplace: 'depop', revoked: false });
       expect(byId.get(alreadyRevoked)).toEqual({
         marketplace: 'depop',
         displayName: 'mia_old',
@@ -337,61 +413,60 @@ describe('deleteAccount (real Postgres)', () => {
       });
       // Listora lost the tokens, so it cannot claim the marketplace revoked them.
       expect(byId.get(tokenless)).toEqual({ marketplace: 'ebay', revoked: false });
+      expect(await rowsOf(api.db, tenant.accountId)).toEqual({});
+      // The tombstone keeps the encrypted tokens of the grants still to revoke, and only those.
+      expect(await grantsOf(api.db)).toEqual(
+        [
+          { connection_id: confirmed, outcome: 'pending', token: 'ct' },
+          { connection_id: unconfirmed, outcome: 'pending', token: 'ct' },
+          { connection_id: failing, outcome: 'pending', token: 'ct' },
+        ].sort(byConnection),
+      );
 
-      const asked = api.marketplaceAccess.revoked
-        .filter((grant) => [confirmed, unconfirmed, failing].includes(grant.connectionId))
-        .map((grant) => [grant.connectionId, grant.marketplace, grant.tokenCiphertext.toString()]);
-      expect(asked).toEqual([
-        [confirmed, 'ebay', 'ct'],
-        [unconfirmed, 'depop', 'ct'],
-        [failing, 'ebay', 'ct'],
-      ]);
+      expect(await api.accountDeletions.runAll()).toEqual(['retrying']);
+      const asked = () =>
+        marketplaceAccess.revoked
+          .filter((grant) => [confirmed, unconfirmed, failing].includes(grant.connectionId))
+          .map((grant) => grant.connectionId);
+      expect(asked().sort()).toEqual([confirmed, unconfirmed, failing].sort());
       expect(
-        api.marketplaceAccess.revoked.some((grant) =>
+        marketplaceAccess.revoked.some((grant) =>
           [alreadyRevoked, tokenless].includes(grant.connectionId),
         ),
       ).toBe(false);
-      expect(await rowsOf(api.db, tenant.accountId)).toEqual({});
+      expect(await grantsOf(api.db)).toEqual(
+        [
+          { connection_id: confirmed, outcome: 'revoked', token: null },
+          { connection_id: unconfirmed, outcome: 'pending', token: 'ct' },
+          { connection_id: failing, outcome: 'pending', token: 'ct' },
+        ].sort(byConnection),
+      );
+
+      // A later run asks again for the unconfirmed ones only.
+      marketplaceAccess.answer(unconfirmed, true);
+      expect(await api.accountDeletions.runAll()).toEqual(['retrying']);
+      expect(asked().filter((id) => id === confirmed)).toHaveLength(1);
+      expect(asked().filter((id) => id === unconfirmed)).toHaveLength(2);
+
+      // After the revocation window, the job gives up: the tokens are deleted, and the
+      // tombstone goes.
+      await sql`update account_deletion set requested_at = now() - interval '8 days'`.execute(
+        api.db,
+      );
+      expect(await api.accountDeletions.runAll()).toEqual(['completed']);
+      expect(asked().filter((id) => id === failing)).toHaveLength(3);
+      expect(await grantsOf(api.db)).toEqual([]);
+      expect(await tombstones(api.db)).toEqual([]);
     });
   });
 
   describe('failures stay retryable', () => {
-    it('deletes nothing when the identity provider cannot delete the user', async () => {
-      const email = 'pat.provider@example.com';
+    it('deletes nothing when the database fails, and finishes on retry', async () => {
+      const email = 'dana.database@example.com';
       const token = await api.signIn(email);
       const tenant = await api.tenantOf(email);
       await populate(token, tenant);
       const rows = await rowsOf(api.db, tenant.accountId);
-      const deleteUser = vi
-        .spyOn(api.devAuth, 'deleteUser')
-        .mockRejectedValueOnce(new Error('Cognito is unavailable'));
-      try {
-        const failed = await api.call('deleteAccount', { token });
-        expect(failed.status).toBe(503);
-        expect(failed.error).toMatchObject({ code: 'service_unavailable', retryable: true });
-        expect(failed.error.message).not.toContain('Cognito');
-        expect(await rowsOf(api.db, tenant.accountId)).toEqual(rows);
-        expect((await api.call('listItems', { token })).status).toBe(200);
-
-        // The marketplace grant was confirmed revoked on the first attempt; the retry does not
-        // ask again and still reports it.
-        const asked = api.marketplaceAccess.revoked.length;
-        const retried = await api.call('deleteAccount', { token });
-        expect(retried.status).toBe(200);
-        expect(retried.body.marketplaceAccess).toEqual([{ marketplace: 'ebay', revoked: true }]);
-        expect(api.marketplaceAccess.revoked.length).toBe(asked);
-        expect(deleteUser).toHaveBeenCalledTimes(2);
-        expect(await rowsOf(api.db, tenant.accountId)).toEqual({});
-      } finally {
-        deleteUser.mockRestore();
-      }
-    });
-
-    it('finishes on retry when the database fails after the provider deleted the user', async () => {
-      const email = 'dana.database@example.com';
-      const token = await api.signIn(email);
-      const tenant = await api.tenantOf(email);
-      const deleteUser = vi.spyOn(api.devAuth, 'deleteUser');
       await sql`
         create function test_fail_deletion() returns trigger language plpgsql as $$
         begin
@@ -405,8 +480,12 @@ describe('deleteAccount (real Postgres)', () => {
         const failed = await api.call('deleteAccount', { token });
         expect(failed.status).toBe(500);
         expect(failed.error.retryable).toBe(true);
-        // The transaction rolled back as a whole: the identity is not marked deleted.
+        // The transaction rolled back as a whole: no data is gone, the identity is not
+        // marked deleted, and no tombstone or job was left.
         expect(await userCount(api.db, email)).toBe(1);
+        expect(await rowsOf(api.db, tenant.accountId)).toEqual(rows);
+        expect(await tombstones(api.db)).toEqual([]);
+        expect(await api.accountDeletions.jobs()).toEqual([]);
         expect((await api.call('listItems', { token })).status).toBe(200);
       } finally {
         await sql`
@@ -414,14 +493,23 @@ describe('deleteAccount (real Postgres)', () => {
           drop function test_fail_deletion();
         `.execute(api.db);
       }
-      try {
-        expect((await api.call('deleteAccount', { token })).status).toBe(200);
-        expect(deleteUser).toHaveBeenCalledTimes(2);
-        expect(await userCount(api.db, email)).toBe(0);
-        expect(await rowsOf(api.db, tenant.accountId)).toEqual({});
-      } finally {
-        deleteUser.mockRestore();
-      }
+      expect((await api.call('deleteAccount', { token })).status).toBe(200);
+      expect(await userCount(api.db, email)).toBe(0);
+      expect(await rowsOf(api.db, tenant.accountId)).toEqual({});
+      expect(await api.accountDeletions.runAll()).toEqual(['completed']);
+    });
+
+    it('answers 401 to a second deletion that waited for the first', async () => {
+      const email = 'tess.twice@example.com';
+      const token = await api.signIn(email);
+      await api.tenantOf(email);
+      const [first, second] = await Promise.all([
+        api.call('deleteAccount', { token }),
+        api.call('deleteAccount', { token }),
+      ]);
+      expect([first.status, second.status].sort()).toEqual([200, 401]);
+      expect(await api.accountDeletions.jobs()).toHaveLength(1);
+      expect(await api.accountDeletions.runAll()).toEqual(['completed']);
     });
   });
 
@@ -483,6 +571,7 @@ describe('deleteAccount (real Postgres)', () => {
       // With the member gone, the owner can delete the account.
       expect((await api.call('deleteAccount', { token: ownerToken })).status).toBe(200);
       expect(await rowsOf(api.db, owner.accountId)).toEqual({});
+      expect(await api.accountDeletions.runAll()).toEqual(['completed', 'completed']);
     });
   });
 });

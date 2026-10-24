@@ -5,7 +5,6 @@ import type { FastifyBaseLogger } from 'fastify';
 
 import type { AuthConfig } from '../config.ts';
 import { CognitoAuthDriver } from './cognito-driver.ts';
-import { AwsCognitoUserAdmin } from './cognito-user-admin.ts';
 import { DevAuthDriver } from './dev-driver.ts';
 import type { AuthDriver } from './driver.ts';
 
@@ -21,13 +20,7 @@ export function createAuthDriver(auth: AuthConfig, logger: FastifyBaseLogger): A
       return new DevAuthDriver({ secret, logger });
     }
     case 'cognito':
-      return new CognitoAuthDriver({
-        config: auth.cognito,
-        userAdmin: new AwsCognitoUserAdmin({
-          region: auth.cognito.region,
-          userPoolId: auth.cognito.userPoolId,
-        }),
-      });
+      return new CognitoAuthDriver({ config: auth.cognito });
     default:
       return assertNever(auth, 'AUTH_DRIVER');
   }

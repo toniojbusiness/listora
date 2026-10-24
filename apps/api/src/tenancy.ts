@@ -6,10 +6,10 @@
  * pass a raw id from a request in place of one: cross-tenant access fails closed by construction.
  * The database backs this up with composite `(account_id, id)` foreign keys.
  */
+import { isIdentityDeleted, lockIdentity } from '@listora/accounts';
 import type { Db, MembershipRole } from '@listora/db';
 import type { FastifyRequest } from 'fastify';
 
-import { isDeletedSinceIssue } from './account/repository.ts';
 import type { AuthDriver, Identity } from './auth/driver.ts';
 import { ApiError } from './errors.ts';
 
@@ -59,14 +59,11 @@ export async function authenticate(
  * The tenant of a verified identity. On a person's first request this creates their user,
  * their account (named after the email, SKU prefix from its initials), and the owner
  * membership, in one transaction. Fails closed with `401 unauthenticated` when the person
- * deleted their account after the token was issued (so it cannot provision a new one), and
- * with `403 forbidden` when the user has no account, or more than one (choosing an account is
+ * deleted their account after the token was issued, or the deletion still waits for the
+ * identity provider (so the token cannot provision a new account), and with `403 forbidden` when the user has no account, or more than one (choosing an account is
  * not supported yet).
  */
 export async function resolveTenant(db: Db, identity: Identity): Promise<Tenant> {
-  if (await isDeletedSinceIssue(db, identity)) {
-    throw new ApiError('unauthenticated', 'Sign in to continue.');
-  }
   let found = await findMemberships(db, identity);
   if (found === undefined) {
     await provisionUser(db, identity);
@@ -105,6 +102,12 @@ async function findMemberships(db: Db, identity: Identity): Promise<Tenant[] | u
 
 async function provisionUser(db: Db, identity: Identity): Promise<void> {
   await db.transaction().execute(async (trx) => {
+    // The lock account deletion takes: a deletion that committed before this point is seen
+    // here, and one that starts later waits for this transaction.
+    await lockIdentity(trx, identity);
+    if (await isIdentityDeleted(trx, identity)) {
+      throw new ApiError('unauthenticated', 'Sign in to continue.');
+    }
     // Two first requests can race: the loser's insert waits for the winner and then does
     // nothing, and both go on to read the winner's membership.
     const user = await trx

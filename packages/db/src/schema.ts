@@ -18,6 +18,7 @@ import type { CurrencyCode } from '@listora/shared';
 
 import type { JsonArray, JsonObject, JsonValue } from './json.ts';
 import type {
+  AccountDeletionGrantOutcome,
   AiProvider,
   AiUsageOutcome,
   AnalysisStatus,
@@ -576,8 +577,35 @@ export interface IdempotencyRecordTable {
 export interface DeletedIdentityTable {
   auth_provider: AuthProvider;
   auth_subject_sha256: Buffer;
-  /** Defaults to now; moved forward when the identity deletes a later account. */
+  /**
+   * Defaults to now; moved forward when the provider confirms the user is gone, and when the
+   * identity deletes a later account.
+   */
   deleted_at: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
+/**
+ * The tombstone of a committed account deletion whose `account_deletion` job has not finished
+ * (deleting the person at the identity provider, revoking marketplace grants).
+ */
+export interface AccountDeletionTable {
+  id: Id;
+  auth_provider: AuthProvider;
+  auth_subject_sha256: Buffer;
+  /** The provider's admin API name for the user (Cognito's username); null for dev. */
+  provider_username: Nullable<string>;
+  requested_at: CreatedAt;
+  identity_deleted_at: NullableTimestamp;
+  attempts: Generated<number>;
+}
+
+/** A deleted account's marketplace grant; the encrypted tokens stay only while it is pending. */
+export interface AccountDeletionGrantTable {
+  deletion_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  token_ciphertext: Nullable<Buffer>;
+  outcome: Generated<AccountDeletionGrantOutcome>;
 }
 
 /** Every table and view in the schema, keyed by name. */
@@ -613,4 +641,6 @@ export interface Database {
   audit_log: AuditLogTable;
   idempotency_record: IdempotencyRecordTable;
   deleted_identity: DeletedIdentityTable;
+  account_deletion: AccountDeletionTable;
+  account_deletion_grant: AccountDeletionGrantTable;
 }

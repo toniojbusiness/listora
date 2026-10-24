@@ -8,6 +8,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { AccountDeletionDependencies, AccountDeletionOutcome } from '@listora/accounts';
+import {
+  accountDeletionJobs,
+  FakeCognitoUserAdmin,
+  FakeMarketplaceAccess,
+  runAccountDeletionJobs,
+  type AccountDeletionJob,
+} from '@listora/accounts/testing';
 import {
   AiClient,
   createModelRegistry,
@@ -27,7 +35,13 @@ import {
   type AnalysisJobPayload,
   type AnalysisJobQueue,
 } from '@listora/analysis';
-import { createDatabase, SchemaMigrator, type Db, type DbExecutor } from '@listora/db';
+import {
+  createDatabase,
+  migrateJobQueue,
+  SchemaMigrator,
+  type Db,
+  type DbExecutor,
+} from '@listora/db';
 import {
   processPhoto,
   storageKeys,
@@ -42,7 +56,6 @@ import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
 import type { ApiError, ErrorResponse } from '@listora/api-contract';
 import type { FastifyInstance } from 'fastify';
 
-import type { GrantToRevoke, MarketplaceAccessRevoker } from './account/marketplace-access.ts';
 import { buildApp, type AppDependencies } from './app.ts';
 import { DevAuthDriver } from './auth/dev-driver.ts';
 import type { AuthDriver } from './auth/driver.ts';
@@ -245,23 +258,15 @@ export interface TestAiControls {
 }
 
 /**
- * A stand-in for the marketplace adapters' grant revocation: each connection id answers as
- * configured (confirmed by default), and every request is recorded.
+ * The worker's side of account deletion, in process: `runAll()` runs every queued
+ * `account_deletion` job once, with a fake Cognito and fake marketplace revocations.
  */
-export class FakeMarketplaceAccess implements MarketplaceAccessRevoker {
-  readonly revoked: GrantToRevoke[] = [];
-  readonly #outcomes = new Map<string, boolean | Error>();
-
-  /** How the marketplace answers for `connectionId`: confirmed, unconfirmed, or a failure. */
-  answer(connectionId: string, outcome: boolean | Error): void {
-    this.#outcomes.set(connectionId, outcome);
-  }
-
-  revoke(grant: GrantToRevoke): Promise<boolean> {
-    this.revoked.push(grant);
-    const outcome = this.#outcomes.get(grant.connectionId) ?? true;
-    return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(outcome);
-  }
+export interface TestAccountDeletions {
+  cognito: FakeCognitoUserAdmin;
+  marketplaceAccess: FakeMarketplaceAccess;
+  /** The queued jobs, oldest first. */
+  jobs(): Promise<AccountDeletionJob[]>;
+  runAll(): Promise<AccountDeletionOutcome[]>;
 }
 
 export interface TestApiOptions {
@@ -272,9 +277,9 @@ export interface TestApiOptions {
 export interface TestApi {
   app: FastifyInstance;
   db: Db;
-  /** The dev driver behind `signIn` (spy on it to make its methods fail). */
+  /** The dev driver behind `signIn`. */
   devAuth: DevAuthDriver;
-  marketplaceAccess: FakeMarketplaceAccess;
+  accountDeletions: TestAccountDeletions;
   /** URL of the scratch database, for tests that need a second session. */
   databaseUrl: string;
   uploads: TestUploads;
@@ -306,6 +311,11 @@ export async function createTestApi(
   const db = createDatabase({ connectionString: scratch.url, max: 10 });
   try {
     await new SchemaMigrator(db).migrateToLatest();
+    // `deleteAccount` enqueues its job in the deletion's transaction.
+    await migrateJobQueue({
+      connectionString: scratch.url,
+      logger: createLogger({ service: 'api-test', level: 'silent' }),
+    });
   } catch (error) {
     await db.destroy();
     await scratch.drop();
@@ -346,12 +356,19 @@ export async function createTestApi(
     logger,
     autoEscalate: aiControls.autoEscalate,
   }));
+  const cognito = new FakeCognitoUserAdmin();
   const marketplaceAccess = new FakeMarketplaceAccess();
+  const deletionDeps: AccountDeletionDependencies = { db, cognito, marketplaceAccess, logger };
+  const accountDeletions: TestAccountDeletions = {
+    cognito,
+    marketplaceAccess,
+    jobs: () => accountDeletionJobs(db),
+    runAll: () => runAccountDeletionJobs(deletionDeps),
+  };
   const app = buildApp({
     db,
     auth: options.auth ?? devAuth,
     storage,
-    marketplaceAccess,
     photoJobs,
     ai,
     analysisJobs,
@@ -442,7 +459,7 @@ export async function createTestApi(
     app,
     db,
     devAuth,
-    marketplaceAccess,
+    accountDeletions,
     databaseUrl: scratch.url,
     uploads,
     storage,

@@ -100,8 +100,8 @@ The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
 ```text
 apps/
   api/          Fastify HTTP API (@listora/api)
-  worker/       Background worker: operation engine, polls, health jobs, photo processing,
-                item analysis (@listora/worker)
+  worker/       Background worker: operation engine, account deletion, polls, health jobs,
+                photo processing, item analysis (@listora/worker)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
@@ -123,6 +123,8 @@ packages/
                 assisted adapters, conformance suite; fake marketplace with fault injection
                 (@listora/marketplaces)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
+  accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
+                Cognito user administration, marketplace grant revocation (@listora/accounts)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
@@ -154,7 +156,8 @@ src/
   contract/      Validators compiled from openapi.yaml, and contractRoute()
   auth/          AuthDriver interface; the dev driver (with its /dev/auth endpoints) and the
                  Cognito driver
-  account/       Account deletion (deleteAccount) and the marketplace grant revoker interface
+  account/       Account deletion (deleteAccount); the job that finishes it is in
+                 @listora/accounts
   tenancy.ts     Tenant resolution: the tenancy guard
   idempotency.ts Idempotency-Key handling for POSTs
   items/ photos/ One folder per resource: routes.ts, repository.ts, mapping and views
@@ -179,12 +182,16 @@ src/
   `contractRoute` refuses operations the contract marks public. A person's first request
   creates their user, an account (SKU prefix from the email's initials), and the owner
   membership; a user without exactly one account gets `403 forbidden`. A token issued before
-  its person deleted their account is `401`, so it cannot provision a new account.
+  its person deleted their account, or while the deletion still waits for the identity
+  provider, is `401`, so it cannot provision a new account (checked under the lock deletion
+  takes, so a deletion that commits meanwhile cannot be missed).
 - **Sign-in and account deletion.** `AUTH_DRIVER=dev|cognito`. The Cognito driver verifies
   the pool's tokens locally (cached JWKS, issuer, app client, `token_use`, expiry) and fails
-  closed. `DELETE /v1/account` revokes marketplace grants, deletes the person at the identity
-  provider, then deletes the account's data in one transaction and its stored objects after it. The flows, the user pool
-  settings the infrastructure must create, and the open items are in [auth.md](auth.md).
+  closed. `DELETE /v1/account` deletes the account's data in one transaction that also leaves
+  a tombstone and enqueues its `account_deletion` job, then deletes its stored objects; the
+  worker's job deletes the person at the identity provider and revokes marketplace grants,
+  retrying until done. The flows, the user pool settings the infrastructure must create, and
+  the open items are in [auth.md](auth.md).
 - **Idempotency.** A POST runs in one transaction that takes an advisory lock on (account,
   key) and stores its successful response in `idempotency_record` together with the change,
   so a retry replays it, a concurrent retry gets `409`, and a failure stores nothing. Each
@@ -694,8 +701,8 @@ and guards (budget alarms are T-29):
 PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations` (T-04).
 
 - **Tenancy.** Every table has a non-null `account_id`, except `account` itself, `app_user`
-  (a person's identity is global, and `membership` links it to accounts), and
-  `deleted_identity`. Child
+  (a person's identity is global, and `membership` links it to accounts), and the deleted
+  identity tables `deleted_identity`, `account_deletion`, and `account_deletion_grant`. Child
   rows reference parents through composite `(account_id, <parent>_id)` foreign keys, so the
   database rejects a row that points at another tenant's data. Deleting an account deletes
   all of its data.
@@ -761,6 +768,10 @@ Tables by area:
   batches by later POSTs once expired), and `deleted_identity` (the SHA-256 of each identity
   whose account was deleted and when, so its earlier tokens are refused; its only timestamp
   is `deleted_at`, and later deletions purge rows older than 48 hours).
+- **Account deletion:** `account_deletion` (the tombstone of a committed deletion whose job
+  has not finished: the identity's SHA-256 and provider username, attempts) and
+  `account_deletion_grant` (the deleted account's marketplace grants still to revoke, with
+  their encrypted tokens only while pending). The job deletes the tombstone when it is done.
 
 **Migrations.** Each migration is a pair of plain SQL files, `NNNN_name.up.sql` and
 `NNNN_name.down.sql`, run by Kysely's migrator in one transaction with a lock (`npm run
