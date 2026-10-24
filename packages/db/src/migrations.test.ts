@@ -15,21 +15,30 @@ async function migrationsDir(files: readonly string[]): Promise<string> {
   return directory;
 }
 
-/** Migration numbers used by more than one migration, and numbers missing from 0001..max. */
+/**
+ * Problems with a set of migration files: a name without both its up and down file, a number
+ * used by more than one migration, or numbers that do not strictly increase in name order.
+ * Gaps are allowed: firstmate pre-assigns numbers to open branches and merges them in order.
+ */
 function numberingProblems(files: readonly string[]): string[] {
-  const byNumber = new Map<number, Set<string>>();
+  const directions = new Map<string, Set<string>>();
   for (const file of files) {
-    const name = file.split('.')[0] ?? file;
-    const number = Number(name.slice(0, 4));
-    byNumber.set(number, (byNumber.get(number) ?? new Set()).add(name));
+    const [name = file, direction = ''] = file.split('.');
+    directions.set(name, (directions.get(name) ?? new Set()).add(direction));
   }
   const problems: string[] = [];
-  const highest = Math.max(0, ...byNumber.keys());
-  for (let number = 1; number <= highest; number += 1) {
-    const label = String(number).padStart(4, '0');
-    const names = [...(byNumber.get(number) ?? [])].sort();
-    if (names.length === 0) problems.push(`${label} is missing`);
-    if (names.length > 1) problems.push(`${label} is used by ${names.join(' and ')}`);
+  const names = [...directions.keys()].sort();
+  for (const name of names) {
+    const found = directions.get(name) ?? new Set();
+    if (!found.has('up') || !found.has('down')) problems.push(`${name} needs up and down files`);
+  }
+  for (let index = 1; index < names.length; index += 1) {
+    const previous = names[index - 1] ?? '';
+    const current = names[index] ?? '';
+    const [before, after] = [Number(previous.slice(0, 4)), Number(current.slice(0, 4))];
+    if (after === before)
+      problems.push(`${current.slice(0, 4)} is used by ${previous} and ${current}`);
+    else if (!(after > before)) problems.push(`${current} does not follow ${previous}`);
   }
   return problems;
 }
@@ -76,20 +85,23 @@ describe('SqlFileMigrationProvider', () => {
     );
   });
 
-  it('ships migrations numbered 0001 to N, each number used once, with no gaps', async () => {
-    // Parallel branches can each add "the next" migration; whichever merges second must
-    // renumber, and this fails until it does.
+  it('ships migrations with unique, strictly increasing numbers (gaps allowed)', async () => {
+    // Numbers are assigned up front and branches merge in numeric order, so a gap is only a
+    // migration that has not merged yet. A reused number fails here.
     expect(numberingProblems(await readdir(MIGRATIONS_DIR))).toEqual([]);
   });
 
-  it('numbering check reports shared numbers and gaps', () => {
+  it('numbering check reports shared numbers and unpaired files, and allows gaps', () => {
     const pair = (name: string) => [`${name}.up.sql`, `${name}.down.sql`];
     expect(numberingProblems([...pair('0001_a'), ...pair('0002_b')])).toEqual([]);
+    expect(numberingProblems([...pair('0001_a'), ...pair('0003_c')])).toEqual([]);
+    expect(numberingProblems(pair('0002_b'))).toEqual([]);
     expect(numberingProblems([...pair('0001_a'), ...pair('0002_b'), ...pair('0002_c')])).toEqual([
       '0002 is used by 0002_b and 0002_c',
     ]);
-    expect(numberingProblems([...pair('0001_a'), ...pair('0003_c')])).toEqual(['0002 is missing']);
-    expect(numberingProblems(pair('0002_b'))).toEqual(['0001 is missing']);
+    expect(numberingProblems([...pair('0001_a'), '0002_b.up.sql'])).toEqual([
+      '0002_b needs up and down files',
+    ]);
   });
 
   it('loads the migrations shipped with this package', async () => {
