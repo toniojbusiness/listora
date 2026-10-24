@@ -53,6 +53,8 @@ These two rules from the product owner override every other design choice.
   integration-test helpers for other workspaces (`@listora/db/testing`); runtime code never
   imports one.
 - TypeScript is pinned to 6.0.x because typescript-eslint does not support TypeScript 7 yet.
+- `npm run lint` runs ESLint with a 6 GB heap. Type-aware linting holds a TypeScript program
+  for every workspace in one process, which outgrew Node's default heap of about 2 GB.
 - Configuration comes only from environment variables. Each process parses them once at
   startup and fails fast (the API with a zod schema in `apps/api/src/config.ts`). Error
   messages name the bad key but never print its value. Every key is documented in
