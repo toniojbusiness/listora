@@ -748,7 +748,9 @@ paths:
       tags: [listings]
       operationId: reviseListing
       summary: Change a live listing's details
-      description: Queues a `revise` operation with the new variant (title, description, aspects, price).
+      description: |
+        Queues a `revise` operation with the new variant (title, description, aspects, price).
+        Assisted marketplaces get an `edit_manually` task.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -776,7 +778,9 @@ paths:
       tags: [listings]
       operationId: changeListingPrice
       summary: Change a live listing's price
-      description: Queues a `price` operation. The listed price changes only once it is confirmed.
+      description: |
+        Queues a `price` operation. The listed price changes only once it is confirmed.
+        Assisted marketplaces get an `edit_manually` task.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -3537,7 +3541,7 @@ components:
           maxLength: 64
     KnownUserTaskKind:
       type: string
-      enum: [list_manually, delist_manually, confirm_sale, reconnect, review_match]
+      enum: [list_manually, delist_manually, edit_manually, confirm_sale, reconnect, review_match]
     UserTaskStatus:
       type: string
       enum: [open, completed, dismissed]
@@ -3623,7 +3627,7 @@ components:
         - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
           `rejectMatch: true` when nothing matches. Exactly one of the two is required.
         - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
-        - `delist_manually`, `reconnect`: nothing besides `note`.
+        - `delist_manually`, `edit_manually`, `reconnect`: nothing besides `note`.
         - Every kind: optional `note`.
       properties:
         externalUrl:

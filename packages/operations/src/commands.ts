@@ -14,9 +14,15 @@ import {
   type OperationOrigin,
 } from '@listora/db';
 import {
+  desiredStateForContent,
   desiredStateToJson,
+  isContentKind,
+  listingContentToJson,
   parseDesiredListingState,
+  parseListingContent,
+  type ContentKind,
   type DesiredListingState,
+  type ListingContent,
 } from '@listora/marketplaces';
 
 import { validateDesiredState } from './desired.ts';
@@ -38,17 +44,27 @@ import {
   type OperationRow,
 } from './transitions.ts';
 
-export interface NewOperation {
+interface NewOperationBase {
   accountId: string;
   listingId: string;
-  kind: OperationKind;
   /** Chosen by the caller and unique per account; enqueueing the same key again is a no-op. */
   idempotencyKey: string;
-  desired: DesiredListingState;
   origin: OperationOrigin;
   /** Required for `auto_delist` operations. */
   delistRunId?: string | null;
 }
+
+/**
+ * A create, revise, or relist publishes listing content: the item snapshot and the
+ * marketplace variant, as they are now. The state its read-back must show comes from the same
+ * content (`desiredStateForContent`), so what is sent and what is verified cannot disagree.
+ * Every other kind names the desired state itself.
+ */
+export type NewOperation = NewOperationBase &
+  (
+    | { kind: ContentKind; content: ListingContent }
+    | { kind: Exclude<OperationKind, ContentKind>; desired: DesiredListingState }
+  );
 
 export interface EnqueueResult {
   operation: OperationRow;
@@ -65,7 +81,9 @@ export async function enqueueOperation(
   executor: DbExecutor,
   input: NewOperation,
 ): Promise<EnqueueResult> {
-  const desired = desiredStateToJson(validateDesiredState(input.kind, input.desired));
+  const intent = operationIntent(input);
+  const desired = desiredStateToJson(intent.desired);
+  const content = intent.content === null ? null : listingContentToJson(intent.content);
   const delistRunId = input.delistRunId ?? null;
   if ((input.origin === 'auto_delist') !== (delistRunId !== null)) {
     throw new InvalidOperationError('Auto-delist operations, and only those, need a delist run');
@@ -80,6 +98,7 @@ export async function enqueueOperation(
         kind: input.kind,
         idempotency_key: input.idempotencyKey,
         desired: jsonb(desired),
+        content: content === null ? null : jsonb(content),
         origin: input.origin,
         delist_run_id: delistRunId,
         next_attempt_at: sql<Date>`now()`,
@@ -95,12 +114,17 @@ export async function enqueueOperation(
         .where('account_id', '=', input.accountId)
         .where('idempotency_key', '=', input.idempotencyKey)
         .executeTakeFirstOrThrow();
-      // jsonb reorders keys, so compare both states in their canonical field order.
+      // jsonb reorders keys, so compare both states and contents in their canonical order.
       const same =
         existing.listing_id === input.listingId &&
         existing.kind === input.kind &&
         JSON.stringify(desiredStateToJson(parseDesiredListingState(existing.desired))) ===
-          JSON.stringify(desired);
+          JSON.stringify(desired) &&
+        JSON.stringify(
+          existing.content === null
+            ? null
+            : listingContentToJson(parseListingContent(existing.content)),
+        ) === JSON.stringify(content);
       if (!same) throw new IdempotencyConflictError(input.idempotencyKey);
       return { operation: existing, created: false };
     }
@@ -125,6 +149,38 @@ export async function enqueueOperation(
     });
     return { operation: inserted, created: true };
   });
+}
+
+/**
+ * The desired state and content of a new operation, validated for its kind. Checked at run time
+ * too, since a caller that is not type-checked can send any shape.
+ */
+function operationIntent(input: NewOperation): {
+  desired: DesiredListingState;
+  content: ListingContent | null;
+} {
+  const { kind } = input;
+  const content: unknown = 'content' in input ? input.content : undefined;
+  if (isContentKind(kind)) {
+    if (content === undefined) {
+      throw new InvalidOperationError(`A ${kind} operation needs the listing content`);
+    }
+    let parsed: ListingContent;
+    try {
+      parsed = parseListingContent(content);
+    } catch (error) {
+      throw new InvalidOperationError(error instanceof Error ? error.message : String(error));
+    }
+    return {
+      desired: validateDesiredState(kind, desiredStateForContent(kind, parsed)),
+      content: parsed,
+    };
+  }
+  if (content !== undefined) {
+    throw new InvalidOperationError(`A ${kind} operation carries no listing content`);
+  }
+  const desired: unknown = 'desired' in input ? input.desired : undefined;
+  return { desired: validateDesiredState(kind, desired), content: null };
 }
 
 export interface OperationTarget {

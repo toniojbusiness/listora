@@ -3,16 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Marketplace adapter interface and the fake marketplace (with fault injection) used in development and tests.",
+  "description": "Marketplace adapter framework: the adapter interface, capability flags, registry, listing content, the assisted adapter base, and the fake marketplace (with fault injection) used in development and tests.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "fake": "node --env-file-if-exists=../../.env src/fake/cli.ts"
   },
   "dependencies": {
     "@listora/db": "*",
-    "@listora/shared": "*"
+    "@listora/shared": "*",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@listora/testing": "*"

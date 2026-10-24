@@ -499,6 +499,7 @@ export interface paths {
         /**
          * Change a live listing's details
          * @description Queues a `revise` operation with the new variant (title, description, aspects, price).
+         *     Assisted marketplaces get an `edit_manually` task.
          */
         post: operations["reviseListing"];
         delete?: never;
@@ -521,6 +522,7 @@ export interface paths {
         /**
          * Change a live listing's price
          * @description Queues a `price` operation. The listed price changes only once it is confirmed.
+         *     Assisted marketplaces get an `edit_manually` task.
          */
         post: operations["changeListingPrice"];
         delete?: never;
@@ -2074,7 +2076,7 @@ export interface components {
          */
         UserTaskKind: components["schemas"]["KnownUserTaskKind"];
         /** @enum {string} */
-        KnownUserTaskKind: "list_manually" | "delist_manually" | "confirm_sale" | "reconnect" | "review_match";
+        KnownUserTaskKind: "list_manually" | "delist_manually" | "edit_manually" | "confirm_sale" | "reconnect" | "review_match";
         /** @enum {string} */
         UserTaskStatus: "open" | "completed" | "dismissed";
         /**
@@ -2126,7 +2128,7 @@ export interface components {
          *     - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
          *       `rejectMatch: true` when nothing matches. Exactly one of the two is required.
          *     - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
-         *     - `delist_manually`, `reconnect`: nothing besides `note`.
+         *     - `delist_manually`, `edit_manually`, `reconnect`: nothing besides `note`.
          *     - Every kind: optional `note`.
          */
         UserTaskCompletion: {
@@ -3967,6 +3969,6 @@ export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<componen
 export const knownDelistResultStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownDelistResultState"]> = ["pending", "verifying", "delisted", "user_confirmed", "needs_user_action", "failed"];
 export const knownFeeTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeType"]> = ["marketplace", "payment", "shipping_label", "promotion", "tax", "other"];
 export const feeSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FeeSource"]> = ["actual", "estimated"];
-export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "confirm_sale", "reconnect", "review_match"];
+export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "edit_manually", "confirm_sale", "reconnect", "review_match"];
 export const userTaskStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskStatus"]> = ["open", "completed", "dismissed"];
 export const userTaskUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskUrgency"]> = ["normal", "urgent"];

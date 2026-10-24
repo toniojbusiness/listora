@@ -17,11 +17,16 @@ import {
 } from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
 import {
+  createPoshmarkAdapter,
   FakeMarketplace,
   FakeMarketplaceAdapter,
+  isContentKind,
   type AdapterLookup,
   type DesiredListingState,
+  type ListingContent,
+  type MarketplaceAdapter,
 } from '@listora/marketplaces';
+import { contentWith } from '@listora/marketplaces/testing';
 import { createLogger, type Logger } from '@listora/shared';
 
 import { enqueueOperation } from './commands.ts';
@@ -56,19 +61,30 @@ export interface EngineHarness {
   fatalErrors: Error[];
   /**
    * eBay and Depop use the fake marketplace's API (eBay's reads carry revisions, Depop's carry
-   * no freshness marker), Poshmark behaves as an assisted marketplace, and Mercari has no
-   * adapter.
+   * no freshness marker), Poshmark is the real assisted adapter, and Mercari has no adapter.
    */
   adapters: AdapterLookup;
   startWorker(options?: Partial<OperationWorkerOptions>): Promise<OperationWorker>;
   createListing(marketplace?: Marketplace): Promise<ListingRow>;
+  /**
+   * Enqueues an operation. A create, revise, or relist publishes `options.content`, or else
+   * sample content with the title, description, and price `desired` names; its desired state
+   * then comes from that content.
+   */
   enqueue(
     listing: Pick<ListingRow, 'id'>,
     kind: OperationKind,
     desired: DesiredListingState,
-    options?: { idempotencyKey?: string; origin?: OperationOrigin; delistRunId?: string },
+    options?: {
+      idempotencyKey?: string;
+      origin?: OperationOrigin;
+      delistRunId?: string;
+      content?: ListingContent;
+    },
   ): Promise<OperationRow>;
   operation(operationId: string): Promise<OperationRow>;
+  /** A new user who is a member of the harness account; returns their id. */
+  addMember(subject: string): Promise<string>;
   listing(listingId: string): Promise<ListingRow>;
   events(operationId: string): Promise<EventRow[]>;
   waitForStatus(
@@ -99,24 +115,24 @@ export async function createEngineHarness(prefix: string): Promise<EngineHarness
       requestTimeoutMs: FAKE_REQUEST_TIMEOUT_MS,
       readFreshness,
     });
-  const registered = new Map<Marketplace, FakeMarketplaceAdapter>([
+  const registered = new Map<Marketplace, MarketplaceAdapter>([
     ['ebay', api('ebay', 'revision')],
     ['depop', api('depop', 'none')],
-    [
-      'poshmark',
-      new FakeMarketplaceAdapter({ marketplace: 'poshmark', baseUrl: fake.url, mode: 'assisted' }),
-    ],
+    ['poshmark', createPoshmarkAdapter()],
   ]);
   const adapters: AdapterLookup = (marketplace) => registered.get(marketplace);
   // One read through each API adapter first, so a test's first call does not pay the cold
   // start (connection, JIT) and trip the short request timeout on a loaded machine.
   for (const marketplace of ['ebay', 'depop'] as const) {
-    await registered
-      .get(marketplace)
-      ?.readListing(
-        { listingId: 'harness-warmup', externalListingId: null, externalSku: null },
-        { signal: AbortSignal.timeout(10_000), connection: null },
-      );
+    await registered.get(marketplace)?.readListing(
+      {
+        listingId: 'harness-warmup',
+        externalListingId: null,
+        externalSku: null,
+        externalUrl: null,
+      },
+      { signal: AbortSignal.timeout(10_000), connection: null },
+    );
   }
 
   const operation = (operationId: string): Promise<OperationRow> =>
@@ -176,18 +192,34 @@ export async function createEngineHarness(prefix: string): Promise<EngineHarness
     },
     async enqueue(listing, kind, desired, options = {}) {
       sequence += 1;
-      const { operation: created } = await enqueueOperation(db, {
+      const base = {
         accountId,
         listingId: listing.id,
-        kind,
-        desired,
         idempotencyKey: options.idempotencyKey ?? `test-${prefix}-${String(sequence)}`,
         origin: options.origin ?? 'user',
         delistRunId: options.delistRunId ?? null,
-      });
+      };
+      const { operation: created } = await enqueueOperation(
+        db,
+        isContentKind(kind)
+          ? { ...base, kind, content: options.content ?? contentWith(desired) }
+          : { ...base, kind, desired },
+      );
       return created;
     },
     operation,
+    async addMember(subject) {
+      const { id } = await db
+        .insertInto('app_user')
+        .values({ auth_provider: 'dev', auth_subject: subject })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await db
+        .insertInto('membership')
+        .values({ account_id: accountId, user_id: id, role: 'member' })
+        .execute();
+      return id;
+    },
     listing: (listingId) =>
       db
         .selectFrom('marketplace_listing')

@@ -107,7 +107,7 @@ packages/api-contract/  OpenAPI v1 contract + generated TS and Swift code (@list
 packages/db/            SQL migrations, migration runner, Kysely types (@listora/db)
 packages/storage/       Object storage drivers: local disk (.local/storage) and S3 (@listora/storage)
 packages/photos/        Image pipeline: derivatives, metadata stripping, hashes, processing job (@listora/photos)
-packages/marketplaces/  Marketplace adapter interface and the fake marketplace (@listora/marketplaces)
+packages/marketplaces/  Marketplace adapter framework, assisted adapters, and the fake marketplace (@listora/marketplaces)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)

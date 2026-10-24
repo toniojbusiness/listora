@@ -50,6 +50,7 @@ const MIGRATIONS = [
   '0006_read_freshness',
   '0007_pending_listing_id',
   '0008_item_analysis',
+  '0009_listing_content',
 ];
 
 describe('schema migrations (real Postgres)', () => {

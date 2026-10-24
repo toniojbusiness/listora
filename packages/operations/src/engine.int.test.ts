@@ -3,12 +3,14 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import { addJob } from '@listora/db';
 import { FakeMarketplaceAdapter, type FakeAction } from '@listora/marketplaces';
+import { contentWith, sampleListingContent } from '@listora/marketplaces/testing';
 
 import {
   cancelOperation,
   confirmOperationByUser,
   enqueueOperation,
   retryOperation,
+  type NewOperation,
 } from './commands.ts';
 import {
   IdempotencyConflictError,
@@ -550,16 +552,36 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
       listingId: listing.id,
       kind: 'create' as const,
       idempotencyKey: `idem-${listing.id}`,
-      desired: { status: 'active' as const, title: 'Denim skirt', priceCents: 2500 },
+      content: contentWith({ title: 'Denim skirt', priceCents: 2500 }),
       origin: 'user' as const,
     };
     const first = await enqueueOperation(harness.db, input);
-    const again = await enqueueOperation(harness.db, { ...input, desired: { ...input.desired } });
+    // The same content in another key order is the same operation.
+    const reordered = JSON.parse(JSON.stringify(input.content), (_key, value: unknown) =>
+      typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? Object.fromEntries(Object.entries(value).reverse())
+        : value,
+    ) as typeof input.content;
+    const again = await enqueueOperation(harness.db, { ...input, content: reordered });
     expect(first.created).toBe(true);
     expect(again).toMatchObject({ created: false, operation: { id: first.operation.id } });
+    expect(first.operation.desired).toEqual({
+      status: 'active',
+      title: 'Denim skirt',
+      description: input.content.variant.description,
+      priceCents: 2500,
+      currency: 'USD',
+    });
 
     await expect(
-      enqueueOperation(harness.db, { ...input, desired: { ...input.desired, priceCents: 9900 } }),
+      enqueueOperation(harness.db, { ...input, content: contentWith({ priceCents: 9900 }) }),
+    ).rejects.toBeInstanceOf(IdempotencyConflictError);
+    const otherPhotos = sampleListingContent({
+      item: { photos: [] },
+      variant: input.content.variant,
+    });
+    await expect(
+      enqueueOperation(harness.db, { ...input, content: otherPhotos }),
     ).rejects.toBeInstanceOf(IdempotencyConflictError);
 
     await harness.waitForStatus(first.operation.id, ['succeeded']);
@@ -607,19 +629,58 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     ).rejects.toBeInstanceOf(InvalidOperationError);
   });
 
+  it('refuses listing content that is missing, misplaced, or malformed', async () => {
+    const listing = await harness.createListing();
+    const base = { accountId: harness.accountId, listingId: listing.id, origin: 'user' as const };
+    const invalid = [
+      // A create without content, as an untyped caller could send it.
+      { ...base, kind: 'create', idempotencyKey: 'no-content', desired: { status: 'active' } },
+      // An end carries no content.
+      {
+        ...base,
+        kind: 'end',
+        idempotencyKey: 'end-content',
+        desired: { status: 'ended' },
+        content: contentWith({}),
+      },
+      {
+        ...base,
+        kind: 'revise',
+        idempotencyKey: 'bad-content',
+        content: { ...contentWith({}), variant: { title: 'Jacket' } },
+      },
+    ] as unknown as NewOperation[];
+    for (const input of invalid) {
+      await expect(
+        enqueueOperation(harness.db, input),
+        input.idempotencyKey,
+      ).rejects.toBeInstanceOf(InvalidOperationError);
+    }
+    const count = await harness.db
+      .selectFrom('marketplace_operation')
+      .select((eb) => eb.fn.countAll<number>().as('count'))
+      .where('listing_id', '=', listing.id)
+      .executeTakeFirstOrThrow();
+    expect(count.count).toBe(0);
+  });
+
   it('runs one listing at a time, in creation order, even when an older one retries', async () => {
     const listing = await liveListing(1000);
     harness.fake.setLatency(30);
     harness.fake.inject({ action: 'update', sku: listing.id, fault: { type: 'rate_limited' } });
     const first = await harness.enqueue(listing, 'price', { priceCents: 1500 });
     const second = await harness.enqueue(listing, 'price', { priceCents: 2000 });
-    const third = await harness.enqueue(listing, 'revise', { title: 'Denim jacket, size M' });
+    // A revise replaces the whole variant, price included.
+    const third = await harness.enqueue(listing, 'revise', {
+      title: 'Denim jacket, size M',
+      priceCents: 2200,
+    });
 
     for (const op of [first, second, third]) {
       expect(await harness.waitForStatus(op.id, SETTLED)).toMatchObject({ status: 'succeeded' });
     }
     expect(harness.fake.listings('ebay', listing.id)).toEqual([
-      expect.objectContaining({ priceCents: 2000, title: 'Denim jacket, size M' }),
+      expect.objectContaining({ priceCents: 2200, title: 'Denim jacket, size M' }),
     ]);
     expect(harness.fake.maxInFlightPerSku).toBe(1);
 
@@ -693,7 +754,17 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
         urgency: 'normal',
       }),
     ]);
-    expect(tasks[0]?.payload).toMatchObject({ action: 'create', title: 'Floral dress' });
+    expect(tasks[0]).toMatchObject({
+      deep_link: 'https://poshmark.com/',
+      payload: {
+        action: 'create',
+        copyAssist: {
+          title: 'Floral dress',
+          price: { amountCents: 3500, currency: 'USD' },
+          photos: [{ photoId: 'photo-front' }, { photoId: 'photo-back' }, { photoId: 'photo-tag' }],
+        },
+      },
+    });
     expect(harness.fake.requests.filter((request) => request.marketplace === 'poshmark')).toEqual(
       [],
     );
@@ -715,7 +786,7 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
       }),
     ).rejects.toBeInstanceOf(NotAccountMemberError);
 
-    const userId = await addMember(harness, `owner-${op.id}`);
+    const userId = await harness.addMember(`owner-${op.id}`);
     const confirmed = await confirmOperationByUser(harness.db, {
       accountId: harness.accountId,
       operationId: op.id,
@@ -754,7 +825,7 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(await harness.operation(end.id)).toMatchObject({ status: 'queued', attempts: 0 });
 
-    const userId = await addMember(harness, `owner-${create.id}`);
+    const userId = await harness.addMember(`owner-${create.id}`);
     await confirmOperationByUser(harness.db, {
       accountId: harness.accountId,
       operationId: create.id,
@@ -910,17 +981,4 @@ async function recordSale(harness: EngineHarness, listing: ListingRow): Promise<
     .returning('id')
     .executeTakeFirstOrThrow();
   return run.id;
-}
-
-async function addMember(harness: EngineHarness, subject: string): Promise<string> {
-  const { id } = await harness.db
-    .insertInto('app_user')
-    .values({ auth_provider: 'dev', auth_subject: subject })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  await harness.db
-    .insertInto('membership')
-    .values({ account_id: harness.accountId, user_id: id, role: 'member' })
-    .execute();
-  return id;
 }

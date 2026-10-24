@@ -7,11 +7,16 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type {
+  ListingPayload,
   MarketplaceAdapter,
   MarketplaceCapabilities,
+  OperationRequest,
   Outcome,
   RemoteListingState,
+  ValidationIssue,
 } from '@listora/marketplaces';
+
+import { sampleListingContent } from '@listora/marketplaces/testing';
 
 import { runOperationStep, type StepDependencies } from './executor.ts';
 import { listingQueueName, operationJobKey } from './jobs.ts';
@@ -44,23 +49,36 @@ const ACTIVE: RemoteListingState = {
   externalUrl: null,
   status: 'active',
   title: 'Stub jacket',
-  description: null,
+  // The harness publishes sample content, whose description a read-back must show.
+  description: sampleListingContent().variant.description,
   priceCents: 4500,
   currency: 'USD',
   revision: 1,
 };
 
 function stubAdapter(behavior: {
-  execute: () => Promise<Outcome>;
+  execute: (op: OperationRequest) => Promise<Outcome>;
   read?: () => Promise<RemoteListingState>;
   readFreshness?: MarketplaceCapabilities['readFreshness'];
+  capabilities?: Partial<MarketplaceCapabilities>;
+  validate?: () => ValidationIssue[];
+  buildPayload?: () => ListingPayload;
 }): MarketplaceAdapter {
-  const capabilities = { ...CAPABILITIES, readFreshness: behavior.readFreshness ?? 'revision' };
+  const capabilities: MarketplaceCapabilities = {
+    ...CAPABILITIES,
+    readFreshness: behavior.readFreshness ?? 'revision',
+    ...behavior.capabilities,
+  };
   return {
     id: 'depop',
     capabilities: () => capabilities,
+    buildPayload:
+      behavior.buildPayload ??
+      ((_item, variant) => ({ title: variant.title, priceCents: variant.price.amountCents })),
+    validate: behavior.validate ?? (() => []),
     execute: behavior.execute,
     readListing: behavior.read ?? (() => Promise.resolve(ACTIVE)),
+    healthCheck: () => Promise.resolve({ status: 'ok' }),
   };
 }
 

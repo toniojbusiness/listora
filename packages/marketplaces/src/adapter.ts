@@ -1,14 +1,26 @@
 /**
  * The marketplace adapter interface (docs/architecture.md section 4). All marketplace logic
- * lives behind it; the operation engine and the UI never branch on the marketplace name.
+ * lives behind it; the operation engine and the UI never branch on the marketplace name, only
+ * on capability flags (capabilities.ts), which may differ per connection.
  *
- * This is the minimal interface the operation engine needs (T-06). The adapter framework
- * (T-10) adds the rest of the planned interface (`buildPayload`, `validate`, `healthCheck`,
- * and the optional import, order, webhook, email, and credential members) without changing
- * these members.
+ * Every adapter follows the same pattern:
+ *
+ * - `buildPayload` and `validate` are pure: the same listing content and connection always
+ *   give the same payload and issues, and golden tests pin both down. The engine builds and
+ *   validates the payload of every attempt itself and never sends an invalid one.
+ * - `execute` sends one attempt and maps every answer onto an `Outcome`; it never throws for a
+ *   marketplace error.
+ * - `readListing` reports what the marketplace shows, with a freshness marker, and says when an
+ *   absence is definitive.
+ * - The shared conformance suite (conformance/suite.ts) checks each of these rules against the
+ *   adapter's own fake marketplace.
+ *
+ * Imports, orders, webhooks, emails, and credential refresh join this interface with the tasks
+ * that first use them (T-16, T-17, T-23, T-36), as optional members.
  */
 import type {
   ConnectionMode,
+  ConnectionStatus,
   JsonObject,
   Marketplace,
   OperationKind,
@@ -16,10 +28,16 @@ import type {
 } from '@listora/db';
 import type { CurrencyCode } from '@listora/shared';
 
+import type { ItemSnapshot, ListingVariant } from './content.ts';
+
 /** How a marketplace supports a capability. */
 export type Mode = 'api' | 'assisted' | 'bulk_file' | 'none';
 
-/** Capability flags; they may change for one connection (Depop: assisted until approved). */
+/**
+ * Capability flags; they may change for one connection (Depop: assisted until approved). The
+ * engine reads `create` through `markSold` to route each kind of operation (`operationMode`),
+ * and `verifyRead` and `readFreshness` to decide how success is established.
+ */
 export interface MarketplaceCapabilities {
   connect: 'oauth' | 'none';
   create: Mode;
@@ -27,6 +45,7 @@ export interface MarketplaceCapabilities {
   updateDetails: Mode;
   delist: Mode;
   relist: Mode;
+  /** `not_needed`: the marketplace marks its own sales sold; Listora never asks. */
   markSold: Mode | 'not_needed';
   /** How success is established: an API read-back, or the user's confirmation. */
   verifyRead: 'api' | 'user_confirm';
@@ -86,11 +105,14 @@ export interface ListingRef {
   externalListingId: string | null;
   /** The seller SKU sent to the marketplace, when the adapter uses one. */
   externalSku: string | null;
+  /** The listing's page on the marketplace, once known (assisted tasks link to it). */
+  externalUrl: string | null;
 }
 
 /** The connection an operation runs under, without credentials (T-16 adds token access). */
 export interface ConnectionRef {
   id: string;
+  /** `api` once the seller connected an official API; capabilities follow it. */
   mode: ConnectionMode;
 }
 
@@ -100,8 +122,27 @@ export interface AdapterContext {
   connection: ConnectionRef | null;
 }
 
+/**
+ * What an adapter sends for a create, revise, or relist, in the marketplace's own terms. It is
+ * JSON so it can be compared with golden files, and it never holds credentials.
+ */
+export type ListingPayload = JsonObject;
+
+/** A reason a listing can't be sent to a marketplace as it is. */
+export interface ValidationIssue {
+  /**
+   * The listing content field the user has to change, as a path: `variant.title`,
+   * `variant.price`, `item.photos`, and so on.
+   */
+  field: string;
+  /** Stable machine-readable reason: `required`, `too_long`, `too_many`, `out_of_range`, ... */
+  code: string;
+  /** User-readable and names the marketplace, for example "eBay titles can be at most 80 characters." */
+  message: string;
+}
+
 /** One attempt of a marketplace operation. */
-export interface OperationRequest {
+export interface OperationRequest<P extends ListingPayload = ListingPayload> {
   operationId: string;
   kind: WriteOperationKind;
   /**
@@ -114,6 +155,11 @@ export interface OperationRequest {
   attempt: number;
   desired: DesiredListingState;
   listing: ListingRef;
+  /**
+   * For a create, revise, or relist: this adapter's `buildPayload` result for the operation's
+   * content under the same connection, already validated. `null` for every other kind.
+   */
+  payload: P | null;
 }
 
 /** A listing as read back from the marketplace, normalized to Listora's fields. */
@@ -172,21 +218,54 @@ export type Outcome =
   | { type: 'transient'; code: string; message: string; retryAfterMs?: number; excerpt?: Excerpt }
   /** The request may have reached the marketplace (for example a timeout after sending). */
   | { type: 'unknown'; code: string; message: string; excerpt?: Excerpt }
-  /** Assisted mode: the user has to do the step, then confirm it. */
+  /**
+   * Assisted mode: the user has to do the step, then confirm it. The engine accepts it only for
+   * an operation whose capability mode is `assisted`.
+   */
   | { type: 'pendingUser'; task: UserTaskSpec; excerpt?: Excerpt };
 
-export interface MarketplaceAdapter {
+/**
+ * A connection's health as one cheap marketplace call shows it (the daily health job, T-25).
+ * `ok` also means "nothing to check" for an assisted marketplace.
+ */
+export type Health =
+  | { status: 'ok' }
+  | {
+      status: Exclude<ConnectionStatus, 'connected'>;
+      /** Stable machine-readable reason, for example `unreachable` or `rate_limited`. */
+      code: string;
+      /** User-readable and names the marketplace. */
+      message: string;
+    };
+
+export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
   readonly id: Marketplace;
-  capabilities(connection?: ConnectionRef): MarketplaceCapabilities;
+  /**
+   * The capabilities under a connection; without one, the marketplace's default (Depop:
+   * assisted). A connection that switches to `api` switches them without any data migration.
+   */
+  capabilities(connection?: ConnectionRef | null): MarketplaceCapabilities;
+  /**
+   * Builds the marketplace payload for a listing's content. Pure: no I/O, no clock, no
+   * randomness, and the inputs are never changed. Photos go in `position` order.
+   */
+  buildPayload(item: ItemSnapshot, variant: ListingVariant, connection: ConnectionRef | null): P;
+  /**
+   * The marketplace's rules for a payload `buildPayload` returned (length limits, required
+   * photos, price range); empty when it can be sent. Pure.
+   */
+  validate(payload: P, connection: ConnectionRef | null): ValidationIssue[];
   /** Sends one attempt. Must not throw for marketplace errors; it returns an `Outcome`. */
-  execute(op: OperationRequest, ctx: AdapterContext): Promise<Outcome>;
+  execute(op: OperationRequest<P>, ctx: AdapterContext): Promise<Outcome>;
   /**
    * Reads the listing back. Must observe the effect of any earlier attempt of an operation on
    * this listing, including one whose outcome was unknown (find it by external SKU or id).
    * A read may be stale; its `revision` (see `readFreshness`) lets the engine tell.
-   * Throws when the marketplace cannot be read.
+   * Throws when the marketplace cannot be read; an assisted adapter always throws.
    */
   readListing(ref: ListingRef, ctx: AdapterContext): Promise<RemoteListingState>;
+  /** One cheap call that shows whether the connection works. Never throws. */
+  healthCheck(ctx: AdapterContext): Promise<Health>;
 }
 
 /** Finds the adapter for a marketplace; `undefined` when Listora has none configured. */

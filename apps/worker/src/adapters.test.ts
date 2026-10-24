@@ -1,23 +1,40 @@
 import { describe, expect, it } from 'vitest';
 
-import { MARKETPLACES } from '@listora/db';
-import { FakeMarketplaceAdapter } from '@listora/marketplaces';
+import {
+  AssistedAdapter,
+  ConnectionAwareAdapter,
+  FakeMarketplaceAdapter,
+} from '@listora/marketplaces';
 
 import { createAdapters } from './adapters.ts';
 
+const api = { id: 'connection-1', mode: 'api' } as const;
+
 describe('createAdapters', () => {
-  it('has no adapter for any marketplace without FAKE_MARKETPLACE_URL', () => {
+  it('serves the assisted marketplaces, and no eBay, without FAKE_MARKETPLACE_URL', () => {
     const adapters = createAdapters({ fakeMarketplaceUrl: undefined });
-    for (const marketplace of MARKETPLACES) expect(adapters(marketplace)).toBeUndefined();
+    expect(adapters.marketplaces).toEqual(['depop', 'poshmark', 'mercari']);
+    expect(adapters.get('ebay')).toBeUndefined();
+    expect(adapters.get('poshmark')).toBeInstanceOf(AssistedAdapter);
+    expect(adapters.get('mercari')).toBeInstanceOf(AssistedAdapter);
+    // Depop stays assisted even under an api connection while it has no api adapter.
+    expect(adapters.capabilities('depop', api)?.verifyRead).toBe('user_confirm');
   });
 
-  it('routes every marketplace to the fake marketplace when it is configured', () => {
+  it('routes eBay and api-connected Depop listings to the fake marketplace when configured', () => {
     const adapters = createAdapters({ fakeMarketplaceUrl: 'http://127.0.0.1:4100' });
-    for (const marketplace of MARKETPLACES) {
-      const adapter = adapters(marketplace);
-      expect(adapter).toBeInstanceOf(FakeMarketplaceAdapter);
-      expect(adapter?.id).toBe(marketplace);
-      expect(adapter?.capabilities().verifyRead).toBe('api');
+    expect(adapters.marketplaces).toEqual(['ebay', 'depop', 'poshmark', 'mercari']);
+    expect(adapters.get('ebay')).toBeInstanceOf(FakeMarketplaceAdapter);
+    const depop = adapters.get('depop');
+    expect(depop).toBeInstanceOf(ConnectionAwareAdapter);
+    expect(depop?.capabilities(null).verifyRead).toBe('user_confirm');
+    expect(depop?.capabilities(api).verifyRead).toBe('api');
+    // Poshmark and Mercari have no api; they stay assisted until the browser runner lands.
+    for (const marketplace of ['poshmark', 'mercari'] as const) {
+      expect(adapters.capabilities(marketplace, api)).toMatchObject({
+        create: 'assisted',
+        verifyRead: 'user_confirm',
+      });
     }
   });
 });

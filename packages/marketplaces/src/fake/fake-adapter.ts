@@ -1,15 +1,18 @@
 /**
  * A `MarketplaceAdapter` for the fake marketplace (fake-marketplace.ts). It speaks the fake's
  * HTTP API and maps its responses and failures onto outcomes exactly as the real adapters do,
- * so the operation engine can be tested against every failure mode without a credential.
+ * so the operation engine can be tested against every failure mode without a credential. It is
+ * the reference API adapter: it passes the shared conformance suite, and its payload builder is
+ * golden-tested (fake-adapter.test.ts).
  */
-import type { Marketplace } from '@listora/db';
+import type { JsonObject, Marketplace } from '@listora/db';
 import { assertNever, type CurrencyCode } from '@listora/shared';
 
 import {
   MARKETPLACE_NAMES,
   type AdapterContext,
   type Excerpt,
+  type Health,
   type ListingRef,
   type MarketplaceAdapter,
   type MarketplaceCapabilities,
@@ -17,7 +20,9 @@ import {
   type Outcome,
   type RemoteListingState,
   type RemoteListingStatus,
+  type ValidationIssue,
 } from '../adapter.ts';
+import { photosInOrder, type ItemSnapshot, type ListingVariant } from '../content.ts';
 import { requestJson, type HttpResult, type JsonRequest } from '../http.ts';
 
 export interface FakeAdapterOptions {
@@ -27,18 +32,13 @@ export interface FakeAdapterOptions {
   /** Per-request timeout; a timeout after sending is an `unknown` outcome. Default 10 s. */
   requestTimeoutMs?: number;
   /**
-   * `api` (default) writes through the API and is verified by read-back. `assisted` behaves
-   * like Poshmark: every write becomes a user task, confirmed by the user.
-   */
-  mode?: 'api' | 'assisted';
-  /**
    * `revision` (default) reports the fake's listing revisions. `none` hides them, like a
    * marketplace whose reads carry no freshness marker.
    */
   readFreshness?: MarketplaceCapabilities['readFreshness'];
 }
 
-const API_CAPABILITIES: MarketplaceCapabilities = {
+const CAPABILITIES: MarketplaceCapabilities = {
   connect: 'oauth',
   create: 'api',
   updatePrice: 'api',
@@ -57,24 +57,18 @@ const API_CAPABILITIES: MarketplaceCapabilities = {
   limits: {},
 };
 
-const ASSISTED_CAPABILITIES: MarketplaceCapabilities = {
-  connect: 'none',
-  create: 'assisted',
-  updatePrice: 'assisted',
-  updateDetails: 'assisted',
-  delist: 'assisted',
-  relist: 'assisted',
-  markSold: 'not_needed',
-  verifyRead: 'user_confirm',
-  readFreshness: 'none',
-  importListings: 'share_sheet',
-  saleDetection: ['email', 'manual'],
-  imageTransport: 'user_saves_photos',
-  taxonomy: 'static_snapshot',
-  pricingData: 'none',
-  externalSkuReusable: true,
-  limits: {},
-};
+/** The fake's limits, like eBay's. */
+const TITLE_MAX_LENGTH = 80;
+const MAX_PHOTOS = 24;
+
+/** What a create or revise sends: the listing fields and the photo URLs in posting order. */
+export interface FakeListingPayload extends JsonObject {
+  title: string;
+  description: string;
+  priceCents: number;
+  currency: CurrencyCode;
+  photoUrls: string[];
+}
 
 interface FakeListingBody {
   id: string;
@@ -87,11 +81,10 @@ interface FakeListingBody {
   revision: number;
 }
 
-export class FakeMarketplaceAdapter implements MarketplaceAdapter {
+export class FakeMarketplaceAdapter implements MarketplaceAdapter<FakeListingPayload> {
   readonly id: Marketplace;
   readonly #baseUrl: string;
   readonly #timeoutMs: number;
-  readonly #mode: 'api' | 'assisted';
   readonly #capabilities: MarketplaceCapabilities;
   readonly #name: string;
 
@@ -99,11 +92,7 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
     this.id = options.marketplace;
     this.#baseUrl = `${options.baseUrl.replace(/\/+$/, '')}/${options.marketplace}`;
     this.#timeoutMs = options.requestTimeoutMs ?? 10_000;
-    this.#mode = options.mode ?? 'api';
-    this.#capabilities =
-      this.#mode === 'api'
-        ? { ...API_CAPABILITIES, readFreshness: options.readFreshness ?? 'revision' }
-        : ASSISTED_CAPABILITIES;
+    this.#capabilities = { ...CAPABILITIES, readFreshness: options.readFreshness ?? 'revision' };
     this.#name = MARKETPLACE_NAMES[options.marketplace];
   }
 
@@ -111,9 +100,50 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
     return this.#capabilities;
   }
 
-  async execute(op: OperationRequest, ctx: AdapterContext): Promise<Outcome> {
-    if (this.#mode === 'assisted') return this.#assistedTask(op);
+  buildPayload(item: ItemSnapshot, variant: ListingVariant): FakeListingPayload {
+    return {
+      title: variant.title,
+      description: variant.description,
+      priceCents: variant.price.amountCents,
+      currency: variant.price.currency,
+      photoUrls: photosInOrder(item).map((photo) => photo.url),
+    };
+  }
 
+  validate(payload: FakeListingPayload): ValidationIssue[] {
+    const name = this.#name;
+    const issues: ValidationIssue[] = [];
+    if (payload.title.length > TITLE_MAX_LENGTH) {
+      issues.push({
+        field: 'variant.title',
+        code: 'too_long',
+        message: `${name} titles can be at most ${String(TITLE_MAX_LENGTH)} characters.`,
+      });
+    }
+    if (payload.priceCents <= 0) {
+      issues.push({
+        field: 'variant.price',
+        code: 'out_of_range',
+        message: `${name} needs a price above $0.`,
+      });
+    }
+    if (payload.photoUrls.length === 0) {
+      issues.push({
+        field: 'item.photos',
+        code: 'required',
+        message: `${name} needs at least one photo.`,
+      });
+    } else if (payload.photoUrls.length > MAX_PHOTOS) {
+      issues.push({
+        field: 'item.photos',
+        code: 'too_many',
+        message: `${name} takes at most ${String(MAX_PHOTOS)} photos.`,
+      });
+    }
+    return issues;
+  }
+
+  async execute(op: OperationRequest<FakeListingPayload>, ctx: AdapterContext): Promise<Outcome> {
     const externalId = op.listing.externalListingId;
     if (op.kind !== 'create' && externalId === null) {
       return {
@@ -128,15 +158,18 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
 
     switch (op.kind) {
       case 'create':
+        if (op.payload === null) return missingPayload(this.#name);
         return this.#write(ctx, {
           method: 'POST',
           path: '/listings',
-          body: { sku: sellerSku(op.listing), ...op.desired },
+          body: { sku: sellerSku(op.listing), ...op.payload },
           idempotencyKey: op.idempotencyKey,
         });
       case 'revise':
+        if (op.payload === null) return missingPayload(this.#name);
+        return this.#write(ctx, { method: 'PATCH', path: path(''), body: op.payload });
       case 'price':
-        return this.#write(ctx, { method: 'PATCH', path: path(''), body: listingFields(op) });
+        return this.#write(ctx, { method: 'PATCH', path: path(''), body: priceFields(op) });
       case 'end':
         return this.#write(ctx, { method: 'POST', path: path('/end') });
       case 'relist':
@@ -180,32 +213,28 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
     };
   }
 
-  #assistedTask(op: OperationRequest): Outcome {
-    switch (op.kind) {
-      case 'create':
-      case 'relist':
-      case 'end':
-      case 'mark_sold':
-        return {
-          type: 'pendingUser',
-          task: {
-            kind:
-              op.kind === 'create' || op.kind === 'relist' ? 'list_manually' : 'delist_manually',
-            deepLink: `${this.#baseUrl}/listings?sku=${encodeURIComponent(sellerSku(op.listing))}`,
-            payload: { action: op.kind, ...op.desired },
-          },
-        };
-      case 'revise':
-      case 'price':
-        return {
-          type: 'rejected',
-          code: 'not_supported',
-          message: `Listora can't change ${this.#name} listings for you yet.`,
-          fixHint: `Edit the listing on ${this.#name}.`,
-        };
-      default:
-        return assertNever(op.kind, 'operation kind');
+  async healthCheck(ctx: AdapterContext): Promise<Health> {
+    const result = await this.#send(ctx, { method: 'GET', path: '/health' });
+    if (result.type !== 'response') {
+      return {
+        status: 'degraded',
+        code: 'unreachable',
+        message: `Listora couldn't reach ${this.#name}.`,
+      };
     }
+    if (result.status === 200) return { status: 'ok' };
+    if (result.status === 401) {
+      return {
+        status: 'reauth_required',
+        code: 'unauthorized',
+        message: `Listora's access to ${this.#name} has expired.`,
+      };
+    }
+    return {
+      status: 'degraded',
+      code: result.status === 429 ? 'rate_limited' : `http_${String(result.status)}`,
+      message: `${this.#name} isn't answering normally right now.`,
+    };
   }
 
   async #write(
@@ -263,6 +292,15 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
     // the listing back, and only that read decides.
     if (status === 409 && (error?.code === 'already_ended' || error?.code === 'already_sold')) {
       return { type: 'confirmed', excerpt };
+    }
+    if (status === 401) {
+      return {
+        type: 'rejected',
+        code: 'reauth_required',
+        message: `Listora's access to ${this.#name} has expired.`,
+        fixHint: `Reconnect ${this.#name}, then tap Retry.`,
+        excerpt,
+      };
     }
     if (status === 429) {
       const retryAfter = Number(result.headers.get('retry-after'));
@@ -329,14 +367,19 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
   }
 }
 
-/** The fields a revise or price change sends; the status changes only through end and relist. */
-function listingFields(op: OperationRequest): Record<string, unknown> {
-  const { title, description, priceCents, currency } = op.desired;
-  return Object.fromEntries(
-    Object.entries({ title, description, priceCents, currency }).filter(
-      ([, value]) => value !== undefined,
-    ),
-  );
+/** What a price change sends; the status changes only through end and relist. */
+function priceFields(op: OperationRequest): Record<string, unknown> {
+  const { priceCents, currency } = op.desired;
+  return currency === undefined ? { priceCents } : { priceCents, currency };
+}
+
+/** The engine always passes a payload for a create or revise; this guards a caller that doesn't. */
+function missingPayload(name: string): Outcome {
+  return {
+    type: 'rejected',
+    code: 'missing_content',
+    message: `This change has no listing details to send to ${name}.`,
+  };
 }
 
 /** The seller SKU the fake knows a listing by: the external SKU, else Listora's listing id. */

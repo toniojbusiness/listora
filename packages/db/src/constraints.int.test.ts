@@ -124,6 +124,7 @@ function insertOperation(
       kind: 'create',
       idempotency_key: 'create-1',
       desired: jsonb({ price_cents: 4_500 }),
+      content: jsonb({ variant: { title: 'Jacket' } }),
       origin: 'user',
       ...overrides,
     })
@@ -771,6 +772,54 @@ describe('schema constraints (real Postgres)', () => {
         PG_ERROR.checkViolation,
         'marketplace_operation_auto_delist_has_run',
       );
+    });
+
+    it('stores listing content exactly on the operations that publish it', async () => {
+      const values = {
+        account_id: a.accountId,
+        listing_id: a.listingId,
+        desired: jsonb({ status: 'active' }),
+        origin: 'user',
+      } as const;
+      for (const kind of ['create', 'revise', 'relist'] as const) {
+        await expectPgError(
+          db
+            .insertInto('marketplace_operation')
+            .values({ ...values, kind, idempotency_key: `no-content-${kind}` })
+            .execute(),
+          PG_ERROR.checkViolation,
+          'marketplace_operation_content_by_kind',
+        );
+      }
+      await expectPgError(
+        db
+          .insertInto('marketplace_operation')
+          .values({
+            ...values,
+            kind: 'end',
+            idempotency_key: 'end-with-content',
+            desired: jsonb({ status: 'ended' }),
+            content: jsonb({ variant: { title: 'Jacket' } }),
+          })
+          .execute(),
+        PG_ERROR.checkViolation,
+        'marketplace_operation_content_by_kind',
+      );
+    });
+
+    it('ties assisted edit tasks to their listing', async () => {
+      await expectPgError(
+        db
+          .insertInto('user_task')
+          .values({ account_id: a.accountId, kind: 'edit_manually' })
+          .execute(),
+        PG_ERROR.checkViolation,
+        'user_task_manual_listing_task_has_listing',
+      );
+      await db
+        .insertInto('user_task')
+        .values({ account_id: a.accountId, kind: 'edit_manually', listing_id: a.listingId })
+        .execute();
     });
   });
 
