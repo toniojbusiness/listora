@@ -380,4 +380,6 @@ read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
   Its conventions (error model, idempotency keys, pagination, Money) are in
   [packages/api-contract/README.md](../packages/api-contract/README.md).
 - CI runs the same fresh-clone path as local development; see the CI section of the
-  [README](../README.md#ci). A macOS job runs `make ios-lint` and `make ios-test`.
+  [README](../README.md#ci). A macOS job runs `make ios-lint` and `make ios-test`, but only
+  when a file the iOS build reads changed (macOS minutes cost 10 times Linux minutes); the
+  Linux backend check runs on every pull request.
