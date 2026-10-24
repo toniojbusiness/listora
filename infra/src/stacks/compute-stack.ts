@@ -1,26 +1,31 @@
+import { assertNever } from '@listora/shared';
 import { CfnOutput, Duration } from 'aws-cdk-lib';
+import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import type * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import type * as iam from 'aws-cdk-lib/aws-iam';
 import type * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import type * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
+import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import type { Construct } from 'constructs';
 
 import type { ServiceName, ServiceSize } from '../config.ts';
 import { API_PORT, containerEnvironment, SERVICE_COMMANDS } from '../containers.ts';
-import { ListoraStack, removalPolicyFor, type ListoraStackProps } from './common.ts';
+import { ListoraStack, removalPolicyFor, taskPlacement, type ListoraStackProps } from './common.ts';
 import { INBOUND_MAIL_PREFIX } from './email-stack.ts';
 import { containerSecrets, databaseUrl } from './task-config.ts';
 
 export interface ComputeStackProps extends ListoraStackProps {
   readonly vpc: ec2.IVpc;
-  readonly loadBalancerSecurityGroup: ec2.ISecurityGroup;
+  readonly ingressSecurityGroup: ec2.ISecurityGroup;
   readonly apiSecurityGroup: ec2.ISecurityGroup;
   readonly workerSecurityGroup: ec2.ISecurityGroup;
   readonly database: rds.DatabaseInstance;
@@ -37,23 +42,46 @@ export const API_SUBDOMAIN = 'api';
 const TARGET_CPU_PERCENT = 60;
 
 /**
- * Fargate services for the API and the worker on one ECS cluster, plus the public
- * load balancer for the API at `https://api.<domain>`.
+ * Steady and burst request rates the HTTP API admits for the whole environment; beyond them
+ * it answers 429. Far above what one reseller's app sends, far below a bill-raising flood.
+ */
+export const HTTP_API_THROTTLE = { rateLimit: 50, burstLimit: 100 } as const;
+
+/** What serves `https://api.<domain>` (`ingress`), for the alarms. */
+export type ApiEndpoint =
+  | {
+      readonly kind: 'load-balancer';
+      readonly loadBalancer: elbv2.ApplicationLoadBalancer;
+      readonly targetGroup: elbv2.ApplicationTargetGroup;
+    }
+  | { readonly kind: 'http-api'; readonly httpApi: apigwv2.HttpApi };
+
+/** One ECS service: `api` and `worker`, or `app`, which runs both containers. */
+export interface ListoraService {
+  readonly name: string;
+  readonly service: ecs.FargateService;
+}
+
+/**
+ * Fargate services for the API and the worker on one ECS cluster, plus the public HTTPS
+ * endpoint of the API at `https://api.<domain>`: an Application Load Balancer, or an API
+ * Gateway HTTP API reaching the tasks through a VPC link and Cloud Map (`ingress`). The two
+ * processes run as two services, or as two containers of one service (`services.layout`).
  *
  * Container configuration comes from `containerEnvironment` (src/containers.ts). The database
  * password reaches the processes only as `PGPASSWORD`, injected by ECS from the RDS-generated
- * secret, so no secret appears in a task definition. Each service has its own task role,
- * granted only the resources that service is designed to use.
+ * secret, so no secret appears in a task definition. Each task role is granted only the
+ * resources its containers are designed to use.
  *
  * The services set no desired count: CloudFormation would reset the running count to it on
  * every deploy. Autoscaling owns the count, between `minTasks` and `maxTasks`.
  */
 export class ComputeStack extends ListoraStack {
   readonly cluster: ecs.Cluster;
-  readonly loadBalancer: elbv2.ApplicationLoadBalancer;
-  readonly apiTargetGroup: elbv2.ApplicationTargetGroup;
-  readonly apiService: ecs.FargateService;
-  readonly workerService: ecs.FargateService;
+  readonly services: readonly ListoraService[];
+  readonly endpoint: ApiEndpoint;
+
+  private readonly containerOptions: (service: ServiceName) => ecs.ContainerDefinitionOptions;
 
   constructor(scope: Construct, id: string, props: ComputeStackProps) {
     super(scope, id, props);
@@ -71,32 +99,65 @@ export class ComputeStack extends ListoraStack {
 
     const image = ecs.ContainerImage.fromEcrRepository(props.repository, target.imageTag);
     const url = databaseUrl(props.database);
-
-    const api = this.taskDefinition(props, 'api', {
+    this.containerOptions = (service) => ({
       image,
-      environment: containerEnvironment('api', url),
-      secrets: containerSecrets(this, environment, 'api', props.database),
-      portMappings: [{ containerPort: API_PORT }],
-    });
-
-    const worker = this.taskDefinition(props, 'worker', {
-      image,
-      environment: containerEnvironment('worker', url),
-      secrets: containerSecrets(this, environment, 'worker', props.database),
-      portMappings: [],
+      command: [...SERVICE_COMMANDS[service]],
+      environment: containerEnvironment(service, url),
+      secrets: containerSecrets(this, environment, service, props.database),
+      portMappings: service === 'api' ? [{ containerPort: API_PORT }] : [],
+      // Without a load balancer, ECS itself checks the API (the same liveness path) and
+      // replaces a task that fails.
+      ...(service === 'api' && settings.ingress === 'http-api'
+        ? { healthCheck: apiHealthCheck() }
+        : {}),
+      readonlyRootFilesystem: true,
+      // Both processes drain on SIGTERM (handleShutdownSignals in @listora/shared).
+      stopTimeout: Duration.seconds(30),
     });
 
     // Designed access, least privilege: photos for both (uploads, derivatives), raw sale
-    // emails for the worker only, and envelope encryption of marketplace tokens for both.
-    props.photoBucket.grantReadWrite(api.taskRole);
-    props.photoBucket.grantReadWrite(worker.taskRole);
-    props.inboundMailBucket.grantRead(worker.taskRole, `${INBOUND_MAIL_PREFIX}*`);
-    for (const role of [api.taskRole, worker.taskRole]) {
+    // emails for the worker only, and envelope encryption of marketplace tokens for both. A
+    // combined task's role holds the union, since its two containers share it.
+    const grant = (role: iam.IRole, containers: readonly ServiceName[]): void => {
+      props.photoBucket.grantReadWrite(role);
+      if (containers.includes('worker')) {
+        props.inboundMailBucket.grantRead(role, `${INBOUND_MAIL_PREFIX}*`);
+      }
       props.tokenKey.grant(role, 'kms:GenerateDataKey', 'kms:Decrypt');
-    }
+    };
 
-    this.apiService = this.service('api', api, settings.api, props.apiSecurityGroup);
-    this.workerService = this.service('worker', worker, settings.worker, props.workerSecurityGroup);
+    const layout = settings.services;
+    let apiService: ecs.FargateService;
+    switch (layout.layout) {
+      case 'separate': {
+        const api = this.taskDefinition(props, 'api', layout.api, ['api']);
+        const worker = this.taskDefinition(props, 'worker', layout.worker, ['worker']);
+        grant(api.taskRole, ['api']);
+        grant(worker.taskRole, ['worker']);
+        apiService = this.service(props, 'api', api, layout.api, [props.apiSecurityGroup]);
+        const workerService = this.service(props, 'worker', worker, layout.worker, [
+          props.workerSecurityGroup,
+        ]);
+        this.services = [
+          { name: 'api', service: apiService },
+          { name: 'worker', service: workerService },
+        ];
+        break;
+      }
+      case 'combined': {
+        const app = this.taskDefinition(props, 'app', layout.app, ['api', 'worker']);
+        grant(app.taskRole, ['api', 'worker']);
+        // Both groups: the API's admits the ingress, and the database admits each of them.
+        apiService = this.service(props, 'app', app, layout.app, [
+          props.apiSecurityGroup,
+          props.workerSecurityGroup,
+        ]);
+        this.services = [{ name: 'app', service: apiService }];
+        break;
+      }
+      default:
+        assertNever(layout);
+    }
 
     const zone = route53.PublicHostedZone.fromHostedZoneAttributes(this, 'Zone', {
       hostedZoneId: target.hostedZoneId,
@@ -107,70 +168,135 @@ export class ComputeStack extends ListoraStack {
       validation: acm.CertificateValidation.fromDns(zone),
     });
 
-    this.loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'LoadBalancer', {
-      loadBalancerName: `listora-${environment}-api`,
-      vpc: props.vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      internetFacing: true,
-      securityGroup: props.loadBalancerSecurityGroup,
-      dropInvalidHeaderFields: true,
-      deletionProtection: settings.protectData,
-    });
-    this.loadBalancer.addRedirect({ sourcePort: 80, targetPort: 443, open: false });
-    const https = this.loadBalancer.addListener('Https', {
-      port: 443,
-      certificates: [certificate],
-      sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
-      open: false,
-    });
-    this.apiTargetGroup = https.addTargets('Api', {
-      port: API_PORT,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targets: [this.apiService],
-      deregistrationDelay: Duration.seconds(30),
-      healthCheck: {
-        // Liveness, not readiness (apps/api/src/health.ts): ECS replaces tasks that fail this
-        // check, and a database failover must not restart every API task at once.
-        path: '/health/live',
-        healthyHttpCodes: '200',
-        interval: Duration.seconds(15),
-        timeout: Duration.seconds(5),
-        healthyThresholdCount: 2,
-        unhealthyThresholdCount: 3,
-      },
-    });
+    let aliasTarget: route53.IAliasRecordTarget;
+    switch (settings.ingress) {
+      case 'load-balancer': {
+        const loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'LoadBalancer', {
+          loadBalancerName: `listora-${environment}-api`,
+          vpc: props.vpc,
+          vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+          internetFacing: true,
+          securityGroup: props.ingressSecurityGroup,
+          dropInvalidHeaderFields: true,
+          deletionProtection: settings.protectData,
+        });
+        loadBalancer.addRedirect({ sourcePort: 80, targetPort: 443, open: false });
+        const https = loadBalancer.addListener('Https', {
+          port: 443,
+          certificates: [certificate],
+          sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
+          open: false,
+        });
+        const targetGroup = https.addTargets('Api', {
+          port: API_PORT,
+          protocol: elbv2.ApplicationProtocol.HTTP,
+          targets: [
+            apiService.loadBalancerTarget({ containerName: 'api', containerPort: API_PORT }),
+          ],
+          deregistrationDelay: Duration.seconds(30),
+          healthCheck: {
+            // Liveness, not readiness (apps/api/src/health.ts): ECS replaces tasks that fail
+            // this check, and a database failover must not restart every API task at once.
+            path: '/health/live',
+            healthyHttpCodes: '200',
+            interval: Duration.seconds(15),
+            timeout: Duration.seconds(5),
+            healthyThresholdCount: 2,
+            unhealthyThresholdCount: 3,
+          },
+        });
+        this.endpoint = { kind: 'load-balancer', loadBalancer, targetGroup };
+        aliasTarget = new route53Targets.LoadBalancerTarget(loadBalancer);
+        break;
+      }
+      case 'http-api': {
+        // ECS registers each running API container (address and port, an SRV record) in Cloud
+        // Map; the VPC link sends each request to a healthy one.
+        const namespace = new servicediscovery.PrivateDnsNamespace(this, 'Namespace', {
+          name: `${environment}.listora.internal`,
+          vpc: props.vpc,
+          description: `Listora ${environment} service discovery`,
+        });
+        const apiContainer = apiService.taskDefinition.findContainer('api');
+        if (apiContainer === undefined) throw new Error('the API service has no api container');
+        const discovery = apiService.enableCloudMap({
+          name: 'api',
+          cloudMapNamespace: namespace,
+          dnsRecordType: servicediscovery.DnsRecordType.SRV,
+          dnsTtl: Duration.seconds(10),
+          container: apiContainer,
+          containerPort: API_PORT,
+        });
+        const vpcLink = new apigwv2.VpcLink(this, 'VpcLink', {
+          vpcLinkName: `listora-${environment}-api`,
+          vpc: props.vpc,
+          subnets: taskPlacement(settings).subnets,
+          securityGroups: [props.ingressSecurityGroup],
+        });
+        const domainName = new apigwv2.DomainName(this, 'ApiDomain', {
+          domainName: apiDomain,
+          certificate,
+          securityPolicy: apigwv2.SecurityPolicy.TLS_1_2,
+        });
+        const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
+          apiName: `listora-${environment}-api`,
+          description: `Listora ${environment} API`,
+          // Only https://api.<domain> serves the API; the execute-api URL is turned off.
+          disableExecuteApiEndpoint: true,
+          createDefaultStage: false,
+          defaultIntegration: new integrations.HttpServiceDiscoveryIntegration('Api', discovery, {
+            vpcLink,
+          }),
+        });
+        new apigwv2.HttpStage(this, 'DefaultStage', {
+          httpApi,
+          stageName: '$default',
+          autoDeploy: true,
+          throttle: HTTP_API_THROTTLE,
+          domainMapping: { domainName },
+        });
+        this.endpoint = { kind: 'http-api', httpApi };
+        aliasTarget = new route53Targets.ApiGatewayv2DomainProperties(
+          domainName.regionalDomainName,
+          domainName.regionalHostedZoneId,
+        );
+        break;
+      }
+      default:
+        assertNever(settings.ingress);
+    }
 
     new route53.ARecord(this, 'ApiAlias', {
       zone,
       recordName: API_SUBDOMAIN,
-      target: route53.RecordTarget.fromAlias(
-        new route53Targets.LoadBalancerTarget(this.loadBalancer),
-      ),
+      target: route53.RecordTarget.fromAlias(aliasTarget),
     });
 
     new CfnOutput(this, 'ApiUrl', { value: `https://${apiDomain}` });
     new CfnOutput(this, 'ClusterName', { value: this.cluster.clusterName });
   }
 
+  /**
+   * A task definition `listora-<environment>-<name>` running the given containers, each
+   * logging to `/listora/<environment>/<container>`.
+   */
   private taskDefinition(
     { settings, target }: ListoraStackProps,
-    service: ServiceName,
-    options: {
-      image: ecs.ContainerImage;
-      environment: Record<string, string>;
-      secrets: Record<string, ecs.Secret>;
-      portMappings: ecs.PortMapping[];
-    },
+    name: string,
+    size: ServiceSize,
+    containers: readonly ServiceName[],
   ): ecs.FargateTaskDefinition {
     const environment = target.environment;
-    const size = settings[service];
-    const logGroup = new logs.LogGroup(this, `${service}-logs`, {
-      logGroupName: `/listora/${environment}/${service}`,
-      retention: settings.logRetention,
-      removalPolicy: removalPolicyFor(settings),
-    });
-    const taskDefinition = new ecs.FargateTaskDefinition(this, `${service}-task`, {
-      family: `listora-${environment}-${service}`,
+    const logGroups = containers.map(
+      (container) =>
+        new logs.LogGroup(this, `${container}-logs`, {
+          logGroupName: `/listora/${environment}/${container}`,
+          retention: settings.logRetention,
+          removalPolicy: removalPolicyFor(settings),
+        }),
+    );
+    const taskDefinition = new ecs.FargateTaskDefinition(this, `${name}-task`, {
+      family: `listora-${environment}-${name}`,
       cpu: size.cpu,
       memoryLimitMiB: size.memoryMiB,
       runtimePlatform: {
@@ -178,45 +304,66 @@ export class ComputeStack extends ListoraStack {
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
       },
     });
-    taskDefinition.addContainer(service, {
-      image: options.image,
-      command: [...SERVICE_COMMANDS[service]],
-      environment: options.environment,
-      secrets: options.secrets,
-      portMappings: options.portMappings,
-      logging: ecs.LogDrivers.awsLogs({ logGroup, streamPrefix: service }),
-      readonlyRootFilesystem: true,
-      // Both processes drain on SIGTERM (handleShutdownSignals in @listora/shared).
-      stopTimeout: Duration.seconds(30),
+    containers.forEach((container, index) => {
+      const logGroup = logGroups[index];
+      if (logGroup === undefined) throw new Error(`no log group for ${container}`);
+      taskDefinition.addContainer(container, {
+        ...this.containerOptions(container),
+        logging: ecs.LogDrivers.awsLogs({ logGroup, streamPrefix: container }),
+      });
     });
     return taskDefinition;
   }
 
   private service(
-    service: ServiceName,
+    { settings }: ListoraStackProps,
+    name: string,
     taskDefinition: ecs.FargateTaskDefinition,
     size: ServiceSize,
-    securityGroup: ec2.ISecurityGroup,
+    securityGroups: ec2.ISecurityGroup[],
   ): ecs.FargateService {
-    const fargate = new ecs.FargateService(this, `${service}-service`, {
-      serviceName: service,
+    const placement = taskPlacement(settings);
+    const runsApi = taskDefinition.findContainer('api') !== undefined;
+    const fargate = new ecs.FargateService(this, `${name}-service`, {
+      serviceName: name,
       cluster: this.cluster,
       taskDefinition,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      securityGroups: [securityGroup],
-      assignPublicIp: false,
+      vpcSubnets: placement.subnets,
+      securityGroups,
+      assignPublicIp: placement.assignPublicIp,
       // A deploy whose tasks never become healthy rolls back to the previous revision.
       circuitBreaker: { enable: true, rollback: true },
       minHealthyPercent: 100,
       maxHealthyPercent: 200,
       propagateTags: ecs.PropagatedTagSource.SERVICE,
-      ...(service === 'api' ? { healthCheckGracePeriod: Duration.seconds(60) } : {}),
+      ...(runsApi && settings.ingress === 'load-balancer'
+        ? { healthCheckGracePeriod: Duration.seconds(60) }
+        : {}),
     });
     const scaling = fargate.autoScaleTaskCount({
       minCapacity: size.minTasks,
       maxCapacity: size.maxTasks,
     });
-    scaling.scaleOnCpuUtilization('Cpu', { targetUtilizationPercent: TARGET_CPU_PERCENT });
+    if (size.maxTasks > size.minTasks) {
+      scaling.scaleOnCpuUtilization('Cpu', { targetUtilizationPercent: TARGET_CPU_PERCENT });
+    }
     return fargate;
   }
+}
+
+/**
+ * The API container's own liveness check, run inside the container (the image has Node but
+ * no curl): the same `/health/live` the load balancer checks, which checks no dependency.
+ */
+function apiHealthCheck(): ecs.HealthCheck {
+  const probe =
+    `fetch('http://127.0.0.1:${String(API_PORT)}/health/live')` +
+    '.then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))';
+  return {
+    command: ['CMD', 'node', '-e', probe],
+    interval: Duration.seconds(15),
+    timeout: Duration.seconds(5),
+    retries: 3,
+    startPeriod: Duration.seconds(30),
+  };
 }

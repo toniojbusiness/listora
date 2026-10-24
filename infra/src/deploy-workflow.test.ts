@@ -112,6 +112,9 @@ describe('deploy workflow', () => {
     expect(run).toContain(`--task-definition "${names.family}"`);
     expect(run).toContain(`--stack-name "${names.stack}"`);
     for (const output of Object.values(MIGRATE_OUTPUTS)) expect(run).toContain(`output ${output}`);
+    // The stack says whether the task needs a public address (public-IP egress, no NAT).
+    expect(run).toContain(`public_ip=$(output ${MIGRATE_OUTPUTS.assignPublicIp})`);
+    expect(run).toContain('assignPublicIp=$public_ip}');
     expect(run).not.toContain('aws ecs wait');
     expect(run).toContain('.tasks[0].lastStatus');
     expect(run).toMatch(/while true; do\n[\s\S]*"\$status" == STOPPED \]\]; then break; fi/);

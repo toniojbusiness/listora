@@ -1,0 +1,442 @@
+{
+  "Description": "Listora personal: alarms",
+  "Resources": {
+    "Alarms04B5A0BF": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "listora-personal-alarms"
+      }
+    },
+    "AlarmsPolicy5C860CFE": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              },
+              "Effect": "Deny",
+              "Principal": "*",
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "AllowPublishThroughSSLOnly"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": "arn:aws:rds:us-east-1:333333333333:es:listora-personal-database-storage"
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.rds.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "RdsStorageEvents"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Topics": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ]
+      }
+    },
+    "api5xx1F762CB3": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The API answered at least 10 server errors in each of 3 consecutive 5-minute periods.",
+        "AlarmName": "listora-personal-api-5xx",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "ApiId",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefHttpApiF5A9A8A73B77AB98"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "5xx",
+        "Namespace": "AWS/ApiGateway",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Sum",
+        "Threshold": 10,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "apilatencyp95EC3F4579": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "API p95 response time stayed above 2 seconds for 15 minutes.",
+        "AlarmName": "listora-personal-api-latency-p95",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ApiId",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefHttpApiF5A9A8A73B77AB98"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "ExtendedStatistic": "p95",
+        "MetricName": "IntegrationLatency",
+        "Namespace": "AWS/ApiGateway",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Threshold": 2000,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "apinorunningtask02381CC7": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "No app task, so no API, has run for 3 minutes.",
+        "AlarmName": "listora-personal-api-no-running-task",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+              }
+            }
+          },
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttappserviceServiceA5AB3AA1Name13268485"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/ECS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 60,
+        "Statistic": "SampleCount",
+        "Threshold": 1,
+        "TreatMissingData": "breaching"
+      }
+    },
+    "appcpuF4F70E94": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The app service averaged over 85% CPU for 15 minutes (at maximum scale or not scaling).",
+        "AlarmName": "listora-personal-app-cpu",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+              }
+            }
+          },
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttappserviceServiceA5AB3AA1Name13268485"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/ECS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 85,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "appmemoryC418DE11": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The app service averaged over 85% memory for 15 minutes.",
+        "AlarmName": "listora-personal-app-memory",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+              }
+            }
+          },
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttappserviceServiceA5AB3AA1Name13268485"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "MemoryUtilization",
+        "Namespace": "AWS/ECS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 85,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "databasecpu0DB9081A": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "Database CPU stayed above 80% for 15 minutes.",
+        "AlarmName": "listora-personal-database-cpu",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-data",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 80,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "databasefreestorage49DB9A3A": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "Database free storage fell below 1 GiB: storage autoscaling reached its 50 GiB ceiling (raise maxAllocatedStorageGiB) or is not keeping up.",
+        "AlarmName": "listora-personal-database-free-storage",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-data",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "MetricName": "FreeStorageSpace",
+        "Namespace": "AWS/RDS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Minimum",
+        "Threshold": 1073741824,
+        "TreatMissingData": "breaching"
+      }
+    },
+    "DatabaseStorageEvents": {
+      "Type": "AWS::RDS::EventSubscription",
+      "Properties": {
+        "Enabled": true,
+        "EventCategories": [
+          "low storage"
+        ],
+        "SnsTopicArn": {
+          "Ref": "Alarms04B5A0BF"
+        },
+        "SourceIds": [
+          {
+            "Fn::GetStackOutput": {
+              "StackName": "listora-personal-data",
+              "Region": "us-east-1",
+              "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+            }
+          }
+        ],
+        "SourceType": "db-instance",
+        "SubscriptionName": "listora-personal-database-storage"
+      },
+      "DependsOn": [
+        "AlarmsPolicy5C860CFE"
+      ]
+    },
+    "databasefreememory3B37BAB9": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "Database freeable memory stayed below 64 MiB for 15 minutes.",
+        "AlarmName": "listora-personal-database-free-memory",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-personal-data",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "FreeableMemory",
+        "Namespace": "AWS/RDS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Minimum",
+        "Threshold": 67108864,
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+    }
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  {
+                    "Ref": "BootstrapVersion"
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+        }
+      ]
+    }
+  }
+}

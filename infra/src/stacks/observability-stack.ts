@@ -1,7 +1,7 @@
+import { assertNever } from '@listora/shared';
 import { Duration } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import type * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -10,20 +10,20 @@ import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import type { Construct } from 'constructs';
 
 import { ListoraStack, type ListoraStackProps } from './common.ts';
+import type { ApiEndpoint, ListoraService } from './compute-stack.ts';
 
 export interface ObservabilityStackProps extends ListoraStackProps {
-  readonly loadBalancer: elbv2.IApplicationLoadBalancer;
-  readonly apiTargetGroup: elbv2.IApplicationTargetGroup;
-  readonly apiService: ecs.FargateService;
-  readonly workerService: ecs.FargateService;
+  readonly endpoint: ApiEndpoint;
+  readonly services: readonly ListoraService[];
   readonly database: rds.DatabaseInstance;
 }
 
 const GIB = 1024 ** 3;
 
 /**
- * Baseline alarms on the platform: API errors, health, and latency; service CPU and memory;
- * database CPU, storage, and memory. Every alarm notifies the alarm topic when it fires and
+ * Baseline alarms on the platform: API errors, health, and latency (from the load balancer or
+ * the HTTP API, whichever serves the API); service CPU and memory; database CPU, storage,
+ * and memory. Every alarm notifies the alarm topic when it fires and
  * when it recovers. Database storage has two signals: the free-storage alarm (autoscaling is
  * not keeping up) and RDS's own low-storage events, which include storage autoscaling
  * reaching its ceiling, so the ceiling alerts well before writes stop. Log groups live next to what writes them (compute, migrate, data, network)
@@ -74,43 +74,88 @@ export class ObservabilityStack extends ListoraStack {
     };
 
     const fiveMinutes = Duration.minutes(5);
-    const lb = props.loadBalancer.metrics;
-    const tg = props.apiTargetGroup.metrics;
+    const endpoint = props.endpoint;
+    switch (endpoint.kind) {
+      case 'load-balancer': {
+        const lb = endpoint.loadBalancer.metrics;
+        const tg = endpoint.targetGroup.metrics;
+        alarm(
+          'api-5xx',
+          'The API answered at least 10 server errors in each of 3 consecutive 5-minute periods.',
+          tg.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {
+            period: fiveMinutes,
+            statistic: 'Sum',
+          }),
+          10,
+        );
+        alarm(
+          'load-balancer-5xx',
+          'The load balancer itself answered server errors (often: no healthy API task).',
+          lb.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, {
+            period: fiveMinutes,
+            statistic: 'Sum',
+          }),
+          10,
+          { evaluationPeriods: 1 },
+        );
+        alarm(
+          'api-unhealthy-tasks',
+          'At least one API task failed the load balancer health check (/health/live) for 3 minutes.',
+          tg.unhealthyHostCount({ period: Duration.minutes(1), statistic: 'Maximum' }),
+          1,
+        );
+        alarm(
+          'api-latency-p95',
+          'API p95 response time stayed above 2 seconds for 15 minutes.',
+          tg.targetResponseTime({ period: fiveMinutes, statistic: 'p95' }),
+          2,
+          { comparison: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD },
+        );
+        break;
+      }
+      case 'http-api': {
+        const api = endpoint.httpApi;
+        // The HTTP API counts the API's own server errors and its own (503 when no API task
+        // is registered, 504 after 30 seconds) together.
+        alarm(
+          'api-5xx',
+          'The API answered at least 10 server errors in each of 3 consecutive 5-minute periods.',
+          api.metricServerError({ period: fiveMinutes, statistic: 'Sum' }),
+          10,
+        );
+        alarm(
+          'api-latency-p95',
+          'API p95 response time stayed above 2 seconds for 15 minutes.',
+          api.metricIntegrationLatency({ period: fiveMinutes, statistic: 'p95' }),
+          2000,
+          { comparison: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD },
+        );
+        // No load balancer counts healthy tasks. ECS reports a service's CPU every minute
+        // while a task runs, so minutes without a sample mean no task is running.
+        const apiService = props.services.find(({ service }) =>
+          service.taskDefinition.findContainer('api'),
+        );
+        if (apiService === undefined) throw new Error('no service runs the api container');
+        alarm(
+          'api-no-running-task',
+          `No ${apiService.name} task, so no API, has run for 3 minutes.`,
+          apiService.service.metricCpuUtilization({
+            period: Duration.minutes(1),
+            statistic: 'SampleCount',
+          }),
+          1,
+          {
+            comparison: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+            missingData: cloudwatch.TreatMissingData.BREACHING,
+          },
+        );
+        break;
+      }
+      default:
+        assertNever(endpoint);
+    }
 
-    alarm(
-      'api-5xx',
-      'The API answered at least 10 server errors in each of 3 consecutive 5-minute periods.',
-      tg.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {
-        period: fiveMinutes,
-        statistic: 'Sum',
-      }),
-      10,
-    );
-    alarm(
-      'load-balancer-5xx',
-      'The load balancer itself answered server errors (often: no healthy API task).',
-      lb.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, { period: fiveMinutes, statistic: 'Sum' }),
-      10,
-      { evaluationPeriods: 1 },
-    );
-    alarm(
-      'api-unhealthy-tasks',
-      'At least one API task failed the load balancer health check (/health/live) for 3 minutes.',
-      tg.unhealthyHostCount({ period: Duration.minutes(1), statistic: 'Maximum' }),
-      1,
-    );
-    alarm(
-      'api-latency-p95',
-      'API p95 response time stayed above 2 seconds for 15 minutes.',
-      tg.targetResponseTime({ period: fiveMinutes, statistic: 'p95' }),
-      2,
-      { comparison: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD },
-    );
-
-    for (const [name, service] of [
-      ['api', props.apiService],
-      ['worker', props.workerService],
-    ] as const) {
+    for (const { name, service } of props.services) {
       alarm(
         `${name}-cpu`,
         `The ${name} service averaged over 85% CPU for 15 minutes (at maximum scale or not scaling).`,

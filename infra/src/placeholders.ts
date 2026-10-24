@@ -21,4 +21,12 @@ export const PLACEHOLDER_CONTEXT: Readonly<Record<EnvironmentName, Record<string
     hostedZoneId: 'Z00000000000000PROD',
     imageTag: 'synth-check',
   },
+  personal: {
+    env: 'personal',
+    account: '333333333333',
+    region: 'us-east-1',
+    domain: 'personal.example.com',
+    hostedZoneId: 'Z000000000PERSONAL',
+    imageTag: 'synth-check',
+  },
 };

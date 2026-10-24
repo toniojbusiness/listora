@@ -114,7 +114,7 @@ scripts/
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
   ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
 Dockerfile      Application image; the API and the worker run from the same image
-docs/           This overview and the roadmap
+docs/           This overview, the roadmap, and the personal environment's cost estimate
 Makefile        iOS commands (make ios-test, ios-lint, ...)
 ```
 
@@ -501,20 +501,23 @@ read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
 
 ## 10. Hosting and deploys
 
-Each environment (`staging`, `prod`) is its own AWS account, defined by the CDK app in
-`infra/` and documented in [infra/README.md](../infra/README.md). In short:
+Each environment (`staging`, `prod`, and `personal`, the low-cost layout for one reseller in
+their own account, priced in [costs.md](costs.md)) is its own AWS account, defined by the CDK
+app in `infra/` and documented in [infra/README.md](../infra/README.md). In short:
 
 - **One image, two services.** The root `Dockerfile` installs production dependencies and
   the sources; ECS runs `node apps/api/src/main.ts` or `node apps/worker/src/main.ts` from it,
   on Fargate in private subnets, with a read-only root file system. The API is behind an
   HTTPS load balancer at `api.<domain>` that health-checks `/health/live`. ECS replaces
   tasks that fail it, so it checks no dependency: a database failover must not restart every
-  task. `/health/ready` (database reachable) is for deploy checks and operators.
+  task. `/health/ready` (database reachable) is for deploy checks and operators. `personal`
+  runs both containers in one task in public subnets (no NAT) behind an API Gateway HTTP API
+  instead of the load balancer, and ECS runs the same `/health/live` check in the container.
 - **Configuration.** Containers get exactly the environment in `infra/src/containers.ts`, and
   a test runs the API's and worker's config loaders on it. A task that adds a required config
   key adds it there (and, for a secret, to `APP_SECRETS` in `infra/src/config.ts`). The
   database password reaches the processes only as `PGPASSWORD` from the RDS secret.
-- **Data.** RDS PostgreSQL 18 (Multi-AZ, deletion protection in prod), a private photo bucket
+- **Data.** RDS PostgreSQL 18 (Multi-AZ in prod; deletion protection in prod and personal), a private photo bucket
   whose `public/` prefix CloudFront serves by exact key, SES inbound mail for `in.<domain>`
   stored in a private bucket, and a KMS key for token envelope encryption.
 - **Deploys** run only from the manual Deploy workflow, on `main`, inside the protected GitHub
@@ -528,14 +531,15 @@ Each environment (`staging`, `prod`) is its own AWS account, defined by the CDK 
   contract (add first and use in a later release; stop using first and drop in a later
   release).
 - **Offline.** Synthesis never calls AWS: no `fromLookup`, zones resolve at deploy time, and
-  `npm run infra:synth` (part of `npm run check`) runs `cdk synth` with credentials hidden.
+  `npm run infra:synth` (part of `npm run check`) runs `cdk synth` of every environment with
+  credentials hidden.
   Template snapshots in `infra/src/__snapshots__/` make every infrastructure change a
   reviewable diff.
 
 ## 11. Testing and CI
 
 - `npm run check` runs the format check, lint (ESLint and shellcheck), type check, the API
-  contract check, the offline `cdk synth` of both environments, unit tests, and integration
+  contract check, the offline `cdk synth` of every environment, unit tests, and integration
   tests. It must pass before merge. When iOS code
   is touched, `make ios-lint` and `make ios-test` must pass too. `make ios-test` runs the
   package, unit, and UI tests on an existing iPhone 17 simulator and keeps DerivedData in

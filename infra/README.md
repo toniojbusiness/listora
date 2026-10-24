@@ -1,14 +1,19 @@
 # Listora infrastructure
 
-AWS infrastructure as code for the staging and prod environments, written with AWS CDK v2 in
-TypeScript (`@listora/infra`). Each environment is a separate AWS account. Synthesis and all
-tests run offline: `npm run check` needs no AWS account and no credentials.
+AWS infrastructure as code for the staging, prod, and personal environments, written with AWS
+CDK v2 in TypeScript (`@listora/infra`). Each environment is a separate AWS account. Synthesis
+and all tests run offline: `npm run check` needs no AWS account and no credentials.
+
+`staging` and `prod` are the product's environments. `personal` is the low-cost layout for one
+reseller running Listora in their own AWS account; see
+[The personal environment](#the-personal-environment) and [docs/costs.md](../docs/costs.md).
 
 ## Stacks
 
-One CDK app defines one environment at a time (`-c env=staging|prod`). Every stack is named
-`listora-<env>-<name>`, tagged `project=listora` and `environment=<env>`, and in prod has
-CloudFormation termination protection.
+One CDK app defines one environment at a time (`-c env=staging|prod|personal`). Every stack is
+named `listora-<env>-<name>`, tagged `project=listora` and `environment=<env>`, and in prod and
+personal (`protectData`) has CloudFormation termination protection. The table describes
+staging and prod; personal swaps a few pieces for cheaper ones (below).
 
 | Stack           | What it holds                                                                                                                                                                                                                                                                                                                                         |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -23,8 +28,33 @@ CloudFormation termination protection.
 | `compute`       | ECS cluster with Fargate services `api` and `worker` (one image, private subnets, CPU autoscaling, rollback on a failed deploy), an HTTPS ALB at `api.<domain>` health-checked on `/health/live`, service log groups, and a task role per service.                                                                                                    |
 | `observability` | Alarm topic (optional email subscription) and baseline alarms: API 5xx, ALB 5xx, unhealthy tasks, p95 latency, service CPU and memory, database CPU, storage, and memory, plus RDS low-storage events (including storage autoscaling at its ceiling). Log groups sit with the stacks that write them; retention is 30 days in staging and 90 in prod. |
 
-Sizes, redundancy, and retention per environment are in `ENVIRONMENT_SETTINGS`
-(`src/config.ts`), so a change shows up in review as a code and snapshot diff.
+Sizes, redundancy, retention, and the network, ingress, and service layouts per environment
+are in `ENVIRONMENT_SETTINGS` (`src/config.ts`), so a change shows up in review as a code and
+snapshot diff.
+
+### The personal environment
+
+The same stacks, image, and deploy workflow, with every hourly charge that one user does not
+need removed. It costs about $33 a month; [docs/costs.md](../docs/costs.md) has the line
+items, the alternatives each choice beat, and the levers left.
+
+| Piece       | staging and prod                                              | personal                                                                                                                                     |
+| ----------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Egress      | Tasks in private `app` subnets behind NAT gateways            | No `app` tier and no NAT: tasks run in the public subnets with a public IPv4 address, and their groups admit nothing from the internet       |
+| API ingress | HTTPS ALB, health-checked on `/health/live`                   | API Gateway HTTP API at `api.<domain>` (TLS 1.2+, throttled, execute-api URL off) with a VPC link to the task, found through Cloud Map (SRV) |
+| Health      | The ALB's target health check                                 | The API container's own ECS health check on `/health/live`; an `api-no-running-task` alarm replaces the target-group alarms                  |
+| Services    | `api` and `worker`, each its own service and task role        | One `app` service whose task runs both containers (0.25 vCPU, 1 GiB), with one task role holding both sets of grants                         |
+| Database    | `t4g.micro` single-AZ (staging), `t4g.medium` Multi-AZ (prod) | `t4g.micro` single-AZ, 20 to 50 GiB, 7-day backups, deletion protection                                                                      |
+| Logs        | Rejected-traffic flow logs; 30 or 90 days                     | No flow logs; 7 days                                                                                                                         |
+
+The HTTP API limits each request to 30 seconds and 10 MB. Photos upload straight to S3, so no
+request comes near them. If no request passes through the VPC link for 60 days, API Gateway
+removes its network interfaces, and the first request afterwards fails for a few minutes.
+
+`browserRunner` reserves the size of the later headless-Chromium runner (1 vCPU, 4 GiB,
+started per job, zero tasks while idle). Nothing is provisioned from it yet. Whatever it runs
+must follow the product invariants in [docs/architecture.md](../docs/architecture.md): no
+marketplace passwords or sessions, no CAPTCHA solving, no anti-bot workarounds.
 
 ### How the pieces connect
 
@@ -60,7 +90,7 @@ Run from the repository root.
 
 | Command                                  | What it does                                                                                                   |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `npm run infra:synth`                    | `cdk synth` for both environments with placeholder settings, with AWS credentials hidden (offline)             |
+| `npm run infra:synth`                    | `cdk synth` for every environment with placeholder settings, with AWS credentials hidden (offline)             |
 | `npx vitest run --project unit infra`    | Infra tests: config, assertions per stack and environment, template snapshots, deploy and TestFlight workflows |
 | `npx vitest run --project unit infra -u` | Refresh the template snapshots in `src/__snapshots__/` after an intended change; review the diff               |
 
@@ -73,16 +103,17 @@ Account ids and domains are never committed. `loadDeployTarget` reads each setti
 context (`-c key=value`) or else an environment variable (all documented in `.env.example`),
 and fails fast, naming the missing or invalid key without printing its value.
 
-| Context key        | Environment variable        | Required | Meaning                                                        |
-| ------------------ | --------------------------- | -------- | -------------------------------------------------------------- |
-| `env`              | `LISTORA_ENV`               | yes      | `staging` or `prod`                                            |
-| `account`          | `LISTORA_AWS_ACCOUNT_ID`    | yes      | The environment's 12-digit AWS account id                      |
-| `region`           | `LISTORA_AWS_REGION`        | no       | Default `us-east-1`; SES must receive email there              |
-| `domain`           | `LISTORA_DOMAIN`            | yes      | For example `staging.listora.app`                              |
-| `hostedZoneId`     | `LISTORA_HOSTED_ZONE_ID`    | yes      | Route 53 public hosted zone for `domain`                       |
-| `imageTag`         | `LISTORA_IMAGE_TAG`         | yes      | Image tag to run (the commit SHA); `latest` is refused         |
-| `alarmEmail`       | `LISTORA_ALARM_EMAIL`       | no       | Subscribed to the alarm topic                                  |
-| `githubRepository` | `LISTORA_GITHUB_REPOSITORY` | no       | Repository allowed to deploy; default `toniojbusiness/listora` |
+| Context key         | Environment variable         | Required | Meaning                                                          |
+| ------------------- | ---------------------------- | -------- | ---------------------------------------------------------------- |
+| `env`               | `LISTORA_ENV`                | yes      | `staging`, `prod`, or `personal`                                 |
+| `account`           | `LISTORA_AWS_ACCOUNT_ID`     | yes      | The environment's 12-digit AWS account id                        |
+| `region`            | `LISTORA_AWS_REGION`         | no       | Default `us-east-1`; SES must receive email there                |
+| `domain`            | `LISTORA_DOMAIN`             | yes      | For example `staging.listora.app`                                |
+| `hostedZoneId`      | `LISTORA_HOSTED_ZONE_ID`     | yes      | Route 53 public hosted zone for `domain`                         |
+| `imageTag`          | `LISTORA_IMAGE_TAG`          | yes      | Image tag to run (the commit SHA); `latest` is refused           |
+| `alarmEmail`        | `LISTORA_ALARM_EMAIL`        | no       | Subscribed to the alarm topic                                    |
+| `githubRepository`  | `LISTORA_GITHUB_REPOSITORY`  | no       | Repository allowed to deploy; default `toniojbusiness/listora`   |
+| `availabilityZones` | `LISTORA_AVAILABILITY_ZONES` | no       | Two zones of the region, comma-separated; default: the first two |
 
 ## First deploy of an environment
 
@@ -91,7 +122,15 @@ account. The examples use staging.
 
 1. **Accounts and DNS.** Create the account (AWS Organizations) and a Route 53 public hosted
    zone for the environment's domain (for example `staging.listora.app`, delegated from the
-   parent zone). Note the account id and hosted zone id.
+   parent zone). Note the account id and hosted zone id. For personal, use the reseller's own
+   account and any domain they control.
+   **Zones.** Zone names map to different zone ids in every account, and in us-east-1 the
+   zone `use1-az3` has no API Gateway VPC links (which personal needs) and no Graviton
+   instances. List the first two zones with
+   `aws ec2 describe-availability-zones --query 'AvailabilityZones[0:2].[ZoneName,ZoneId]'`;
+   if either is `use1-az3`, pick two other zones for the `availabilityZones` setting
+   (`AVAILABILITY_ZONES` in the GitHub environment). Choose them before the first deploy:
+   changing zones later replaces the network and everything in it.
 2. **Bootstrap CDK** in the account and region:
    `npx cdk bootstrap aws://<account>/us-east-1` (from `infra/`). The bootstrap's
    CloudFormation execution policy (`AdministratorAccess` by default) is the ceiling on what
@@ -100,9 +139,10 @@ account. The examples use staging.
    `npx cdk deploy listora-staging-deploy-access`. If the account already has the GitHub OIDC
    provider, remove it first or import it; an account can have only one per URL.
 4. **GitHub environment.** In the repository settings create the environment `staging` (and
-   later `prod`) with protection rules: required reviewers, and deployment branches limited to
+   later `prod`, or `personal` for a personal deployment) with protection rules: required reviewers, and deployment branches limited to
    `main`. Add the environment variables `AWS_ACCOUNT_ID`, `AWS_REGION`, `DOMAIN`,
-   `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL`. No secrets are needed.
+   `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL` and `AVAILABILITY_ZONES`. No secrets are
+   needed.
 5. **Deploy.** Run the **Deploy** workflow (Actions tab) on `main` with `staging`. It tests
    and synthesizes offline, assumes the deploy role through OIDC, deploys the registry, builds
    and pushes the image tagged with the commit, deploys the state stacks and the migrate

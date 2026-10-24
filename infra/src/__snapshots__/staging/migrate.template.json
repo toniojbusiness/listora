@@ -314,6 +314,9 @@
           "OutputName": "PublishOutputFnGetAttWorkerSecurityGroup5529CF0BGroupId1D09B9A4"
         }
       }
+    },
+    "AssignPublicIp": {
+      "Value": "DISABLED"
     }
   },
   "Parameters": {
