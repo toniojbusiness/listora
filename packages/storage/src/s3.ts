@@ -16,6 +16,7 @@ import {
   base64ToHex,
   CHECKSUM_SHA256_HEADER,
   hexToBase64,
+  PUBLIC_KEY_PREFIX,
   type ObjectStorage,
   type PutOptions,
   type StoredObjectInfo,
@@ -29,7 +30,10 @@ const MAX_PRESIGN_SECONDS = 7 * 24 * 60 * 60;
 export interface S3StorageOptions {
   client: S3Client;
   bucket: string;
-  /** Base URL of the CloudFront distribution that serves the bucket's `public/` keys. */
+  /**
+   * Base URL of the CloudFront distribution that serves the bucket's `public/` keys. Its
+   * origin path is `/public`, so a key's URL is the key without that prefix.
+   */
   publicBaseUrl: string;
   now?: () => Date;
 }
@@ -168,6 +172,6 @@ export class S3Storage implements ObjectStorage {
 
   publicUrl(key: string): string {
     assertPublicKey(key);
-    return `${this.#publicBaseUrl}/${key}`;
+    return `${this.#publicBaseUrl}/${key.slice(PUBLIC_KEY_PREFIX.length)}`;
   }
 }

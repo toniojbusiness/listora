@@ -10,7 +10,10 @@ import { createWorkerTasks } from './tasks.ts';
 
 const config = loadWorkerConfig();
 const logger = createLogger({ service: 'worker', level: config.logLevel });
-const db = createDatabase({ connectionString: config.databaseUrl, max: config.concurrency + 5 });
+const db = createDatabase({
+  connectionString: config.databaseUrl,
+  max: config.concurrency + config.taskConcurrency + 5,
+});
 
 try {
   const worker = await startOperationWorker({
@@ -30,6 +33,7 @@ try {
     }),
     logger,
     concurrency: config.concurrency,
+    taskConcurrency: config.taskConcurrency,
     onFatalError: (error) => {
       // Other workers recover this worker's jobs once its process is gone; exiting at once
       // is what keeps two workers from running the same step.
@@ -49,6 +53,7 @@ try {
   logger.info(
     {
       poolId: worker.poolId,
+      taskPoolId: worker.taskPoolId,
       fakeMarketplace: config.fakeMarketplaceUrl !== undefined,
       aiProvider: config.ai.provider,
     },

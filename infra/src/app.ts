@@ -93,6 +93,7 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
     database: data.database,
     repository: registry.repository,
     photoBucket: storage.photoBucket,
+    photoCdnDomain: storage.photoDistribution.distributionDomainName,
     inboundMailBucket: email.inboundMailBucket,
     tokenKey: secrets.tokenKey,
   });

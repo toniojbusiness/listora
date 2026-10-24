@@ -6,8 +6,10 @@ import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@list
 export interface WorkerConfig {
   databaseUrl: string;
   logLevel: LogLevel;
-  /** Jobs run at the same time: operation steps, photo processing, and item analysis. */
+  /** Marketplace operation steps run at the same time. */
   concurrency: number;
+  /** Photo processing and item analysis jobs run at the same time, in their own pool. */
+  taskConcurrency: number;
   /** Base URL of the fake marketplace every adapter uses (development and tests only). */
   fakeMarketplaceUrl: string | undefined;
   /** STORAGE_* keys, read by @listora/storage: where photo processing and analysis read. */
@@ -47,11 +49,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     issues.push('LOG_LEVEL must be one of fatal, error, warn, info, debug, trace, silent');
   }
 
-  const rawConcurrency = env['WORKER_CONCURRENCY'] ?? '5';
-  const concurrency = Number(rawConcurrency);
-  if (!/^\d+$/.test(rawConcurrency) || concurrency < 1 || concurrency > 100) {
-    issues.push('WORKER_CONCURRENCY must be an integer from 1 to 100');
-  }
+  const concurrency = poolSize(issues, env, 'WORKER_CONCURRENCY', '5');
+  const taskConcurrency = poolSize(issues, env, 'WORKER_TASK_CONCURRENCY', '2');
 
   // Empty means unset, as `FAKE_MARKETPLACE_URL=` in an env file.
   const rawFakeMarketplaceUrl = env['FAKE_MARKETPLACE_URL'];
@@ -73,7 +72,26 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   ) {
     throw new ConfigError(issues);
   }
-  return { databaseUrl, logLevel, concurrency, fakeMarketplaceUrl, storage, ai, analysis };
+  return {
+    databaseUrl,
+    logLevel,
+    concurrency,
+    taskConcurrency,
+    fakeMarketplaceUrl,
+    storage,
+    ai,
+    analysis,
+  };
+}
+
+/** A job pool's size from `key`: an integer from 1 to 100. */
+function poolSize(issues: string[], env: NodeJS.ProcessEnv, key: string, fallback: string): number {
+  const raw = env[key] ?? fallback;
+  const size = Number(raw);
+  if (!/^\d+$/.test(raw) || size < 1 || size > 100) {
+    issues.push(`${key} must be an integer from 1 to 100`);
+  }
+  return size;
 }
 
 /** A package's own configuration, or undefined with its problems added to `issues`. */

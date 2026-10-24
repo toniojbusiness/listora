@@ -160,6 +160,46 @@
               {
                 "Name": "LOG_LEVEL",
                 "Value": "info"
+              },
+              {
+                "Name": "AI_PROVIDER",
+                "Value": "anthropic"
+              },
+              {
+                "Name": "STORAGE_DRIVER",
+                "Value": "s3"
+              },
+              {
+                "Name": "STORAGE_S3_BUCKET",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-staging-storage",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefPhotosB9552D0DEC068679"
+                  }
+                }
+              },
+              {
+                "Name": "STORAGE_S3_REGION",
+                "Value": "us-east-1"
+              },
+              {
+                "Name": "STORAGE_PUBLIC_BASE_URL",
+                "Value": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-staging-storage",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputFnGetAttPhotoCdn9B72B83DDomainName6A373DF8"
+                        }
+                      }
+                    ]
+                  ]
+                }
               }
             ],
             "Essential": true,
@@ -538,6 +578,46 @@
               {
                 "Name": "LOG_LEVEL",
                 "Value": "info"
+              },
+              {
+                "Name": "AI_PROVIDER",
+                "Value": "anthropic"
+              },
+              {
+                "Name": "STORAGE_DRIVER",
+                "Value": "s3"
+              },
+              {
+                "Name": "STORAGE_S3_BUCKET",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-staging-storage",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefPhotosB9552D0DEC068679"
+                  }
+                }
+              },
+              {
+                "Name": "STORAGE_S3_REGION",
+                "Value": "us-east-1"
+              },
+              {
+                "Name": "STORAGE_PUBLIC_BASE_URL",
+                "Value": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "https://",
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-staging-storage",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputFnGetAttPhotoCdn9B72B83DDomainName6A373DF8"
+                        }
+                      }
+                    ]
+                  ]
+                }
               }
             ],
             "Essential": true,

@@ -6,7 +6,7 @@
  *
  * A standard analysis that asks for escalation queues its premium analysis in the same
  * transaction as its result, when automatic escalation is on, the reason is worth a premium
- * call without the user asking (not just an unidentified brand or product), and the plan's
+ * call without the user asking (not just an unidentified brand), and the plan's
  * premium quota still allows one.
  */
 import { AiGuardError, type AiClient } from '@listora/ai';

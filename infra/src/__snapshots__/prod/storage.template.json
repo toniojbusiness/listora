@@ -257,6 +257,19 @@
           "Arn"
         ]
       }
+    },
+    "PublishOutputRefPhotosB9552D0DEC068679": {
+      "Value": {
+        "Ref": "PhotosB9552D0D"
+      }
+    },
+    "PublishOutputFnGetAttPhotoCdn9B72B83DDomainName6A373DF8": {
+      "Value": {
+        "Fn::GetAtt": [
+          "PhotoCdn9B72B83D",
+          "DomainName"
+        ]
+      }
     }
   },
   "Parameters": {

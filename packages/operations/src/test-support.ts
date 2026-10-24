@@ -146,6 +146,7 @@ export async function createEngineHarness(prefix: string): Promise<EngineHarness
       workers.add(worker);
       return {
         poolId: worker.poolId,
+        taskPoolId: worker.taskPoolId,
         async stop() {
           workers.delete(worker);
           await worker.stop();

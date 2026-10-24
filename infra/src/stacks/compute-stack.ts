@@ -31,6 +31,8 @@ export interface ComputeStackProps extends ListoraStackProps {
   readonly database: rds.DatabaseInstance;
   readonly repository: ecr.IRepository;
   readonly photoBucket: s3.IBucket;
+  /** The photo CloudFront distribution's domain name; it serves the bucket's `public/` keys. */
+  readonly photoCdnDomain: string;
   readonly inboundMailBucket: s3.IBucket;
   readonly tokenKey: kms.IKey;
 }
@@ -107,7 +109,11 @@ export class ComputeStack extends ListoraStack {
     this.containerOptions = (service) => ({
       image,
       command: [...SERVICE_COMMANDS[service]],
-      environment: containerEnvironment(service, url),
+      environment: containerEnvironment(service, url, {
+        bucket: props.photoBucket.bucketName,
+        region: target.region,
+        publicBaseUrl: `https://${props.photoCdnDomain}`,
+      }),
       secrets: containerSecrets(this, environment, service, props.database),
       portMappings: service === 'api' ? [{ containerPort: API_PORT }] : [],
       // Without a load balancer, ECS itself checks the API (the same liveness path) and

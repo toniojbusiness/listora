@@ -179,11 +179,9 @@ describe('S3Storage', () => {
     ).rejects.toThrow();
   });
 
-  it('serves only public keys at the CloudFront URL', () => {
+  it('serves only public keys at the CloudFront URL, whose origin path is /public', () => {
     const { storage: s3 } = storage();
-    expect(s3.publicUrl('public/abc/listing.jpg')).toBe(
-      'https://cdn.example.com/public/abc/listing.jpg',
-    );
+    expect(s3.publicUrl('public/abc/listing.jpg')).toBe('https://cdn.example.com/abc/listing.jpg');
     expect(() => s3.publicUrl('photos/acct/photo/original.jpg')).toThrow('public/');
   });
 });

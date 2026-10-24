@@ -1,12 +1,13 @@
 /**
  * Runs the operation engine on Graphile Worker: the job runner, the liveness session, and the
- * periodic recovery of stopped workers' jobs (recovery.ts). The same runner takes the other
- * background jobs the worker is given (`tasks`), with the same liveness and recovery.
- * `apps/worker` starts it; tests start it in process with a short retry schedule.
+ * periodic recovery of stopped workers' jobs (recovery.ts). The other background jobs the
+ * worker is given (`tasks`) run on a second runner with its own, smaller pool and its own
+ * liveness session, so slow AI calls and image work never hold the slots an urgent delist
+ * needs. `apps/worker` starts it; tests start it in process with a short retry schedule.
  */
 import { EventEmitter } from 'node:events';
 
-import { run, type Runner, type TaskList, type WorkerEvents } from 'graphile-worker';
+import { run, type JobHelpers, type TaskList, type WorkerEvents } from 'graphile-worker';
 
 import { createJobQueueLogger, JOB_QUEUE_SCHEMA, type Db } from '@listora/db';
 import type { AdapterLookup } from '@listora/marketplaces';
@@ -33,8 +34,10 @@ export interface OperationWorkerOptions {
   logger: Logger;
   /** Other jobs this worker runs (photo processing, item analysis), by task name. */
   tasks?: Readonly<Record<string, WorkerTask>>;
-  /** Jobs run at the same time, operation steps and `tasks` together (default 5). */
+  /** Operation steps run at the same time (default 5). */
   concurrency?: number;
+  /** `tasks` jobs run at the same time, apart from the operation steps (default 2). */
+  taskConcurrency?: number;
   policy?: RetryPolicy;
   /** Deadline for one marketplace call (default 60 s). */
   callTimeoutMs?: number;
@@ -54,8 +57,10 @@ export interface OperationWorkerOptions {
 }
 
 export interface OperationWorker {
-  /** The Graphile Worker pool id that this worker's job locks carry. */
+  /** The Graphile Worker pool id that this worker's operation job locks carry. */
   readonly poolId: string;
+  /** The pool id of the runner that runs `tasks`, when there are any. */
+  readonly taskPoolId: string | undefined;
   /** Stops taking jobs, lets running steps finish (or aborts them), and closes the session. */
   stop(): Promise<void>;
 }
@@ -80,7 +85,104 @@ export async function startOperationWorker(
   const fatal = (error: Error): void => {
     if (!stopping) options.onFatalError(error);
   };
+  const runnerOptions = {
+    connectionString: options.connectionString,
+    logger,
+    pollIntervalMs: options.pollIntervalMs ?? 2_000,
+    fatal,
+    isStopping: () => stopping,
+  };
 
+  const operations = await startRunner(
+    { ...runnerOptions, concurrency: options.concurrency ?? 5, crontab: MAINTENANCE_CRONTAB },
+    {
+      [OPERATION_TASK]: async (payload, helpers) => {
+        if (!isOperationJobPayload(payload)) {
+          helpers.logger.error('operation job with an invalid payload; dropping it');
+          return;
+        }
+        await runOperationStep(deps, payload, helpers.abortSignal);
+      },
+      [MAINTENANCE_TASK]: async () => {
+        await runJobQueueMaintenance(options.connectionString, logger);
+      },
+    },
+  );
+  let background: StartedRunner | undefined;
+  if (Object.keys(tasks).length > 0) {
+    try {
+      background = await startRunner(
+        { ...runnerOptions, concurrency: options.taskConcurrency ?? 2 },
+        Object.fromEntries(
+          Object.entries(tasks).map(([name, task]): [string, JobHandler] => [
+            name,
+            (payload, helpers) => task(payload, helpers.abortSignal),
+          ]),
+        ),
+      );
+    } catch (error) {
+      stopping = true;
+      await operations.stop();
+      throw error;
+    }
+  }
+
+  const graceMs = options.recoveryGraceMs ?? 5_000;
+  let recovering: Promise<void> = Promise.resolve();
+  const recover = async (): Promise<void> => {
+    try {
+      const released = await reapStoppedWorkers(options.db, graceMs);
+      if (released.length > 0) {
+        logger.warn({ poolIds: released }, 'released jobs of stopped workers');
+      }
+    } catch (error) {
+      logger.error({ err: error }, 'releasing jobs of stopped workers failed');
+    }
+  };
+  await recover();
+  const recovery = setInterval(() => {
+    recovering = recover();
+  }, options.recoveryIntervalMs ?? 5_000);
+
+  return {
+    poolId: operations.poolId,
+    taskPoolId: background?.poolId,
+    async stop() {
+      stopping = true;
+      clearInterval(recovery);
+      await recovering;
+      const stopped = await Promise.allSettled([operations.stop(), background?.stop()]);
+      const failed = stopped.find((result) => result.status === 'rejected');
+      if (failed !== undefined) throw failed.reason;
+    },
+  };
+}
+
+type JobHandler = (payload: unknown, helpers: JobHelpers) => Promise<void>;
+
+interface StartedRunner {
+  readonly poolId: string;
+  stop(): Promise<void>;
+}
+
+/**
+ * One Graphile Worker runner for `handlers` with its own liveness session. It takes only jobs
+ * of its own tasks, and no job starts before other workers can see that this runner is alive.
+ */
+async function startRunner(
+  options: {
+    connectionString: string;
+    logger: Logger;
+    concurrency: number;
+    pollIntervalMs: number;
+    crontab?: string;
+    fatal: (error: Error) => void;
+    isStopping: () => boolean;
+  },
+  handlers: Readonly<Record<string, JobHandler>>,
+): Promise<StartedRunner> {
+  const { fatal } = options;
+  let stopped = false;
   const liveness = await WorkerLiveness.open(options.connectionString, fatal);
   let markRegistered: (poolId: string) => void = () => undefined;
   let failRegistration: (error: Error) => void = () => undefined;
@@ -104,43 +206,28 @@ export async function startOperationWorker(
     );
   });
 
-  const taskList: TaskList = {
-    ...Object.fromEntries(
-      Object.entries(tasks).map(([name, task]): [string, TaskList[string]] => [
-        name,
-        async (payload, helpers) => {
-          // Like operation steps: no job runs before other workers can see this one is alive.
-          await registered;
-          await task(payload, helpers.abortSignal);
-        },
-      ]),
-    ),
-    [OPERATION_TASK]: async (payload, helpers) => {
-      if (!isOperationJobPayload(payload)) {
-        helpers.logger.error('operation job with an invalid payload; dropping it');
-        return;
-      }
-      // No step runs before other workers can see that this worker is alive.
-      await registered;
-      await runOperationStep(deps, payload, helpers.abortSignal);
-    },
-    [MAINTENANCE_TASK]: async () => {
-      await runJobQueueMaintenance(options.connectionString, logger);
-    },
-  };
+  const taskList: TaskList = Object.fromEntries(
+    Object.entries(handlers).map(([name, handler]): [string, TaskList[string]] => [
+      name,
+      async (payload, helpers) => {
+        await registered;
+        await handler(payload, helpers);
+      },
+    ]),
+  );
 
-  let runner: Runner;
+  let runner;
   try {
     runner = await run({
       connectionString: options.connectionString,
       schema: JOB_QUEUE_SCHEMA,
-      concurrency: options.concurrency ?? 5,
-      pollInterval: options.pollIntervalMs ?? 2_000,
+      concurrency: options.concurrency,
+      pollInterval: options.pollIntervalMs,
       noHandleSignals: true,
-      logger: createJobQueueLogger(logger),
+      logger: createJobQueueLogger(options.logger),
       events,
       taskList,
-      crontab: MAINTENANCE_CRONTAB,
+      ...(options.crontab === undefined ? {} : { crontab: options.crontab }),
     });
   } catch (error) {
     await liveness.close();
@@ -148,7 +235,9 @@ export async function startOperationWorker(
   }
   runner.promise.then(
     () => {
-      if (!stopping) fatal(new Error('the job runner stopped unexpectedly'));
+      if (!stopped && !options.isStopping()) {
+        fatal(new Error('the job runner stopped unexpectedly'));
+      }
     },
     (error: unknown) => {
       fatal(error instanceof Error ? error : new Error(String(error)));
@@ -159,36 +248,16 @@ export async function startOperationWorker(
   try {
     poolId = await registered;
   } catch (error) {
-    stopping = true;
+    stopped = true;
     await runner.stop();
     await liveness.close();
     throw error;
   }
-
-  const graceMs = options.recoveryGraceMs ?? 5_000;
-  let recovering: Promise<void> = Promise.resolve();
-  const recover = async (): Promise<void> => {
-    try {
-      const released = await reapStoppedWorkers(options.db, graceMs);
-      if (released.length > 0) {
-        logger.warn({ poolIds: released }, 'released jobs of stopped workers');
-      }
-    } catch (error) {
-      logger.error({ err: error }, 'releasing jobs of stopped workers failed');
-    }
-  };
-  await recover();
-  const recovery = setInterval(() => {
-    recovering = recover();
-  }, options.recoveryIntervalMs ?? 5_000);
-
   return {
     poolId,
     async stop() {
-      stopping = true;
-      clearInterval(recovery);
+      stopped = true;
       try {
-        await recovering;
         await runner.stop();
       } finally {
         await liveness.close();

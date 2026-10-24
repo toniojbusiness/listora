@@ -54,7 +54,7 @@ export interface BuiltAnalysisResult {
   readonly result: AnalysisResult;
   /**
    * True when the result asks for escalation for a reason worth a premium call without the
-   * user asking: an unidentified brand or product alone only suggests "Identify harder".
+   * user asking: an unidentified brand alone only suggests "Identify harder".
    */
   readonly autoEscalate: boolean;
 }
@@ -405,9 +405,10 @@ function variants(output: ItemAnalysisOutput): VariantSuggestion[] {
  * Why a standard analysis should be escalated to the premium identification, or undefined.
  * The model's own judgment counts, and so do rules it cannot talk its way out of: a brand or
  * product proposed with low confidence, and items that look vintage or designer, where a
- * closer look is worth the most. Those escalate on their own. A brand or product the model
- * did not identify at all only suggests it: many items are unbranded, and a premium call
- * costs the user's quota, so the user decides.
+ * closer look is worth the most. Those escalate on their own. A brand the model did not
+ * identify at all only suggests it: many items are unbranded, and a premium call costs the
+ * user's quota, so the user decides. A missing product name is no reason at all: most
+ * secondhand items show none.
  */
 function escalationOf(
   output: ItemAnalysisOutput,
@@ -419,8 +420,9 @@ function escalationOf(
   const { brand, productName } = details;
   if (brand === undefined) add('The brand was not identified.', false);
   else if (brand.confidence < LOW_IDENTITY_CONFIDENCE) add('The brand is uncertain.');
-  if (productName === undefined) add('The product was not identified.', false);
-  else if (productName.confidence < LOW_IDENTITY_CONFIDENCE) add('The product is uncertain.');
+  if (productName !== undefined && productName.confidence < LOW_IDENTITY_CONFIDENCE) {
+    add('The product is uncertain.');
+  }
   if (output.looksDesigner) add('It looks like a designer item.');
   if (output.looksVintage) add('It looks vintage.');
   if (reasons.length === 0) return undefined;

@@ -279,7 +279,7 @@ describe('buildAnalysisResult escalation', () => {
     ).toBe(true);
   });
 
-  it('suggests, but does not start, a premium identification for an unidentified brand or product', () => {
+  it('suggests, but does not start, a premium identification for an unidentified brand', () => {
     // Many items are unbranded: the user decides whether a premium call is worth it.
     const unbranded = built(answer(attributes({ brand: null })), noReads);
     expect(unbranded.result).toMatchObject({
@@ -287,9 +287,11 @@ describe('buildAnalysisResult escalation', () => {
       escalationReason: 'The brand was not identified.',
     });
     expect(unbranded.autoEscalate).toBe(false);
-    expect(built(answer(attributes({ productName: null }))).result.escalationReason).toBe(
-      'The product was not identified.',
-    );
+    // Most secondhand items show no product name: its absence alone suggests nothing.
+    expect(built(answer(attributes({ productName: null })))).toEqual({
+      result: expect.objectContaining({ needsEscalation: false }) as unknown,
+      autoEscalate: false,
+    });
     // Another reason still starts it.
     const vintage = built(answer({ ...attributes({ brand: null }), looksVintage: true }), noReads);
     expect(vintage.result.escalationReason).toBe('The brand was not identified. It looks vintage.');

@@ -12,6 +12,7 @@ describe('loadWorkerConfig', () => {
       databaseUrl: DATABASE_URL,
       logLevel: 'info',
       concurrency: 5,
+      taskConcurrency: 2,
       fakeMarketplaceUrl: undefined,
       storage: { driver: 'local' },
       ai: { provider: 'fake', fakeFixturesDir: DEFAULT_FAKE_FIXTURES_DIR },
@@ -40,11 +41,13 @@ describe('loadWorkerConfig', () => {
         DATABASE_URL,
         LOG_LEVEL: 'debug',
         WORKER_CONCURRENCY: '12',
+        WORKER_TASK_CONCURRENCY: '3',
         FAKE_MARKETPLACE_URL: 'http://127.0.0.1:4100',
       }),
     ).toMatchObject({
       logLevel: 'debug',
       concurrency: 12,
+      taskConcurrency: 3,
       fakeMarketplaceUrl: 'http://127.0.0.1:4100',
     });
   });
@@ -60,6 +63,7 @@ describe('loadWorkerConfig', () => {
       captureConfigError({
         LOG_LEVEL: 'loud',
         WORKER_CONCURRENCY: '0',
+        WORKER_TASK_CONCURRENCY: '101',
         FAKE_MARKETPLACE_URL: 'ftp://fake',
         AI_AUTO_ESCALATE: 'sometimes',
       }).issues,
@@ -67,6 +71,7 @@ describe('loadWorkerConfig', () => {
       'DATABASE_URL is required',
       'LOG_LEVEL must be one of fatal, error, warn, info, debug, trace, silent',
       'WORKER_CONCURRENCY must be an integer from 1 to 100',
+      'WORKER_TASK_CONCURRENCY must be an integer from 1 to 100',
       'FAKE_MARKETPLACE_URL must be an http:// or https:// URL',
       'AI_AUTO_ESCALATE must be on or off',
     ]);

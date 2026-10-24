@@ -216,7 +216,10 @@ src/
   queue (Graphile Worker, `graphilePhotoJobs`, job key `photoJobKey`) in the transaction that
   attaches the photo, and the worker runs it (`processPhoto`, task `photo_processing`) next to
   the operation steps. Analyses go the same way (`graphileAnalysisJobs`, `analysisJobKey`,
-  `runItemAnalysis`, task `item_analysis`). The API and the worker must share photo storage.
+  `runItemAnalysis`, task `item_analysis`). The API and the worker must share photo storage:
+  deployed, both use the S3 photo bucket (`infra/src/containers.ts`). Photo and analysis jobs
+  run in a pool of their own (`WORKER_TASK_CONCURRENCY`), so a slow AI call never holds a
+  slot an operation step, such as an urgent delist, needs.
 - **Photo-set hash.** `itemPhotoSet` returns an item's photos in order and `photoSetHash`
   (from `@listora/shared`) over their upload sha256s, the key analysis is idempotent by. The
   hash sorts the sha256s, so reordering the photos or choosing another cover keeps the
@@ -547,10 +550,11 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
   product is uncertain (confidence below 0.6), the item looks designer or vintage, or the
   model says so. With `AI_AUTO_ESCALATE=on` the job then queues the premium analysis (same
   photos plus the first result) in the transaction that stores the result, when the premium
-  quota allows; otherwise the user starts it (`escalateAnalysis`). A brand or product the
-  model did not identify at all also sets `needsEscalation` (with the reason "The brand was
-  not identified."), so the app makes "Identify harder" prominent, but never escalates on its
-  own: many items are unbranded, and a premium identification costs the user's quota.
+  quota allows; otherwise the user starts it (`escalateAnalysis`). A brand the model did not
+  identify at all also sets `needsEscalation` (with the reason "The brand was not
+  identified."), so the app makes "Identify harder" prominent, but never escalates on its own:
+  many items are unbranded, and a premium identification costs the user's quota. A missing
+  product name alone sets nothing, since most secondhand items show none.
 - **Quotas.** A standard call uses one `ai_items` unit and a premium call one
   `premium_identifications` unit when it succeeds. `PostgresQuotaPolicy` counts them in
   `usage_counter` per UTC month and enforces the row's `quota` (null means unlimited until
