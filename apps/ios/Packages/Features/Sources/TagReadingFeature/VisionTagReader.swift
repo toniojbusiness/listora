@@ -144,16 +144,18 @@ public struct VisionTagReader: TagReader {
         let request = VNDetectBarcodesRequest()
         request.revision = VNDetectBarcodesRequestRevision2
         request.symbologies = Array(legacySymbologies.keys)
-        if let cpu = try request.supportedComputeStageDevices[.main]?.first(where: { device in
-            if case .cpu = device {
-                true
-            } else {
-                false
+        try await perform {
+            if let cpu = try request.supportedComputeStageDevices[.main]?.first(where: { device in
+                if case .cpu = device {
+                    true
+                } else {
+                    false
+                }
+            }) {
+                request.setComputeDevice(cpu, for: .main)
             }
-        }) {
-            request.setComputeDevice(cpu, for: .main)
+            try VNImageRequestHandler(cgImage: image).perform([request])
         }
-        try await perform { try VNImageRequestHandler(cgImage: image).perform([request]) }
         return (request.results ?? []).compactMap { observation in
             guard let payload = observation.payloadStringValue, let symbology = legacySymbologies[observation.symbology]
             else { return nil }

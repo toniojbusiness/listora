@@ -45,6 +45,32 @@ struct PhotoTagReadUploadTests {
     }
 
     @Test
+    func `measures the limits in UTF-16 code units`() {
+        let crlfPayload = String(repeating: "x", count: 2028) + String(repeating: "\r\n", count: 20)
+        let fittingPayload = String(repeating: "x", count: 2046) + "\r\n"
+        let emojiPayload = String(repeating: "x", count: 2047) + "😀"
+        let reading = TagReading(
+            lines: [
+                line(String(repeating: "A", count: 499) + "😀", 1),
+                line(String(repeating: "😀", count: 300), 1),
+                line(String(repeating: "e\u{301}", count: 300), 1),
+                line(String(repeating: "\r\n", count: 300), 1),
+            ],
+            barcodes: [barcode(.qr, crlfPayload), barcode(.qr, emojiPayload), barcode(.qr, fittingPayload)],
+            timing: timing,
+        )
+        #expect(crlfPayload.count == 2048 && crlfPayload.utf16.count == 2068)
+        let upload = reading.upload
+        let texts = upload.ocrLines.map(\.text)
+        #expect(texts[0] == String(repeating: "A", count: 499))
+        #expect(texts[1] == String(repeating: "😀", count: 250))
+        #expect(texts[2] == String(repeating: "e\u{301}", count: 250))
+        #expect(texts[3] == String(repeating: "\r\n", count: 250))
+        #expect(texts.allSatisfy { $0.utf16.count <= PhotoTagReadUpload.Limit.lineLength })
+        #expect(upload.barcodes.map(\.payload) == [fittingPayload])
+    }
+
+    @Test
     func `a reading survives a round trip through JSON for the draft store`() throws {
         let reading = TagReading(lines: [line("CA 54321", 0.9)], barcodes: [barcode(.ean8, "96385074")], timing: timing)
         let decoded = try JSONDecoder().decode(TagReading.self, from: JSONEncoder().encode(reading))
