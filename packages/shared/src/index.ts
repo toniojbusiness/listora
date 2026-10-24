@@ -6,3 +6,5 @@ export type { Logger, LoggerOptions, LogLevel } from './logging.ts';
 export { addMoney, money, subtractMoney } from './money.ts';
 export type { CurrencyCode, Money } from './money.ts';
 export { isSha256Hex, photoSetHash, sha256Hex } from './photo-set-hash.ts';
+export { isSensitiveKey, REDACTED, redactForStorage, TRUNCATED } from './redact.ts';
+export type { RedactedValue, RedactOptions } from './redact.ts';

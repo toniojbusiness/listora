@@ -1,52 +1,11 @@
 /**
  * Test-only helpers for this package's integration tests (not exported from the package).
+ * The helpers other workspaces need are in testing.ts (`@listora/db/testing`).
  */
 import { expect } from 'vitest';
 
-import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
-
-import { createDatabase, type Db } from './database.ts';
-import { SchemaMigrator } from './migrations.ts';
-
-export interface MigratedDatabase {
-  db: Db;
-  scratch: ScratchDatabase;
-  close(): Promise<void>;
-}
-
-/** A scratch database with every migration applied. */
-export async function createMigratedDatabase(prefix: string, max = 5): Promise<MigratedDatabase> {
-  const scratch = await createScratchDatabase(prefix);
-  const db = createDatabase({ connectionString: scratch.url, max });
-  try {
-    await new SchemaMigrator(db).migrateToLatest();
-  } catch (error) {
-    await db.destroy();
-    await scratch.drop();
-    throw error;
-  }
-  return {
-    db,
-    scratch,
-    close: async () => {
-      await db.destroy();
-      await scratch.drop();
-    },
-  };
-}
-
-export async function insertAccount(
-  db: Db,
-  skuPrefix = 'AJ',
-  name = 'Test account',
-): Promise<string> {
-  const { id } = await db
-    .insertInto('account')
-    .values({ name, sku_prefix: skuPrefix })
-    .returning('id')
-    .executeTakeFirstOrThrow();
-  return id;
-}
+export { createMigratedDatabase, insertAccount } from './testing.ts';
+export type { MigratedDatabase } from './testing.ts';
 
 /** Postgres SQLSTATE codes the constraint tests expect. */
 export const PG_ERROR = {

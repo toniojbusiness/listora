@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
+import pg from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createScratchDatabase, startNodeProcess, type ScratchDatabase } from '@listora/testing';
@@ -12,6 +13,8 @@ const SHIPPED = [
   '0003_idempotency',
   '0004_item_pre_archive_status',
   '0005_photo_pipeline',
+  '0006_read_freshness',
+  '0007_pending_listing_id',
 ];
 const LATEST = SHIPPED.at(-1) ?? '';
 
@@ -20,6 +23,20 @@ async function migrate(env: NodeJS.ProcessEnv, ...args: string[]) {
   const process_ = startNodeProcess(entry, { PATH: process.env['PATH'], ...env }, args);
   const code = await process_.waitForExit(20_000);
   return { code, logs: process_.logs, stderr: process_.stderr };
+}
+
+async function functionExists(url: string, name: string): Promise<boolean> {
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    const { rows } = await client.query<{ found: boolean }>(
+      "select exists (select 1 from pg_proc where oid::regprocedure::text like $1 || '(%') as found",
+      [name],
+    );
+    return rows[0]?.found === true;
+  } finally {
+    await client.end();
+  }
 }
 
 describe('migrate command (real Postgres)', () => {
@@ -41,6 +58,11 @@ describe('migrate command (real Postgres)', () => {
     expect(applied.logs).toContainEqual(
       expect.objectContaining({ msg: 'migrations applied', applied: SHIPPED }),
     );
+
+    expect(applied.logs).toContainEqual(
+      expect.objectContaining({ msg: 'job queue schema is up to date', schema: 'graphile_worker' }),
+    );
+    expect(await functionExists(scratch.url, 'graphile_worker.add_job')).toBe(true);
 
     const again = await migrate(env);
     expect(again.code).toBe(0);

@@ -321,6 +321,12 @@ export interface MarketplaceListingTable {
   applied_version: Generated<number>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  /** The newest revision seen of the marketplace listing `external_listing_id` names. */
+  remote_revision: Nullable<number>;
+  /** The newest listing id the marketplace returned that no read-back has confirmed yet. */
+  pending_external_listing_id: Nullable<string>;
+  /** The newest revision seen of the marketplace listing `pending_external_listing_id` names. */
+  pending_remote_revision: Nullable<number>;
 }
 
 export interface MarketplaceOperationTable {

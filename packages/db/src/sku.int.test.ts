@@ -27,7 +27,7 @@ describe('SKU allocation (real Postgres)', () => {
 
   beforeAll(async () => {
     // A pool of 20 connections, so creates genuinely run concurrently and contend.
-    database = await createMigratedDatabase('sku', 20);
+    database = await createMigratedDatabase('sku', { max: 20 });
   });
 
   afterAll(async () => {

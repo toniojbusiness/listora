@@ -26,6 +26,7 @@
     "test:integration": "vitest run --project integration",
     "dev:api": "npm run dev --workspace @listora/api",
     "dev:worker": "npm run dev --workspace @listora/worker",
+    "dev:fake-marketplace": "npm run fake --workspace @listora/marketplaces",
     "db:migrate": "npm run migrate --workspace @listora/db --",
     "eval": "npm run eval --workspace @listora/eval --",
     "corpus:render": "npm run corpus:render --workspace @listora/eval"

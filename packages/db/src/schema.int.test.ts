@@ -194,6 +194,9 @@ const COLUMNS = {
     'applied_version',
     'created_at',
     'updated_at',
+    'remote_revision',
+    'pending_external_listing_id',
+    'pending_remote_revision',
   ],
   marketplace_operation: [
     'id',
