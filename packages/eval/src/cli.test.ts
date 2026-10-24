@@ -10,17 +10,22 @@ import type { EvalReport } from './harness.ts';
 
 const entry = fileURLToPath(new URL('cli.ts', import.meta.url));
 
+/** Upper bound for one CLI process; a cold start under a parallel test run takes seconds. */
+const CLI_TIMEOUT_MS = 60_000;
+
 /** Runs the CLI the way `npm run eval` does, as a real process. */
 function runCli(...args: string[]) {
   const result = spawnSync(process.execPath, [entry, ...args], {
     encoding: 'utf8',
     env: { PATH: process.env['PATH'] },
-    timeout: 60_000,
+    timeout: CLI_TIMEOUT_MS,
   });
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-describe('eval CLI', () => {
+// Each test spawns up to two CLI processes, so the vitest timeout covers two full CLI budgets
+// rather than the 5s default, which a loaded machine exceeds.
+describe('eval CLI', { timeout: 2 * CLI_TIMEOUT_MS }, () => {
   it('prints parser and fake-provider accuracy and the metered cost per item by default', () => {
     const { status, stdout, stderr } = runCli();
     expect(stderr).toBe('');
@@ -62,7 +67,7 @@ describe('eval CLI', () => {
     const result = spawnSync(process.execPath, [entry, '--json'], {
       encoding: 'utf8',
       env: { PATH: process.env['PATH'], AI_KILL_SWITCH: 'on' },
-      timeout: 60_000,
+      timeout: CLI_TIMEOUT_MS,
     });
     expect(result.status).toBe(1);
     const report = JSON.parse(result.stdout) as EvalReport;
