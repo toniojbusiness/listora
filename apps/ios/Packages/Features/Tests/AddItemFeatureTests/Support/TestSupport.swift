@@ -165,6 +165,24 @@ extension RetryPolicy {
     )
 }
 
+/// A clock that moves on by `step` at every reading, as on a slow machine where time passes
+/// between any two of the queue's decisions.
+final class SteppingClock: Sendable {
+    private let time = Mutex(Date.now)
+    private let step: TimeInterval
+
+    init(step: Duration) {
+        self.step = step.timeInterval
+    }
+
+    func now() -> Date {
+        time.withLock { time in
+            time = time.addingTimeInterval(step)
+            return time
+        }
+    }
+}
+
 /// Polls `condition` until it holds or `timeout` passes.
 @MainActor
 func eventually(

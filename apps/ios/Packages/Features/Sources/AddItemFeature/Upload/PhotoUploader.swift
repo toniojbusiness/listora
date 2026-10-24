@@ -127,7 +127,7 @@ actor PhotoUploader {
         transferring = await transport.activePhotoIDs()
         forgetTargetsOfInterruptedTransfers()
         while !Task.isCancelled {
-            if await performNextStep() {
+            guard case let .idle(nextRetry) = await performNextStep() else {
                 continue
             }
             if wakePending {
@@ -135,7 +135,6 @@ actor PhotoUploader {
                 continue
             }
             setIdle(true)
-            let nextRetry = (try? store.uploadSnapshot()).flatMap { UploadPlanner.nextRetry(in: $0, now: now()) }
             await sleep(until: nextRetry)
             setIdle(false)
         }
@@ -154,8 +153,17 @@ actor PhotoUploader {
         }
     }
 
-    /// Runs one step; false when there is nothing to do now.
-    private func performNextStep() async -> Bool {
+    /// What one pass of the loop did.
+    private enum Pass {
+        case worked
+        /// Nothing to do now; the earliest waiting retry falls due at `until`, if any.
+        case idle(until: Date?)
+    }
+
+    /// Runs one step, or finds that there is nothing to do now and when the next retry falls due.
+    /// Both come from the same snapshot at the same time, so a retry that falls due meanwhile is
+    /// either run now or waited for, never missed.
+    private func performNextStep() async -> Pass {
         isSignedIn = await accessTokens.accessToken() != nil
         await publish()
         let snapshot: UploadSnapshot
@@ -163,14 +171,15 @@ actor PhotoUploader {
             snapshot = try store.uploadSnapshot()
         } catch {
             log.error("Reading the upload queue failed: \(String(describing: error), privacy: .public)")
-            return false
+            return .idle(until: nil)
         }
+        let time = now()
         guard let work = UploadPlanner.next(
             in: snapshot,
-            now: now(),
+            now: time,
             transferring: transferring,
             signedIn: isSignedIn,
-        ) else { return false }
+        ) else { return .idle(until: UploadPlanner.nextRetry(in: snapshot, now: time)) }
         do {
             try await perform(work, in: snapshot)
         } catch {
@@ -178,7 +187,7 @@ actor PhotoUploader {
             log.error("Upload step failed: \(String(describing: error), privacy: .public)")
             try? await Task.sleep(for: policy.baseDelay)
         }
-        return true
+        return .worked
     }
 
     private func perform(_ work: UploadWork, in snapshot: UploadSnapshot) async throws {

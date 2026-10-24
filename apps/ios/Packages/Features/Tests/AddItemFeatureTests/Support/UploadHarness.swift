@@ -15,6 +15,7 @@ final class UploadHarness {
     let tagReader = FakeTagReader()
     let activity = UploadActivity()
     let policy: RetryPolicy
+    private let now: @Sendable () -> Date
     /// The transport every launch uses, or nil for a new URLSession transport per launch.
     private let fixedTransport: (any UploadTransport)?
     private var wiring: Wiring
@@ -32,9 +33,11 @@ final class UploadHarness {
         signedIn: Bool = true,
         policy: RetryPolicy = .test,
         transport: (any UploadTransport)? = nil,
+        now: @escaping @Sendable () -> Date = Date.init,
     ) throws {
         self.server = server
         self.policy = policy
+        self.now = now
         fixedTransport = transport
         directory = try TemporaryDirectory()
         grants = InMemoryAccessGrantStorage(signedIn ? Self.grant : nil)
@@ -43,7 +46,7 @@ final class UploadHarness {
             directory: directory.url,
             server: server,
             tokens: tokens,
-            parts: Parts(tagReader: tagReader, activity: activity, policy: policy, transport: transport),
+            parts: Parts(tagReader: tagReader, activity: activity, policy: policy, transport: transport, now: now),
         )
     }
 
@@ -62,7 +65,7 @@ final class UploadHarness {
             directory: directory.url,
             server: server,
             tokens: tokens,
-            parts: Parts(tagReader: tagReader, activity: activity, policy: policy, transport: fixedTransport),
+            parts: Parts(tagReader: tagReader, activity: activity, policy: policy, transport: fixedTransport, now: now),
         )
         await uploader.start()
     }
@@ -97,6 +100,7 @@ final class UploadHarness {
         var activity: UploadActivity
         var policy: RetryPolicy
         var transport: (any UploadTransport)?
+        var now: @Sendable () -> Date
     }
 
     /// What a launch builds: the store over the database, the transport, and the queue.
@@ -121,6 +125,7 @@ final class UploadHarness {
                 transport: transport,
                 activity: parts.activity,
                 policy: parts.policy,
+                now: parts.now,
             )
         }
 
