@@ -1,7 +1,17 @@
 // Settings shared by every build configuration. Environment files include this first.
 
+// CURRENT_PROJECT_VERSION (CFBundleVersion) stays 1 for local builds. Release builds set it on
+// the command line (`make ios-testflight IOS_BUILD_NUMBER=...`); see the release guide in
+// apps/ios/README.md.
 MARKETING_VERSION = 0.1.0
 CURRENT_PROJECT_VERSION = 1
 
-// Placeholder until the Apple Developer Program account exists (gate G-Apple).
+// Placeholder until the Apple Developer Program account exists (gate G-Apple). The Staging and
+// Prod app records in App Store Connect must use these ids plus BUNDLE_ID_SUFFIX, and the Share
+// Extension the app id plus ".share".
 BASE_BUNDLE_IDENTIFIER = com.listora.app
+
+// The Apple Developer team that signs device builds. Empty until G-Apple: simulator builds and
+// `make ios-archive` need no team, and `make ios-testflight` passes APPLE_TEAM_ID on the command
+// line. Set it in Config/Local.xcconfig to run Dev on a physical device.
+DEVELOPMENT_TEAM =

@@ -80,6 +80,10 @@ The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
   consistent. A test checks WCAG AA contrast for every text and background pair.
 - Tests use Swift Testing; UI tests use XCTest. `make ios-lint` (SwiftLint and SwiftFormat)
   must be clean.
+- Releases are plain `xcodebuild`, no fastlane: `scripts/ios-release.sh` archives
+  (`make ios-archive` unsigned, `make ios-testflight` signed with an App Store Connect team API
+  key and uploaded). The hand-dispatched TestFlight workflow runs it; the build number is the
+  workflow's run number. Bundle ids and the team id are xcconfig settings.
 
 ## 3. Repository layout
 

@@ -58,11 +58,11 @@ Sizes, redundancy, and retention per environment are in `ENVIRONMENT_SETTINGS`
 
 Run from the repository root.
 
-| Command                                  | What it does                                                                                       |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `npm run infra:synth`                    | `cdk synth` for both environments with placeholder settings, with AWS credentials hidden (offline) |
-| `npx vitest run --project unit infra`    | Infra tests: config, assertions per stack and environment, template snapshots, deploy workflow     |
-| `npx vitest run --project unit infra -u` | Refresh the template snapshots in `src/__snapshots__/` after an intended change; review the diff   |
+| Command                                  | What it does                                                                                                   |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `npm run infra:synth`                    | `cdk synth` for both environments with placeholder settings, with AWS credentials hidden (offline)             |
+| `npx vitest run --project unit infra`    | Infra tests: config, assertions per stack and environment, template snapshots, deploy and TestFlight workflows |
+| `npx vitest run --project unit infra -u` | Refresh the template snapshots in `src/__snapshots__/` after an intended change; review the diff               |
 
 Commands that talk to AWS (`cdk diff`, `cdk deploy`) run from `infra/` with that account's
 credentials and the settings below, for example `npx cdk diff -c env=staging`.

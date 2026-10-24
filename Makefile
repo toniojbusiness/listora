@@ -20,11 +20,18 @@ XCODEBUILD := xcodebuild \
 	-skipPackagePluginValidation \
 	-quiet
 
+# Release builds (scripts/ios-release.sh; release guide in apps/ios/README.md). The build number
+# defaults to CURRENT_PROJECT_VERSION in Config/Base.xcconfig for ios-archive and is required by
+# ios-testflight.
+IOS_RELEASE_CONFIGURATION ?= Prod-Release
+IOS_BUILD_NUMBER ?=
+IOS_RELEASE := IOS_BUILD_DIR='$(IOS_BUILD_DIR)' scripts/ios-release.sh
+
 # Fails with an install hint when a command-line tool is missing.
 require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Install it with: brew install $(2)" >&2; exit 1; }
 
 .PHONY: ios-generate ios-build ios-test ios-check-ats ios-lint ios-format ios-open ios-clean ios-simulator \
-	ios-tag-fixtures
+	ios-tag-fixtures ios-archive ios-testflight
 
 ## Generate Listora.xcodeproj from apps/ios/project.yml.
 ios-generate:
@@ -80,6 +87,18 @@ ios-tag-fixtures:
 	mkdir -p $(IOS_BUILD_DIR)/tools
 	xcrun swiftc -O -o $(IOS_BUILD_DIR)/tools/generate-tag-fixtures $(IOS_DIR)/Tools/generate-tag-fixtures.swift
 	$(IOS_BUILD_DIR)/tools/generate-tag-fixtures
+
+## Archive a release configuration without signing, to prove the archive step works with no
+## Apple account. Output: .build/ios/archives/Listora-<configuration>-unsigned.xcarchive.
+ios-archive: ios-generate ios-check-ats
+	$(IOS_RELEASE) archive '$(IOS_RELEASE_CONFIGURATION)' '$(IOS_BUILD_NUMBER)'
+
+## Archive, sign, and upload a release configuration to TestFlight. Needs IOS_BUILD_NUMBER and the
+## App Store Connect credentials in the environment; it checks them before building.
+ios-testflight:
+	$(IOS_RELEASE) check-credentials
+	$(MAKE) ios-generate ios-check-ats
+	$(IOS_RELEASE) testflight '$(IOS_RELEASE_CONFIGURATION)' '$(IOS_BUILD_NUMBER)'
 
 ## Generate the project and open it in Xcode.
 ios-open: ios-generate

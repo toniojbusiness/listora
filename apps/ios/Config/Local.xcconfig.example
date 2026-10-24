@@ -2,3 +2,6 @@
 // Only the Dev configuration reads this file.
 
 // API_BASE_URL = http:/$()/127.0.0.1:3001
+
+// Your Apple Developer team id, to run Dev on a physical device (after gate G-Apple).
+// DEVELOPMENT_TEAM = ABCDE12345

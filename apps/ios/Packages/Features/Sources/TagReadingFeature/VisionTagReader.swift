@@ -142,7 +142,8 @@ public struct VisionTagReader: TagReader {
             .ean13: .ean13, .ean8: .ean8, .upce: .upce, .code128: .code128, .qr: .qr,
         ]
         let request = VNDetectBarcodesRequest()
-        request.revision = VNDetectBarcodesRequestRevision2
+        // VNDetectBarcodesRequestRevision2, by value: the constant is deprecated, and this use is deliberate.
+        request.revision = 2
         request.symbologies = Array(legacySymbologies.keys)
         try await perform {
             if let cpu = try request.supportedComputeStageDevices[.main]?.first(where: { device in

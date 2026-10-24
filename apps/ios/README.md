@@ -33,6 +33,8 @@ Run these from the repository root.
 | `make ios-format`       | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes |
 | `make ios-clean`        | Delete the generated project and `.build/ios`                  |
 | `make ios-tag-fixtures` | Re-render the tag-reading test photos (see Tag reading)        |
+| `make ios-archive`      | Unsigned release archive; needs no Apple account (Releases)    |
+| `make ios-testflight`   | Signed release archive uploaded to TestFlight (Releases)       |
 
 `make ios-test` writes DerivedData, SwiftPM caches, and the result bundle
 (`.build/ios/Test.xcresult`) to `.build/ios` in this checkout, never to `~/Library`. To use a
@@ -142,3 +144,108 @@ error that names the key.
   copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` (gitignored) and set
   `API_BASE_URL` there.
 - No configuration value is a secret. Never put credentials in an xcconfig file.
+
+## Releases
+
+Release builds are plain `xcodebuild`, run by `scripts/ios-release.sh` (no fastlane). Signing
+uses an App Store Connect team API key, never a personal Apple ID.
+
+| Command               | What it does                                                             |
+| --------------------- | ------------------------------------------------------------------------ |
+| `make ios-archive`    | Archive `Prod-Release` without signing, then check the archive           |
+| `make ios-testflight` | Archive with automatic signing, then sign for distribution and upload it |
+
+Both take `IOS_RELEASE_CONFIGURATION` (`Prod-Release`, the default, or `Staging-Release`) and
+`IOS_BUILD_NUMBER` (the CFBundleVersion, a whole number; required for TestFlight). For example
+`make ios-archive IOS_RELEASE_CONFIGURATION=Staging-Release IOS_BUILD_NUMBER=7` writes
+`.build/ios/archives/Listora-Staging-Release-unsigned.xcarchive`. After archiving, the script
+checks that the app and the Share Extension have the same version and build number, that the
+extension's bundle id is the app's plus `.share`, that the app is the requested environment, and
+that it has no ATS exception. The unsigned archive cannot be installed or uploaded; it proves
+that the release configuration compiles and archives without credentials.
+
+`make ios-testflight` reads `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
+`APP_STORE_CONNECT_PRIVATE_KEY` (the contents of the `.p8` file), and `APPLE_TEAM_ID` from the
+environment (see `.env.example`), and stops before building when one is missing. It writes the
+key to a private temporary file that it deletes when it ends.
+
+### Uploading a TestFlight build
+
+1. Merge the change to `main`. To start a new version, raise `MARKETING_VERSION` in
+   `Config/Base.xcconfig` in that change.
+2. In GitHub, open Actions > **TestFlight** > Run workflow, keep the `main` branch, and choose
+   `staging` (the Listora Staging app) or `prod` (the Listora app). The run waits for the
+   approval rules of the `ios-staging` or `ios-prod` environment.
+3. The workflow (`.github/workflows/testflight.yml`, macOS runner) first checks that the four
+   secrets exist and stops with an error naming any that are missing. Then it runs
+   `make ios-testflight` with the build number set to the workflow's run number.
+4. When the run succeeds, App Store Connect processes the build (usually a few minutes) and it
+   appears in TestFlight for internal testers. External testing needs Beta App Review.
+
+The run number goes up by one for each run of the workflow, for both apps, so build numbers
+always increase. Re-running a run reuses its number; if that run already uploaded, App Store
+Connect rejects the duplicate, so a build is never replaced. Renaming or recreating
+`testflight.yml` restarts the run number; if that ever happens, raise `MARKETING_VERSION` before
+the next upload, because App Store Connect needs a build number it has not seen for the version.
+
+The workflow never runs on pushes or pull requests (macOS minutes cost 10 times Linux minutes).
+
+### One-time setup (gate G-Apple)
+
+What the captain creates once the Apple Developer Program account exists. The ids below use the
+placeholder `BASE_BUNDLE_IDENTIFIER` (`com.listora.app`, in `Config/Base.xcconfig`). If that id
+is taken, choose another, change `BASE_BUNDLE_IDENTIFIER` (the only place it is set), and use
+the new one everywhere below.
+
+1. **Team id.** Enroll as an organization (needs a D-U-N-S number). Note the 10-character team
+   id from developer.apple.com > Account > Membership details.
+2. **Bundle ids.** In Certificates, Identifiers & Profiles > Identifiers, register explicit App
+   IDs:
+
+   | App             | App id                    | Share Extension id              |
+   | --------------- | ------------------------- | ------------------------------- |
+   | Listora (Prod)  | `com.listora.app`         | `com.listora.app.share`         |
+   | Listora Staging | `com.listora.app.staging` | `com.listora.app.staging.share` |
+
+   Dev (`com.listora.app.dev`) is only for running on a device from Xcode; automatic signing
+   registers it when needed.
+
+3. **App Groups.** Register `group.com.listora.app` and `group.com.listora.app.staging`, and
+   enable the App Groups capability with its environment's group on both the app id and the
+   Share Extension id. The app and the Share Extension share data through it; the entitlement
+   arrives with the Share Extension work (T-22). Later tasks enable more capabilities on the app
+   ids the same way (Sign in with Apple in T-31, In-App Purchase in T-28, Push Notifications).
+4. **App records.** In App Store Connect > Apps > New App, create two iOS apps: **Listora** with
+   bundle id `com.listora.app`, and **Listora Staging** with `com.listora.app.staging`. Staging
+   is only ever distributed through TestFlight.
+5. **API key.** In App Store Connect > Users and Access > Integrations > App Store Connect API >
+   Team Keys, generate a key (for example "GitHub TestFlight") with the **Admin** role. Automatic
+   signing creates provisioning profiles and signs with a cloud-managed distribution
+   certificate, which lower roles cannot do; individual keys cannot use the provisioning
+   endpoints at all. Download the `.p8` file (Apple offers it only once), and note the key id
+   and the issuer id shown on that page.
+6. **GitHub environments.** In the repository's Settings > Environments, create `ios-staging`
+   and `ios-prod`, limit both to the `main` branch, and add required reviewers to `ios-prod`.
+   Add these secrets to each (the same key can serve both):
+
+   | Secret                          | Value                                              |
+   | ------------------------------- | -------------------------------------------------- |
+   | `APP_STORE_CONNECT_KEY_ID`      | The key id                                         |
+   | `APP_STORE_CONNECT_ISSUER_ID`   | The issuer id                                      |
+   | `APP_STORE_CONNECT_PRIVATE_KEY` | The whole `.p8` file, BEGIN and END lines included |
+   | `APPLE_TEAM_ID`                 | The team id                                        |
+
+   These environments are separate from the AWS `staging` and `prod` deploy environments, so the
+   Apple key and the AWS deploy role never share one.
+
+7. **App icon.** App Store Connect rejects an upload without an app icon, and the app has none
+   yet. Add an `AppIcon` asset before the first upload.
+
+Notes:
+
+- `ITSAppUsesNonExemptEncryption` is `false` in Info.plist, so TestFlight does not ask the export
+  compliance question for each build.
+- Each fresh runner has no development certificate, so the signed archive step may create one
+  ("Created via API" in Certificates). If they pile up toward Apple's limit, revoke the old ones;
+  distribution signing is cloud-managed and is not affected.
+- If the key leaks, revoke it in App Store Connect, generate a new one, and replace the secrets.

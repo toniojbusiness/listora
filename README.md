@@ -147,6 +147,12 @@ succeeds in seconds without building, so it still reports a result and can be a 
 check. It fails, rather than passing, when change detection fails. When the iOS build starts
 reading a new file outside these paths, add it to the `ios` filter in the `changes` job.
 
+Two more workflows run only when dispatched by hand from the Actions tab on `main`, never on
+pushes or pull requests: **Deploy** (`deploy.yml`, the AWS stacks; see
+[infra/README.md](infra/README.md)) and **TestFlight** (`testflight.yml`, a signed iOS build
+uploaded to TestFlight on a macOS runner; see
+[Releases in apps/ios/README.md](apps/ios/README.md#releases)).
+
 A new push to a pull request cancels the run it supersedes. Runs on `main` are never
 cancelled, so every merged commit gets a full result. Every job has a `timeout-minutes`
 limit.
