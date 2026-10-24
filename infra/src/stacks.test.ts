@@ -2,8 +2,9 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 
 import { APP_SECRETS, ENVIRONMENT_NAMES, ENVIRONMENT_SETTINGS, SERVICE_NAMES } from './config.ts';
-import { containerEnvironment, containerSecretNames } from './containers.ts';
+import { containerEnvironment, containerSecretNames, MIGRATE_COMMAND } from './containers.ts';
 import type { ListoraStacks } from './app.ts';
+import { migrateTaskNames } from './stacks/migrate-stack.ts';
 import { stackList, synthesize } from './test-support.ts';
 
 type Resource = { Type: string; Properties?: Record<string, unknown> } & Record<string, unknown>;
@@ -352,6 +353,8 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
 
     it('runs tasks in private subnets with rollback on failed deploys', () => {
       for (const service of resources(t, 'AWS::ECS::Service')) {
+        // Autoscaling owns the task count; a template count would reset it on every deploy.
+        expect(service.Properties?.['DesiredCount']).toBeUndefined();
         expect(service.Properties).toMatchObject({
           LaunchType: 'FARGATE',
           NetworkConfiguration: { AwsvpcConfiguration: { AssignPublicIp: 'DISABLED' } },
@@ -381,7 +384,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
       }
     });
 
-    it('serves the API over HTTPS only, health-checked on /health/ready', () => {
+    it('serves the API over HTTPS only, health-checked on /health/live', () => {
       t.hasResourceProperties('AWS::CertificateManager::Certificate', {
         DomainName: `api.${target.domain}`,
         ValidationMethod: 'DNS',
@@ -402,7 +405,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
       });
       t.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
         Port: 3000,
-        HealthCheckPath: '/health/ready',
+        HealthCheckPath: '/health/live',
         Matcher: { HttpCode: '200' },
       });
       t.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
@@ -461,6 +464,77 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
     });
   });
 
+  describe('migrate', () => {
+    const t = template(environment, 'migrate');
+    const names = migrateTaskNames(environment);
+    const definition = () => {
+      const [task] = resources(t, 'AWS::ECS::TaskDefinition');
+      expect(task?.Properties?.['Family']).toBe(names.family);
+      return (task?.Properties?.['ContainerDefinitions'] as Record<string, unknown>[])[0] ?? {};
+    };
+
+    it('defines the migration task under fixed names, with its own cluster and log group', () => {
+      t.resourceCountIs('AWS::ECS::TaskDefinition', 1);
+      t.hasResourceProperties('AWS::ECS::Cluster', { ClusterName: names.cluster });
+      t.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: names.logGroup,
+        RetentionInDays: settings.logRetention,
+      });
+      for (const roleName of [names.taskRole, names.executionRole]) {
+        t.hasResourceProperties('AWS::IAM::Role', {
+          RoleName: roleName,
+          AssumeRolePolicyDocument: {
+            Statement: [Match.objectLike({ Principal: { Service: 'ecs-tasks.amazonaws.com' } })],
+          },
+        });
+      }
+      t.hasOutput('SubnetIds', Match.anyValue());
+      t.hasOutput('SecurityGroupId', Match.anyValue());
+    });
+
+    it('runs the migrate CLI from the deployed image with the worker database access', () => {
+      const container = definition();
+      expect(container['Command']).toEqual(MIGRATE_COMMAND);
+      expect(container['ReadonlyRootFilesystem']).toBe(true);
+      expect(JSON.stringify(container['Image'])).toContain(`:${target.imageTag}"`);
+      const env = container['Environment'] as { Name: string; Value: unknown }[];
+      expect(env.map((entry) => entry.Name)).toEqual(
+        Object.keys(containerEnvironment('worker', 'postgres://')),
+      );
+      expect(JSON.stringify(env.find((entry) => entry.Name === 'DATABASE_URL')?.Value)).toContain(
+        'postgres://listora@',
+      );
+      const secrets = container['Secrets'] as { Name: string; ValueFrom: unknown }[];
+      expect(secrets.map((secret) => secret.Name)).toEqual(['PGPASSWORD']);
+      expect(JSON.stringify(secrets[0]?.ValueFrom)).toContain(':password::');
+    });
+
+    it('gives the task role no permissions and the execution role only what starts the task', () => {
+      const policies = Object.entries(t.findResources('AWS::IAM::Policy'));
+      expect(policies.map(([id]) => id)).toEqual([
+        expect.stringMatching(/^ExecutionRoleDefaultPolicy/) as unknown,
+      ]);
+      const actions = statements(t).flatMap((statement) => asList(statement['Action']));
+      expect([...new Set(actions)].sort()).toEqual(
+        [
+          'ecr:BatchCheckLayerAvailability',
+          'ecr:BatchGetImage',
+          'ecr:GetAuthorizationToken',
+          'ecr:GetDownloadUrlForLayer',
+          'logs:CreateLogStream',
+          'logs:PutLogEvents',
+          'secretsmanager:DescribeSecret',
+          'secretsmanager:GetSecretValue',
+        ].sort(),
+      );
+      for (const statement of statements(t)) {
+        if (statement['Resource'] === '*') {
+          expect(statement['Action']).toBe('ecr:GetAuthorizationToken');
+        }
+      }
+    });
+  });
+
   describe('observability', () => {
     const t = template(environment, 'observability');
 
@@ -489,6 +563,16 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
         expect(alarm.Properties?.['OKActions']).toEqual(alarm.Properties?.['AlarmActions']);
       }
       t.resourceCountIs('AWS::SNS::Subscription', 0);
+    });
+
+    it('alarms on free storage only once autoscaling stops keeping up', () => {
+      const threshold = resources(t, 'AWS::CloudWatch::Alarm').find(
+        (alarm) =>
+          alarm.Properties?.['AlarmName'] === `listora-${environment}-database-free-storage`,
+      )?.Properties?.['Threshold'] as number;
+      // Autoscaling grows the volume below 10% free, so normal operation never gets this low.
+      expect(threshold).toBeLessThan(settings.database.allocatedStorageGiB * 0.1 * 1024 ** 3);
+      expect(threshold).toBeGreaterThan(0);
     });
 
     it('subscribes the alarm email when one is configured', () => {
@@ -527,10 +611,11 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
       });
     });
 
-    it('can only use the CDK bootstrap roles and push the application image', () => {
+    it('can only use the CDK bootstrap roles, push the image, and run the migration task', () => {
       const actions = statements(t).flatMap((statement) => asList(statement['Action']));
       expect(actions.sort()).toEqual(
         [
+          'cloudformation:DescribeStacks',
           'ecr:BatchCheckLayerAvailability',
           'ecr:BatchGetImage',
           'ecr:CompleteLayerUpload',
@@ -539,6 +624,9 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
           'ecr:InitiateLayerUpload',
           'ecr:PutImage',
           'ecr:UploadLayerPart',
+          'ecs:DescribeTasks',
+          'ecs:RunTask',
+          'iam:PassRole',
           'sts:AssumeRole',
         ].sort(),
       );
@@ -548,6 +636,27 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
       expect(JSON.stringify(statements(t))).toContain(
         `role/cdk-hnb659fds-*-${target.account}-${target.region}`,
       );
+    });
+
+    it('scopes the migration grants to the migration task, its cluster, and its roles', () => {
+      const names = migrateTaskNames(environment);
+      const bySid = (sid: string) => {
+        const found = statements(t).find((statement) => statement['Sid'] === sid);
+        if (found === undefined) throw new Error(`no statement ${sid}`);
+        return JSON.stringify(found);
+      };
+      const ecs = `:ecs:${target.region}:${target.account}:`;
+      expect(bySid('RunSchemaMigrations')).toContain(`${ecs}task-definition/${names.family}:*`);
+      expect(bySid('RunSchemaMigrations')).toMatch(
+        new RegExp(`"ArnEquals":\\{"ecs:cluster":.*${ecs}cluster/${names.cluster}"`),
+      );
+      expect(bySid('WatchSchemaMigrations')).toContain(`${ecs}task/${names.cluster}/*`);
+      const passRole = bySid('PassSchemaMigrationRoles');
+      for (const role of [names.taskRole, names.executionRole]) {
+        expect(passRole).toContain(`:iam::${target.account}:role/${role}"`);
+      }
+      expect(passRole).toContain('"iam:PassedToService":"ecs-tasks.amazonaws.com"');
+      expect(bySid('ReadStackOutputs')).toContain(`:stack/listora-${environment}-*/*`);
     });
   });
 });

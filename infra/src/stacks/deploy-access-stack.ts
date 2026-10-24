@@ -3,6 +3,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import type { Construct } from 'constructs';
 
 import { ListoraStack, type ListoraStackProps } from './common.ts';
+import { migrateTaskNames } from './migrate-stack.ts';
 import { IMAGE_REPOSITORY_NAME } from './registry-stack.ts';
 
 export const GITHUB_OIDC_ISSUER = 'token.actions.githubusercontent.com';
@@ -19,10 +20,13 @@ export function deployRoleName(environment: string): string {
  * keys exist anywhere. Only a workflow job running in this repository's GitHub environment
  * of the same name (`staging` or `prod`, which carries the protection rules) can assume it.
  *
- * The role itself can do two things: assume the CDK bootstrap roles of this account and
- * region (which perform the CloudFormation deployment), and push to the application image
- * repository. An administrator deploys this stack once per account, before the first
- * workflow run (infra/README.md).
+ * The role itself can assume the CDK bootstrap roles of this account and region (which
+ * perform the CloudFormation deployment), push to the application image repository, read
+ * this environment's stack outputs, and run and watch the schema migration task. Through
+ * the bootstrap roles it can deploy anything the bootstrap's CloudFormation execution policy
+ * allows (AdministratorAccess by default), this stack included: the trust boundary is the
+ * GitHub environment's protection rules plus that policy (infra/README.md). An administrator
+ * deploys this stack once per account, before the first workflow run.
  */
 export class DeployAccessStack extends ListoraStack {
   readonly deployRole: iam.Role;
@@ -80,6 +84,44 @@ export class DeployAccessStack extends ListoraStack {
         resources: [
           `arn:${this.partition}:ecr:${this.region}:${this.account}:repository/${IMAGE_REPOSITORY_NAME}`,
         ],
+      }),
+    );
+
+    const migrate = migrateTaskNames(target.environment);
+    const ecsArn = (resource: string) =>
+      `arn:${this.partition}:ecs:${this.region}:${this.account}:${resource}`;
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'ReadStackOutputs',
+        actions: ['cloudformation:DescribeStacks'],
+        resources: [
+          `arn:${this.partition}:cloudformation:${this.region}:${this.account}:stack/listora-${target.environment}-*/*`,
+        ],
+      }),
+    );
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'RunSchemaMigrations',
+        actions: ['ecs:RunTask'],
+        resources: [ecsArn(`task-definition/${migrate.family}:*`)],
+        conditions: { ArnEquals: { 'ecs:cluster': ecsArn(`cluster/${migrate.cluster}`) } },
+      }),
+    );
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'WatchSchemaMigrations',
+        actions: ['ecs:DescribeTasks'],
+        resources: [ecsArn(`task/${migrate.cluster}/*`)],
+      }),
+    );
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'PassSchemaMigrationRoles',
+        actions: ['iam:PassRole'],
+        resources: [migrate.taskRole, migrate.executionRole].map(
+          (name) => `arn:${this.partition}:iam::${this.account}:role/${name}`,
+        ),
+        conditions: { StringEquals: { 'iam:PassedToService': 'ecs-tasks.amazonaws.com' } },
       }),
     );
 

@@ -10,19 +10,13 @@ import type * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import type { Construct } from 'constructs';
 
-import { APP_SECRETS, secretName, type ServiceName, type ServiceSize } from '../config.ts';
-import {
-  API_PORT,
-  containerEnvironment,
-  containerSecretNames,
-  SERVICE_COMMANDS,
-} from '../containers.ts';
+import type { ServiceName, ServiceSize } from '../config.ts';
+import { API_PORT, containerEnvironment, SERVICE_COMMANDS } from '../containers.ts';
 import { ListoraStack, removalPolicyFor, type ListoraStackProps } from './common.ts';
-import { DATABASE_NAME, DATABASE_USER } from './data-stack.ts';
 import { INBOUND_MAIL_PREFIX } from './email-stack.ts';
+import { containerSecrets, databaseUrl } from './task-config.ts';
 
 export interface ComputeStackProps extends ListoraStackProps {
   readonly vpc: ec2.IVpc;
@@ -50,6 +44,9 @@ const TARGET_CPU_PERCENT = 60;
  * password reaches the processes only as `PGPASSWORD`, injected by ECS from the RDS-generated
  * secret, so no secret appears in a task definition. Each service has its own task role,
  * granted only the resources that service is designed to use.
+ *
+ * The services set no desired count: CloudFormation would reset the running count to it on
+ * every deploy. Autoscaling owns the count, between `minTasks` and `maxTasks`.
  */
 export class ComputeStack extends ListoraStack {
   readonly cluster: ecs.Cluster;
@@ -73,38 +70,19 @@ export class ComputeStack extends ListoraStack {
     });
 
     const image = ecs.ContainerImage.fromEcrRepository(props.repository, target.imageTag);
-    const database = props.database;
-    const databaseUrl =
-      `postgres://${DATABASE_USER}@${database.dbInstanceEndpointAddress}:` +
-      `${database.dbInstanceEndpointPort}/${DATABASE_NAME}?sslmode=verify-full`;
-    if (database.secret === undefined) throw new Error('the database must have a secret');
-    const databasePassword = ecs.Secret.fromSecretsManager(database.secret, 'password');
-
-    const secretsFor = (service: ServiceName): Record<string, ecs.Secret> =>
-      Object.fromEntries(
-        containerSecretNames(service).map((envVar) => {
-          const secret = APP_SECRETS.find((candidate) => candidate.envVar === envVar);
-          if (secret === undefined) return [envVar, databasePassword];
-          const stored = secretsmanager.Secret.fromSecretNameV2(
-            this,
-            `${service}-${secret.name}`,
-            secretName(environment, secret.name),
-          );
-          return [envVar, ecs.Secret.fromSecretsManager(stored)];
-        }),
-      );
+    const url = databaseUrl(props.database);
 
     const api = this.taskDefinition(props, 'api', {
       image,
-      environment: containerEnvironment('api', databaseUrl),
-      secrets: secretsFor('api'),
+      environment: containerEnvironment('api', url),
+      secrets: containerSecrets(this, environment, 'api', props.database),
       portMappings: [{ containerPort: API_PORT }],
     });
 
     const worker = this.taskDefinition(props, 'worker', {
       image,
-      environment: containerEnvironment('worker', databaseUrl),
-      secrets: secretsFor('worker'),
+      environment: containerEnvironment('worker', url),
+      secrets: containerSecrets(this, environment, 'worker', props.database),
       portMappings: [],
     });
 
@@ -151,8 +129,9 @@ export class ComputeStack extends ListoraStack {
       targets: [this.apiService],
       deregistrationDelay: Duration.seconds(30),
       healthCheck: {
-        // Ready means the task can reach the database (apps/api/src/health.ts).
-        path: '/health/ready',
+        // Liveness, not readiness (apps/api/src/health.ts): ECS replaces tasks that fail this
+        // check, and a database failover must not restart every API task at once.
+        path: '/health/live',
         healthyHttpCodes: '200',
         interval: Duration.seconds(15),
         timeout: Duration.seconds(5),
@@ -223,7 +202,6 @@ export class ComputeStack extends ListoraStack {
       serviceName: service,
       cluster: this.cluster,
       taskDefinition,
-      desiredCount: size.minTasks,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [securityGroup],
       assignPublicIp: false,

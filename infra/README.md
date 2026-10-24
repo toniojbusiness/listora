@@ -10,17 +10,18 @@ One CDK app defines one environment at a time (`-c env=staging|prod`). Every sta
 `listora-<env>-<name>`, tagged `project=listora` and `environment=<env>`, and in prod has
 CloudFormation termination protection.
 
-| Stack           | What it holds                                                                                                                                                                                                                                                             |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deploy-access` | GitHub OIDC provider and the `listora-<env>-github-deploy` role. Deployed once by an administrator, never by the workflow.                                                                                                                                                |
-| `registry`      | ECR repository `listora/app`: immutable tags (one per commit), scan on push, the newest 50 images kept.                                                                                                                                                                   |
-| `network`       | VPC across two zones: `public` (ALB, NAT), `app` (Fargate tasks), `data` (RDS, no route out). One NAT gateway in staging, one per zone in prod; an S3 gateway endpoint keeps photo and image traffic off NAT. Rejected-traffic flow logs. Every security group.           |
-| `secrets`       | KMS key `alias/listora-<env>-tokens` (yearly rotation, never deleted) for marketplace token envelope encryption, and the app secrets in `APP_SECRETS` (`listora/<env>/<name>`).                                                                                           |
-| `data`          | RDS PostgreSQL 18: encrypted, private, TLS required, daily backups (7 days staging, 30 prod), storage autoscaling, Multi-AZ and deletion protection in prod, a final snapshot on removal. The password is generated into `listora/<env>/database`.                        |
-| `storage`       | Private photo bucket (versioned, TLS only, old versions expire after 30 days) and a CloudFront distribution that serves only `public/` objects by exact key, for marketplace image fetch.                                                                                 |
-| `email`         | SES domain identity (Easy DKIM), MX for `in.<domain>`, and a receipt rule that scans each message and stores it under `inbound/` in a private bucket (kept 90 days).                                                                                                      |
-| `compute`       | ECS cluster with Fargate services `api` and `worker` (one image, private subnets, CPU autoscaling, rollback on a failed deploy), an HTTPS ALB at `api.<domain>` health-checked on `/health/ready`, service log groups, and a task role per service.                       |
-| `observability` | Alarm topic (optional email subscription) and baseline alarms: API 5xx, ALB 5xx, unhealthy tasks, p95 latency, service CPU and memory, database CPU, storage, and memory. Log groups sit with the stacks that write them; retention is 30 days in staging and 90 in prod. |
+| Stack           | What it holds                                                                                                                                                                                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy-access` | GitHub OIDC provider and the `listora-<env>-github-deploy` role. Deployed once by an administrator; the workflow does not deploy it (a convention, not an enforced limit: see [Trust boundary](#trust-boundary)).                                                                            |
+| `registry`      | ECR repository `listora/app`: immutable tags (one per commit), scan on push, the newest 50 images kept.                                                                                                                                                                                      |
+| `network`       | VPC across two zones: `public` (ALB, NAT), `app` (Fargate tasks), `data` (RDS, no route out). One NAT gateway in staging, one per zone in prod; an S3 gateway endpoint keeps photo and image traffic off NAT. Rejected-traffic flow logs. Every security group.                              |
+| `secrets`       | KMS key `alias/listora-<env>-tokens` (yearly rotation, never deleted) for marketplace token envelope encryption, and the app secrets in `APP_SECRETS` (`listora/<env>/<name>`).                                                                                                              |
+| `data`          | RDS PostgreSQL 18: encrypted, private, TLS required, daily backups (7 days staging, 30 prod), storage autoscaling, Multi-AZ and deletion protection in prod, a final snapshot on removal. The password is generated into `listora/<env>/database`.                                           |
+| `migrate`       | The schema migration task `listora-<env>-migrate` (its own cluster, log group `/listora/<env>/migrate`, and roles): the worker's database access running `node packages/db/src/cli.ts latest` from the deployed image. Outputs the app subnets and worker security group for `ecs run-task`. |
+| `storage`       | Private photo bucket (versioned, TLS only, old versions expire after 30 days) and a CloudFront distribution that serves only `public/` objects by exact key, for marketplace image fetch.                                                                                                    |
+| `email`         | SES domain identity (Easy DKIM), MX for `in.<domain>`, and a receipt rule that scans each message and stores it under `inbound/` in a private bucket (kept 90 days).                                                                                                                         |
+| `compute`       | ECS cluster with Fargate services `api` and `worker` (one image, private subnets, CPU autoscaling, rollback on a failed deploy), an HTTPS ALB at `api.<domain>` health-checked on `/health/live`, service log groups, and a task role per service.                                           |
+| `observability` | Alarm topic (optional email subscription) and baseline alarms: API 5xx, ALB 5xx, unhealthy tasks, p95 latency, service CPU and memory, database CPU, storage, and memory. Log groups sit with the stacks that write them; retention is 30 days in staging and 90 in prod.                    |
 
 Sizes, redundancy, and retention per environment are in `ENVIRONMENT_SETTINGS`
 (`src/config.ts`), so a change shows up in review as a code and snapshot diff.
@@ -39,6 +40,13 @@ Sizes, redundancy, and retention per environment are in `ENVIRONMENT_SETTINGS`
   under `inbound/`. Each service can read only its own secrets. These grants are the designed
   access for T-07 (storage), T-16 (token vault), and T-23 (email ingest), which add their
   config keys to `src/containers.ts`.
+- **Schema migrations.** Every deploy runs the migration task after the image push and
+  before the compute stack, waits for it to stop, and stops unless it exits 0. The previous
+  release keeps serving while migrations apply, so **every migration must be compatible with
+  the code currently running**: expand, then contract. Add a column or table in one release
+  and start using it in the next; stop using a column in one release and drop it in a later
+  one. A migration that renames, drops, or tightens something the running code uses breaks
+  production until the new tasks are up.
 - **Photo URLs.** CloudFront's origin path is `/public`, so `https://<cdn>/<key>` serves
   `public/<key>` and nothing else. It has no list permission, so a missing key looks the same
   as a forbidden one. Keys must be unguessable (random, at least 128 bits).
@@ -85,9 +93,9 @@ account. The examples use staging.
    zone for the environment's domain (for example `staging.listora.app`, delegated from the
    parent zone). Note the account id and hosted zone id.
 2. **Bootstrap CDK** in the account and region:
-   `npx cdk bootstrap aws://<account>/us-east-1` (from `infra/`). For tighter control, pass
-   `--cloudformation-execution-policies` with a policy narrower than the default
-   `AdministratorAccess`.
+   `npx cdk bootstrap aws://<account>/us-east-1` (from `infra/`). The bootstrap's
+   CloudFormation execution policy (`AdministratorAccess` by default) is the ceiling on what
+   any deploy can change; see [Trust boundary](#trust-boundary).
 3. **Deploy access.** From `infra/`, with the settings exported (or as `-c` flags):
    `npx cdk deploy listora-staging-deploy-access`. If the account already has the GitHub OIDC
    provider, remove it first or import it; an account can have only one per URL.
@@ -97,8 +105,11 @@ account. The examples use staging.
    `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL`. No secrets are needed.
 5. **Deploy.** Run the **Deploy** workflow (Actions tab) on `main` with `staging`. It tests
    and synthesizes offline, assumes the deploy role through OIDC, deploys the registry, builds
-   and pushes the image tagged with the commit, then deploys every other stack. ACM and SES
-   validate through the hosted zone, so the first run waits for DNS.
+   and pushes the image tagged with the commit, deploys the state stacks and the migrate
+   stack, runs the schema migrations (on a first deploy, every migration from an empty
+   database), and only then deploys compute and observability. ACM and SES validate through
+   the hosted zone, so the first run waits for DNS. If the migrations fail, the workflow stops
+   before any new task starts; the task's logs are in `/listora/<env>/migrate`.
 6. **Activate the SES receipt rule set** (one per account and region can be active, and
    CloudFormation cannot activate it):
    `aws ses set-active-receipt-rule-set --rule-set-name listora-staging`. Request SES
@@ -109,6 +120,22 @@ listora/staging/<name> --secret-string ...`, then redeploy or force a new ECS de
    tasks read them.
 
 Later deploys are step 5 only.
+
+## Trust boundary
+
+The deploy role can assume the CDK bootstrap roles, and the bootstrap's CloudFormation
+execution role has `AdministratorAccess` unless the bootstrap restricted it. So a job holding
+the deploy role can change anything in the account, including the `deploy-access` stack and
+the role's own trust policy. The workflow leaving `deploy-access` to an administrator is a
+convention, not an enforced limit. What actually bounds a deploy:
+
+- the GitHub environment's protection rules (required reviewers, `main` only), which decide
+  who can run a job that assumes the role, and
+- the bootstrap's CloudFormation execution policy, which decides what that job can change.
+
+**Follow-up (T-33, security hardening):** bootstrap with a restricted
+`--cloudformation-execution-policies` and a permissions boundary on the roles it creates, so
+a deploy can change only Listora's own resources and never the deploy role itself.
 
 ## Conventions
 

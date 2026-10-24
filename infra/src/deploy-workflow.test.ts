@@ -5,9 +5,11 @@ import { parse } from 'yaml';
 
 import { ENVIRONMENT_NAMES } from './config.ts';
 import { deployRoleName } from './stacks/deploy-access-stack.ts';
+import { MIGRATE_OUTPUTS, migrateTaskNames } from './stacks/migrate-stack.ts';
 import { stackList, synthesize } from './test-support.ts';
 
 interface Step {
+  name?: string;
   uses?: string;
   run?: string;
   with?: Record<string, unknown>;
@@ -60,15 +62,58 @@ describe('deploy workflow', () => {
     }
   });
 
+  /** The stacks each `cdk deploy` step deploys, by step index. */
+  const deploys = job.steps.flatMap((step, index) =>
+    step.run?.includes('cdk deploy') === true
+      ? [
+          {
+            index,
+            stacks: [...step.run.matchAll(/"listora-\$LISTORA_ENV-([a-z-]+)"/g)].map(
+              (match) => match[1] ?? '',
+            ),
+          },
+        ]
+      : [],
+  );
+  const deployIndex = (stack: string): number => {
+    const found = deploys.find((deploy) => deploy.stacks.includes(stack));
+    if (found === undefined) throw new Error(`no step deploys ${stack}`);
+    return found.index;
+  };
+  const stepIndex = (name: string): number => {
+    const index = job.steps.findIndex((step) => step.name === name);
+    if (index < 0) throw new Error(`no step named ${name}`);
+    return index;
+  };
+
   it('deploys every stack except deploy-access, which only an administrator deploys', () => {
-    const deploy = job.steps.find((step) => step.run?.includes('cdk deploy --require-approval'));
-    const deployed = [...(deploy?.run ?? '').matchAll(/"listora-\$LISTORA_ENV-([a-z-]+)"/g)].map(
-      (match) => match[1],
-    );
+    const deployed = new Set(deploys.flatMap((deploy) => deploy.stacks));
     const { stacks } = synthesize('staging');
     const expected = stackList(stacks)
       .map((stack) => stack.stackName.replace('listora-staging-', ''))
       .filter((name) => name !== 'deploy-access');
-    expect(deployed.sort()).toEqual(expected.sort());
+    expect([...deployed].sort()).toEqual(expected.sort());
+  });
+
+  it('migrates the schema after the image push and before any service deploys', () => {
+    const migrate = stepIndex('Run schema migrations');
+    expect(stepIndex('Build and push the application image')).toBeLessThan(deployIndex('migrate'));
+    expect(deployIndex('migrate')).toBeLessThan(migrate);
+    for (const stack of ['compute', 'observability']) {
+      expect(deploys.filter((deploy) => deploy.stacks.includes(stack))).toHaveLength(1);
+      expect(deployIndex(stack)).toBeGreaterThan(migrate);
+    }
+  });
+
+  it('runs the migration task by name and fails the deploy unless it exits 0', () => {
+    const names = migrateTaskNames('$LISTORA_ENV');
+    const run = job.steps[stepIndex('Run schema migrations')]?.run ?? '';
+    expect(run).toContain(`cluster="${names.cluster}"`);
+    expect(run).toContain(`--task-definition "${names.family}"`);
+    expect(run).toContain(`--stack-name "${names.stack}"`);
+    for (const output of Object.values(MIGRATE_OUTPUTS)) expect(run).toContain(`output ${output}`);
+    expect(run).toContain('aws ecs wait tasks-stopped');
+    expect(run).toContain('.tasks[0].containers[0].exitCode');
+    expect(run).toMatch(/if \[\[ "\$code" != 0 \]\]; then\n.*\n\s*exit 1/);
   });
 });

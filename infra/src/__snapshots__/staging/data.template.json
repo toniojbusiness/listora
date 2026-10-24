@@ -153,6 +153,11 @@
     }
   },
   "Outputs": {
+    "PublishOutputRefPostgresSecretAttachment75CD6F6FCF33B882": {
+      "Value": {
+        "Ref": "PostgresSecretAttachment75CD6F6F"
+      }
+    },
     "PublishOutputFnGetAttPostgres9DC8BB04EndpointAddress8027D079": {
       "Value": {
         "Fn::GetAtt": [
@@ -167,11 +172,6 @@
           "Postgres9DC8BB04",
           "Endpoint.Port"
         ]
-      }
-    },
-    "PublishOutputRefPostgresSecretAttachment75CD6F6FCF33B882": {
-      "Value": {
-        "Ref": "PostgresSecretAttachment75CD6F6F"
       }
     },
     "PublishOutputRefPostgres9DC8BB0494FCDEA9": {

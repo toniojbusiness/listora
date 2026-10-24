@@ -753,7 +753,6 @@
           "MaximumPercent": 200,
           "MinimumHealthyPercent": 100
         },
-        "DesiredCount": 1,
         "EnableECSManagedTags": false,
         "HealthCheckGracePeriodSeconds": 60,
         "LaunchType": "FARGATE",
@@ -875,7 +874,6 @@
           "MaximumPercent": 200,
           "MinimumHealthyPercent": 100
         },
-        "DesiredCount": 1,
         "EnableECSManagedTags": false,
         "LaunchType": "FARGATE",
         "LoadBalancers": [],
@@ -1084,7 +1082,7 @@
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
         "HealthCheckIntervalSeconds": 15,
-        "HealthCheckPath": "/health/ready",
+        "HealthCheckPath": "/health/live",
         "HealthCheckTimeoutSeconds": 5,
         "HealthyThresholdCount": 2,
         "Matcher": {

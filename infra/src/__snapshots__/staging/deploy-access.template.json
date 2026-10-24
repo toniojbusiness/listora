@@ -68,6 +68,43 @@
               "Effect": "Allow",
               "Resource": "arn:aws:ecr:us-east-1:111111111111:repository/listora/app",
               "Sid": "PushApplicationImage"
+            },
+            {
+              "Action": "cloudformation:DescribeStacks",
+              "Effect": "Allow",
+              "Resource": "arn:aws:cloudformation:us-east-1:111111111111:stack/listora-staging-*/*",
+              "Sid": "ReadStackOutputs"
+            },
+            {
+              "Action": "ecs:RunTask",
+              "Condition": {
+                "ArnEquals": {
+                  "ecs:cluster": "arn:aws:ecs:us-east-1:111111111111:cluster/listora-staging-migrate"
+                }
+              },
+              "Effect": "Allow",
+              "Resource": "arn:aws:ecs:us-east-1:111111111111:task-definition/listora-staging-migrate:*",
+              "Sid": "RunSchemaMigrations"
+            },
+            {
+              "Action": "ecs:DescribeTasks",
+              "Effect": "Allow",
+              "Resource": "arn:aws:ecs:us-east-1:111111111111:task/listora-staging-migrate/*",
+              "Sid": "WatchSchemaMigrations"
+            },
+            {
+              "Action": "iam:PassRole",
+              "Condition": {
+                "StringEquals": {
+                  "iam:PassedToService": "ecs-tasks.amazonaws.com"
+                }
+              },
+              "Effect": "Allow",
+              "Resource": [
+                "arn:aws:iam::111111111111:role/listora-staging-migrate-execution",
+                "arn:aws:iam::111111111111:role/listora-staging-migrate-task"
+              ],
+              "Sid": "PassSchemaMigrationRoles"
             }
           ],
           "Version": "2012-10-17"

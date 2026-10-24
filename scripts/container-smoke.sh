@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Smoke test of the application image (run by CI; needs Docker and `npm ci`).
 #
-# Builds the image from the root Dockerfile, then starts the API and the worker from it the
-# way ECS does: read-only root file system, the exact container environment from
-# infra/src/containers.ts, and the database password only in PGPASSWORD, against a real
-# PostgreSQL 18 that requires that password. Passes when the API reports ready (database
-# reachable), the worker stays up, and both stop cleanly on SIGTERM.
+# Builds the image from the root Dockerfile, then runs the schema migration task and starts
+# the API and the worker from it the way ECS does: read-only root file system, the exact
+# container environment from infra/src/containers.ts, and the database password only in
+# PGPASSWORD, against a real PostgreSQL 18 that requires that password. Passes when the
+# migrations apply, the API reports ready (database reachable), the worker stays up, and both
+# stop cleanly on SIGTERM.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -14,7 +15,7 @@ readonly image=listora-app:smoke
 readonly network=listora-smoke
 readonly password=smoke-only-password
 readonly database_url=postgres://listora@listora-smoke-db:5432/listora
-readonly containers=(listora-smoke-api listora-smoke-worker listora-smoke-db)
+readonly containers=(listora-smoke-migrate listora-smoke-api listora-smoke-worker listora-smoke-db)
 
 workdir=$(mktemp -d)
 cleanup() {
@@ -49,10 +50,16 @@ done
 docker exec listora-smoke-db pg_isready --host 127.0.0.1 --username listora >/dev/null ||
   fail "postgres did not start"
 
-for service in api worker; do
-  PGPASSWORD="$password" node infra/src/container-env.ts "$service" "$database_url" \
-    >"$workdir/$service.env"
+for container in migrate api worker; do
+  PGPASSWORD="$password" node infra/src/container-env.ts "$container" "$database_url" \
+    >"$workdir/$container.env"
 done
+
+docker run --name listora-smoke-migrate --network "$network" --read-only \
+  --env-file "$workdir/migrate.env" \
+  "$image" node packages/db/src/cli.ts latest >/dev/null ||
+  fail "the schema migration task failed"
+echo "container-smoke: migrations applied"
 
 docker run --detach --name listora-smoke-api --network "$network" --read-only \
   --env-file "$workdir/api.env" --publish 127.0.0.1:3000:3000 \

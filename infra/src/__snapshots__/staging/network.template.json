@@ -894,18 +894,18 @@
         "Ref": "VpcappSubnet2Subnet2449FB56"
       }
     },
-    "PublishOutputFnGetAttApiSecurityGroup4E5BB726GroupIdF3427EAD": {
-      "Value": {
-        "Fn::GetAtt": [
-          "ApiSecurityGroup4E5BB726",
-          "GroupId"
-        ]
-      }
-    },
     "PublishOutputFnGetAttWorkerSecurityGroup5529CF0BGroupId1D09B9A4": {
       "Value": {
         "Fn::GetAtt": [
           "WorkerSecurityGroup5529CF0B",
+          "GroupId"
+        ]
+      }
+    },
+    "PublishOutputFnGetAttApiSecurityGroup4E5BB726GroupIdF3427EAD": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ApiSecurityGroup4E5BB726",
           "GroupId"
         ]
       }

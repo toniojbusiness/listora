@@ -181,7 +181,7 @@
             "Ref": "Alarms04B5A0BF"
           }
         ],
-        "AlarmDescription": "At least one API task failed its readiness check for 3 minutes.",
+        "AlarmDescription": "At least one API task failed the load balancer health check (/health/live) for 3 minutes.",
         "AlarmName": "listora-prod-api-unhealthy-tasks",
         "ComparisonOperator": "GreaterThanOrEqualToThreshold",
         "Dimensions": [
@@ -606,7 +606,7 @@
             "Ref": "Alarms04B5A0BF"
           }
         ],
-        "AlarmDescription": "Database free storage fell below 20% of the allocated size (autoscaling may be at its ceiling).",
+        "AlarmDescription": "Database free storage fell below 2.5 GiB: storage autoscaling reached its 500 GiB ceiling (raise maxAllocatedStorageGiB) or is not keeping up.",
         "AlarmName": "listora-prod-database-free-storage",
         "ComparisonOperator": "LessThanThreshold",
         "Dimensions": [
@@ -631,7 +631,7 @@
         ],
         "Period": 300,
         "Statistic": "Minimum",
-        "Threshold": 10737418240,
+        "Threshold": 2684354560,
         "TreatMissingData": "breaching"
       }
     },

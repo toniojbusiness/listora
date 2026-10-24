@@ -23,7 +23,7 @@ const GIB = 1024 ** 3;
 /**
  * Baseline alarms on the platform: API errors, health, and latency; service CPU and memory;
  * database CPU, storage, and memory. Every alarm notifies the alarm topic when it fires and
- * when it recovers. Log groups live next to what writes them (compute, data, network stacks)
+ * when it recovers. Log groups live next to what writes them (compute, migrate, data, network)
  * with the environment's retention. Product SLO alarms (delist latency, verified-success
  * rate, unverified operations, AI cost) are T-32.
  */
@@ -92,7 +92,7 @@ export class ObservabilityStack extends ListoraStack {
     );
     alarm(
       'api-unhealthy-tasks',
-      'At least one API task failed its readiness check for 3 minutes.',
+      'At least one API task failed the load balancer health check (/health/live) for 3 minutes.',
       tg.unhealthyHostCount({ period: Duration.minutes(1), statistic: 'Maximum' }),
       1,
     );
@@ -125,6 +125,11 @@ export class ObservabilityStack extends ListoraStack {
     }
 
     const db = props.database;
+    // Storage autoscaling grows the volume whenever free space falls below 10% of its size, so
+    // free space normally stays above 10% of the initial size. Below half of that, autoscaling
+    // is no longer keeping up, most often because the volume reached its ceiling.
+    const lowStorageGiB = settings.database.allocatedStorageGiB * 0.05;
+    const ceilingGiB = settings.database.maxAllocatedStorageGiB;
     alarm(
       'database-cpu',
       'Database CPU stayed above 80% for 15 minutes.',
@@ -134,9 +139,10 @@ export class ObservabilityStack extends ListoraStack {
     );
     alarm(
       'database-free-storage',
-      'Database free storage fell below 20% of the allocated size (autoscaling may be at its ceiling).',
+      `Database free storage fell below ${String(lowStorageGiB)} GiB: storage autoscaling reached ` +
+        `its ${String(ceilingGiB)} GiB ceiling (raise maxAllocatedStorageGiB) or is not keeping up.`,
       db.metricFreeStorageSpace({ period: fiveMinutes, statistic: 'Minimum' }),
-      settings.database.allocatedStorageGiB * 0.2 * GIB,
+      lowStorageGiB * GIB,
       {
         comparison: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
         evaluationPeriods: 1,

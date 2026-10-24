@@ -78,9 +78,13 @@ jobs:
           aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
           docker build --tag "$image" .
           docker push "$image"
-      # Every stack except deploy-access, which an administrator deploys by hand: this role
-      # must not be able to change its own trust policy.
-      - name: Deploy the stacks
+      # The deploy role cannot deploy deploy-access by convention only: through the CDK bootstrap
+      # roles it can change anything the bootstrap's CloudFormation execution policy allows
+      # (AdministratorAccess by default), its own trust policy included. What bounds a deploy
+      # is this GitHub environment's protection rules plus that policy (infra/README.md).
+      #
+      # First every stack the schema migration task needs, and the task itself.
+      - name: Deploy the state stacks and the migration task
         working-directory: infra
         run: |
           npx cdk deploy --require-approval never --no-notices \
@@ -90,5 +94,39 @@ jobs:
             "listora-$LISTORA_ENV-data" \
             "listora-$LISTORA_ENV-storage" \
             "listora-$LISTORA_ENV-email" \
+            "listora-$LISTORA_ENV-migrate"
+      # Migrations run while the previous release still serves, before any new task starts, so
+      # every migration must work with the code already running (expand, then contract). The
+      # deploy stops here unless the task exits 0. Its logs: /listora/<env>/migrate.
+      - name: Run schema migrations
+        run: |
+          cluster="listora-$LISTORA_ENV-migrate"
+          outputs=$(aws cloudformation describe-stacks --stack-name "listora-$LISTORA_ENV-migrate" \
+            --query 'Stacks[0].Outputs' --output json)
+          output() { jq --raw-output --arg key "$1" '.[] | select(.OutputKey == $key) | .OutputValue' <<<"$outputs"; }
+          subnets=$(output SubnetIds)
+          group=$(output SecurityGroupId)
+          started=$(aws ecs run-task --cluster "$cluster" --task-definition "listora-$LISTORA_ENV-migrate" \
+            --launch-type FARGATE --count 1 --started-by "deploy-$GITHUB_RUN_ID" \
+            --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$group],assignPublicIp=DISABLED}" \
+            --output json)
+          task=$(jq --raw-output '.tasks[0].taskArn // empty' <<<"$started")
+          if [[ -z "$task" ]]; then
+            echo "::error::The schema migration task did not start: $(jq --compact-output '.failures' <<<"$started")"
+            exit 1
+          fi
+          echo "Schema migration task $task"
+          aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$task"
+          stopped=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task" --output json)
+          code=$(jq --raw-output '.tasks[0].containers[0].exitCode // "none"' <<<"$stopped")
+          if [[ "$code" != 0 ]]; then
+            echo "::error::Schema migrations failed (exit code $code): $(jq --raw-output '.tasks[0].stoppedReason // ""' <<<"$stopped")"
+            exit 1
+          fi
+          echo "Schema migrations applied"
+      - name: Deploy the services and alarms
+        working-directory: infra
+        run: |
+          npx cdk deploy --require-approval never --no-notices \
             "listora-$LISTORA_ENV-compute" \
             "listora-$LISTORA_ENV-observability"

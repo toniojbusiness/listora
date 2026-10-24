@@ -6,6 +6,7 @@ import { ComputeStack } from './stacks/compute-stack.ts';
 import { DataStack } from './stacks/data-stack.ts';
 import { DeployAccessStack } from './stacks/deploy-access-stack.ts';
 import { EmailStack } from './stacks/email-stack.ts';
+import { MigrateStack } from './stacks/migrate-stack.ts';
 import { NetworkStack } from './stacks/network-stack.ts';
 import { ObservabilityStack } from './stacks/observability-stack.ts';
 import { RegistryStack } from './stacks/registry-stack.ts';
@@ -18,6 +19,7 @@ export interface ListoraStacks {
   readonly network: NetworkStack;
   readonly secrets: SecretsStack;
   readonly data: DataStack;
+  readonly migrate: MigrateStack;
   readonly storage: StorageStack;
   readonly email: EmailStack;
   readonly compute: ComputeStack;
@@ -31,7 +33,8 @@ export function stackName(target: DeployTarget, name: string): string {
 /**
  * Defines one environment's stacks in `app`. Stacks are split by lifecycle: long-lived state
  * (data, storage, email, secrets, registry) changes rarely and is protected, while compute and
- * observability change on every deploy and can be replaced freely.
+ * observability change on every deploy and can be replaced freely. The migrate stack holds
+ * the schema migration task, which the deploy workflow runs before it deploys compute.
  */
 export function defineListora(app: App, target: DeployTarget): ListoraStacks {
   const settings = ENVIRONMENT_SETTINGS[target.environment];
@@ -66,6 +69,13 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
     ...props('data', 'RDS PostgreSQL'),
     vpc: network.vpc,
     securityGroup: network.databaseSecurityGroup,
+  });
+  const migrate = new MigrateStack(app, id('migrate'), {
+    ...props('migrate', 'schema migration task'),
+    vpc: network.vpc,
+    workerSecurityGroup: network.workerSecurityGroup,
+    database: data.database,
+    repository: registry.repository,
   });
   const storage = new StorageStack(
     app,
@@ -102,6 +112,7 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
     network,
     secrets,
     data,
+    migrate,
     storage,
     email,
     compute,

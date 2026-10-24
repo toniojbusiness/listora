@@ -410,7 +410,8 @@ Tables by area:
 
 **Migrations.** Each migration is a pair of plain SQL files, `NNNN_name.up.sql` and
 `NNNN_name.down.sql`, run by Kysely's migrator in one transaction with a lock (`npm run
-db:migrate`). Never edit a migration that has been merged; add a new one. A schema change
+db:migrate`; in AWS, the deploy runs them before new code starts, see section 10). Never edit
+a migration that has been merged; add a new one. A schema change
 updates the Kysely table types in `packages/db/src/schema.ts` and the value lists in
 `values.ts` in the same change; `schema.int.test.ts` fails when they drift. `bigint` columns
 read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
@@ -424,7 +425,9 @@ Each environment (`staging`, `prod`) is its own AWS account, defined by the CDK 
 - **One image, two services.** The root `Dockerfile` installs production dependencies and
   the sources; ECS runs `node apps/api/src/main.ts` or `node apps/worker/src/main.ts` from it,
   on Fargate in private subnets, with a read-only root file system. The API is behind an
-  HTTPS load balancer at `api.<domain>` that routes only to tasks passing `/health/ready`.
+  HTTPS load balancer at `api.<domain>` that health-checks `/health/live`. ECS replaces
+  tasks that fail it, so it checks no dependency: a database failover must not restart every
+  task. `/health/ready` (database reachable) is for deploy checks and operators.
 - **Configuration.** Containers get exactly the environment in `infra/src/containers.ts`, and
   a test runs the API's and worker's config loaders on it. A task that adds a required config
   key adds it there (and, for a secret, to `APP_SECRETS` in `infra/src/config.ts`). The
@@ -434,7 +437,14 @@ Each environment (`staging`, `prod`) is its own AWS account, defined by the CDK 
   stored in a private bucket, and a KMS key for token envelope encryption.
 - **Deploys** run only from the manual Deploy workflow, on `main`, inside the protected GitHub
   environment, with OIDC role assumption (no stored AWS keys). Images are tagged with the
-  commit and immutable.
+  commit and immutable. The environment's protection rules and the CDK bootstrap's
+  CloudFormation execution policy bound what a deploy can change (infra/README.md).
+- **Migrations** run on every deploy as a one-off ECS task (`listora-<env>-migrate`, the
+  worker's database access) after the image push and before the new services start; a
+  failed migration stops the deploy. The previous release is still serving while they run,
+  so every migration must be compatible with the code currently running: expand, then
+  contract (add first and use in a later release; stop using first and drop in a later
+  release).
 - **Offline.** Synthesis never calls AWS: no `fromLookup`, zones resolve at deploy time, and
   `npm run infra:synth` (part of `npm run check`) runs `cdk synth` with credentials hidden.
   Template snapshots in `infra/src/__snapshots__/` make every infrastructure change a

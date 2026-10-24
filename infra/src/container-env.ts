@@ -1,17 +1,16 @@
-// Prints a service's container environment as a Docker env file, so the image smoke test
+// Prints a container's environment as a Docker env file, so the image smoke test
 // (scripts/container-smoke.sh) starts each process exactly as ECS configures it.
 //
-//   node infra/src/container-env.ts <api|worker> <database-url>
+//   node infra/src/container-env.ts <api|worker|migrate> <database-url>
 //
 // Secrets that ECS injects (PGPASSWORD and the app secrets) take their value from this
 // process's environment, or the word `placeholder` when unset.
-import { SERVICE_NAMES } from './config.ts';
-import { containerEnvironment, containerSecretNames } from './containers.ts';
+import { CONTAINER_NAMES, containerEnvironment, containerSecretNames } from './containers.ts';
 
-const [service, databaseUrl] = process.argv.slice(2);
-const known = SERVICE_NAMES.find((name) => name === service);
+const [container, databaseUrl] = process.argv.slice(2);
+const known = CONTAINER_NAMES.find((name) => name === container);
 if (known === undefined || databaseUrl === undefined) {
-  process.stderr.write(`usage: container-env.ts <${SERVICE_NAMES.join('|')}> <database-url>\n`);
+  process.stderr.write(`usage: container-env.ts <${CONTAINER_NAMES.join('|')}> <database-url>\n`);
   process.exit(2);
 }
 
