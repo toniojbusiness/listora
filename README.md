@@ -128,8 +128,9 @@ runner image), then runs `npm ci`, `scripts/dev-db.sh` (with
 `PG_BIN_DIR=/usr/lib/postgresql/18/bin`), and `npm run check`. It caches npm downloads and
 the API contract's SwiftPM builds.
 
-The image job runs `scripts/container-smoke.sh`: it builds the application image and starts
-the API and the worker from it, configured as in AWS, against a PostgreSQL container.
+The image job runs `scripts/container-smoke.sh`: it builds the application image, runs the
+schema migrations, and starts the API and the worker from it, configured as in AWS, against
+a PostgreSQL container.
 
 The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, and SwiftFormat
 from Homebrew, then runs `make ios-lint` and `make ios-test`. It caches the app's SwiftPM
