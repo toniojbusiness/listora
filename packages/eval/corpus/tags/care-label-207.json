@@ -1,0 +1,84 @@
+{
+  "id": "care-label-207",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "COPPER FOX"
+    },
+    {
+      "text": "TALLA 16"
+    },
+    {
+      "text": "POLYESTER 100%"
+    },
+    {
+      "text": "MADE IN JAPAN"
+    },
+    {
+      "text": "R.N. 56714"
+    },
+    {
+      "text": "MACHINE WASH COLD"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "COPPER FOX",
+        "confidence": 1
+      },
+      {
+        "text": "TALLA 16",
+        "confidence": 1
+      },
+      {
+        "text": "POLYESTER 100%",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN JAPAN",
+        "confidence": 1
+      },
+      {
+        "text": "R.N. 56714",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "56714"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "16"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "JP"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-207.png",
+    "mediaType": "image/png",
+    "width": 375,
+    "height": 279,
+    "pixelSha256": "5ea5d16da4996001ba92fb7e339636c9fc10c0aabae08b57d0dc2fe1d10b5747"
+  }
+}

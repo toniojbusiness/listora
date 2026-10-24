@@ -1,0 +1,86 @@
+{
+  "id": "hang-tag-067",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "KITE AND KESTREL"
+    },
+    {
+      "text": "ART. NO. CM0462"
+    },
+    {
+      "text": "TALLA/SIZE/TAILLE: S"
+    },
+    {
+      "text": "$65.00"
+    },
+    {
+      "barcode": "4061399565675"
+    },
+    {
+      "text": "DESIGNED IN BROOKLYN"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "KITE AND KESTREL",
+        "confidence": 1
+      },
+      {
+        "text": "ART. NO. CM0462",
+        "confidence": 1
+      },
+      {
+        "text": "TALLA/SIZE/TAILLE: S",
+        "confidence": 1
+      },
+      {
+        "text": "$65.00",
+        "confidence": 1
+      },
+      {
+        "text": "4 061399 565675",
+        "confidence": 1
+      },
+      {
+        "text": "DESIGNED IN BROOKLYN",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "4061399565675",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "4061399565675"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "CM0462"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-067.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 432,
+    "pixelSha256": "7b9f7acc10a296082f155ad9b056adf738b343bfbd0462959ae484d00c72d232"
+  }
+}

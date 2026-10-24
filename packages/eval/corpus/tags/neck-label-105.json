@@ -1,0 +1,64 @@
+{
+  "id": "neck-label-105",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "Quiet Harbor"
+    },
+    {
+      "text": "SIZE: OS"
+    },
+    {
+      "text": "Made in China"
+    },
+    {
+      "text": "RN #144349"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Quiet Harbor",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE: OS",
+        "confidence": 1
+      },
+      {
+        "text": "Made in China",
+        "confidence": 1
+      },
+      {
+        "text": "RN #144349",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "144349"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-105.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 207,
+    "pixelSha256": "f37e6b490cef4b5d3326c91d738a3b453995e6f01459c8326e21e1430af8cff1"
+  }
+}

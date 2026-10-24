@@ -1,0 +1,81 @@
+{
+  "id": "hang-tag-037",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "JUNIPER CO."
+    },
+    {
+      "text": "REF. 9987-32"
+    },
+    {
+      "text": "TALLA/SIZE/TAILLE: S"
+    },
+    {
+      "text": "$79.99"
+    },
+    {
+      "barcode": "763196314886"
+    },
+    {
+      "text": "LOS ANGELES, CA 90041"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "JUNIPER CO.",
+        "confidence": 1
+      },
+      {
+        "text": "REF. 9987-32",
+        "confidence": 1
+      },
+      {
+        "text": "TALLA/SIZE/TAILLE: S",
+        "confidence": 1
+      },
+      {
+        "text": "$79.99",
+        "confidence": 1
+      },
+      {
+        "text": "7 63196 31488 6",
+        "confidence": 1
+      },
+      {
+        "text": "LOS ANGELES, CA 90041",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "763196314886"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "9987-32"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-037.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 432,
+    "pixelSha256": "d8fd842919289f2f91b7b3df8b00f6cde15236c39f6b1769d7acda9799035663"
+  }
+}

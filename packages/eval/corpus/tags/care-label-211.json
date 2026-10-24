@@ -1,0 +1,96 @@
+{
+  "id": "care-label-211",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Meridian Works"
+    },
+    {
+      "text": "Polyester 100%"
+    },
+    {
+      "text": "Made in Vietnam"
+    },
+    {
+      "text": "RN 45281"
+    },
+    {
+      "text": "NO Usar Blanqueador"
+    },
+    {
+      "text": "Laver A La Machine A Froid"
+    },
+    {
+      "text": "Hand Wash Cold"
+    },
+    {
+      "text": "Ne Pas Blanchir"
+    },
+    {
+      "text": "Return Policy 30 Days"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Meridian Works",
+        "confidence": 1
+      },
+      {
+        "text": "Polyester 100%",
+        "confidence": 1
+      },
+      {
+        "text": "made in vietnam",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN 45281",
+        "confidence": 1
+      },
+      {
+        "text": "no usar blanqueador",
+        "confidence": 0.5
+      },
+      {
+        "text": "Laver  A La Machine A Froid Hand Wash Cold",
+        "confidence": 0.5
+      },
+      {
+        "text": "Ne Pas Blanchir",
+        "confidence": 1
+      },
+      {
+        "text": "Return Policy 30 Days",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "45281"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-211.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 387,
+    "pixelSha256": "742ea608c1e875d5fe198061a5a9bcc59f4ee11565e25f33039929fffc419a06"
+  }
+}

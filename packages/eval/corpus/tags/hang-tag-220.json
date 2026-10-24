@@ -1,0 +1,70 @@
+{
+  "id": "hang-tag-220",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "SALT FLATS SUPPLY"
+    },
+    {
+      "text": "ONE SIZE"
+    },
+    {
+      "text": "$79.00"
+    },
+    {
+      "barcode": "5789268821637"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SALT FLATS SUPPLY",
+        "confidence": 1
+      },
+      {
+        "text": "ONE SIZE",
+        "confidence": 1
+      },
+      {
+        "text": "$79.00",
+        "confidence": 1
+      },
+      {
+        "text": "5 789268 821637",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "5789268821637",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "5789268821637"
+      }
+    ],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-220.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 360,
+    "pixelSha256": "ad15c522b4a387b95eeb74dd26480e24c10ee4ab28491885438693901ee0202f"
+  }
+}

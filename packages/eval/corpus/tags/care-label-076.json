@@ -1,0 +1,88 @@
+{
+  "id": "care-label-076",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "TENCEL 100%"
+    },
+    {
+      "text": "MADE IN JAPAN"
+    },
+    {
+      "text": "RN 117892 CA 84893"
+    },
+    {
+      "text": "SEE REVERSE FOR CARE"
+    },
+    {
+      "text": "WASH INSIDE OUT"
+    },
+    {
+      "text": "DO NOT DRY CLEAN"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "TENCEL 100%",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN JAPAN",
+        "confidence": 1
+      },
+      {
+        "text": "RN 117892 CA 84893",
+        "confidence": 1
+      },
+      {
+        "text": "SEE REVERSE FOR CARE",
+        "confidence": 1
+      },
+      {
+        "text": "WASH INSIDE OUT",
+        "confidence": 1
+      },
+      {
+        "text": "do not dry clean",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "117892"
+    ],
+    "ca": [
+      "84893"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "lyocell",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "JP"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-076.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 315,
+    "pixelSha256": "8a25fcdb3b0a39eb022b8a1fcf7169a92248ed72fcb3bcd650f0a41200f812dc"
+  }
+}

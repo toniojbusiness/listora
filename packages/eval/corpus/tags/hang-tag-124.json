@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-124",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "KITE AND KESTREL"
+    },
+    {
+      "text": "STYLE IZ0287-702"
+    },
+    {
+      "text": "SIZE: OS"
+    },
+    {
+      "text": "PRICE $18"
+    },
+    {
+      "barcode": "167355318539"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "KITE AND KESTREL",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE IZ0287-702",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE: OS",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE $18",
+        "confidence": 1
+      },
+      {
+        "text": "1 67355 31853 9",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0167355318539",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "167355318539"
+      }
+    ],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "IZ0287-702"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-124.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "9688d03546bf62851c78b868ca25ef1895967500916fc510893d0697f40d4b26"
+  }
+}

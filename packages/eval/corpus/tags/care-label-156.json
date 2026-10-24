@@ -1,0 +1,70 @@
+{
+  "id": "care-label-156",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "LYOCELL 100%"
+    },
+    {
+      "text": "MADE IN VIETNAM"
+    },
+    {
+      "text": "HAND WASH COLD"
+    },
+    {
+      "text": "LINE DRY"
+    },
+    {
+      "text": "DESIGNED IN CALIFORNIA"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "LYOCELL 1O0%",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN",
+        "confidence": 0.5
+      },
+      {
+        "text": "VIETNAM HAND WASH COLD",
+        "confidence": 0.5
+      },
+      {
+        "text": "LINE DRY",
+        "confidence": 1
+      },
+      {
+        "text": "DESIGNED IN CALIFORNIA",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "lyocell",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-156.png",
+    "mediaType": "image/png",
+    "width": 465,
+    "height": 243,
+    "pixelSha256": "173612464645ac8e437991f586913e41d6abbdb7edbbde8dd2b9c6f78a7e5056"
+  }
+}

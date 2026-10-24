@@ -1,0 +1,104 @@
+{
+  "id": "hang-tag-093",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Northwind Apparel"
+    },
+    {
+      "text": "SIZE L"
+    },
+    {
+      "text": "$24.00"
+    },
+    {
+      "text": "100% COTTON"
+    },
+    {
+      "text": "100% COTON"
+    },
+    {
+      "text": "100% ALGODON"
+    },
+    {
+      "barcode": "9348210717976"
+    },
+    {
+      "text": "SAN DIEGO, CA 92140"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Northwind Apparel",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE L",
+        "confidence": 1
+      },
+      {
+        "text": "$24.00",
+        "confidence": 1
+      },
+      {
+        "text": "100% COTTON",
+        "confidence": 1
+      },
+      {
+        "text": "100% COTON",
+        "confidence": 1
+      },
+      {
+        "text": "100% ALGODON",
+        "confidence": 1
+      },
+      {
+        "text": "9 348210 717973",
+        "confidence": 0.5
+      },
+      {
+        "text": "SAN DIEGO, CA 92140",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "9348210717976",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "9348210717976"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 100
+      }
+    ],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-093.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 504,
+    "pixelSha256": "0cdc073be7fb3640a8630ffd813b2d99a31a742539a70660512eab9592a746e0"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "id": "care-label-082",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "S/P/CH"
+    },
+    {
+      "text": "100% SILK"
+    },
+    {
+      "text": "MADE IN ITALY"
+    },
+    {
+      "text": "CA 71990"
+    },
+    {
+      "text": "COOL IRON IF NEEDED"
+    },
+    {
+      "text": "WASH INSIDE OUT"
+    },
+    {
+      "text": "NE PAS BLANCHIR"
+    },
+    {
+      "text": "MACHINE WASH COLD WITH LIKE COLORS"
+    },
+    {
+      "text": "DESIGNED IN CALIFORNIA"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "S/P/CH",
+        "confidence": 1
+      },
+      {
+        "text": "100%  SILK",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN ITALY CA 71990",
+        "confidence": 0.5
+      },
+      {
+        "text": "COOL IRON IF NEEDED WASH INSIDE OUT",
+        "confidence": 0.5
+      },
+      {
+        "text": "NE PAS BLANCHIR MACHINE WASH COLD WITH LIKE COLORS",
+        "confidence": 0.5
+      },
+      {
+        "text": "DESIGNED IN CALIFORNIA",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "71990"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "silk",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "IT"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-082.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 387,
+    "pixelSha256": "e6d71f02a1cd2fdd652dcff74c7aba0d6d3aaab2a163104b9cebb268a498fb00"
+  }
+}

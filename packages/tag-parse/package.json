@@ -1,0 +1,10 @@
+{
+  "name": "@listora/tag-parse",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic parsers for garment tag text: RN/CA numbers, UPC/EAN, sizes, fibers, origin, style numbers.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

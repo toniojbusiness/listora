@@ -1,0 +1,46 @@
+{
+  "id": "edge-case-014",
+  "kind": "edge_case",
+  "description": "OCR misreads inside an RN and a CA number",
+  "printed": [
+    {
+      "text": "RN#150722"
+    },
+    {
+      "text": "CA 34018"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "RN#I5O722",
+        "confidence": 1
+      },
+      {
+        "text": "CA 34OI8",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "150722"
+    ],
+    "ca": [
+      "34018"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-014.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 135,
+    "pixelSha256": "44ca1da1b39a40714b3f08e7ef528004e832304b46e2ba6888ffddc188a6def2"
+  }
+}

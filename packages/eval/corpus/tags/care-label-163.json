@@ -1,0 +1,110 @@
+{
+  "id": "care-label-163",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "TALLA 16"
+    },
+    {
+      "text": "50% COTTON"
+    },
+    {
+      "text": "50% POLYESTER"
+    },
+    {
+      "text": "MADE IN PERU"
+    },
+    {
+      "text": "CA#13187"
+    },
+    {
+      "text": "TUMBLE DRY LOW"
+    },
+    {
+      "text": "MACHINE WASH COLD WITH LIKE COLORS"
+    },
+    {
+      "text": "COOL IRON IF NEEDED"
+    },
+    {
+      "text": "LAY FLAT TO DRY"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "TALLA 16",
+        "confidence": 1
+      },
+      {
+        "text": "50% COTTON",
+        "confidence": 1
+      },
+      {
+        "text": "50% POLYESTER",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN PERU",
+        "confidence": 1
+      },
+      {
+        "text": "CA#13187",
+        "confidence": 1
+      },
+      {
+        "text": "TUMBLE DRY LOW",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD WITH LIKE COLORS",
+        "confidence": 1
+      },
+      {
+        "text": "COOL  IRON IF NEEDED",
+        "confidence": 0.5
+      },
+      {
+        "text": "LAY  FLAT TO DRY",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "13187"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "16"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 50
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 50
+      }
+    ],
+    "origin": [
+      "PE"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-163.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 387,
+    "pixelSha256": "2be48eb49eea2085d05cefa2f3d18d0e751753683d259672b806e8a2c2f2f454"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-133",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "QUIET HARBOR"
+    },
+    {
+      "text": "MODEL: 1012-96"
+    },
+    {
+      "text": "TALLA 0"
+    },
+    {
+      "text": "MSRP $58.00"
+    },
+    {
+      "barcode": "011877001403"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "QUIET HARBOR",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL: 1012-96",
+        "confidence": 1
+      },
+      {
+        "text": "TALLA 0",
+        "confidence": 1
+      },
+      {
+        "text": "MSRP $58.00",
+        "confidence": 1
+      },
+      {
+        "text": "0 11877 00140 3",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0011877001403",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "011877001403"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "0"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "1012-96"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-133.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "00cc98281dc557828e591e0dca20d6fcab807a80a2bbf6b588b23874bb64c8b9"
+  }
+}

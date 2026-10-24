@@ -1,0 +1,119 @@
+{
+  "id": "care-label-005",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "TALLA/SIZE/TAILLE: XL"
+    },
+    {
+      "text": "50% COTTON, 50% POLYESTER"
+    },
+    {
+      "text": "MADE IN P.R.C."
+    },
+    {
+      "text": "CA 28504"
+    },
+    {
+      "text": "STYLE: ES6123"
+    },
+    {
+      "text": "NE PAS BLANCHIR"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    },
+    {
+      "text": "MACHINE WASH COLD WITH LIKE COLORS"
+    },
+    {
+      "text": "LAY FLAT TO DRY"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL  ATHLETIC",
+        "confidence": 0.5
+      },
+      {
+        "text": "TALLA/SIZE/TAILLE: XL",
+        "confidence": 1
+      },
+      {
+        "text": "50% COTTON, 50% POLYESTER",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN P.R.C.",
+        "confidence": 1
+      },
+      {
+        "text": "CA 28504",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE: ES6123",
+        "confidence": 1
+      },
+      {
+        "text": "NE  PAS BLANCHIR",
+        "confidence": 0.5
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD WITH LIKE COLORS",
+        "confidence": 1
+      },
+      {
+        "text": "LAY FLAT TO DRY",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "28504"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 50
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 50
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": [
+      "ES6123"
+    ]
+  },
+  "image": {
+    "file": "care-label-005.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 423,
+    "pixelSha256": "3488bd6a406761962c0406a51447bb86b96e271cbfac25b84546b25d8961191e"
+  }
+}

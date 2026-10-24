@@ -1,0 +1,68 @@
+{
+  "id": "neck-label-068",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "FIELD AND FERN"
+    },
+    {
+      "text": "SIZE S"
+    },
+    {
+      "text": "MADE IN VIET NAM"
+    },
+    {
+      "text": "RN# 116147"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "FIELD AND FERN",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE S",
+        "confidence": 1
+      },
+      {
+        "text": "MADE  IN VIET NAM",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN#",
+        "confidence": 0.5
+      },
+      {
+        "text": "116147",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "116147"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "VN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-068.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 207,
+    "pixelSha256": "710aa649133deb59407421af25a906920e554bb865628c3eed1d9000d83bd825"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "id": "shoe-label-183",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US 8.5 / UK 7.5 / EU 42"
+    },
+    {
+      "text": "STYLE # MN4644-715"
+    },
+    {
+      "text": "MADE IN THAILAND"
+    },
+    {
+      "barcode": "631922591972"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 8.5 / UK 7.5 / EU 42",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE # MN4644-715",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN",
+        "confidence": 0.5
+      },
+      {
+        "text": "THAILAND",
+        "confidence": 0.5
+      },
+      {
+        "text": "6 31922 59197 2",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0631922591972",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "631922591972"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "8.5"
+      },
+      {
+        "system": "uk",
+        "value": "7.5"
+      },
+      {
+        "system": "eu",
+        "value": "42"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "TH"
+    ],
+    "style": [
+      "MN4644-715"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-183.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 327,
+    "pixelSha256": "84022122a88dccba892b16e7d20d12d5b90ff2d9fe4837d350d2458693a972fb"
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-116",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US: 11.5  UK: 10.5  EUR: 45"
+    },
+    {
+      "text": "STYLE: 884416"
+    },
+    {
+      "text": "MADE IN BANGLADESH"
+    },
+    {
+      "barcode": "036802639551"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "us: 11.5  uk: 10.5  eur: 45",
+        "confidence": 0.5
+      },
+      {
+        "text": "STYLE: 884416",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN BANGLADESH",
+        "confidence": 1
+      },
+      {
+        "text": "0 36802 63955 1",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0036802639551",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "036802639551"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "11.5"
+      },
+      {
+        "system": "uk",
+        "value": "10.5"
+      },
+      {
+        "system": "eu",
+        "value": "45"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "BD"
+    ],
+    "style": [
+      "884416"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-116.png",
+    "mediaType": "image/png",
+    "width": 555,
+    "height": 363,
+    "pixelSha256": "d6048a61d7b1176ce90f4cf7b5ccb8efaa30023565949f926ae414d2e9664c00"
+  }
+}

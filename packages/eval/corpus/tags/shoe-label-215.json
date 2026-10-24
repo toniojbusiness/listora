@@ -1,0 +1,73 @@
+{
+  "id": "shoe-label-215",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US 9.5 / UK 8.5 / EU 43"
+    },
+    {
+      "text": "PRODUCT OF EGYPT"
+    },
+    {
+      "barcode": "760628241314"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 9.5 / UK 8.5 / EU 43",
+        "confidence": 1
+      },
+      {
+        "text": "PRODUCT OF EGYPT",
+        "confidence": 1
+      },
+      {
+        "text": "7 60628 24131 4",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0760628241314",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "760628241314"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "9.5"
+      },
+      {
+        "system": "uk",
+        "value": "8.5"
+      },
+      {
+        "system": "eu",
+        "value": "43"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "EG"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "shoe-label-215.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 291,
+    "pixelSha256": "bc14e38a3b0cbe956b87c7a4be01ae16e33aa1dff5c6c6d0b6c0695f7399adc7"
+  }
+}

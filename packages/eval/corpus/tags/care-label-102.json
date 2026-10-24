@@ -1,0 +1,86 @@
+{
+  "id": "care-label-102",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "100% COTTON"
+    },
+    {
+      "text": "MADE IN VIET NAM"
+    },
+    {
+      "text": "RN NO. 129465"
+    },
+    {
+      "text": "COOL IRON IF NEEDED"
+    },
+    {
+      "text": "TUMBLE DRY LOW"
+    },
+    {
+      "text": "LINE DRY"
+    },
+    {
+      "text": "PATTERN 20817"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "100%COTTON",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN VIET NAM",
+        "confidence": 1
+      },
+      {
+        "text": "RN NO. 129465",
+        "confidence": 1
+      },
+      {
+        "text": "COOL IRON IF NEEDED",
+        "confidence": 1
+      },
+      {
+        "text": "TUMBLE DRY LOW",
+        "confidence": 1
+      },
+      {
+        "text": "LINE DRY",
+        "confidence": 1
+      },
+      {
+        "text": "PATTERN  20817",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "129465"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-102.png",
+    "mediaType": "image/png",
+    "width": 411,
+    "height": 315,
+    "pixelSha256": "307524bebedc6bb57a962ff085afb108afa731de6dd973061bb3afabdc286a45"
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "id": "denim-label-020",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "SIZE: 29X34"
+    },
+    {
+      "text": "100% COTTON / COTON / ALGODON"
+    },
+    {
+      "text": "MADE IN BANGLADESH"
+    },
+    {
+      "text": "RN: 20427"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STONE RIVER DENIM",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE:  29X34",
+        "confidence": 0.5
+      },
+      {
+        "text": "100% COTTON / COTON / ALGODON",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN BANGLADESH",
+        "confidence": 1
+      },
+      {
+        "text": "RN: 20427",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "20427"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "29x34"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "BD"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "denim-label-020.png",
+    "mediaType": "image/png",
+    "width": 591,
+    "height": 243,
+    "pixelSha256": "a08d17446e3c8bd4b75cc4e6fc0c19e1a9ffa90a1d0fac7e9dd550cd1d9f93a8"
+  }
+}

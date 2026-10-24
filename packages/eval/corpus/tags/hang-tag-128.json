@@ -1,0 +1,70 @@
+{
+  "id": "hang-tag-128",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "HARBOR LANE"
+    },
+    {
+      "text": "TALLA 2"
+    },
+    {
+      "text": "$58.00"
+    },
+    {
+      "barcode": "762071614769"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "HARBOR LANE",
+        "confidence": 1
+      },
+      {
+        "text": "TALLA 2",
+        "confidence": 1
+      },
+      {
+        "text": "$58.00",
+        "confidence": 1
+      },
+      {
+        "text": "7 62071 61476 9",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0762071614769",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "762071614769"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "2"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-128.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 360,
+    "pixelSha256": "9032ec25422acfe8fd09cd1b5988c90d8dd37648e5cf8fae0b99f99d0540331c"
+  }
+}

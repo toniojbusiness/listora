@@ -1,0 +1,104 @@
+{
+  "id": "hang-tag-199",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Northwind Apparel"
+    },
+    {
+      "text": "STYLE GS0398"
+    },
+    {
+      "text": "XS (0-2)"
+    },
+    {
+      "text": "PRICE $48"
+    },
+    {
+      "text": "55% Hemp 45% Cotton"
+    },
+    {
+      "barcode": "084636589726"
+    },
+    {
+      "text": "SAN DIEGO, CA 92156"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Northwind Apparel",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE GS0398",
+        "confidence": 1
+      },
+      {
+        "text": "XS (0-2)",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE $48",
+        "confidence": 1
+      },
+      {
+        "text": "55%Hemp 45% Cotton",
+        "confidence": 0.5
+      },
+      {
+        "text": "0 84636 58972 9",
+        "confidence": 0.5
+      },
+      {
+        "text": "SAN DIEGO, CA 92156",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0084636589726",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "084636589726"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XS"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "hemp",
+        "percent": 55
+      },
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 45
+      }
+    ],
+    "origin": [],
+    "style": [
+      "GS0398"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-199.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 468,
+    "pixelSha256": "07974a4a33614d3cd6af6f1283ac86a81b86b36fd2360d6d1cf480db0f25656c"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "id": "shoe-label-189",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US: 11  UK: 10  EUR: 44"
+    },
+    {
+      "text": "MADE IN ITALY"
+    },
+    {
+      "barcode": "7672707507521"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US: 11  UK: 10  EUR: 44",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN ITALY",
+        "confidence": 1
+      },
+      {
+        "text": "7 672707 507521",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "7672707507521",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "7672707507521"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "11"
+      },
+      {
+        "system": "uk",
+        "value": "10"
+      },
+      {
+        "system": "eu",
+        "value": "44"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "IT"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "shoe-label-189.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 291,
+    "pixelSha256": "6e2bd2f62618441d2abef6269e42ce8069837bcec8ca0f7811cfeb2a43e09320"
+  }
+}

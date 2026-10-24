@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-096",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "NORTHWIND APPAREL"
+    },
+    {
+      "text": "ART. NO. 7641-98"
+    },
+    {
+      "text": "SIZE L"
+    },
+    {
+      "text": "$128.99"
+    },
+    {
+      "barcode": "054415819726"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "NORTHWIND APPAREL",
+        "confidence": 1
+      },
+      {
+        "text": "ART. NO. 7641-98",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE L",
+        "confidence": 1
+      },
+      {
+        "text": "$128.99",
+        "confidence": 1
+      },
+      {
+        "text": "0 54415 81972 6",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0054415819726",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "054415819726"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "7641-98"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-096.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "bd5dbe2c2cdcc989b7f0f76ec43af8ea37225bef610155a093ce999724f13a6c"
+  }
+}

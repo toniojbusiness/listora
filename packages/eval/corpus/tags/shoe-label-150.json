@@ -1,0 +1,85 @@
+{
+  "id": "shoe-label-150",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US 5.5 UK 4.5 EUR 39"
+    },
+    {
+      "text": "MODEL: B-96283"
+    },
+    {
+      "text": "MADE IN P.R.C."
+    },
+    {
+      "barcode": "196098106288"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US 5.5 UK 4.5 EUR 39",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL: B-96283 MADE IN P.R.C.",
+        "confidence": 0.5
+      },
+      {
+        "text": "1 96098 10628 8",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0196098106288",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "196098106288"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "5.5"
+      },
+      {
+        "system": "uk",
+        "value": "4.5"
+      },
+      {
+        "system": "eu",
+        "value": "39"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "CN"
+    ],
+    "style": [
+      "B-96283"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-150.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 363,
+    "pixelSha256": "fde842e85c404125c6cae1f8d0e0271328ed9d8ec694169b0b4aa88095e887fd"
+  }
+}

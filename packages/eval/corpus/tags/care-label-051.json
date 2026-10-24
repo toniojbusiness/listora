@@ -1,0 +1,107 @@
+{
+  "id": "care-label-051",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Field And Fern"
+    },
+    {
+      "text": "80% NYLON / 20% ELASTANE"
+    },
+    {
+      "text": "80% POLYAMIDE, 20% ELASTHANNE"
+    },
+    {
+      "text": "80% NAILON 20% ELASTANO"
+    },
+    {
+      "text": "Made in Canada"
+    },
+    {
+      "text": "CA# 15180"
+    },
+    {
+      "text": "ITEM # T-18375"
+    },
+    {
+      "text": "Do Not Dry Clean"
+    },
+    {
+      "text": "Line Dry"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Field  And Fern",
+        "confidence": 0.5
+      },
+      {
+        "text": "8O% NYLON / 20% ELASTANE",
+        "confidence": 0.5
+      },
+      {
+        "text": "80% POLYAMIDE, 20% ELASTHANNE",
+        "confidence": 1
+      },
+      {
+        "text": "80% NAILON 20% ELASTANO",
+        "confidence": 1
+      },
+      {
+        "text": "Made in Canada",
+        "confidence": 1
+      },
+      {
+        "text": "CA# 15180",
+        "confidence": 1
+      },
+      {
+        "text": "ITEM # T-18375",
+        "confidence": 1
+      },
+      {
+        "text": "Do Not Dry Clean",
+        "confidence": 1
+      },
+      {
+        "text": "Line Dry",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "15180"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 80
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 20
+      }
+    ],
+    "origin": [
+      "CA"
+    ],
+    "style": [
+      "T-18375"
+    ]
+  },
+  "image": {
+    "file": "care-label-051.png",
+    "mediaType": "image/png",
+    "width": 591,
+    "height": 387,
+    "pixelSha256": "f07bd4cdfe325c90b9a2f799bd71f797af8dc3490136c54ad3338b26555ad008"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "id": "edge-case-028",
+  "kind": "edge_case",
+  "description": "Prices and quantities are not sizes or style numbers",
+  "printed": [
+    {
+      "text": "MSRP $48.00"
+    },
+    {
+      "text": "2 PACK"
+    },
+    {
+      "text": "SIZE: XL"
+    },
+    {
+      "text": "MODEL: TR-4410"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "MSRP $48.00",
+        "confidence": 1
+      },
+      {
+        "text": "2 PACK",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE: XL",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL: TR-4410",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "TR-4410"
+    ]
+  },
+  "image": {
+    "file": "edge-case-028.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 207,
+    "pixelSha256": "adda8554843c06bd6ab16aa42694fbe9ee40a1c2209c27eb93b260cca3c28587"
+  }
+}

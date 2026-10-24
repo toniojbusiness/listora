@@ -1,0 +1,82 @@
+{
+  "id": "hang-tag-030",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "FIELD AND FERN"
+    },
+    {
+      "text": "REF. PD8651-961"
+    },
+    {
+      "text": "SIZE L"
+    },
+    {
+      "text": "MSRP $128.00"
+    },
+    {
+      "barcode": "5789908289629"
+    },
+    {
+      "text": "DESIGNED IN BROOKLYN"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "FIELD AND FERN REF. PD8651-961",
+        "confidence": 0.5
+      },
+      {
+        "text": "SIZE L",
+        "confidence": 1
+      },
+      {
+        "text": "MSRP $128.00",
+        "confidence": 1
+      },
+      {
+        "text": "5 789908 289629",
+        "confidence": 1
+      },
+      {
+        "text": "designed in brooklyn",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "5789908289629",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "5789908289629"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "PD8651-961"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-030.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 432,
+    "pixelSha256": "9e3ea5b342ca96ebf4bcc955d941e7ea247eeb8c73c4e7bb39b5ad2a987bcef7"
+  }
+}

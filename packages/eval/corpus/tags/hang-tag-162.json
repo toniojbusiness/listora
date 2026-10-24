@@ -1,0 +1,86 @@
+{
+  "id": "hang-tag-162",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "COPPER FOX"
+    },
+    {
+      "text": "ITEM # US7415-303"
+    },
+    {
+      "text": "SIZE XL"
+    },
+    {
+      "text": "PRICE $34"
+    },
+    {
+      "barcode": "631655785587"
+    },
+    {
+      "text": "LOS ANGELES, CA 90048 USA"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "COPPER FOX",
+        "confidence": 1
+      },
+      {
+        "text": "ITEM # US7415-303",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE XL",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE $34",
+        "confidence": 1
+      },
+      {
+        "text": "6 31655 78558 7",
+        "confidence": 1
+      },
+      {
+        "text": "LOS ANGELES, CA 90048 USA",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0631655785587",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "631655785587"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "US7415-303"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-162.png",
+    "mediaType": "image/png",
+    "width": 519,
+    "height": 432,
+    "pixelSha256": "411a203fffc0205ede92532763e98039cad21e7e4c0cde0c4b703e2816d1bccd"
+  }
+}

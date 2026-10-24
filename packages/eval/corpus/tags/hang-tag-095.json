@@ -1,0 +1,97 @@
+{
+  "id": "hang-tag-095",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "MODEL: W-66717"
+    },
+    {
+      "text": "SIZE: XL"
+    },
+    {
+      "text": "PRICE $65"
+    },
+    {
+      "text": "70% VISCOSE, 30% NYLON"
+    },
+    {
+      "barcode": "8076997455040"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STONE RIVER DENIM",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL: W-66717",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE: XL",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE $65",
+        "confidence": 1
+      },
+      {
+        "text": "70% VISCOSE, 30% NYLON",
+        "confidence": 1
+      },
+      {
+        "text": "8 076997 455040",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "8076997455040",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "8076997455040"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "viscose",
+        "percent": 70
+      },
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 30
+      }
+    ],
+    "origin": [],
+    "style": [
+      "W-66717"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-095.png",
+    "mediaType": "image/png",
+    "width": 465,
+    "height": 432,
+    "pixelSha256": "e7389140a771771fd2f2926dc3517aed96956cf28165b75773fcc0bd59e6f28f"
+  }
+}

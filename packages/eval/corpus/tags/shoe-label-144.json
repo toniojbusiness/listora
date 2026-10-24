@@ -1,0 +1,92 @@
+{
+  "id": "shoe-label-144",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US 11.5 / UK 10.5 / EU 45"
+    },
+    {
+      "text": "STYLE NO. O-83464"
+    },
+    {
+      "text": "MADE IN CHINA"
+    },
+    {
+      "text": "HECHO EN CHINA"
+    },
+    {
+      "barcode": "742614825692"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US 11.5 / UK 10.5 / EU 45",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. O-83464 MADE IN CHINA",
+        "confidence": 0.5
+      },
+      {
+        "text": "HECHO EN CHINA",
+        "confidence": 1
+      },
+      {
+        "text": "7 42614 82569 1",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0742614825692",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "742614825692"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "11.5"
+      },
+      {
+        "system": "uk",
+        "value": "10.5"
+      },
+      {
+        "system": "eu",
+        "value": "45"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "CN"
+    ],
+    "style": [
+      "O-83464"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-144.png",
+    "mediaType": "image/png",
+    "width": 519,
+    "height": 399,
+    "pixelSha256": "05aec9a508e644505c28e54ded40907e4cc3071437285d491e6d802d2387e7ae"
+  }
+}

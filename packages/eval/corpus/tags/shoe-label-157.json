@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-157",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US 7 / UK 6 / EU 40.5"
+    },
+    {
+      "text": "STYLE ND5043"
+    },
+    {
+      "text": "MADE IN HONDURAS"
+    },
+    {
+      "barcode": "606154671389"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US 7 / UK 6 / EU 40.5",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE ND5043",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN HONDURAS",
+        "confidence": 1
+      },
+      {
+        "text": "6 06154 67138 9",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0606154671389",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "606154671389"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "7"
+      },
+      {
+        "system": "uk",
+        "value": "6"
+      },
+      {
+        "system": "eu",
+        "value": "40.5"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "HN"
+    ],
+    "style": [
+      "ND5043"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-157.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 363,
+    "pixelSha256": "db9e9a83f33023cd2ae5353a61ac1efa3ad3f21fab961c5b8bb7fbc38987aaa6"
+  }
+}

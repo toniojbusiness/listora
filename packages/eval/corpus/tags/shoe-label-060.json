@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-060",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "Parallel Athletic"
+    },
+    {
+      "text": "US: 8  UK: 7  EUR: 41"
+    },
+    {
+      "text": "MODEL: 443445"
+    },
+    {
+      "text": "Made in China"
+    },
+    {
+      "barcode": "884114725352"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Parallel Athletic",
+        "confidence": 1
+      },
+      {
+        "text": "US:8  UK: 7  EUR: 41",
+        "confidence": 0.5
+      },
+      {
+        "text": "MODEL: 443445",
+        "confidence": 1
+      },
+      {
+        "text": "Made in China",
+        "confidence": 1
+      },
+      {
+        "text": "8 84114 72535 2",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0884114725352",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "884114725352"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "8"
+      },
+      {
+        "system": "uk",
+        "value": "7"
+      },
+      {
+        "system": "eu",
+        "value": "41"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "CN"
+    ],
+    "style": [
+      "443445"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-060.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 363,
+    "pixelSha256": "634eab903e40ad02ed7940c1f1dd281e8592da6d59166341c0211ad9485d5353"
+  }
+}

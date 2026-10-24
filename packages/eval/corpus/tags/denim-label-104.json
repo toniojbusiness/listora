@@ -1,0 +1,98 @@
+{
+  "id": "denim-label-104",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "34W 32L"
+    },
+    {
+      "text": "STYLE NO. 209426"
+    },
+    {
+      "text": "95% COTTON / COTON / ALGODON"
+    },
+    {
+      "text": "5% SPANDEX / ELASTHANNE / ELASTANO"
+    },
+    {
+      "text": "MADE IN VIET NAM"
+    },
+    {
+      "text": "RN 74960"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STONE RIVER DENIM",
+        "confidence": 1
+      },
+      {
+        "text": "34W 32L",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. 209426",
+        "confidence": 1
+      },
+      {
+        "text": "95% COTTON / COTON / ALGODON",
+        "confidence": 1
+      },
+      {
+        "text": "5% SPANDEX / ELASTHANNE / ELASTANO",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN VIET NAM",
+        "confidence": 1
+      },
+      {
+        "text": "RN  74960",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "74960"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "34x32"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 95
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": [
+      "209426"
+    ]
+  },
+  "image": {
+    "file": "denim-label-104.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 315,
+    "pixelSha256": "2548fa038332373fa025093fa0c118d929a6b8655a8bd963046823d483d92265"
+  }
+}

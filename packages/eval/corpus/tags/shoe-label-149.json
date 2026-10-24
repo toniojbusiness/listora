@@ -1,0 +1,82 @@
+{
+  "id": "shoe-label-149",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US 10 / UK 9 / EU 43.5"
+    },
+    {
+      "text": "STYLE AM5109"
+    },
+    {
+      "text": "MADE IN BANGLADESH"
+    },
+    {
+      "barcode": "8987929310286"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 10 / UK 9 / EU 43.5",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE AM5109",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN BANGLADESH",
+        "confidence": 1
+      },
+      {
+        "text": "8 987929 310286",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "8987929310286",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "8987929310286"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "10"
+      },
+      {
+        "system": "uk",
+        "value": "9"
+      },
+      {
+        "system": "eu",
+        "value": "43.5"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "BD"
+    ],
+    "style": [
+      "AM5109"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-149.png",
+    "mediaType": "image/png",
+    "width": 465,
+    "height": 327,
+    "pixelSha256": "cb7fc5fc2b7b8a91e0475dd23de57d4ad5c95f140c46b87e0965e170bba1af95"
+  }
+}

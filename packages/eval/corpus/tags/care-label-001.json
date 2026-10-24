@@ -1,0 +1,95 @@
+{
+  "id": "care-label-001",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "SIZE EXTRA LARGE"
+    },
+    {
+      "text": "100% CASHMERE"
+    },
+    {
+      "text": "MADE IN THE USA"
+    },
+    {
+      "text": "RN: 141525"
+    },
+    {
+      "text": "DO NOT DRY CLEAN"
+    },
+    {
+      "text": "SEE REVERSE FOR CARE"
+    },
+    {
+      "text": "MACHINE WASH COLD"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SIZE EXTRA LARGE",
+        "confidence": 1
+      },
+      {
+        "text": "100% CASHMERE",
+        "confidence": 1
+      },
+      {
+        "text": "made in",
+        "confidence": 0.5
+      },
+      {
+        "text": "the usa",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN:",
+        "confidence": 0.5
+      },
+      {
+        "text": "141525",
+        "confidence": 0.5
+      },
+      {
+        "text": "DO NOT DRY CLEAN SEE REVERSE FOR CARE",
+        "confidence": 0.5
+      },
+      {
+        "text": "MACHINE WASH COLD",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "141525"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cashmere",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-001.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 315,
+    "pixelSha256": "913c55d1d876fc21e5efcb6eb859400b6c33b886e18dfb6b931b88d34164bc68"
+  }
+}

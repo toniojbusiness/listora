@@ -1,0 +1,105 @@
+{
+  "id": "hang-tag-140",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "BLUE CEDAR"
+    },
+    {
+      "text": "STYLE NO. 7794-84"
+    },
+    {
+      "text": "US 8 UK 12 EUR 40"
+    },
+    {
+      "text": "MSRP $28.00"
+    },
+    {
+      "text": "POLYESTER 88% ELASTANE 12%"
+    },
+    {
+      "barcode": "811656986378"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "BLUE CEDAR",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. 7794-84",
+        "confidence": 1
+      },
+      {
+        "text": "US 8 UK 12 EUR 40",
+        "confidence": 1
+      },
+      {
+        "text": "MSRP $28.00",
+        "confidence": 1
+      },
+      {
+        "text": "POLYESTER 88% ELASTANE 12%",
+        "confidence": 1
+      },
+      {
+        "text": "8 11656 98637 8",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0811656986378",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "811656986378"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "8"
+      },
+      {
+        "system": "uk",
+        "value": "12"
+      },
+      {
+        "system": "eu",
+        "value": "40"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 88
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 12
+      }
+    ],
+    "origin": [],
+    "style": [
+      "7794-84"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-140.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 432,
+    "pixelSha256": "0f0af2b862095c8b9c130c07cbfba02bac01d4530c6b90ab4482e4c092d2d146"
+  }
+}

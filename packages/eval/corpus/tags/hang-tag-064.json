@@ -1,0 +1,65 @@
+{
+  "id": "hang-tag-064",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Stone River Denim"
+    },
+    {
+      "text": "ONE SIZE FITS MOST"
+    },
+    {
+      "text": "$58.99"
+    },
+    {
+      "barcode": "066718760483"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Stone River Denim",
+        "confidence": 1
+      },
+      {
+        "text": "ONE SIZE FITS MOST",
+        "confidence": 1
+      },
+      {
+        "text": "$58.99",
+        "confidence": 1
+      },
+      {
+        "text": "0 66718 76048 3",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "066718760483"
+      }
+    ],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-064.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 360,
+    "pixelSha256": "2601b085ce8375791d154dda791833249c20a04c4fd4698b37e16278e6939fad"
+  }
+}

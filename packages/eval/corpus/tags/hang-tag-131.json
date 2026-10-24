@@ -1,0 +1,99 @@
+{
+  "id": "hang-tag-131",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "REF. 457211"
+    },
+    {
+      "text": "SIZE: OS"
+    },
+    {
+      "text": "PRICE $34"
+    },
+    {
+      "text": "100% MERINO WOOL"
+    },
+    {
+      "barcode": "078054677400"
+    },
+    {
+      "text": "STYLE MEETS COMFORT"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STONE RIVER DENIM",
+        "confidence": 1
+      },
+      {
+        "text": "REF. 457211",
+        "confidence": 1
+      },
+      {
+        "text": "size: os",
+        "confidence": 0.5
+      },
+      {
+        "text": "PRICE $34",
+        "confidence": 1
+      },
+      {
+        "text": "100% MERINO WOOL",
+        "confidence": 1
+      },
+      {
+        "text": "0 78054 67740 0",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE MEETS COMFORT",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0078054677400",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "078054677400"
+      }
+    ],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "merino_wool",
+        "percent": 100
+      }
+    ],
+    "origin": [],
+    "style": [
+      "457211"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-131.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 468,
+    "pixelSha256": "4eb3fd104b2d1da0eb6f0cbe44584a516da36bef4c65f0af504ebb3deb56b432"
+  }
+}

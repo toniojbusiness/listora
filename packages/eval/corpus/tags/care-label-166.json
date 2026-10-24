@@ -1,0 +1,107 @@
+{
+  "id": "care-label-166",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Salt Flats Supply"
+    },
+    {
+      "text": "XL/EG/EG"
+    },
+    {
+      "text": "100% Silk"
+    },
+    {
+      "text": "Made in Italy"
+    },
+    {
+      "text": "RN 138229 / CA 22737"
+    },
+    {
+      "text": "Tumble Dry Low"
+    },
+    {
+      "text": "Do Not Dry Clean"
+    },
+    {
+      "text": "Cool Iron If Needed"
+    },
+    {
+      "text": "Hand Wash Cold"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Salt Flats Supply",
+        "confidence": 1
+      },
+      {
+        "text": "XL/EG/EG",
+        "confidence": 1
+      },
+      {
+        "text": "100% Silk",
+        "confidence": 1
+      },
+      {
+        "text": "Made in Italy",
+        "confidence": 1
+      },
+      {
+        "text": "RN 138229 / CA 22737",
+        "confidence": 1
+      },
+      {
+        "text": "Tumble Dry Low",
+        "confidence": 1
+      },
+      {
+        "text": "Do Not Dry Clean",
+        "confidence": 1
+      },
+      {
+        "text": "Cool Iron If Needed",
+        "confidence": 1
+      },
+      {
+        "text": "Hand Wash Cold",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "138229"
+    ],
+    "ca": [
+      "22737"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "silk",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "IT"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-166.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 387,
+    "pixelSha256": "d1426707bf6f5257af784417571a5065451fe7053c5cac66e3d16d3bca2f2543"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "id": "care-label-046",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "MERIDIAN WORKS"
+    },
+    {
+      "text": "L"
+    },
+    {
+      "text": "95% COTTON"
+    },
+    {
+      "text": "5% SPANDEX"
+    },
+    {
+      "text": "MADE IN CANADA"
+    },
+    {
+      "text": "CA: 18368"
+    },
+    {
+      "text": "MACHINE WASH COLD WITH LIKE COLORS"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "MERIDIAN WORKS",
+        "confidence": 1
+      },
+      {
+        "text": "L",
+        "confidence": 1
+      },
+      {
+        "text": "95% COTTON",
+        "confidence": 1
+      },
+      {
+        "text": "5% spandex",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN CANADA CA:",
+        "confidence": 0.5
+      },
+      {
+        "text": "18368",
+        "confidence": 0.5
+      },
+      {
+        "text": "MACHINE WASH COLD WITH LIKE COLORS",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "18368"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 95
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "CA"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-046.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 315,
+    "pixelSha256": "48ffd526d85a1164b67968bbf8ae65519948d9ed4b103326aab2641ed3ea95e3"
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "id": "care-label-164",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Oak Hollow"
+    },
+    {
+      "text": "SIZE 0"
+    },
+    {
+      "text": "88% Polyester"
+    },
+    {
+      "text": "12% Elastane"
+    },
+    {
+      "text": "Made in Japan"
+    },
+    {
+      "text": "CA NO. 44222"
+    },
+    {
+      "text": "Line Dry"
+    },
+    {
+      "text": "Laver A La Machine A Froid"
+    },
+    {
+      "text": "Do Not Dry Clean"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "oak hollow",
+        "confidence": 0.5
+      },
+      {
+        "text": "SIZE 0",
+        "confidence": 1
+      },
+      {
+        "text": "88% Polyester",
+        "confidence": 1
+      },
+      {
+        "text": "12% Elastane",
+        "confidence": 1
+      },
+      {
+        "text": "Made in Japan",
+        "confidence": 1
+      },
+      {
+        "text": "CA NO. 44222 Line  Dry",
+        "confidence": 0.5
+      },
+      {
+        "text": "Laver A La Machine A Froid",
+        "confidence": 1
+      },
+      {
+        "text": "Do Not Dry Clean",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "44222"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "0"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 88
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 12
+      }
+    ],
+    "origin": [
+      "JP"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-164.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 387,
+    "pixelSha256": "75af8c81ed3eadc710dca30bea5e5b3eed044d82bf5370d85fb1095e4c8aa933"
+  }
+}

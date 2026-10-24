@@ -1,0 +1,84 @@
+{
+  "id": "shoe-label-212",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US: 11  UK: 10  EUR: 44.5"
+    },
+    {
+      "text": "Made in Turkey"
+    },
+    {
+      "text": "Hecho en Turquia"
+    },
+    {
+      "barcode": "4046511060726"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US:  11  UK: 10  EUR: 44.5",
+        "confidence": 0.5
+      },
+      {
+        "text": "Made in",
+        "confidence": 0.5
+      },
+      {
+        "text": "Turkey",
+        "confidence": 0.5
+      },
+      {
+        "text": "Hecho en Turquia",
+        "confidence": 1
+      },
+      {
+        "text": "4 046511 060726",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "4046511060726",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "4046511060726"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "11"
+      },
+      {
+        "system": "uk",
+        "value": "10"
+      },
+      {
+        "system": "eu",
+        "value": "44.5"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "TR"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "shoe-label-212.png",
+    "mediaType": "image/png",
+    "width": 519,
+    "height": 327,
+    "pixelSha256": "d787ad25b21f7613271dec3cbe8def949c3f0ebf59453a39b7780cb17c466c79"
+  }
+}

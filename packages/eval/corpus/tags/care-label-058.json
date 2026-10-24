@@ -1,0 +1,79 @@
+{
+  "id": "care-label-058",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Northwind Apparel"
+    },
+    {
+      "text": "100% Acetate Exclusive of Trim"
+    },
+    {
+      "text": "Made in India"
+    },
+    {
+      "text": "R.N. 154910"
+    },
+    {
+      "text": "Cool Iron If Needed"
+    },
+    {
+      "text": "Do Not Dry Clean"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Northwind Apparel",
+        "confidence": 1
+      },
+      {
+        "text": "100% Acetate Exclusive of Trim",
+        "confidence": 1
+      },
+      {
+        "text": "Made in India",
+        "confidence": 1
+      },
+      {
+        "text": "R.N. 154910",
+        "confidence": 1
+      },
+      {
+        "text": "Cool Iron If Needed",
+        "confidence": 1
+      },
+      {
+        "text": "Do Not Dry Clean",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "154910"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "acetate",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "IN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-058.png",
+    "mediaType": "image/png",
+    "width": 609,
+    "height": 279,
+    "pixelSha256": "8955fba7f1ad7d0adb9ffeb6cc53142773b9b54232109b52e453643c9bdc5f19"
+  }
+}

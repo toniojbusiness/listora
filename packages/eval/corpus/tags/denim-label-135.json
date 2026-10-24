@@ -1,0 +1,84 @@
+{
+  "id": "denim-label-135",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "Stone River Denim"
+    },
+    {
+      "text": "38X28"
+    },
+    {
+      "text": "100% Cotton Exclusive of Trim"
+    },
+    {
+      "text": "Product of U.S.A."
+    },
+    {
+      "text": "RN NO. 109123"
+    },
+    {
+      "text": "Line Dry"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Stone  River Denim",
+        "confidence": 0.5
+      },
+      {
+        "text": "38X28",
+        "confidence": 1
+      },
+      {
+        "text": "100%  Cotton Exclusive of Trim",
+        "confidence": 0.5
+      },
+      {
+        "text": "Product of U.S.A.",
+        "confidence": 1
+      },
+      {
+        "text": "RN NO. 109123",
+        "confidence": 1
+      },
+      {
+        "text": "Line Dry",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "109123"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "38x28"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "denim-label-135.png",
+    "mediaType": "image/png",
+    "width": 591,
+    "height": 279,
+    "pixelSha256": "28c9530da5c3ec1fa40276be6572b869f68385925eab7a3c8798c21ee0f2a232"
+  }
+}

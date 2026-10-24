@@ -1,0 +1,115 @@
+{
+  "id": "care-label-154",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Blue Cedar"
+    },
+    {
+      "text": "TALLA/SIZE/TAILLE: XL"
+    },
+    {
+      "text": "55% HEMP, 45% COTTON"
+    },
+    {
+      "text": "55% CHANVRE, 45% COTON"
+    },
+    {
+      "text": "55% CANAMO / 45% ALGODON"
+    },
+    {
+      "text": "Made in USA"
+    },
+    {
+      "text": "NO Usar Blanqueador"
+    },
+    {
+      "text": "Lay Flat To Dry"
+    },
+    {
+      "text": "Do Not Dry Clean"
+    },
+    {
+      "text": "Tumble Dry Low"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Blue Cedar",
+        "confidence": 1
+      },
+      {
+        "text": "talla/size/taille: xl",
+        "confidence": 0.5
+      },
+      {
+        "text": "55% HEMP, 45% COTION",
+        "confidence": 0.5
+      },
+      {
+        "text": "55%  CHANVRE, 45% COTON",
+        "confidence": 0.5
+      },
+      {
+        "text": "55% CANAMO / 45% ALGODON",
+        "confidence": 1
+      },
+      {
+        "text": "Made in USA",
+        "confidence": 1
+      },
+      {
+        "text": "NO Usar Blanqueador",
+        "confidence": 1
+      },
+      {
+        "text": "Lay Flat To Dry",
+        "confidence": 1
+      },
+      {
+        "text": "Do Not Dry Clean",
+        "confidence": 1
+      },
+      {
+        "text": "Tumble Dry Low",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "hemp",
+        "percent": 55
+      },
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 45
+      }
+    ],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-154.png",
+    "mediaType": "image/png",
+    "width": 501,
+    "height": 423,
+    "pixelSha256": "e0eb8963e72cf251daef7cd922dc2b9858fc92d5a52fad084c18f75352987b5b"
+  }
+}

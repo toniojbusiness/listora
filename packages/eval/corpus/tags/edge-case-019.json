@@ -1,0 +1,47 @@
+{
+  "id": "edge-case-019",
+  "kind": "edge_case",
+  "description": "An EAN-13 read from printed digits only (bars not decoded)",
+  "printed": [
+    {
+      "text": "QUIET HARBOR"
+    },
+    {
+      "barcode": "5901234123457"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "QUIET HARBOR",
+        "confidence": 1
+      },
+      {
+        "text": "5 901234 123457",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "5901234123457"
+      }
+    ],
+    "size": [],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-019.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 255,
+    "pixelSha256": "62dcbed7291455a2a5c112fb5499c9094a42a8c5450a4830948934e82ad2f7c3"
+  }
+}

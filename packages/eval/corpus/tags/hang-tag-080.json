@@ -1,0 +1,88 @@
+{
+  "id": "hang-tag-080",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "NORTHWIND APPAREL"
+    },
+    {
+      "text": "REF. JE6605"
+    },
+    {
+      "text": "SIZE M"
+    },
+    {
+      "text": "$58.99"
+    },
+    {
+      "text": "LYOCELL 100%"
+    },
+    {
+      "barcode": "067135409429"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "NORTHWIND APPAREL",
+        "confidence": 1
+      },
+      {
+        "text": "REF. JE6605 SIZE M",
+        "confidence": 0.5
+      },
+      {
+        "text": "$58.99",
+        "confidence": 1
+      },
+      {
+        "text": "LYOCELL 1O0%",
+        "confidence": 0.5
+      },
+      {
+        "text": "0 67135 40942 9",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0067135409429",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "067135409429"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "lyocell",
+        "percent": 100
+      }
+    ],
+    "origin": [],
+    "style": [
+      "JE6605"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-080.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 432,
+    "pixelSha256": "802091bcdfb3c6ee90ad744f1c098c791176ec6ed3031ab36a7afe117a6b5404"
+  }
+}

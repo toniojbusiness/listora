@@ -1,0 +1,123 @@
+{
+  "id": "care-label-139",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "US 4  UK 8  EU 36"
+    },
+    {
+      "text": "50% ACRYLIC, 30% NYLON, 20% WOOL"
+    },
+    {
+      "text": "50% ACRYLIQUE, 30% POLYAMIDE, 20% LAINE"
+    },
+    {
+      "text": "50% ACRILICO 30% NAILON 20% LANA"
+    },
+    {
+      "text": "MADE IN INDONESIA"
+    },
+    {
+      "text": "RN 161528"
+    },
+    {
+      "text": "WASH INSIDE OUT"
+    },
+    {
+      "text": "MACHINE WASH COLD"
+    },
+    {
+      "text": "DO NOT BLEACH"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 4  UK 8  EU 36",
+        "confidence": 1
+      },
+      {
+        "text": "50% ACRYLIC, 30% NYLON, 20% WOOL",
+        "confidence": 1
+      },
+      {
+        "text": "50% ACRYLIQUE, 30% POLYAMIDE, 20% LAINE",
+        "confidence": 1
+      },
+      {
+        "text": "50%ACRILICO 30% NAILON 20% LANA",
+        "confidence": 0.5
+      },
+      {
+        "text": "made in indonesia",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN 161528",
+        "confidence": 1
+      },
+      {
+        "text": "WASH INSIDE OUT",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT BLEACH",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "161528"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "4"
+      },
+      {
+        "system": "uk",
+        "value": "8"
+      },
+      {
+        "system": "eu",
+        "value": "36"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "acrylic",
+        "percent": 50
+      },
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 30
+      },
+      {
+        "part": null,
+        "material": "wool",
+        "percent": 20
+      }
+    ],
+    "origin": [
+      "ID"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-139.png",
+    "mediaType": "image/png",
+    "width": 771,
+    "height": 387,
+    "pixelSha256": "0a12a70f8e98f85f91041b8b0464c5df6f59b561c1ddfd565cd7bc6c020df1cc"
+  }
+}

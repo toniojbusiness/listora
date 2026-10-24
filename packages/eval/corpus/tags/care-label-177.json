@@ -1,0 +1,108 @@
+{
+  "id": "care-label-177",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "NORTHWIND APPAREL"
+    },
+    {
+      "text": "SIZE X-LARGE"
+    },
+    {
+      "text": "95% RAYON / 5% SPANDEX"
+    },
+    {
+      "text": "95% RAYONNE, 5% ELASTHANNE"
+    },
+    {
+      "text": "95% RAYON 5% ELASTANO"
+    },
+    {
+      "text": "MADE IN MOROCCO"
+    },
+    {
+      "text": "RN NO. 56561"
+    },
+    {
+      "text": "REF. 805690"
+    },
+    {
+      "text": "LAVER A LA MACHINE A FROID"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "NORTHWIND APPAREL SIZE X-LARGE",
+        "confidence": 0.5
+      },
+      {
+        "text": "95% RAYON / 5% SPANDEX",
+        "confidence": 1
+      },
+      {
+        "text": "95% RAYONNE, 5% ELASTHANNE",
+        "confidence": 1
+      },
+      {
+        "text": "95% RAYON 5% ELASTANO",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN MOROCCO",
+        "confidence": 1
+      },
+      {
+        "text": "RN  NO. 56561",
+        "confidence": 0.5
+      },
+      {
+        "text": "REF. 805690",
+        "confidence": 1
+      },
+      {
+        "text": "LAVER A LA MACHINE A FROID",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "56561"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "rayon",
+        "percent": 95
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "MA"
+    ],
+    "style": [
+      "805690"
+    ]
+  },
+  "image": {
+    "file": "care-label-177.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 387,
+    "pixelSha256": "429e523f8731131d8f4d45720a1be09ea76e394738fbbdce2b01de4c66d8953f"
+  }
+}

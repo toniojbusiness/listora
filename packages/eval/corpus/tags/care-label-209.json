@@ -1,0 +1,92 @@
+{
+  "id": "care-label-209",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "JUNIPER CO."
+    },
+    {
+      "text": "60% COTTON / 35% POLYESTER / 5% SPANDEX"
+    },
+    {
+      "text": "PRODUCT OF SOUTH KOREA"
+    },
+    {
+      "text": "CA#88964"
+    },
+    {
+      "text": "LINE DRY"
+    },
+    {
+      "text": "DO NOT DRY CLEAN"
+    },
+    {
+      "text": "PATTERN 20817"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "JUNIPER CO.",
+        "confidence": 1
+      },
+      {
+        "text": "60% COTTON / 35% POLYESTER / 5% SPANDEX",
+        "confidence": 1
+      },
+      {
+        "text": "PRODUCT OF SOUTH KOREA",
+        "confidence": 1
+      },
+      {
+        "text": "CA#88964",
+        "confidence": 1
+      },
+      {
+        "text": "LINE DRY DO NOT DRY CLEAN",
+        "confidence": 0.5
+      },
+      {
+        "text": "PATTERN 20817",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "88964"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 35
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "KR"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-209.png",
+    "mediaType": "image/png",
+    "width": 771,
+    "height": 315,
+    "pixelSha256": "763de0bb2149b8759c0f3024a352981930b4a67a6fbd50e4726e4eed9c2e1578"
+  }
+}

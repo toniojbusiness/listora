@@ -93,6 +93,8 @@ packages/
   db/           SQL migrations, migration runner, Kysely types, SKU allocator (@listora/db)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
+  tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
+  eval/         Synthetic tag corpus (corpus/) and the eval harness CLI (@listora/eval)
 infra/          AWS CDK stacks (T-30)
 scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
@@ -228,8 +230,10 @@ must stay true to the real contract: shapes, error codes, and failure modes.
 AI cost is a product constraint, so each item is analyzed once, as cheaply as possible.
 
 1. **On device (free):** capture guidance, Vision text recognition on tags, barcode detection.
-2. **Deterministic server parsing (free):** RN/CA numbers, UPC/EAN checksums, sizes, fibers,
-   country of origin. Never scrape the FTC RN database.
+2. **Deterministic server parsing (free):** `@listora/tag-parse` reads RN/CA numbers, UPC/EAN
+   (check digit verified), sizes with their system, fiber percentages, country of origin, and
+   labeled style numbers from OCR lines and barcode payloads. Every value carries a confidence
+   and its source line. Never scrape or call the FTC RN database.
 3. **One multimodal call** (Claude Haiku 5.5, low effort, strict JSON schema). It returns
    canonical attributes with per-field confidence and provenance, plus every marketplace
    variant and a labeled price estimate. Typical cost is about $0.0015-0.003 per item.
@@ -238,7 +242,13 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
 5. **Analyze once.** There is one `ai_analysis` per photo-set hash and tier (`standard`, plus
    `premium` only after escalation). Edits, repricing, delist, sync, and profit tracking never
    call AI. Bulk work uses the Batch API.
-6. **Metering from day one.** Every call writes an `ai_usage_event` (tokens, images, searches,
+6. **Evaluation.** `npm run eval` scores the parsers, and a provider behind the `EvalProvider`
+   interface, on the synthetic tag corpus in `packages/eval/corpus`. It prints per-field
+   accuracy, precision, recall, and cost per item, including the billed cost of failed calls.
+   The parsers must stay at or above 95% on every field (a unit test enforces this). Providers,
+   the corpus license manifest, and how to change the corpus are described in
+   [packages/eval/corpus/README.md](../packages/eval/corpus/README.md).
+7. **Metering from day one.** Every call writes an `ai_usage_event` (tokens, images, searches,
    `cost_micros` from a versioned price table). The system also keeps daily and monthly
    rollups and per-plan quotas in reseller units. There is a per-account daily dollar circuit
    breaker (default $1/day), a global kill switch, and budget alarms.

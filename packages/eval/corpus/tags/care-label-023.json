@@ -1,0 +1,114 @@
+{
+  "id": "care-label-023",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "JUNIPER CO."
+    },
+    {
+      "text": "SHELL"
+    },
+    {
+      "text": "100% COTTON"
+    },
+    {
+      "text": "LINING"
+    },
+    {
+      "text": "100% POLYESTER"
+    },
+    {
+      "text": "MADE IN EL SALVADOR"
+    },
+    {
+      "text": "RN#103899  CA#80019"
+    },
+    {
+      "text": "LAVER A LA MACHINE A FROID"
+    },
+    {
+      "text": "COOL IRON IF NEEDED"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "JUNIPER CO.",
+        "confidence": 1
+      },
+      {
+        "text": "SHELL",
+        "confidence": 1
+      },
+      {
+        "text": "100% COTTON",
+        "confidence": 1
+      },
+      {
+        "text": "LINING",
+        "confidence": 1
+      },
+      {
+        "text": "100%POLYESTER",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN EL SALVADOR",
+        "confidence": 1
+      },
+      {
+        "text": "RN#103899  CA#80019",
+        "confidence": 1
+      },
+      {
+        "text": "LAVER A LA MACHINE A FROID",
+        "confidence": 1
+      },
+      {
+        "text": "COOL IRON IF NEEDED",
+        "confidence": 1
+      },
+      {
+        "text": "LAVAR A MAQUINA EN FRIO",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "103899"
+    ],
+    "ca": [
+      "80019"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": "shell",
+        "material": "cotton",
+        "percent": 100
+      },
+      {
+        "part": "lining",
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "SV"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-023.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 423,
+    "pixelSha256": "70a3f8858921144830ec9cccab5d4dad519eb0281558bb2e4a287a36d7e6a4e0"
+  }
+}

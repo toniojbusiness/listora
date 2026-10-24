@@ -1,0 +1,72 @@
+{
+  "id": "care-label-191",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Merino Wool 100%"
+    },
+    {
+      "text": "Made in India"
+    },
+    {
+      "text": "CA NO. 66887"
+    },
+    {
+      "text": "Wash Inside Out"
+    },
+    {
+      "text": "Do Not Dry Clean"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Merino Wool 100%",
+        "confidence": 1
+      },
+      {
+        "text": "Made in India",
+        "confidence": 1
+      },
+      {
+        "text": "CA NO. 66887",
+        "confidence": 1
+      },
+      {
+        "text": "Wash Inside Out",
+        "confidence": 1
+      },
+      {
+        "text": "Do Not Dry Clean",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "66887"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "merino_wool",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "IN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-191.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 243,
+    "pixelSha256": "d6dc631028dd49c7c4305437a7263152860553c10dfd63136ba3a8be699112c7"
+  }
+}

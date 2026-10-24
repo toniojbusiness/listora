@@ -1,0 +1,89 @@
+{
+  "id": "care-label-028",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "OAK HOLLOW"
+    },
+    {
+      "text": "100% LYOCELL"
+    },
+    {
+      "text": "PRODUCT OF CAMBODIA"
+    },
+    {
+      "text": "RN 47687"
+    },
+    {
+      "text": "MACHINE WASH COLD WITH LIKE COLORS"
+    },
+    {
+      "text": "LAVER A LA MACHINE A FROID"
+    },
+    {
+      "text": "DO NOT BLEACH"
+    },
+    {
+      "text": "OAKLAND, CA 94667"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "OAK HOLLOW",
+        "confidence": 1
+      },
+      {
+        "text": "100% LYOCELL",
+        "confidence": 1
+      },
+      {
+        "text": "PRODUCT OF CAMBODIA",
+        "confidence": 1
+      },
+      {
+        "text": "RN 476B7 MACHINE WASH COLD WITH LIKE COLORS",
+        "confidence": 0.5
+      },
+      {
+        "text": "LAVER A LA MACHINE A FROID",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT BLEACH",
+        "confidence": 1
+      },
+      {
+        "text": "OAKLAND, CA 94667",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "47687"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "lyocell",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "KH"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-028.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 351,
+    "pixelSha256": "77906a31c566614bb92a95825eb0ef71486660c671368fea07ca976499b0362c"
+  }
+}

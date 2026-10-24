@@ -1,0 +1,56 @@
+{
+  "id": "edge-case-020",
+  "kind": "edge_case",
+  "description": "Waist and inseam without a label, alone on the line",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "32X34"
+    },
+    {
+      "text": "MADE IN MEXICO"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "STONE RIVER DENIM",
+        "confidence": 1
+      },
+      {
+        "text": "32X34",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN MEXICO",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "32x34"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "MX"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-020.png",
+    "mediaType": "image/png",
+    "width": 375,
+    "height": 171,
+    "pixelSha256": "d546c4176479c77a50af51b34adeda5fd5800c962557f6b10a75339a066047b9"
+  }
+}

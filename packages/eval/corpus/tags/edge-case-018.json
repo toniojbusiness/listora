@@ -1,0 +1,52 @@
+{
+  "id": "edge-case-018",
+  "kind": "edge_case",
+  "description": "Vision reports a UPC-A as a 13-digit EAN-13 with a leading zero",
+  "printed": [
+    {
+      "text": "BLUE CEDAR"
+    },
+    {
+      "barcode": "036000291452"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "BLUE CEDAR",
+        "confidence": 1
+      },
+      {
+        "text": "0 36000 29145 2",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0036000291452",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "036000291452"
+      }
+    ],
+    "size": [],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-018.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 255,
+    "pixelSha256": "15f588172021777a1d987123242cfd4e3cf7410df6de13f7457c6cdb528babf5"
+  }
+}

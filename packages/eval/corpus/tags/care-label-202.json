@@ -1,0 +1,104 @@
+{
+  "id": "care-label-202",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "US 2  UK 6  EU 34"
+    },
+    {
+      "text": "80% WOOL 20% NYLON"
+    },
+    {
+      "text": "MADE IN KOREA"
+    },
+    {
+      "text": "CA 29678"
+    },
+    {
+      "text": "DO NOT BLEACH"
+    },
+    {
+      "text": "MACHINE WASH COLD"
+    },
+    {
+      "text": "SAN DIEGO, CA 92151"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 2  UK 6  EU 34",
+        "confidence": 1
+      },
+      {
+        "text": "80% WOOL 20% NYLON",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN KOREA",
+        "confidence": 1
+      },
+      {
+        "text": "CA 29678",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT BLEACH",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD",
+        "confidence": 1
+      },
+      {
+        "text": "SAN DIEGO, CA 92151",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "29678"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "2"
+      },
+      {
+        "system": "uk",
+        "value": "6"
+      },
+      {
+        "system": "eu",
+        "value": "34"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "wool",
+        "percent": 80
+      },
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 20
+      }
+    ],
+    "origin": [
+      "KR"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-202.png",
+    "mediaType": "image/png",
+    "width": 411,
+    "height": 315,
+    "pixelSha256": "a38bf3037d666137af222cca31769ccf1c3c8a10ed28e50585a252f879c0ea38"
+  }
+}

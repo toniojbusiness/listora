@@ -1,0 +1,75 @@
+{
+  "id": "hang-tag-198",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Oak Hollow"
+    },
+    {
+      "text": "REF. 1880-11"
+    },
+    {
+      "text": "TALLA 0"
+    },
+    {
+      "text": "MSRP $58.00"
+    },
+    {
+      "barcode": "036853500596"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Oak Hollow",
+        "confidence": 1
+      },
+      {
+        "text": "REF. 1880-11",
+        "confidence": 1
+      },
+      {
+        "text": "TALLA 0 MSRP $58.00",
+        "confidence": 0.5
+      },
+      {
+        "text": "0 36853 50059 6",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0036853500596",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "036853500596"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "0"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "1880-11"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-198.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "4a9a7fd01a74d5ea77762a53bd7deb6244770789d1d2e501cf8256eaddaabdb5"
+  }
+}

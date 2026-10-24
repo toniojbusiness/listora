@@ -1,0 +1,105 @@
+{
+  "id": "care-label-130",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Blue Cedar"
+    },
+    {
+      "text": "Cotton 100%"
+    },
+    {
+      "text": "Made in U.S.A."
+    },
+    {
+      "text": "RN 122207"
+    },
+    {
+      "text": "STYLE NO. RL0194"
+    },
+    {
+      "text": "Ne Pas Blanchir"
+    },
+    {
+      "text": "Laver A La Machine A Froid"
+    },
+    {
+      "text": "Hand Wash Cold"
+    },
+    {
+      "text": "Cool Iron If Needed"
+    },
+    {
+      "text": "OAKLAND, CA 94690"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Blue Cedar",
+        "confidence": 1
+      },
+      {
+        "text": "Cotton 100% Made in U.S.A.",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN 122207",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. RL0194",
+        "confidence": 1
+      },
+      {
+        "text": "Ne Pas Blanchir",
+        "confidence": 1
+      },
+      {
+        "text": "Laver A La Machine A Froid",
+        "confidence": 1
+      },
+      {
+        "text": "Hand Wash Cold",
+        "confidence": 1
+      },
+      {
+        "text": "cool iron if needed",
+        "confidence": 0.5
+      },
+      {
+        "text": "OAKLAND, CA 94690",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "122207"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "US"
+    ],
+    "style": [
+      "RL0194"
+    ]
+  },
+  "image": {
+    "file": "care-label-130.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 423,
+    "pixelSha256": "194ab0ee7c0eb6085be10e1e011789a15ebed241cee9e9a62491e4422a52df8a"
+  }
+}

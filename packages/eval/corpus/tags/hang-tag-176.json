@@ -1,0 +1,88 @@
+{
+  "id": "hang-tag-176",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "JUNIPER CO."
+    },
+    {
+      "text": "SIZE 10"
+    },
+    {
+      "text": "MSRP $58.00"
+    },
+    {
+      "text": "97% VISCOSE / 3% METALLIC"
+    },
+    {
+      "barcode": "108066309164"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "JUNIPER CO.",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE 10",
+        "confidence": 1
+      },
+      {
+        "text": "MSRP $58.00",
+        "confidence": 1
+      },
+      {
+        "text": "97 VISCOSE / 3% METALLIC",
+        "confidence": 0.5
+      },
+      {
+        "text": "1 08066 30916 4",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0108066309164",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "108066309164"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "10"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "viscose",
+        "percent": 97
+      },
+      {
+        "part": null,
+        "material": "metallic",
+        "percent": 3
+      }
+    ],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-176.png",
+    "mediaType": "image/png",
+    "width": 519,
+    "height": 396,
+    "pixelSha256": "7375eec0ab2416f1a6e8775f9bcb8173a7b58e80aaa268f1df7a5c13d693c59e"
+  }
+}

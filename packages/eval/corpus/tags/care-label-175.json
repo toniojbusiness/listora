@@ -1,0 +1,93 @@
+{
+  "id": "care-label-175",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Shell: 100% Polyester"
+    },
+    {
+      "text": "Lining: 100% Polyester"
+    },
+    {
+      "text": "Fill: 100% Polyester"
+    },
+    {
+      "text": "Made in Bangladesh"
+    },
+    {
+      "text": "CA 74004"
+    },
+    {
+      "text": "Machine Wash Cold With Like Colors"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Shell: 100%Polyester",
+        "confidence": 0.5
+      },
+      {
+        "text": "Lining: 100% Polyesfer",
+        "confidence": 0.5
+      },
+      {
+        "text": "Fill: 100% Polyester",
+        "confidence": 1
+      },
+      {
+        "text": "Made in",
+        "confidence": 0.5
+      },
+      {
+        "text": "Bangladesh",
+        "confidence": 0.5
+      },
+      {
+        "text": "CA 74004",
+        "confidence": 1
+      },
+      {
+        "text": "Machine Wash Cold With Like Colors",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "74004"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": "shell",
+        "material": "polyester",
+        "percent": 100
+      },
+      {
+        "part": "lining",
+        "material": "polyester",
+        "percent": 100
+      },
+      {
+        "part": "fill",
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "BD"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-175.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 279,
+    "pixelSha256": "05af1aa9de0ff55eaec4d15905e8be16214d3ed576e693aa9a44f575f0fa0d14"
+  }
+}

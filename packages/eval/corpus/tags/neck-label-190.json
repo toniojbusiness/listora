@@ -1,0 +1,64 @@
+{
+  "id": "neck-label-190",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "BLUE CEDAR"
+    },
+    {
+      "text": "SIZE L"
+    },
+    {
+      "text": "MADE IN TURKEY"
+    },
+    {
+      "text": "RN# 102431"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "BLUE CEDAR",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE L",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN TURKEY",
+        "confidence": 1
+      },
+      {
+        "text": "RN# 102431",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "102431"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "TR"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-190.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 207,
+    "pixelSha256": "b6319da3426eada7d8dabd1d9efac4297a461c17e54f4955bd399507f2750fe5"
+  }
+}

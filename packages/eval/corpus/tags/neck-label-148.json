@@ -1,0 +1,55 @@
+{
+  "id": "neck-label-148",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "ONE SIZE"
+    },
+    {
+      "text": "MADE IN BANGLADESH"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL  ATHLETIC",
+        "confidence": 0.5
+      },
+      {
+        "text": "ONE SIZE",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN BANGLADESH",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "BD"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-148.png",
+    "mediaType": "image/png",
+    "width": 393,
+    "height": 171,
+    "pixelSha256": "91efde4e9385761ffad476f2957c24b69e4a2db6a0ea7f15a535249ce36e5ae6"
+  }
+}

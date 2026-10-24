@@ -1,0 +1,60 @@
+{
+  "id": "edge-case-001",
+  "kind": "edge_case",
+  "description": "A California ZIP code after a comma is an address, not a CA number",
+  "printed": [
+    {
+      "text": "HARBOR LANE"
+    },
+    {
+      "text": "LOS ANGELES, CA 90012"
+    },
+    {
+      "text": "RN 141526"
+    },
+    {
+      "text": "MADE IN USA"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "HARBOR LANE",
+        "confidence": 1
+      },
+      {
+        "text": "LOS ANGELES, CA 90012",
+        "confidence": 1
+      },
+      {
+        "text": "RN 141526",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN USA",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "141526"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-001.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 207,
+    "pixelSha256": "cf45fee7cc78221715e1cf94bf617e18ab6ada33bf8e60254b5e641a9e454551"
+  }
+}

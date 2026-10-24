@@ -1,0 +1,10 @@
+{
+  "description": "License manifest for the synthetic tag corpus. Every file here is generated in this repository or written by hand in it; none comes from a third party. Each third-party file added later needs an entry under thirdParty with an open license.",
+  "generated": {
+    "by": "packages/eval/src/corpus/render-corpus.ts",
+    "files": "manifest.json, and tags/<id>.json and tags/<id>.png for every case id manifest.json lists",
+    "source": "Rendered from a fixed seed with a built-in bitmap font; no downloaded data, photos, fonts, or images"
+  },
+  "authored": ["LICENSES.json", "README.md"],
+  "thirdParty": []
+}

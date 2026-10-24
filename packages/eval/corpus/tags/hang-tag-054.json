@@ -1,0 +1,104 @@
+{
+  "id": "hang-tag-054",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "JUNIPER CO."
+    },
+    {
+      "text": "STYLE # SJ1573-737"
+    },
+    {
+      "text": "M/M/M"
+    },
+    {
+      "text": "$98.00"
+    },
+    {
+      "text": "80% NYLON / POLYAMIDE / NAILON"
+    },
+    {
+      "text": "20% ELASTANE / ELASTHANNE / ELASTANO"
+    },
+    {
+      "barcode": "148027462941"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "JUNIPER CO.",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE  # SJ1573-737",
+        "confidence": 0.5
+      },
+      {
+        "text": "M/M/M",
+        "confidence": 1
+      },
+      {
+        "text": "$98.00",
+        "confidence": 1
+      },
+      {
+        "text": "80% NYLON / POLYAMIDE / NAILON",
+        "confidence": 1
+      },
+      {
+        "text": "2O% ELASTANE / ELASTHANNE / ELASTANO",
+        "confidence": 0.5
+      },
+      {
+        "text": "1 48027 46294 1",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0148027462941",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "148027462941"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 80
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 20
+      }
+    ],
+    "origin": [],
+    "style": [
+      "SJ1573-737"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-054.png",
+    "mediaType": "image/png",
+    "width": 717,
+    "height": 468,
+    "pixelSha256": "55ba01263a840d11ac522b44865421eba80a2289bb1bc04819fcf2264342abb8"
+  }
+}

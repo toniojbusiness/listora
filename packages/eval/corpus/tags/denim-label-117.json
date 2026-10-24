@@ -1,0 +1,103 @@
+{
+  "id": "denim-label-117",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "STONE RIVER DENIM"
+    },
+    {
+      "text": "W34 L28"
+    },
+    {
+      "text": "60% COTTON / 40% POLYESTER"
+    },
+    {
+      "text": "60% COTON / 40% POLYESTER"
+    },
+    {
+      "text": "60% ALGODON 40% POLIESTER"
+    },
+    {
+      "text": "MADE IN PERU"
+    },
+    {
+      "text": "HECHO EN PERU"
+    },
+    {
+      "text": "RN: 68565"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "stone river denim",
+        "confidence": 0.5
+      },
+      {
+        "text": "W34 L28",
+        "confidence": 1
+      },
+      {
+        "text": "60% coiton / 40% polyester",
+        "confidence": 0.5
+      },
+      {
+        "text": "60%  COTON / 40% POLYESTER",
+        "confidence": 0.5
+      },
+      {
+        "text": "60% ALGODON 40% POLIESTER",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN PERU",
+        "confidence": 1
+      },
+      {
+        "text": "HECHO EN PERU",
+        "confidence": 1
+      },
+      {
+        "text": "RN: 6B565",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "68565"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "34x28"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 40
+      }
+    ],
+    "origin": [
+      "PE"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "denim-label-117.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 351,
+    "pixelSha256": "125d789c7a679c750e7dbbac5044e2f1ad83028587dfea19ca4f127387716646"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "id": "shoe-label-085",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US: 10.5  UK: 9.5  EUR: 44"
+    },
+    {
+      "text": "ART. NO. UF7979-152"
+    },
+    {
+      "text": "MADE IN VIET NAM"
+    },
+    {
+      "barcode": "891228418520"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US: 10.5  UK: 9.5  EUR: 44",
+        "confidence": 1
+      },
+      {
+        "text": "ART. NO. UF7979-152",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN",
+        "confidence": 0.5
+      },
+      {
+        "text": "VIET NAM",
+        "confidence": 0.5
+      },
+      {
+        "text": "8 91228 41852 0",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0891228418520",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "891228418520"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "10.5"
+      },
+      {
+        "system": "uk",
+        "value": "9.5"
+      },
+      {
+        "system": "eu",
+        "value": "44"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "VN"
+    ],
+    "style": [
+      "UF7979-152"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-085.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 363,
+    "pixelSha256": "674ce81f379b6483659060970b226d4f204986a781daf617aa0395e7e39a6060"
+  }
+}

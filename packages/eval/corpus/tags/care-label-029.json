@@ -1,0 +1,68 @@
+{
+  "id": "care-label-029",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "M/M/M"
+    },
+    {
+      "text": "100% Lyocell"
+    },
+    {
+      "text": "Product of Romania"
+    },
+    {
+      "text": "Tumble Dry Low"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "M/M/M",
+        "confidence": 1
+      },
+      {
+        "text": "100% Lyocell",
+        "confidence": 1
+      },
+      {
+        "text": "Product of Romania",
+        "confidence": 1
+      },
+      {
+        "text": "Tumble Dry Low",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "lyocell",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "RO"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-029.png",
+    "mediaType": "image/png",
+    "width": 393,
+    "height": 207,
+    "pixelSha256": "b9551c6e5016c65358c6cb9112f8e59cc3be14af7fbbb7f3654f04dc12e27b6f"
+  }
+}

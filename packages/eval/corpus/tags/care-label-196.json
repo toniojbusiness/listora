@@ -1,0 +1,91 @@
+{
+  "id": "care-label-196",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "L"
+    },
+    {
+      "text": "LINEN 100%"
+    },
+    {
+      "text": "MADE IN GUATEMALA"
+    },
+    {
+      "text": "RN#59077"
+    },
+    {
+      "text": "DO NOT DRY CLEAN"
+    },
+    {
+      "text": "WASH INSIDE OUT"
+    },
+    {
+      "text": "DESIGNED IN BROOKLYN"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "L",
+        "confidence": 1
+      },
+      {
+        "text": "LINEN 100%",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN",
+        "confidence": 0.5
+      },
+      {
+        "text": "GUATEMALA",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN#59077",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT DRY CLEAN WASH INSIDE OUT",
+        "confidence": 0.5
+      },
+      {
+        "text": "DESIGNED IN BROOKLYN",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "59077"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "linen",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "GT"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-196.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 315,
+    "pixelSha256": "c468ac516442e2e1f66235426b9f1151586cdd9a242095bf71f89df44231973a"
+  }
+}

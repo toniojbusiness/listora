@@ -1,0 +1,85 @@
+{
+  "id": "shoe-label-127",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US 5 / UK 4 / EU 38.5"
+    },
+    {
+      "text": "MODEL: DH6731"
+    },
+    {
+      "text": "MADE IN SRI LANKA"
+    },
+    {
+      "barcode": "5011813941461"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC US 5 / UK 4 / EU 38.5",
+        "confidence": 0.5
+      },
+      {
+        "text": "MODEL: DH6731",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN SRI LANKA",
+        "confidence": 1
+      },
+      {
+        "text": "5 011813 941461",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "5011813941461",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "5011813941461"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "5"
+      },
+      {
+        "system": "uk",
+        "value": "4"
+      },
+      {
+        "system": "eu",
+        "value": "38.5"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "LK"
+    ],
+    "style": [
+      "DH6731"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-127.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 363,
+    "pixelSha256": "829a3c2ad750077f2ddbc3574806679ec536744936af7e3c0522d4f4382f71a3"
+  }
+}

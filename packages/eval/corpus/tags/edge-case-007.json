@@ -1,0 +1,62 @@
+{
+  "id": "edge-case-007",
+  "kind": "edge_case",
+  "description": "Translated part labels before a colon",
+  "printed": [
+    {
+      "text": "SHELL/EXTERIOR: 100% NYLON"
+    },
+    {
+      "text": "LINING/FORRO: 100% POLYESTER"
+    },
+    {
+      "text": "HECHO EN VIETNAM"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SHELL/EXTERIOR: 100% NYLON",
+        "confidence": 1
+      },
+      {
+        "text": "LINING/FORRO: 100% POLYESTER",
+        "confidence": 1
+      },
+      {
+        "text": "HECHO EN VIETNAM",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": "shell",
+        "material": "nylon",
+        "percent": 100
+      },
+      {
+        "part": "lining",
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "VN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-007.png",
+    "mediaType": "image/png",
+    "width": 573,
+    "height": 171,
+    "pixelSha256": "cdff3cbc3c5a41da0e372b6287bea9e038777d0be2c0f4b9b94a1a4a42c0cdb2"
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-019",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US: 8  UK: 7  EUR: 41.5"
+    },
+    {
+      "text": "REF. UP0160"
+    },
+    {
+      "text": "MADE IN PAKISTAN"
+    },
+    {
+      "barcode": "150840484970"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US: 8  UK: 7  EUR: 41.5",
+        "confidence": 1
+      },
+      {
+        "text": "ref. up0160",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN PAKISTAN",
+        "confidence": 1
+      },
+      {
+        "text": "1 50840 48499 0",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0150840484970",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "150840484970"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "8"
+      },
+      {
+        "system": "uk",
+        "value": "7"
+      },
+      {
+        "system": "eu",
+        "value": "41.5"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "PK"
+    ],
+    "style": [
+      "UP0160"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-019.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 363,
+    "pixelSha256": "f6ebc5f34a07e65b960cb476811742861050b3540dd14afffa8ef66e18fb1494"
+  }
+}

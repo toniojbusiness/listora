@@ -1,0 +1,59 @@
+{
+  "id": "shoe-label-031",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US: 7  UK: 6  EUR: 40"
+    },
+    {
+      "text": "MADE IN EGYPT"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC US: 7  UK: 6  EUR: 40",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN EGYPT",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "7"
+      },
+      {
+        "system": "uk",
+        "value": "6"
+      },
+      {
+        "system": "eu",
+        "value": "40"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "EG"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "shoe-label-031.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 171,
+    "pixelSha256": "aefda5672846e4b4ace7b09934b516c04bce0474c30b0b931e0fa353c2e7abf3"
+  }
+}

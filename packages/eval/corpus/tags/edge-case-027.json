@@ -1,0 +1,44 @@
+{
+  "id": "edge-case-027",
+  "kind": "edge_case",
+  "description": "A ZIP+4 after \"CA\" is an address",
+  "printed": [
+    {
+      "text": "SAN DIEGO CA 92101-4213"
+    },
+    {
+      "text": "CA 55103"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SAN DIEGO CA 92101-4213",
+        "confidence": 1
+      },
+      {
+        "text": "CA 55103",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "55103"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-027.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 135,
+    "pixelSha256": "31e3ae930e7d450a3a56f670db73b255bb26e9b5a074aa0bf885f932d0b5b160"
+  }
+}

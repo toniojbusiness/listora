@@ -1,0 +1,74 @@
+{
+  "id": "hang-tag-171",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Salt Flats Supply"
+    },
+    {
+      "text": "MODEL: CZ4745-104"
+    },
+    {
+      "text": "SIZE: L"
+    },
+    {
+      "text": "$24.99"
+    },
+    {
+      "barcode": "8442788710528"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Salt Flats Supply",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL:CZ4745-104",
+        "confidence": 0.5
+      },
+      {
+        "text": "SIZE: L",
+        "confidence": 1
+      },
+      {
+        "text": "$24.99",
+        "confidence": 1
+      },
+      {
+        "text": "8 442788 719528",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "8442788710528"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "CZ4745-104"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-171.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "2abf03082491eb622b1aadfee5566a1c172ce0dc64374c6d98c50f23122c6856"
+  }
+}

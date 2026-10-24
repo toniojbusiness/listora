@@ -1,0 +1,91 @@
+{
+  "id": "care-label-168",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "S/P/CH"
+    },
+    {
+      "text": "100% MERINO WOOL / LAINE MERINOS / LANA MERINO"
+    },
+    {
+      "text": "MADE IN HONDURAS"
+    },
+    {
+      "text": "RN 97032"
+    },
+    {
+      "text": "DO NOT BLEACH"
+    },
+    {
+      "text": "LINE DRY"
+    },
+    {
+      "text": "DRY CLEAN ONLY"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "S/P/CH",
+        "confidence": 1
+      },
+      {
+        "text": "100% MERINO WOOL / LAINE MERINOS / LANA MERINO",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN HONDURAS",
+        "confidence": 1
+      },
+      {
+        "text": "RN 97032",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT BLEACH",
+        "confidence": 1
+      },
+      {
+        "text": "LINE DRY",
+        "confidence": 1
+      },
+      {
+        "text": "dry clean only",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "97032"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "merino_wool",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "HN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-168.png",
+    "mediaType": "image/png",
+    "width": 897,
+    "height": 315,
+    "pixelSha256": "166d14500d57b4a9a76b11f91c688aacabc7c2d7d228892a62f6d549b90fb661"
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "id": "care-label-040",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "SIZE LARGE"
+    },
+    {
+      "text": "95% COTTON 5% SPANDEX"
+    },
+    {
+      "text": "MADE IN HONDURAS"
+    },
+    {
+      "text": "CA: 72471"
+    },
+    {
+      "text": "PROD. NO. U-27709"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    },
+    {
+      "text": "NE PAS BLANCHIR"
+    },
+    {
+      "text": "LAVER A LA MACHINE A FROID"
+    },
+    {
+      "text": "ORDER 5512 BATCH 7"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SIZE  LARGE",
+        "confidence": 0.5
+      },
+      {
+        "text": "95% COTTON",
+        "confidence": 0.5
+      },
+      {
+        "text": "5% SPANDEX MADE IN HONDURAS",
+        "confidence": 0.5
+      },
+      {
+        "text": "CA: 72471",
+        "confidence": 1
+      },
+      {
+        "text": "PROD. NO. U-277O9",
+        "confidence": 0.5
+      },
+      {
+        "text": "LAVAR A MAQUINA EN FRIO",
+        "confidence": 1
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      },
+      {
+        "text": "NE PAS BLANCHIR LAVER A LA MACHINE A FROID",
+        "confidence": 0.5
+      },
+      {
+        "text": "ORDER 5512 BATCH 7",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "72471"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 95
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 5
+      }
+    ],
+    "origin": [
+      "HN"
+    ],
+    "style": [
+      "U-27709"
+    ]
+  },
+  "image": {
+    "file": "care-label-040.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 423,
+    "pixelSha256": "2ffdf82e185dab5a116dd0518e0841cc357e8e3746a1b123569c8ce8da8784e9"
+  }
+}

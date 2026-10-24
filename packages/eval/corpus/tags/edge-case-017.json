@@ -1,0 +1,50 @@
+{
+  "id": "edge-case-017",
+  "kind": "edge_case",
+  "description": "Several facts merged onto one OCR line",
+  "printed": [
+    {
+      "text": "SIZE M"
+    },
+    {
+      "text": "MADE IN CHINA"
+    },
+    {
+      "text": "RN 41235"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SIZE M MADE IN CHINA RN 41235",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "41235"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-017.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 171,
+    "pixelSha256": "a8ef3837103da5651c69b082b54331fbbf333a50c2ee4383b73638aaa5a45a92"
+  }
+}

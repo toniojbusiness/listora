@@ -1,0 +1,111 @@
+{
+  "id": "care-label-013",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "US 14  UK 18  EU 46"
+    },
+    {
+      "text": "80% WOOL 20% NYLON"
+    },
+    {
+      "text": "MADE IN P.R.C."
+    },
+    {
+      "text": "RN# 58120"
+    },
+    {
+      "text": "LAY FLAT TO DRY"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    },
+    {
+      "text": "MACHINE WASH COLD WITH LIKE COLORS"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US 14  UK 18  EU 46",
+        "confidence": 1
+      },
+      {
+        "text": "80% WOOL 20% NYLON",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN P.R.C.",
+        "confidence": 1
+      },
+      {
+        "text": "RN# 58120",
+        "confidence": 1
+      },
+      {
+        "text": "LAY FLAT TO DRY",
+        "confidence": 1
+      },
+      {
+        "text": "LAVAR A MAQUINA EN FRIO",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD WITH LIKE COLORS",
+        "confidence": 1
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "58120"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "14"
+      },
+      {
+        "system": "uk",
+        "value": "18"
+      },
+      {
+        "system": "eu",
+        "value": "46"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "wool",
+        "percent": 80
+      },
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 20
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-013.png",
+    "mediaType": "image/png",
+    "width": 681,
+    "height": 351,
+    "pixelSha256": "c25626971212fbedbafb07334692f3f35844efaacaf09e567807b0c7a0cb5987"
+  }
+}

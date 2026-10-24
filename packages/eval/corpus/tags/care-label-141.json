@@ -1,0 +1,110 @@
+{
+  "id": "care-label-141",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "SIZE S"
+    },
+    {
+      "text": "55% HEMP, 45% COTTON"
+    },
+    {
+      "text": "55% CHANVRE, 45% COTON"
+    },
+    {
+      "text": "55% CANAMO, 45% ALGODON"
+    },
+    {
+      "text": "Made in South Korea"
+    },
+    {
+      "text": "RN 139026"
+    },
+    {
+      "text": "NO Usar Blanqueador"
+    },
+    {
+      "text": "Machine Wash Cold"
+    },
+    {
+      "text": "Do Not Dry Clean"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "SIZE S",
+        "confidence": 1
+      },
+      {
+        "text": "55% HEMP, 45% COTTON",
+        "confidence": 1
+      },
+      {
+        "text": "55% CHANVRE",
+        "confidence": 0.5
+      },
+      {
+        "text": "45% COTON",
+        "confidence": 0.5
+      },
+      {
+        "text": "55% CANAMO, 45% ALGODON",
+        "confidence": 1
+      },
+      {
+        "text": "Made in South Korea",
+        "confidence": 1
+      },
+      {
+        "text": "RN 139026",
+        "confidence": 1
+      },
+      {
+        "text": "NO Usar Blanqueador",
+        "confidence": 1
+      },
+      {
+        "text": "Machine Wash Cold Do Not Dry Clean",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "139026"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "hemp",
+        "percent": 55
+      },
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 45
+      }
+    ],
+    "origin": [
+      "KR"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-141.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 387,
+    "pixelSha256": "5cc3332a92c0408de756800613296dc2f3307c0e5935a8fbcec49538ca6f7230"
+  }
+}

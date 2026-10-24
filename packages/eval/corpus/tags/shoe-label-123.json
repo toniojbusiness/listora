@@ -1,0 +1,56 @@
+{
+  "id": "shoe-label-123",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "US: 6  UK: 5  EUR: 39"
+    },
+    {
+      "text": "MADE IN MEXICO / FABRIQUE EN MEXIQUE / HECHO EN MEXICO"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "US: 6  UK: 5  EUR: 39",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN MEXICO / FABRIQUE EN MEXIQUE / HECHO EN MEXICO",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "6"
+      },
+      {
+        "system": "uk",
+        "value": "5"
+      },
+      {
+        "system": "eu",
+        "value": "39"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "MX"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "shoe-label-123.png",
+    "mediaType": "image/png",
+    "width": 1041,
+    "height": 135,
+    "pixelSha256": "17f6520430a0d7fa3e37df9b89fef972f5a471b7123ad4cb240422041c399f58"
+  }
+}

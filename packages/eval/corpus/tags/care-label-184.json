@@ -1,0 +1,117 @@
+{
+  "id": "care-label-184",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Meridian Works"
+    },
+    {
+      "text": "SIZE 12"
+    },
+    {
+      "text": "60% Alpaca"
+    },
+    {
+      "text": "40% Acrylic"
+    },
+    {
+      "text": "Made in South Korea"
+    },
+    {
+      "text": "RN NO. 76341"
+    },
+    {
+      "text": "Lay Flat To Dry"
+    },
+    {
+      "text": "Line Dry"
+    },
+    {
+      "text": "NO Usar Blanqueador"
+    },
+    {
+      "text": "Hand Wash Cold"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Meridian Works",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE 12",
+        "confidence": 1
+      },
+      {
+        "text": "60% Alpaca",
+        "confidence": 1
+      },
+      {
+        "text": "40% Acrylic",
+        "confidence": 1
+      },
+      {
+        "text": "Made in South Korea",
+        "confidence": 1
+      },
+      {
+        "text": "RN NO. 76341",
+        "confidence": 1
+      },
+      {
+        "text": "Lay Flat To Dry",
+        "confidence": 1
+      },
+      {
+        "text": "Line Dry",
+        "confidence": 1
+      },
+      {
+        "text": "NO Usar Blanqueador",
+        "confidence": 1
+      },
+      {
+        "text": "Hand  Wash Cold",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "76341"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "12"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "alpaca",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "acrylic",
+        "percent": 40
+      }
+    ],
+    "origin": [
+      "KR"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-184.png",
+    "mediaType": "image/png",
+    "width": 411,
+    "height": 423,
+    "pixelSha256": "c1b3effbdc0378032ee881a89ad8fc0d69ec0e9cfc58fdfb26d8b7c9a55c37f8"
+  }
+}

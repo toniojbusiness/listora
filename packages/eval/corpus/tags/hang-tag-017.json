@@ -1,0 +1,94 @@
+{
+  "id": "hang-tag-017",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Willow Street"
+    },
+    {
+      "text": "STYLE: CO1542"
+    },
+    {
+      "text": "US 0  UK 4  EU 32"
+    },
+    {
+      "text": "$34.99"
+    },
+    {
+      "barcode": "600888795687"
+    },
+    {
+      "text": "Fits Like A Large"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Willow Street",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE: CO1542",
+        "confidence": 1
+      },
+      {
+        "text": "US 0  UK 4  EU 32",
+        "confidence": 1
+      },
+      {
+        "text": "$34.99",
+        "confidence": 1
+      },
+      {
+        "text": "6 00888 79568 7",
+        "confidence": 1
+      },
+      {
+        "text": "Fits Like A Large",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0600888795687",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "600888795687"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "0"
+      },
+      {
+        "system": "uk",
+        "value": "4"
+      },
+      {
+        "system": "eu",
+        "value": "32"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "CO1542"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-017.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 432,
+    "pixelSha256": "435064d6d8b30cad62bbd2ec086da08e3c61b07a8a82c9f58ed6bf9a5015b31c"
+  }
+}

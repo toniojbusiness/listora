@@ -1,0 +1,73 @@
+{
+  "id": "hang-tag-214",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Little Atlas"
+    },
+    {
+      "text": "SIZE: XL"
+    },
+    {
+      "text": "PRICE $39"
+    },
+    {
+      "barcode": "062835550525"
+    },
+    {
+      "text": "OAKLAND, CA 94609"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Little Atlas SIZE: XL",
+        "confidence": 0.5
+      },
+      {
+        "text": "PRICE $39",
+        "confidence": 1
+      },
+      {
+        "text": "0 62834 55052 5",
+        "confidence": 0.5
+      },
+      {
+        "text": "OAKLAND, CA 94609",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0062835550525",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "062835550525"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-214.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "9047e10fed56254af1aeb6acbb9b4479107f31baa94a93320f21d2434a26bc09"
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "id": "care-label-204",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "LITTLE ATLAS"
+    },
+    {
+      "text": "100% TENCEL"
+    },
+    {
+      "text": "PRODUCT OF PAKISTAN"
+    },
+    {
+      "text": "CA#84048"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    },
+    {
+      "text": "SEE REVERSE FOR CARE"
+    },
+    {
+      "text": "TUMBLE DRY LOW"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    },
+    {
+      "text": "OAKLAND, CA 94627"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "little atlas",
+        "confidence": 0.5
+      },
+      {
+        "text": "100% TENCEL PRODUCT OF PAKISTAN",
+        "confidence": 0.5
+      },
+      {
+        "text": "CA#84048",
+        "confidence": 1
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      },
+      {
+        "text": "SEE REVERSE FOR CARE tumble dry low",
+        "confidence": 0.5
+      },
+      {
+        "text": "LAVAR A MAQUINA EN FRIO",
+        "confidence": 1
+      },
+      {
+        "text": "OAKLAND, CA 94627",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [
+      "84048"
+    ],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "lyocell",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "PK"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-204.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 387,
+    "pixelSha256": "acf49d80242526d074fe1250597994967d7d0db8706dc36780a85fc13cc31dad"
+  }
+}

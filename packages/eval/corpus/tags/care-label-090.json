@@ -1,0 +1,76 @@
+{
+  "id": "care-label-090",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "BODY: 100% POLYESTER"
+    },
+    {
+      "text": "CONTRAST: 100% NYLON"
+    },
+    {
+      "text": "MADE IN U.S.A."
+    },
+    {
+      "text": "RN 31545"
+    },
+    {
+      "text": "MACHINE WASH COLD"
+    },
+    {
+      "text": "NO USAR BLANQUEADOR"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "BODY: 100% POLYESTER",
+        "confidence": 1
+      },
+      {
+        "text": "CONTRAST: 100% NYLON MADE IN U.S.A.",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN 3l545 MACHINE WASH COLD",
+        "confidence": 0.5
+      },
+      {
+        "text": "NO USAR BLANQUEADOR",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "31545"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": "body",
+        "material": "polyester",
+        "percent": 100
+      },
+      {
+        "part": "contrast",
+        "material": "nylon",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-090.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 279,
+    "pixelSha256": "ab3e6eb7d542bf80cf559878ece3d2c44b02aaf2f7b0251cdebde5212ae82b5a"
+  }
+}

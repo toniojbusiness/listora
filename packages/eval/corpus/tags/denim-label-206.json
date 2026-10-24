@@ -1,0 +1,89 @@
+{
+  "id": "denim-label-206",
+  "kind": "denim_label",
+  "printed": [
+    {
+      "text": "Stone River Denim"
+    },
+    {
+      "text": "SIZE: 31X32"
+    },
+    {
+      "text": "STYLE NO. L-50405"
+    },
+    {
+      "text": "60% Cotton 40% Polyester"
+    },
+    {
+      "text": "Made in China"
+    },
+    {
+      "text": "Hecho en China"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Stone River Denim",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE: 31X32",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. L-50405",
+        "confidence": 1
+      },
+      {
+        "text": "60%cotton 40% polyester",
+        "confidence": 0.5
+      },
+      {
+        "text": "Made in China",
+        "confidence": 1
+      },
+      {
+        "text": "Hecho en China",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "waist_inseam",
+        "value": "31x32"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 60
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 40
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": [
+      "L-50405"
+    ]
+  },
+  "image": {
+    "file": "denim-label-206.png",
+    "mediaType": "image/png",
+    "width": 501,
+    "height": 279,
+    "pixelSha256": "1360bf56b2ba58a612469d9bfd21084512f31fffa40b2e142c5834b3b99533b7"
+  }
+}

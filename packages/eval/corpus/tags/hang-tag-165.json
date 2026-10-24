@@ -1,0 +1,70 @@
+{
+  "id": "hang-tag-165",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "HARBOR LANE"
+    },
+    {
+      "text": "TALLA/SIZE/TAILLE: M"
+    },
+    {
+      "text": "PRICE $58"
+    },
+    {
+      "barcode": "631489825947"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "HARBOR LANE",
+        "confidence": 1
+      },
+      {
+        "text": "TALLA/SIZE/TAILLE: M",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE $58",
+        "confidence": 1
+      },
+      {
+        "text": "6 31489 82594 7",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0631489825947",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "631489825947"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "M"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-165.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 360,
+    "pixelSha256": "9af577bfb63a7d63028f9929c6c5989b711d786b26f2d3b94ea167a437fc1785"
+  }
+}

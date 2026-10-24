@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-086",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "Parallel Athletic"
+    },
+    {
+      "text": "US 13 UK 12 EUR 46"
+    },
+    {
+      "text": "STYLE: 911605"
+    },
+    {
+      "text": "Made in United States"
+    },
+    {
+      "barcode": "671748660803"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Parallel Athletic",
+        "confidence": 1
+      },
+      {
+        "text": "US 13 UK 12 EUR 46",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE: 911605",
+        "confidence": 1
+      },
+      {
+        "text": "Made in United States",
+        "confidence": 1
+      },
+      {
+        "text": "6 71748 66080 3",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0671748660803",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "671748660803"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "13"
+      },
+      {
+        "system": "uk",
+        "value": "12"
+      },
+      {
+        "system": "eu",
+        "value": "46"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "US"
+    ],
+    "style": [
+      "911605"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-086.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 363,
+    "pixelSha256": "e6be443ec5dc556266be505038d73134ee3b3b9ad784b58da93710981bedad14"
+  }
+}

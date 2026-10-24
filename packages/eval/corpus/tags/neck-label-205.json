@@ -1,0 +1,71 @@
+{
+  "id": "neck-label-205",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "JUNIPER CO."
+    },
+    {
+      "text": "SIZE XX-LARGE"
+    },
+    {
+      "text": "MADE IN JAPAN"
+    },
+    {
+      "text": "HECHO EN JAPON"
+    },
+    {
+      "text": "RN #159811"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "JUNIPER CO.",
+        "confidence": 1
+      },
+      {
+        "text": "SIZE XX-LARGE",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN JAPAN",
+        "confidence": 1
+      },
+      {
+        "text": "HECHO EN JAPON",
+        "confidence": 1
+      },
+      {
+        "text": "RN #159811",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "159811"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XXL"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "JP"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-205.png",
+    "mediaType": "image/png",
+    "width": 360,
+    "height": 243,
+    "pixelSha256": "ee2a28c0a7fd8e5b0106bd6763ef79d5544c64b4b3b1544cc590a2fa0e9d27ca"
+  }
+}

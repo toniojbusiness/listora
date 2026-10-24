@@ -1,0 +1,84 @@
+{
+  "id": "care-label-044",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "COPPER FOX"
+    },
+    {
+      "text": "80% POLYAMIDE 20% ELASTANE"
+    },
+    {
+      "text": "MADE IN JORDAN"
+    },
+    {
+      "text": "R.N. 111532"
+    },
+    {
+      "text": "NE PAS BLANCHIR"
+    },
+    {
+      "text": "SAN DIEGO, CA 92104"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "COPPER FOX",
+        "confidence": 1
+      },
+      {
+        "text": "80% POLYAMIDE 20% ELASTANE",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN JORDAN",
+        "confidence": 1
+      },
+      {
+        "text": "R.N. 111532",
+        "confidence": 1
+      },
+      {
+        "text": "NE PAS BLANCHIR",
+        "confidence": 1
+      },
+      {
+        "text": "SAN DIEGO, CA 92104",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "111532"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [
+      {
+        "part": null,
+        "material": "nylon",
+        "percent": 80
+      },
+      {
+        "part": null,
+        "material": "spandex",
+        "percent": 20
+      }
+    ],
+    "origin": [
+      "JO"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-044.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 279,
+    "pixelSha256": "6aa385bdf0c37a156fe42b3bd021d1f5c34cb83a149f3034196749d8bb50f4c1"
+  }
+}

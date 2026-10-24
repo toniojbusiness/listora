@@ -1,0 +1,64 @@
+{
+  "id": "neck-label-134",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "ONE SIZE FITS MOST"
+    },
+    {
+      "text": "MADE IN ROMANIA"
+    },
+    {
+      "text": "RN NO. 64291"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "ONE SIZE FITS MOST",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN ROMANIA",
+        "confidence": 1
+      },
+      {
+        "text": "RN NO. 64291",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "64291"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "one_size",
+        "value": "OS"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "RO"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-134.png",
+    "mediaType": "image/png",
+    "width": 393,
+    "height": 207,
+    "pixelSha256": "85b256e33091020fcc5b5eb5c20fe071d8de3069dde69131b55d05505b6e9ae1"
+  }
+}

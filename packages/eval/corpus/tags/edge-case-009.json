@@ -1,0 +1,46 @@
+{
+  "id": "edge-case-009",
+  "kind": "edge_case",
+  "description": "Origin with a trailing qualifier",
+  "printed": [
+    {
+      "text": "MADE IN U.S.A. OF IMPORTED MATERIALS"
+    },
+    {
+      "text": "RN 98765"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "MADE IN U.S.A. OF IMPORTED MATERIALS",
+        "confidence": 1
+      },
+      {
+        "text": "RN 98765",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "98765"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [],
+    "fiber": [],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "edge-case-009.png",
+    "mediaType": "image/png",
+    "width": 717,
+    "height": 135,
+    "pixelSha256": "c1be2c13ec45b3aeb567b01344e44b57ae96ffc4faff1f5706b7b1676a72e26c"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-210",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "KITE AND KESTREL"
+    },
+    {
+      "text": "MODEL: G-95652"
+    },
+    {
+      "text": "XL"
+    },
+    {
+      "text": "PRICE $98"
+    },
+    {
+      "barcode": "794538212058"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "KITE AND KESTREL",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL:  G-95652",
+        "confidence": 0.5
+      },
+      {
+        "text": "XL",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE $98",
+        "confidence": 1
+      },
+      {
+        "text": "7 94538 29205 8",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0794538212058",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "794538212058"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "G-95652"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-210.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "29726abe8d837910fcccf37da2be50d3110155d2d91cd72216b5874b0dd0dde5"
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "id": "care-label-193",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "L (12-14)"
+    },
+    {
+      "text": "SHELL"
+    },
+    {
+      "text": "100% COTTON"
+    },
+    {
+      "text": "LINING"
+    },
+    {
+      "text": "100% POLYESTER"
+    },
+    {
+      "text": "MADE IN CAMBODIA / FABRIQUE EN CAMBODGE / HECHO EN CAMBOYA"
+    },
+    {
+      "text": "RN NO. 55721"
+    },
+    {
+      "text": "STYLE NO. 2276-42"
+    },
+    {
+      "text": "LAVER A LA MACHINE A FROID"
+    },
+    {
+      "text": "WASH INSIDE OUT"
+    },
+    {
+      "text": "MACHINE WASH COLD WITH LIKE COLORS"
+    },
+    {
+      "text": "COOL IRON IF NEEDED"
+    },
+    {
+      "text": "RETURN POLICY 30 DAYS"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "L (12-14)",
+        "confidence": 1
+      },
+      {
+        "text": "SHELL",
+        "confidence": 1
+      },
+      {
+        "text": "1O0% COTTON",
+        "confidence": 0.5
+      },
+      {
+        "text": "LINING",
+        "confidence": 1
+      },
+      {
+        "text": "100% polyester",
+        "confidence": 0.5
+      },
+      {
+        "text": "MADE IN CAMBODIA / FABRIQUE EN CAMBODGE / HECHO EN CAMBOYA",
+        "confidence": 1
+      },
+      {
+        "text": "RN NO. 55721",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. 2276-42",
+        "confidence": 1
+      },
+      {
+        "text": "LAVER A LA MACHINE A FROID",
+        "confidence": 1
+      },
+      {
+        "text": "WASH INSIDE OUT",
+        "confidence": 1
+      },
+      {
+        "text": "machine wash cold with like colors",
+        "confidence": 0.5
+      },
+      {
+        "text": "COOL IRON IF NEEDED",
+        "confidence": 1
+      },
+      {
+        "text": "RETURN POLICY 30 DAYS",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "55721"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [
+      {
+        "part": "shell",
+        "material": "cotton",
+        "percent": 100
+      },
+      {
+        "part": "lining",
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "KH"
+    ],
+    "style": [
+      "2276-42"
+    ]
+  },
+  "image": {
+    "file": "care-label-193.png",
+    "mediaType": "image/png",
+    "width": 1113,
+    "height": 531,
+    "pixelSha256": "ac44cee4a00067e137c0abf1b4bd42e1da40cabb62b3441a066d0c2df5b754fa"
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "id": "care-label-169",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "WILLOW STREET"
+    },
+    {
+      "text": "XL/EG/EG"
+    },
+    {
+      "text": "55% LINEN"
+    },
+    {
+      "text": "45% COTTON"
+    },
+    {
+      "text": "MADE IN GUATEMALA"
+    },
+    {
+      "text": "HECHO EN GUATEMALA"
+    },
+    {
+      "text": "RN 68642 / CA 82068"
+    },
+    {
+      "text": "MACHINE WASH COLD"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    },
+    {
+      "text": "DO NOT BLEACH"
+    },
+    {
+      "text": "COOL IRON IF NEEDED"
+    },
+    {
+      "text": "NEW YORK, NY 10018"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "WILLOW STREET",
+        "confidence": 1
+      },
+      {
+        "text": "XL/EG/EG",
+        "confidence": 1
+      },
+      {
+        "text": "55% LINEN",
+        "confidence": 1
+      },
+      {
+        "text": "45% COTTON",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN GUATEMALA",
+        "confidence": 1
+      },
+      {
+        "text": "HECHO EN GUATEMALA",
+        "confidence": 1
+      },
+      {
+        "text": "RN 68642 / CA 82068",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD",
+        "confidence": 1
+      },
+      {
+        "text": "LAVAR A MAQUINA EN FRIO",
+        "confidence": 1
+      },
+      {
+        "text": "DO NOT BLEACH",
+        "confidence": 1
+      },
+      {
+        "text": "COOL IRON IF NEEDED",
+        "confidence": 1
+      },
+      {
+        "text": "NEW YORK, NY 10018",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "68642"
+    ],
+    "ca": [
+      "82068"
+    ],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "linen",
+        "percent": 55
+      },
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 45
+      }
+    ],
+    "origin": [
+      "GT"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "care-label-169.png",
+    "mediaType": "image/png",
+    "width": 483,
+    "height": 495,
+    "pixelSha256": "a367383a04a790596852817eea99f531d3bb2914c10dd5c8a586d29f84ca888d"
+  }
+}

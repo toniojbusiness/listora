@@ -1,0 +1,87 @@
+{
+  "id": "hang-tag-138",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "LITTLE ATLAS"
+    },
+    {
+      "text": "STYLE NO. 7146-03"
+    },
+    {
+      "text": "US 12 / UK 16 / EU 44"
+    },
+    {
+      "text": "PRICE $28"
+    },
+    {
+      "barcode": "8921810965148"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "LITTLE ATLAS",
+        "confidence": 1
+      },
+      {
+        "text": "STYLE NO. 7146-03",
+        "confidence": 1
+      },
+      {
+        "text": "US 12 / UK 16 / EU 44",
+        "confidence": 1
+      },
+      {
+        "text": "PRICE  $28",
+        "confidence": 0.5
+      },
+      {
+        "text": "8 921810 965108",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "8921810965148",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "ean_13",
+        "digits": "8921810965148"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "12"
+      },
+      {
+        "system": "uk",
+        "value": "16"
+      },
+      {
+        "system": "eu",
+        "value": "44"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "7146-03"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-138.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 396,
+    "pixelSha256": "5f37b4ac7fcea5875551ce916761a3b6f668e071bd63ab8f4c3e45f83543e2b8"
+  }
+}

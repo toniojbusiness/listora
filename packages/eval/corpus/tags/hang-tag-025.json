@@ -1,0 +1,79 @@
+{
+  "id": "hang-tag-025",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "OAK HOLLOW"
+    },
+    {
+      "text": "MODEL: I-56246"
+    },
+    {
+      "text": "SIZE: 4"
+    },
+    {
+      "text": "$58.99"
+    },
+    {
+      "barcode": "807746284622"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "OAK HOLLOW",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL:  I-56246",
+        "confidence": 0.5
+      },
+      {
+        "text": "SIZE: 4",
+        "confidence": 1
+      },
+      {
+        "text": "$58.99",
+        "confidence": 1
+      },
+      {
+        "text": "8 07746 28462 2",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0807746284622",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "807746284622"
+      }
+    ],
+    "size": [
+      {
+        "system": "numeric",
+        "value": "4"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": [
+      "I-56246"
+    ]
+  },
+  "image": {
+    "file": "hang-tag-025.png",
+    "mediaType": "image/png",
+    "width": 423,
+    "height": 396,
+    "pixelSha256": "e412da13a5f616940be5b422ce143ceacda179a8081c54b62fbb21fadd4dfa77"
+  }
+}

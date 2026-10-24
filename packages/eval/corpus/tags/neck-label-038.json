@@ -1,0 +1,68 @@
+{
+  "id": "neck-label-038",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "BLUE CEDAR"
+    },
+    {
+      "text": "XS"
+    },
+    {
+      "text": "MADE IN BANGLADESH"
+    },
+    {
+      "text": "RN #81176"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "blue cedar",
+        "confidence": 0.5
+      },
+      {
+        "text": "XS",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN",
+        "confidence": 0.5
+      },
+      {
+        "text": "BANGLADESH",
+        "confidence": 0.5
+      },
+      {
+        "text": "RN #B1176",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "81176"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XS"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "BD"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-038.png",
+    "mediaType": "image/png",
+    "width": 393,
+    "height": 207,
+    "pixelSha256": "fc46413c4819c65153fec895e437405415a4f8ff96195701a83d528b871c2615"
+  }
+}

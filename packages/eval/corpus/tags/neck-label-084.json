@@ -1,0 +1,51 @@
+{
+  "id": "neck-label-084",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "Parallel Athletic"
+    },
+    {
+      "text": "SIZE XL"
+    },
+    {
+      "text": "Made in Morocco"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Parallel Athletic SIZE XL",
+        "confidence": 0.5
+      },
+      {
+        "text": "Made in Morocco",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "XL"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "MA"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-084.png",
+    "mediaType": "image/png",
+    "width": 375,
+    "height": 171,
+    "pixelSha256": "e16bc664a7eda454777cd19a30d75a4b996879dd8807aa7320cb2524076a813f"
+  }
+}

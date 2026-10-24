@@ -1,0 +1,77 @@
+{
+  "id": "hang-tag-024",
+  "kind": "hang_tag",
+  "printed": [
+    {
+      "text": "Oak Hollow"
+    },
+    {
+      "text": "TALLA/SIZE/TAILLE: L"
+    },
+    {
+      "text": "$65.99"
+    },
+    {
+      "barcode": "667217629396"
+    },
+    {
+      "text": "Style Meets Comfort"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Oak Hollow",
+        "confidence": 1
+      },
+      {
+        "text": "TALLA/SIZE/TAILLE: L",
+        "confidence": 1
+      },
+      {
+        "text": "$65.99",
+        "confidence": 1
+      },
+      {
+        "text": "6 67217 62939 6",
+        "confidence": 1
+      },
+      {
+        "text": "Style Meets Comfort",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0667217629396",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "667217629396"
+      }
+    ],
+    "size": [
+      {
+        "system": "letter",
+        "value": "L"
+      }
+    ],
+    "fiber": [],
+    "origin": [],
+    "style": []
+  },
+  "image": {
+    "file": "hang-tag-024.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 396,
+    "pixelSha256": "b2df38a0d12e47d945bfa8be91c60b001a492c75537ca76dfca3fa0b90f52bf3"
+  }
+}

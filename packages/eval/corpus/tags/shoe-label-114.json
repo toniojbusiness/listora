@@ -1,0 +1,72 @@
+{
+  "id": "shoe-label-114",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "Parallel Athletic"
+    },
+    {
+      "text": "US 7 UK 6 EUR 40"
+    },
+    {
+      "text": "MODEL: OV7188"
+    },
+    {
+      "text": "Product of Bangladesh"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Parallel Athletic",
+        "confidence": 1
+      },
+      {
+        "text": "US 7 UK 6 EUR 40",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL: OV7188",
+        "confidence": 1
+      },
+      {
+        "text": "Product of Bangladesh",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "7"
+      },
+      {
+        "system": "uk",
+        "value": "6"
+      },
+      {
+        "system": "eu",
+        "value": "40"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "BD"
+    ],
+    "style": [
+      "OV7188"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-114.png",
+    "mediaType": "image/png",
+    "width": 447,
+    "height": 207,
+    "pixelSha256": "a1d5a1e5b22f7ac79955e11a47cfa06dab8c8c6fa095597aea63d236ddedd40a"
+  }
+}

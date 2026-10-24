@@ -1,0 +1,131 @@
+{
+  "id": "care-label-021",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "FIELD AND FERN"
+    },
+    {
+      "text": "US 0 / UK 4 / EU 32"
+    },
+    {
+      "text": "50% COTTON / 50% POLYESTER"
+    },
+    {
+      "text": "MADE IN ROMANIA"
+    },
+    {
+      "text": "RN#113785"
+    },
+    {
+      "text": "ART. NO. 712802"
+    },
+    {
+      "text": "SEE REVERSE FOR CARE"
+    },
+    {
+      "text": "MACHINE WASH COLD"
+    },
+    {
+      "text": "LAVAR A MAQUINA EN FRIO"
+    },
+    {
+      "text": "SAN FRANCISCO, CA 94159"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "FIELD  AND FERN",
+        "confidence": 0.5
+      },
+      {
+        "text": "US 0 / UK 4 / EU 32",
+        "confidence": 1
+      },
+      {
+        "text": "50% COTTON / 50% POLYESTER",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN ROMANIA",
+        "confidence": 1
+      },
+      {
+        "text": "RN#",
+        "confidence": 0.5
+      },
+      {
+        "text": "113785",
+        "confidence": 0.5
+      },
+      {
+        "text": "ART. NO. 712802",
+        "confidence": 1
+      },
+      {
+        "text": "SEE REVERSE FOR CARE",
+        "confidence": 1
+      },
+      {
+        "text": "MACHINE WASH COLD",
+        "confidence": 1
+      },
+      {
+        "text": "LAVAR A MAQUINA EN FRIO",
+        "confidence": 1
+      },
+      {
+        "text": "SAN  FRANCISCO, CA 94159",
+        "confidence": 0.5
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "113785"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "us",
+        "value": "0"
+      },
+      {
+        "system": "uk",
+        "value": "4"
+      },
+      {
+        "system": "eu",
+        "value": "32"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "cotton",
+        "percent": 50
+      },
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 50
+      }
+    ],
+    "origin": [
+      "RO"
+    ],
+    "style": [
+      "712802"
+    ]
+  },
+  "image": {
+    "file": "care-label-021.png",
+    "mediaType": "image/png",
+    "width": 537,
+    "height": 423,
+    "pixelSha256": "f29388eb7e23c97b83ab63ad5bfaee679f266626b0545b4acf3edf2dd1011ae4"
+  }
+}

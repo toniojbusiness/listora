@@ -1,0 +1,89 @@
+{
+  "id": "shoe-label-186",
+  "kind": "shoe_label",
+  "printed": [
+    {
+      "text": "PARALLEL ATHLETIC"
+    },
+    {
+      "text": "US: 12.5  UK: 11.5  EUR: 46"
+    },
+    {
+      "text": "ITEM # VM1955"
+    },
+    {
+      "text": "MADE IN INDONESIA"
+    },
+    {
+      "barcode": "651302522860"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "PARALLEL ATHLETIC",
+        "confidence": 1
+      },
+      {
+        "text": "US: 12.5  UK: 11.5  EUR: 46",
+        "confidence": 1
+      },
+      {
+        "text": "ITEM # VM1955",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN INDONESIA",
+        "confidence": 1
+      },
+      {
+        "text": "6 51302 52286 0",
+        "confidence": 1
+      }
+    ],
+    "barcodes": [
+      {
+        "payload": "0651302522860",
+        "symbology": "VNBarcodeSymbologyEAN13"
+      }
+    ]
+  },
+  "truth": {
+    "rn": [],
+    "ca": [],
+    "gtin": [
+      {
+        "format": "upc_a",
+        "digits": "651302522860"
+      }
+    ],
+    "size": [
+      {
+        "system": "us",
+        "value": "12.5"
+      },
+      {
+        "system": "uk",
+        "value": "11.5"
+      },
+      {
+        "system": "eu",
+        "value": "46"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "ID"
+    ],
+    "style": [
+      "VM1955"
+    ]
+  },
+  "image": {
+    "file": "shoe-label-186.png",
+    "mediaType": "image/png",
+    "width": 555,
+    "height": 363,
+    "pixelSha256": "60e12037724a78e03a7c830b774b11e691917d30377781131a020eb61397ef30"
+  }
+}

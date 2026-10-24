@@ -1,0 +1,64 @@
+{
+  "id": "neck-label-111",
+  "kind": "neck_label",
+  "printed": [
+    {
+      "text": "OAK HOLLOW"
+    },
+    {
+      "text": "S"
+    },
+    {
+      "text": "MADE IN U.S.A. / FABRIQUE EN ETATS-UNIS / HECHO EN ESTADOS UNIDOS"
+    },
+    {
+      "text": "R.N. 122952"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "OAK HOLLOW",
+        "confidence": 1
+      },
+      {
+        "text": "S",
+        "confidence": 1
+      },
+      {
+        "text": "MADE IN U.S.A. / FABRIQUE EN ETATS-UNIS / HECHO EN ESTADOS UNIDOS",
+        "confidence": 1
+      },
+      {
+        "text": "R.N. 122952",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "122952"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [],
+    "origin": [
+      "US"
+    ],
+    "style": []
+  },
+  "image": {
+    "file": "neck-label-111.png",
+    "mediaType": "image/png",
+    "width": 1239,
+    "height": 207,
+    "pixelSha256": "074f59d3349d63a2a526be573b1d12ae533971620879f4bef62f5dbb19947598"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "id": "care-label-012",
+  "kind": "care_label",
+  "printed": [
+    {
+      "text": "Size Small"
+    },
+    {
+      "text": "Polyester 100%"
+    },
+    {
+      "text": "Made in China"
+    },
+    {
+      "text": "RN #84617"
+    },
+    {
+      "text": "MODEL: V-63580"
+    },
+    {
+      "text": "See Reverse For Care"
+    }
+  ],
+  "ocr": {
+    "lines": [
+      {
+        "text": "Size Small",
+        "confidence": 1
+      },
+      {
+        "text": "Polyester 100%",
+        "confidence": 1
+      },
+      {
+        "text": "Made in China",
+        "confidence": 1
+      },
+      {
+        "text": "RN #84617",
+        "confidence": 1
+      },
+      {
+        "text": "MODEL: V-63580",
+        "confidence": 1
+      },
+      {
+        "text": "See Reverse For Care",
+        "confidence": 1
+      }
+    ],
+    "barcodes": []
+  },
+  "truth": {
+    "rn": [
+      "84617"
+    ],
+    "ca": [],
+    "gtin": [],
+    "size": [
+      {
+        "system": "letter",
+        "value": "S"
+      }
+    ],
+    "fiber": [
+      {
+        "part": null,
+        "material": "polyester",
+        "percent": 100
+      }
+    ],
+    "origin": [
+      "CN"
+    ],
+    "style": [
+      "V-63580"
+    ]
+  },
+  "image": {
+    "file": "care-label-012.png",
+    "mediaType": "image/png",
+    "width": 429,
+    "height": 279,
+    "pixelSha256": "272d9a926918ac825a9f25d07a3fba1ad16cde300fab26cf63f74b3136f8e729"
+  }
+}
