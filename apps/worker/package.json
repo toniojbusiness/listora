@@ -1,0 +1,17 @@
+{
+  "name": "@listora/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Listora background worker (operation engine host).",
+  "scripts": {
+    "start": "node src/main.ts",
+    "dev": "node --watch --env-file-if-exists=../../.env src/main.ts"
+  },
+  "dependencies": {
+    "@listora/shared": "*"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

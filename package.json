@@ -1,0 +1,40 @@
+{
+  "name": "listora",
+  "private": true,
+  "type": "module",
+  "description": "Listora monorepo: iPhone app, API, worker, and shared packages.",
+  "engines": {
+    "node": ">=26.0.0 <27",
+    "npm": ">=11"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/api",
+    "apps/worker"
+  ],
+  "scripts": {
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run test:integration",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint --max-warnings=0 . && shellcheck scripts/*.sh",
+    "typecheck": "tsc --build",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "dev:api": "npm run dev --workspace @listora/api",
+    "dev:worker": "npm run dev --workspace @listora/worker"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.0",
+    "vitest": "^5.0.5"
+  },
+  "allowScripts": {
+    "fsevents": false
+  }
+}

@@ -1,0 +1,10 @@
+{
+  // Solution file: `tsc --build` type-checks every workspace in dependency order.
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/testing" },
+    { "path": "apps/api" },
+    { "path": "apps/worker" }
+  ]
+}

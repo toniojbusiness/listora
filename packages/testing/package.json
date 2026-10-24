@@ -1,0 +1,16 @@
+{
+  "name": "@listora/testing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Test-only helpers shared by Listora workspaces (never imported by runtime code).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  }
+}
