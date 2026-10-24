@@ -569,6 +569,17 @@ export interface IdempotencyRecordTable {
   expires_at: Timestamp;
 }
 
+/**
+ * An identity whose account was deleted: its tokens issued at or before `deleted_at` are
+ * refused. The subject is stored only as its SHA-256.
+ */
+export interface DeletedIdentityTable {
+  auth_provider: AuthProvider;
+  auth_subject_sha256: Buffer;
+  /** Defaults to now; moved forward when the identity deletes a later account. */
+  deleted_at: ColumnType<Date, Date | string | undefined, Date | string>;
+}
+
 /** Every table and view in the schema, keyed by name. */
 export interface Database {
   account: AccountTable;
@@ -601,4 +612,5 @@ export interface Database {
   usage_counter: UsageCounterTable;
   audit_log: AuditLogTable;
   idempotency_record: IdempotencyRecordTable;
+  deleted_identity: DeletedIdentityTable;
 }

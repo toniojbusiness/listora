@@ -152,7 +152,9 @@ src/
   config.ts      Environment, parsed once with a zod schema
   errors.ts      ApiError and the contract's ErrorResponse; HTTP status per error code
   contract/      Validators compiled from openapi.yaml, and contractRoute()
-  auth/          AuthDriver interface; the dev driver and its /dev/auth endpoints
+  auth/          AuthDriver interface; the dev driver (with its /dev/auth endpoints) and the
+                 Cognito driver
+  account/       Account deletion (deleteAccount) and the marketplace grant revoker interface
   tenancy.ts     Tenant resolution: the tenancy guard
   idempotency.ts Idempotency-Key handling for POSTs
   items/ photos/ One folder per resource: routes.ts, repository.ts, mapping and views
@@ -176,7 +178,13 @@ src/
   account, so another account's rows read as `404 not_found` and cannot be changed.
   `contractRoute` refuses operations the contract marks public. A person's first request
   creates their user, an account (SKU prefix from the email's initials), and the owner
-  membership; a user without exactly one account gets `403 forbidden`.
+  membership; a user without exactly one account gets `403 forbidden`. A token issued before
+  its person deleted their account is `401`, so it cannot provision a new account.
+- **Sign-in and account deletion.** `AUTH_DRIVER=dev|cognito`. The Cognito driver verifies
+  the pool's tokens locally (cached JWKS, issuer, app client, `token_use`, expiry) and fails
+  closed. `DELETE /v1/account` revokes marketplace grants, deletes the person at the identity
+  provider, then deletes the account's data in one transaction and its stored objects after it. The flows, the user pool
+  settings the infrastructure must create, and the open items are in [auth.md](auth.md).
 - **Idempotency.** A POST runs in one transaction that takes an advisory lock on (account,
   key) and stores its successful response in `idempotency_record` together with the change,
   so a retry replays it, a concurrent retry gets `409`, and a failure stores nothing. Each
@@ -228,7 +236,7 @@ src/
   hash sorts the sha256s, so reordering the photos or choosing another cover keeps the
   analysis; only adding or removing photos makes a new photo set. The display order reaches
   only the prompt.
-- Deleting a photo, or its item, deletes its stored objects after the transaction commits.
+- Deleting a photo, its item, or the whole account deletes its stored objects after the transaction commits.
 
 ## 4. Marketplace adapter model
 
@@ -543,7 +551,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production` |
 | Depop            | `fake-depop` generated from Depop's OpenAPI spec                                                             | Sandbox, then production   | `DEPOP_ENV`                          |
 | Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                         | SES inbound                | `EMAIL_INGEST=folder\|ses`           |
-| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                           | Cognito (T-31)             | `AUTH_DRIVER=dev\|cognito`           |
+| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                           | Cognito                    | `AUTH_DRIVER=dev\|cognito`           |
 | Payments         | Fake Stripe client + StoreKit configuration file                                                             | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`        |
 | Push             | Recording fake                                                                                               | APNs                       | `PUSH_DRIVER`                        |
 | Token encryption | Local AES-GCM key from `.env`                                                                                | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                   |
@@ -685,8 +693,9 @@ and guards (budget alarms are T-29):
 
 PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations` (T-04).
 
-- **Tenancy.** Every table has a non-null `account_id`, except `account` itself and
-  `app_user` (a person's identity is global, and `membership` links it to accounts). Child
+- **Tenancy.** Every table has a non-null `account_id`, except `account` itself, `app_user`
+  (a person's identity is global, and `membership` links it to accounts), and
+  `deleted_identity`. Child
   rows reference parents through composite `(account_id, <parent>_id)` foreign keys, so the
   database rejects a row that points at another tenant's data. Deleting an account deletes
   all of its data.
@@ -749,7 +758,9 @@ Tables by area:
 - **History:** `audit_log` (item changes the user can see).
 - **API:** `idempotency_record` (the stored first successful response per account and
   `Idempotency-Key`, kept 24 hours; written once, so it has no `updated_at`, and deleted in
-  batches by later POSTs once expired).
+  batches by later POSTs once expired), and `deleted_identity` (the SHA-256 of each identity
+  whose account was deleted and when, so its earlier tokens are refused; its only timestamp
+  is `deleted_at`, and later deletions purge rows older than 48 hours).
 
 **Migrations.** Each migration is a pair of plain SQL files, `NNNN_name.up.sql` and
 `NNNN_name.down.sql`, run by Kysely's migrator in one transaction with a lock (`npm run

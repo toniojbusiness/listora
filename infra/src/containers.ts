@@ -69,7 +69,8 @@ export function containerEnvironment(
   };
   switch (container) {
     case 'api':
-      // `dev` is the only auth driver this build has; T-31 switches deployed APIs to `cognito`.
+      // Deployed APIs switch to `cognito` (with COGNITO_USER_POOL_ID and COGNITO_CLIENT_IDS) once
+      // the user pool exists; docs/auth.md lists what it needs.
       return { API_HOST: '0.0.0.0', API_PORT: String(API_PORT), AUTH_DRIVER: 'dev', ...services() };
     case 'worker':
       return services();

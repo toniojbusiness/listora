@@ -51,6 +51,7 @@ const MIGRATIONS = [
   '0007_pending_listing_id',
   '0008_item_analysis',
   '0009_listing_content',
+  '0010_deleted_identity',
 ];
 
 describe('schema migrations (real Postgres)', () => {

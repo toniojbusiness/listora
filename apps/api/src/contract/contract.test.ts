@@ -136,7 +136,11 @@ describe('contractRoute', () => {
 
   it('refuses to serve an operation the contract leaves public', () => {
     const app = fastify();
-    const auth = { provider: 'dev' as const, verifyAccessToken: () => Promise.resolve(undefined) };
+    const auth = {
+      provider: 'dev' as const,
+      verifyAccessToken: () => Promise.resolve(undefined),
+      deleteUser: () => Promise.resolve(),
+    };
     expect(() => {
       contractRoute(app, { db, auth }, 'getLiveness', () =>
         Promise.resolve({ status: 200, body: { status: 'ok' } }),

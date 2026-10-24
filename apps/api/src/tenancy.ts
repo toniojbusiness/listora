@@ -9,6 +9,7 @@
 import type { Db, MembershipRole } from '@listora/db';
 import type { FastifyRequest } from 'fastify';
 
+import { isDeletedSinceIssue } from './account/repository.ts';
 import type { AuthDriver, Identity } from './auth/driver.ts';
 import { ApiError } from './errors.ts';
 
@@ -27,7 +28,15 @@ declare module 'fastify' {
   interface FastifyRequest {
     /** Set by the authentication hook of every secured contract route; null elsewhere. */
     tenant: Tenant | null;
+    /** The verified identity behind `tenant`; set and null exactly when it is. */
+    identity: Identity | null;
   }
+}
+
+/** A verified bearer token and the tenant it acts as. */
+export interface Authenticated {
+  identity: Identity;
+  tenant: Tenant;
 }
 
 const BEARER = /^Bearer ([A-Za-z0-9._~+/=-]+)$/;
@@ -37,22 +46,27 @@ export async function authenticate(
   request: FastifyRequest,
   auth: AuthDriver,
   db: Db,
-): Promise<Tenant> {
+): Promise<Authenticated> {
   const match = BEARER.exec(request.headers.authorization ?? '');
   const identity = match?.[1] === undefined ? undefined : await auth.verifyAccessToken(match[1]);
   if (!identity) {
     throw new ApiError('unauthenticated', 'Sign in to continue.');
   }
-  return resolveTenant(db, identity);
+  return { identity, tenant: await resolveTenant(db, identity) };
 }
 
 /**
  * The tenant of a verified identity. On a person's first request this creates their user,
  * their account (named after the email, SKU prefix from its initials), and the owner
- * membership, in one transaction. Fails closed with `403 forbidden` when the user has no
- * account, or more than one (choosing an account is not supported yet).
+ * membership, in one transaction. Fails closed with `401 unauthenticated` when the person
+ * deleted their account after the token was issued (so it cannot provision a new one), and
+ * with `403 forbidden` when the user has no account, or more than one (choosing an account is
+ * not supported yet).
  */
 export async function resolveTenant(db: Db, identity: Identity): Promise<Tenant> {
+  if (await isDeletedSinceIssue(db, identity)) {
+    throw new ApiError('unauthenticated', 'Sign in to continue.');
+  }
   let found = await findMemberships(db, identity);
   if (found === undefined) {
     await provisionUser(db, identity);

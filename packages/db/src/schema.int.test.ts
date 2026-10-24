@@ -398,6 +398,7 @@ const COLUMNS = {
     'created_at',
     'expires_at',
   ],
+  deleted_identity: ['auth_provider', 'auth_subject_sha256', 'deleted_at'],
 } as const satisfies { [Table in keyof Database]: readonly (keyof Database[Table])[] };
 
 type MissingColumns = {
@@ -409,6 +410,7 @@ const columnsAreComplete: [MissingColumns] extends [never] ? true : MissingColum
 /** Each constrained text column and the TypeScript list that must match its CHECK. */
 const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly string[]][] = [
   ['app_user', 'auth_provider', values.AUTH_PROVIDERS],
+  ['deleted_identity', 'auth_provider', values.AUTH_PROVIDERS],
   ['membership', 'role', values.MEMBERSHIP_ROLES],
   ['inventory_item', 'status', values.ITEM_STATUSES],
   ['inventory_item', 'pre_archive_status', values.PRE_ARCHIVE_ITEM_STATUSES],
@@ -527,12 +529,12 @@ describe('schema types and values match the database', () => {
     expect(rows.filter((row) => !row.has_trigger)).toEqual([]);
   });
 
-  it('gives every table except app_user a non-null tenant account_id', async () => {
+  it('gives every table except the global identity tables a non-null tenant account_id', async () => {
     const { rows } = await sql<{ table_name: string }>`
       select t.table_name from information_schema.tables t
       where t.table_schema = 'public' and t.table_type = 'BASE TABLE'
         and t.table_name not like 'kysely_migration%'
-        and t.table_name not in ('account', 'app_user')
+        and t.table_name not in ('account', 'app_user', 'deleted_identity')
         and not exists (
           select 1 from information_schema.columns c
           where c.table_schema = t.table_schema and c.table_name = t.table_name

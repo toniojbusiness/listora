@@ -7,6 +7,11 @@ import type { PhotoJobQueue } from '@listora/photos';
 import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
 import { fastify, LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 
+import {
+  noMarketplaceAccessRevocation,
+  type MarketplaceAccessRevoker,
+} from './account/marketplace-access.ts';
+import { registerAccountRoutes } from './account/routes.ts';
 import { registerAnalysisRoutes } from './analyses/routes.ts';
 import type { AuthDriver } from './auth/driver.ts';
 import { registerErrorHandling } from './errors.ts';
@@ -34,6 +39,8 @@ export interface AppDependencies extends HealthDependencies {
   uploads?: PhotoUploads;
   /** The clock upload sessions expire by. */
   now?: () => Date;
+  /** Revokes marketplace grants when an account is deleted; adapters provide it (T-16, T-24). */
+  marketplaceAccess?: MarketplaceAccessRevoker;
   /** A `createLogger()` instance from @listora/shared. Omit in tests to keep output quiet. */
   logger?: FastifyBaseLogger;
 }
@@ -59,6 +66,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   // Every body is JSON; without this, Fastify would hand a text/plain body to validation.
   app.removeContentTypeParser('text/plain');
   app.decorateRequest('tenant', null);
+  app.decorateRequest('identity', null);
   app.addHook('onRequest', async (request, reply) => {
     reply.header(REQUEST_ID_HEADER, request.id);
   });
@@ -70,6 +78,10 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   if (deps.storage instanceof LocalDiskStorage) registerLocalStorageRoutes(app, deps.storage);
   const now = deps.now ?? (() => new Date());
   const routeDeps = { db: deps.db, auth: deps.auth, storage: deps.storage };
+  registerAccountRoutes(app, {
+    ...routeDeps,
+    marketplaceAccess: deps.marketplaceAccess ?? noMarketplaceAccessRevocation,
+  });
   registerItemRoutes(app, routeDeps);
   registerUploadRoutes(app, { ...routeDeps, now });
   registerPhotoRoutes(app, {

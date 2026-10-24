@@ -42,8 +42,10 @@ import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
 import type { ApiError, ErrorResponse } from '@listora/api-contract';
 import type { FastifyInstance } from 'fastify';
 
+import type { GrantToRevoke, MarketplaceAccessRevoker } from './account/marketplace-access.ts';
 import { buildApp, type AppDependencies } from './app.ts';
 import { DevAuthDriver } from './auth/dev-driver.ts';
+import type { AuthDriver } from './auth/driver.ts';
 import { operationSpec, responseContractErrors } from './contract/contract.ts';
 import type { ContractReply, OperationId } from './contract/routes.ts';
 import { resolveTenant, type Tenant } from './tenancy.ts';
@@ -242,9 +244,37 @@ export interface TestAiControls {
   autoEscalate: boolean;
 }
 
+/**
+ * A stand-in for the marketplace adapters' grant revocation: each connection id answers as
+ * configured (confirmed by default), and every request is recorded.
+ */
+export class FakeMarketplaceAccess implements MarketplaceAccessRevoker {
+  readonly revoked: GrantToRevoke[] = [];
+  readonly #outcomes = new Map<string, boolean | Error>();
+
+  /** How the marketplace answers for `connectionId`: confirmed, unconfirmed, or a failure. */
+  answer(connectionId: string, outcome: boolean | Error): void {
+    this.#outcomes.set(connectionId, outcome);
+  }
+
+  revoke(grant: GrantToRevoke): Promise<boolean> {
+    this.revoked.push(grant);
+    const outcome = this.#outcomes.get(grant.connectionId) ?? true;
+    return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(outcome);
+  }
+}
+
+export interface TestApiOptions {
+  /** Replaces the dev driver (whose `signIn` and `tenantOf` then do not work). */
+  auth?: AuthDriver;
+}
+
 export interface TestApi {
   app: FastifyInstance;
   db: Db;
+  /** The dev driver behind `signIn` (spy on it to make its methods fail). */
+  devAuth: DevAuthDriver;
+  marketplaceAccess: FakeMarketplaceAccess;
   /** URL of the scratch database, for tests that need a second session. */
   databaseUrl: string;
   uploads: TestUploads;
@@ -268,7 +298,10 @@ export interface TestApi {
   close(): Promise<void>;
 }
 
-export async function createTestApi(prefix = 'api'): Promise<TestApi> {
+export async function createTestApi(
+  prefix = 'api',
+  options: TestApiOptions = {},
+): Promise<TestApi> {
   const scratch: ScratchDatabase = await createScratchDatabase(prefix);
   const db = createDatabase({ connectionString: scratch.url, max: 10 });
   try {
@@ -288,7 +321,7 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
     },
   });
   const clock = { now: Date.now() };
-  const auth = new DevAuthDriver({ secret: TEST_AUTH_SECRET, logger, now: () => clock.now });
+  const devAuth = new DevAuthDriver({ secret: TEST_AUTH_SECRET, logger, now: () => clock.now });
   const storageDir = await mkdtemp(join(tmpdir(), `listora-${prefix}-storage-`));
   const storage = new LocalDiskStorage({
     rootDir: storageDir,
@@ -313,10 +346,12 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
     logger,
     autoEscalate: aiControls.autoEscalate,
   }));
+  const marketplaceAccess = new FakeMarketplaceAccess();
   const app = buildApp({
     db,
-    auth,
+    auth: options.auth ?? devAuth,
     storage,
+    marketplaceAccess,
     photoJobs,
     ai,
     analysisJobs,
@@ -398,7 +433,7 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
 
   const tenantOf = async (email: string): Promise<Tenant> => {
     const token = tokens.get(email) ?? (await signIn(email));
-    const identity = await auth.verifyAccessToken(token);
+    const identity = await devAuth.verifyAccessToken(token);
     if (!identity) throw new Error(`token for ${email} no longer verifies`);
     return resolveTenant(db, identity);
   };
@@ -406,6 +441,8 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
   return {
     app,
     db,
+    devAuth,
+    marketplaceAccess,
     databaseUrl: scratch.url,
     uploads,
     storage,

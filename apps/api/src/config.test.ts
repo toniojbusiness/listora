@@ -104,9 +104,61 @@ describe('loadApiConfig', () => {
   });
 
   it('rejects an auth driver this build does not have', () => {
-    expect(captureConfigError({ ...REQUIRED, AUTH_DRIVER: 'cognito' }).issues).toEqual([
-      'AUTH_DRIVER must be one of dev',
+    expect(captureConfigError({ ...REQUIRED, AUTH_DRIVER: 'clerk' }).issues).toEqual([
+      'AUTH_DRIVER must be one of dev, cognito',
     ]);
+  });
+
+  describe('AUTH_DRIVER=cognito', () => {
+    const COGNITO = {
+      ...REQUIRED,
+      AUTH_DRIVER: 'cognito',
+      COGNITO_USER_POOL_ID: 'us-east-1_AbC123xyZ',
+      COGNITO_CLIENT_IDS: '4abc123def456ghi789jkl0mno, 5pqr678stu',
+    };
+
+    it('reads the pool, its region, and the accepted app clients', () => {
+      expect(loadApiConfig(COGNITO).auth).toEqual({
+        driver: 'cognito',
+        cognito: {
+          region: 'us-east-1',
+          userPoolId: 'us-east-1_AbC123xyZ',
+          clientIds: ['4abc123def456ghi789jkl0mno', '5pqr678stu'],
+        },
+      });
+      expect(
+        loadApiConfig({ ...COGNITO, COGNITO_USER_POOL_ID: 'ap-southeast-2_Xy9' }).auth,
+      ).toMatchObject({ cognito: { region: 'ap-southeast-2' } });
+    });
+
+    it('requires the pool and the app clients', () => {
+      expect(captureConfigError({ ...REQUIRED, AUTH_DRIVER: 'cognito' }).issues).toEqual([
+        'COGNITO_USER_POOL_ID is required when AUTH_DRIVER=cognito',
+        'COGNITO_CLIENT_IDS is required when AUTH_DRIVER=cognito',
+      ]);
+    });
+
+    it.each(['us-east-1', 'useast1_abc', 'us-east-1_', 'us-east-1_abc/../x', 'US-EAST-1_abc'])(
+      'rejects COGNITO_USER_POOL_ID=%j',
+      (COGNITO_USER_POOL_ID) => {
+        expect(captureConfigError({ ...COGNITO, COGNITO_USER_POOL_ID }).issues).toEqual([
+          'COGNITO_USER_POOL_ID must be a user pool id such as us-east-1_AbC123xyZ',
+        ]);
+      },
+    );
+
+    it.each(['', 'abc,', 'abc def', 'abc,../x'])('rejects COGNITO_CLIENT_IDS=%j', (ids) => {
+      expect(captureConfigError({ ...COGNITO, COGNITO_CLIENT_IDS: ids }).issues).toEqual([
+        'COGNITO_CLIENT_IDS must be a comma-separated list of app client ids',
+      ]);
+    });
+
+    it('ignores the Cognito keys under the dev driver', () => {
+      expect(loadApiConfig({ ...COGNITO, AUTH_DRIVER: 'dev' }).auth).toEqual({
+        driver: 'dev',
+        devSecret: undefined,
+      });
+    });
   });
 
   it('rejects a short AUTH_DEV_SECRET without echoing it', () => {

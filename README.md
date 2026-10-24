@@ -55,6 +55,10 @@ curl -X POST localhost:3000/dev/auth/sessions -H 'content-type: application/json
 Send the token as `Authorization: Bearer <accessToken>` on every `/v1` request, and an
 `Idempotency-Key` header (a new UUID per action) on every POST.
 
+Staging and production use `AUTH_DRIVER=cognito`, where the app signs in with the Cognito user
+pool (Sign in with Apple or an emailed code). [docs/auth.md](docs/auth.md) covers both drivers,
+the user pool settings, and in-app account deletion (`DELETE /v1/account`).
+
 ## Commands
 
 | Command                        | What it does                                                                                                                                     |

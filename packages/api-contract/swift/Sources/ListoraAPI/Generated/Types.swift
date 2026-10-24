@@ -21,6 +21,29 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /health/ready`.
     /// - Remark: Generated from `#/paths//health/ready/get(getReadiness)`.
     func getReadiness(_ input: Operations.GetReadiness.Input) async throws -> Operations.GetReadiness.Output
+    /// Delete my account
+    ///
+    /// In-app account deletion (App Store Review Guideline 5.1.1(v)). Deletes the signed-in
+    /// person and, when they own their account, the account with all of its data: items,
+    /// photos, listing records, sales, and history. Live listings themselves stay on the
+    /// marketplaces. Before that, Listora asks each connected marketplace to revoke its access
+    /// and deletes the stored tokens, and it deletes the person from the sign-in provider, so
+    /// they cannot sign in to the deleted account again.
+    ///
+    /// The deletion is final, and the bearer token stops working at once (any other token
+    /// issued before the deletion too). Signing in again later creates a new, empty account.
+    /// A `503 service_unavailable` means nothing was deleted yet; retry with the same token.
+    /// A retry after a lost success response gets `401 unauthenticated`, which means the
+    /// account is gone.
+    ///
+    /// `marketplaceAccess` reports each API marketplace connection honestly: `revoked` is
+    /// true only when the marketplace confirmed it. For any other entry the app tells the user
+    /// to remove Listora in that marketplace's connected-apps settings.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/account`.
+    /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)`.
+    func deleteAccount(_ input: Operations.DeleteAccount.Input) async throws -> Operations.DeleteAccount.Output
     /// List items
     ///
     /// Newest first. Filters combine with AND.
@@ -441,6 +464,31 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//health/ready/get(getReadiness)`.
     public func getReadiness(headers: Operations.GetReadiness.Input.Headers = .init()) async throws -> Operations.GetReadiness.Output {
         try await getReadiness(Operations.GetReadiness.Input(headers: headers))
+    }
+    /// Delete my account
+    ///
+    /// In-app account deletion (App Store Review Guideline 5.1.1(v)). Deletes the signed-in
+    /// person and, when they own their account, the account with all of its data: items,
+    /// photos, listing records, sales, and history. Live listings themselves stay on the
+    /// marketplaces. Before that, Listora asks each connected marketplace to revoke its access
+    /// and deletes the stored tokens, and it deletes the person from the sign-in provider, so
+    /// they cannot sign in to the deleted account again.
+    ///
+    /// The deletion is final, and the bearer token stops working at once (any other token
+    /// issued before the deletion too). Signing in again later creates a new, empty account.
+    /// A `503 service_unavailable` means nothing was deleted yet; retry with the same token.
+    /// A retry after a lost success response gets `401 unauthenticated`, which means the
+    /// account is gone.
+    ///
+    /// `marketplaceAccess` reports each API marketplace connection honestly: `revoked` is
+    /// true only when the marketplace confirmed it. For any other entry the app tells the user
+    /// to remove Listora in that marketplace's connected-apps settings.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/account`.
+    /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)`.
+    public func deleteAccount(headers: Operations.DeleteAccount.Input.Headers = .init()) async throws -> Operations.DeleteAccount.Output {
+        try await deleteAccount(Operations.DeleteAccount.Input(headers: headers))
     }
     /// List items
     ///

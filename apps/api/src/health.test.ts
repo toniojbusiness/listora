@@ -10,6 +10,7 @@ describe('health routes', () => {
   const auth: AppDependencies['auth'] = {
     provider: 'dev',
     verifyAccessToken: () => Promise.resolve(undefined),
+    deleteUser: () => Promise.resolve(),
   };
   let app: ReturnType<typeof buildApp> | undefined;
 

@@ -41,7 +41,7 @@ async function rejection(promise: Promise<unknown>): Promise<ApiError> {
 
 describe('DevAuthDriver', () => {
   it('prints a 6-digit code and exchanges it once for a session that verifies', async () => {
-    const { instance, codes } = driver();
+    const { instance, codes, clock } = driver();
     expect(instance.requestCode(EMAIL)).toEqual({ expiresInSeconds: 600 });
     const [code = ''] = codes;
     expect(code).toMatch(/^\d{6}$/);
@@ -52,6 +52,7 @@ describe('DevAuthDriver', () => {
       provider: 'dev',
       subject: EMAIL,
       email: EMAIL,
+      issuedAt: clock.now / 1000,
     });
     expect(decodeJwt(session.accessToken)).toMatchObject({
       iss: 'listora-dev-auth',

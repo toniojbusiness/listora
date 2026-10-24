@@ -119,18 +119,26 @@ export class DevAuthDriver implements AuthDriver {
         issuer: ISSUER,
         audience: AUDIENCE,
         algorithms: ['HS256'],
-        requiredClaims: ['sub', 'exp'],
+        requiredClaims: ['sub', 'exp', 'iat'],
         currentDate: new Date(this.#now()),
       });
       if (typeof payload.sub !== 'string' || payload.sub === '') return undefined;
+      if (typeof payload.iat !== 'number') return undefined;
       return {
         provider: 'dev',
         subject: payload.sub,
         ...(typeof payload['email'] === 'string' ? { email: payload['email'] } : {}),
+        issuedAt: payload.iat,
       };
     } catch {
       return undefined;
     }
+  }
+
+  /** Dev users exist only as signed tokens; this forgets a pending code for their email. */
+  deleteUser(identity: Identity): Promise<void> {
+    this.#codes.delete(identity.subject);
+    return Promise.resolve();
   }
 
   registerRoutes(app: FastifyInstance): void {

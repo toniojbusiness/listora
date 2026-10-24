@@ -44,6 +44,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete my account
+         * @description In-app account deletion (App Store Review Guideline 5.1.1(v)). Deletes the signed-in
+         *     person and, when they own their account, the account with all of its data: items,
+         *     photos, listing records, sales, and history. Live listings themselves stay on the
+         *     marketplaces. Before that, Listora asks each connected marketplace to revoke its access
+         *     and deletes the stored tokens, and it deletes the person from the sign-in provider, so
+         *     they cannot sign in to the deleted account again.
+         *
+         *     The deletion is final, and the bearer token stops working at once (any other token
+         *     issued before the deletion too). Signing in again later creates a new, empty account.
+         *     A `503 service_unavailable` means nothing was deleted yet; retry with the same token.
+         *     A retry after a lost success response gets `401 unauthenticated`, which means the
+         *     account is gone.
+         *
+         *     `marketplaceAccess` reports each API marketplace connection honestly: `revoked` is
+         *     true only when the marketplace confirmed it. For any other entry the app tells the user
+         *     to remove Listora in that marketplace's connected-apps settings.
+         */
+        delete: operations["deleteAccount"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/items": {
         parameters: {
             query?: never;
@@ -1096,6 +1131,22 @@ export interface components {
          * @enum {string}
          */
         KnownErrorCode: "invalid_request" | "unauthenticated" | "quota_exceeded" | "forbidden" | "not_found" | "version_conflict" | "invalid_state_transition" | "already_exists" | "idempotency_key_in_progress" | "upload_incomplete" | "upload_expired" | "marketplace_not_connected" | "marketplace_reauth_required" | "marketplace_action_unavailable" | "payload_too_large" | "validation_failed" | "idempotency_key_reused" | "rate_limited" | "ai_budget_exceeded" | "internal_error" | "service_unavailable" | "marketplace_authorization_denied" | "marketplace_authorization_failed";
+        AccountDeletion: {
+            deletedAt: components["schemas"]["Timestamp"];
+            /** @description One entry per API marketplace connection the account had; assisted connections hold no access. */
+            marketplaceAccess: components["schemas"]["MarketplaceAccessRevocation"][];
+        };
+        MarketplaceAccessRevocation: {
+            marketplace: components["schemas"]["Marketplace"];
+            /** @description The seller's name on the marketplace. */
+            displayName?: string;
+            /**
+             * @description True only when the marketplace confirmed that Listora's access is revoked (or had
+             *     already revoked it). False means Listora deleted its tokens but could not confirm
+             *     the revocation, so the user should remove Listora in the marketplace's settings.
+             */
+            revoked: boolean;
+        };
         /** @enum {string} */
         HealthCheckStatus: "ok" | "unavailable";
         HealthLive: {
@@ -2299,6 +2350,8 @@ export type ApiError = components['schemas']['ApiError'];
 export type FieldError = components['schemas']['FieldError'];
 export type ErrorCode = components['schemas']['ErrorCode'];
 export type KnownErrorCode = components['schemas']['KnownErrorCode'];
+export type AccountDeletion = components['schemas']['AccountDeletion'];
+export type MarketplaceAccessRevocation = components['schemas']['MarketplaceAccessRevocation'];
 export type HealthCheckStatus = components['schemas']['HealthCheckStatus'];
 export type HealthLive = components['schemas']['HealthLive'];
 export type HealthReady = components['schemas']['HealthReady'];
@@ -2511,6 +2564,39 @@ export interface operations {
                     "application/json": components["schemas"]["HealthReady"];
                 };
             };
+        };
+    };
+    deleteAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account is deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDeletion"];
+                };
+            };
+            /**
+             * @description The account has other members, so it cannot be deleted with this person
+             *     (`forbidden`); they must leave first.
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
         };
     };
     listItems: {
