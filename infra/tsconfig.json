@@ -1,0 +1,19 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": ".tsbuild",
+    "tsBuildInfoFile": ".tsbuild/tsconfig.tsbuildinfo",
+    // aws-cdk-lib's own types are not written for this flag: its concrete classes (Vpc,
+    // Bucket, Cluster) declare optional members that the matching interfaces (IVpc, IBucket,
+    // ICluster) then fail to accept, so every hand-off between stacks would need a cast.
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../packages/shared" },
+    { "path": "../packages/db" },
+    { "path": "../apps/api" },
+    { "path": "../apps/worker" }
+  ]
+}

@@ -7,8 +7,11 @@ export interface HealthDependencies {
 }
 
 /**
- * `/health/live`: the process is up (no dependencies; for container liveness).
- * `/health/ready`: the process can serve traffic (database reachable; for load balancers).
+ * `/health/live`: the process is up (no dependencies). The load balancer health check uses
+ * it, and ECS replaces tasks that fail that check, so it must not depend on the database: a
+ * database failover would otherwise restart every API task at once.
+ * `/health/ready`: the process can serve traffic (database reachable). For deploy checks,
+ * smoke tests, and operators diagnosing an outage; nothing replaces tasks on it.
  * Responses never include error details; failures are logged server-side.
  * Reply types come from the API contract (packages/api-contract/openapi.yaml).
  */

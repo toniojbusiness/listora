@@ -19,6 +19,9 @@ apps/ios/Config/Local.xcconfig
 # Test output
 coverage/
 
+# CDK synthesis output (`npm run infra:synth`, `cdk synth`)
+infra/cdk.out/
+
 # Environment: copy .env.example to .env; never commit real values
 .env
 .env.*

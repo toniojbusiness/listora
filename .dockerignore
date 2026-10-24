@@ -1,0 +1,21 @@
+# Docker build context: only what the application image copies (see Dockerfile).
+**/node_modules
+**/.tsbuild
+**/*.test.ts
+**/*.int.test.ts
+.git
+.github
+.local
+.build
+.swiftpm
+coverage
+.env
+.env.*
+apps/ios
+docs
+infra/*
+!infra/package.json
+packages/api-contract/swift
+packages/api-contract/tools
+packages/eval/corpus
+packages/eval/fixtures

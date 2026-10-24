@@ -79,6 +79,19 @@ jobs:
       - run: scripts/dev-db.sh
       - run: npm run check
 
+  image:
+    name: Application image build and smoke test (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: scripts/container-smoke.sh
+
   # This job always reports a result, so it can be a required check: when no iOS input changed
   # it runs on Linux and succeeds in seconds without building. It never succeeds when change
   # detection failed.

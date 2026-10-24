@@ -10,6 +10,7 @@
     { "path": "packages/tag-parse" },
     { "path": "packages/eval" },
     { "path": "apps/api" },
-    { "path": "apps/worker" }
+    { "path": "apps/worker" },
+    { "path": "infra" }
   ]
 }

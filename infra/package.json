@@ -1,0 +1,21 @@
+{
+  "name": "@listora/infra",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Listora AWS infrastructure as code (AWS CDK v2).",
+  "scripts": {
+    "cdk": "cdk",
+    "synth": "node src/synth-check.ts"
+  },
+  "devDependencies": {
+    "@listora/api": "*",
+    "@listora/db": "*",
+    "@listora/shared": "*",
+    "@listora/worker": "*",
+    "aws-cdk": "^2.1146.1",
+    "aws-cdk-lib": "^2.274.0",
+    "constructs": "^10.8.1",
+    "yaml": "^2.9.1"
+  }
+}
