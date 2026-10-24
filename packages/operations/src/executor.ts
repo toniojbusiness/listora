@@ -35,7 +35,8 @@
  *
  * Operations on a listing apply in creation order, with one exception: an end or mark-sold never
  * waits behind an older operation that waits for the user (an assisted edit nobody answered, say).
- * It closes those as superseded and goes ahead, so a delist after a sale is never stuck.
+ * It closes those, and the operations queued behind them that never went through the API, as
+ * superseded, and goes ahead, so a delist after a sale is never stuck.
  */
 import type { Selectable } from 'kysely';
 import { sql } from 'kysely';
@@ -78,7 +79,7 @@ import {
   type SuccessProof,
 } from './evidence.ts';
 import type { OperationJobPayload } from './jobs.ts';
-import { scheduleOperationJob } from './jobs.ts';
+import { removeOperationJob, scheduleOperationJob } from './jobs.ts';
 import { createdBefore } from './ordering.ts';
 import { delayAfterAttempt, maxAttempts, type RetryPolicy } from './policy.ts';
 import { dismissOpenTasks } from './commands.ts';
@@ -324,8 +325,10 @@ async function claimStep(
 
     // queued or retrying: a new attempt, once every older operation on the listing is done. A
     // delist does not wait for older operations that wait for the user; it supersedes them.
-    const delist = isDelistKind(op.kind);
-    if (await hasOlderUnfinishedOperation(trx, op, { pastUserSteps: delist })) {
+    if (isDelistKind(op.kind) && mode !== 'unsupported' && op.attempts < max) {
+      await supersedeUserSteps(trx, op, log);
+    }
+    if (await hasOlderUnfinishedOperation(trx, op)) {
       await scheduleOperationJob(trx, {
         accountId: op.account_id,
         operationId: op.id,
@@ -364,7 +367,6 @@ async function claimStep(
       { to: 'running' },
       { step: op.kind === 'verify' ? 'check' : 'send', precheck, mode },
     );
-    if (delist) await supersedeUserSteps(trx, running, log);
     const ctx = { op: running, ...base };
     return op.kind === 'verify'
       ? { type: 'check', ctx, attempt: running.attempts }
@@ -412,24 +414,14 @@ function isDelistKind(kind: OperationRow['kind']): boolean {
   return kind === 'end' || kind === 'mark_sold';
 }
 
-/**
- * Whether an older operation on the same listing is still unfinished (FIFO per listing). With
- * `pastUserSteps`, older operations waiting for the user do not count.
- */
-async function hasOlderUnfinishedOperation(
-  trx: DbTransaction,
-  op: OperationRow,
-  options: { pastUserSteps: boolean },
-): Promise<boolean> {
-  const statuses = options.pastUserSteps
-    ? UNFINISHED_STATUSES.filter((status) => status !== 'needs_user_action')
-    : UNFINISHED_STATUSES;
+/** Whether an older operation on the same listing is still unfinished (FIFO per listing). */
+async function hasOlderUnfinishedOperation(trx: DbTransaction, op: OperationRow): Promise<boolean> {
   const older = await trx
     .selectFrom('marketplace_operation')
     .select('id')
     .where('account_id', '=', op.account_id)
     .where('listing_id', '=', op.listing_id)
-    .where('status', 'in', statuses)
+    .where('status', 'in', UNFINISHED_STATUSES)
     .where(createdBefore(op))
     .limit(1)
     .executeTakeFirst();
@@ -437,38 +429,47 @@ async function hasOlderUnfinishedOperation(
 }
 
 /**
- * Closes the older operations on a delist's listing that wait for the user: each is canceled as
- * superseded by the delist, in its history, and its open tasks are dismissed, never marked done.
- * The delist creates its own task when the listing is assisted.
+ * Closes the older operations on a delist's listing that wait for the user, and the ones queued
+ * or waiting to retry behind them that never went through the API (they have had no remote
+ * effect, and the delist makes them moot). Each is canceled as superseded by the delist, in its
+ * history, and its open tasks are dismissed, never marked done. Without an older operation that
+ * waits for the user, nothing is closed and the listing's order stands. The delist creates its
+ * own task when the listing is assisted.
  */
 async function supersedeUserSteps(
   trx: DbTransaction,
   delist: OperationRow,
   log: Logger,
 ): Promise<void> {
-  const waiting = await trx
+  const older = await trx
     .selectFrom('marketplace_operation')
     .selectAll()
     .where('account_id', '=', delist.account_id)
     .where('listing_id', '=', delist.listing_id)
-    .where('status', '=', 'needs_user_action')
+    .where('status', 'in', ['needs_user_action', 'queued', 'retrying'])
     .where(createdBefore(delist))
     .orderBy('created_at')
     .orderBy('id')
     .forUpdate()
     .execute();
-  for (const older of waiting) {
+  const firstWaiting = older.findIndex((candidate) => candidate.status === 'needs_user_action');
+  if (firstWaiting === -1) return;
+  const superseded: string[] = [];
+  for (const candidate of older.slice(firstWaiting)) {
+    if (candidate.status !== 'needs_user_action' && (await wasSentThroughApi(trx, candidate))) {
+      continue;
+    }
     await transitionOperation(
       trx,
-      older,
+      candidate,
       { to: 'canceled' },
       { action: 'supersede', reason: 'superseded by delist', supersededBy: delist.id },
     );
-    await dismissOpenTasks(trx, older);
+    await removeOperationJob(trx, candidate.id);
+    await dismissOpenTasks(trx, candidate);
+    superseded.push(candidate.id);
   }
-  if (waiting.length > 0) {
-    log.info({ superseded: waiting.map((older) => older.id) }, 'a delist superseded user steps');
-  }
+  log.info({ superseded }, 'a delist superseded operations waiting for the user');
 }
 
 /**
