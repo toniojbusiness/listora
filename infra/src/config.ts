@@ -54,15 +54,22 @@ export type TaskEgress =
   { readonly via: 'nat'; readonly natGateways: number } | { readonly via: 'public-ip' };
 
 /**
- * How `https://api.<domain>` reaches the API tasks:
+ * How the public HTTPS endpoint of the API reaches the API tasks:
  *
- * - `load-balancer`: an internet-facing Application Load Balancer that health-checks the
- *   tasks (`/health/live`) and redirects HTTP to HTTPS.
- * - `http-api`: an API Gateway HTTP API with a VPC link to the tasks, found through Cloud Map.
- *   No hourly charge, but requests are limited to 30 seconds and 10 MB (photo uploads go to
- *   S3 directly), and ECS health-checks the API container itself.
+ * - `load-balancer`: an internet-facing Application Load Balancer at `api.<domain>` that
+ *   health-checks the tasks (`/health/live`) and redirects HTTP to HTTPS. Needs a domain.
+ * - `http-api`: an API Gateway HTTP API with a VPC link to the tasks, found through Cloud Map,
+ *   at its default `execute-api` URL and, with a domain, at `api.<domain>` too. No hourly
+ *   charge, but requests are limited to 30 seconds and 10 MB (photo uploads go to S3
+ *   directly), and ECS health-checks the API container itself. `disableDefaultEndpoint`
+ *   turns the `execute-api` URL off, leaving only `api.<domain>`, so it needs a domain. It is
+ *   separate from adding the domain: marketplaces and payment providers call back URLs
+ *   registered at the `execute-api` URL until they are re-registered at `api.<domain>`
+ *   (infra/README.md, Adding a domain later).
  */
-export type ApiIngress = 'load-balancer' | 'http-api';
+export type ApiIngress =
+  | { readonly via: 'load-balancer' }
+  | { readonly via: 'http-api'; readonly disableDefaultEndpoint: boolean };
 
 export interface EnvironmentSettings {
   /**
@@ -114,7 +121,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       taskEgress: { via: 'nat', natGateways: 1 },
       rejectedFlowLogs: true,
     },
-    ingress: 'load-balancer',
+    ingress: { via: 'load-balancer' },
     database: {
       instanceType: 't4g.micro',
       multiAz: false,
@@ -139,7 +146,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       taskEgress: { via: 'nat', natGateways: 2 },
       rejectedFlowLogs: true,
     },
-    ingress: 'load-balancer',
+    ingress: { via: 'load-balancer' },
     database: {
       instanceType: 't4g.medium',
       multiAz: true,
@@ -172,7 +179,9 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       rejectedFlowLogs: false,
     },
     // An ALB costs about $24 a month with its two public addresses; the HTTP API costs cents.
-    ingress: 'http-api',
+    // The execute-api URL stays on until every URL registered with a third party has moved
+    // to api.<domain>.
+    ingress: { via: 'http-api', disableDefaultEndpoint: false },
     database: {
       // Single-AZ Graviton RDS beats Aurora Serverless v2: the worker keeps connections open,
       // so Aurora never pauses and bills at least 0.5 ACU around the clock.
@@ -231,12 +240,12 @@ export interface DeployTarget {
   readonly account: string;
   readonly region: string;
   /**
-   * The environment's DNS name, for example `staging.listora.app`. The API is served at
-   * `api.<domain>` and sale emails are received at `in.<domain>`.
+   * The environment's domain. Required where the API is behind a load balancer (staging and
+   * prod) or only at `api.<domain>` (`disableDefaultEndpoint`), optional behind the HTTP API
+   * otherwise (personal): without one, the API answers at its default `execute-api` URL and
+   * no sale email is received (infra/README.md).
    */
-  readonly domain: string;
-  /** Route 53 public hosted zone for `domain`, created when the domain is set up. */
-  readonly hostedZoneId: string;
+  readonly dns: DnsTarget | undefined;
   /** Tag of the application image in the environment's ECR repository (the git commit). */
   readonly imageTag: string;
   /** GitHub `owner/name` allowed to deploy through OIDC. */
@@ -250,6 +259,17 @@ export interface DeployTarget {
    * region's first two zones, resolved at deploy time.
    */
   readonly availabilityZones: readonly string[] | undefined;
+}
+
+/** A domain and its hosted zone, always set together. */
+export interface DnsTarget {
+  /**
+   * The environment's DNS name, for example `staging.listora.app`. The API is served at
+   * `api.<domain>` and sale emails are received at `in.<domain>`.
+   */
+  readonly domain: string;
+  /** Route 53 public hosted zone for `domain`, created when the domain is set up. */
+  readonly hostedZoneId: string;
 }
 
 export class DeployConfigError extends Error {
@@ -278,7 +298,7 @@ const SOURCES = {
   githubRepository: { context: 'githubRepository', env: 'LISTORA_GITHUB_REPOSITORY' },
   alarmEmail: { context: 'alarmEmail', env: 'LISTORA_ALARM_EMAIL' },
   availabilityZones: { context: 'availabilityZones', env: 'LISTORA_AVAILABILITY_ZONES' },
-} as const satisfies Record<keyof DeployTarget, Source>;
+} as const satisfies Record<Exclude<keyof DeployTarget, 'dns'> | keyof DnsTarget, Source>;
 
 /** SES receives email only in some regions; us-east-1 also hosts CloudFront certificates. */
 export const DEFAULT_REGION = 'us-east-1';
@@ -310,6 +330,7 @@ export type ContextReader = (key: string) => unknown;
 export function loadDeployTarget(
   context: ContextReader,
   env: NodeJS.ProcessEnv = process.env,
+  settings: Readonly<Record<EnvironmentName, EnvironmentSettings>> = ENVIRONMENT_SETTINGS,
 ): DeployTarget {
   const issues: string[] = [];
 
@@ -348,12 +369,23 @@ export function loadDeployTarget(
   const account = required(SOURCES.account, ACCOUNT, 'a 12-digit AWS account id');
   const region = read(SOURCES.region) ?? DEFAULT_REGION;
   if (!REGION.test(region)) issues.push(`${describe(SOURCES.region)} must be an AWS region`);
-  const domain = required(SOURCES.domain, DOMAIN, 'a lowercase DNS name such as example.com');
-  const hostedZoneId = required(
-    SOURCES.hostedZoneId,
-    HOSTED_ZONE_ID,
-    'a Route 53 hosted zone id (Z...)',
-  );
+  // A load balancer serves only https://api.<domain>; the HTTP API also has its own URL unless
+  // it is disabled. A domain and its hosted zone are set together or, where optional, not at
+  // all.
+  const { ingress } = settings[environment];
+  const domainOptional = ingress.via === 'http-api' && !ingress.disableDefaultEndpoint;
+  const dnsSet = read(SOURCES.domain) !== undefined || read(SOURCES.hostedZoneId) !== undefined;
+  const dns: DnsTarget | undefined =
+    domainOptional && !dnsSet
+      ? undefined
+      : {
+          domain: required(SOURCES.domain, DOMAIN, 'a lowercase DNS name such as example.com'),
+          hostedZoneId: required(
+            SOURCES.hostedZoneId,
+            HOSTED_ZONE_ID,
+            'a Route 53 hosted zone id (Z...)',
+          ),
+        };
   const imageTag = required(SOURCES.imageTag, IMAGE_TAG, 'a valid container image tag');
   if (imageTag === 'latest') {
     issues.push(`${describe(SOURCES.imageTag)} must name an immutable tag, not latest`);
@@ -386,8 +418,7 @@ export function loadDeployTarget(
     environment,
     account,
     region,
-    domain,
-    hostedZoneId,
+    dns,
     imageTag,
     githubRepository,
     alarmEmail,

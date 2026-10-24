@@ -5,6 +5,7 @@ import * as ses from 'aws-cdk-lib/aws-ses';
 import * as actions from 'aws-cdk-lib/aws-ses-actions';
 import type { Construct } from 'constructs';
 
+import type { DeployTarget, DnsTarget } from '../config.ts';
 import { ListoraStack, type ListoraStackProps } from './common.ts';
 
 /** Raw inbound messages land under this prefix of the inbound mail bucket. */
@@ -20,30 +21,22 @@ export const INBOUND_MAIL_SUBDOMAIN = 'in';
  *
  * SES allows one active receipt rule set per account and region, and CloudFormation cannot
  * activate one, so the first deploy is followed by one manual activation (infra/README.md).
+ *
+ * Receiving email needs a domain. Without one (personal, until a domain is added) the stack
+ * holds only the empty bucket, so the worker's grant and the deploy are the same either way;
+ * sales are then detected by the scheduled checks and marketplace webhooks alone.
  */
 export class EmailStack extends ListoraStack {
   readonly inboundMailBucket: s3.Bucket;
-  readonly receiptRuleSet: ses.ReceiptRuleSet;
+  /** Absent without a domain. */
+  readonly receiptRuleSet: ses.ReceiptRuleSet | undefined;
 
   constructor(scope: Construct, id: string, props: ListoraStackProps) {
     super(scope, id, props);
     const { target } = props;
-    const inboundDomain = `${INBOUND_MAIL_SUBDOMAIN}.${target.domain}`;
+    const { dns } = target;
 
-    const zone = route53.PublicHostedZone.fromHostedZoneAttributes(this, 'Zone', {
-      hostedZoneId: target.hostedZoneId,
-      zoneName: target.domain,
-    });
-
-    new ses.EmailIdentity(this, 'DomainIdentity', {
-      identity: ses.Identity.publicHostedZone(zone),
-    });
-
-    new route53.MxRecord(this, 'InboundMx', {
-      zone,
-      recordName: INBOUND_MAIL_SUBDOMAIN,
-      values: [{ priority: 10, hostName: `inbound-smtp.${target.region}.amazonaws.com` }],
-    });
+    if (dns !== undefined) this.verifyDomain(dns, target);
 
     this.inboundMailBucket = new s3.Bucket(this, 'InboundMail', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -58,10 +51,34 @@ export class EmailStack extends ListoraStack {
       ],
     });
 
-    this.receiptRuleSet = new ses.ReceiptRuleSet(this, 'ReceiptRules', {
+    this.receiptRuleSet = dns === undefined ? undefined : this.storeMail(dns, target);
+  }
+
+  /** The SES domain identity (Easy DKIM) and the MX record for `in.<domain>`. */
+  private verifyDomain(dns: DnsTarget, target: DeployTarget): void {
+    const zone = route53.PublicHostedZone.fromHostedZoneAttributes(this, 'Zone', {
+      hostedZoneId: dns.hostedZoneId,
+      zoneName: dns.domain,
+    });
+
+    new ses.EmailIdentity(this, 'DomainIdentity', {
+      identity: ses.Identity.publicHostedZone(zone),
+    });
+
+    new route53.MxRecord(this, 'InboundMx', {
+      zone,
+      recordName: INBOUND_MAIL_SUBDOMAIN,
+      values: [{ priority: 10, hostName: `inbound-smtp.${target.region}.amazonaws.com` }],
+    });
+  }
+
+  /** Receipt rules that scan every message to `in.<domain>` and store it in the bucket. */
+  private storeMail(dns: DnsTarget, target: DeployTarget): ses.ReceiptRuleSet {
+    const inboundDomain = `${INBOUND_MAIL_SUBDOMAIN}.${dns.domain}`;
+    const receiptRuleSet = new ses.ReceiptRuleSet(this, 'ReceiptRules', {
       receiptRuleSetName: `listora-${target.environment}`,
     });
-    this.receiptRuleSet.addRule('StoreSaleEmail', {
+    receiptRuleSet.addRule('StoreSaleEmail', {
       recipients: [inboundDomain],
       scanEnabled: true,
       tlsPolicy: ses.TlsPolicy.REQUIRE,
@@ -71,6 +88,7 @@ export class EmailStack extends ListoraStack {
     });
 
     new CfnOutput(this, 'InboundMailDomain', { value: inboundDomain });
-    new CfnOutput(this, 'ReceiptRuleSetName', { value: this.receiptRuleSet.receiptRuleSetName });
+    new CfnOutput(this, 'ReceiptRuleSetName', { value: receiptRuleSet.receiptRuleSetName });
+    return receiptRuleSet;
   }
 }

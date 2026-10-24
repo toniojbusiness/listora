@@ -6,9 +6,11 @@ page estimates its monthly AWS bill, explains the choices that keep it low, and 
 levers that would cut it further. The design is described in
 [infra/README.md](../infra/README.md#the-personal-environment).
 
-**Estimate: about $32 a month, or about $34 a month with browser automation**, before any
-Free Tier credit. A copy of the staging layout (NAT gateway, load balancer, two services) would
-cost about $100.
+**Estimate: about $32 a month, or about $33 a month with browser automation**, before any
+Free Tier credit, deployed as it starts: without a domain
+([infra/README.md](../infra/README.md#without-a-domain)). It costs $0.56 more once a domain is
+added (its Route 53 hosted zone and SES inbound sale email), plus the domain's registration.
+A copy of the staging layout (NAT gateway, load balancer, two services) would cost about $100.
 
 Prices were read on 2026-10-24 for US East (N. Virginia), on demand, from the AWS pricing
 pages linked below (the price data behind their tables). A month is 730 hours. Taxes, the
@@ -17,7 +19,7 @@ domain registration, and the Anthropic API bill are not included.
 ## Assumptions
 
 - One reseller, about 500 items with 6 photos each, light traffic: about 100,000 API
-  requests, 300 forwarded sale emails, and 1 GB of logs a month.
+  requests and 1 GB of logs a month, plus 300 forwarded sale emails once a domain is added.
 - Each photo stores about 2.2 MB (a full-size original plus the listing, AI, and thumbnail
   derivatives), so photos take about 7 GB, about 8 GB with replaced versions kept for 30 days.
 - Marketplaces fetch listing photos well within CloudFront's always-free tier.
@@ -27,27 +29,41 @@ domain registration, and the Anthropic API bill are not included.
 
 ## Line items
 
-| Item                                 | Usage                                                            |    Monthly |
-| ------------------------------------ | ---------------------------------------------------------------- | ---------: |
-| RDS PostgreSQL `db.t4g.micro`        | Single-AZ, $0.016 an hour                                        |     $11.68 |
-| RDS storage                          | 20 GB gp3 at $0.115 per GB                                       |      $2.30 |
-| RDS automated backups                | 7 days; free up to the provisioned storage                       |      $0.00 |
-| Fargate task (API and worker)        | 0.25 vCPU at $0.04048 and 1 GB at $0.004446 an hour (x86)        |     $10.63 |
-| Public IPv4 address of the task      | 1 address at $0.005 an hour                                      |      $3.65 |
-| API Gateway HTTP API                 | 100,000 requests at $1.00 per million; the VPC link is free      |      $0.10 |
-| Cloud Map                            | 1 registered task at $0.10, plus its private DNS zone at $0.50   |      $0.60 |
-| Route 53 public hosted zone          | 1 zone at $0.50; alias queries to API Gateway are free           |      $0.50 |
-| S3 photo storage and requests        | 8 GB at $0.023 per GB, 15,000 PUTs at $0.005 per 1,000           |      $0.27 |
-| CloudFront                           | Within the always-free 1 TB and 10 million requests              |      $0.00 |
-| SES inbound sale email               | 300 emails at $0.10 per 1,000, plus 256 KB chunks at $0.09/1,000 |      $0.06 |
-| Secrets Manager                      | 2 secrets (database, Anthropic key) at $0.40                     |      $0.80 |
-| KMS token key                        | 1 key at $1.00 (each yearly rotation adds $1, for two years)     |      $1.00 |
-| CloudWatch Logs                      | 1 GB ingested at $0.50, kept 7 days at $0.03 per GB              |      $0.51 |
-| CloudWatch alarms                    | 8 standard alarms, within the always-free 10                     |      $0.00 |
-| EventBridge task-stopped rule        | AWS service events delivered to SNS have no EventBridge charge   |      $0.00 |
-| ECR image storage                    | About 1 GB at $0.10 per GB                                       |      $0.10 |
-| ACM certificate, SNS email, data out | Free (public certificates; SNS and data transfer free tiers)     |      $0.00 |
-| **Total**                            |                                                                  | **$32.20** |
+| Item                                 | Usage                                                           |    Monthly |
+| ------------------------------------ | --------------------------------------------------------------- | ---------: |
+| RDS PostgreSQL `db.t4g.micro`        | Single-AZ, $0.016 an hour                                       |     $11.68 |
+| RDS storage                          | 20 GB gp3 at $0.115 per GB                                      |      $2.30 |
+| RDS automated backups                | 7 days; free up to the provisioned storage                      |      $0.00 |
+| Fargate task (API and worker)        | 0.25 vCPU at $0.04048 and 1 GB at $0.004446 an hour (x86)       |     $10.63 |
+| Public IPv4 address of the task      | 1 address at $0.005 an hour                                     |      $3.65 |
+| API Gateway HTTP API                 | 100,000 requests at $1.00 per million; the VPC link is free     |      $0.10 |
+| Cloud Map                            | 1 registered task at $0.10, plus its private DNS zone at $0.50  |      $0.60 |
+| Route 53 public hosted zone          | None without a domain (the API uses its execute-api URL)        |      $0.00 |
+| S3 photo storage and requests        | 8 GB at $0.023 per GB, 15,000 PUTs at $0.005 per 1,000          |      $0.27 |
+| CloudFront                           | Within the always-free 1 TB and 10 million requests             |      $0.00 |
+| SES inbound sale email               | None without a domain (SES receives only for a verified domain) |      $0.00 |
+| Secrets Manager                      | 2 secrets (database, Anthropic key) at $0.40                    |      $0.80 |
+| KMS token key                        | 1 key at $1.00 (each yearly rotation adds $1, for two years)    |      $1.00 |
+| CloudWatch Logs                      | 1 GB ingested at $0.50, kept 7 days at $0.03 per GB             |      $0.51 |
+| CloudWatch alarms                    | 8 standard alarms, within the always-free 10                    |      $0.00 |
+| EventBridge task-stopped rule        | AWS service events delivered to SNS have no EventBridge charge  |      $0.00 |
+| ECR image storage                    | About 1 GB at $0.10 per GB                                      |      $0.10 |
+| ACM certificate, SNS email, data out | Free (public certificates; SNS and data transfer free tiers)    |      $0.00 |
+| **Total**                            |                                                                 | **$31.64** |
+
+## With a domain
+
+A domain adds two line items, and the API moves to `https://api.<domain>` at no extra
+charge (ACM certificates and alias queries to API Gateway are free):
+
+| Item                        | Usage                                                            |    Monthly |
+| --------------------------- | ---------------------------------------------------------------- | ---------: |
+| Route 53 public hosted zone | 1 zone at $0.50; alias queries to API Gateway are free           |      $0.50 |
+| SES inbound sale email      | 300 emails at $0.10 per 1,000, plus 256 KB chunks at $0.09/1,000 |      $0.06 |
+| **Total with a domain**     | $31.64 plus these                                                | **$32.20** |
+
+With browser automation as well, the total is $33.68. The domain's registration is billed by
+its registrar and is not included.
 
 ## Browser automation
 
@@ -56,8 +72,8 @@ the headless-Chromium runner (decision D1 in [architecture.md](architecture.md))
 is reserved at 1 vCPU and 4 GB, with no task while idle (`browserRunner` in
 `infra/src/config.ts`), and runs as an on-demand Fargate task: one per batch of listing
 actions, and one for each scheduled sale check, about every 12 hours by default (the
-automation tasks will later adapt the interval to the seller's sales history). Between checks,
-forwarded sale emails detect sales almost immediately.
+automation tasks will later adapt the interval to the seller's sales history). Once a domain
+is added, forwarded sale emails also detect sales between checks, almost immediately.
 
 On demand the runner costs $0.0583 an hour (1 vCPU at $0.04048 and 4 GB at $0.004446, x86),
 plus $0.005 an hour for its public address while it runs. Assumptions:
@@ -77,7 +93,7 @@ plus $0.005 an hour for its public address while it runs. Assumptions:
 | EventBridge Scheduler              | 60 invocations, within the free 14 million a month |      $0.00 |
 | ECR storage for the Chromium image | About 1.5 GB more at $0.10 per GB                  |      $0.15 |
 | **Automation subtotal**            |                                                    |  **$1.48** |
-| **Total with browser automation**  | $32.20 plus the automation subtotal                | **$33.68** |
+| **Total with browser automation**  | $31.64 plus the automation subtotal                | **$33.12** |
 
 An always-on runner (one 1 vCPU / 4 GB task 24/7) is the alternative if per-job startup ever
 gets in the way: about $42.56 a month, plus $3.65 for its address. Listing jobs scale with
@@ -85,14 +101,15 @@ listing volume, at about $0.06 an hour of browser work.
 
 ## What the design avoids
 
-| Choice                                                    | Instead of                                                                            | Saves a month |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------: |
-| Tasks in public subnets, egress through their own address | A NAT gateway: $0.045 an hour ($32.85), its own $3.65 address, $0.045 per GB          |     about $36 |
-| API Gateway HTTP API with a VPC link                      | An Application Load Balancer: $16.43, LCUs, two addresses at $7.30                    |     about $24 |
-| One task running both containers (0.25 vCPU, 1 GB)        | Two tasks of 0.25 vCPU and 0.5 GB ($18.02) and a second address ($3.65)               |     about $11 |
-| RDS `db.t4g.micro`, single-AZ ($13.98 with storage)       | Aurora Serverless v2: at least 0.5 ACU at $0.12 an hour ($43.80) plus storage and I/O |     about $30 |
-| No rejected-traffic flow logs                             | Logging constant internet scanner traffic at $0.50 per GB                             |      $1 to $3 |
-| 7-day log retention                                       | 30 days (staging) or 90 days (prod)                                                   |         cents |
+| Choice                                                         | Instead of                                                                            | Saves a month |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------: |
+| Tasks in public subnets, egress through their own address      | A NAT gateway: $0.045 an hour ($32.85), its own $3.65 address, $0.045 per GB          |     about $36 |
+| API Gateway HTTP API with a VPC link                           | An Application Load Balancer: $16.43, LCUs, two addresses at $7.30                    |     about $24 |
+| One task running both containers (0.25 vCPU, 1 GB)             | Two tasks of 0.25 vCPU and 0.5 GB ($18.02) and a second address ($3.65)               |     about $11 |
+| RDS `db.t4g.micro`, single-AZ ($13.98 with storage)            | Aurora Serverless v2: at least 0.5 ACU at $0.12 an hour ($43.80) plus storage and I/O |     about $30 |
+| No rejected-traffic flow logs                                  | Logging constant internet scanner traffic at $0.50 per GB                             |      $1 to $3 |
+| 7-day log retention                                            | 30 days (staging) or 90 days (prod)                                                   |         cents |
+| No domain until one is wanted (the API at its execute-api URL) | A Route 53 hosted zone at $0.50                                                       |         $0.50 |
 
 Interface VPC endpoints were also considered in place of the NAT gateway. ECR (two
 endpoints), CloudWatch Logs, Secrets Manager, and KMS at $0.01 per endpoint per zone an hour

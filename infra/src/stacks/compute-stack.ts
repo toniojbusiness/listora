@@ -17,7 +17,7 @@ import type * as s3 from 'aws-cdk-lib/aws-s3';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import type { Construct } from 'constructs';
 
-import type { ServiceName, ServiceSize } from '../config.ts';
+import type { DnsTarget, ServiceName, ServiceSize } from '../config.ts';
 import { API_PORT, containerEnvironment, SERVICE_COMMANDS } from '../containers.ts';
 import { ListoraStack, removalPolicyFor, taskPlacement, type ListoraStackProps } from './common.ts';
 import { INBOUND_MAIL_PREFIX } from './email-stack.ts';
@@ -47,7 +47,7 @@ const TARGET_CPU_PERCENT = 60;
  */
 export const HTTP_API_THROTTLE = { rateLimit: 50, burstLimit: 100 } as const;
 
-/** What serves `https://api.<domain>` (`ingress`), for the alarms. */
+/** What serves the API (`ingress`), for the alarms. */
 export type ApiEndpoint =
   | {
       readonly kind: 'load-balancer';
@@ -64,9 +64,15 @@ export interface ListoraService {
 
 /**
  * Fargate services for the API and the worker on one ECS cluster, plus the public HTTPS
- * endpoint of the API at `https://api.<domain>`: an Application Load Balancer, or an API
- * Gateway HTTP API reaching the tasks through a VPC link and Cloud Map (`ingress`). The two
- * processes run as two services, or as two containers of one service (`services.layout`).
+ * endpoint of the API: an Application Load Balancer, or an API Gateway HTTP API reaching the
+ * tasks through a VPC link and Cloud Map (`ingress`). The two processes run as two services,
+ * or as two containers of one service (`services.layout`).
+ *
+ * With a domain, the API is served at `https://api.<domain>`, with an ACM certificate and an
+ * alias record in the domain's zone, and that is the `ApiUrl` output. Without one (HTTP API
+ * only), it answers at its default `execute-api` URL, which AWS serves over TLS, no DNS
+ * resource is created, and `ApiUrl` is that URL. The HTTP API keeps the `execute-api` URL
+ * alongside a domain unless `disableDefaultEndpoint` is set.
  *
  * Container configuration comes from `containerEnvironment` (src/containers.ts). The database
  * password reaches the processes only as `PGPASSWORD`, injected by ECS from the RDS-generated
@@ -87,7 +93,6 @@ export class ComputeStack extends ListoraStack {
     super(scope, id, props);
     const { settings, target } = props;
     const environment = target.environment;
-    const apiDomain = `${API_SUBDOMAIN}.${target.domain}`;
 
     this.cluster = new ecs.Cluster(this, 'Cluster', {
       clusterName: `listora-${environment}`,
@@ -107,7 +112,7 @@ export class ComputeStack extends ListoraStack {
       portMappings: service === 'api' ? [{ containerPort: API_PORT }] : [],
       // Without a load balancer, ECS itself checks the API (the same liveness path) and
       // replaces a task that fails.
-      ...(service === 'api' && settings.ingress === 'http-api'
+      ...(service === 'api' && settings.ingress.via === 'http-api'
         ? { healthCheck: apiHealthCheck() }
         : {}),
       readonlyRootFilesystem: true,
@@ -159,18 +164,12 @@ export class ComputeStack extends ListoraStack {
         assertNever(layout);
     }
 
-    const zone = route53.PublicHostedZone.fromHostedZoneAttributes(this, 'Zone', {
-      hostedZoneId: target.hostedZoneId,
-      zoneName: target.domain,
-    });
-    const certificate = new acm.Certificate(this, 'ApiCertificate', {
-      domainName: apiDomain,
-      validation: acm.CertificateValidation.fromDns(zone),
-    });
-
-    let aliasTarget: route53.IAliasRecordTarget;
-    switch (settings.ingress) {
+    const apiDomain = target.dns === undefined ? undefined : this.apiDomain(target.dns);
+    let apiUrl: string;
+    switch (settings.ingress.via) {
       case 'load-balancer': {
+        // loadDeployTarget requires a domain for this ingress.
+        if (apiDomain === undefined) throw new Error('a load balancer needs the API domain');
         const loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'LoadBalancer', {
           loadBalancerName: `listora-${environment}-api`,
           vpc: props.vpc,
@@ -183,7 +182,7 @@ export class ComputeStack extends ListoraStack {
         loadBalancer.addRedirect({ sourcePort: 80, targetPort: 443, open: false });
         const https = loadBalancer.addListener('Https', {
           port: 443,
-          certificates: [certificate],
+          certificates: [apiDomain.certificate],
           sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
           open: false,
         });
@@ -206,7 +205,7 @@ export class ComputeStack extends ListoraStack {
           },
         });
         this.endpoint = { kind: 'load-balancer', loadBalancer, targetGroup };
-        aliasTarget = new route53Targets.LoadBalancerTarget(loadBalancer);
+        apiUrl = apiDomain.alias(new route53Targets.LoadBalancerTarget(loadBalancer));
         break;
       }
       case 'http-api': {
@@ -233,16 +232,28 @@ export class ComputeStack extends ListoraStack {
           subnets: taskPlacement(settings).subnets,
           securityGroups: [props.ingressSecurityGroup],
         });
-        const domainName = new apigwv2.DomainName(this, 'ApiDomain', {
-          domainName: apiDomain,
-          certificate,
-          securityPolicy: apigwv2.SecurityPolicy.TLS_1_2,
-        });
+        const { disableDefaultEndpoint } = settings.ingress;
+        // loadDeployTarget requires a domain when the execute-api URL is off.
+        if (disableDefaultEndpoint && apiDomain === undefined) {
+          throw new Error('an HTTP API without its default endpoint needs the API domain');
+        }
+        const custom =
+          apiDomain === undefined
+            ? undefined
+            : {
+                ...apiDomain,
+                domainName: new apigwv2.DomainName(this, 'ApiDomain', {
+                  domainName: apiDomain.name,
+                  certificate: apiDomain.certificate,
+                  securityPolicy: apigwv2.SecurityPolicy.TLS_1_2,
+                }),
+              };
         const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
           apiName: `listora-${environment}-api`,
           description: `Listora ${environment} API`,
-          // Only https://api.<domain> serves the API; the execute-api URL is turned off.
-          disableExecuteApiEndpoint: true,
+          // Kept on after a domain is added, until every URL registered with a third party
+          // has moved to https://api.<domain>.
+          disableExecuteApiEndpoint: disableDefaultEndpoint,
           createDefaultStage: false,
           defaultIntegration: new integrations.HttpServiceDiscoveryIntegration('Api', discovery, {
             vpcLink,
@@ -253,27 +264,55 @@ export class ComputeStack extends ListoraStack {
           stageName: '$default',
           autoDeploy: true,
           throttle: HTTP_API_THROTTLE,
-          domainMapping: { domainName },
+          ...(custom === undefined ? {} : { domainMapping: { domainName: custom.domainName } }),
         });
         this.endpoint = { kind: 'http-api', httpApi };
-        aliasTarget = new route53Targets.ApiGatewayv2DomainProperties(
-          domainName.regionalDomainName,
-          domainName.regionalHostedZoneId,
-        );
+        apiUrl =
+          custom === undefined
+            ? httpApi.apiEndpoint
+            : custom.alias(
+                new route53Targets.ApiGatewayv2DomainProperties(
+                  custom.domainName.regionalDomainName,
+                  custom.domainName.regionalHostedZoneId,
+                ),
+              );
         break;
       }
       default:
         assertNever(settings.ingress);
     }
 
-    new route53.ARecord(this, 'ApiAlias', {
-      zone,
-      recordName: API_SUBDOMAIN,
-      target: route53.RecordTarget.fromAlias(aliasTarget),
-    });
-
-    new CfnOutput(this, 'ApiUrl', { value: `https://${apiDomain}` });
+    new CfnOutput(this, 'ApiUrl', { value: apiUrl });
     new CfnOutput(this, 'ClusterName', { value: this.cluster.clusterName });
+  }
+
+  /**
+   * `api.<domain>`: its certificate, validated in the domain's hosted zone, and `alias`, which
+   * points the name at the endpoint and returns the API's URL.
+   */
+  private apiDomain(dns: DnsTarget): {
+    readonly name: string;
+    readonly certificate: acm.ICertificate;
+    readonly alias: (target: route53.IAliasRecordTarget) => string;
+  } {
+    const name = `${API_SUBDOMAIN}.${dns.domain}`;
+    const zone = route53.PublicHostedZone.fromHostedZoneAttributes(this, 'Zone', {
+      hostedZoneId: dns.hostedZoneId,
+      zoneName: dns.domain,
+    });
+    const certificate = new acm.Certificate(this, 'ApiCertificate', {
+      domainName: name,
+      validation: acm.CertificateValidation.fromDns(zone),
+    });
+    const alias = (target: route53.IAliasRecordTarget): string => {
+      new route53.ARecord(this, 'ApiAlias', {
+        zone,
+        recordName: API_SUBDOMAIN,
+        target: route53.RecordTarget.fromAlias(target),
+      });
+      return `https://${name}`;
+    };
+    return { name, certificate, alias };
   }
 
   /**
@@ -336,7 +375,7 @@ export class ComputeStack extends ListoraStack {
       minHealthyPercent: 100,
       maxHealthyPercent: 200,
       propagateTags: ecs.PropagatedTagSource.SERVICE,
-      ...(runsApi && settings.ingress === 'load-balancer'
+      ...(runsApi && settings.ingress.via === 'load-balancer'
         ? { healthCheckGracePeriod: Duration.seconds(60) }
         : {}),
     });

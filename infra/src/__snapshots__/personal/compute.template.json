@@ -707,25 +707,6 @@
         "apptaskTaskRoleB0806AA3"
       ]
     },
-    "ApiCertificate1D5B2B3B": {
-      "Type": "AWS::CertificateManager::Certificate",
-      "Properties": {
-        "DomainName": "api.personal.example.com",
-        "DomainValidationOptions": [
-          {
-            "DomainName": "api.personal.example.com",
-            "HostedZoneId": "Z000000000PERSONAL"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "listora-personal-compute/ApiCertificate"
-          }
-        ],
-        "ValidationMethod": "DNS"
-      }
-    },
     "Namespace9B63B8C8": {
       "Type": "AWS::ServiceDiscovery::PrivateDnsNamespace",
       "Properties": {
@@ -771,26 +752,11 @@
         ]
       }
     },
-    "ApiDomain2D27DFFC": {
-      "Type": "AWS::ApiGatewayV2::DomainName",
-      "Properties": {
-        "DomainName": "api.personal.example.com",
-        "DomainNameConfigurations": [
-          {
-            "CertificateArn": {
-              "Ref": "ApiCertificate1D5B2B3B"
-            },
-            "EndpointType": "REGIONAL",
-            "SecurityPolicy": "TLS_1_2"
-          }
-        ]
-      }
-    },
     "HttpApiF5A9A8A7": {
       "Type": "AWS::ApiGatewayV2::Api",
       "Properties": {
         "Description": "Listora personal API",
-        "DisableExecuteApiEndpoint": true,
+        "DisableExecuteApiEndpoint": false,
         "Name": "listora-personal-api",
         "ProtocolType": "HTTP"
       }
@@ -849,53 +815,17 @@
           "ThrottlingRateLimit": 50
         },
         "StageName": "$default"
-      },
-      "DependsOn": [
-        "ApiDomain2D27DFFC"
-      ]
-    },
-    "DefaultStagelistorapersonalcomputeApiDomainundefinedED8E6E58": {
-      "Type": "AWS::ApiGatewayV2::ApiMapping",
-      "Properties": {
-        "ApiId": {
-          "Ref": "HttpApiF5A9A8A7"
-        },
-        "DomainName": {
-          "Ref": "ApiDomain2D27DFFC"
-        },
-        "Stage": "$default"
-      },
-      "DependsOn": [
-        "ApiDomain2D27DFFC",
-        "DefaultStageEE28A986"
-      ]
-    },
-    "ApiAliasF1DE69EE": {
-      "Type": "AWS::Route53::RecordSet",
-      "Properties": {
-        "AliasTarget": {
-          "DNSName": {
-            "Fn::GetAtt": [
-              "ApiDomain2D27DFFC",
-              "RegionalDomainName"
-            ]
-          },
-          "HostedZoneId": {
-            "Fn::GetAtt": [
-              "ApiDomain2D27DFFC",
-              "RegionalHostedZoneId"
-            ]
-          }
-        },
-        "HostedZoneId": "Z000000000PERSONAL",
-        "Name": "api.personal.example.com.",
-        "Type": "A"
       }
     }
   },
   "Outputs": {
     "ApiUrl": {
-      "Value": "https://api.personal.example.com"
+      "Value": {
+        "Fn::GetAtt": [
+          "HttpApiF5A9A8A7",
+          "ApiEndpoint"
+        ]
+      }
     },
     "ClusterName": {
       "Value": {

@@ -83,7 +83,7 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
     props('storage', 'photo bucket and CloudFront'),
   );
   const email = new EmailStack(app, id('email'), props('email', 'SES inbound sale email'));
-  const front = settings.ingress === 'load-balancer' ? 'an ALB' : 'an API Gateway HTTP API';
+  const front = settings.ingress.via === 'load-balancer' ? 'an ALB' : 'an API Gateway HTTP API';
   const compute = new ComputeStack(app, id('compute'), {
     ...props('compute', `ECS Fargate api and worker behind ${front}`),
     vpc: network.vpc,

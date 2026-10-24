@@ -1,8 +1,9 @@
-import type { EnvironmentName } from './config.ts';
+import { ENVIRONMENT_NAMES, type EnvironmentName } from './config.ts';
 
 /**
  * Placeholder deploy settings for offline synthesis (tests and `npm run infra:synth`). The
  * accounts are not real and the domains are reserved example names; nothing here can deploy.
+ * Personal has no domain, as it deploys until one is added (`PLACEHOLDER_SHAPES` adds one).
  */
 export const PLACEHOLDER_CONTEXT: Readonly<Record<EnvironmentName, Record<string, string>>> = {
   staging: {
@@ -25,11 +26,30 @@ export const PLACEHOLDER_CONTEXT: Readonly<Record<EnvironmentName, Record<string
     env: 'personal',
     account: '333333333333',
     region: 'us-east-1',
-    domain: 'personal.example.com',
-    hostedZoneId: 'Z000000000PERSONAL',
     imageTag: 'synth-check',
   },
 };
+
+/** One deployable shape: an environment's placeholders with `overrides` applied. */
+export interface PlaceholderShape {
+  /** Names the shape's snapshot directory and `cdk.out` subdirectory. */
+  readonly name: string;
+  readonly environment: EnvironmentName;
+  readonly overrides: Readonly<Record<string, string>>;
+}
+
+/**
+ * Every shape the tests, template snapshots, and `npm run infra:synth` cover: each
+ * environment as placed above, plus personal once a domain is added.
+ */
+export const PLACEHOLDER_SHAPES: readonly PlaceholderShape[] = [
+  ...ENVIRONMENT_NAMES.map((environment) => ({ name: environment, environment, overrides: {} })),
+  {
+    name: 'personal-domain',
+    environment: 'personal',
+    overrides: { domain: 'personal.example.com', hostedZoneId: 'Z000000000PERSONAL' },
+  },
+];
 
 /**
  * The process environment for offline synthesis: the caller's, minus every AWS, CDK, and

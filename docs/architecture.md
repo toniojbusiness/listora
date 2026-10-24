@@ -623,13 +623,16 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   task. `/health/ready` (database reachable) is for deploy checks and operators. `personal`
   runs both containers in one task in public subnets (no NAT) behind an API Gateway HTTP API
   instead of the load balancer, and ECS runs the same `/health/live` check in the container.
+  Personal can also run without a domain: the API then answers at the HTTP API's default
+  `execute-api` URL, and no sale email is received until a domain is added.
 - **Configuration.** Containers get exactly the environment in `infra/src/containers.ts`, and
   a test runs the API's and worker's config loaders on it. A task that adds a required config
   key adds it there (and, for a secret, to `APP_SECRETS` in `infra/src/config.ts`). The
   database password reaches the processes only as `PGPASSWORD` from the RDS secret.
-- **Data.** RDS PostgreSQL 18 (Multi-AZ in prod; deletion protection in prod and personal), a private photo bucket
-  whose `public/` prefix CloudFront serves by exact key, SES inbound mail for `in.<domain>`
-  stored in a private bucket, and a KMS key for token envelope encryption.
+- **Data.** RDS PostgreSQL 18 (Multi-AZ in prod; deletion protection in prod and personal), a
+  private photo bucket whose `public/` prefix CloudFront serves by exact key (at its
+  `*.cloudfront.net` domain), SES inbound mail for `in.<domain>` stored in a private bucket,
+  and a KMS key for token envelope encryption.
 - **Deploys** run only from the manual Deploy workflow, on `main`, inside the protected GitHub
   environment, with OIDC role assumption (no stored AWS keys). Images are tagged with the
   commit and immutable. The environment's protection rules and the CDK bootstrap's
