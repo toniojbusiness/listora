@@ -1,0 +1,20 @@
+{
+  "name": "@listora/api-contract",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Listora OpenAPI v1 contract and the TypeScript types generated from it.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "node tools/codegen.ts generate",
+    "lint": "redocly lint openapi.yaml",
+    "check": "npm run lint && node tools/codegen.ts check && node tools/codegen.ts swift-test"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.71.0",
+    "openapi-typescript": "^7.13.0",
+    "yaml": "^2.9.1"
+  }
+}

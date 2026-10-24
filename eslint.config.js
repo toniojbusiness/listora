@@ -7,7 +7,16 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   {
-    ignores: ['**/node_modules/', '**/.tsbuild/', '.local/', '.build/', 'coverage/', 'apps/ios/'],
+    ignores: [
+      '**/node_modules/',
+      '**/.tsbuild/',
+      '.local/',
+      '.build/',
+      'coverage/',
+      'apps/ios/',
+      // Generated from openapi.yaml by `npm run contract:generate`; checked for drift instead.
+      'packages/api-contract/src/generated/',
+    ],
   },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,

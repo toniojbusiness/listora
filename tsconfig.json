@@ -3,6 +3,7 @@
   "files": [],
   "references": [
     { "path": "packages/shared" },
+    { "path": "packages/api-contract" },
     { "path": "packages/testing" },
     { "path": "packages/db" },
     { "path": "apps/api" },

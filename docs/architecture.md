@@ -20,19 +20,19 @@ These two rules from the product owner override every other design choice.
 
 ## 2. Stack
 
-| Area       | Choice                                                                                         | Why                                                                                       |
-| ---------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| iPhone app | Native Swift 6 / SwiftUI, iOS 18+, XcodeGen, local SPM modules, GRDB                           | Camera, Vision OCR, barcodes, background upload, Share Extension, and StoreKit are native |
-| Backend    | TypeScript on Node 26: Fastify API plus a worker process                                       | One language for the API, worker, infra (CDK), and the later web app                      |
-| Contract   | OpenAPI 3.1 → generated TS types and Swift client; CI fails on drift (T-03)                    | Client and server cannot drift apart                                                      |
-| Database   | PostgreSQL 18 (Homebrew locally, RDS in prod), Kysely, plain SQL migrations                    | Relational inventory, strong constraints, JSONB for marketplace payloads                  |
-| Jobs       | Graphile Worker (Postgres-backed), enqueued in the same transaction as the operation row       | No second datastore; an operation can't be recorded without its job, or the reverse       |
-| Photos     | Client resizes and strips GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
-| Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                 | Managed and in the same AWS account                                                       |
-| Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                 | App Store rule 3.1.3(b)                                                                   |
-| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK          | Standard, robust, one security boundary                                                   |
-| Push       | APNs (token-based key); fake driver in dev                                                     | Delist alerts and assisted tasks                                                          |
-| Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                     | No extra package manager or build system                                                  |
+| Area       | Choice                                                                                          | Why                                                                                       |
+| ---------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| iPhone app | Native Swift 6 / SwiftUI, iOS 18+, XcodeGen, local SPM modules, GRDB                            | Camera, Vision OCR, barcodes, background upload, Share Extension, and StoreKit are native |
+| Backend    | TypeScript on Node 26: Fastify API plus a worker process                                        | One language for the API, worker, infra (CDK), and the later web app                      |
+| Contract   | OpenAPI 3.1 in `packages/api-contract` → generated TS types and Swift client; CI fails on drift | Client and server cannot drift apart                                                      |
+| Database   | PostgreSQL 18 (Homebrew locally, RDS in prod), Kysely, plain SQL migrations                     | Relational inventory, strong constraints, JSONB for marketplace payloads                  |
+| Jobs       | Graphile Worker (Postgres-backed), enqueued in the same transaction as the operation row        | No second datastore; an operation can't be recorded without its job, or the reverse       |
+| Photos     | Client resizes and strips GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives  | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
+| Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                  | Managed and in the same AWS account                                                       |
+| Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                  | App Store rule 3.1.3(b)                                                                   |
+| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK           | Standard, robust, one security boundary                                                   |
+| Push       | APNs (token-based key); fake driver in dev                                                      | Delist alerts and assisted tasks                                                          |
+| Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                      | No extra package manager or build system                                                  |
 
 ### TypeScript conventions
 
@@ -89,6 +89,7 @@ apps/
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
+  api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
   db/           SQL migrations, migration runner, Kysely types, SKU allocator (@listora/db)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
@@ -308,15 +309,22 @@ read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
 
 ## 10. Testing and CI
 
-- `npm run check` runs the format check, lint (ESLint and shellcheck), type check, unit tests,
-  and integration tests. It must pass before merge. When iOS code is touched, `make ios-lint`
-  and `make ios-test` must pass too. `make ios-test` runs the package, unit, and UI tests on an
-  existing iPhone 17 simulator and keeps DerivedData in `.build/ios`.
+- `npm run check` runs the format check, lint (ESLint and shellcheck), type check, the API
+  contract check, unit tests, and integration tests. It must pass before merge. When iOS code
+  is touched, `make ios-lint` and `make ios-test` must pass too. `make ios-test` runs the
+  package, unit, and UI tests on an existing iPhone 17 simulator and keeps DerivedData in
+  `.build/ios`.
 - Integration tests use a real Postgres: the local `listora_test` database from
   `scripts/dev-db.sh` (locally and in CI), or `TEST_DATABASE_URL` when set. They fail, and
   never skip, when the database is unreachable. Tests that need their own schema create a
   throwaway database with `createScratchDatabase` from `@listora/testing` and drop it after.
 - Tests cover acceptance criteria **and failure paths**. Process-level tests start the real
   entry points with `node src/main.ts` (see `startNodeProcess` in `@listora/testing`).
+- **API contract.** `packages/api-contract/openapi.yaml` is the only place an endpoint or
+  payload shape is defined. The server imports its types from `@listora/api-contract` and
+  the iOS app uses the generated `ListoraAPI` Swift package. `npm run contract:check` lints
+  the spec, fails when the committed generated code is stale, and tests the Swift package.
+  Its conventions (error model, idempotency keys, pagination, Money) are in
+  [packages/api-contract/README.md](../packages/api-contract/README.md).
 - CI runs the same fresh-clone path as local development; see the CI section of the
   [README](../README.md#ci). A macOS job runs `make ios-lint` and `make ios-test`.

@@ -1,0 +1,10 @@
+# swift-openapi-generator configuration for the ListoraAPI Swift package.
+# Used by `npm run contract:generate`; the output is committed under Sources/ListoraAPI/Generated.
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic
+additionalFileComments:
+  - 'swift-format-ignore-file'
+  - 'swiftlint:disable all'

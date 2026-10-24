@@ -16,7 +16,7 @@ jobs:
   backend:
     name: Backend check (Linux)
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       PG_BIN_DIR: /usr/lib/postgresql/18/bin
     steps:
@@ -31,6 +31,21 @@ jobs:
           sudo apt-get install -y postgresql-common
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-18
+      # `npm run contract:check` (part of `npm run check`) regenerates the Swift client and
+      # runs its tests with the Swift toolchain preinstalled on the Ubuntu runner image.
+      # The version file keys the SwiftPM cache, so a runner image with a new Swift never
+      # restores modules built by the old compiler.
+      - name: Show Swift toolchain
+        run: |
+          mkdir -p .build
+          swift --version | tee .build/swift-version.txt
+      - name: Cache SwiftPM builds for the API contract
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/api-contract
+            .build/swiftpm-cache
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('.build/swift-version.txt', 'packages/api-contract/swift/Package.resolved', 'packages/api-contract/tools/swift-generator/Package.resolved') }}
       - run: npm ci
       - run: scripts/dev-db.sh
       - run: npm run check

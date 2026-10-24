@@ -4,3 +4,6 @@ node_modules/
 .build/
 coverage/
 package-lock.json
+# Generated from openapi.yaml by `npm run contract:generate`; checked for drift instead
+packages/api-contract/src/generated/
+packages/api-contract/swift/Sources/ListoraAPI/Generated/

@@ -1,0 +1,3510 @@
+openapi: 3.1.0
+info:
+  title: Listora API
+  version: 1.0.0
+  summary: The v1 contract between the Listora iPhone app and the Listora backend.
+  description: |
+    Single source of truth for the Listora HTTP API. The server's TypeScript types and the
+    iOS Swift client are generated from this file (`npm run contract:generate`), and CI fails
+    when the generated code is stale. Conventions are documented in
+    `packages/api-contract/README.md`. The most important ones:
+
+    - **Never false success.** Marketplace state is reported by the server through
+      `statusDisplay` (a server-rendered label plus a tone) and `verification`. A listing or
+      operation is shown as done only after an API read-back or an explicit user
+      confirmation. Clients render these values; they never infer success themselves.
+    - **Money** is always integer minor units (`amountCents`) plus a `currency`.
+    - **Errors** always use `ErrorResponse`: a machine `code`, a user-readable `message`, and
+      a `retryable` flag.
+    - **Lists** use opaque cursor pagination (`cursor`, `limit`, `nextCursor`).
+    - **Every POST** requires an `Idempotency-Key` header, so retries after a lost response
+      never create a second item, listing, or marketplace action.
+    - **Absent means no value.** The server omits a property instead of sending `null`.
+    - **Open enums.** A response value that can grow (marketplaces, statuses, actions,
+      capabilities) is a `Known*` value or any other string, so a new value never breaks an
+      installed app. Clients handle values they do not know.
+  contact:
+    name: Listora engineering
+servers:
+  - url: http://127.0.0.1:3000
+    description: Local development (`npm run dev:api`)
+security:
+  - bearerAuth: []
+tags:
+  - name: health
+    description: Liveness and readiness probes for load balancers and containers.
+  - name: items
+    description: Master inventory items. Each physical item has one item and one SKU.
+  - name: photos
+    description: Upload sessions and item photos.
+  - name: analysis
+    description: AI analysis of an item's photos (run once per photo set).
+  - name: pricing
+    description: Price suggestions with honest source labels.
+  - name: listings
+    description: Per-marketplace listings of an item and the actions on them.
+  - name: operations
+    description: Marketplace operations (every marketplace write) and their event history.
+  - name: connections
+    description: Marketplace account connections and their health.
+  - name: sales
+    description: Sales and the automatic delist run each sale starts.
+  - name: tasks
+    description: Assisted-mode tasks the user completes in a marketplace app.
+
+paths:
+  /health/live:
+    get:
+      tags: [health]
+      operationId: getLiveness
+      summary: Liveness probe
+      description: The process is up. Checks no dependencies.
+      security: []
+      responses:
+        '200':
+          description: The process is running.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthLive'
+
+  /health/ready:
+    get:
+      tags: [health]
+      operationId: getReadiness
+      summary: Readiness probe
+      description: The process can serve traffic (the database answers). Never includes error details.
+      security: []
+      responses:
+        '200':
+          description: Ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReady'
+        '503':
+          description: Not ready; at least one check is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReady'
+
+  /v1/items:
+    get:
+      tags: [items]
+      operationId: listItems
+      summary: List items
+      description: Newest first. Filters combine with AND.
+      parameters:
+        - name: status
+          in: query
+          description: Only items in one of these statuses.
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/KnownItemStatus'
+          style: form
+          explode: true
+        - name: q
+          in: query
+          description: Free-text search over SKU, title, brand, and keywords.
+          schema:
+            type: string
+            maxLength: 200
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of items.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags: [items]
+      operationId: createItem
+      summary: Create an item
+      description: |
+        Creates a `draft` item and allocates its SKU (for example `AJ-000184`) in the same
+        transaction. Every detail is optional so a draft can be created before analysis.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemCreate'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    get:
+      tags: [items]
+      operationId: getItem
+      summary: Get an item
+      description: The item with its photos and per-marketplace listings.
+      responses:
+        '200':
+          description: The item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags: [items]
+      operationId: replaceItem
+      summary: Replace an item's details
+      description: |
+        Full replacement of the user-editable `details`: a property left out is cleared.
+        `expectedVersion` must equal the item's current `version`, otherwise the server
+        answers `409 version_conflict` and the client refetches. Changing details never
+        changes a live marketplace listing; use the listing actions for that.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemReplace'
+      responses:
+        '200':
+          description: The updated item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags: [items]
+      operationId: deleteItem
+      summary: Delete an item
+      description: |
+        Allowed only while no listing is live on a marketplace (every listing is `draft` or
+        `ended`); otherwise `409 invalid_state_transition`. The SKU is never reused.
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/skus/{sku}:
+    parameters:
+      - name: sku
+        in: path
+        required: true
+        description: The item's SKU, for example `AJ-000184` (from a scanned label).
+        schema:
+          $ref: '#/components/schemas/Sku'
+    get:
+      tags: [items]
+      operationId: getItemBySku
+      summary: Look up an item by SKU
+      responses:
+        '200':
+          description: The item that owns this SKU.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/upload-sessions:
+    post:
+      tags: [photos]
+      operationId: createUploadSession
+      summary: Start a photo upload session
+      description: |
+        Returns one pre-signed upload target per file. The client sends each file's bytes
+        with the given method, URL, and headers (directly to object storage; background
+        uploads are fine), then attaches each uploaded file to an item with `addItemPhoto`.
+        Clients resize to at most 2048 px on the long edge and strip GPS before uploading.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadSessionCreate'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSession'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/upload-sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      tags: [photos]
+      operationId: getUploadSession
+      summary: Get an upload session
+      description: |
+        Used to resume after an app relaunch: shows which files the server already has, and
+        returns fresh upload targets for files still `pending`.
+      responses:
+        '200':
+          description: The session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSession'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/items/{itemId}/photos:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    post:
+      tags: [photos]
+      operationId: addItemPhoto
+      summary: Attach an uploaded file to an item as a photo
+      description: |
+        The server checks that the file's bytes arrived and match the declared size and
+        SHA-256 (`409 upload_incomplete` if not), then creates the photo in `processing`
+        while it derives the thumbnail, AI, and listing images.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhotoCreate'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Photo'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/items/{itemId}/photo-order:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    put:
+      tags: [photos]
+      operationId: reorderItemPhotos
+      summary: Reorder an item's photos
+      description: '`photoIds` must list every photo of the item exactly once; the first is the cover.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhotoOrder'
+      responses:
+        '200':
+          description: The photos in their new order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoList'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/items/{itemId}/photos/{photoId}:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+      - $ref: '#/components/parameters/PhotoId'
+    patch:
+      tags: [photos]
+      operationId: updateItemPhoto
+      summary: Change a photo's role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhotoUpdate'
+      responses:
+        '200':
+          description: The updated photo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Photo'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags: [photos]
+      operationId: deleteItemPhoto
+      summary: Remove a photo from an item
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/items/{itemId}/analyses:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    post:
+      tags: [analysis]
+      operationId: startItemAnalysis
+      summary: Analyze the item's current photos
+      description: |
+        Starts the default ("fast") analysis of the item's current photo set. Analysis runs
+        once per photo set: when an analysis for the same photo-set hash exists, it is
+        returned instead of running (and paying for) a new one. Poll `getAnalysis` until
+        `status` is `completed` or `failed`. `409 invalid_state_transition` when the item has no
+        ready photo; `429 ai_budget_exceeded` when the account's daily AI budget is used up.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: The analysis for the current photo set (new or existing).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analysis'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/analyses/{analysisId}:
+    parameters:
+      - $ref: '#/components/parameters/AnalysisId'
+    get:
+      tags: [analysis]
+      operationId: getAnalysis
+      summary: Get an analysis
+      responses:
+        '200':
+          description: The analysis.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analysis'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/analyses/{analysisId}/escalate:
+    parameters:
+      - $ref: '#/components/parameters/AnalysisId'
+    post:
+      tags: [analysis]
+      operationId: escalateAnalysis
+      summary: Identify harder (premium analysis)
+      description: |
+        Runs the premium identification on the same photos plus the first result. Counts
+        against the plan's premium quota (`402 quota_exceeded` when used up). Repeating the
+        request for the same analysis returns the existing premium analysis.
+        `409 invalid_state_transition` until the analysis has `completed`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: The premium analysis.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analysis'
+        '402':
+          $ref: '#/components/responses/QuotaExceeded'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/items/{itemId}/pricing:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    get:
+      tags: [pricing]
+      operationId: getItemPricing
+      summary: Get price suggestions for an item
+      description: |
+        Every number carries its source. Without real sold data the response has no
+        `soldComparables`, and tiers are based on the labeled AI estimate and the cost floor.
+        Computing suggestions never calls AI; the estimate comes from the item's analysis.
+      responses:
+        '200':
+          description: Price suggestions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PricingSuggestion'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/items/{itemId}/listings:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    get:
+      tags: [listings]
+      operationId: listItemListings
+      summary: List an item's marketplace listings
+      description: At most one listing per marketplace, so this list is not paginated.
+      responses:
+        '200':
+          description: The item's listings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingList'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags: [listings]
+      operationId: createListing
+      summary: Create a draft listing for a marketplace
+      description: |
+        Creates the marketplace-specific variant as a `draft`. Nothing is sent to the
+        marketplace until `publishListing`. `409 already_exists` when the item already has a
+        listing on that marketplace.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingCreate'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listing'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/listings:
+    get:
+      tags: [listings]
+      operationId: listListings
+      summary: List listings across items
+      description: For views such as "everything that failed" or "everything on Depop". Newest first.
+      parameters:
+        - name: marketplace
+          in: query
+          schema:
+            $ref: '#/components/schemas/KnownMarketplace'
+        - name: status
+          in: query
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/KnownListingStatus'
+          style: form
+          explode: true
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of listings.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/listings/{listingId}:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    get:
+      tags: [listings]
+      operationId: getListing
+      summary: Get a listing and its current status
+      responses:
+        '200':
+          description: The listing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listing'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/listings/{listingId}/variant:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    put:
+      tags: [listings]
+      operationId: replaceListingDraft
+      summary: Replace a draft listing's variant
+      description: |
+        Only for `draft` listings; it changes nothing on the marketplace. A live listing is
+        changed with `reviseListing` or `changeListingPrice` (`409 invalid_state_transition`
+        otherwise).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingVariantReplace'
+      responses:
+        '200':
+          description: The updated listing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listing'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/listings/{listingId}/publish:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    post:
+      tags: [listings]
+      operationId: publishListing
+      summary: Publish a draft listing to its marketplace
+      description: |
+        Queues a `create` operation. On an API marketplace the listing becomes `active` only
+        after the marketplace confirms it on read-back. On an assisted marketplace it opens a
+        `list_manually` task and the operation waits in `needs_user_action`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          $ref: '#/components/responses/ListingOperationAccepted'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/listings/{listingId}/revise:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    post:
+      tags: [listings]
+      operationId: reviseListing
+      summary: Change a live listing's details
+      description: Queues a `revise` operation with the new variant (title, description, aspects, price).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingVariantReplace'
+      responses:
+        '202':
+          $ref: '#/components/responses/ListingOperationAccepted'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/listings/{listingId}/price:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    post:
+      tags: [listings]
+      operationId: changeListingPrice
+      summary: Change a live listing's price
+      description: Queues a `price` operation. The listed price changes only once it is confirmed.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingPriceChange'
+      responses:
+        '202':
+          $ref: '#/components/responses/ListingOperationAccepted'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/listings/{listingId}/end:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    post:
+      tags: [listings]
+      operationId: endListing
+      summary: End (delist) a live listing
+      description: Queues an `end` operation. Assisted marketplaces get a `delist_manually` task.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingEnd'
+      responses:
+        '202':
+          $ref: '#/components/responses/ListingOperationAccepted'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/listings/{listingId}/relist:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    post:
+      tags: [listings]
+      operationId: relistListing
+      summary: Relist an ended listing
+      description: |
+        Queues a `relist` operation. Some marketplaces relist as a new listing with new
+        external ids (Depop gets a new external SKU); `externalListingId` changes when
+        confirmed.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          $ref: '#/components/responses/ListingOperationAccepted'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/listings/{listingId}/verify:
+    parameters:
+      - $ref: '#/components/parameters/ListingId'
+    post:
+      tags: [listings]
+      operationId: verifyListing
+      summary: Check the listing's real state on the marketplace again
+      description: |
+        Queues a `verify` operation (a read-back only; nothing is changed on the marketplace).
+        Only for API listings; assisted listings answer `409 marketplace_action_unavailable`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          $ref: '#/components/responses/ListingOperationAccepted'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/operations:
+    get:
+      tags: [operations]
+      operationId: listOperations
+      summary: List marketplace operations
+      description: Newest first. Filters combine with AND.
+      parameters:
+        - name: itemId
+          in: query
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: listingId
+          in: query
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: status
+          in: query
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/KnownOperationStatus'
+          style: form
+          explode: true
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of operations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/operations/{operationId}:
+    parameters:
+      - $ref: '#/components/parameters/OperationId'
+    get:
+      tags: [operations]
+      operationId: getOperation
+      summary: Get an operation
+      responses:
+        '200':
+          description: The operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/operations/{operationId}/events:
+    parameters:
+      - $ref: '#/components/parameters/OperationId'
+    get:
+      tags: [operations]
+      operationId: listOperationEvents
+      summary: List an operation's history
+      description: Oldest first (by `sequence`). Events are append-only.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of events.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEventPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/operations/{operationId}/retry:
+    parameters:
+      - $ref: '#/components/parameters/OperationId'
+    post:
+      tags: [operations]
+      operationId: retryOperation
+      summary: Retry a failed operation
+      description: |
+        Only for `failed` operations. Creates a new operation with the same desired state
+        (`retryOfOperationId` points at the failed one); the failed operation and its history
+        stay unchanged.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: The new operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/operations/{operationId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/OperationId'
+    post:
+      tags: [operations]
+      operationId: cancelOperation
+      summary: Cancel an operation that has not been sent
+      description: |
+        Only while `queued` or `retrying`. Once a request may have reached the marketplace
+        the operation cannot be canceled (`409 invalid_state_transition`), because its outcome
+        must still be verified.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The canceled operation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/connections:
+    get:
+      tags: [connections]
+      operationId: listConnections
+      summary: List marketplace connections
+      description: One entry per supported marketplace, including assisted ones, so not paginated.
+      responses:
+        '200':
+          description: Every marketplace and its connection state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionList'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/connections/{marketplace}:
+    parameters:
+      - $ref: '#/components/parameters/MarketplacePath'
+    get:
+      tags: [connections]
+      operationId: getConnection
+      summary: Get one marketplace connection
+      responses:
+        '200':
+          description: The connection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    delete:
+      tags: [connections]
+      operationId: disconnectConnection
+      summary: Disconnect a marketplace account
+      description: |
+        Revokes and deletes the stored tokens. Existing listings stay on the marketplace but
+        Listora can no longer change or verify them until the account is connected again.
+      responses:
+        '200':
+          description: The connection, now `not_connected`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/connections/{marketplace}/authorizations:
+    parameters:
+      - $ref: '#/components/parameters/MarketplacePath'
+    post:
+      tags: [connections]
+      operationId: startConnectionAuthorization
+      summary: Start connecting a marketplace account (OAuth)
+      description: |
+        Returns the marketplace's official authorization URL. The app opens it in
+        `ASWebAuthenticationSession` with `callbackUrlScheme`. The marketplace redirects the
+        browser to `handleConnectionCallback`, which exchanges the code on the server and
+        redirects to the app. The app then reads the result with
+        `getConnectionAuthorization`; it never trusts the redirect alone. Listora never asks
+        for marketplace passwords. `409 marketplace_action_unavailable` for marketplaces
+        without an authorized API connection.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionAuthorization'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/connections/{marketplace}/authorizations/{authorizationId}:
+    parameters:
+      - $ref: '#/components/parameters/MarketplacePath'
+      - $ref: '#/components/parameters/AuthorizationId'
+    get:
+      tags: [connections]
+      operationId: getConnectionAuthorization
+      summary: Get the result of a connection attempt
+      responses:
+        '200':
+          description: The authorization attempt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionAuthorization'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/connections/{marketplace}/callback:
+    parameters:
+      - $ref: '#/components/parameters/MarketplacePath'
+    get:
+      tags: [connections]
+      operationId: handleConnectionCallback
+      summary: OAuth redirect target (called by the marketplace, not the app)
+      description: |
+        The marketplace redirects the user's browser here after consent. No bearer token: the
+        single-use, short-lived `state` binds the request to the authorization attempt. The
+        server exchanges the code and always answers with a redirect to the app
+        (`listora://connections/{marketplace}?authorizationId=...`), also on failure; the
+        app then calls `getConnectionAuthorization`. Query parameter names follow OAuth 2.0.
+      security: []
+      parameters:
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 512
+        - name: code
+          in: query
+          description: Authorization code; absent when the user declined.
+          schema:
+            type: string
+            maxLength: 4096
+        - name: error
+          in: query
+          description: OAuth error code, for example `access_denied`.
+          schema:
+            type: string
+            maxLength: 256
+        - name: error_description
+          in: query
+          schema:
+            type: string
+            maxLength: 2048
+      responses:
+        '302':
+          description: Redirect to the app.
+          headers:
+            Location:
+              description: An app URL with the `listora` scheme.
+              required: true
+              schema:
+                type: string
+                format: uri
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/sales:
+    get:
+      tags: [sales]
+      operationId: listSales
+      summary: List sales
+      description: Newest first (by `soldAt`).
+      parameters:
+        - name: itemId
+          in: query
+          description: Only sales whose order contains this item.
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: status
+          in: query
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/KnownSaleStatus'
+          style: form
+          explode: true
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of sales.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags: [sales]
+      operationId: createSale
+      summary: Record a sale manually ("Mark sold")
+      description: |
+        For sales Listora did not detect itself. One sale is one order; a bundle lists several
+        items. Starts the same automatic delist run as a detected sale: every other listing
+        of every item in the order gets a delist operation or an urgent assisted task. A
+        sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+        `422 validation_failed` when an item appears twice or a `listingId` does not belong
+        to its item on `marketplace`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleCreate'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/sales/{saleId}:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    get:
+      tags: [sales]
+      operationId: getSale
+      summary: Get a sale and its delist run
+      responses:
+        '200':
+          description: The sale.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/tasks:
+    get:
+      tags: [tasks]
+      operationId: listTasks
+      summary: List assisted-mode tasks
+      description: Urgent first, then oldest first.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/UserTaskStatus'
+          style: form
+          explode: true
+        - name: itemId
+          in: query
+          schema:
+            $ref: '#/components/schemas/Id'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of tasks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTaskPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/tasks/{taskId}:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    get:
+      tags: [tasks]
+      operationId: getTask
+      summary: Get a task
+      responses:
+        '200':
+          description: The task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/tasks/{taskId}/complete:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      tags: [tasks]
+      operationId: completeTask
+      summary: Confirm that the user did the task
+      description: |
+        The explicit user confirmation that finishes an assisted operation. The linked
+        listing then shows "Done (you confirmed)", never "confirmed by <marketplace>".
+        `409 invalid_state_transition` when the task is not `open`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserTaskCompletion'
+      responses:
+        '200':
+          description: The completed task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/tasks/{taskId}/dismiss:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      tags: [tasks]
+      operationId: dismissTask
+      summary: Dismiss a task without doing it
+      description: |
+        Dismissing never counts as doing the work: a linked operation becomes `failed` (with
+        a Retry action), not `succeeded`.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The dismissed task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserTask'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from the auth driver (Cognito in production, the dev OTP driver locally).
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+        every retry of that action. The server stores the first response for at least 24
+        hours: a retry with the same key and body gets that response again without repeating
+        the action; the same key with a different body gets `422 idempotency_key_reused`; a
+        retry while the first request is still running gets `409 idempotency_key_in_progress`.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
+      schema:
+        type: string
+        maxLength: 1024
+    Limit:
+      name: limit
+      in: query
+      description: Page size.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 25
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    PhotoId:
+      name: photoId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    AnalysisId:
+      name: analysisId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    ListingId:
+      name: listingId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    OperationId:
+      name: operationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    AuthorizationId:
+      name: authorizationId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    SaleId:
+      name: saleId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    MarketplacePath:
+      name: marketplace
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/KnownMarketplace'
+
+  responses:
+    DefaultError:
+      description: Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BadRequest:
+      description: Malformed request, for example an invalid cursor (`invalid_request`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: The resource does not exist in this account (`not_found`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: |
+        The request conflicts with the current state, for example `version_conflict`,
+        `invalid_state_transition`, `already_exists`, or a marketplace that is not connected.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationFailed:
+      description: The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    PayloadTooLarge:
+      description: A declared file is larger than allowed (`payload_too_large`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    QuotaExceeded:
+      description: The plan's quota for this action is used up (`quota_exceeded`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Too many requests or the daily AI budget is reached; see `retryAfterSeconds`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ListingOperationAccepted:
+      description: The operation was queued. Watch `operation.status` or the listing's `statusDisplay`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ListingOperationAccepted'
+
+  schemas:
+    # ---------------------------------------------------------------- common
+    Id:
+      type: string
+      format: uuid
+      description: Server-generated UUID.
+    Timestamp:
+      type: string
+      format: date-time
+      description: RFC 3339 timestamp in UTC.
+    Sku:
+      type: string
+      description: Account prefix, a dash, and a zero-padded gapless number, for example `AJ-000184`.
+      pattern: '^[A-Z0-9]{1,8}-[0-9]{6,}$'
+      maxLength: 32
+    CurrencyCode:
+      type: string
+      description: ISO 4217 code. Listora launches US-only, so USD is the only currency for now.
+      enum: [USD]
+    Money:
+      type: object
+      description: An amount in integer minor units (cents) plus a currency. Never a floating-point amount.
+      required: [amountCents, currency]
+      properties:
+        amountCents:
+          type: integer
+          format: int64
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: Integer minor units, for example 3400 for $34.00.
+        currency:
+          $ref: '#/components/schemas/CurrencyCode'
+    Marketplace:
+      description: |
+        A `KnownMarketplace`, or a marketplace added after this client was built. Clients show
+        an unknown marketplace generically (its raw id and the server's `statusDisplay`).
+      anyOf:
+        - $ref: '#/components/schemas/KnownMarketplace'
+        - type: string
+          maxLength: 64
+    KnownMarketplace:
+      type: string
+      enum: [ebay, depop, poshmark, mercari]
+    IntegrationMode:
+      description: |
+        A `KnownIntegrationMode`, or a mode added after this client was built. Clients offer
+        nothing that depends on an unknown mode.
+      anyOf:
+        - $ref: '#/components/schemas/KnownIntegrationMode'
+        - type: string
+          maxLength: 64
+    KnownIntegrationMode:
+      type: string
+      description: |
+        `api`: Listora acts through the marketplace's official API and verifies by read-back.
+        `assisted`: Listora prepares the work and the user does the final step in the
+        marketplace app, then confirms.
+      enum: [api, assisted]
+    StatusTone:
+      description: |
+        A `KnownStatusTone`, or a tone added after this client was built. Clients style an
+        unknown tone like `neutral` and still show the `label`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownStatusTone'
+        - type: string
+          maxLength: 64
+    KnownStatusTone:
+      type: string
+      description: |
+        How to style a status. `success` is used only for states verified by an API read-back
+        or confirmed by the user.
+      enum: [success, in_progress, checking, failed, action_needed, neutral]
+    StatusDisplay:
+      type: object
+      description: |
+        Server-rendered honest status, for example `Active (confirmed by eBay)`,
+        `Delisting... retry 2 of 6`, `Delist failed - Retry`, `Checking...`,
+        `Action needed - delist on Poshmark`, or `Done (you confirmed)`. Clients show
+        `label` as given and never compute success themselves.
+      required: [tone, label]
+      properties:
+        tone:
+          $ref: '#/components/schemas/StatusTone'
+        label:
+          type: string
+          maxLength: 120
+        detail:
+          type: string
+          maxLength: 1000
+          description: Extra context, for example the marketplace's error text.
+    VerificationMethod:
+      type: string
+      description: '`marketplace_api`: confirmed by an API read-back. `user_confirmation`: the user confirmed an assisted task.'
+      enum: [marketplace_api, user_confirmation]
+    Verification:
+      type: object
+      description: How and when the current state was established. Absent when it is not verified.
+      required: [method, verifiedAt]
+      properties:
+        method:
+          $ref: '#/components/schemas/VerificationMethod'
+        verifiedAt:
+          $ref: '#/components/schemas/Timestamp'
+    Provenance:
+      description: |
+        A `KnownProvenance`, or a source added after this client was built. Clients treat an
+        unknown source as not entered by the user (highlight it for review).
+      anyOf:
+        - $ref: '#/components/schemas/KnownProvenance'
+        - type: string
+          maxLength: 64
+    KnownProvenance:
+      type: string
+      description: Where a field value came from.
+      enum: [ai, ocr, barcode, user]
+
+    # ---------------------------------------------------------------- errors
+    ErrorResponse:
+      type: object
+      description: The body of every error response.
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/ApiError'
+    ApiError:
+      type: object
+      required: [code, message, retryable, requestId]
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+          maxLength: 1000
+          description: User-readable explanation, safe to show as is. Never contains secrets.
+        retryable:
+          type: boolean
+          description: |
+            True when the same request may succeed later without changes. Retry it with the
+            same `Idempotency-Key`, after `retryAfterSeconds` when present.
+        retryAfterSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+        requestId:
+          type: string
+          maxLength: 128
+          description: Correlates with server logs; show it in support views.
+        fieldErrors:
+          type: array
+          description: Per-field problems for `validation_failed`.
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/FieldError'
+    FieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          maxLength: 200
+          description: Dotted path into the request body, for example `details.title` or `variant.price`.
+        message:
+          type: string
+          maxLength: 500
+    ErrorCode:
+      description: |
+        A `KnownErrorCode`, or a code added after this client was built. Clients must handle
+        unknown codes by using `message` and `retryable`, so new codes never break decoding.
+      anyOf:
+        - $ref: '#/components/schemas/KnownErrorCode'
+        - type: string
+          maxLength: 64
+    KnownErrorCode:
+      type: string
+      description: |
+        HTTP status per code: `invalid_request` 400; `unauthenticated` 401; `quota_exceeded`
+        402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
+        `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
+        `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
+        `marketplace_action_unavailable` 409; `payload_too_large` 413; `validation_failed`,
+        `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
+        `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
+        and `marketplace_authorization_failed` appear only inside a failed
+        `ConnectionAuthorization`.
+      enum:
+        - invalid_request
+        - unauthenticated
+        - quota_exceeded
+        - forbidden
+        - not_found
+        - version_conflict
+        - invalid_state_transition
+        - already_exists
+        - idempotency_key_in_progress
+        - upload_incomplete
+        - upload_expired
+        - marketplace_not_connected
+        - marketplace_reauth_required
+        - marketplace_action_unavailable
+        - payload_too_large
+        - validation_failed
+        - idempotency_key_reused
+        - rate_limited
+        - ai_budget_exceeded
+        - internal_error
+        - service_unavailable
+        - marketplace_authorization_denied
+        - marketplace_authorization_failed
+
+    # ---------------------------------------------------------------- health
+    HealthCheckStatus:
+      type: string
+      enum: [ok, unavailable]
+    HealthLive:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthCheckStatus'
+    HealthReady:
+      type: object
+      required: [status, checks]
+      properties:
+        status:
+          $ref: '#/components/schemas/HealthCheckStatus'
+        checks:
+          type: object
+          required: [database]
+          properties:
+            database:
+              $ref: '#/components/schemas/HealthCheckStatus'
+
+    # ---------------------------------------------------------------- items
+    ItemStatus:
+      description: |
+        A `KnownItemStatus`, or a status added after this client was built. Clients show an
+        unknown status generically and offer no status-specific action for it.
+      anyOf:
+        - $ref: '#/components/schemas/KnownItemStatus'
+        - type: string
+          maxLength: 64
+    KnownItemStatus:
+      type: string
+      description: |
+        `draft` and `ready` are set by the user; `archived` by the user for an item with no
+        live listing. `listed`, `sold_pending_delist`, `sold`, and `shipped` are set by the
+        server from listings and sales.
+      enum: [draft, ready, listed, sold_pending_delist, sold, shipped, archived]
+    UserSettableItemStatus:
+      type: string
+      description: The item statuses a client may set directly.
+      enum: [draft, ready, archived]
+    ItemCondition:
+      type: string
+      description: Canonical condition; each marketplace adapter maps it to that marketplace's values.
+      enum:
+        [
+          new_with_tags,
+          new_without_tags,
+          new_with_defects,
+          pre_owned_excellent,
+          pre_owned_good,
+          pre_owned_fair,
+        ]
+    MeasurementUnit:
+      type: string
+      enum: [in, cm]
+    Measurement:
+      type: object
+      required: [name, value, unit]
+      properties:
+        name:
+          type: string
+          maxLength: 64
+          description: Canonical name, for example `pit_to_pit`, `length`, `inseam`.
+        value:
+          type: number
+          minimum: 0
+          maximum: 10000
+        unit:
+          $ref: '#/components/schemas/MeasurementUnit'
+    ItemDetails:
+      type: object
+      description: |
+        Every user-editable property of an item. All are optional: a property that is absent
+        has no value. `replaceItem` replaces this object as a whole.
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 10000
+        brand:
+          type: string
+          maxLength: 120
+        productName:
+          type: string
+          maxLength: 200
+        styleNumber:
+          type: string
+          maxLength: 64
+        rnNumber:
+          type: string
+          maxLength: 16
+          description: Registered identification number from the care tag.
+        upc:
+          type: string
+          maxLength: 14
+          description: UPC or EAN digits, checksum-validated by the server.
+        department:
+          type: string
+          maxLength: 64
+          description: Canonical department, for example `women`, `men`, `kids`, `unisex`.
+        category:
+          type: string
+          maxLength: 200
+          description: Canonical taxonomy path, for example `clothing/tops/t_shirts`.
+        sizeLabel:
+          type: string
+          maxLength: 32
+          description: The size as printed, for example `M` or `32x30`.
+        sizeSystem:
+          type: string
+          maxLength: 16
+          description: For example `us`, `uk`, `eu`, `intl`.
+        colors:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 32
+        pattern:
+          type: string
+          maxLength: 64
+        materials:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 64
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        conditionNotes:
+          type: string
+          maxLength: 2000
+        flaws:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 200
+        keywords:
+          type: array
+          maxItems: 30
+          items:
+            type: string
+            maxLength: 64
+        measurements:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Measurement'
+        listPrice:
+          $ref: '#/components/schemas/Money'
+        floorPrice:
+          $ref: '#/components/schemas/Money'
+        cost:
+          $ref: '#/components/schemas/Money'
+        purchaseDate:
+          type: string
+          format: date
+        purchaseSource:
+          type: string
+          maxLength: 200
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          default: 1
+        storageLocationId:
+          $ref: '#/components/schemas/Id'
+          description: The storage location where the item is kept (for example a bin or shelf).
+        acceptedAnalysisId:
+          $ref: '#/components/schemas/Id'
+          description: The analysis whose proposals the user accepted; see `Item.fieldProvenance`.
+    ItemCreate:
+      type: object
+      properties:
+        details:
+          $ref: '#/components/schemas/ItemDetails'
+    ItemReplace:
+      type: object
+      required: [expectedVersion, details]
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The `version` the client last read (optimistic lock).
+        status:
+          $ref: '#/components/schemas/UserSettableItemStatus'
+        details:
+          $ref: '#/components/schemas/ItemDetails'
+    Item:
+      type: object
+      required: [id, sku, status, version, details, photos, listings, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        sku:
+          $ref: '#/components/schemas/Sku'
+        status:
+          $ref: '#/components/schemas/ItemStatus'
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Increases on every change; send it back as `expectedVersion`.
+        details:
+          $ref: '#/components/schemas/ItemDetails'
+        fieldProvenance:
+          type: object
+          description: |
+            Read-only: where each detail came from, keyed by property name, for example
+            `{"brand": "ocr"}`. The server owns it and clients never send it. A detail whose
+            value equals the accepted analysis's value keeps that analysis's source; any other
+            detail written through the API is `user`.
+          additionalProperties:
+            $ref: '#/components/schemas/Provenance'
+        storageLocation:
+          $ref: '#/components/schemas/StorageLocationSummary'
+          description: Read-only; the location `details.storageLocationId` refers to.
+        photos:
+          type: array
+          description: In display order; the first is the cover.
+          items:
+            $ref: '#/components/schemas/Photo'
+        listings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Listing'
+        saleSummary:
+          $ref: '#/components/schemas/ItemSaleSummary'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    StorageLocationSummary:
+      type: object
+      description: Where an item is kept.
+      required: [id, code, label]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        code:
+          type: string
+          maxLength: 32
+          description: The short code printed on the bin or shelf, for example `B-12`.
+        label:
+          type: string
+          maxLength: 120
+          description: For example "Garage shelf 3, bin 12".
+    ItemSaleSummary:
+      type: object
+      description: |
+        Read-only result of the item's sale. Present only when the item has sold (status
+        `sold_pending_delist`, `sold`, or `shipped`). For an item sold in a bundle, the
+        order's fees and shipping cost are split across its items in proportion to each
+        item's `salePrice`. A value is absent until it is known.
+      required: [saleId, soldAt, salePrice]
+      properties:
+        saleId:
+          $ref: '#/components/schemas/Id'
+        soldAt:
+          $ref: '#/components/schemas/Timestamp'
+        salePrice:
+          $ref: '#/components/schemas/Money'
+        netProceeds:
+          $ref: '#/components/schemas/Money'
+          description: This item's share of the sale's `netProceeds`.
+        profit:
+          $ref: '#/components/schemas/Money'
+          description: This item's share of `netProceeds`, minus its share of `shippingCost`, minus its `cost`.
+        roiBasisPoints:
+          type: integer
+          format: int64
+          description: |
+            Return on investment, `profit` divided by the item's `cost`, in basis points
+            (12550 is 125.5%). Absent when `profit` is absent or the cost is zero.
+    ItemSummary:
+      type: object
+      description: The item as shown in inventory lists.
+      required: [id, sku, status, listings, createdAt, updatedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        sku:
+          $ref: '#/components/schemas/Sku'
+        status:
+          $ref: '#/components/schemas/ItemStatus'
+        title:
+          type: string
+          maxLength: 200
+        brand:
+          type: string
+          maxLength: 120
+        sizeLabel:
+          type: string
+          maxLength: 32
+        listPrice:
+          $ref: '#/components/schemas/Money'
+        coverPhoto:
+          $ref: '#/components/schemas/Photo'
+        listings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingStatusSummary'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    ItemPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemSummary'
+        nextCursor:
+          type: string
+          description: Present when there are more results.
+
+    # ---------------------------------------------------------------- photos
+    PhotoRole:
+      type: string
+      enum: [front, back, tag, flaw, detail]
+    PhotoStatus:
+      type: string
+      description: '`processing` until the derived images exist; `failed` when the file is not a usable image.'
+      enum: [processing, ready, failed]
+    ImageContentType:
+      type: string
+      enum: [image/jpeg, image/heic]
+    OcrLine:
+      type: object
+      description: A text line recognized on the device (Vision).
+      required: [text, confidence]
+      properties:
+        text:
+          type: string
+          maxLength: 500
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+    Barcode:
+      type: object
+      description: A barcode detected on the device.
+      required: [symbology, payload]
+      properties:
+        symbology:
+          type: string
+          maxLength: 32
+          description: For example `ean13`, `upce`, `qr`.
+        payload:
+          type: string
+          maxLength: 2048
+    PhotoUrls:
+      type: object
+      description: Unguessable URLs of the derived images.
+      required: [thumbnail, listing]
+      properties:
+        thumbnail:
+          type: string
+          format: uri
+          description: 400 px long edge.
+        listing:
+          type: string
+          format: uri
+          description: 1600 px long edge; what marketplaces fetch.
+    Photo:
+      type: object
+      required:
+        [id, itemId, position, role, status, width, height, sha256, ocrLines, barcodes, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        itemId:
+          $ref: '#/components/schemas/Id'
+        position:
+          type: integer
+          format: int32
+          minimum: 0
+        role:
+          $ref: '#/components/schemas/PhotoRole'
+        status:
+          $ref: '#/components/schemas/PhotoStatus'
+        width:
+          type: integer
+          format: int32
+          minimum: 1
+        height:
+          type: integer
+          format: int32
+          minimum: 1
+        sha256:
+          $ref: '#/components/schemas/Sha256'
+        urls:
+          $ref: '#/components/schemas/PhotoUrls'
+        ocrLines:
+          type: array
+          items:
+            $ref: '#/components/schemas/OcrLine'
+        barcodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Barcode'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+    PhotoList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Photo'
+    PhotoCreate:
+      type: object
+      required: [uploadFileId, role]
+      properties:
+        uploadFileId:
+          $ref: '#/components/schemas/Id'
+        role:
+          $ref: '#/components/schemas/PhotoRole'
+        position:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Insert position; appended when absent.
+        width:
+          type: integer
+          format: int32
+          minimum: 1
+        height:
+          type: integer
+          format: int32
+          minimum: 1
+        ocrLines:
+          type: array
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/OcrLine'
+        barcodes:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/Barcode'
+    PhotoUpdate:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: '#/components/schemas/PhotoRole'
+    PhotoOrder:
+      type: object
+      required: [photoIds]
+      properties:
+        photoIds:
+          type: array
+          minItems: 1
+          maxItems: 24
+          items:
+            $ref: '#/components/schemas/Id'
+    Sha256:
+      type: string
+      description: Lowercase hex SHA-256 of the file bytes.
+      pattern: '^[0-9a-f]{64}$'
+    UploadFileCreate:
+      type: object
+      required: [contentType, byteSize, sha256]
+      properties:
+        contentType:
+          $ref: '#/components/schemas/ImageContentType'
+        byteSize:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 20971520
+          description: At most 20 MiB.
+        sha256:
+          $ref: '#/components/schemas/Sha256'
+    UploadSessionCreate:
+      type: object
+      required: [files]
+      properties:
+        files:
+          type: array
+          minItems: 1
+          maxItems: 24
+          items:
+            $ref: '#/components/schemas/UploadFileCreate'
+    UploadFileStatus:
+      type: string
+      description: '`pending`: bytes not received yet. `uploaded`: bytes received and verified. `attached`: used by a photo.'
+      enum: [pending, uploaded, attached]
+    HttpHeader:
+      type: object
+      required: [name, value]
+      properties:
+        name:
+          type: string
+          maxLength: 256
+        value:
+          type: string
+          maxLength: 4096
+    UploadTarget:
+      type: object
+      description: Where and how to send one file's bytes. Send exactly these headers.
+      required: [method, url, headers, expiresAt]
+      properties:
+        method:
+          type: string
+          enum: [PUT]
+        url:
+          type: string
+          format: uri
+        headers:
+          type: array
+          items:
+            $ref: '#/components/schemas/HttpHeader'
+        expiresAt:
+          $ref: '#/components/schemas/Timestamp'
+    UploadFile:
+      type: object
+      required: [id, status, contentType, byteSize, sha256]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/UploadFileStatus'
+        contentType:
+          $ref: '#/components/schemas/ImageContentType'
+        byteSize:
+          type: integer
+          format: int64
+          minimum: 1
+        sha256:
+          $ref: '#/components/schemas/Sha256'
+        upload:
+          $ref: '#/components/schemas/UploadTarget'
+    UploadSession:
+      type: object
+      required: [id, expiresAt, files, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        expiresAt:
+          $ref: '#/components/schemas/Timestamp'
+        files:
+          type: array
+          description: In the order of the request's `files`. `upload` is present only for `pending` files.
+          items:
+            $ref: '#/components/schemas/UploadFile'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+
+    # ---------------------------------------------------------------- analysis
+    AnalysisTier:
+      type: string
+      description: '`fast`: the default low-cost model. `premium`: "Identify harder", counted against the plan quota.'
+      enum: [fast, premium]
+    AnalysisStatus:
+      type: string
+      enum: [queued, running, completed, failed]
+    AnalysisProvenance:
+      description: |
+        A `KnownAnalysisProvenance`, or a source added after this client was built. Clients
+        treat an unknown source like `ai`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownAnalysisProvenance'
+        - type: string
+          maxLength: 64
+    KnownAnalysisProvenance:
+      type: string
+      description: Where an analyzed value came from (users are not a source inside an analysis).
+      enum: [ai, ocr, barcode]
+    Confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: 0 to 1. Clients highlight low-confidence fields for review.
+    AnalyzedText:
+      type: object
+      required: [value, confidence, provenance]
+      properties:
+        value:
+          type: string
+          maxLength: 10000
+        confidence:
+          $ref: '#/components/schemas/Confidence'
+        provenance:
+          $ref: '#/components/schemas/AnalysisProvenance'
+    AnalyzedTextList:
+      type: object
+      required: [values, confidence, provenance]
+      properties:
+        values:
+          type: array
+          items:
+            type: string
+            maxLength: 200
+        confidence:
+          $ref: '#/components/schemas/Confidence'
+        provenance:
+          $ref: '#/components/schemas/AnalysisProvenance'
+    AnalyzedCondition:
+      type: object
+      required: [value, confidence, provenance]
+      properties:
+        value:
+          $ref: '#/components/schemas/ItemCondition'
+        confidence:
+          $ref: '#/components/schemas/Confidence'
+        provenance:
+          $ref: '#/components/schemas/AnalysisProvenance'
+    AnalyzedDetails:
+      type: object
+      description: Proposed item details; a property is absent when the analysis found nothing.
+      properties:
+        title:
+          $ref: '#/components/schemas/AnalyzedText'
+        description:
+          $ref: '#/components/schemas/AnalyzedText'
+        brand:
+          $ref: '#/components/schemas/AnalyzedText'
+        productName:
+          $ref: '#/components/schemas/AnalyzedText'
+        styleNumber:
+          $ref: '#/components/schemas/AnalyzedText'
+        rnNumber:
+          $ref: '#/components/schemas/AnalyzedText'
+        upc:
+          $ref: '#/components/schemas/AnalyzedText'
+        department:
+          $ref: '#/components/schemas/AnalyzedText'
+        category:
+          $ref: '#/components/schemas/AnalyzedText'
+        sizeLabel:
+          $ref: '#/components/schemas/AnalyzedText'
+        sizeSystem:
+          $ref: '#/components/schemas/AnalyzedText'
+        colors:
+          $ref: '#/components/schemas/AnalyzedTextList'
+        pattern:
+          $ref: '#/components/schemas/AnalyzedText'
+        materials:
+          $ref: '#/components/schemas/AnalyzedTextList'
+        condition:
+          $ref: '#/components/schemas/AnalyzedCondition'
+        conditionNotes:
+          $ref: '#/components/schemas/AnalyzedText'
+        flaws:
+          $ref: '#/components/schemas/AnalyzedTextList'
+        keywords:
+          $ref: '#/components/schemas/AnalyzedTextList'
+    VariantSuggestion:
+      type: object
+      description: Marketplace-specific copy written by the analysis.
+      required: [marketplace, title, description]
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 10000
+        hashtags:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 64
+    AnalysisResult:
+      type: object
+      required: [details, variants, needsEscalation]
+      properties:
+        details:
+          $ref: '#/components/schemas/AnalyzedDetails'
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/VariantSuggestion'
+        priceEstimate:
+          $ref: '#/components/schemas/AiPriceEstimate'
+        needsEscalation:
+          type: boolean
+          description: True when the analysis suggests "Identify harder".
+        escalationReason:
+          type: string
+          maxLength: 500
+    AnalysisFailure:
+      type: object
+      required: [code, message, retryable]
+      properties:
+        code:
+          type: string
+          maxLength: 64
+        message:
+          type: string
+          maxLength: 1000
+        retryable:
+          type: boolean
+    Analysis:
+      type: object
+      required: [id, itemId, photoSetHash, tier, status, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        itemId:
+          $ref: '#/components/schemas/Id'
+        photoSetHash:
+          $ref: '#/components/schemas/Sha256'
+        tier:
+          $ref: '#/components/schemas/AnalysisTier'
+        status:
+          $ref: '#/components/schemas/AnalysisStatus'
+        result:
+          $ref: '#/components/schemas/AnalysisResult'
+        failure:
+          $ref: '#/components/schemas/AnalysisFailure'
+        escalatedFromAnalysisId:
+          $ref: '#/components/schemas/Id'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        completedAt:
+          $ref: '#/components/schemas/Timestamp'
+
+    # ---------------------------------------------------------------- pricing
+    AiPriceEstimate:
+      type: object
+      description: |
+        A model's guess, not market data. `label` is always
+        "AI estimate - not based on sold listings"; clients show it next to the numbers.
+      required: [label, low, mid, high, confidence]
+      properties:
+        label:
+          type: string
+          maxLength: 120
+        low:
+          $ref: '#/components/schemas/Money'
+        mid:
+          $ref: '#/components/schemas/Money'
+        high:
+          $ref: '#/components/schemas/Money'
+        confidence:
+          $ref: '#/components/schemas/Confidence'
+    SoldDataSource:
+      description: |
+        A `KnownSoldDataSource`, or a source of real sold data added after this client was
+        built. Clients show the comparables' `label` for an unknown source.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSoldDataSource'
+        - type: string
+          maxLength: 64
+    KnownSoldDataSource:
+      type: string
+      description: |
+        Sources of real sold data. `ai_estimate` and `cost_floor` are deliberately not in this
+        list: the words "comps" and "sold" are only ever shown next to real sold data.
+      enum: [depop_inspiration, ebay_mi, own_history]
+    SoldComparables:
+      type: object
+      description: Real sold data. Absent from a suggestion when none is available.
+      required: [source, label, sampleSize, low, median, high, fetchedAt]
+      properties:
+        source:
+          $ref: '#/components/schemas/SoldDataSource'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+          description: Set when the data may be shown only in that marketplace's listing context.
+        label:
+          type: string
+          maxLength: 120
+          description: For example "Sold on Depop (last 90 days)".
+        sampleSize:
+          type: integer
+          format: int32
+          minimum: 1
+        low:
+          $ref: '#/components/schemas/Money'
+        median:
+          $ref: '#/components/schemas/Money'
+        high:
+          $ref: '#/components/schemas/Money'
+        fetchedAt:
+          $ref: '#/components/schemas/Timestamp'
+    PriceTierName:
+      type: string
+      enum: [quick_sale, recommended, higher_profit]
+    PriceBasis:
+      description: |
+        A `KnownPriceBasis`, or a basis added after this client was built. Clients show the
+        tier's `label` for an unknown basis and never present it as sold data.
+      anyOf:
+        - $ref: '#/components/schemas/KnownPriceBasis'
+        - type: string
+          maxLength: 64
+    KnownPriceBasis:
+      type: string
+      description: What a suggested price is derived from.
+      enum: [sold_data, ai_estimate, cost_floor]
+    PriceTier:
+      type: object
+      required: [tier, price, basis, label]
+      properties:
+        tier:
+          $ref: '#/components/schemas/PriceTierName'
+        price:
+          $ref: '#/components/schemas/Money'
+        basis:
+          $ref: '#/components/schemas/PriceBasis'
+        label:
+          type: string
+          maxLength: 120
+          description: For example "Recommended (AI estimate)".
+    FloorBreakdown:
+      type: object
+      required: [cost, estimatedFees, shipping, minimumProfit]
+      properties:
+        cost:
+          $ref: '#/components/schemas/Money'
+        estimatedFees:
+          $ref: '#/components/schemas/Money'
+        shipping:
+          $ref: '#/components/schemas/Money'
+        minimumProfit:
+          $ref: '#/components/schemas/Money'
+    MarketplaceFloor:
+      type: object
+      description: '"Don''t sell below": cost + estimated marketplace fees + shipping + the user''s minimum profit.'
+      required: [marketplace, floorPrice, breakdown, feeTableVersion]
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        floorPrice:
+          $ref: '#/components/schemas/Money'
+        breakdown:
+          $ref: '#/components/schemas/FloorBreakdown'
+        feeTableVersion:
+          type: string
+          maxLength: 64
+    ResearchLink:
+      type: object
+      description: A page the user opens in their own browser. Listora does not fetch or scrape it.
+      required: [label, url]
+      properties:
+        label:
+          type: string
+          maxLength: 120
+        url:
+          type: string
+          format: uri
+    PricingSuggestion:
+      type: object
+      required: [itemId, tiers, floors, researchLinks, generatedAt]
+      properties:
+        itemId:
+          $ref: '#/components/schemas/Id'
+        soldComparables:
+          type: array
+          description: Absent or empty when there is no real sold data for this item.
+          items:
+            $ref: '#/components/schemas/SoldComparables'
+        aiEstimate:
+          $ref: '#/components/schemas/AiPriceEstimate'
+        tiers:
+          type: array
+          description: Empty when there is neither an estimate nor sold data.
+          items:
+            $ref: '#/components/schemas/PriceTier'
+        floors:
+          type: array
+          description: One per marketplace the item is or may be listed on. Empty when the item has no cost.
+          items:
+            $ref: '#/components/schemas/MarketplaceFloor'
+        researchLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResearchLink'
+        generatedAt:
+          $ref: '#/components/schemas/Timestamp'
+
+    # ---------------------------------------------------------------- listings
+    ListingStatus:
+      description: |
+        A `KnownListingStatus`, or a status added after this client was built. Clients show
+        the listing's `statusDisplay` for an unknown status and never treat it as success.
+      anyOf:
+        - $ref: '#/components/schemas/KnownListingStatus'
+        - type: string
+          maxLength: 64
+    KnownListingStatus:
+      type: string
+      description: |
+        Lifecycle of one listing. `active` and `ended` are set only after verification
+        (see `verification`); `unknown` means an outcome is being checked.
+      enum:
+        [draft, queued, publishing, active, ending, ended, sold, error, unknown, needs_user_action]
+    ListingAction:
+      description: |
+        A `KnownListingAction`, or an action added after this client was built. Clients hide
+        actions they do not know.
+      anyOf:
+        - $ref: '#/components/schemas/KnownListingAction'
+        - type: string
+          maxLength: 64
+    KnownListingAction:
+      type: string
+      enum: [publish, revise, change_price, end, relist, verify]
+    ListingActionAvailability:
+      type: object
+      description: An action the user can take now, and whether Listora or the user performs it.
+      required: [action, mode]
+      properties:
+        action:
+          $ref: '#/components/schemas/ListingAction'
+        mode:
+          $ref: '#/components/schemas/IntegrationMode'
+    ListingAspect:
+      type: object
+      description: >-
+        A marketplace item specific, for example
+        `{"name": "Sleeve Length", "values": ["Short Sleeve"]}`.
+      required: [name, values]
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        values:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            type: string
+            maxLength: 200
+    ListingVariant:
+      type: object
+      description: The marketplace-specific version of the item.
+      required: [title, description, price]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Marketplace limits (for example 80 characters on eBay) are checked at publish.
+        description:
+          type: string
+          maxLength: 10000
+        price:
+          $ref: '#/components/schemas/Money'
+        categoryRef:
+          type: string
+          maxLength: 64
+          description: The marketplace's category id.
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        aspects:
+          type: array
+          maxItems: 60
+          items:
+            $ref: '#/components/schemas/ListingAspect'
+        hashtags:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 64
+    ListingCreate:
+      type: object
+      required: [marketplace, variant]
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/KnownMarketplace'
+        variant:
+          $ref: '#/components/schemas/ListingVariant'
+    ListingVariantReplace:
+      type: object
+      required: [variant]
+      properties:
+        variant:
+          $ref: '#/components/schemas/ListingVariant'
+    ListingPriceChange:
+      type: object
+      required: [price]
+      properties:
+        price:
+          $ref: '#/components/schemas/Money'
+    ListingEndReason:
+      type: string
+      enum: [sold_elsewhere, not_available, other]
+    ListingEnd:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          $ref: '#/components/schemas/ListingEndReason'
+    Listing:
+      type: object
+      required:
+        [
+          id,
+          itemId,
+          marketplace,
+          mode,
+          status,
+          statusDisplay,
+          variant,
+          availableActions,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        itemId:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        mode:
+          $ref: '#/components/schemas/IntegrationMode'
+        status:
+          $ref: '#/components/schemas/ListingStatus'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+        verification:
+          $ref: '#/components/schemas/Verification'
+        externalListingId:
+          type: string
+          maxLength: 128
+        externalSku:
+          type: string
+          maxLength: 64
+        externalUrl:
+          type: string
+          format: uri
+        variant:
+          $ref: '#/components/schemas/ListingVariant'
+        latestOperation:
+          $ref: '#/components/schemas/Operation'
+        availableActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ListingActionAvailability'
+        listedAt:
+          $ref: '#/components/schemas/Timestamp'
+        endedAt:
+          $ref: '#/components/schemas/Timestamp'
+        lastVerifiedAt:
+          $ref: '#/components/schemas/Timestamp'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    ListingStatusSummary:
+      type: object
+      required: [listingId, marketplace, mode, status, statusDisplay]
+      properties:
+        listingId:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        mode:
+          $ref: '#/components/schemas/IntegrationMode'
+        status:
+          $ref: '#/components/schemas/ListingStatus'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+    ListingList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Listing'
+    ListingPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Listing'
+        nextCursor:
+          type: string
+          description: Present when there are more results.
+    ListingOperationAccepted:
+      type: object
+      required: [listing, operation]
+      properties:
+        listing:
+          $ref: '#/components/schemas/Listing'
+        operation:
+          $ref: '#/components/schemas/Operation'
+
+    # ---------------------------------------------------------------- operations
+    OperationKind:
+      description: |
+        A `KnownOperationKind`, or a kind added after this client was built. Clients describe
+        an unknown kind generically using the operation's `statusDisplay`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownOperationKind'
+        - type: string
+          maxLength: 64
+    KnownOperationKind:
+      type: string
+      enum: [create, revise, price, end, relist, mark_sold, verify]
+    OperationStatus:
+      description: |
+        A `KnownOperationStatus`, or a status added after this client was built. Clients show
+        the operation's `statusDisplay` for an unknown status and never treat it as success.
+      anyOf:
+        - $ref: '#/components/schemas/KnownOperationStatus'
+        - type: string
+          maxLength: 64
+    KnownOperationStatus:
+      type: string
+      description: |
+        `succeeded` only after an API read-back confirms the desired state or the user
+        confirms an assisted task. `verifying`: the outcome is unknown (for example a timeout
+        after sending) and is being checked by read-back; the request is never re-sent
+        blindly. `retrying`: a transient failure, retried with backoff.
+      enum: [queued, running, retrying, verifying, succeeded, failed, needs_user_action, canceled]
+    OperationOriginType:
+      description: |
+        A `KnownOperationOriginType`, or an origin added after this client was built. Clients
+        show an unknown origin generically.
+      anyOf:
+        - $ref: '#/components/schemas/KnownOperationOriginType'
+        - type: string
+          maxLength: 64
+    KnownOperationOriginType:
+      type: string
+      enum: [user, auto_delist, reprice_rule]
+    OperationOrigin:
+      type: object
+      required: [type]
+      properties:
+        type:
+          $ref: '#/components/schemas/OperationOriginType'
+        saleId:
+          $ref: '#/components/schemas/Id'
+          description: Set for `auto_delist`.
+        repriceRuleId:
+          $ref: '#/components/schemas/Id'
+          description: Set for `reprice_rule`.
+    OperationError:
+      type: object
+      required: [code, message, retryable]
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          description: Listora's normalized error code, for example `marketplace_validation`.
+        message:
+          type: string
+          maxLength: 1000
+          description: User-readable reason.
+        fixHint:
+          type: string
+          maxLength: 1000
+          description: What the user can do about it.
+        retryable:
+          type: boolean
+        marketplaceErrorCode:
+          type: string
+          maxLength: 64
+          description: The marketplace's own error code, for support.
+    Operation:
+      type: object
+      required:
+        [
+          id,
+          listingId,
+          itemId,
+          marketplace,
+          kind,
+          status,
+          statusDisplay,
+          attempt,
+          maxAttempts,
+          origin,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        listingId:
+          $ref: '#/components/schemas/Id'
+        itemId:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        kind:
+          $ref: '#/components/schemas/OperationKind'
+        status:
+          $ref: '#/components/schemas/OperationStatus'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+        attempt:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Attempts made so far (shown as "retry 2 of 6").
+        maxAttempts:
+          type: integer
+          format: int32
+          minimum: 1
+        nextAttemptAt:
+          $ref: '#/components/schemas/Timestamp'
+        origin:
+          $ref: '#/components/schemas/OperationOrigin'
+        error:
+          $ref: '#/components/schemas/OperationError'
+        verification:
+          $ref: '#/components/schemas/Verification'
+        userTaskId:
+          $ref: '#/components/schemas/Id'
+          description: The assisted task this operation waits for.
+        retryOfOperationId:
+          $ref: '#/components/schemas/Id'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+        completedAt:
+          $ref: '#/components/schemas/Timestamp'
+    OperationPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Operation'
+        nextCursor:
+          type: string
+          description: Present when there are more results.
+    OperationEvent:
+      type: object
+      description: One state transition. Append-only.
+      required: [id, operationId, sequence, toStatus, attempt, occurredAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        operationId:
+          $ref: '#/components/schemas/Id'
+        sequence:
+          type: integer
+          format: int64
+          minimum: 1
+        fromStatus:
+          $ref: '#/components/schemas/OperationStatus'
+          description: Absent for the first event.
+        toStatus:
+          $ref: '#/components/schemas/OperationStatus'
+        attempt:
+          type: integer
+          format: int32
+          minimum: 0
+        message:
+          type: string
+          maxLength: 1000
+          description: User-readable summary, for example "eBay confirmed the new price".
+        error:
+          $ref: '#/components/schemas/OperationError'
+        detail:
+          type: object
+          description: Redacted request/response excerpt for support views. Never contains tokens.
+          additionalProperties: true
+        occurredAt:
+          $ref: '#/components/schemas/Timestamp'
+    OperationEventPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationEvent'
+        nextCursor:
+          type: string
+          description: Present when there are more results.
+
+    # ---------------------------------------------------------------- connections
+    ConnectionStatus:
+      description: |
+        A `KnownConnectionStatus`, or a status added after this client was built. Clients
+        show the connection's `statusDisplay` for an unknown status.
+      anyOf:
+        - $ref: '#/components/schemas/KnownConnectionStatus'
+        - type: string
+          maxLength: 64
+    KnownConnectionStatus:
+      type: string
+      description: |
+        State of the API connection. Assisted marketplaces (`mode: assisted`) have no account
+        connection and report `not_connected`; their `statusDisplay` says so.
+      enum: [not_connected, connected, degraded, reauth_required, revoked]
+    CapabilityMode:
+      description: |
+        A `KnownCapabilityMode`, or a mode added after this client was built. Clients treat
+        an unknown mode like `none` (the capability is not offered).
+      anyOf:
+        - $ref: '#/components/schemas/KnownCapabilityMode'
+        - type: string
+          maxLength: 64
+    KnownCapabilityMode:
+      type: string
+      enum: [api, assisted, bulk_file, none]
+    MarkSoldMode:
+      description: |
+        A `KnownMarkSoldMode`, or a mode added after this client was built. Clients treat an
+        unknown mode like `none`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownMarkSoldMode'
+        - type: string
+          maxLength: 64
+    KnownMarkSoldMode:
+      type: string
+      enum: [api, assisted, bulk_file, none, not_needed]
+    ConnectMethod:
+      description: |
+        A `KnownConnectMethod`, or a method added after this client was built. Clients treat
+        an unknown method like `none` (no connect button).
+      anyOf:
+        - $ref: '#/components/schemas/KnownConnectMethod'
+        - type: string
+          maxLength: 64
+    KnownConnectMethod:
+      type: string
+      enum: [oauth, none]
+    VerifyReadMode:
+      description: |
+        A `KnownVerifyReadMode`, or a mode added after this client was built. Clients offer no
+        "check again" action for an unknown mode.
+      anyOf:
+        - $ref: '#/components/schemas/KnownVerifyReadMode'
+        - type: string
+          maxLength: 64
+    KnownVerifyReadMode:
+      type: string
+      description: How success is established.
+      enum: [api, user_confirm]
+    ImportListingsMode:
+      description: |
+        A `KnownImportListingsMode`, or a mode added after this client was built. Clients
+        treat an unknown mode like `none`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownImportListingsMode'
+        - type: string
+          maxLength: 64
+    KnownImportListingsMode:
+      type: string
+      enum: [api, share_sheet, bulk_file, none]
+    ImageTransportMode:
+      description: |
+        A `KnownImageTransportMode`, or a mode added after this client was built. Clients
+        treat an unknown mode like `user_saves_photos`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownImageTransportMode'
+        - type: string
+          maxLength: 64
+    KnownImageTransportMode:
+      type: string
+      enum: [url_fetch, upload, user_saves_photos]
+    MarketplaceCapabilities:
+      type: object
+      description: |
+        What Listora can do on this marketplace for this account. Clients branch on these
+        flags, never on the marketplace name; they can change when access is granted.
+      required:
+        [
+          connect,
+          create,
+          updatePrice,
+          updateDetails,
+          delist,
+          relist,
+          markSold,
+          verifyRead,
+          importListings,
+          saleDetection,
+          imageTransport,
+        ]
+      properties:
+        connect:
+          $ref: '#/components/schemas/ConnectMethod'
+        create:
+          $ref: '#/components/schemas/CapabilityMode'
+        updatePrice:
+          $ref: '#/components/schemas/CapabilityMode'
+        updateDetails:
+          $ref: '#/components/schemas/CapabilityMode'
+        delist:
+          $ref: '#/components/schemas/CapabilityMode'
+        relist:
+          $ref: '#/components/schemas/CapabilityMode'
+        markSold:
+          $ref: '#/components/schemas/MarkSoldMode'
+        verifyRead:
+          $ref: '#/components/schemas/VerifyReadMode'
+        importListings:
+          $ref: '#/components/schemas/ImportListingsMode'
+        saleDetection:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleDetectionSource'
+        imageTransport:
+          $ref: '#/components/schemas/ImageTransportMode'
+    ConnectionIssue:
+      type: object
+      required: [code, message, occurredAt]
+      properties:
+        code:
+          type: string
+          maxLength: 64
+        message:
+          type: string
+          maxLength: 1000
+        occurredAt:
+          $ref: '#/components/schemas/Timestamp'
+    Connection:
+      type: object
+      required: [marketplace, mode, status, statusDisplay, capabilities]
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        mode:
+          $ref: '#/components/schemas/IntegrationMode'
+        status:
+          $ref: '#/components/schemas/ConnectionStatus'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+        capabilities:
+          $ref: '#/components/schemas/MarketplaceCapabilities'
+        displayName:
+          type: string
+          maxLength: 200
+          description: The seller's name on the marketplace.
+        connectedAt:
+          $ref: '#/components/schemas/Timestamp'
+        grantExpiresAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When the user must reconnect (Depop grants last one year; eBay refresh tokens about 18 months).
+        lastOkAt:
+          $ref: '#/components/schemas/Timestamp'
+        lastIssue:
+          $ref: '#/components/schemas/ConnectionIssue'
+    ConnectionList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Connection'
+    ConnectionAuthorizationStatus:
+      type: string
+      enum: [pending, completed, failed, expired]
+    ConnectionAuthorization:
+      type: object
+      required: [id, marketplace, status, authorizationUrl, callbackUrlScheme, expiresAt, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        status:
+          $ref: '#/components/schemas/ConnectionAuthorizationStatus'
+        authorizationUrl:
+          type: string
+          format: uri
+          description: The marketplace's own consent page.
+        callbackUrlScheme:
+          type: string
+          maxLength: 32
+          description: The URL scheme `ASWebAuthenticationSession` waits for (`listora`).
+        expiresAt:
+          $ref: '#/components/schemas/Timestamp'
+        failure:
+          $ref: '#/components/schemas/ApiError'
+          description: Present when `status` is `failed`.
+        connection:
+          $ref: '#/components/schemas/Connection'
+          description: Present when `status` is `completed`.
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        completedAt:
+          $ref: '#/components/schemas/Timestamp'
+
+    # ---------------------------------------------------------------- sales
+    SaleStatus:
+      description: |
+        A `KnownSaleStatus`, or a status added after this client was built. Clients show an
+        unknown status generically.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSaleStatus'
+        - type: string
+          maxLength: 64
+    KnownSaleStatus:
+      type: string
+      enum: [detected, confirmed, canceled, returned]
+    SaleDetectionSource:
+      description: |
+        A `KnownSaleDetectionSource`, or a source added after this client was built. Clients
+        show an unknown source generically.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSaleDetectionSource'
+        - type: string
+          maxLength: 64
+    KnownSaleDetectionSource:
+      type: string
+      enum: [webhook, poll, email, manual]
+    DelistRunStatus:
+      type: string
+      description: '`completed`: every other listing is verified ended or confirmed by the user. `needs_attention`: something failed or waits for the user.'
+      enum: [in_progress, completed, needs_attention]
+    DelistResultState:
+      description: |
+        A `KnownDelistResultState`, or a state added after this client was built. Clients
+        show the result's `statusDisplay` for an unknown state and never treat it as delisted.
+      anyOf:
+        - $ref: '#/components/schemas/KnownDelistResultState'
+        - type: string
+          maxLength: 64
+    KnownDelistResultState:
+      type: string
+      enum: [pending, verifying, delisted, user_confirmed, needs_user_action, failed]
+    DelistResult:
+      type: object
+      required: [listingId, itemId, marketplace, mode, state, statusDisplay]
+      properties:
+        listingId:
+          $ref: '#/components/schemas/Id'
+        itemId:
+          $ref: '#/components/schemas/Id'
+          description: The sold item this listing belongs to (a bundle has several).
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        mode:
+          $ref: '#/components/schemas/IntegrationMode'
+        state:
+          $ref: '#/components/schemas/DelistResultState'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+        operationId:
+          $ref: '#/components/schemas/Id'
+        userTaskId:
+          $ref: '#/components/schemas/Id'
+    DelistRun:
+      type: object
+      description: The automatic delist of every other listing of the sold items after a sale.
+      required: [id, status, statusDisplay, results, startedAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/DelistRunStatus'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DelistResult'
+        startedAt:
+          $ref: '#/components/schemas/Timestamp'
+        completedAt:
+          $ref: '#/components/schemas/Timestamp'
+    SaleItem:
+      type: object
+      description: One item of an order.
+      required: [itemId, salePrice]
+      properties:
+        itemId:
+          $ref: '#/components/schemas/Id'
+        listingId:
+          $ref: '#/components/schemas/Id'
+          description: The listing the item sold through, when known. Absent for a sale recorded without one.
+        salePrice:
+          $ref: '#/components/schemas/Money'
+          description: This item's part of the order's sale price (for a bundle, its share of the bundle price).
+    KnownFeeType:
+      type: string
+      enum: [marketplace, payment, shipping_label, promotion, tax, other]
+    FeeType:
+      description: |
+        A `KnownFeeType`, or a type added after this client was built. Clients show an unknown
+        type like `other`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownFeeType'
+        - type: string
+          maxLength: 64
+    FeeSource:
+      type: string
+      description: "`actual`: reported by the marketplace. `estimated`: from Listora's fee table until the marketplace reports the actual fee."
+      enum: [actual, estimated]
+    FeeLine:
+      type: object
+      description: One fee deducted from the sale.
+      required: [type, amount, source]
+      properties:
+        type:
+          $ref: '#/components/schemas/FeeType'
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: A positive amount the seller pays.
+        source:
+          $ref: '#/components/schemas/FeeSource'
+    SaleCreate:
+      type: object
+      required: [marketplace, items]
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/KnownMarketplace'
+        items:
+          type: array
+          description: The items of the order, each at most once; more than one for a bundle.
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/SaleItem'
+        shippingCharged:
+          $ref: '#/components/schemas/Money'
+        soldAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: Defaults to now.
+        externalOrderId:
+          type: string
+          maxLength: 128
+    Sale:
+      type: object
+      description: |
+        One marketplace order. It has one or more items (a bundle has several). Money values
+        that depend on fees are absent until they are known.
+      required:
+        [
+          id,
+          marketplace,
+          items,
+          soldAt,
+          salePrice,
+          detectionSource,
+          status,
+          isDoubleSale,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        externalOrderId:
+          type: string
+          maxLength: 128
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SaleItem'
+        soldAt:
+          $ref: '#/components/schemas/Timestamp'
+        salePrice:
+          $ref: '#/components/schemas/Money'
+          description: The order's sale price before fees, the sum of `items[].salePrice`.
+        shippingCharged:
+          $ref: '#/components/schemas/Money'
+          description: What the buyer paid for shipping.
+        fees:
+          type: array
+          description: Every fee deducted from the payout. Absent until known.
+          items:
+            $ref: '#/components/schemas/FeeLine'
+        shippingCost:
+          $ref: '#/components/schemas/Money'
+          description: |
+            What the seller paid to ship outside the payout, for example a label bought
+            separately. A label the marketplace deducts is a `shipping_label` fee instead.
+        netProceeds:
+          $ref: '#/components/schemas/Money'
+          description: The payout, `salePrice` plus `shippingCharged` minus `fees`. Absent until the fees are known.
+        profit:
+          $ref: '#/components/schemas/Money'
+          description: |
+            `netProceeds` minus `shippingCost` minus the items' `cost`. Absent until
+            `netProceeds` is known and every item has a cost.
+        detectionSource:
+          $ref: '#/components/schemas/SaleDetectionSource'
+        status:
+          $ref: '#/components/schemas/SaleStatus'
+        shipBy:
+          $ref: '#/components/schemas/Timestamp'
+        isDoubleSale:
+          type: boolean
+          description: True when an item of the order had already sold elsewhere; the user must cancel one sale.
+        delistRun:
+          $ref: '#/components/schemas/DelistRun'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    SalePage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sale'
+        nextCursor:
+          type: string
+          description: Present when there are more results.
+
+    # ---------------------------------------------------------------- tasks
+    UserTaskKind:
+      description: |
+        A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
+        unknown task's `title`, `instructions`, and `deepLink`, and ask the user to update
+        the app to complete it.
+      anyOf:
+        - $ref: '#/components/schemas/KnownUserTaskKind'
+        - type: string
+          maxLength: 64
+    KnownUserTaskKind:
+      type: string
+      enum: [list_manually, delist_manually, confirm_sale, reconnect, review_match]
+    UserTaskStatus:
+      type: string
+      enum: [open, completed, dismissed]
+    UserTaskUrgency:
+      type: string
+      description: '`urgent` for delists after a sale (pushed, and re-alerted until done).'
+      enum: [normal, urgent]
+    CopyField:
+      type: object
+      description: One value the user copies into the marketplace app with one tap.
+      required: [label, value]
+      properties:
+        label:
+          type: string
+          maxLength: 64
+        value:
+          type: string
+          maxLength: 10000
+    CopyAssist:
+      type: object
+      description: Everything the user needs to do the task by hand.
+      required: [fields, photos]
+      properties:
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/CopyField'
+        photos:
+          type: array
+          description: Photos to save to the camera roll, in posting order.
+          items:
+            $ref: '#/components/schemas/Photo'
+    UserTask:
+      type: object
+      required: [id, kind, status, urgency, title, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        kind:
+          $ref: '#/components/schemas/UserTaskKind'
+        status:
+          $ref: '#/components/schemas/UserTaskStatus'
+        urgency:
+          $ref: '#/components/schemas/UserTaskUrgency'
+        title:
+          type: string
+          maxLength: 200
+          description: For example "Sold on Depop - delist on Poshmark".
+        instructions:
+          type: string
+          maxLength: 2000
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        itemId:
+          $ref: '#/components/schemas/Id'
+        listingId:
+          $ref: '#/components/schemas/Id'
+        operationId:
+          $ref: '#/components/schemas/Id'
+        saleId:
+          $ref: '#/components/schemas/Id'
+          description: For `confirm_sale`, the sale to confirm.
+        deepLink:
+          type: string
+          format: uri
+          description: Opens the right screen in the marketplace app or site.
+        copyAssist:
+          $ref: '#/components/schemas/CopyAssist'
+        dueAt:
+          $ref: '#/components/schemas/Timestamp'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        completedAt:
+          $ref: '#/components/schemas/Timestamp'
+    UserTaskCompletion:
+      type: object
+      description: |
+        The user's confirmation and, for some kinds, their decision. Which properties apply
+        depends on the task's `kind`; a property that does not apply is
+        `422 validation_failed`.
+
+        - `list_manually`: `externalUrl`, the new listing's URL (links the listing).
+        - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
+          `rejectMatch: true` when nothing matches. Exactly one of the two is required.
+        - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+        - `delist_manually`, `reconnect`: nothing besides `note`.
+        - Every kind: optional `note`.
+      properties:
+        externalUrl:
+          type: string
+          format: uri
+        matchedItemId:
+          $ref: '#/components/schemas/Id'
+        matchedListingId:
+          $ref: '#/components/schemas/Id'
+        rejectMatch:
+          type: boolean
+        saleCorrection:
+          $ref: '#/components/schemas/SaleCorrection'
+        note:
+          type: string
+          maxLength: 1000
+    SaleCorrection:
+      type: object
+      description: Corrected sale details; a property that is absent keeps the detected value.
+      properties:
+        salePrice:
+          $ref: '#/components/schemas/Money'
+          description: The order's sale price; for a bundle it is split across the items in proportion.
+        soldAt:
+          $ref: '#/components/schemas/Timestamp'
+        externalOrderId:
+          type: string
+          maxLength: 128
+    UserTaskPage:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserTask'
+        nextCursor:
+          type: string
+          description: Present when there are more results.

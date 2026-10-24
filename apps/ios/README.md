@@ -3,6 +3,10 @@
 The native iPhone app: Swift 6 (strict concurrency), SwiftUI, iOS 18 and later. It is not an
 npm workspace. Read [docs/architecture.md](../../docs/architecture.md) first.
 
+The app talks to the backend only through the generated `ListoraAPI` Swift package in
+`packages/api-contract/swift`; see
+[its README](../../packages/api-contract/README.md#using-the-contract).
+
 ## Prerequisites
 
 - Xcode 26.3 with the iPhone 17 simulator (Xcode > Settings > Components installs the iOS
