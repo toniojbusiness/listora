@@ -2,6 +2,7 @@ import APIClient
 import AppFeature
 import Core
 import Foundation
+import Security
 import Testing
 
 /// Runs inside the Dev app with its real entitlements, so it checks what the Share Extension
@@ -48,5 +49,57 @@ struct ShareExtensionIntegrationTests {
         #expect(KeychainAccessGrantStorage(service: service, accessGroup: group).load() == grant)
         KeychainAccessGrantStorage(service: service, accessGroup: group).save(nil)
         #expect(KeychainAccessGrantStorage(service: service, accessGroup: group).load() == nil)
+    }
+
+    @Test
+    func `a session an earlier build saved outside the App Group moves into it once`() throws {
+        let group = try AppConfiguration(bundle: .main).appGroupIdentifier
+        let service = "com.listora.tests.\(UUID().uuidString)"
+        let grant = AccessGrant(accessToken: "token-1", expiresAt: .distantFuture, email: "a@b.c")
+        defer { KeychainAccessGrantStorage(service: service, accessGroup: group).save(nil) }
+
+        // Earlier builds kept the session in the app's default group.
+        KeychainAccessGrantStorage(service: service).save(grant)
+        try #require(accessGroups(holding: service).count == 1)
+        #expect(try !accessGroups(holding: service).contains(group))
+
+        #expect(KeychainAccessGrantStorage(service: service, accessGroup: group).load() == grant)
+        #expect(try accessGroups(holding: service) == [group])
+        #expect(KeychainAccessGrantStorage(service: service, accessGroup: group).load() == grant)
+    }
+
+    @Test
+    func `signing out removes the session from the App Group and from the earlier location`() throws {
+        let group = try AppConfiguration(bundle: .main).appGroupIdentifier
+        let service = "com.listora.tests.\(UUID().uuidString)"
+        let grant = AccessGrant(accessToken: "token-1", expiresAt: .distantFuture, email: "a@b.c")
+        let storage = KeychainAccessGrantStorage(service: service, accessGroup: group)
+        defer { storage.save(nil) }
+
+        KeychainAccessGrantStorage(service: service).save(grant)
+        storage.save(AccessGrant(accessToken: "token-2", expiresAt: .distantFuture, email: "a@b.c"))
+        try #require(accessGroups(holding: service).count == 2)
+
+        storage.save(nil)
+        #expect(try accessGroups(holding: service).isEmpty)
+        #expect(storage.load() == nil)
+    }
+
+    /// Every access group with a session item for `service`, whichever store saved it.
+    private func accessGroups(holding service: String) throws -> [String] {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            return []
+        }
+        try #require(status == errSecSuccess)
+        let items = try #require(result as? [[String: Any]])
+        return items.compactMap { $0[kSecAttrAccessGroup as String] as? String }
     }
 }

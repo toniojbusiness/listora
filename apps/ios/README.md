@@ -65,7 +65,7 @@ Code lives in local Swift packages under `Packages/`. The app target only compos
 Packages/
   Core/          Models and utilities with no UI: AppConfiguration, AppEnvironment, AppVersion,
                  the TagReader protocol with its TagReading model, the listing URL parser
-                 (ListingURL, SharedContent), and the session's AccessTokenStore
+                 (ListingURL, SharedContent)
   DesignSystem/  Palette (light and dark colors), Typography, Spacing, Radius, components
   APIClient/     The generated ListoraAPI client over URLSession, the signed-in session (Keychain),
                  APIFailure (the contract's error model), and the dev sign-in client
@@ -141,7 +141,8 @@ to **Listora** links it to an inventory item. The extension:
   server's message; a retryable one offers Try again with the same Idempotency-Key.
 - is signed in when the app is: the session (`AccessGrant`) is a keychain item in the App
   Group's access group (`KeychainAccessGrantStorage.session(appGroup:)`), which both the app
-  and the extension use. The App Group (`APP_GROUP_IDENTIFIER` in `Config/Base.xcconfig`,
+  and the extension use. A session an earlier build kept in the app's default group moves
+  into the App Group on the first launch, and signing out removes it from both. The App Group (`APP_GROUP_IDENTIFIER` in `Config/Base.xcconfig`,
   `group.com.listora.app.dev` in Dev) is in both targets' entitlements. It is a placeholder
   until the Apple Developer account registers it (gate G-Apple); simulator builds need no team.
 

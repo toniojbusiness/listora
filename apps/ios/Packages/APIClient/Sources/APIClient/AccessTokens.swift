@@ -123,27 +123,81 @@ public struct KeychainAccessGrantStorage: AccessGrantStorage {
         Self(service: "com.listora.app.session", accessGroup: appGroup)
     }
 
+    /// Reads the session. With an access group, a session that an earlier build saved under the
+    /// same service in the app's default group is moved into the access group the first time.
     public func load() -> AccessGrant? {
-        var query = baseQuery
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else {
-            return nil
+        if let data = copyData(baseQuery) {
+            return try? JSONDecoder().decode(AccessGrant.self, from: data)
         }
-        return try? JSONDecoder().decode(AccessGrant.self, from: data)
+        for group in legacyAccessGroups() {
+            let legacy = query(accessGroup: group)
+            guard let data = copyData(legacy) else { continue }
+            guard let grant = try? JSONDecoder().decode(AccessGrant.self, from: data) else {
+                SecItemDelete(legacy as CFDictionary)
+                return nil
+            }
+            if write(grant) {
+                SecItemDelete(legacy as CFDictionary)
+            }
+            return grant
+        }
+        return nil
     }
 
+    /// Saves the session, or with nil signs out: that also removes any session an earlier build
+    /// left in the app's default group.
     public func save(_ grant: AccessGrant?) {
+        guard let grant else {
+            SecItemDelete(baseQuery as CFDictionary)
+            for group in legacyAccessGroups() {
+                SecItemDelete(query(accessGroup: group) as CFDictionary)
+            }
+            return
+        }
+        write(grant)
+    }
+
+    @discardableResult
+    private func write(_ grant: AccessGrant) -> Bool {
         SecItemDelete(baseQuery as CFDictionary)
-        guard let grant, let data = try? JSONEncoder().encode(grant) else { return }
+        guard let data = try? JSONEncoder().encode(grant) else { return false }
         var item = baseQuery
         item[kSecValueData as String] = data
         item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(item as CFDictionary, nil)
+        return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
+    }
+
+    private func copyData(_ query: [String: Any]) -> Data? {
+        var query = query
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess else { return nil }
+        return result as? Data
+    }
+
+    /// The other groups holding an item for this service and account. A query without an access
+    /// group searches every group the process can read, so this finds the item an earlier build
+    /// saved in the app's default group.
+    private func legacyAccessGroups() -> [String] {
+        guard let accessGroup else { return [] }
+        var search = query(accessGroup: nil)
+        search[kSecReturnAttributes as String] = true
+        search[kSecMatchLimit as String] = kSecMatchLimitAll
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(search as CFDictionary, &result) == errSecSuccess,
+              let items = result as? [[String: Any]]
+        else {
+            return []
+        }
+        return items.compactMap { $0[kSecAttrAccessGroup as String] as? String }.filter { $0 != accessGroup }
     }
 
     private var baseQuery: [String: Any] {
+        query(accessGroup: accessGroup)
+    }
+
+    private func query(accessGroup: String?) -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
