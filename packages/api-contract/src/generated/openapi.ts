@@ -953,14 +953,14 @@ export interface components {
          * @description A `KnownMarketplace`, or a marketplace added after this client was built. Clients show
          *     an unknown marketplace generically (its raw id and the server's `statusDisplay`).
          */
-        Marketplace: components["schemas"]["KnownMarketplace"] | string;
+        Marketplace: components["schemas"]["KnownMarketplace"];
         /** @enum {string} */
         KnownMarketplace: "ebay" | "depop" | "poshmark" | "mercari";
         /**
          * @description A `KnownIntegrationMode`, or a mode added after this client was built. Clients offer
          *     nothing that depends on an unknown mode.
          */
-        IntegrationMode: components["schemas"]["KnownIntegrationMode"] | string;
+        IntegrationMode: components["schemas"]["KnownIntegrationMode"];
         /**
          * @description `api`: Listora acts through the marketplace's official API and verifies by read-back.
          *     `assisted`: Listora prepares the work and the user does the final step in the
@@ -972,7 +972,7 @@ export interface components {
          * @description A `KnownStatusTone`, or a tone added after this client was built. Clients style an
          *     unknown tone like `neutral` and still show the `label`.
          */
-        StatusTone: components["schemas"]["KnownStatusTone"] | string;
+        StatusTone: components["schemas"]["KnownStatusTone"];
         /**
          * @description How to style a status. `success` is used only for states verified by an API read-back
          *     or confirmed by the user.
@@ -1006,7 +1006,7 @@ export interface components {
          *     unknown source as not entered by the user (highlight it for review) and send it back
          *     unchanged.
          */
-        Provenance: components["schemas"]["KnownProvenance"] | string;
+        Provenance: components["schemas"]["KnownProvenance"];
         /**
          * @description Where a field value came from.
          * @enum {string}
@@ -1041,7 +1041,7 @@ export interface components {
          * @description A `KnownErrorCode`, or a code added after this client was built. Clients must handle
          *     unknown codes by using `message` and `retryable`, so new codes never break decoding.
          */
-        ErrorCode: components["schemas"]["KnownErrorCode"] | string;
+        ErrorCode: components["schemas"]["KnownErrorCode"];
         /**
          * @description HTTP status per code: `invalid_request` 400; `unauthenticated` 401; `quota_exceeded`
          *     402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
@@ -1070,7 +1070,7 @@ export interface components {
          * @description A `KnownItemStatus`, or a status added after this client was built. Clients show an
          *     unknown status generically and offer no status-specific action for it.
          */
-        ItemStatus: components["schemas"]["KnownItemStatus"] | string;
+        ItemStatus: components["schemas"]["KnownItemStatus"];
         /**
          * @description `draft` and `ready` are set by the user; `archived` by the user for an item with no
          *     live listing. `listed`, `sold_pending_delist`, `sold`, and `shipped` are set by the
@@ -1199,7 +1199,7 @@ export interface components {
             /** @description This item's share of `netProceeds`, minus its share of `shippingCost`, minus its `cost`. */
             profit?: components["schemas"]["Money"];
             /**
-             * Format: int32
+             * Format: int64
              * @description Return on investment, `profit` divided by the item's `cost`, in basis points
              *     (12550 is 125.5%). Absent when `profit` is absent or the cost is zero.
              */
@@ -1357,7 +1357,7 @@ export interface components {
          * @description A `KnownAnalysisProvenance`, or a source added after this client was built. Clients
          *     treat an unknown source like `ai`.
          */
-        AnalysisProvenance: components["schemas"]["KnownAnalysisProvenance"] | string;
+        AnalysisProvenance: components["schemas"]["KnownAnalysisProvenance"];
         /**
          * @description Where an analyzed value came from (users are not a source inside an analysis).
          * @enum {string}
@@ -1448,7 +1448,7 @@ export interface components {
          * @description A `KnownSoldDataSource`, or a source of real sold data added after this client was
          *     built. Clients show the comparables' `label` for an unknown source.
          */
-        SoldDataSource: components["schemas"]["KnownSoldDataSource"] | string;
+        SoldDataSource: components["schemas"]["KnownSoldDataSource"];
         /**
          * @description Sources of real sold data. `ai_estimate` and `cost_floor` are deliberately not in this
          *     list: the words "comps" and "sold" are only ever shown next to real sold data.
@@ -1475,7 +1475,7 @@ export interface components {
          * @description A `KnownPriceBasis`, or a basis added after this client was built. Clients show the
          *     tier's `label` for an unknown basis and never present it as sold data.
          */
-        PriceBasis: components["schemas"]["KnownPriceBasis"] | string;
+        PriceBasis: components["schemas"]["KnownPriceBasis"];
         /**
          * @description What a suggested price is derived from.
          * @enum {string}
@@ -1523,7 +1523,7 @@ export interface components {
          * @description A `KnownListingStatus`, or a status added after this client was built. Clients show
          *     the listing's `statusDisplay` for an unknown status and never treat it as success.
          */
-        ListingStatus: components["schemas"]["KnownListingStatus"] | string;
+        ListingStatus: components["schemas"]["KnownListingStatus"];
         /**
          * @description Lifecycle of one listing. `active` and `ended` are set only after verification
          *     (see `verification`); `unknown` means an outcome is being checked.
@@ -1534,7 +1534,7 @@ export interface components {
          * @description A `KnownListingAction`, or an action added after this client was built. Clients hide
          *     actions they do not know.
          */
-        ListingAction: components["schemas"]["KnownListingAction"] | string;
+        ListingAction: components["schemas"]["KnownListingAction"];
         /** @enum {string} */
         KnownListingAction: "publish" | "revise" | "change_price" | "end" | "relist" | "verify";
         /** @description An action the user can take now, and whether Listora or the user performs it. */
@@ -1618,14 +1618,14 @@ export interface components {
          * @description A `KnownOperationKind`, or a kind added after this client was built. Clients describe
          *     an unknown kind generically using the operation's `statusDisplay`.
          */
-        OperationKind: components["schemas"]["KnownOperationKind"] | string;
+        OperationKind: components["schemas"]["KnownOperationKind"];
         /** @enum {string} */
         KnownOperationKind: "create" | "revise" | "price" | "end" | "relist" | "mark_sold" | "verify";
         /**
          * @description A `KnownOperationStatus`, or a status added after this client was built. Clients show
          *     the operation's `statusDisplay` for an unknown status and never treat it as success.
          */
-        OperationStatus: components["schemas"]["KnownOperationStatus"] | string;
+        OperationStatus: components["schemas"]["KnownOperationStatus"];
         /**
          * @description `succeeded` only after an API read-back confirms the desired state or the user
          *     confirms an assisted task. `verifying`: the outcome is unknown (for example a timeout
@@ -1638,7 +1638,7 @@ export interface components {
          * @description A `KnownOperationOriginType`, or an origin added after this client was built. Clients
          *     show an unknown origin generically.
          */
-        OperationOriginType: components["schemas"]["KnownOperationOriginType"] | string;
+        OperationOriginType: components["schemas"]["KnownOperationOriginType"];
         /** @enum {string} */
         KnownOperationOriginType: "user" | "auto_delist" | "reprice_rule";
         OperationOrigin: {
@@ -1719,7 +1719,7 @@ export interface components {
          * @description A `KnownConnectionStatus`, or a status added after this client was built. Clients
          *     show the connection's `statusDisplay` for an unknown status.
          */
-        ConnectionStatus: components["schemas"]["KnownConnectionStatus"] | string;
+        ConnectionStatus: components["schemas"]["KnownConnectionStatus"];
         /**
          * @description State of the API connection. Assisted marketplaces (`mode: assisted`) have no account
          *     connection and report `not_connected`; their `statusDisplay` says so.
@@ -1730,28 +1730,28 @@ export interface components {
          * @description A `KnownCapabilityMode`, or a mode added after this client was built. Clients treat
          *     an unknown mode like `none` (the capability is not offered).
          */
-        CapabilityMode: components["schemas"]["KnownCapabilityMode"] | string;
+        CapabilityMode: components["schemas"]["KnownCapabilityMode"];
         /** @enum {string} */
         KnownCapabilityMode: "api" | "assisted" | "bulk_file" | "none";
         /**
          * @description A `KnownMarkSoldMode`, or a mode added after this client was built. Clients treat an
          *     unknown mode like `none`.
          */
-        MarkSoldMode: components["schemas"]["KnownMarkSoldMode"] | string;
+        MarkSoldMode: components["schemas"]["KnownMarkSoldMode"];
         /** @enum {string} */
         KnownMarkSoldMode: "api" | "assisted" | "bulk_file" | "none" | "not_needed";
         /**
          * @description A `KnownConnectMethod`, or a method added after this client was built. Clients treat
          *     an unknown method like `none` (no connect button).
          */
-        ConnectMethod: components["schemas"]["KnownConnectMethod"] | string;
+        ConnectMethod: components["schemas"]["KnownConnectMethod"];
         /** @enum {string} */
         KnownConnectMethod: "oauth" | "none";
         /**
          * @description A `KnownVerifyReadMode`, or a mode added after this client was built. Clients offer no
          *     "check again" action for an unknown mode.
          */
-        VerifyReadMode: components["schemas"]["KnownVerifyReadMode"] | string;
+        VerifyReadMode: components["schemas"]["KnownVerifyReadMode"];
         /**
          * @description How success is established.
          * @enum {string}
@@ -1761,14 +1761,14 @@ export interface components {
          * @description A `KnownImportListingsMode`, or a mode added after this client was built. Clients
          *     treat an unknown mode like `none`.
          */
-        ImportListingsMode: components["schemas"]["KnownImportListingsMode"] | string;
+        ImportListingsMode: components["schemas"]["KnownImportListingsMode"];
         /** @enum {string} */
         KnownImportListingsMode: "api" | "share_sheet" | "bulk_file" | "none";
         /**
          * @description A `KnownImageTransportMode`, or a mode added after this client was built. Clients
          *     treat an unknown mode like `user_saves_photos`.
          */
-        ImageTransportMode: components["schemas"]["KnownImageTransportMode"] | string;
+        ImageTransportMode: components["schemas"]["KnownImageTransportMode"];
         /** @enum {string} */
         KnownImageTransportMode: "url_fetch" | "upload" | "user_saves_photos";
         /**
@@ -1835,14 +1835,14 @@ export interface components {
          * @description A `KnownSaleStatus`, or a status added after this client was built. Clients show an
          *     unknown status generically.
          */
-        SaleStatus: components["schemas"]["KnownSaleStatus"] | string;
+        SaleStatus: components["schemas"]["KnownSaleStatus"];
         /** @enum {string} */
         KnownSaleStatus: "detected" | "confirmed" | "canceled" | "returned";
         /**
          * @description A `KnownSaleDetectionSource`, or a source added after this client was built. Clients
          *     show an unknown source generically.
          */
-        SaleDetectionSource: components["schemas"]["KnownSaleDetectionSource"] | string;
+        SaleDetectionSource: components["schemas"]["KnownSaleDetectionSource"];
         /** @enum {string} */
         KnownSaleDetectionSource: "webhook" | "poll" | "email" | "manual";
         /**
@@ -1854,7 +1854,7 @@ export interface components {
          * @description A `KnownDelistResultState`, or a state added after this client was built. Clients
          *     show the result's `statusDisplay` for an unknown state and never treat it as delisted.
          */
-        DelistResultState: components["schemas"]["KnownDelistResultState"] | string;
+        DelistResultState: components["schemas"]["KnownDelistResultState"];
         /** @enum {string} */
         KnownDelistResultState: "pending" | "verifying" | "delisted" | "user_confirmed" | "needs_user_action" | "failed";
         DelistResult: {
@@ -1891,7 +1891,7 @@ export interface components {
          * @description A `KnownFeeType`, or a type added after this client was built. Clients show an unknown
          *     type like `other`.
          */
-        FeeType: components["schemas"]["KnownFeeType"] | string;
+        FeeType: components["schemas"]["KnownFeeType"];
         /**
          * @description `actual`: reported by the marketplace. `estimated`: from Listora's fee table until the marketplace reports the actual fee.
          * @enum {string}
@@ -1960,7 +1960,7 @@ export interface components {
          *     unknown task's `title`, `instructions`, and `deepLink`, and ask the user to update
          *     the app to complete it.
          */
-        UserTaskKind: components["schemas"]["KnownUserTaskKind"] | string;
+        UserTaskKind: components["schemas"]["KnownUserTaskKind"];
         /** @enum {string} */
         KnownUserTaskKind: "list_manually" | "delist_manually" | "confirm_sale" | "reconnect" | "review_match";
         /** @enum {string} */

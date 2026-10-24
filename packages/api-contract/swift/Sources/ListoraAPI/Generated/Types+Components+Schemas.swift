@@ -1142,7 +1142,7 @@ extension Components {
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/roiBasisPoints`.
-            public var roiBasisPoints: Swift.Int32?
+            public var roiBasisPoints: Swift.Int64?
             /// Creates a new `ItemSaleSummary`.
             ///
             /// - Parameters:
@@ -1158,7 +1158,7 @@ extension Components {
                 salePrice: Components.Schemas.Money,
                 netProceeds: Components.Schemas.Money? = nil,
                 profit: Components.Schemas.Money? = nil,
-                roiBasisPoints: Swift.Int32? = nil
+                roiBasisPoints: Swift.Int64? = nil
             ) {
                 self.saleId = saleId
                 self.soldAt = soldAt

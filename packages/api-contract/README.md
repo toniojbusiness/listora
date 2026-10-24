@@ -140,6 +140,14 @@ bodies and query and path parameters use `KnownX` directly, so the server still 
 values it does not know. Schemas shared by requests and responses (such as `ItemDetails`)
 keep `X`, so the app can send back a value it does not know unchanged.
 
+The two sides read open enums differently, on purpose:
+
+- **Server (TypeScript): strict.** The server is always the newest party, so it may only
+  send values it knows. Code generation (`tools/codegen.ts`) types every `X` as `KnownX`, so
+  a typo such as `status: 'actve'` fails `tsc` (see `src/server-types.test.ts`).
+- **App (Swift): open.** The generated client decodes any string, so values added after an
+  app build never fail decoding.
+
 In Swift an open enum decodes to a struct with `value1` (the `KnownX` case, `nil` for a new
 value) and `value2` (the raw string), so a new value never fails decoding:
 

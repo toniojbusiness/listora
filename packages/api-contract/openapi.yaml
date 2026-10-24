@@ -1924,7 +1924,7 @@ components:
           description: This item's share of `netProceeds`, minus its share of `shippingCost`, minus its `cost`.
         roiBasisPoints:
           type: integer
-          format: int32
+          format: int64
           description: |
             Return on investment, `profit` divided by the item's `cost`, in basis points
             (12550 is 125.5%). Absent when `profit` is absent or the cost is zero.
