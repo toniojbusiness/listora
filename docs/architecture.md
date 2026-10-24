@@ -89,6 +89,8 @@ apps/
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
+  ai/           AI provider layer: provider interface, model registry, price table, usage
+                metering, budget guards, fake and Anthropic providers (@listora/ai)
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
   db/           SQL migrations, migration runner, Kysely types, SKU allocator (@listora/db)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
@@ -245,6 +247,8 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
 6. **Evaluation.** `npm run eval` scores the parsers, and a provider behind the `EvalProvider`
    interface, on the synthetic tag corpus in `packages/eval/corpus`. It prints per-field
    accuracy, precision, recall, and cost per item, including the billed cost of failed calls.
+   The `fake` (default) and `anthropic` providers go through `AiClient`, so the guards, the
+   tier's model (`--tier`), and metering are the production ones.
    The parsers must stay at or above 95% on every field (a unit test enforces this). Providers,
    the corpus license manifest, and how to change the corpus are described in
    [packages/eval/corpus/README.md](../packages/eval/corpus/README.md).
@@ -252,6 +256,32 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
    `cost_micros` from a versioned price table). The system also keeps daily and monthly
    rollups and per-plan quotas in reseller units. There is a per-account daily dollar circuit
    breaker (default $1/day), a global kill switch, and budget alarms.
+
+`@listora/ai` implements steps 3 to 6 for every caller:
+
+- **`AiClient` is the only way to call AI.** A call names its account, purpose, and tier
+  (`standard` is the Fast tier, `premium` the escalation). The client checks the guards in
+  order: the global kill switch (`AI_KILL_SWITCH`), the account's spend today in UTC against
+  `AI_DAILY_BUDGET_USD`, and the plan quota hook (`QuotaPolicy`, in reseller units such as
+  `ai_items`). A tripped guard throws `AiGuardError` before anything is sent and records
+  nothing. Quota units are consumed only when a call succeeds.
+- **Tiers map to models by configuration** (`AI_MODEL_STANDARD`, `AI_MODEL_PREMIUM`); the
+  default registry is Haiku 5.5 at low effort and Sonnet 5.5 at medium effort. Every
+  configured model must be in the price table, so every call can be priced.
+- **Prices** live in `packages/ai/src/prices.ts` as integer micro-dollars per million tokens.
+  A price change adds a new table version; each event stores the version it was priced with.
+  Costs round up to the next micro-dollar, once per call.
+- **Every call is metered, failed ones too.** The provider reports what it billed (a
+  truncated or invalid answer still costs tokens), and the event records it with
+  `outcome = 'failed'` and an `error_code` before `AiCallError` is thrown. Providers send one
+  request per call and never retry, so each request the vendor sees is its own event.
+- **Providers.** `FakeAiProvider` answers from fixture JSON keyed by photo-set hash and output
+  schema name (`packages/ai/fixtures/README.md`), validates it against the schema, and
+  estimates usage the way the API counts it. Fake calls are metered at the configured model's
+  real prices so budgets behave the same in development. `AnthropicProvider` uses the official
+  SDK with strict structured output (`output_config.format` from the Zod schema), base64
+  images, the tier's effort, and a prompt-cache breakpoint on the system prompt. Its live smoke
+  test runs only when `ANTHROPIC_API_KEY` is set.
 
 ## 9. Data model outline
 
@@ -266,8 +296,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   column (`currency_code` domain, USD only for now). Status-like columns are text with a
   CHECK of allowed values, mirrored by the lists in `packages/db/src/values.ts`.
 - **Timestamps.** `created_at` and `updated_at` default to `now()`, and a trigger maintains
-  `updated_at`. The append-only tables (`operation_event`, `audit_log`) have only
-  `created_at`, since their rows never change.
+  `updated_at`. The append-only tables (`operation_event`, `audit_log`, `ai_usage_event`) have
+  only `created_at`, since their rows never change.
 - **History is kept.** A trigger rejects updates and deletes on the append-only tables, and
   deletes on `marketplace_operation`. The only changes it lets through are foreign-key actions
   caused by deleting a parent row (for example deleting the account), never direct statements
@@ -289,8 +319,10 @@ Tables by area:
   `field_provenance`, optimistic-lock `version`), `photo` (role, hashes, derivatives, OCR and
   barcodes), and `storage_location`. `photo` stores pixel `width` and `height` but no byte
   size; the stored object's size is available from object storage when needed.
-- **AI:** `ai_analysis` (unique per photo-set hash and tier), `ai_usage_event`, and
-  `ai_usage_daily`.
+- **AI:** `ai_analysis` (unique per photo-set hash and tier), `ai_usage_event` (one
+  append-only row per provider call, with its tier, outcome, and error code), and
+  `ai_usage_daily`, which a trigger on `ai_usage_event` keeps in step per account and UTC day.
+  Monthly totals are sums of the daily rows.
 - **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
   `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot,
   desired/applied version), `marketplace_operation`, and the append-only `operation_event`.

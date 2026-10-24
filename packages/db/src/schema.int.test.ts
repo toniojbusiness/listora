@@ -113,7 +113,10 @@ const COLUMNS = {
     'price_table_version',
     'latency_ms',
     'created_at',
-    'updated_at',
+    'tier',
+    'outcome',
+    'error_code',
+    'batch',
   ],
   ai_usage_daily: [
     'account_id',
@@ -128,6 +131,7 @@ const COLUMNS = {
     'cost_micros',
     'created_at',
     'updated_at',
+    'failed_calls',
   ],
   marketplace_connection: [
     'id',
@@ -372,6 +376,8 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['ai_analysis', 'tier', values.ANALYSIS_TIERS],
   ['ai_analysis', 'status', values.ANALYSIS_STATUSES],
   ['ai_usage_event', 'provider', values.AI_PROVIDERS],
+  ['ai_usage_event', 'tier', values.ANALYSIS_TIERS],
+  ['ai_usage_event', 'outcome', values.AI_USAGE_OUTCOMES],
   ['marketplace_connection', 'mode', values.CONNECTION_MODES],
   ['marketplace_connection', 'status', values.CONNECTION_STATUSES],
   ['marketplace_listing', 'status', values.LISTING_STATUSES],

@@ -1,0 +1,36 @@
+{
+  "description": "denim-label-009: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [
+        "127175"
+      ],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "waist_inseam",
+          "value": "26x32"
+        }
+      ],
+      "fiber": [
+        {
+          "part": null,
+          "material": "cotton",
+          "percent": 98
+        },
+        {
+          "part": null,
+          "material": "spandex",
+          "percent": 2
+        }
+      ],
+      "origin": [
+        "VN"
+      ],
+      "style": [
+        "5022-11"
+      ]
+    }
+  }
+}

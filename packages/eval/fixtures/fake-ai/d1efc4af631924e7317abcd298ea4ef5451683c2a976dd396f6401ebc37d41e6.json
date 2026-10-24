@@ -1,0 +1,30 @@
+{
+  "description": "edge-case-025: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [],
+      "size": [],
+      "fiber": [
+        {
+          "part": "shell",
+          "material": "cotton",
+          "percent": 60
+        },
+        {
+          "part": "shell",
+          "material": "polyester",
+          "percent": 40
+        },
+        {
+          "part": "lining",
+          "material": "polyester",
+          "percent": 100
+        }
+      ],
+      "origin": [],
+      "style": []
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "description": "care-label-175: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [
+        "74004"
+      ],
+      "gtin": [],
+      "size": [],
+      "fiber": [
+        {
+          "part": "shell",
+          "material": "polyester",
+          "percent": 100
+        },
+        {
+          "part": "lining",
+          "material": "polyester",
+          "percent": 100
+        },
+        {
+          "part": "fill",
+          "material": "polyester",
+          "percent": 100
+        }
+      ],
+      "origin": [
+        "BD"
+      ],
+      "style": []
+    }
+  }
+}

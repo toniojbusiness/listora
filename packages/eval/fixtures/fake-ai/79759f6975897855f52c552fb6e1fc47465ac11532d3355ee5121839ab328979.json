@@ -1,0 +1,26 @@
+{
+  "description": "care-label-069: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [
+        "121437"
+      ],
+      "ca": [
+        "81134"
+      ],
+      "gtin": [],
+      "size": [],
+      "fiber": [
+        {
+          "part": null,
+          "material": "polyester",
+          "percent": 100
+        }
+      ],
+      "origin": [
+        "SV"
+      ],
+      "style": []
+    }
+  }
+}

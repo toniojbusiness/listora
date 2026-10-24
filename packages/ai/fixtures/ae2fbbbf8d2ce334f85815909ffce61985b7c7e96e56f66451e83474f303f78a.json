@@ -1,0 +1,6 @@
+{
+  "description": "Sample fixture: the 1x1 red PNG in packages/ai/src/test-support.ts.",
+  "outputs": {
+    "dominant_color": { "color": "red", "confidence": 0.99 }
+  }
+}

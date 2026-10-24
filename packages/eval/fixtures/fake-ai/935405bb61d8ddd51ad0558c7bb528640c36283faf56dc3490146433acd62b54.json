@@ -1,0 +1,36 @@
+{
+  "description": "shoe-label-149: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [
+        {
+          "format": "ean_13",
+          "digits": "8987929310286"
+        }
+      ],
+      "size": [
+        {
+          "system": "us",
+          "value": "10"
+        },
+        {
+          "system": "uk",
+          "value": "9"
+        },
+        {
+          "system": "eu",
+          "value": "43.5"
+        }
+      ],
+      "fiber": [],
+      "origin": [
+        "BD"
+      ],
+      "style": [
+        "AM5109"
+      ]
+    }
+  }
+}

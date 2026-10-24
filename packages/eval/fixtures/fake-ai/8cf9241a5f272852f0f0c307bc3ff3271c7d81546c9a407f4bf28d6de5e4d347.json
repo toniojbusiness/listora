@@ -1,0 +1,21 @@
+{
+  "description": "edge-case-005: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "one_size",
+          "value": "OS"
+        }
+      ],
+      "fiber": [],
+      "origin": [],
+      "style": [
+        "20931-004"
+      ]
+    }
+  }
+}

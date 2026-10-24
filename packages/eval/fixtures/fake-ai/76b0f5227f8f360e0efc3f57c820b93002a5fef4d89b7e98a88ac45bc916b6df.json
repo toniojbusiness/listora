@@ -1,0 +1,24 @@
+{
+  "description": "hang-tag-165: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [
+        {
+          "format": "upc_a",
+          "digits": "631489825947"
+        }
+      ],
+      "size": [
+        {
+          "system": "letter",
+          "value": "M"
+        }
+      ],
+      "fiber": [],
+      "origin": [],
+      "style": []
+    }
+  }
+}

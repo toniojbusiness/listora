@@ -21,14 +21,54 @@ function runCli(...args: string[]) {
 }
 
 describe('eval CLI', () => {
-  it('prints parser and stub-provider accuracy and cost per item by default', () => {
+  it('prints parser and fake-provider accuracy and the metered cost per item by default', () => {
     const { status, stdout, stderr } = runCli();
     expect(stderr).toBe('');
     expect(status).toBe(0);
     expect(stdout).toMatch(/^Tag eval: \d+ items from listora-synthetic-tags/);
-    expect(stdout).toContain('provider:stub: stub provider');
+    expect(stdout).toContain('provider:fake: fake AI provider');
+    expect(stdout).toContain('metered at claude-haiku-5-5 prices');
     expect(stdout).toMatch(/^origin\s+\d+\.\d% \(\d+\/\d+\)/m);
+    // The parsers cost nothing; the fake provider is metered at Haiku 5.5 prices.
+    expect(stdout).toMatch(/^cost\/item\s+\$0\.000000\s+\$0\.0000[1-9]\d$/m);
+  });
+
+  it('meters the premium tier at its model prices', () => {
+    const { status, stdout } = runCli('--tier', 'premium', '--json');
+    expect(status).toBe(0);
+    const report = JSON.parse(stdout) as EvalReport;
+    const standard = JSON.parse(runCli('--json').stdout) as EvalReport;
+    expect(report.systems[1]?.description).toContain('claude-sonnet-5-5');
+    expect(report.systems[1]?.costMicrosTotal).toBeGreaterThan(
+      (standard.systems[1]?.costMicrosTotal ?? 0) * 10,
+    );
+  });
+
+  it('still offers the stub provider, which costs nothing', () => {
+    const { status, stdout } = runCli('--provider', 'stub');
+    expect(status).toBe(0);
+    expect(stdout).toContain('provider:stub: stub provider');
     expect(stdout).toMatch(/^cost\/item\s+\$0\.000000\s+\$0\.000000$/m);
+  });
+
+  it('refuses the Anthropic provider without an API key, naming the key', () => {
+    const { status, stderr, stdout } = runCli('--provider', 'anthropic');
+    expect(status).toBe(1);
+    expect(stderr).toContain('ANTHROPIC_API_KEY is required when AI_PROVIDER is anthropic');
+    expect(stdout).toBe('');
+  });
+
+  it('honours the AI kill switch: every provider call fails and the run exits 1', () => {
+    const result = spawnSync(process.execPath, [entry, '--json'], {
+      encoding: 'utf8',
+      env: { PATH: process.env['PATH'], AI_KILL_SWITCH: 'on' },
+      timeout: 60_000,
+    });
+    expect(result.status).toBe(1);
+    const report = JSON.parse(result.stdout) as EvalReport;
+    expect(report.systems[1]?.errors).toHaveLength(report.corpus.items);
+    expect(report.systems[1]?.costMicrosTotal).toBe(0);
+    expect(result.stderr).toMatch(/provider:fake: \d+ provider calls failed/);
   });
 
   it('passes the acceptance gate and fails a gate the corpus cannot meet', () => {
@@ -49,7 +89,8 @@ describe('eval CLI', () => {
   });
 
   it.each([
-    [['--provider', 'anthropic'], /unknown provider "anthropic"/],
+    [['--provider', 'gemini'], /unknown provider "gemini"/],
+    [['--tier', 'expert'], /unknown tier "expert"/],
     [['--min-accuracy', 'high'], /--min-accuracy must be a number from 0 to 1/],
     [['--min-accuracy', '1.5'], /--min-accuracy must be a number from 0 to 1/],
     [['--bogus'], /Unknown option '--bogus'/],

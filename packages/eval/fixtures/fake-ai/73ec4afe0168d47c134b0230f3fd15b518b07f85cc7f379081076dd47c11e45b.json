@@ -1,0 +1,23 @@
+{
+  "description": "neck-label-152: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [
+        "84258"
+      ],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "letter",
+          "value": "S"
+        }
+      ],
+      "fiber": [],
+      "origin": [
+        "VN"
+      ],
+      "style": []
+    }
+  }
+}
