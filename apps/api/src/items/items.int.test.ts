@@ -306,6 +306,41 @@ describe('items (real Postgres)', () => {
       });
     });
 
+    it('keeps the source of unchanged money and measurements whatever their key order', async () => {
+      const created = (
+        await create({
+          title: 'Wool coat',
+          listPrice: { amountCents: 12000, currency: 'USD' },
+          measurements: [{ name: 'length', value: 40, unit: 'in' }],
+        })
+      ).body;
+      await api.db
+        .updateTable('inventory_item')
+        .set({ field_provenance: jsonb({ title: 'ai', listPrice: 'ai', measurements: 'ocr' }) })
+        .where('id', '=', created.id)
+        .execute();
+
+      // Keys sorted, as an encoder with sorted keys (the Swift client's) sends them.
+      const response = await api.call('replaceItem', {
+        token,
+        params: { itemId: created.id },
+        body: {
+          expectedVersion: 2,
+          details: {
+            listPrice: { currency: 'USD', amountCents: 12000 },
+            measurements: [{ name: 'length', unit: 'in', value: 40 }],
+            title: 'Wool overcoat',
+          },
+        },
+      });
+      expect(response.status).toBe(200);
+      expect(response.body.fieldProvenance).toEqual({
+        title: 'user',
+        listPrice: 'ai',
+        measurements: 'ocr',
+      });
+    });
+
     it('changes nothing, not even the version, when the request changes nothing', async () => {
       const created = (
         await create({
@@ -404,6 +439,108 @@ describe('items (real Postgres)', () => {
         token,
         params: { itemId: created.id },
         body: { expectedVersion: version + 1, status: 'draft', details: {} },
+      });
+      expect(response.status).toBe(409);
+      expect(response.error.code).toBe('invalid_state_transition');
+    });
+
+    it('records the status an item had when archived and restores it on unarchive', async () => {
+      const created = (await create()).body;
+      const ready = await api.call('replaceItem', {
+        token,
+        params: { itemId: created.id },
+        body: { expectedVersion: 1, status: 'ready', details: {} },
+      });
+      const archived = await api.call('replaceItem', {
+        token,
+        params: { itemId: created.id },
+        body: { expectedVersion: ready.body.version, status: 'archived', details: {} },
+      });
+      expect(archived.body.status).toBe('archived');
+      const stored = () =>
+        api.db
+          .selectFrom('inventory_item')
+          .select(['status', 'pre_archive_status'])
+          .where('id', '=', created.id)
+          .executeTakeFirstOrThrow();
+      expect(await stored()).toEqual({ status: 'archived', pre_archive_status: 'ready' });
+
+      const restored = await api.call('replaceItem', {
+        token,
+        params: { itemId: created.id },
+        body: { expectedVersion: archived.body.version, status: 'ready', details: {} },
+      });
+      expect(restored.status).toBe(200);
+      expect(restored.body.status).toBe('ready');
+      expect(await stored()).toEqual({ status: 'ready', pre_archive_status: null });
+    });
+
+    it('never lets an archived sold or shipped item become draft or ready again', async () => {
+      for (const soldStatus of ['sold', 'shipped'] as const) {
+        const created = (await create()).body;
+        await api.db
+          .updateTable('inventory_item')
+          .set({ status: soldStatus })
+          .where('id', '=', created.id)
+          .execute();
+        const archived = await api.call('replaceItem', {
+          token,
+          params: { itemId: created.id },
+          body: { expectedVersion: 2, status: 'archived', details: {} },
+        });
+        expect(archived.status, soldStatus).toBe(200);
+
+        for (const status of ['draft', 'ready'] as const) {
+          const response = await api.call('replaceItem', {
+            token,
+            params: { itemId: created.id },
+            body: { expectedVersion: archived.body.version, status, details: {} },
+          });
+          expect(response.status, `${soldStatus} -> ${status}`).toBe(409);
+          expect(response.error.code).toBe('invalid_state_transition');
+        }
+        const current = await api.db
+          .selectFrom('inventory_item')
+          .select(['status', 'pre_archive_status'])
+          .where('id', '=', created.id)
+          .executeTakeFirstOrThrow();
+        expect(current).toEqual({ status: 'archived', pre_archive_status: soldStatus });
+      }
+    });
+
+    it('keeps an archived item with a sale archived even if it was a draft', async () => {
+      const created = (await create()).body;
+      const archived = await api.call('replaceItem', {
+        token,
+        params: { itemId: created.id },
+        body: { expectedVersion: 1, status: 'archived', details: {} },
+      });
+      const tenant = await api.tenantOf(OWNER);
+      const sale = await api.db
+        .insertInto('sale')
+        .values({
+          account_id: tenant.accountId,
+          marketplace: 'depop',
+          sold_at: new Date(),
+          detection_source: 'manual',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await api.db
+        .insertInto('sale_item')
+        .values({
+          account_id: tenant.accountId,
+          sale_id: sale.id,
+          marketplace: 'depop',
+          item_id: created.id,
+          sale_price_cents: 2500,
+        })
+        .execute();
+
+      const response = await api.call('replaceItem', {
+        token,
+        params: { itemId: created.id },
+        body: { expectedVersion: archived.body.version, status: 'draft', details: {} },
       });
       expect(response.status).toBe(409);
       expect(response.error.code).toBe('invalid_state_transition');

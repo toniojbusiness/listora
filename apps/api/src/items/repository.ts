@@ -11,6 +11,7 @@ import {
   type InventoryItem,
   type JsonObject,
   type ListingStatus,
+  type PreArchiveItemStatus,
 } from '@listora/db';
 import { sql } from 'kysely';
 
@@ -55,18 +56,17 @@ export async function lockItem(
     .executeTakeFirst();
 }
 
-export async function findItemIdBySku(
+export async function findItemBySku(
   db: DbExecutor,
   tenant: Tenant,
   sku: string,
-): Promise<string | undefined> {
-  const row = await db
+): Promise<InventoryItem | undefined> {
+  return db
     .selectFrom('inventory_item')
-    .select('id')
+    .selectAll()
     .where('account_id', '=', tenant.accountId)
     .where('sku', '=', sku)
     .executeTakeFirst();
-  return row?.id;
 }
 
 export interface ItemListFilter {
@@ -183,7 +183,12 @@ export async function updateItem(
   tenant: Tenant,
   itemId: string,
   expectedVersion: number,
-  changes: { columns: DetailColumns; status: ItemStatus; provenance: FieldProvenance },
+  changes: {
+    columns: DetailColumns;
+    status: ItemStatus;
+    preArchiveStatus: PreArchiveItemStatus | null;
+    provenance: FieldProvenance;
+  },
 ): Promise<InventoryItem | undefined> {
   const { measurements, ...rest } = changes.columns;
   return trx
@@ -191,6 +196,7 @@ export async function updateItem(
     .set({
       ...rest,
       status: changes.status,
+      pre_archive_status: changes.preArchiveStatus,
       measurements: jsonb(measurements),
       field_provenance: jsonb(changes.provenance as JsonObject),
     })
@@ -213,6 +219,18 @@ export async function hasLiveListing(
     .where('account_id', '=', tenant.accountId)
     .where('item_id', '=', itemId)
     .where('status', 'not in', NOT_LIVE_LISTING_STATUSES)
+    .limit(1)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
+/** Whether the item was sold in any marketplace order (whatever became of the order). */
+export async function hasSale(db: DbExecutor, tenant: Tenant, itemId: string): Promise<boolean> {
+  const row = await db
+    .selectFrom('sale_item')
+    .select('id')
+    .where('account_id', '=', tenant.accountId)
+    .where('item_id', '=', itemId)
     .limit(1)
     .executeTakeFirst();
   return row !== undefined;

@@ -63,6 +63,7 @@ const COLUMNS = {
     'version',
     'created_at',
     'updated_at',
+    'pre_archive_status',
   ],
   photo: [
     'id',
@@ -378,6 +379,7 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['app_user', 'auth_provider', values.AUTH_PROVIDERS],
   ['membership', 'role', values.MEMBERSHIP_ROLES],
   ['inventory_item', 'status', values.ITEM_STATUSES],
+  ['inventory_item', 'pre_archive_status', values.PRE_ARCHIVE_ITEM_STATUSES],
   ['photo', 'role', values.PHOTO_ROLES],
   ['ai_analysis', 'tier', values.ANALYSIS_TIERS],
   ['ai_analysis', 'status', values.ANALYSIS_STATUSES],

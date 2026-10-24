@@ -108,6 +108,24 @@ describe('provenanceAfterWrite', () => {
     ).toEqual({ brand: 'ocr', title: 'user', sizeLabel: 'user' });
   });
 
+  it('keeps the source of unchanged money and measurements sent with keys in another order', () => {
+    const before = {
+      listPrice: { amountCents: 6500, currency: 'USD' as const },
+      measurements: [{ name: 'length', value: 26, unit: 'in' as const }],
+      quantity: 1,
+    };
+    expect(
+      provenanceAfterWrite(
+        {
+          listPrice: { currency: 'USD', amountCents: 6500 },
+          measurements: [{ name: 'length', unit: 'in', value: 26 }],
+          quantity: 1,
+        },
+        { details: before, provenance: { listPrice: 'ai', measurements: 'ocr' } },
+      ),
+    ).toEqual({ listPrice: 'ai', measurements: 'ocr' });
+  });
+
   it('gives a default quantity no source, but a quantity the user set stays the user’s', () => {
     expect(provenanceAfterWrite({ quantity: 1 }, undefined)).toEqual({});
     expect(provenanceAfterWrite({ quantity: 3 }, undefined)).toEqual({ quantity: 'user' });
@@ -146,6 +164,7 @@ function rowStub(): Parameters<typeof detailsFromRow>[0] {
     version: 1,
     created_at: new Date(),
     updated_at: new Date(),
+    pre_archive_status: null,
     ...columnsFromDetails({}),
   };
 }

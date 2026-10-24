@@ -29,6 +29,17 @@ export const ITEM_STATUSES = [
 ] as const;
 export type ItemStatus = (typeof ITEM_STATUSES)[number];
 
+/** `inventory_item.pre_archive_status`: every item status but `archived`. */
+export const PRE_ARCHIVE_ITEM_STATUSES = [
+  'draft',
+  'ready',
+  'listed',
+  'sold_pending_delist',
+  'sold',
+  'shipped',
+] as const satisfies readonly Exclude<ItemStatus, 'archived'>[];
+export type PreArchiveItemStatus = (typeof PRE_ARCHIVE_ITEM_STATUSES)[number];
+
 export const PHOTO_ROLES = ['front', 'back', 'tag', 'flaw', 'detail'] as const;
 export type PhotoRole = (typeof PHOTO_ROLES)[number];
 

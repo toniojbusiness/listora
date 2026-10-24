@@ -9,17 +9,26 @@
  * - no stored response → the operation runs, and its successful response is stored in the
  *   same transaction as the change. A failure rolls both back, so nothing is stored and a retry
  *   runs again. A crash releases the lock with the transaction, so a key is never stuck.
+ *
+ * An expired record counts as absent. Each stored response also deletes a batch of expired
+ * records (`IDEMPOTENCY_SWEEP_BATCH`), so the table does not grow without bound.
  */
 import { createHash } from 'node:crypto';
 
 import { jsonb, type Db, type DbTransaction, type JsonValue } from '@listora/db';
 import { sql } from 'kysely';
 
+import { canonicalJson } from './canonical-json.ts';
 import { ApiError } from './errors.ts';
 import type { Tenant } from './tenancy.ts';
 
 /** How long a stored response is replayed; the contract promises at least 24 hours. */
 export const IDEMPOTENCY_RETENTION_HOURS = 24;
+/**
+ * Expired records each POST deletes, from any account. A POST stores at most one record, so
+ * the table never holds much more than a retention period of records.
+ */
+export const IDEMPOTENCY_SWEEP_BATCH = 100;
 
 export interface IdempotentRequest {
   key: string;
@@ -89,8 +98,26 @@ export async function runIdempotent(
         expires_at: sql<Date>`now() + make_interval(hours => ${IDEMPOTENCY_RETENTION_HOURS})`,
       })
       .execute();
+    await sweepExpired(trx);
     return response;
   });
+}
+
+/**
+ * Deletes a batch of expired records, oldest first. Rows another transaction holds are
+ * skipped, so concurrent POSTs never wait on each other here.
+ */
+async function sweepExpired(trx: DbTransaction): Promise<void> {
+  await sql`
+    delete from idempotency_record
+    where (account_id, key) in (
+      select account_id, key from idempotency_record
+      where expires_at <= now()
+      order by expires_at
+      limit ${IDEMPOTENCY_SWEEP_BATCH}
+      for update skip locked
+    )
+  `.execute(trx);
 }
 
 /** sha256 over the operation and a canonical (key-sorted) JSON form of the request. */
@@ -98,15 +125,4 @@ export function hashRequest(request: IdempotentRequest): string {
   return createHash('sha256')
     .update(canonicalJson({ operationId: request.operationId, ...request.request }))
     .digest('hex');
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (typeof value === 'object' && value !== null) {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, child]) => child !== undefined)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    return `{${entries.map(([key, child]) => `${JSON.stringify(key)}:${canonicalJson(child)}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
 }

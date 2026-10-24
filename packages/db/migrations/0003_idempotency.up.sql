@@ -3,7 +3,8 @@
 -- retry with the same key replays it instead of repeating the action (see
 -- packages/api-contract/README.md). A request that fails rolls back and stores nothing.
 --
--- A row is written once and never updated; it is deleted when it expires, and with its account.
+-- A row is written once and never updated. Expired rows are deleted in small batches by later
+-- POSTs (`runIdempotent` in apps/api), and every row goes with its account.
 create table idempotency_record (
   account_id uuid not null references account (id) on delete cascade,
   key text not null check (char_length(key) between 1 and 255),

@@ -12,7 +12,7 @@ import { MigrationError, SchemaMigrator, SqlFileMigrationProvider } from './migr
 
 const KYSELY_TABLES = ['kysely_migration', 'kysely_migration_lock'];
 /** The migrations shipped in migrations/, in order. */
-const SHIPPED = ['0001_schema_v1', '0002_idempotency'];
+const SHIPPED = ['0001_schema_v1', '0003_idempotency', '0004_item_pre_archive_status'];
 
 /** Every object in the public schema other than Kysely's bookkeeping tables. */
 async function publicObjects(db: Db): Promise<string[]> {
@@ -72,10 +72,14 @@ describe('schema migrations (real Postgres)', () => {
     expect(await migrator.migrateToLatest()).toEqual([]);
 
     // Each down migration reverts only its own up migration.
-    expect(await migrator.migrateDown()).toEqual(['0002_idempotency']);
+    for (const migration of [...SHIPPED].reverse().slice(0, -1)) {
+      expect(await migrator.migrateDown()).toEqual([migration]);
+    }
     expect(await tablesAndViews(db)).not.toContain('idempotency_record');
     expect(await tablesAndViews(db)).toContain('inventory_item');
-    expect(await migrator.migrateUp()).toEqual(['0002_idempotency']);
+    for (const migration of SHIPPED.slice(1)) {
+      expect(await migrator.migrateUp()).toEqual([migration]);
+    }
 
     expect(await migrator.migrateToEmpty()).toEqual([...SHIPPED].reverse());
     expect(await publicObjects(db)).toEqual([]);

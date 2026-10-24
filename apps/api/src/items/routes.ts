@@ -4,6 +4,7 @@ import {
   SkuAllocationError,
   type DbExecutor,
   type InventoryItem,
+  type PreArchiveItemStatus,
 } from '@listora/db';
 import type { FastifyInstance } from 'fastify';
 
@@ -28,8 +29,9 @@ import {
   coverPhotoRows,
   deleteItem,
   findItem,
-  findItemIdBySku,
+  findItemBySku,
   hasLiveListing,
+  hasSale,
   insertItem,
   listItemRows,
   lockItem,
@@ -95,8 +97,7 @@ export function registerItemRoutes(app: FastifyInstance, deps: RouteDependencies
   });
 
   contractRoute(app, deps, 'getItemBySku', async ({ tenant, db, params }) => {
-    const itemId = await findItemIdBySku(db, tenant, params.sku);
-    const row = itemId === undefined ? undefined : await findItem(db, tenant, itemId);
+    const row = await findItemBySku(db, tenant, params.sku);
     if (!row) throw notFound('Item');
     return { status: 200, body: await itemView(db, tenant, row) };
   });
@@ -109,7 +110,7 @@ export function registerItemRoutes(app: FastifyInstance, deps: RouteDependencies
 
       const details = normalizeDetails(body.details);
       await assertValidDetails(trx, tenant, row.id, details);
-      const status = await nextStatus(trx, tenant, row, body.status);
+      const { status, preArchiveStatus } = await nextStatus(trx, tenant, row, body.status);
       const columns = columnsFromDetails(details);
       const before = detailsFromRow(row);
       const after = detailsFromRow({ ...row, ...columns });
@@ -125,6 +126,7 @@ export function registerItemRoutes(app: FastifyInstance, deps: RouteDependencies
         updated = await updateItem(trx, tenant, row.id, body.expectedVersion, {
           columns,
           status,
+          preArchiveStatus,
           provenance: provenanceAfterWrite(details, {
             details: before,
             provenance: provenanceFromRow(row),
@@ -205,18 +207,43 @@ async function assertValidDetails(
   if (errors.length > 0) throw validationFailed(errors);
 }
 
+interface StatusChange {
+  status: ItemStatus;
+  preArchiveStatus: PreArchiveItemStatus | null;
+}
+
 /**
  * The status after a replace. `draft` and `ready` are the user's to set only while the server
  * does not own the status (it does once the item is listed or sold); `archived` needs every
- * listing to be off the marketplaces.
+ * listing to be off the marketplaces and records the status the item had. An archived item
+ * goes back to `draft` or `ready` only if it was one of them before and has no sale, so a
+ * sold item can never become available inventory again.
  */
 async function nextStatus(
   db: DbExecutor,
   tenant: Tenant,
   row: InventoryItem,
   requested: UserSettableItemStatus | undefined,
-): Promise<ItemStatus> {
-  if (requested === undefined || requested === row.status) return row.status;
+): Promise<StatusChange> {
+  if (requested === undefined || requested === row.status) {
+    return { status: row.status, preArchiveStatus: row.pre_archive_status };
+  }
+  if (row.status === 'archived') {
+    const before = row.pre_archive_status;
+    if (before !== 'draft' && before !== 'ready') {
+      throw new ApiError(
+        'invalid_state_transition',
+        'This item was listed, sold, or shipped before it was archived, so it stays archived.',
+      );
+    }
+    if (await hasSale(db, tenant, row.id)) {
+      throw new ApiError(
+        'invalid_state_transition',
+        'This item has been sold, so it stays archived.',
+      );
+    }
+    return { status: requested, preArchiveStatus: null };
+  }
   if (requested === 'archived') {
     if (await hasLiveListing(db, tenant, row.id)) {
       throw new ApiError(
@@ -224,10 +251,10 @@ async function nextStatus(
         'This item is live on a marketplace. End its listings before archiving it.',
       );
     }
-    return requested;
+    return { status: requested, preArchiveStatus: row.status };
   }
-  if (row.status === 'draft' || row.status === 'ready' || row.status === 'archived') {
-    return requested;
+  if (row.status === 'draft' || row.status === 'ready') {
+    return { status: requested, preArchiveStatus: null };
   }
   throw new ApiError(
     'invalid_state_transition',

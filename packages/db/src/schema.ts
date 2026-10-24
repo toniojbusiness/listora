@@ -40,6 +40,7 @@ import type {
   OperationStatus,
   PhotoRole,
   Plan,
+  PreArchiveItemStatus,
   PricingSource,
   SaleDetectionSource,
   SaleStatus,
@@ -165,6 +166,8 @@ export interface InventoryItemTable {
   version: DatabaseManaged<number>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  /** The status before the item was archived; set exactly when `status` is `archived`. */
+  pre_archive_status: Nullable<PreArchiveItemStatus>;
 }
 
 export interface PhotoTable {
@@ -500,7 +503,8 @@ export interface AuditLogTable {
 
 /**
  * The stored first successful response to a POST, keyed by its `Idempotency-Key`. Written once
- * in the transaction of the change it reports; deleted when it expires or with its account.
+ * in the transaction of the change it reports; deleted in batches by later POSTs once it
+ * expires, or with its account.
  */
 export interface IdempotencyRecordTable {
   account_id: string;

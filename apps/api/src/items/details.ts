@@ -13,6 +13,8 @@ import type {
 } from '@listora/api-contract';
 import type { InventoryItem, JsonObject } from '@listora/db';
 
+import { canonicalJson } from '../canonical-json.ts';
+
 type DetailKey = keyof ItemDetails;
 
 /**
@@ -296,8 +298,9 @@ export function provenanceFromRow(row: InventoryItem): FieldProvenance {
   return row.field_provenance;
 }
 
+/** Equal as JSON, whatever the order of object keys (clients may send them in any order). */
 function sameValue(a: unknown, b: unknown): boolean {
-  return JSON.stringify(toJson(a)) === JSON.stringify(toJson(b));
+  return canonicalJson(toJson(a)) === canonicalJson(toJson(b));
 }
 
 /** A detail value as plain JSON. */

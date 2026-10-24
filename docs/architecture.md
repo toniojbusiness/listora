@@ -140,14 +140,22 @@ src/
   membership; a user without exactly one account gets `403 forbidden`.
 - **Idempotency.** A POST runs in one transaction that takes an advisory lock on (account,
   key) and stores its successful response in `idempotency_record` together with the change,
-  so a retry replays it, a concurrent retry gets `409`, and a failure stores nothing.
+  so a retry replays it, a concurrent retry gets `409`, and a failure stores nothing. Each
+  stored response also deletes up to 100 expired records (any account, oldest first, skipping
+  rows another request holds), so the table stays about one retention period in size.
 - **Errors and logs.** Every error is the contract's `ErrorResponse`; unexpected failures are
   a generic `500 internal_error` and only the log has details. Each request has an id (a
   sane incoming `X-Request-Id`, otherwise a UUID) that is in the response header, in
   `error.requestId`, and as `requestId` on every log line of the request.
 - **Writes** that change an item append an `audit_log` entry in the same transaction.
   `fieldProvenance` is server-owned: a detail written through the API is `user`, an unchanged
-  one keeps its source. Responses omit empty values (absent means no value).
+  one keeps its source (values compare as key-sorted JSON). Responses omit empty values
+  (absent means no value).
+- **Item status.** The user moves an item between `draft` and `ready` while the server does
+  not own its status, and archives it once no listing is live; archiving records the earlier
+  status. An archived item goes back to `draft` or `ready` only if it was one of them before
+  and has no sale. A listed, sold, or shipped item stays archived (409
+  `invalid_state_transition`), so its server-owned status is never lost.
 - **Shutdown.** On SIGTERM the server stops accepting connections, finishes in-flight
   requests (asking their keep-alive clients to close), then closes the database pool.
 
@@ -329,7 +337,8 @@ Tables by area:
   `membership` as the plan's data model sketched: SKUs and their counter are per account
   (decision D12), so every member of an account creates SKUs with the same prefix.
 - **Inventory:** `inventory_item` (status, canonical attributes, prices, cost,
-  `field_provenance`, optimistic-lock `version`), `photo` (role, hashes, derivatives, OCR and
+  `field_provenance`, optimistic-lock `version`, and `pre_archive_status`, the status an
+  archived item had before it was archived), `photo` (role, hashes, derivatives, OCR and
   barcodes), and `storage_location`. `photo` stores pixel `width` and `height` but no byte
   size; the stored object's size is available from object storage when needed.
 - **AI:** `ai_analysis` (unique per photo-set hash and tier), `ai_usage_event`, and
@@ -352,8 +361,8 @@ Tables by area:
 - **Billing:** `subscription`, `entitlement`, and `usage_counter`.
 - **History:** `audit_log` (item changes the user can see).
 - **API:** `idempotency_record` (the stored first successful response per account and
-  `Idempotency-Key`, kept 24 hours; written once and deleted on expiry, so it has no
-  `updated_at`).
+  `Idempotency-Key`, kept 24 hours; written once, so it has no `updated_at`, and deleted in
+  batches by later POSTs once expired).
 
 **Migrations.** Each migration is a pair of plain SQL files, `NNNN_name.up.sql` and
 `NNNN_name.down.sql`, run by Kysely's migrator in one transaction with a lock (`npm run

@@ -2,6 +2,7 @@ import { sql } from 'kysely';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { IDEMPOTENCY_SWEEP_BATCH } from './idempotency.ts';
 import { createTestApi, type TestApi } from './test-support.ts';
 import type { Tenant } from './tenancy.ts';
 
@@ -143,6 +144,37 @@ describe('Idempotency-Key (real Postgres)', () => {
     const later = await createItem(key, { title: 'Expires' });
     expect(later.status).toBe(201);
     expect(later.body.id).not.toBe(first.body.id);
+  });
+
+  it('deletes expired records of every account in bounded batches', async () => {
+    const other = await api.tenantOf('someone.else@example.com');
+    const expired = (account: string, count: number) =>
+      sql`
+        insert into idempotency_record
+          (account_id, key, operation_id, request_hash, response_status, created_at, expires_at)
+        select ${account}, 'expired-' || n, 'createItem', repeat('0', 64), 201,
+          now() - interval '25 hours', now() - interval '1 hour'
+        from generate_series(1, ${count}) as n
+      `.execute(api.db);
+    const remaining = async (account: string) => {
+      const { count } = await api.db
+        .selectFrom('idempotency_record')
+        .select((eb) => eb.fn.countAll<number>().as('count'))
+        .where('account_id', '=', account)
+        .where('expires_at', '<=', sql<Date>`now()`)
+        .executeTakeFirstOrThrow();
+      return count;
+    };
+    const live = crypto.randomUUID();
+    const first = await createItem(live, { title: 'Live' });
+    await expired(other.accountId, IDEMPOTENCY_SWEEP_BATCH + 5);
+
+    await createItem(crypto.randomUUID(), { title: 'Sweeps' });
+    expect(await remaining(other.accountId)).toBe(5);
+    await createItem(crypto.randomUUID(), { title: 'Sweeps again' });
+    expect(await remaining(other.accountId)).toBe(0);
+    // A record that has not expired is kept and still replays.
+    expect((await createItem(live, { title: 'Live' })).body.id).toBe(first.body.id);
   });
 
   it('keeps the stored response for at least 24 hours', async () => {
