@@ -166,6 +166,7 @@ describe('deleteAccount (real Postgres)', () => {
         kind: 'create',
         idempotency_key: `create-${listing.id}`,
         desired: jsonb({ priceCents: 4500 }),
+        content: jsonb({ variant: { title: 'Jacket' } }),
         origin: 'user',
       })
       .returning('id')
