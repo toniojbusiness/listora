@@ -168,9 +168,9 @@ the names, or update `Contents.json`), delete the tool and the `ios-app-icon` ta
   `getUploadSession` what arrived. Failures retry by `RetryPolicy` (2 s doubling to 5 minutes,
   with jitter, 8 attempts), then stop with the server's reason and a Retry button. Nothing is
   sent while signed out; a `401` signs out and the queue waits for the next sign-in.
-- **Status.** Each photo shows Waiting, Reading tag, Uploading, Retrying (n of 8), Sign in to
-  upload, Upload failed, or Uploaded; "Uploaded" means the server attached the photo with its
-  current role. The draft says "Saved to Listora" only when every photo is attached in order.
+- **Status.** Each photo shows Waiting to upload, Reading tag, Uploading, Retrying (n of 8), Sign
+  in to upload, Upload failed, or Uploaded; "Uploaded" means the server attached the photo with
+  its current role. The draft says "Saved to Listora" only when every photo is attached in order.
 
 The queue's tests (`AddItemFeatureTests`) run the real generated client and URLSession transport
 against `FakeListoraServer` through a `URLProtocol` stub, including resume after a relaunch,

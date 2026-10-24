@@ -92,7 +92,8 @@ extension PhotoUploader {
     static let expiringTarget = APIFailure(
         statusCode: nil,
         code: "upload_target_expiring",
-        message: "The photo's upload link expires too soon. Check that the phone's date and time are set automatically.",
+        message: "The photo's upload link expires too soon. "
+            + "Check that the phone's date and time are set automatically.",
         retryable: true,
     )
 
