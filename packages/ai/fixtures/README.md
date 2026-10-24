@@ -1,9 +1,11 @@
 # Fake AI provider fixtures
 
 `FakeAiProvider` answers from these files instead of calling a model. Each file is named
-`<photo-set hash>.json`, where the photo-set hash is `photoSetHash()` over the sha256 of each
-image in the request, in order (the same key as `ai_analysis.photo_set_hash`). Point
-`AI_FAKE_FIXTURES_DIR` at another directory to use a different set.
+`<photo-set hash>.json`, where the photo-set hash is the request's `photoSetHash`: the item's
+`ai_analysis.photo_set_hash`, which is `photoSetHash()` (from `@listora/shared`) over the sha256
+of each uploaded photo, in display order (`itemPhotoSet()` in `@listora/photos` computes it).
+It is not a hash of the image bytes in the request, which are usually the smaller `ai`
+derivatives. Point `AI_FAKE_FIXTURES_DIR` at another directory to use a different set.
 
 ```json
 {

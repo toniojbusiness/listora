@@ -7,6 +7,7 @@ import { createDatabase } from '@listora/db';
 import { fastify } from 'fastify';
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { offlinePhotoDependencies } from './test-support.ts';
 import { buildApp } from './app.ts';
 import { DevAuthDriver } from './auth/dev-driver.ts';
 import { responseContractErrors } from './contract/contract.ts';
@@ -37,7 +38,12 @@ describe('ERROR_STATUS', () => {
 describe('error responses', () => {
   const db = createDatabase({ connectionString: 'postgres://listora@127.0.0.1:1/unused' });
   const auth = new DevAuthDriver({ secret: 'x'.repeat(32), logger: fastify().log });
-  const app = buildApp({ db, auth, pingDatabase: () => Promise.resolve() });
+  const app = buildApp({
+    db,
+    auth,
+    ...offlinePhotoDependencies(),
+    pingDatabase: () => Promise.resolve(),
+  });
 
   afterAll(async () => {
     await app.close();

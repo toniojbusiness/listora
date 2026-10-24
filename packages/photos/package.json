@@ -1,0 +1,21 @@
+{
+  "name": "@listora/photos",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Photo image pipeline: verification, metadata stripping, derivatives, hashes, and the processing job.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/db": "*",
+    "@listora/shared": "*",
+    "@listora/storage": "*",
+    "kysely": "^0.29.7",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "@listora/testing": "*",
+    "exif-reader": "^2.0.3"
+  }
+}

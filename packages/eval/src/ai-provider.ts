@@ -2,7 +2,13 @@ import { readFile } from 'node:fs/promises';
 
 import { z } from 'zod';
 
-import { AiCallError, type AiClient, type AiTier, type OutputSchema } from '@listora/ai';
+import {
+  AiCallError,
+  photoSetHashOfImages,
+  type AiClient,
+  type AiTier,
+  type OutputSchema,
+} from '@listora/ai';
 import {
   COUNTRY_NAMES,
   FIBER_PART_NAMES,
@@ -108,6 +114,8 @@ export class AiEvalProvider implements EvalProvider {
         tier: this.#tier,
         system: TAG_EXTRACTION_SYSTEM,
         prompt: tagPrompt(input),
+        // The corpus image is the upload itself, so this is the photo set's real hash.
+        photoSetHash: photoSetHashOfImages([{ data }]),
         images: [
           {
             mediaType: input.image.mediaType,

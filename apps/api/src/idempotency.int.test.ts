@@ -76,7 +76,7 @@ describe('Idempotency-Key (real Postgres)', () => {
       token,
       idempotencyKey: key,
       params: { itemId: item.id },
-      body: { uploadFileId: api.uploads.add(tenant, { width: 1, height: 1 }), role: 'front' },
+      body: { uploadFileId: await api.uploads.add(tenant), role: 'front', width: 1, height: 1 },
     });
     expect(otherOperation.status).toBe(422);
     expect(otherOperation.error.code).toBe('idempotency_key_reused');

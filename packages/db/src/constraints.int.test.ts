@@ -1,9 +1,10 @@
-import { sql } from 'kysely';
+import { sql, type Updateable } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Db } from './database.ts';
 import { createInventoryItem } from './items.ts';
 import { jsonb } from './json.ts';
+import type { PhotoTable } from './schema.ts';
 import {
   createMigratedDatabase,
   expectPgError,
@@ -13,6 +14,14 @@ import {
 } from './test-support.ts';
 
 const HASH = 'a'.repeat(64);
+
+/** The `photo.derivatives` of a processed photo (the shape @listora/photos writes). */
+const DERIVATIVES = Object.fromEntries(
+  ['original', 'ai', 'thumbnail', 'listing'].map((kind) => [
+    kind,
+    { key: `photos/${kind}.jpg`, width: 10, height: 10, byteSize: 100, sha256: HASH },
+  ]),
+);
 
 /** An account with one item, an eBay API connection, and a live listing. */
 async function seedAccount(db: Db, prefix: string) {
@@ -683,6 +692,130 @@ describe('schema constraints (real Postgres)', () => {
           .execute(),
         PG_ERROR.checkViolation,
         'marketplace_operation_auto_delist_has_run',
+      );
+    });
+  });
+
+  describe('photos and uploads', () => {
+    async function insertPhoto(storageKey: string) {
+      return db
+        .insertInto('photo')
+        .values({
+          account_id: a.accountId,
+          item_id: a.itemId,
+          position: 0,
+          role: 'front',
+          storage_key: storageKey,
+          width: 10,
+          height: 10,
+          sha256: HASH,
+        })
+        .returning(['id', 'status'])
+        .executeTakeFirstOrThrow();
+    }
+
+    async function cleanUp(photoId: string) {
+      await db.deleteFrom('photo').where('id', '=', photoId).execute();
+    }
+
+    it('starts photos as processing and makes ready ones carry their images', async () => {
+      const photo = await insertPhoto('uploads/a/ready');
+      expect(photo.status).toBe('processing');
+      const update = (values: Updateable<PhotoTable>) =>
+        db.updateTable('photo').set(values).where('id', '=', photo.id).execute();
+
+      await expectPgError(
+        update({ status: 'ready', processed_at: new Date(), phash: '0123456789abcdef' }),
+        PG_ERROR.checkViolation,
+        'photo_ready_has_images',
+      );
+      await expectPgError(
+        update({ status: 'ready', phash: '0123456789abcdef', derivatives: jsonb(DERIVATIVES) }),
+        PG_ERROR.checkViolation,
+        'photo_processed_at_iff_processed',
+      );
+      await update({
+        status: 'ready',
+        processed_at: new Date(),
+        phash: '0123456789abcdef',
+        derivatives: jsonb(DERIVATIVES),
+      });
+      await cleanUp(photo.id);
+    });
+
+    it('makes failed photos carry a reason, and only failed ones', async () => {
+      const photo = await insertPhoto('uploads/a/failed');
+      const update = (values: Updateable<PhotoTable>) =>
+        db.updateTable('photo').set(values).where('id', '=', photo.id).execute();
+      await expectPgError(
+        update({ status: 'failed', processed_at: new Date() }),
+        PG_ERROR.checkViolation,
+        'photo_failure_reason_iff_failed',
+      );
+      await expectPgError(
+        update({ failure_reason: 'Not a JPEG.' }),
+        PG_ERROR.checkViolation,
+        'photo_failure_reason_iff_failed',
+      );
+      await update({ status: 'failed', processed_at: new Date(), failure_reason: 'Not a JPEG.' });
+      await cleanUp(photo.id);
+    });
+
+    it('records upload files once, with timestamps that follow their status', async () => {
+      const session = await db
+        .insertInto('upload_session')
+        .values({ account_id: a.accountId, expires_at: new Date(Date.now() + 60_000) })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const file = {
+        account_id: a.accountId,
+        session_id: session.id,
+        position: 0,
+        content_type: 'image/jpeg' as const,
+        byte_size: 100,
+        sha256: HASH,
+        storage_key: `uploads/${a.accountId}/one`,
+      };
+      const { id } = await db
+        .insertInto('upload_file')
+        .values(file)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await expectPgError(
+        db
+          .insertInto('upload_file')
+          .values({ ...file, position: 1 })
+          .execute(),
+        PG_ERROR.uniqueViolation,
+        'upload_file_storage_key_key',
+      );
+      await expectPgError(
+        db.updateTable('upload_file').set({ status: 'uploaded' }).where('id', '=', id).execute(),
+        PG_ERROR.checkViolation,
+        'upload_file_uploaded_at_iff_not_pending',
+      );
+      await expectPgError(
+        db
+          .updateTable('upload_file')
+          .set({ status: 'attached', uploaded_at: new Date() })
+          .where('id', '=', id)
+          .execute(),
+        PG_ERROR.checkViolation,
+        'upload_file_attached_at_iff_attached',
+      );
+      await expectPgError(
+        db
+          .insertInto('upload_file')
+          .values({ ...file, position: 2, storage_key: 'x', byte_size: 20 * 1024 * 1024 + 1 })
+          .execute(),
+        PG_ERROR.checkViolation,
+      );
+      await expectPgError(
+        db
+          .insertInto('upload_file')
+          .values({ ...file, position: 2, storage_key: 'y', session_id: b.accountId })
+          .execute(),
+        PG_ERROR.foreignKeyViolation,
       );
     });
   });

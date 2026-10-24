@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { z } from 'zod';
 
 import { AI_ERROR_CODES, AiProviderError } from './errors.ts';
-import { photoSetHashOfImages } from './photo-set-hash.ts';
 import type { AiProvider, ProviderRequest, ProviderResponse } from './provider.ts';
 import type { TokenUsage } from './types.ts';
 
@@ -81,7 +80,8 @@ export function inMemoryFixtures(fixtures: Readonly<Record<string, FakeFixture>>
 
 /**
  * Deterministic stand-in for a real provider: the answer is fixture JSON keyed by the
- * photo-set hash of the request's images and the output schema's name. It never touches the
+ * request's photo-set hash (the item's, not a hash of the images sent) and the output schema's
+ * name. It never touches the
  * network, and the same request always gets the same answer and the same usage.
  *
  * It keeps the real contract: outputs are validated against the schema (a mismatch is an
@@ -100,7 +100,7 @@ export class FakeAiProvider implements AiProvider {
     if (request.signal?.aborted === true) {
       throw new AiProviderError('aborted', 'the call was aborted before it was sent');
     }
-    const hash = photoSetHashOfImages(request.images);
+    const hash = request.photoSetHash;
     const fixture = await this.#fixtures.load(hash);
     const answer = fixture?.outputs?.[request.output.name];
     const estimated = estimateUsage(request, answer);

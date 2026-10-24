@@ -1308,10 +1308,13 @@ extension Components {
             case ready = "ready"
             case failed = "failed"
         }
+        /// JPEG only: the server's image pipeline cannot decode HEIC, so clients convert photos to
+        /// JPEG when they resize them.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/ImageContentType`.
         @frozen public enum ImageContentType: String, Codable, Hashable, Sendable, CaseIterable {
             case imageJpeg = "image/jpeg"
-            case imageHeic = "image/heic"
         }
         /// A text line recognized on the device (Vision).
         ///
@@ -1365,7 +1368,7 @@ extension Components {
                 case payload
             }
         }
-        /// Unguessable URLs of the derived images.
+        /// Unguessable URLs of the derived images; present only when the photo is `ready`.
         ///
         /// - Remark: Generated from `#/components/schemas/PhotoUrls`.
         public struct PhotoUrls: Codable, Hashable, Sendable {
@@ -1414,6 +1417,10 @@ extension Components {
             public var sha256: Components.Schemas.Sha256
             /// - Remark: Generated from `#/components/schemas/Photo/urls`.
             public var urls: Components.Schemas.PhotoUrls?
+            /// Why the file is not a usable image, for the user; present only when `status` is `failed`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Photo/failureReason`.
+            public var failureReason: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Photo/ocrLines`.
             public var ocrLines: [Components.Schemas.OcrLine]
             /// - Remark: Generated from `#/components/schemas/Photo/barcodes`.
@@ -1432,6 +1439,7 @@ extension Components {
             ///   - height:
             ///   - sha256:
             ///   - urls:
+            ///   - failureReason: Why the file is not a usable image, for the user; present only when `status` is `failed`.
             ///   - ocrLines:
             ///   - barcodes:
             ///   - createdAt:
@@ -1445,6 +1453,7 @@ extension Components {
                 height: Swift.Int32,
                 sha256: Components.Schemas.Sha256,
                 urls: Components.Schemas.PhotoUrls? = nil,
+                failureReason: Swift.String? = nil,
                 ocrLines: [Components.Schemas.OcrLine],
                 barcodes: [Components.Schemas.Barcode],
                 createdAt: Components.Schemas.Timestamp
@@ -1458,6 +1467,7 @@ extension Components {
                 self.height = height
                 self.sha256 = sha256
                 self.urls = urls
+                self.failureReason = failureReason
                 self.ocrLines = ocrLines
                 self.barcodes = barcodes
                 self.createdAt = createdAt
@@ -1472,6 +1482,7 @@ extension Components {
                 case height
                 case sha256
                 case urls
+                case failureReason
                 case ocrLines
                 case barcodes
                 case createdAt

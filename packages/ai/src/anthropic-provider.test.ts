@@ -24,6 +24,7 @@ const REQUEST: ProviderRequest<Color> = {
   effort: 'low',
   system: 'You name the dominant color of a photo.',
   prompt: 'Which color dominates?',
+  photoSetHash: 'e'.repeat(64),
   images: [image(RED_PIXEL_PNG, 1, 1)],
   output: COLOR_OUTPUT,
   maxOutputTokens: 1_000,
@@ -266,6 +267,7 @@ describe.skipIf(apiKey === '')('AnthropicProvider live smoke test', () => {
       tier: 'standard',
       system: REQUEST.system,
       prompt: 'Which color dominates this image? Use a lowercase color name.',
+      photoSetHash: REQUEST.photoSetHash,
       images: [{ mediaType: 'image/png', data: RED_PIXEL_PNG, width: 1, height: 1 }],
       output: COLOR_OUTPUT,
     });

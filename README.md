@@ -99,6 +99,8 @@ apps/ios/              iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift pack
 packages/ai/           AI provider layer: providers, price table, metering, budget guards (@listora/ai)
 packages/api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
 packages/db/           SQL migrations, migration runner, Kysely types (@listora/db)
+packages/storage/      Object storage drivers: local disk (.local/storage) and S3 (@listora/storage)
+packages/photos/       Image pipeline: derivatives, metadata stripping, hashes, processing job (@listora/photos)
 packages/shared/       Shared types and utilities (@listora/shared)
 packages/testing/      Test-only helpers (@listora/testing)
 packages/tag-parse/    Deterministic tag-text parsers (@listora/tag-parse)

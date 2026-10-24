@@ -360,6 +360,7 @@ describe('AiClient with Postgres metering', () => {
     tier: 'standard' as const,
     system: 'Name the dominant color.',
     prompt: 'Answer in JSON.',
+    photoSetHash: photoSetHashOfImages(images),
     images,
     output: COLOR_OUTPUT,
   });

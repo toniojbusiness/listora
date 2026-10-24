@@ -1,5 +1,7 @@
 import type { FieldError } from '@listora/api-contract';
 import { inTransaction, type DbTransaction } from '@listora/db';
+import type { PhotoJobQueue } from '@listora/photos';
+import type { ObjectStorage } from '@listora/storage';
 import type { FastifyInstance } from 'fastify';
 
 import { writeAudit } from '../audit.ts';
@@ -16,6 +18,7 @@ import {
   reorderPhotos,
   updatePhotoRole,
 } from './repository.ts';
+import { deletePhotoObjects } from './stored-objects.ts';
 import type { PhotoUploads } from './uploads.ts';
 
 /** The most photos an item can have (the contract's `PhotoOrder.photoIds` limit). */
@@ -23,13 +26,15 @@ export const MAX_PHOTOS_PER_ITEM = 24;
 
 export interface PhotoRouteDependencies extends RouteDependencies {
   uploads: PhotoUploads;
+  storage: ObjectStorage;
+  photoJobs: PhotoJobQueue;
 }
 
 /**
- * Photo metadata: `addItemPhoto`, `reorderItemPhotos`, `updateItemPhoto`, `deleteItemPhoto`.
- * Upload sessions, object storage, and derived images are plan task T-07; `addItemPhoto`
- * takes its file from `PhotoUploads`. Removing a photo leaves its stored object for T-07's
- * storage cleanup.
+ * Photos: `addItemPhoto`, `reorderItemPhotos`, `updateItemPhoto`, `deleteItemPhoto`.
+ * `addItemPhoto` takes its file from an upload session (`PhotoUploads`) and adds the photo's
+ * processing job in the same transaction; the worker derives its images (@listora/photos).
+ * Removing a photo deletes its stored objects once the removal has committed.
  */
 export function registerPhotoRoutes(app: FastifyInstance, deps: PhotoRouteDependencies): void {
   contractRoute(app, deps, 'addItemPhoto', async ({ tenant, db, params, body }) =>
@@ -53,12 +58,17 @@ export function registerPhotoRoutes(app: FastifyInstance, deps: PhotoRouteDepend
           );
         case 'expired':
           throw new ApiError('upload_expired', 'This upload has expired. Start a new upload.');
+        case 'attached':
+          throw new ApiError(
+            'already_exists',
+            'This uploaded file is already attached as a photo.',
+          );
         case 'ready':
           break;
       }
       const { file } = claim;
-      const width = file.width ?? body.width;
-      const height = file.height ?? body.height;
+      // The worker replaces these with the image's real upright size once it has read it.
+      const { width, height } = body;
       const missing: FieldError[] = [];
       if (width === undefined)
         missing.push({ field: 'width', message: 'is required for this file' });
@@ -92,12 +102,13 @@ export function registerPhotoRoutes(app: FastifyInstance, deps: PhotoRouteDepend
         }
         throw error;
       }
+      await deps.photoJobs.enqueue(trx, { accountId: tenant.accountId, photoId: row.id });
       await writeAudit(trx, tenant, {
         itemId: params.itemId,
         action: 'photo.added',
         changes: { photoId: row.id, role: row.role, position: row.position },
       });
-      return { status: 201, body: photoFromRow(row) };
+      return { status: 201, body: photoFromRow(row, deps.storage) };
     }),
   );
 
@@ -125,7 +136,10 @@ export function registerPhotoRoutes(app: FastifyInstance, deps: PhotoRouteDepend
         });
       }
       const reordered = await listPhotoRows(trx, tenant, params.itemId);
-      return { status: 200, body: { data: reordered.map(photoFromRow) } };
+      return {
+        status: 200,
+        body: { data: reordered.map((row) => photoFromRow(row, deps.storage)) },
+      };
     }),
   );
 
@@ -134,7 +148,9 @@ export function registerPhotoRoutes(app: FastifyInstance, deps: PhotoRouteDepend
       const photos = await lockedItemPhotos(trx, tenant, params.itemId);
       const before = photos.find((photo) => photo.id === params.photoId);
       if (!before) throw notFound('Photo');
-      if (before.role === body.role) return { status: 200, body: photoFromRow(before) };
+      if (before.role === body.role) {
+        return { status: 200, body: photoFromRow(before, deps.storage) };
+      }
       const updated = await updatePhotoRole(trx, tenant, params.itemId, params.photoId, body.role);
       if (!updated) throw notFound('Photo');
       await writeAudit(trx, tenant, {
@@ -142,23 +158,25 @@ export function registerPhotoRoutes(app: FastifyInstance, deps: PhotoRouteDepend
         action: 'photo.role_changed',
         changes: { photoId: updated.id, role: { from: before.role, to: updated.role } },
       });
-      return { status: 200, body: photoFromRow(updated) };
+      return { status: 200, body: photoFromRow(updated, deps.storage) };
     }),
   );
 
-  contractRoute(app, deps, 'deleteItemPhoto', async ({ tenant, db, params }) =>
-    inTransaction(db, async (trx) => {
+  contractRoute(app, deps, 'deleteItemPhoto', async ({ tenant, db, params, request }) => {
+    const deleted = await inTransaction(db, async (trx) => {
       await lockedItemPhotos(trx, tenant, params.itemId);
-      const deleted = await deletePhoto(trx, tenant, params.itemId, params.photoId);
-      if (!deleted) throw notFound('Photo');
+      const row = await deletePhoto(trx, tenant, params.itemId, params.photoId);
+      if (!row) throw notFound('Photo');
       await writeAudit(trx, tenant, {
         itemId: params.itemId,
         action: 'photo.removed',
-        changes: { photoId: deleted.id, role: deleted.role, position: deleted.position },
+        changes: { photoId: row.id, role: row.role, position: row.position },
       });
-      return { status: 204 };
-    }),
-  );
+      return row;
+    });
+    await deletePhotoObjects(deps.storage, [deleted], request.log);
+    return { status: 204 };
+  });
 }
 
 /** Locks the item (404 when it is not in this account) and returns its photos in order. */

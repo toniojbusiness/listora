@@ -4,21 +4,34 @@
  * operation and fails the test when the response does not match the contract.
  */
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { createDatabase, SchemaMigrator, type Db } from '@listora/db';
-import { createLogger } from '@listora/shared';
+import { createDatabase, SchemaMigrator, type Db, type DbExecutor } from '@listora/db';
+import {
+  processPhoto,
+  storageKeys,
+  type PhotoJobPayload,
+  type PhotoJobQueue,
+  type PhotoProcessingDependencies,
+  type PhotoProcessingOutcome,
+} from '@listora/photos';
+import { createLogger, sha256Hex } from '@listora/shared';
+import { LocalDiskStorage } from '@listora/storage';
 import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
 import type { ApiError, ErrorResponse } from '@listora/api-contract';
 import type { FastifyInstance } from 'fastify';
 
-import { buildApp } from './app.ts';
+import { buildApp, type AppDependencies } from './app.ts';
 import { DevAuthDriver } from './auth/dev-driver.ts';
 import { operationSpec, responseContractErrors } from './contract/contract.ts';
 import type { ContractReply, OperationId } from './contract/routes.ts';
-import type { PhotoUploads, UploadClaim, UploadedFile } from './photos/uploads.ts';
 import { resolveTenant, type Tenant } from './tenancy.ts';
 
 export const TEST_AUTH_SECRET = 'test-secret-that-is-at-least-32-characters-long';
+/** The origin `app.inject` requests use; local storage URLs start with it. */
+export const TEST_BASE_URL = 'http://localhost:80';
 
 export interface CallOptions {
   token?: string;
@@ -48,36 +61,96 @@ export function fieldsOf(result: { error: ApiError }): string[] {
   return (result.error.fieldErrors ?? []).map((fieldError) => fieldError.field);
 }
 
-/** A stand-in for T-07's upload sessions: files are registered by the test. */
-export class FakePhotoUploads implements PhotoUploads {
-  readonly #files = new Map<string, { accountId: string; claim: UploadClaim }>();
+/** A PhotoJobQueue that records jobs; `runAll` processes them the way the worker will. */
+export class RecordingPhotoJobs implements PhotoJobQueue {
+  readonly jobs: PhotoJobPayload[] = [];
+  readonly #deps: () => PhotoProcessingDependencies;
 
-  /** Registers an upload of `tenant`'s account and returns its `uploadFileId`. */
-  add(
+  constructor(deps: () => PhotoProcessingDependencies) {
+    this.#deps = deps;
+  }
+
+  enqueue(_executor: DbExecutor, job: PhotoJobPayload): Promise<void> {
+    this.jobs.push(job);
+    return Promise.resolve();
+  }
+
+  /** Runs every recorded job once, in order, and forgets them. */
+  async runAll(): Promise<PhotoProcessingOutcome[]> {
+    const outcomes: PhotoProcessingOutcome[] = [];
+    for (const job of this.jobs.splice(0)) outcomes.push(await processPhoto(this.#deps(), job));
+    return outcomes;
+  }
+}
+
+export type TestUploadState = 'uploaded' | 'pending' | 'expired' | 'attached';
+
+/**
+ * Upload files made directly in the database and storage, for tests that only need a file to
+ * attach. `uploads.int.test.ts` drives the real HTTP flow.
+ */
+export class TestUploads {
+  readonly #db: Db;
+  readonly #storage: LocalDiskStorage;
+  readonly #clock: { now: number };
+
+  constructor(db: Db, storage: LocalDiskStorage, clock: { now: number }) {
+    this.#db = db;
+    this.#storage = storage;
+    this.#clock = clock;
+  }
+
+  /** Registers one file of `tenant`'s account and returns its `uploadFileId`. */
+  async add(
     tenant: Tenant,
-    file: Partial<UploadedFile> = {},
-    status: UploadClaim['status'] = 'ready',
-  ): string {
+    options: { bytes?: Uint8Array } = {},
+    state: TestUploadState = 'uploaded',
+  ): Promise<string> {
+    const bytes = options.bytes ?? new TextEncoder().encode(`file ${randomUUID()}`);
+    const now = this.#clock.now;
+    // An expired session was created a day ago and expired a moment ago.
+    const createdAt = state === 'expired' ? new Date(now - 86_400_000) : new Date(now);
+    const expiresAt = state === 'expired' ? new Date(now - 1_000) : new Date(now + 86_400_000);
+    const session = await this.#db
+      .insertInto('upload_session')
+      .values({ account_id: tenant.accountId, created_at: createdAt, expires_at: expiresAt })
+      .returning('id')
+      .executeTakeFirstOrThrow();
     const id = randomUUID();
-    const uploaded: UploadedFile = {
-      storageKey: file.storageKey ?? `photos/${id}.jpg`,
-      sha256: file.sha256 ?? 'a'.repeat(64),
-      ...(file.width === undefined ? {} : { width: file.width }),
-      ...(file.height === undefined ? {} : { height: file.height }),
-    };
-    this.#files.set(id, {
-      accountId: tenant.accountId,
-      claim: status === 'ready' ? { status, file: uploaded } : { status },
-    });
+    const storageKey = storageKeys.upload(tenant.accountId, id);
+    await this.#db
+      .insertInto('upload_file')
+      .values({
+        id,
+        account_id: tenant.accountId,
+        session_id: session.id,
+        position: 0,
+        content_type: 'image/jpeg',
+        byte_size: bytes.byteLength,
+        sha256: sha256Hex(bytes),
+        storage_key: storageKey,
+        status: state === 'pending' || state === 'expired' ? 'pending' : state,
+        uploaded_at: state === 'uploaded' || state === 'attached' ? new Date(now) : null,
+        attached_at: state === 'attached' ? new Date(now) : null,
+      })
+      .execute();
+    if (state !== 'pending') {
+      await this.#storage.put(storageKey, bytes, { contentType: 'image/jpeg' });
+    }
     return id;
   }
+}
 
-  claim(_trx: unknown, tenant: Tenant, uploadFileId: string): Promise<UploadClaim> {
-    const entry = this.#files.get(uploadFileId);
-    return Promise.resolve(
-      entry?.accountId === tenant.accountId ? entry.claim : { status: 'not_found' },
-    );
-  }
+/** Storage and a job queue for unit tests that build the app but never upload anything. */
+export function offlinePhotoDependencies(): Pick<AppDependencies, 'storage' | 'photoJobs'> {
+  return {
+    storage: new LocalDiskStorage({
+      rootDir: join(tmpdir(), 'listora-unused-storage'),
+      baseUrl: 'http://localhost',
+      signingSecret: TEST_AUTH_SECRET,
+    }),
+    photoJobs: { enqueue: () => Promise.resolve() },
+  };
 }
 
 export interface TestApi {
@@ -85,8 +158,13 @@ export interface TestApi {
   db: Db;
   /** URL of the scratch database, for tests that need a second session. */
   databaseUrl: string;
-  uploads: FakePhotoUploads;
-  /** The dev driver's clock, in milliseconds; move it to expire codes and sessions. */
+  uploads: TestUploads;
+  /** Local storage in a temporary directory, served by `app` like in development. */
+  storage: LocalDiskStorage;
+  storageDir: string;
+  /** Jobs `addItemPhoto` added; `photoJobs.runAll()` processes them. */
+  photoJobs: RecordingPhotoJobs;
+  /** The clock for dev sign-in and upload sessions, in milliseconds; move it to expire them. */
   clock: { now: number };
   /** Signs in through the dev endpoints and returns the bearer token. */
   signIn(email: string): Promise<string>;
@@ -117,8 +195,23 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
   });
   const clock = { now: Date.now() };
   const auth = new DevAuthDriver({ secret: TEST_AUTH_SECRET, logger, now: () => clock.now });
-  const uploads = new FakePhotoUploads();
-  const app = buildApp({ db, auth, uploads, pingDatabase: () => Promise.resolve() });
+  const storageDir = await mkdtemp(join(tmpdir(), `listora-${prefix}-storage-`));
+  const storage = new LocalDiskStorage({
+    rootDir: storageDir,
+    baseUrl: TEST_BASE_URL,
+    signingSecret: TEST_AUTH_SECRET,
+    now: () => new Date(clock.now),
+  });
+  const photoJobs = new RecordingPhotoJobs(() => ({ db, storage, logger }));
+  const uploads = new TestUploads(db, storage, clock);
+  const app = buildApp({
+    db,
+    auth,
+    storage,
+    photoJobs,
+    now: () => new Date(clock.now),
+    pingDatabase: () => Promise.resolve(),
+  });
   const tokens = new Map<string, string>();
 
   const signIn = async (email: string): Promise<string> => {
@@ -204,6 +297,9 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
     db,
     databaseUrl: scratch.url,
     uploads,
+    storage,
+    storageDir,
+    photoJobs,
     clock,
     signIn,
     tenantOf,
@@ -212,6 +308,7 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
       await app.close();
       await db.destroy();
       await scratch.drop();
+      await rm(storageDir, { recursive: true, force: true });
     },
   };
 }

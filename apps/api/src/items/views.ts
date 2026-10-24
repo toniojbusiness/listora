@@ -1,7 +1,7 @@
 import type { Item, ItemSummary } from '@listora/api-contract';
 import type { DbExecutor, InventoryItem } from '@listora/db';
 
-import { photoFromRow, type PhotoRow } from '../photos/mapping.ts';
+import { photoFromRow, type PhotoRow, type PublicUrls } from '../photos/mapping.ts';
 import { listPhotoRows } from '../photos/repository.ts';
 import type { Tenant } from '../tenancy.ts';
 import { detailsFromRow, provenanceFromRow } from './details.ts';
@@ -14,7 +14,12 @@ import { storageLocationSummary } from './repository.ts';
  * the listing and sale tasks (T-19, T-20, T-26) fill them in, with each listing's honest
  * `statusDisplay`.
  */
-export async function itemView(db: DbExecutor, tenant: Tenant, row: InventoryItem): Promise<Item> {
+export async function itemView(
+  db: DbExecutor,
+  tenant: Tenant,
+  row: InventoryItem,
+  urls: PublicUrls,
+): Promise<Item> {
   const [photos, location] = await Promise.all([
     listPhotoRows(db, tenant, row.id),
     row.storage_location_id === null
@@ -39,14 +44,18 @@ export async function itemView(db: DbExecutor, tenant: Tenant, row: InventoryIte
           },
         }
       : {}),
-    photos: photos.map(photoFromRow),
+    photos: photos.map((photo) => photoFromRow(photo, urls)),
     listings: [],
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
 }
 
-export function itemSummaryView(row: InventoryItem, cover: PhotoRow | undefined): ItemSummary {
+export function itemSummaryView(
+  row: InventoryItem,
+  cover: PhotoRow | undefined,
+  urls: PublicUrls,
+): ItemSummary {
   return {
     id: row.id,
     sku: row.sku,
@@ -57,7 +66,7 @@ export function itemSummaryView(row: InventoryItem, cover: PhotoRow | undefined)
     ...(row.list_price_cents === null
       ? {}
       : { listPrice: { amountCents: row.list_price_cents, currency: row.currency } }),
-    ...(cover ? { coverPhoto: photoFromRow(cover) } : {}),
+    ...(cover ? { coverPhoto: photoFromRow(cover, urls) } : {}),
     listings: [],
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),

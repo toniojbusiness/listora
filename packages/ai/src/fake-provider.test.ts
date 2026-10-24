@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { photoSetHash, sha256Hex } from '@listora/shared';
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_FAKE_FIXTURES_DIR } from './config.ts';
@@ -30,6 +31,7 @@ function request(
     effort: 'low',
     system: 'Name the dominant color.',
     prompt: 'Answer in JSON.',
+    photoSetHash: photoSetHashOfImages(images),
     images,
     output: COLOR_OUTPUT,
     maxOutputTokens: 1_000,
@@ -59,6 +61,20 @@ describe('FakeAiProvider', () => {
   it('answers from the fixture keyed by the photo-set hash and the schema name', async () => {
     const result = await provider(fixtures).generate(request([FRONT, TAG]));
     expect(result.output).toEqual({ color: 'navy', confidence: 0.9 });
+  });
+
+  it('keys by the item’s photo-set hash, not by the bytes of the images sent', async () => {
+    // The item's hash covers its uploads; the request carries their smaller `ai` derivatives.
+    const itemHash = photoSetHash([sha256Hex('front upload'), sha256Hex('tag upload')]);
+    const fake = provider({
+      [itemHash]: { outputs: { dominant_color: { color: 'olive', confidence: 0.8 } } },
+    });
+    const result = await fake.generate(request([FRONT, TAG], { photoSetHash: itemHash }));
+    expect(result.output).toEqual({ color: 'olive', confidence: 0.8 });
+
+    const missing = await failure(fake.generate(request([FRONT, TAG])));
+    expect(missing.code).toBe('fixture_missing');
+    expect(missing.message).toContain(photoSetHashOfImages([FRONT, TAG]));
   });
 
   it('is deterministic: the same request gets the same answer and usage every time', async () => {

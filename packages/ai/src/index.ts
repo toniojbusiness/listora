@@ -33,7 +33,7 @@ export type {
 } from './guards.ts';
 export { AI_TIERS, createModelRegistry, DEFAULT_MODEL_REGISTRY } from './models.ts';
 export type { ModelRegistry, TierSettings } from './models.ts';
-export { photoSetHash, photoSetHashOfImages, sha256Hex } from './photo-set-hash.ts';
+export { photoSetHashOfImages } from './photo-set-hash.ts';
 export {
   costMicros,
   CURRENT_PRICE_TABLE,

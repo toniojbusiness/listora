@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Db } from '@listora/db';
+import type { PhotoJobQueue } from '@listora/photos';
+import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
 import { fastify, LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 
 import type { AuthDriver } from './auth/driver.ts';
@@ -8,13 +10,22 @@ import { registerErrorHandling } from './errors.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
 import { registerItemRoutes } from './items/routes.ts';
 import { registerPhotoRoutes } from './photos/routes.ts';
-import { noPhotoUploads, type PhotoUploads } from './photos/uploads.ts';
+import type { PhotoUploads } from './photos/uploads.ts';
+import { registerLocalStorageRoutes } from './storage/local-routes.ts';
+import { registerUploadRoutes } from './uploads/routes.ts';
+import { SessionPhotoUploads } from './uploads/uploads.ts';
 
 export interface AppDependencies extends HealthDependencies {
   db: Db;
   auth: AuthDriver;
-  /** Where attached photo files come from; T-07 provides upload sessions. */
+  /** Photo uploads and derived images. The local driver's routes are served by this app. */
+  storage: ObjectStorage;
+  /** Where `addItemPhoto` adds each new photo's processing job. */
+  photoJobs: PhotoJobQueue;
+  /** Where attached photo files come from; defaults to upload sessions in `storage`. */
   uploads?: PhotoUploads;
+  /** The clock upload sessions expire by. */
+  now?: () => Date;
   /** A `createLogger()` instance from @listora/shared. Omit in tests to keep output quiet. */
   logger?: FastifyBaseLogger;
 }
@@ -48,9 +59,16 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
 
   registerHealthRoutes(app, deps);
   deps.auth.registerRoutes?.(app);
-  const routeDeps = { db: deps.db, auth: deps.auth };
+  if (deps.storage instanceof LocalDiskStorage) registerLocalStorageRoutes(app, deps.storage);
+  const now = deps.now ?? (() => new Date());
+  const routeDeps = { db: deps.db, auth: deps.auth, storage: deps.storage };
   registerItemRoutes(app, routeDeps);
-  registerPhotoRoutes(app, { ...routeDeps, uploads: deps.uploads ?? noPhotoUploads });
+  registerUploadRoutes(app, { ...routeDeps, now });
+  registerPhotoRoutes(app, {
+    ...routeDeps,
+    uploads: deps.uploads ?? new SessionPhotoUploads(deps.storage, now),
+    photoJobs: deps.photoJobs,
+  });
   return app;
 }
 

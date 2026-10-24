@@ -158,7 +158,12 @@ describe('authentication and tenancy (real Postgres)', () => {
         await api.call('addItemPhoto', {
           token: aliceToken,
           params: { itemId: item.id },
-          body: { uploadFileId: api.uploads.add(alice, { width: 10, height: 10 }), role: 'front' },
+          body: {
+            uploadFileId: await api.uploads.add(alice),
+            role: 'front',
+            width: 10,
+            height: 10,
+          },
         })
       ).body.id;
       locationId = (
@@ -206,7 +211,7 @@ describe('authentication and tenancy (real Postgres)', () => {
         api.call('addItemPhoto', {
           token: bobToken,
           params: { itemId },
-          body: { uploadFileId: api.uploads.add(alice, { width: 1, height: 1 }), role: 'front' },
+          body: { uploadFileId: await api.uploads.add(alice), role: 'front', width: 1, height: 1 },
         }),
         api.call('reorderItemPhotos', {
           token: bobToken,
@@ -245,7 +250,7 @@ describe('authentication and tenancy (real Postgres)', () => {
       const upload = await api.call('addItemPhoto', {
         token: bobToken,
         params: { itemId: bobItem.id },
-        body: { uploadFileId: api.uploads.add(alice, { width: 1, height: 1 }), role: 'front' },
+        body: { uploadFileId: await api.uploads.add(alice), role: 'front', width: 1, height: 1 },
       });
       expect(upload.status).toBe(404);
     });

@@ -9,7 +9,9 @@
   "references": [
     { "path": "../../packages/api-contract" },
     { "path": "../../packages/db" },
+    { "path": "../../packages/photos" },
     { "path": "../../packages/shared" },
+    { "path": "../../packages/storage" },
     { "path": "../../packages/testing" }
   ]
 }

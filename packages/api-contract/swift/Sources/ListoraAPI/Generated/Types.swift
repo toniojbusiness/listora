@@ -74,7 +74,9 @@ public protocol APIProtocol: Sendable {
     /// Returns one pre-signed upload target per file. The client sends each file's bytes
     /// with the given method, URL, and headers (directly to object storage; background
     /// uploads are fine), then attaches each uploaded file to an item with `addItemPhoto`.
-    /// Clients resize to at most 2048 px on the long edge and strip GPS before uploading.
+    /// Clients resize to at most 2048 px on the long edge, encode JPEG, and strip GPS before
+    /// uploading. Upload targets expire after 15 minutes (`getUploadSession` returns fresh
+    /// ones) and the session after 24 hours; files must be attached before it expires.
     ///
     ///
     /// - Remark: HTTP `POST /v1/upload-sessions`.
@@ -515,7 +517,9 @@ extension APIProtocol {
     /// Returns one pre-signed upload target per file. The client sends each file's bytes
     /// with the given method, URL, and headers (directly to object storage; background
     /// uploads are fine), then attaches each uploaded file to an item with `addItemPhoto`.
-    /// Clients resize to at most 2048 px on the long edge and strip GPS before uploading.
+    /// Clients resize to at most 2048 px on the long edge, encode JPEG, and strip GPS before
+    /// uploading. Upload targets expire after 15 minutes (`getUploadSession` returns fresh
+    /// ones) and the session after 24 hours; files must be attached before it expires.
     ///
     ///
     /// - Remark: HTTP `POST /v1/upload-sessions`.

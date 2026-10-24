@@ -81,6 +81,25 @@ const COLUMNS = {
     'barcodes',
     'created_at',
     'updated_at',
+    'status',
+    'failure_reason',
+    'processed_at',
+  ],
+  upload_session: ['id', 'account_id', 'expires_at', 'created_at', 'updated_at'],
+  upload_file: [
+    'id',
+    'account_id',
+    'session_id',
+    'position',
+    'content_type',
+    'byte_size',
+    'sha256',
+    'storage_key',
+    'status',
+    'uploaded_at',
+    'attached_at',
+    'created_at',
+    'updated_at',
   ],
   ai_analysis: [
     'id',
@@ -385,6 +404,9 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['inventory_item', 'status', values.ITEM_STATUSES],
   ['inventory_item', 'pre_archive_status', values.PRE_ARCHIVE_ITEM_STATUSES],
   ['photo', 'role', values.PHOTO_ROLES],
+  ['photo', 'status', values.PHOTO_STATUSES],
+  ['upload_file', 'content_type', values.IMAGE_CONTENT_TYPES],
+  ['upload_file', 'status', values.UPLOAD_FILE_STATUSES],
   ['ai_analysis', 'tier', values.ANALYSIS_TIERS],
   ['ai_analysis', 'status', values.ANALYSIS_STATUSES],
   ['ai_usage_event', 'provider', values.AI_PROVIDERS],
@@ -452,10 +474,12 @@ describe('schema types and values match the database', () => {
   it.each(CHECKED_VALUES)(
     '%s.%s allows exactly the values in values.ts',
     async (table, column, allowed) => {
+      // Postgres prints `in (...)` as `= ANY (ARRAY[...])`, or as `= '...'` for one value.
       const { rows } = await sql<{ definition: string }>`
       select pg_get_constraintdef(oid) as definition from pg_constraint
       where conrelid = ${table}::regclass and contype = 'c'
-        and pg_get_constraintdef(oid) like ${`%(${column} = ANY (ARRAY[%`}
+        and (pg_get_constraintdef(oid) like ${`%(${column} = ANY (ARRAY[%`}
+          or pg_get_constraintdef(oid) ~ ${`^CHECK \\(\\(${column} = '[^']*'::text\\)\\)$`})
     `.execute(database.db);
       expect(rows).toHaveLength(1);
       expect(literalsIn(rows[0]?.definition ?? '')).toEqual([...allowed]);
