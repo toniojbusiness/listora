@@ -46,7 +46,7 @@ extension PhotoUploader {
             record.uploadFileID = session.file.id
             record.target = session.file.target
             record.step = session.file.status == .pending ? .transfer : .attach
-            record.retry = RetryState()
+            record.retry.stepSucceeded()
         }
     }
 
@@ -63,14 +63,18 @@ extension PhotoUploader {
             recordPhotoFailure(photo.id, error)
             return
         }
-        let now = now()
+        if file?.status == .pending, let target = file?.target, !target.isUsable(at: now()) {
+            // The session is about to end, or the phone's clock is wrong: asking again after a
+            // wait finds out, as an ended session has no target.
+            recordPhotoFailure(photo.id, Self.expiringTarget)
+            return
+        }
         try store.updatePhoto(photo.id) { record in
             guard record.step == .transfer, record.sessionID == sessionID else { return }
             switch file?.status {
             case .pending:
-                // A pending file without a usable target belongs to a session that has expired,
-                // or is about to.
-                if let target = file?.target, target.isUsable(at: now) {
+                // A pending file without a target belongs to an expired session.
+                if let target = file?.target {
                     record.target = target
                 } else {
                     record.restartUpload()
@@ -84,6 +88,13 @@ extension PhotoUploader {
             }
         }
     }
+
+    static let expiringTarget = APIFailure(
+        statusCode: nil,
+        code: "upload_target_expiring",
+        message: "The photo's upload link expires too soon. Check that the phone's date and time are set automatically.",
+        retryable: true,
+    )
 
     func createItem(for draft: DraftRecord?) async throws {
         guard let draft else { return }
@@ -147,14 +158,14 @@ extension PhotoUploader {
         switch failure.knownCode {
         case .uploadIncomplete:
             // The bytes did not all arrive: send them again.
-            recordPhotoFailure(photo.id, failure) { record in
+            recordPhotoFailure(photo.id, failure, setsBack: true) { record in
                 guard record.attachKey == key else { return }
                 record.step = .transfer
                 record.target = nil
             }
         case .uploadExpired, .notFound:
             // The session expired or its file is gone; nothing was attached.
-            recordPhotoFailure(photo.id, failure) { record in
+            recordPhotoFailure(photo.id, failure, setsBack: true) { record in
                 guard record.attachKey == key else { return }
                 record.restartUpload()
             }
@@ -187,7 +198,7 @@ extension PhotoUploader {
             return
         }
         guard let match else {
-            recordPhotoFailure(photo.id, failure) { $0.restartUpload() }
+            recordPhotoFailure(photo.id, failure, setsBack: true) { $0.restartUpload() }
             return
         }
         let role = photo.attachRequest?.role ?? photo.role
@@ -208,7 +219,7 @@ extension PhotoUploader {
         } catch {
             // A photo the server no longer has uploads again.
             let gone = error.statusCode == 404
-            recordPhotoFailure(photo.id, error) { record in
+            recordPhotoFailure(photo.id, error, setsBack: gone) { record in
                 if gone {
                     record.restartUpload()
                 }

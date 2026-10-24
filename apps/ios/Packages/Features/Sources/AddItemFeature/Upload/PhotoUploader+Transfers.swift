@@ -43,7 +43,7 @@ extension PhotoUploader {
                 guard photo.step == .transfer else { return }
                 photo.step = .attach
                 photo.target = nil
-                photo.retry = RetryState()
+                photo.retry.stepSucceeded()
             }
             return
         case let .response(statusCode):

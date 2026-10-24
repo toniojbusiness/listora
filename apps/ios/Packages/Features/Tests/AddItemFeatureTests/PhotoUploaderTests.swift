@@ -173,21 +173,57 @@ struct PhotoUploaderTests {
     }
 
     @Test
-    func `a refreshed target that is about to expire starts the upload over instead of asking again`() async throws {
+    func `a refreshed target inside the safety margin is asked for again after a wait, never with a new session`(
+    ) async throws {
         let harness = try UploadHarness()
         harness.server.fail({ $0.method == "PUT" }, with: nil)
         let draft = try harness.createDraft(roles: [.front])
         await harness.start()
         #expect(try await eventually { await !harness.uploader.transferring.isEmpty })
         let fileID = try #require(try harness.draft(draft.id)?.photos.first?.uploadFileID)
-        // The session ends in 30 seconds, and the server caps its targets there.
+        // By the phone's clock the target ends in 30 seconds: the session is about to end, or the
+        // clock runs fast.
         harness.server.expireTarget(ofFile: fileID, at: .now.addingTimeInterval(30))
 
         try await harness.relaunch()
 
+        #expect(try await eventually { try harness.draft(draft.id)?.photos.first?.retry.failure != nil })
+        let photo = try #require(try harness.draft(draft.id)?.photos.first)
+        #expect(photo.retry.failure == PhotoUploader.expiringTarget.message)
+        #expect(photo.step == .transfer)
+        #expect(harness.server.requests("GET", "/v1/upload-sessions/").count == RetryPolicy.test.maxAttempts)
+        #expect(harness.server.requests("POST", "/v1/upload-sessions").count == 1)
+
+        harness.server.expireTarget(ofFile: fileID, at: .now.addingTimeInterval(15 * 60))
+        try harness.store.retry(draftID: draft.id)
+        await harness.uploader.wake()
+
         #expect(try await eventually { try harness.isFullyUploaded(draft.id) })
-        #expect(harness.server.requests("GET", "/v1/upload-sessions/").count == 1)
-        #expect(harness.server.requests("POST", "/v1/upload-sessions").count == 2)
+        #expect(harness.server.requests("POST", "/v1/upload-sessions").count == 1)
+        await harness.stop()
+    }
+
+    @Test
+    func `a photo that can never attach stops after the policy's attempts, though every new upload succeeds`(
+    ) async throws {
+        let harness = try UploadHarness()
+        harness.server.fail(
+            { $0.method == "POST" && $0.path.hasSuffix("/photos") },
+            times: .max,
+            with: .error(404, code: "not_found", message: "Item was not found.", retryable: false),
+        )
+        let draft = try harness.createDraft(roles: [.front])
+        await harness.start()
+
+        #expect(try await eventually { try harness.draft(draft.id)?.photos.first?.retry.failure != nil })
+        let photo = try #require(try harness.draft(draft.id)?.photos.first)
+        #expect(photo.retry.failure == "Item was not found.")
+        #expect(photo.retry.attempt == RetryPolicy.test.maxAttempts)
+        #expect(PhotoUploadStatus(photo: photo, isTransferring: false, isSignedIn: true) ==
+            .failed(message: "Item was not found."))
+        // Each attempt uploaded the photo again in a new session.
+        #expect(harness.server.requests("POST", "/v1/upload-sessions").count == RetryPolicy.test.maxAttempts)
+        #expect(harness.server.requests("PUT", "/uploads/").count == RetryPolicy.test.maxAttempts)
         await harness.stop()
     }
 

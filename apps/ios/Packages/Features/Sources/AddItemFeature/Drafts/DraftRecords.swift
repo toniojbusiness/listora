@@ -5,8 +5,13 @@ import GRDB
 /// When a request may run again after a failure, and what stopped it. Drafts, photos, and server
 /// deletions each carry one for their own requests.
 struct RetryState: Codable, Equatable, Sendable {
-    /// Failed attempts since the last success.
+    /// Failed attempts counted toward the policy's limit: those of the current step, plus every
+    /// ``setbacks`` failure.
     var attempt = 0
+    /// Failures that sent the row back to an earlier step (an expired session, a missing file,
+    /// bytes that did not all arrive). The earlier steps succeeding again does not clear them, so
+    /// a row that can never finish still stops.
+    var setbacks = 0
     /// The next attempt waits until then.
     var retryAt: Date?
     /// Set when retrying stopped: a user-readable reason. Only the user's Retry clears it.
@@ -14,6 +19,12 @@ struct RetryState: Codable, Equatable, Sendable {
 
     func isRunnable(at now: Date) -> Bool {
         failure == nil && (retryAt.map { $0 <= now } ?? true)
+    }
+
+    /// A step before the last one succeeded: its own failures no longer count, setbacks still do.
+    mutating func stepSucceeded() {
+        attempt = setbacks
+        retryAt = nil
     }
 }
 

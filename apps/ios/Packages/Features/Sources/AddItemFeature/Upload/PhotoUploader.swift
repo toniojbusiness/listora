@@ -156,6 +156,8 @@ actor PhotoUploader {
 
     /// Runs one step; false when there is nothing to do now.
     private func performNextStep() async -> Bool {
+        isSignedIn = await accessTokens.accessToken() != nil
+        await publish()
         let snapshot: UploadSnapshot
         do {
             snapshot = try store.uploadSnapshot()
@@ -163,8 +165,6 @@ actor PhotoUploader {
             log.error("Reading the upload queue failed: \(String(describing: error), privacy: .public)")
             return false
         }
-        isSignedIn = await accessTokens.accessToken() != nil
-        await publish()
         guard let work = UploadPlanner.next(
             in: snapshot,
             now: now(),
@@ -252,12 +252,16 @@ actor PhotoUploader {
 
     /// Records a failed request of a photo: waits by the policy, or stops with the reason. A `401`
     /// is not counted: the token is gone, and the photo waits for the next sign-in.
+    /// `setsBack`: the failure sends the photo back to an earlier step, which sends new requests,
+    /// so it is retried even when the server called it final; it keeps counting toward the policy's
+    /// limit after that step succeeds again.
     func recordPhotoFailure(
         _ photoID: String,
         _ failure: APIFailure,
+        setsBack: Bool = false,
         also change: @escaping @Sendable (inout DraftPhotoRecord) -> Void = { _ in },
     ) {
-        let next = retryUpdate(for: failure, stops: true)
+        let next = retryUpdate(for: failure, stops: true, setsBack: setsBack)
         _ = try? store.updatePhoto(photoID) { photo in
             change(&photo)
             photo.retry = next(photo.retry)
@@ -275,7 +279,11 @@ actor PhotoUploader {
         try? store.updateDeletion(deletionID) { $0.retry = next($0.retry) }
     }
 
-    private func retryUpdate(for failure: APIFailure, stops: Bool) -> @Sendable (RetryState) -> RetryState {
+    private func retryUpdate(
+        for failure: APIFailure,
+        stops: Bool,
+        setsBack: Bool = false,
+    ) -> @Sendable (RetryState) -> RetryState {
         let policy = policy
         let now = now()
         return { state in
@@ -285,7 +293,10 @@ actor PhotoUploader {
                 return state
             }
             state.attempt += 1
-            if stops, !failure.retryable || state.attempt >= policy.maxAttempts {
+            if setsBack {
+                state.setbacks += 1
+            }
+            if stops, !(failure.retryable || setsBack) || state.attempt >= policy.maxAttempts {
                 state.failure = failure.message
                 state.retryAt = nil
             } else {
