@@ -935,8 +935,9 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   checks) and a verified-success rate below 90% over a day, and on every service running
   fewer tasks than it should, and sends unplanned task stops to the alarm topic. The relink
   alarm fires on a level, which suits one seller; an environment with many sellers should
-  alarm on increases instead, so one unlinked connection does not mask the next. A new metric adds a catalog entry; keep dimensions few, since CloudWatch bills each
-  combination of values as a metric ([costs.md](costs.md)).
+  alarm on increases instead, so one unlinked connection does not mask the next. A new metric
+  adds a catalog entry; keep dimensions few, since CloudWatch bills each combination of values
+  as a metric ([costs.md](costs.md)).
 - **Offline.** Synthesis never calls AWS: no `fromLookup`, zones resolve at deploy time, and
   `npm run infra:synth` (part of `npm run check`) runs `cdk synth` of every environment with
   credentials hidden.
