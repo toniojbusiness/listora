@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# TypeScript declaration output from `tsc --build` (type-check only; never committed)
+.tsbuild/
+
+# Local-only state: Postgres cluster (scripts/dev-db.sh), dev inboxes, uploads
+.local/
+
+# Build output and caches kept inside the worktree (Xcode DerivedData, SwiftPM)
+.build/
+
+# Test output
+coverage/
+
+# Environment: copy .env.example to .env; never commit real values
+.env
+.env.*
+!.env.example
+
+# Logs and OS files
+*.log
+.DS_Store
+
+# Personal Claude Code settings
+.claude/settings.local.json

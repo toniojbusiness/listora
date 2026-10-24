@@ -1,0 +1,13 @@
+{
+  "name": "@listora/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Types and utilities shared by every Listora backend workspace.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "pino": "^10.4.0"
+  }
+}

@@ -1,0 +1,252 @@
+# Listora architecture
+
+Listora is a mobile-first operating system for resellers: take photos once, create the item
+once, and manage it everywhere (eBay, Depop, Poshmark, Mercari). This is the engineering
+overview every task reads first. Keep it accurate and short. If your change makes something
+here wrong, fix this file in the same PR. The task list is in [roadmap.md](roadmap.md).
+
+## 1. Product invariants
+
+These two rules from the product owner override every other design choice.
+
+1. **Authorized integrations only.** Listora uses official marketplace APIs or authorized
+   partner channels. It never stores marketplace passwords or sessions, never solves CAPTCHAs,
+   never works around anti-bot protection, and never automates a marketplace in ways that put a
+   seller's account at risk. If a marketplace has no authorized channel, Listora uses
+   **assisted mode**: it prepares the work and the user does the final step.
+2. **Never report false success.** A marketplace action is shown as done only after one of two
+   things: an API read-back confirms the desired state, or the user explicitly confirms an
+   assisted task. Every failure is visible and can be retried. See section 6.
+
+## 2. Stack
+
+| Area       | Choice                                                                                         | Why                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| iPhone app | Native Swift 6 / SwiftUI, iOS 18+, XcodeGen, local SPM modules, GRDB                           | Camera, Vision OCR, barcodes, background upload, Share Extension, and StoreKit are native |
+| Backend    | TypeScript on Node 26: Fastify API plus a worker process                                       | One language for the API, worker, infra (CDK), and the later web app                      |
+| Contract   | OpenAPI 3.1 → generated TS types and Swift client; CI fails on drift (T-03)                    | Client and server cannot drift apart                                                      |
+| Database   | PostgreSQL 18 (Homebrew locally, RDS in prod), Kysely, plain SQL migrations                    | Relational inventory, strong constraints, JSONB for marketplace payloads                  |
+| Jobs       | Graphile Worker (Postgres-backed), enqueued in the same transaction as the operation row       | No second datastore; an operation can't be recorded without its job, or the reverse       |
+| Photos     | Client resizes and strips GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
+| Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                 | Managed and in the same AWS account                                                       |
+| Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                 | App Store rule 3.1.3(b)                                                                   |
+| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK          | Standard, robust, one security boundary                                                   |
+| Push       | APNs (token-based key); fake driver in dev                                                     | Delist alerts and assisted tasks                                                          |
+| Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                     | No extra package manager or build system                                                  |
+
+### TypeScript conventions
+
+- **No JavaScript build step.** Node 26 runs `.ts` files directly through type stripping
+  (`node src/main.ts`), both in development and in production. `tsc --build` is only a type
+  checker. It emits declarations into each workspace's gitignored `.tsbuild/` so that project
+  references work.
+- Because Node strips types without compiling them, code uses only erasable syntax
+  (`erasableSyntaxOnly`): no `enum`, `namespace`, or constructor parameter properties. Use
+  string-literal unions and `as const` objects instead.
+- Relative imports name the real file, `./money.ts`, never `./money.js`. ESLint enforces this.
+  Type-only imports use `import type`.
+- Workspace packages export their `src/index.ts` directly (`"exports": { ".": "./src/index.ts" }`)
+  and are consumed as `@listora/<name>`.
+- TypeScript is pinned to 6.0.x because typescript-eslint does not support TypeScript 7 yet.
+- Configuration comes only from environment variables. Each process parses them once at
+  startup and fails fast. Error messages name the bad key but never print its value. Every
+  key is documented in `.env.example`.
+- Logging goes through `createLogger()` from `@listora/shared`: structured JSON (pino),
+  with credentials redacted by `REDACTED_LOG_PATHS`. Never log tokens, passwords, or full
+  marketplace payloads that contain secrets.
+- Money is always **integer cents plus a currency** (`Money` in `@listora/shared`). Never use
+  floating-point dollars. The database also stores integer cents with a currency.
+- Switches over unions end with `assertNever`, and ESLint's `switch-exhaustiveness-check`
+  is on. Adding a capability mode or status then fails the type check until every switch
+  handles it.
+
+## 3. Repository layout
+
+```text
+apps/
+  api/          Fastify HTTP API (@listora/api)
+  worker/       Background worker: operation engine, polls, health jobs (@listora/worker)
+  ios/          iPhone app (T-02; not an npm workspace)
+packages/
+  shared/       Types and utilities used by every backend workspace (@listora/shared)
+  testing/      Test-only helpers: test DB URL, process harness (@listora/testing)
+infra/          AWS CDK stacks (T-30)
+scripts/
+  dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
+docs/           This overview and the roadmap
+```
+
+New backend libraries go in `packages/<name>` (for example `packages/db` for migrations and
+query helpers, and `packages/marketplaces` for adapters). Add each one to the root
+`tsconfig.json` references. Tests sit next to the code: `*.test.ts` files are unit tests with
+no external services, and `*.int.test.ts` files are integration tests against the real local
+Postgres.
+
+## 4. Marketplace adapter model
+
+All marketplace logic lives behind one `MarketplaceAdapter` interface. The engine and the UI
+never branch on the marketplace name. They branch on **capability flags**, which can change
+for a single connection; for example, Depop switches from assisted to API once partner access
+is granted.
+
+```ts
+type Mode = 'api' | 'assisted' | 'bulk_file' | 'none';
+interface MarketplaceCapabilities {
+  connect: 'oauth' | 'none';
+  create: Mode;
+  updatePrice: Mode;
+  updateDetails: Mode;
+  delist: Mode;
+  relist: Mode;
+  markSold: Mode | 'not_needed';
+  verifyRead: 'api' | 'user_confirm'; // how success is established
+  importListings: 'api' | 'share_sheet' | 'bulk_file' | 'none';
+  saleDetection: Array<'webhook' | 'poll' | 'email' | 'manual'>;
+  imageTransport: 'url_fetch' | 'upload' | 'user_saves_photos';
+  taxonomy: 'api' | 'static_snapshot';
+  pricingData: 'sold_comps_in_listing_context' | 'none';
+  externalSkuReusable: boolean; // Depop: false
+  limits: { perSellerPerMin?: number; appPerMin?: number; appPerDay?: number };
+}
+interface MarketplaceAdapter {
+  id: 'ebay' | 'depop' | 'poshmark' | 'mercari';
+  capabilities(conn?: Connection): MarketplaceCapabilities;
+  buildPayload(item: ItemSnapshot, variant: ListingVariant): Payload; // pure; golden-tested
+  validate(payload: Payload): ValidationIssue[];
+  execute(op: Operation, ctx: Ctx): Promise<Outcome>; // confirmed | rejected | transient | unknown | pendingUser
+  readListing(ref: ListingRef, ctx: Ctx): Promise<RemoteListingState>;
+  // Optional: listListings, listOrdersSince, parseWebhook, parseEmail, refreshCredentials
+  healthCheck(conn: Connection): Promise<Health>;
+}
+```
+
+| Marketplace | Mode                                            | Listing lifecycle                                                                                                 | Sale detection                               |
+| ----------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| eBay        | API                                             | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs | `ORDER_CONFIRMATION` webhook + 5-minute poll |
+| Depop       | API after partner approval; assisted until then | `PUT` by per-attempt external SKU, `PATCH`, `DELETE`/mark-as-sold; verify with `GET`                              | `v1:order.*` webhooks + poll                 |
+| Poshmark    | Assisted only (the guidelines ban automation)   | Copy-assist, photos saved in order, deep link, user confirms                                                      | DKIM-verified forwarded emails, manual       |
+| Mercari     | Assisted only (no public API)                   | Same as Poshmark                                                                                                  | Forwarded emails, manual                     |
+
+Assisted adapters implement `execute` by creating a `user_task` (deep link plus copy-assist
+payload) and returning `pendingUser`. An assisted operation can finish only through a user
+confirmation event.
+
+## 5. Pricing data rules
+
+The eBay API License forbids using eBay data to suggest prices without written consent. The
+Depop rules allow Pricing Inspiration only inside that Depop listing. Without real sold data,
+Listora shows a cost-based floor, an estimate labeled **"AI estimate - not based on sold
+listings"**, and research links that open in the user's browser. The words "comps" and "sold"
+appear only next to real sold data, and a test enforces this (T-14).
+
+## 6. Operation engine: never false success
+
+Every marketplace write is a `marketplace_operation` row whose state machine is driven by the
+worker.
+
+1. **Write path.** The API, or the auto-delist orchestrator, inserts the operation (`queued`,
+   `idempotency_key`, desired-state snapshot) and enqueues its job **in the same
+   transaction**.
+2. **Execution.** Operations are serialized per listing (`queue_name = listing:<id>`). The
+   adapter outcome determines the next state:
+   - `confirmed`: the API succeeded **and** `readListing` shows the desired state → `succeeded`.
+   - `rejected` (validation or permanent error) → `failed`, with a user-readable reason and fix.
+   - `transient` (429, 5xx, network failure before send) → `retrying` with backoff and jitter
+     (30 s, 2 m, 10 m, 30 m, 2 h, 6 h), then `failed` with a Retry action.
+   - `unknown` (timeout after the request may have been sent) → `verifying`. `readListing`
+     decides the result. The request is never re-sent blindly.
+   - `pendingUser` (assisted) → `needs_user_action` until the user confirms.
+3. **History.** Every transition appends an `operation_event` with a redacted
+   request/response excerpt, error code, and attempt number.
+4. **Invariant, enforced in code and tests:** no code path sets `succeeded` without a verified
+   read-back or a user confirmation event. Chaos tests inject 429s, 5xx errors,
+   timeouts after send, and crashes.
+5. **Concurrency.** Token refresh is single-flight per connection; Depop rotates refresh
+   tokens, so a lost write disconnects the seller. Rate limits use per-seller and app-wide
+   token buckets.
+
+**Auto-delist.** A sale event (webhook, poll, email, or manual entry) is deduplicated by
+`(marketplace, external_order_id)`. Then, in one transaction, Listora records the sale, sets
+the item to `sold_pending_delist`, and creates a high-priority delist operation or urgent
+assisted task for every other listing. A `delist_run` gathers the per-marketplace results. If
+anything is still unconfirmed after 10 minutes, Listora alerts the user again, and after 30
+minutes it escalates the alert. A second sale opens a double-sale incident.
+
+**Status vocabulary** shown to users: `Active (confirmed by eBay)`, `Delisting... retry 2 of 6`,
+`Delist failed - Retry`, `Checking...`, `Action needed - delist on Poshmark`,
+`Done (you confirmed)`. Assisted listings never show "confirmed by <marketplace>".
+
+## 7. Local development: fakes and environment switches
+
+Nothing requires a real credential to build or test. Every external service sits behind an
+interface with a fake or dev driver, selected by an environment variable. Each switch below
+lands with the task that introduces that dependency, and its keys are added to `.env.example`.
+
+| Dependency       | Dev/test                                                                                                     | Production               | Switch                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------ |
+| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                   | RDS                      | `DATABASE_URL`, `TEST_DATABASE_URL`  |
+| Storage          | Local-disk driver with signed upload URLs                                                                    | S3 + CloudFront          | `STORAGE_DRIVER=local\|s3`           |
+| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                          | Anthropic API            | `AI_PROVIDER=fake\|anthropic`        |
+| eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection) | Sandbox, then production | `EBAY_ENV=fake\|sandbox\|production` |
+| Depop            | `fake-depop` generated from Depop's OpenAPI spec                                                             | Sandbox, then production | `DEPOP_ENV`                          |
+| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                         | SES inbound              | `EMAIL_INGEST=folder\|ses`           |
+| Auth             | Dev OTP printed to the console                                                                               | Cognito                  | `AUTH_DRIVER=dev\|cognito`           |
+| Payments         | Fake Stripe client + StoreKit configuration file                                                             | Stripe, App Store        | `BILLING_DRIVER=fake\|stripe`        |
+| Push             | Recording fake                                                                                               | APNs                     | `PUSH_DRIVER`                        |
+| Token encryption | Local AES-GCM key from `.env`                                                                                | KMS envelope encryption  | `TOKEN_KMS_KEY_ID`                   |
+| iOS              | iPhone 17 simulator, photo-library fixtures                                                                  | Device / TestFlight      | xcconfig `API_BASE_URL`              |
+
+Live smoke tests for real providers skip automatically when their credential is absent. Fakes
+must stay true to the real contract: shapes, error codes, and failure modes.
+
+## 8. AI pipeline and cost metering
+
+AI cost is a product constraint, so each item is analyzed once, as cheaply as possible.
+
+1. **On device (free):** capture guidance, Vision text recognition on tags, barcode detection.
+2. **Deterministic server parsing (free):** RN/CA numbers, UPC/EAN checksums, sizes, fibers,
+   country of origin. Never scrape the FTC RN database.
+3. **One multimodal call** (Claude Haiku 5.5, low effort, strict JSON schema). It returns
+   canonical attributes with per-field confidence and provenance, plus every marketplace
+   variant and a labeled price estimate. Typical cost is about $0.0015-0.003 per item.
+4. **Escalation** (Sonnet 5.5) only for low confidence, designer or vintage items, or when the
+   user taps "Identify harder". It counts against the plan's premium quota.
+5. **Analyze once.** There is one `ai_analysis` per photo-set hash. Edits, repricing, delist,
+   sync, and profit tracking never call AI. Bulk work uses the Batch API.
+6. **Metering from day one.** Every call writes an `ai_usage_event` (tokens, images, searches,
+   `cost_micros` from a versioned price table). The system also keeps daily and monthly
+   rollups and per-plan quotas in reseller units. There is a per-account daily dollar circuit
+   breaker (default $1/day), a global kill switch, and budget alarms.
+
+## 9. Data model outline
+
+PostgreSQL, one schema. Every table has `account_id` (tenant), `created_at`, and `updated_at`.
+Money columns are integer cents with a currency. T-04 defines the schema.
+
+- **Tenancy:** `account` (with `sku_prefix`), `app_user`, `membership`, and `sku_sequence`
+  (gapless per-account SKUs such as `AJ-000184`).
+- **Inventory:** `inventory_item` (status, canonical attributes, prices, cost,
+  `field_provenance`, optimistic-lock `version`), `photo` (role, hashes, derivatives, OCR and
+  barcodes), and `storage_location`.
+- **AI:** `ai_analysis` (unique per photo-set hash), `ai_usage_event`, and `ai_usage_daily`.
+- **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
+  `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot,
+  desired/applied version), `marketplace_operation`, and the append-only `operation_event`.
+- **Sales and delist:** `inbound_event` (deduplicated per source), `sale`, `delist_run`,
+  `user_task`, `fee_line`, and `expense`.
+- **Pricing:** `pricing_snapshot` (source-labeled).
+- **Billing:** `subscription`, `entitlement`, and `usage_counter`.
+- **History:** `audit_log` (item changes the user can see).
+
+## 10. Testing and CI
+
+- `npm run check` runs the format check, lint (ESLint and shellcheck), type check, unit tests,
+  and integration tests. It must pass before merge. When iOS code is touched, `make ios-test`
+  must pass too (T-02).
+- Integration tests use a real Postgres: the local `listora_test` database from
+  `scripts/dev-db.sh` (locally and in CI), or `TEST_DATABASE_URL` when set. They fail, and
+  never skip, when the database is unreachable.
+- Tests cover acceptance criteria **and failure paths**. Process-level tests start the real
+  entry points with `node src/main.ts` (see `startNodeProcess` in `@listora/testing`).
+- CI runs the same fresh-clone path as local development; see the CI section of the
+  [README](../README.md#ci). T-02 adds the macOS iOS job.
