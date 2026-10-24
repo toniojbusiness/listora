@@ -40,16 +40,37 @@ begin
 end;
 $$;
 
--- Rejects direct updates and deletes on append-only tables. Changes made by foreign-key
--- actions (for example the cascade when an account is deleted) run one trigger level deeper
--- and are allowed.
-create function reject_append_only_change() returns trigger
+-- Rejects direct updates and deletes. The only changes allowed are foreign-key actions caused
+-- by deleting a parent row, for example the cascade when an account is deleted: those run one
+-- trigger level deeper, and the parent row they reference no longer exists. Changes made by
+-- any other trigger are rejected too.
+create function reject_direct_change() returns trigger
 language plpgsql as $$
+declare
+  parent record;
+  parent_deleted boolean;
 begin
   if pg_trigger_depth() > 1 then
-    return coalesce(new, old);
+    for parent in
+      select
+        fk.confrelid::regclass as parent_table,
+        (select string_agg(format('%I', attname), ', ' order by array_position(fk.confkey, attnum))
+          from pg_attribute where attrelid = fk.confrelid and attnum = any (fk.confkey)) as parent_columns,
+        (select string_agg(format('($1).%I', attname), ', ' order by array_position(fk.conkey, attnum))
+          from pg_attribute where attrelid = fk.conrelid and attnum = any (fk.conkey)) as old_values
+      from pg_constraint as fk
+      where fk.conrelid = tg_relid and fk.contype = 'f' and fk.confdeltype in ('c', 'n')
+    loop
+      execute format(
+        'select row(%1$s) is not null and not exists (select 1 from %2$s where (%3$s) = (%1$s))',
+        parent.old_values, parent.parent_table, parent.parent_columns
+      ) into parent_deleted using old;
+      if parent_deleted then
+        return coalesce(new, old);
+      end if;
+    end loop;
   end if;
-  raise exception '% is append-only: % is not allowed', tg_table_name, lower(tg_op)
+  raise exception '%: direct % is not allowed', tg_table_name, lower(tg_op)
     using errcode = 'restrict_violation';
 end;
 $$;
@@ -343,7 +364,6 @@ create table marketplace_listing (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (account_id, id),
-  unique (account_id, id, marketplace),
   unique (account_id, id, item_id, marketplace),
   unique (account_id, marketplace, external_listing_id),
   constraint marketplace_listing_applied_not_ahead check (applied_version <= desired_version),
@@ -362,11 +382,14 @@ create unique index marketplace_listing_one_live_idx on marketplace_listing (acc
 
 -- Sales and delisting -----------------------------------------------------------------------
 
--- Every inbound signal (webhook, poll result, email, manual entry), deduplicated per source.
+-- Every inbound signal (webhook, poll result, email, manual entry), deduplicated per account,
+-- source, and marketplace, so a provider event id that repeats in another account or on another
+-- marketplace is never mistaken for a duplicate and never drops a sale signal.
 create table inbound_event (
   id uuid primary key default uuidv7(),
   account_id uuid not null references account (id) on delete cascade,
   source text not null check (source in ('ebay_webhook', 'depop_webhook', 'poll', 'email', 'manual')),
+  marketplace marketplace_id not null,
   provider_event_id text not null check (char_length(provider_event_id) between 1 and 255),
   -- Webhook signature or email DKIM result; null where the source has no signature.
   signature_ok boolean,
@@ -377,25 +400,24 @@ create table inbound_event (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (account_id, id),
-  unique (source, provider_event_id),
+  constraint inbound_event_provider_event_key
+    unique (account_id, source, marketplace, provider_event_id),
   constraint inbound_event_signed_source_has_signature
     check (source not in ('ebay_webhook', 'depop_webhook', 'email') or signature_ok is not null),
   constraint inbound_event_processed_has_result check ((processed_at is null) = (result is null)),
   constraint inbound_event_failed_has_error check (result <> 'failed' or error_message is not null)
 );
 
+-- One marketplace order. The items it sold are its sale_item rows, since an order can be a
+-- bundle of several items.
 create table sale (
   id uuid primary key default uuidv7(),
   account_id uuid not null references account (id) on delete cascade,
-  item_id uuid not null,
-  -- Null for a manual sale recorded without a known listing.
-  listing_id uuid,
   marketplace marketplace_id not null,
   -- Null only for manual entries without an order number.
   external_order_id text,
   sold_at timestamptz not null,
   currency currency_code not null default 'USD',
-  sale_price_cents bigint not null check (sale_price_cents >= 0),
   shipping_charged_cents bigint not null default 0 check (shipping_charged_cents >= 0),
   detection_source text not null check (detection_source in ('webhook', 'poll', 'email', 'manual')),
   inbound_event_id uuid,
@@ -404,19 +426,44 @@ create table sale (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (account_id, id),
+  unique (account_id, id, marketplace),
   -- A marketplace order is recorded once; a second event for it is a duplicate.
   unique (account_id, marketplace, external_order_id),
-  foreign key (account_id, item_id) references inventory_item (account_id, id),
-  -- The listing must be this item's listing on this marketplace.
-  foreign key (account_id, listing_id, item_id, marketplace)
-    references marketplace_listing (account_id, id, item_id, marketplace),
   foreign key (account_id, inbound_event_id) references inbound_event (account_id, id)
     on delete set null (inbound_event_id)
 );
 
-create index sale_item_idx on sale (account_id, item_id);
+-- One item sold in an order. Every item of a bundle gets its own row, so each one is marked
+-- sold and delisted everywhere else.
+create table sale_item (
+  id uuid primary key default uuidv7(),
+  account_id uuid not null references account (id) on delete cascade,
+  sale_id uuid not null,
+  -- The sale's marketplace, repeated so the listing can be checked against it.
+  marketplace marketplace_id not null,
+  item_id uuid not null,
+  -- Null for a manual sale recorded without a known listing.
+  listing_id uuid,
+  currency currency_code not null default 'USD',
+  sale_price_cents bigint not null check (sale_price_cents >= 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (account_id, id),
+  unique (account_id, sale_id, id),
+  -- An order sells each item once.
+  unique (account_id, sale_id, item_id),
+  foreign key (account_id, sale_id, marketplace) references sale (account_id, id, marketplace)
+    on delete cascade,
+  foreign key (account_id, item_id) references inventory_item (account_id, id),
+  -- The listing must be this item's listing on the sale's marketplace.
+  foreign key (account_id, listing_id, item_id, marketplace)
+    references marketplace_listing (account_id, id, item_id, marketplace)
+);
 
--- Aggregates the delist fan-out after one sale; per-listing results are in delist_run_listing.
+create index sale_item_item_idx on sale_item (account_id, item_id);
+
+-- Aggregates the delist fan-out after one item is sold (a bundle sale starts one run per
+-- item); per-listing results are in delist_run_listing.
 create table delist_run (
   id uuid primary key default uuidv7(),
   account_id uuid not null references account (id) on delete cascade,
@@ -431,11 +478,12 @@ create table delist_run (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (account_id, id),
-  unique (account_id, sale_id),
+  unique (account_id, sale_id, item_id),
   constraint delist_run_completed_has_completed_at
     check ((status = 'completed') = (completed_at is not null)),
-  foreign key (account_id, sale_id) references sale (account_id, id) on delete cascade,
-  foreign key (account_id, item_id) references inventory_item (account_id, id)
+  -- The item must be one that the sale sold.
+  foreign key (account_id, sale_id, item_id) references sale_item (account_id, sale_id, item_id)
+    on delete cascade
 );
 
 -- Every marketplace write. The worker drives its state machine (docs/architecture.md section 6).
@@ -474,6 +522,11 @@ create table marketplace_operation (
   foreign key (account_id, delist_run_id) references delist_run (account_id, id)
 );
 
+-- Operation history is kept: an operation is deleted only with its account.
+create trigger marketplace_operation_no_direct_delete
+  before delete on marketplace_operation
+  for each row execute function reject_direct_change();
+
 create index marketplace_operation_listing_idx on marketplace_operation (account_id, listing_id, created_at);
 create index marketplace_operation_delist_run_idx on marketplace_operation (account_id, delist_run_id)
   where delist_run_id is not null;
@@ -501,7 +554,7 @@ create index operation_event_operation_idx on operation_event (account_id, opera
 
 create trigger operation_event_append_only
   before update or delete on operation_event
-  for each row execute function reject_append_only_change();
+  for each row execute function reject_direct_change();
 
 -- Work only the user can do: assisted listing and delisting, sale confirmation, reconnects.
 create table user_task (
@@ -565,6 +618,8 @@ create table fee_line (
   id uuid primary key default uuidv7(),
   account_id uuid not null references account (id) on delete cascade,
   sale_id uuid not null,
+  -- Set for a fee charged on one item of the order; null for an order-level fee.
+  sale_item_id uuid,
   kind text not null check (kind in ('marketplace', 'payment', 'shipping_label', 'promotion', 'tax', 'other')),
   currency currency_code not null default 'USD',
   -- Negative for a refunded fee.
@@ -573,10 +628,13 @@ create table fee_line (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (account_id, id),
-  foreign key (account_id, sale_id) references sale (account_id, id) on delete cascade
+  foreign key (account_id, sale_id) references sale (account_id, id) on delete cascade,
+  -- The sale item must belong to the same sale.
+  foreign key (account_id, sale_id, sale_item_id) references sale_item (account_id, sale_id, id)
+    on delete set null (sale_item_id)
 );
 
-create index fee_line_sale_idx on fee_line (account_id, sale_id);
+create index fee_line_sale_idx on fee_line (account_id, sale_id, sale_item_id);
 
 -- Business expenses that are not tied to one item (supplies, mileage, subscriptions).
 create table expense (
@@ -686,7 +744,7 @@ create index audit_log_item_idx on audit_log (account_id, item_id, created_at);
 
 create trigger audit_log_append_only
   before update or delete on audit_log
-  for each row execute function reject_append_only_change();
+  for each row execute function reject_direct_change();
 
 -- Triggers that maintain updated_at and version ---------------------------------------------
 
@@ -701,7 +759,7 @@ begin
   foreach table_name in array array[
     'account', 'app_user', 'membership', 'sku_sequence', 'storage_location', 'inventory_item',
     'photo', 'ai_analysis', 'ai_usage_event', 'ai_usage_daily', 'marketplace_connection',
-    'marketplace_listing', 'inbound_event', 'sale', 'delist_run', 'marketplace_operation',
+    'marketplace_listing', 'inbound_event', 'sale', 'sale_item', 'delist_run', 'marketplace_operation',
     'user_task', 'fee_line', 'expense', 'pricing_snapshot', 'subscription', 'entitlement',
     'usage_counter'
   ] loop

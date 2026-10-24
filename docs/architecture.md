@@ -234,7 +234,12 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   CHECK of allowed values, mirrored by the lists in `packages/db/src/values.ts`.
 - **Timestamps.** `created_at` and `updated_at` default to `now()`, and a trigger maintains
   `updated_at`. The append-only tables (`operation_event`, `audit_log`) have only
-  `created_at`; a trigger rejects updates and deletes on them except cascades from a parent.
+  `created_at`, since their rows never change.
+- **History is kept.** A trigger rejects updates and deletes on the append-only tables, and
+  deletes on `marketplace_operation`. The only changes it lets through are foreign-key actions
+  caused by deleting a parent row (for example deleting the account), never direct statements
+  or other triggers. So an operation and its `operation_event` history go away only with the
+  account.
 - **Invariants in the schema.** An operation can be `succeeded` only with `success_evidence`
   (`read_back` or `user_confirmation`), and `failed` only with a user-readable error. Assisted
   connections can never hold credentials. `inventory_item.version` is bumped by a trigger on
@@ -242,21 +247,31 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
 
 Tables by area:
 
-- **Tenancy:** `account` (with `sku_prefix`), `app_user`, `membership`, and `sku_sequence`
-  (gapless per-account SKUs such as `AJ-000184`, allocated by `createInventoryItem` /
-  `allocateSku` in `@listora/db` inside the item-create transaction).
+- **Tenancy:** `account`, `app_user`, `membership`, and `sku_sequence` (gapless per-account
+  SKUs such as `AJ-000184`, allocated by `createInventoryItem` / `allocateSku` in
+  `@listora/db` inside the item-create transaction). `sku_prefix` lives on `account`, not on
+  `membership` as the plan's data model sketched: SKUs and their counter are per account
+  (decision D12), so every member of an account creates SKUs with the same prefix.
 - **Inventory:** `inventory_item` (status, canonical attributes, prices, cost,
   `field_provenance`, optimistic-lock `version`), `photo` (role, hashes, derivatives, OCR and
-  barcodes), and `storage_location`.
+  barcodes), and `storage_location`. `photo` stores pixel `width` and `height` but no byte
+  size; the stored object's size is available from object storage when needed.
 - **AI:** `ai_analysis` (unique per photo-set hash and tier), `ai_usage_event`, and
   `ai_usage_daily`.
 - **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
   `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot,
   desired/applied version), `marketplace_operation`, and the append-only `operation_event`.
-- **Sales and delist:** `inbound_event` (deduplicated per source), `sale` (unique per
-  marketplace order), `delist_run` (with the `delist_run_listing` view of its operations and
-  user tasks), `user_task`, `fee_line`, and `expense`. Auto-delist operations have
-  `origin = 'auto_delist'` and reference their `delist_run`.
+- **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
+  provider event id, so an id that repeats in another account or on another marketplace is
+  never dropped as a duplicate). `sale` is one marketplace order (unique per account,
+  marketplace, and external order id) with the order-level fields: sold time, currency,
+  shipping charged, detection source, status, and ship-by. Its `sale_item` rows are the items
+  it sold, one per item (an order can be a bundle), each with its price and, when known, the
+  item's listing on the sale's marketplace. `delist_run` is one per sold item and must point
+  at an item of its sale; the `delist_run_listing` view lists its operations and user tasks.
+  `fee_line` belongs to a sale and optionally to one of its items. Also `user_task` and
+  `expense`. Auto-delist operations have `origin = 'auto_delist'` and reference their
+  `delist_run`.
 - **Pricing:** `pricing_snapshot` (source-labeled).
 - **Billing:** `subscription`, `entitlement`, and `usage_counter`.
 - **History:** `audit_log` (item changes the user can see).

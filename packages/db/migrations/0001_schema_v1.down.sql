@@ -14,6 +14,7 @@ drop table user_task;
 drop table operation_event;
 drop table marketplace_operation;
 drop table delist_run;
+drop table sale_item;
 drop table sale;
 drop table inbound_event;
 drop table marketplace_listing;
@@ -31,7 +32,7 @@ drop table app_user;
 drop table account;
 
 drop function create_sku_sequence();
-drop function reject_append_only_change();
+drop function reject_direct_change();
 drop function bump_version();
 drop function set_updated_at();
 

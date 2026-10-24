@@ -45,6 +45,63 @@ async function seedAccount(db: Db, prefix: string) {
 
 type Seed = Awaited<ReturnType<typeof seedAccount>>;
 
+/** A second item of the seed account with its own live eBay listing. */
+async function addListedItem(db: Db, seed: Seed) {
+  const item = await createInventoryItem(db, seed.accountId);
+  const listing = await db
+    .insertInto('marketplace_listing')
+    .values({
+      account_id: seed.accountId,
+      item_id: item.id,
+      marketplace: 'ebay',
+      connection_id: seed.connectionId,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return { itemId: item.id, listingId: listing.id };
+}
+
+async function insertSale(
+  db: Db,
+  accountId: string,
+  externalOrderId: string,
+  marketplace: 'ebay' | 'depop' = 'ebay',
+) {
+  const sale = await db
+    .insertInto('sale')
+    .values({
+      account_id: accountId,
+      marketplace,
+      external_order_id: externalOrderId,
+      sold_at: new Date(),
+      detection_source: 'webhook',
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return sale.id;
+}
+
+function insertSaleItem(
+  db: Db,
+  accountId: string,
+  saleId: string,
+  item: { itemId: string; listingId: string | null },
+  marketplace: 'ebay' | 'depop' = 'ebay',
+) {
+  return db
+    .insertInto('sale_item')
+    .values({
+      account_id: accountId,
+      sale_id: saleId,
+      marketplace,
+      item_id: item.itemId,
+      listing_id: item.listingId,
+      sale_price_cents: 4_500,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+}
+
 function insertOperation(
   db: Db,
   seed: Seed,
@@ -125,24 +182,37 @@ describe('schema constraints (real Postgres)', () => {
       );
     });
 
-    it('deduplicates inbound events by provider event id per source', async () => {
-      const event = (source: 'ebay_webhook' | 'poll') =>
+    it('deduplicates inbound events per account, source, and marketplace', async () => {
+      const event = (
+        accountId: string,
+        source: 'ebay_webhook' | 'poll',
+        marketplace: 'ebay' | 'mercari' | 'depop',
+      ) =>
         db
           .insertInto('inbound_event')
           .values({
-            account_id: a.accountId,
+            account_id: accountId,
             source,
+            marketplace,
             provider_event_id: 'evt-1',
             signature_ok: source === 'poll' ? null : true,
             payload: jsonb({ orderId: 'o-1' }),
           })
           .execute();
-      await event('ebay_webhook');
-      await event('poll');
+      await event(a.accountId, 'ebay_webhook', 'ebay');
+      await event(a.accountId, 'poll', 'ebay');
+      await event(a.accountId, 'poll', 'mercari');
+      await event(a.accountId, 'poll', 'depop');
+      await event(b.accountId, 'poll', 'mercari');
       await expectPgError(
-        event('ebay_webhook'),
+        event(a.accountId, 'poll', 'mercari'),
         PG_ERROR.uniqueViolation,
-        'inbound_event_source_provider_event_id_key',
+        'inbound_event_provider_event_key',
+      );
+      await expectPgError(
+        event(b.accountId, 'poll', 'mercari'),
+        PG_ERROR.uniqueViolation,
+        'inbound_event_provider_event_key',
       );
     });
 
@@ -153,6 +223,7 @@ describe('schema constraints (real Postgres)', () => {
           .values({
             account_id: a.accountId,
             source: 'depop_webhook',
+            marketplace: 'depop',
             provider_event_id: 'evt-unsigned',
             payload: jsonb({}),
           })
@@ -163,24 +234,11 @@ describe('schema constraints (real Postgres)', () => {
     });
 
     it('records a marketplace order once per marketplace', async () => {
-      const sale = (marketplace: 'ebay' | 'depop', listingId: string | null) =>
-        db
-          .insertInto('sale')
-          .values({
-            account_id: a.accountId,
-            item_id: a.itemId,
-            listing_id: listingId,
-            marketplace,
-            external_order_id: 'order-77',
-            sold_at: new Date(),
-            sale_price_cents: 4_500,
-            detection_source: 'webhook',
-          })
-          .execute();
-      await sale('ebay', a.listingId);
-      await sale('depop', null);
+      await insertSale(db, a.accountId, 'order-77', 'ebay');
+      await insertSale(db, a.accountId, 'order-77', 'depop');
+      await insertSale(db, b.accountId, 'order-77', 'ebay');
       await expectPgError(
-        sale('ebay', a.listingId),
+        insertSale(db, a.accountId, 'order-77', 'ebay'),
         PG_ERROR.uniqueViolation,
         'sale_account_id_marketplace_external_order_id_key',
       );
@@ -257,6 +315,100 @@ describe('schema constraints (real Postgres)', () => {
         .insertInto('marketplace_listing')
         .values({ account_id: seed.accountId, item_id: seed.itemId, marketplace: 'ebay' })
         .execute();
+    });
+  });
+
+  describe('bundle sales', () => {
+    it('records every item of a multi-item order, each item once', async () => {
+      const seed = await seedAccount(db, 'BUN');
+      const second = await addListedItem(db, seed);
+      const saleId = await insertSale(db, seed.accountId, 'bundle-1');
+      await insertSaleItem(db, seed.accountId, saleId, seed);
+      await insertSaleItem(db, seed.accountId, saleId, second);
+
+      const items = await db
+        .selectFrom('sale_item')
+        .select('item_id')
+        .where('sale_id', '=', saleId)
+        .orderBy('item_id')
+        .execute();
+      expect(items.map((row) => row.item_id)).toEqual([seed.itemId, second.itemId].sort());
+
+      await expectPgError(
+        insertSaleItem(db, seed.accountId, saleId, second),
+        PG_ERROR.uniqueViolation,
+        'sale_item_account_id_sale_id_item_id_key',
+      );
+    });
+
+    it("accepts only the item's own listing on the sale's marketplace", async () => {
+      const seed = await seedAccount(db, 'MKT');
+      const second = await addListedItem(db, seed);
+      const depopSale = await insertSale(db, seed.accountId, 'depop-1', 'depop');
+      await expectPgError(
+        insertSaleItem(db, seed.accountId, depopSale, seed, 'ebay'),
+        PG_ERROR.foreignKeyViolation,
+        'sale_item_account_id_sale_id_marketplace_fkey',
+      );
+      await expectPgError(
+        insertSaleItem(db, seed.accountId, depopSale, seed, 'depop'),
+        PG_ERROR.foreignKeyViolation,
+        'sale_item_account_id_listing_id_item_id_marketplace_fkey',
+      );
+      await insertSaleItem(db, seed.accountId, depopSale, { ...seed, listingId: null }, 'depop');
+
+      const ebaySale = await insertSale(db, seed.accountId, 'ebay-1');
+      await expectPgError(
+        insertSaleItem(db, seed.accountId, ebaySale, { ...seed, listingId: second.listingId }),
+        PG_ERROR.foreignKeyViolation,
+        'sale_item_account_id_listing_id_item_id_marketplace_fkey',
+      );
+    });
+
+    it('ties fee lines and delist runs to items of the same sale', async () => {
+      const seed = await seedAccount(db, 'TIE');
+      const second = await addListedItem(db, seed);
+      const saleId = await insertSale(db, seed.accountId, 'tie-1');
+      const sold = await insertSaleItem(db, seed.accountId, saleId, seed);
+      const otherSaleId = await insertSale(db, seed.accountId, 'tie-2');
+      const otherSold = await insertSaleItem(db, seed.accountId, otherSaleId, second);
+
+      const fee = (saleItemId: string | null) =>
+        db
+          .insertInto('fee_line')
+          .values({
+            account_id: seed.accountId,
+            sale_id: saleId,
+            sale_item_id: saleItemId,
+            kind: 'marketplace',
+            amount_cents: 600,
+            source: 'actual',
+          })
+          .execute();
+      await fee(sold.id);
+      await fee(null);
+      await expectPgError(
+        fee(otherSold.id),
+        PG_ERROR.foreignKeyViolation,
+        'fee_line_account_id_sale_id_sale_item_id_fkey',
+      );
+
+      const run = (itemId: string) =>
+        db
+          .insertInto('delist_run')
+          .values({ account_id: seed.accountId, sale_id: saleId, item_id: itemId })
+          .execute();
+      await run(seed.itemId);
+      await expectPgError(
+        run(second.itemId),
+        PG_ERROR.foreignKeyViolation,
+        'delist_run_account_id_sale_id_item_id_fkey',
+      );
+      await expectPgError(
+        run(seed.itemId),
+        PG_ERROR.uniqueViolation,
+        'delist_run_account_id_sale_id_item_id_key',
+      );
     });
   });
 
@@ -565,6 +717,89 @@ describe('schema constraints (real Postgres)', () => {
       expect(rows).toEqual([{ to_status: 'queued' }]);
     });
 
+    it('keeps operations: a direct delete is rejected', async () => {
+      const operation = await insertOperation(db, a, { idempotency_key: 'history-keep' });
+      await db
+        .insertInto('operation_event')
+        .values({ account_id: a.accountId, operation_id: operation.id, to_status: 'queued' })
+        .execute();
+      await expectPgError(
+        db.deleteFrom('marketplace_operation').where('id', '=', operation.id).execute(),
+        PG_ERROR.restrictViolation,
+      );
+      const events = await db
+        .selectFrom('operation_event')
+        .select('to_status')
+        .where('operation_id', '=', operation.id)
+        .execute();
+      expect(events).toEqual([{ to_status: 'queued' }]);
+    });
+
+    it('rejects history changes made by triggers other than foreign-key actions', async () => {
+      const operation = await insertOperation(db, a, { idempotency_key: 'history-trigger' });
+      await db
+        .insertInto('operation_event')
+        .values({ account_id: a.accountId, operation_id: operation.id, to_status: 'queued' })
+        .execute();
+      await sql`
+        create function test_erase_history() returns trigger language plpgsql as $$
+        begin
+          delete from operation_event where account_id = new.account_id;
+          return new;
+        end;
+        $$;
+        create trigger test_erase_history after update on marketplace_listing
+          for each row execute function test_erase_history();
+      `.execute(db);
+      try {
+        await expectPgError(
+          db
+            .updateTable('marketplace_listing')
+            .set({ title: 'erase' })
+            .where('id', '=', a.listingId)
+            .execute(),
+          PG_ERROR.restrictViolation,
+        );
+      } finally {
+        await sql`
+          drop trigger test_erase_history on marketplace_listing;
+          drop function test_erase_history();
+        `.execute(db);
+      }
+    });
+
+    it('lets foreign-key actions of a deleted parent change history', async () => {
+      const item = await createInventoryItem(db, a.accountId);
+      const user = await db
+        .insertInto('app_user')
+        .values({ auth_provider: 'dev', auth_subject: 'history-actor' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const entry = await db
+        .insertInto('audit_log')
+        .values({
+          account_id: a.accountId,
+          item_id: item.id,
+          actor_kind: 'user',
+          actor_user_id: user.id,
+          action: 'item.created',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      await db.deleteFrom('app_user').where('id', '=', user.id).execute();
+      const kept = await db
+        .selectFrom('audit_log')
+        .select('actor_user_id')
+        .where('id', '=', entry.id)
+        .execute();
+      expect(kept).toEqual([{ actor_user_id: null }]);
+
+      await db.deleteFrom('inventory_item').where('id', '=', item.id).execute();
+      const removed = await db.selectFrom('audit_log').where('id', '=', entry.id).execute();
+      expect(removed).toEqual([]);
+    });
+
     it('rejects updates to the audit log', async () => {
       const entry = await db
         .insertInto('audit_log')
@@ -588,25 +823,25 @@ describe('schema constraints (real Postgres)', () => {
       const doomed = await seedAccount(db, 'DEL');
       const kept = await seedAccount(db, 'KEP');
       for (const seed of [doomed, kept]) {
-        const sale = await db
-          .insertInto('sale')
+        await db
+          .insertInto('inbound_event')
           .values({
             account_id: seed.accountId,
-            item_id: seed.itemId,
-            listing_id: seed.listingId,
+            source: 'ebay_webhook',
             marketplace: 'ebay',
-            external_order_id: `order-${seed.accountId}`,
-            sold_at: new Date(),
-            sale_price_cents: 4_500,
-            detection_source: 'webhook',
+            provider_event_id: `evt-${seed.accountId}`,
+            signature_ok: true,
+            payload: jsonb({}),
           })
-          .returning('id')
-          .executeTakeFirstOrThrow();
+          .execute();
+        const saleId = await insertSale(db, seed.accountId, `order-${seed.accountId}`);
+        const sold = await insertSaleItem(db, seed.accountId, saleId, seed);
         await db
           .insertInto('fee_line')
           .values({
             account_id: seed.accountId,
-            sale_id: sale.id,
+            sale_id: saleId,
+            sale_item_id: sold.id,
             kind: 'marketplace',
             amount_cents: 600,
             source: 'actual',
@@ -614,7 +849,7 @@ describe('schema constraints (real Postgres)', () => {
           .execute();
         const run = await db
           .insertInto('delist_run')
-          .values({ account_id: seed.accountId, sale_id: sale.id, item_id: seed.itemId })
+          .values({ account_id: seed.accountId, sale_id: saleId, item_id: seed.itemId })
           .returning('id')
           .executeTakeFirstOrThrow();
         const operation = await db
@@ -694,11 +929,13 @@ describe('schema constraints (real Postgres)', () => {
           'audit_log',
           'delist_run',
           'fee_line',
+          'inbound_event',
           'inventory_item',
           'marketplace_listing',
           'marketplace_operation',
           'operation_event',
           'sale',
+          'sale_item',
           'sku_sequence',
           'user_task',
         ]),

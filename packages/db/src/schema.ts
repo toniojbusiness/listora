@@ -322,6 +322,7 @@ export interface InboundEventTable {
   id: Id;
   account_id: string;
   source: InboundEventSource;
+  marketplace: Marketplace;
   provider_event_id: string;
   signature_ok: Nullable<boolean>;
   payload: Jsonb<JsonValue>;
@@ -332,21 +333,33 @@ export interface InboundEventTable {
   updated_at: UpdatedAt;
 }
 
+/** One marketplace order; the items it sold are its `sale_item` rows. */
 export interface SaleTable {
   id: Id;
   account_id: string;
-  item_id: string;
-  listing_id: Nullable<string>;
   marketplace: Marketplace;
   external_order_id: Nullable<string>;
   sold_at: Timestamp;
   currency: Generated<CurrencyCode>;
-  sale_price_cents: number;
   shipping_charged_cents: Generated<number>;
   detection_source: SaleDetectionSource;
   inbound_event_id: Nullable<string>;
   status: Generated<SaleStatus>;
   ship_by: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** One item sold in an order; `marketplace` must equal the sale's. */
+export interface SaleItemTable {
+  id: Id;
+  account_id: string;
+  sale_id: string;
+  marketplace: Marketplace;
+  item_id: string;
+  listing_id: Nullable<string>;
+  currency: Generated<CurrencyCode>;
+  sale_price_cents: number;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -396,6 +409,7 @@ export interface FeeLineTable {
   id: Id;
   account_id: string;
   sale_id: string;
+  sale_item_id: Nullable<string>;
   kind: FeeKind;
   currency: Generated<CurrencyCode>;
   amount_cents: number;
@@ -500,6 +514,7 @@ export interface Database {
   operation_event: OperationEventTable;
   inbound_event: InboundEventTable;
   sale: SaleTable;
+  sale_item: SaleItemTable;
   delist_run: DelistRunTable;
   delist_run_listing: DelistRunListingView;
   user_task: UserTaskTable;
