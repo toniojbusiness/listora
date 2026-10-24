@@ -30,7 +30,7 @@ These two rules from the product owner override every other design choice.
 | Photos     | Client resizes and strips GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives  | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
 | Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                  | Managed and in the same AWS account                                                       |
 | Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                  | App Store rule 3.1.3(b)                                                                   |
-| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK           | Standard, robust, one security boundary                                                   |
+| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK (`infra`) | Standard, robust, one security boundary                                                   |
 | Push       | APNs (token-based key); fake driver in dev                                                      | Delist alerts and assisted tasks                                                          |
 | Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                      | No extra package manager or build system                                                  |
 
@@ -98,9 +98,11 @@ packages/
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
   eval/         Synthetic tag corpus (corpus/) and the eval harness CLI (@listora/eval)
-infra/          AWS CDK stacks (T-30)
+infra/          AWS CDK v2 app: one environment per synth, stacks per lifecycle (@listora/infra)
 scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
+  container-smoke.sh  Builds the application image and runs it as AWS does (CI)
+Dockerfile      Application image; the API and the worker run from the same image
 docs/           This overview and the roadmap
 Makefile        iOS commands (make ios-test, ios-lint, ...)
 ```
@@ -414,10 +416,35 @@ updates the Kysely table types in `packages/db/src/schema.ts` and the value list
 read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
 `YYYY-MM-DD` strings. Write `jsonb` values with `jsonb(value)`.
 
-## 10. Testing and CI
+## 10. Hosting and deploys
+
+Each environment (`staging`, `prod`) is its own AWS account, defined by the CDK app in
+`infra/` and documented in [infra/README.md](../infra/README.md). In short:
+
+- **One image, two services.** The root `Dockerfile` installs production dependencies and
+  the sources; ECS runs `node apps/api/src/main.ts` or `node apps/worker/src/main.ts` from it,
+  on Fargate in private subnets, with a read-only root file system. The API is behind an
+  HTTPS load balancer at `api.<domain>` that routes only to tasks passing `/health/ready`.
+- **Configuration.** Containers get exactly the environment in `infra/src/containers.ts`, and
+  a test runs the API's and worker's config loaders on it. A task that adds a required config
+  key adds it there (and, for a secret, to `APP_SECRETS` in `infra/src/config.ts`). The
+  database password reaches the processes only as `PGPASSWORD` from the RDS secret.
+- **Data.** RDS PostgreSQL 18 (Multi-AZ, deletion protection in prod), a private photo bucket
+  whose `public/` prefix CloudFront serves by exact key, SES inbound mail for `in.<domain>`
+  stored in a private bucket, and a KMS key for token envelope encryption.
+- **Deploys** run only from the manual Deploy workflow, on `main`, inside the protected GitHub
+  environment, with OIDC role assumption (no stored AWS keys). Images are tagged with the
+  commit and immutable.
+- **Offline.** Synthesis never calls AWS: no `fromLookup`, zones resolve at deploy time, and
+  `npm run infra:synth` (part of `npm run check`) runs `cdk synth` with credentials hidden.
+  Template snapshots in `infra/src/__snapshots__/` make every infrastructure change a
+  reviewable diff.
+
+## 11. Testing and CI
 
 - `npm run check` runs the format check, lint (ESLint and shellcheck), type check, the API
-  contract check, unit tests, and integration tests. It must pass before merge. When iOS code
+  contract check, the offline `cdk synth` of both environments, unit tests, and integration
+  tests. It must pass before merge. When iOS code
   is touched, `make ios-lint` and `make ios-test` must pass too. `make ios-test` runs the
   package, unit, and UI tests on an existing iPhone 17 simulator and keeps DerivedData in
   `.build/ios`.
@@ -434,6 +461,7 @@ read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
   Its conventions (error model, idempotency keys, pagination, Money) are in
   [packages/api-contract/README.md](../packages/api-contract/README.md).
 - CI runs the same fresh-clone path as local development; see the CI section of the
-  [README](../README.md#ci). A macOS job runs `make ios-lint` and `make ios-test`, but only
-  when a file the iOS build reads changed (macOS minutes cost 10 times Linux minutes); the
-  Linux backend check runs on every pull request.
+  [README](../README.md#ci). A Linux job builds the application image and smoke-tests it
+  (`scripts/container-smoke.sh`). A macOS job runs `make ios-lint` and `make ios-test`, but
+  only when a file the iOS build reads changed (macOS minutes cost 10 times Linux minutes);
+  the Linux backend check runs on every pull request.

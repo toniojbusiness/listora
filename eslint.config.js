@@ -13,6 +13,7 @@ export default defineConfig(
       '.local/',
       '.build/',
       'coverage/',
+      'infra/cdk.out/',
       'apps/ios/',
       // Generated from openapi.yaml by `npm run contract:generate`; checked for drift instead.
       'packages/api-contract/src/generated/',

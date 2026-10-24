@@ -10,16 +10,18 @@
   "workspaces": [
     "packages/*",
     "apps/api",
-    "apps/worker"
+    "apps/worker",
+    "infra"
   ],
   "scripts": {
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run contract:check && npm run test:unit && npm run test:integration",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run contract:check && npm run infra:synth && npm run test:unit && npm run test:integration",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --max-warnings=0 . && shellcheck scripts/*.sh",
     "typecheck": "tsc --build",
     "contract:generate": "npm run generate --workspace @listora/api-contract",
     "contract:check": "npm run check --workspace @listora/api-contract",
+    "infra:synth": "npm run synth --workspace @listora/infra",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "dev:api": "npm run dev --workspace @listora/api",

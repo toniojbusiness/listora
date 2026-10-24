@@ -1,0 +1,128 @@
+{
+  "Description": "Listora staging: GitHub OIDC deploy role (bootstrap)",
+  "Resources": {
+    "GitHubOidcA2A496A3": {
+      "Type": "AWS::IAM::OIDCProvider",
+      "Properties": {
+        "ClientIdList": [
+          "sts.amazonaws.com"
+        ],
+        "Url": "https://token.actions.githubusercontent.com"
+      }
+    },
+    "DeployRole885297C3": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRoleWithWebIdentity",
+              "Condition": {
+                "StringEquals": {
+                  "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+                  "token.actions.githubusercontent.com:sub": "repo:toniojbusiness/listora:environment:staging"
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Federated": {
+                  "Ref": "GitHubOidcA2A496A3"
+                }
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Description": "GitHub Actions deploys of toniojbusiness/listora to staging",
+        "MaxSessionDuration": 3600,
+        "RoleName": "listora-staging-github-deploy"
+      }
+    },
+    "DeployRoleDefaultPolicyDC930F96": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Resource": "arn:aws:iam::111111111111:role/cdk-hnb659fds-*-111111111111-us-east-1",
+              "Sid": "UseCdkBootstrapRoles"
+            },
+            {
+              "Action": "ecr:GetAuthorizationToken",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "EcrLogin"
+            },
+            {
+              "Action": [
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:BatchGetImage",
+                "ecr:CompleteLayerUpload",
+                "ecr:DescribeImages",
+                "ecr:InitiateLayerUpload",
+                "ecr:PutImage",
+                "ecr:UploadLayerPart"
+              ],
+              "Effect": "Allow",
+              "Resource": "arn:aws:ecr:us-east-1:111111111111:repository/listora/app",
+              "Sid": "PushApplicationImage"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "DeployRoleDefaultPolicyDC930F96",
+        "Roles": [
+          {
+            "Ref": "DeployRole885297C3"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "DeployRoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "DeployRole885297C3",
+          "Arn"
+        ]
+      }
+    }
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+    }
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  {
+                    "Ref": "BootstrapVersion"
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+        }
+      ]
+    }
+  }
+}

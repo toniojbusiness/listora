@@ -1,0 +1,1007 @@
+{
+  "Description": "Listora prod: VPC and security groups",
+  "Resources": {
+    "Vpc8378EB38": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.20.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "InstanceTenancy": "default",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod"
+          }
+        ]
+      }
+    },
+    "VpcpublicSubnet1Subnet2BB74ED7": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.20.0.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "public"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Public"
+          },
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/publicSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcpublicSubnet1RouteTable15C15F8E": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/publicSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcpublicSubnet1RouteTableAssociation4E83B6E4": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet1RouteTable15C15F8E"
+        },
+        "SubnetId": {
+          "Ref": "VpcpublicSubnet1Subnet2BB74ED7"
+        }
+      }
+    },
+    "VpcpublicSubnet1DefaultRouteB88F9E93": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "VpcIGWD7BA715C"
+        },
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet1RouteTable15C15F8E"
+        }
+      },
+      "DependsOn": [
+        "VpcVPCGWBF912B6E"
+      ]
+    },
+    "VpcpublicSubnet1EIP411541E6": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/publicSubnet1"
+          }
+        ]
+      }
+    },
+    "VpcpublicSubnet1NATGatewayA036E8A6": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "VpcpublicSubnet1EIP411541E6",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "VpcpublicSubnet1Subnet2BB74ED7"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/publicSubnet1"
+          }
+        ]
+      },
+      "DependsOn": [
+        "VpcpublicSubnet1DefaultRouteB88F9E93",
+        "VpcpublicSubnet1RouteTableAssociation4E83B6E4"
+      ]
+    },
+    "VpcpublicSubnet2SubnetE34B022A": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.20.1.0/24",
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "public"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Public"
+          },
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/publicSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcpublicSubnet2RouteTableC5A6DF77": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/publicSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcpublicSubnet2RouteTableAssociationCCE257FF": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet2RouteTableC5A6DF77"
+        },
+        "SubnetId": {
+          "Ref": "VpcpublicSubnet2SubnetE34B022A"
+        }
+      }
+    },
+    "VpcpublicSubnet2DefaultRoute732F0BEB": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "VpcIGWD7BA715C"
+        },
+        "RouteTableId": {
+          "Ref": "VpcpublicSubnet2RouteTableC5A6DF77"
+        }
+      },
+      "DependsOn": [
+        "VpcVPCGWBF912B6E"
+      ]
+    },
+    "VpcpublicSubnet2EIP811E07A7": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/publicSubnet2"
+          }
+        ]
+      }
+    },
+    "VpcpublicSubnet2NATGateway4A29FD4F": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": [
+            "VpcpublicSubnet2EIP811E07A7",
+            "AllocationId"
+          ]
+        },
+        "SubnetId": {
+          "Ref": "VpcpublicSubnet2SubnetE34B022A"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/publicSubnet2"
+          }
+        ]
+      },
+      "DependsOn": [
+        "VpcpublicSubnet2DefaultRoute732F0BEB",
+        "VpcpublicSubnet2RouteTableAssociationCCE257FF"
+      ]
+    },
+    "VpcappSubnet1SubnetAE489B2F": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.20.16.0/20",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "app"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Private"
+          },
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/appSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcappSubnet1RouteTable072E8E09": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/appSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcappSubnet1RouteTableAssociation168BF781": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcappSubnet1RouteTable072E8E09"
+        },
+        "SubnetId": {
+          "Ref": "VpcappSubnet1SubnetAE489B2F"
+        }
+      }
+    },
+    "VpcappSubnet1DefaultRoute64294A8F": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "VpcpublicSubnet1NATGatewayA036E8A6"
+        },
+        "RouteTableId": {
+          "Ref": "VpcappSubnet1RouteTable072E8E09"
+        }
+      }
+    },
+    "VpcappSubnet2Subnet2449FB56": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.20.32.0/20",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "app"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Private"
+          },
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/appSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcappSubnet2RouteTableB76BFC59": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/appSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcappSubnet2RouteTableAssociation81E96A75": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcappSubnet2RouteTableB76BFC59"
+        },
+        "SubnetId": {
+          "Ref": "VpcappSubnet2Subnet2449FB56"
+        }
+      }
+    },
+    "VpcappSubnet2DefaultRouteEBCCC1EA": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "VpcpublicSubnet2NATGateway4A29FD4F"
+        },
+        "RouteTableId": {
+          "Ref": "VpcappSubnet2RouteTableB76BFC59"
+        }
+      }
+    },
+    "VpcdataSubnet1SubnetE2B009FB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.20.48.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "data"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Isolated"
+          },
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/dataSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcdataSubnet1RouteTableAF5F53E0": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/dataSubnet1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcdataSubnet1RouteTableAssociation9E9FDBBB": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcdataSubnet1RouteTableAF5F53E0"
+        },
+        "SubnetId": {
+          "Ref": "VpcdataSubnet1SubnetE2B009FB"
+        }
+      }
+    },
+    "VpcdataSubnet2SubnetAD08DFFF": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "CidrBlock": "10.20.49.0/24",
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "aws-cdk:subnet-name",
+            "Value": "data"
+          },
+          {
+            "Key": "aws-cdk:subnet-type",
+            "Value": "Isolated"
+          },
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/dataSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcdataSubnet2RouteTable94FA483A": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/dataSubnet2"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcdataSubnet2RouteTableAssociation6C8F2058": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "VpcdataSubnet2RouteTable94FA483A"
+        },
+        "SubnetId": {
+          "Ref": "VpcdataSubnet2SubnetAD08DFFF"
+        }
+      }
+    },
+    "VpcIGWD7BA715C": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod"
+          }
+        ]
+      }
+    },
+    "VpcVPCGWBF912B6E": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "InternetGatewayId": {
+          "Ref": "VpcIGWD7BA715C"
+        },
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcS3A5408339": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "RouteTableIds": [
+          {
+            "Ref": "VpcappSubnet1RouteTable072E8E09"
+          },
+          {
+            "Ref": "VpcappSubnet2RouteTableB76BFC59"
+          },
+          {
+            "Ref": "VpcpublicSubnet1RouteTable15C15F8E"
+          },
+          {
+            "Ref": "VpcpublicSubnet2RouteTableC5A6DF77"
+          },
+          {
+            "Ref": "VpcdataSubnet1RouteTableAF5F53E0"
+          },
+          {
+            "Ref": "VpcdataSubnet2RouteTable94FA483A"
+          }
+        ],
+        "ServiceName": {
+          "Fn::Join": [
+            "",
+            [
+              "com.amazonaws.",
+              {
+                "Ref": "AWS::Region"
+              },
+              ".s3"
+            ]
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod"
+          }
+        ],
+        "VpcEndpointType": "Gateway",
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "VpcRestrictDefaultSecurityGroupCustomResourceC73DA2BE": {
+      "Type": "Custom::VpcRestrictDefaultSG",
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E",
+            "Arn"
+          ]
+        },
+        "DefaultSecurityGroupId": {
+          "Fn::GetAtt": [
+            "Vpc8378EB38",
+            "DefaultSecurityGroup"
+          ]
+        },
+        "Account": "222222222222"
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "VpcRejectedTrafficIAMRole1D6CF132": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "vpc-flow-logs.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/RejectedTraffic"
+          }
+        ]
+      }
+    },
+    "VpcRejectedTrafficIAMRoleDefaultPolicyA182BCA3": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:DescribeLogStreams",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "RejectedFlowLogsDB7DF1C0",
+                  "Arn"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "VpcRejectedTrafficIAMRoleDefaultPolicyA182BCA3",
+        "Roles": [
+          {
+            "Ref": "VpcRejectedTrafficIAMRole1D6CF132"
+          }
+        ]
+      }
+    },
+    "VpcRejectedTrafficFlowLog2E62DEAE": {
+      "Type": "AWS::EC2::FlowLog",
+      "Properties": {
+        "DeliverLogsPermissionArn": {
+          "Fn::GetAtt": [
+            "VpcRejectedTrafficIAMRole1D6CF132",
+            "Arn"
+          ]
+        },
+        "LogDestinationType": "cloud-watch-logs",
+        "LogGroupName": {
+          "Ref": "RejectedFlowLogsDB7DF1C0"
+        },
+        "ResourceId": {
+          "Ref": "Vpc8378EB38"
+        },
+        "ResourceType": "VPC",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-prod-network/Vpc/RejectedTraffic"
+          }
+        ],
+        "TrafficType": "REJECT"
+      }
+    },
+    "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+          }
+        ],
+        "Policies": [
+          {
+            "PolicyName": "Inline",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ec2:AuthorizeSecurityGroupIngress",
+                    "ec2:AuthorizeSecurityGroupEgress",
+                    "ec2:RevokeSecurityGroupIngress",
+                    "ec2:RevokeSecurityGroupEgress"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:ec2:us-east-1:222222222222:security-group/",
+                          {
+                            "Fn::GetAtt": [
+                              "Vpc8378EB38",
+                              "DefaultSecurityGroup"
+                            ]
+                          }
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Code": {
+          "S3Bucket": "cdk-hnb659fds-assets-222222222222-us-east-1",
+          "S3Key": "02b51ab524e7bcf8f477de3e71e5f9a72e448301b26ba62e9e75a14f9c55a093.zip"
+        },
+        "Timeout": 900,
+        "MemorySize": 128,
+        "Handler": "__entrypoint__.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0",
+            "Arn"
+          ]
+        },
+        "Runtime": "nodejs24.x",
+        "Description": "Lambda function for removing all inbound/outbound rules from the VPC default security group"
+      },
+      "DependsOn": [
+        "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+      ]
+    },
+    "RejectedFlowLogsDB7DF1C0": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/listora/prod/vpc-rejected",
+        "RetentionInDays": 90
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "LoadBalancerSecurityGroup3036A0FC": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Listora API load balancer",
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTPS",
+            "FromPort": 443,
+            "IpProtocol": "tcp",
+            "ToPort": 443
+          },
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTP, redirected to HTTPS",
+            "FromPort": 80,
+            "IpProtocol": "tcp",
+            "ToPort": 80
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "LoadBalancerSecurityGrouptolistoraprodnetworkApiSecurityGroup15ADFA1B3000990B0255": {
+      "Type": "AWS::EC2::SecurityGroupEgress",
+      "Properties": {
+        "Description": "To API tasks",
+        "DestinationSecurityGroupId": {
+          "Fn::GetAtt": [
+            "ApiSecurityGroup4E5BB726",
+            "GroupId"
+          ]
+        },
+        "FromPort": 3000,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "LoadBalancerSecurityGroup3036A0FC",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "ToPort": 3000
+      }
+    },
+    "ApiSecurityGroup4E5BB726": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Listora API tasks",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "ApiSecurityGroupfromlistoraprodnetworkLoadBalancerSecurityGroup5135682930000A83B2EA": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "From the load balancer",
+        "FromPort": 3000,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "ApiSecurityGroup4E5BB726",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "LoadBalancerSecurityGroup3036A0FC",
+            "GroupId"
+          ]
+        },
+        "ToPort": 3000
+      }
+    },
+    "WorkerSecurityGroup5529CF0B": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Listora Worker tasks (no inbound)",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic by default",
+            "IpProtocol": "-1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "DatabaseSecurityGroup7319C0F6": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Listora PostgreSQL",
+        "SecurityGroupEgress": [
+          {
+            "CidrIp": "255.255.255.255/32",
+            "Description": "Disallow all traffic",
+            "FromPort": 252,
+            "IpProtocol": "icmp",
+            "ToPort": 86
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc8378EB38"
+        }
+      }
+    },
+    "DatabaseSecurityGroupfromlistoraprodnetworkApiSecurityGroup15ADFA1B5432AF5EBD8F": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "From API tasks",
+        "FromPort": 5432,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "DatabaseSecurityGroup7319C0F6",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "ApiSecurityGroup4E5BB726",
+            "GroupId"
+          ]
+        },
+        "ToPort": 5432
+      }
+    },
+    "DatabaseSecurityGroupfromlistoraprodnetworkWorkerSecurityGroup552FFFCB5432076F7573": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "Description": "From worker tasks",
+        "FromPort": 5432,
+        "GroupId": {
+          "Fn::GetAtt": [
+            "DatabaseSecurityGroup7319C0F6",
+            "GroupId"
+          ]
+        },
+        "IpProtocol": "tcp",
+        "SourceSecurityGroupId": {
+          "Fn::GetAtt": [
+            "WorkerSecurityGroup5529CF0B",
+            "GroupId"
+          ]
+        },
+        "ToPort": 5432
+      }
+    }
+  },
+  "Outputs": {
+    "PublishOutputRefVpcdataSubnet1SubnetE2B009FB6262E87B": {
+      "Value": {
+        "Ref": "VpcdataSubnet1SubnetE2B009FB"
+      }
+    },
+    "PublishOutputRefVpcdataSubnet2SubnetAD08DFFF5BFEFD45": {
+      "Value": {
+        "Ref": "VpcdataSubnet2SubnetAD08DFFF"
+      }
+    },
+    "PublishOutputFnGetAttDatabaseSecurityGroup7319C0F6GroupId3AE3795A": {
+      "Value": {
+        "Fn::GetAtt": [
+          "DatabaseSecurityGroup7319C0F6",
+          "GroupId"
+        ]
+      }
+    },
+    "PublishOutputRefVpcappSubnet1SubnetAE489B2FDAA626D3": {
+      "Value": {
+        "Ref": "VpcappSubnet1SubnetAE489B2F"
+      }
+    },
+    "PublishOutputRefVpcappSubnet2Subnet2449FB56DBA82608": {
+      "Value": {
+        "Ref": "VpcappSubnet2Subnet2449FB56"
+      }
+    },
+    "PublishOutputFnGetAttApiSecurityGroup4E5BB726GroupIdF3427EAD": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ApiSecurityGroup4E5BB726",
+          "GroupId"
+        ]
+      }
+    },
+    "PublishOutputFnGetAttWorkerSecurityGroup5529CF0BGroupId1D09B9A4": {
+      "Value": {
+        "Fn::GetAtt": [
+          "WorkerSecurityGroup5529CF0B",
+          "GroupId"
+        ]
+      }
+    },
+    "PublishOutputFnGetAttLoadBalancerSecurityGroup3036A0FCGroupId273B4B7E": {
+      "Value": {
+        "Fn::GetAtt": [
+          "LoadBalancerSecurityGroup3036A0FC",
+          "GroupId"
+        ]
+      }
+    },
+    "PublishOutputRefVpcpublicSubnet1Subnet2BB74ED7A7A9244B": {
+      "Value": {
+        "Ref": "VpcpublicSubnet1Subnet2BB74ED7"
+      }
+    },
+    "PublishOutputRefVpcpublicSubnet2SubnetE34B022A584D7750": {
+      "Value": {
+        "Ref": "VpcpublicSubnet2SubnetE34B022A"
+      }
+    },
+    "PublishOutputRefVpc8378EB385002A76F": {
+      "Value": {
+        "Ref": "Vpc8378EB38"
+      }
+    }
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+    }
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  {
+                    "Ref": "BootstrapVersion"
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+        }
+      ]
+    }
+  }
+}

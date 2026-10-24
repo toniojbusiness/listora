@@ -1,0 +1,710 @@
+{
+  "Description": "Listora staging: alarms",
+  "Resources": {
+    "Alarms04B5A0BF": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "listora-staging-alarms"
+      }
+    },
+    "AlarmsPolicy5C860CFE": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              },
+              "Effect": "Deny",
+              "Principal": "*",
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "AllowPublishThroughSSLOnly"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Topics": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ]
+      }
+    },
+    "api5xx1F762CB3": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The API answered at least 10 server errors in each of 3 consecutive 5-minute periods.",
+        "AlarmName": "listora-staging-api-5xx",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Fn::Select": [
+                      1,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-staging-compute",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "/",
+                  {
+                    "Fn::Select": [
+                      2,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-staging-compute",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "/",
+                  {
+                    "Fn::Select": [
+                      3,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-staging-compute",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              ]
+            }
+          },
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttLoadBalancerHttpsApiGroup1C2C0E6FTargetGroupFullName55EB795C"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "HTTPCode_Target_5XX_Count",
+        "Namespace": "AWS/ApplicationELB",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Sum",
+        "Threshold": 10,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "loadbalancer5xx791310EC": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The load balancer itself answered server errors (often: no healthy API task).",
+        "AlarmName": "listora-staging-load-balancer-5xx",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttLoadBalancerBE9EEC3ALoadBalancerFullName425B5434"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "MetricName": "HTTPCode_ELB_5XX_Count",
+        "Namespace": "AWS/ApplicationELB",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Sum",
+        "Threshold": 10,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "apiunhealthytasks68A3A7FF": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "At least one API task failed its readiness check for 3 minutes.",
+        "AlarmName": "listora-staging-api-unhealthy-tasks",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Fn::Select": [
+                      1,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-staging-compute",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "/",
+                  {
+                    "Fn::Select": [
+                      2,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-staging-compute",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "/",
+                  {
+                    "Fn::Select": [
+                      3,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-staging-compute",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              ]
+            }
+          },
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttLoadBalancerHttpsApiGroup1C2C0E6FTargetGroupFullName55EB795C"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "UnHealthyHostCount",
+        "Namespace": "AWS/ApplicationELB",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 60,
+        "Statistic": "Maximum",
+        "Threshold": 1,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "apilatencyp95EC3F4579": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "API p95 response time stayed above 2 seconds for 15 minutes.",
+        "AlarmName": "listora-staging-api-latency-p95",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Fn::Select": [
+                      1,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-staging-compute",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "/",
+                  {
+                    "Fn::Select": [
+                      2,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-staging-compute",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "/",
+                  {
+                    "Fn::Select": [
+                      3,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-staging-compute",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputRefLoadBalancerHttps0C5C99D2ABEA155B"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              ]
+            }
+          },
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttLoadBalancerHttpsApiGroup1C2C0E6FTargetGroupFullName55EB795C"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "ExtendedStatistic": "p95",
+        "MetricName": "TargetResponseTime",
+        "Namespace": "AWS/ApplicationELB",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Threshold": 2,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "apicpu084AC2EC": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The api service averaged over 85% CPU for 15 minutes (at maximum scale or not scaling).",
+        "AlarmName": "listora-staging-api-cpu",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+              }
+            }
+          },
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttapiserviceServiceBEA4D09ENameC4EFDA8C"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/ECS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 85,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "apimemoryC8A0B37B": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The api service averaged over 85% memory for 15 minutes.",
+        "AlarmName": "listora-staging-api-memory",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+              }
+            }
+          },
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttapiserviceServiceBEA4D09ENameC4EFDA8C"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "MemoryUtilization",
+        "Namespace": "AWS/ECS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 85,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "workercpu7725A7C7": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The worker service averaged over 85% CPU for 15 minutes (at maximum scale or not scaling).",
+        "AlarmName": "listora-staging-worker-cpu",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+              }
+            }
+          },
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttworkerserviceService99067999Name8CDE44B0"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/ECS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 85,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "workermemory10912608": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The worker service averaged over 85% memory for 15 minutes.",
+        "AlarmName": "listora-staging-worker-memory",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+              }
+            }
+          },
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-compute",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputFnGetAttworkerserviceService99067999Name8CDE44B0"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "MemoryUtilization",
+        "Namespace": "AWS/ECS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 85,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "databasecpu0DB9081A": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "Database CPU stayed above 80% for 15 minutes.",
+        "AlarmName": "listora-staging-database-cpu",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-data",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/RDS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Average",
+        "Threshold": 80,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "databasefreestorage49DB9A3A": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "Database free storage fell below 20% of the allocated size (autoscaling may be at its ceiling).",
+        "AlarmName": "listora-staging-database-free-storage",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-data",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "MetricName": "FreeStorageSpace",
+        "Namespace": "AWS/RDS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Minimum",
+        "Threshold": 4294967296,
+        "TreatMissingData": "breaching"
+      }
+    },
+    "databasefreememory3B37BAB9": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "Database freeable memory stayed below 64 MiB for 15 minutes.",
+        "AlarmName": "listora-staging-database-free-memory",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Fn::GetStackOutput": {
+                "StackName": "listora-staging-data",
+                "Region": "us-east-1",
+                "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+              }
+            }
+          }
+        ],
+        "EvaluationPeriods": 3,
+        "MetricName": "FreeableMemory",
+        "Namespace": "AWS/RDS",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Minimum",
+        "Threshold": 67108864,
+        "TreatMissingData": "notBreaching"
+      }
+    }
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+    }
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  {
+                    "Ref": "BootstrapVersion"
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+        }
+      ]
+    }
+  }
+}

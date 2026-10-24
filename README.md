@@ -56,12 +56,13 @@ Send the token as `Authorization: Bearer <accessToken>` on every `/v1` request, 
 
 | Command                      | What it does                                                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `npm run check`              | Everything CI runs: format check, lint, type check, API contract check, unit and integration tests                  |
+| `npm run check`              | Format check, lint, type check, API contract check, infra synth, unit and integration tests                         |
 | `npm run format`             | Rewrite files with Prettier                                                                                         |
 | `npm run lint`               | ESLint (type-aware, zero warnings) and shellcheck                                                                   |
 | `npm run typecheck`          | `tsc --build` over every workspace (type check only; no JS output)                                                  |
 | `npm run contract:generate`  | Regenerate the TypeScript types and Swift client from `packages/api-contract/openapi.yaml`                          |
 | `npm run contract:check`     | Lint the API spec, fail if generated code is stale, and test the Swift client package                               |
+| `npm run infra:synth`        | `cdk synth` of the AWS stacks for staging and prod, offline with placeholder settings (see `infra/README.md`)       |
 | `npm run test:unit`          | Unit tests (`*.test.ts`, no external services)                                                                      |
 | `npm run test:integration`   | Integration tests (`*.int.test.ts`) against the local Postgres                                                      |
 | `npm run dev:api`            | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                            |
@@ -102,8 +103,9 @@ packages/shared/       Shared types and utilities (@listora/shared)
 packages/testing/      Test-only helpers (@listora/testing)
 packages/tag-parse/    Deterministic tag-text parsers (@listora/tag-parse)
 packages/eval/         Synthetic tag corpus and eval harness CLI (@listora/eval)
-infra/                 AWS CDK (placeholder until T-30)
-scripts/dev-db.sh      Local PostgreSQL 18 cluster
+infra/                 AWS CDK stacks and deploy setup (@listora/infra; see infra/README.md)
+scripts/               dev-db.sh (local PostgreSQL 18 cluster), container-smoke.sh (image smoke test)
+Dockerfile             Application image: one image runs the API and the worker
 Makefile               iOS commands (make ios-*)
 docs/                  Architecture overview and roadmap
 ```
@@ -112,18 +114,22 @@ docs/                  Architecture overview and roadmap
 
 GitHub Actions (`.github/workflows/ci.yml`) runs the same fresh-clone path as local
 development on every pull request and on every push to `main`. Branch pushes without a pull
-request do not run CI, so one change never runs twice. It has three jobs:
+request do not run CI, so one change never runs twice. It has four jobs:
 
-| Job                                | Runner                   | When it does real work                  |
-| ---------------------------------- | ------------------------ | --------------------------------------- |
-| `Detect changed areas`             | Linux                    | Always; decides whether iOS is affected |
-| `Backend check (Linux)`            | Linux                    | Always                                  |
-| `iOS lint, build and test (macOS)` | macOS, or Linux as no-op | Only when an iOS input changed          |
+| Job                                              | Runner                   | When it does real work                  |
+| ------------------------------------------------ | ------------------------ | --------------------------------------- |
+| `Detect changed areas`                           | Linux                    | Always; decides whether iOS is affected |
+| `Backend check (Linux)`                          | Linux                    | Always                                  |
+| `Application image build and smoke test (Linux)` | Linux                    | Always                                  |
+| `iOS lint, build and test (macOS)`               | macOS, or Linux as no-op | Only when an iOS input changed          |
 
 The backend job installs PostgreSQL 18 from the PGDG apt repository (Swift comes with the
 runner image), then runs `npm ci`, `scripts/dev-db.sh` (with
 `PG_BIN_DIR=/usr/lib/postgresql/18/bin`), and `npm run check`. It caches npm downloads and
 the API contract's SwiftPM builds.
+
+The image job runs `scripts/container-smoke.sh`: it builds the application image and starts
+the API and the worker from it, configured as in AWS, against a PostgreSQL container.
 
 The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, and SwiftFormat
 from Homebrew, then runs `make ios-lint` and `make ios-test`. It caches the app's SwiftPM
@@ -141,3 +147,8 @@ reading a new file outside these paths, add it to the `ios` filter in the `chang
 A new push to a pull request cancels the run it supersedes. Runs on `main` are never
 cancelled, so every merged commit gets a full result. Every job has a `timeout-minutes`
 limit.
+
+Deploys are separate: `.github/workflows/deploy.yml` runs only when started by hand for
+`staging` or `prod`, inside the protected GitHub environment of that name, and reaches AWS
+through OIDC with no stored keys. Setup and the first deploy are described in
+[infra/README.md](infra/README.md).
