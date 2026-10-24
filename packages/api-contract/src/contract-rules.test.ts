@@ -452,7 +452,14 @@ describe('vocabulary', () => {
     ],
     [
       'KnownUserTaskKind',
-      ['list_manually', 'delist_manually', 'confirm_sale', 'reconnect', 'review_match'],
+      [
+        'list_manually',
+        'delist_manually',
+        'edit_manually',
+        'confirm_sale',
+        'reconnect',
+        'review_match',
+      ],
     ],
     ['KnownSaleStatus', ['detected', 'confirmed', 'canceled', 'returned']],
     ['KnownSaleDetectionSource', ['webhook', 'poll', 'email', 'manual']],

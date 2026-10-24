@@ -119,7 +119,9 @@ packages/
                 (@listora/storage)
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
                 the photo processing job, an item's photo-set hash (@listora/photos)
-  marketplaces/ Marketplace adapter interface; fake marketplace with fault injection (@listora/marketplaces)
+  marketplaces/ Marketplace adapter framework: interface, capabilities, registry, listing content,
+                assisted adapters, conformance suite; fake marketplace with fault injection
+                (@listora/marketplaces)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
@@ -230,10 +232,10 @@ src/
 
 ## 4. Marketplace adapter model
 
-All marketplace logic lives behind one `MarketplaceAdapter` interface. The engine and the UI
-never branch on the marketplace name. They branch on **capability flags**, which can change
-for a single connection; for example, Depop switches from browser automation to API once
-partner access is granted.
+All marketplace logic lives behind one `MarketplaceAdapter` interface in `@listora/marketplaces`
+(`adapter.ts`). The engine and the UI never branch on the marketplace name. They branch on
+**capability flags**, which can change for a single connection; for example, Depop runs
+assisted until its partner API is connected, then through the API.
 
 ```ts
 type Mode = 'api' | 'assisted' | 'bulk_file' | 'none';
@@ -244,7 +246,7 @@ interface MarketplaceCapabilities {
   updateDetails: Mode;
   delist: Mode;
   relist: Mode;
-  markSold: Mode | 'not_needed';
+  markSold: Mode | 'not_needed'; // not_needed: the marketplace marks its own sales sold
   verifyRead: 'api' | 'user_confirm'; // how success is established
   readFreshness: 'revision' | 'none'; // whether reads carry a revision (see section 6)
   importListings: 'api' | 'share_sheet' | 'bulk_file' | 'none';
@@ -255,17 +257,20 @@ interface MarketplaceCapabilities {
   externalSkuReusable: boolean; // Depop: false
   limits: { perSellerPerMin?: number; appPerMin?: number; appPerDay?: number };
 }
-interface MarketplaceAdapter {
+interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
   id: 'ebay' | 'depop' | 'poshmark' | 'mercari';
-  capabilities(conn?: Connection): MarketplaceCapabilities;
-  buildPayload(item: ItemSnapshot, variant: ListingVariant): Payload; // pure; golden-tested
-  validate(payload: Payload): ValidationIssue[];
-  execute(op: Operation, ctx: Ctx): Promise<Outcome>; // confirmed | rejected | transient | unknown | pendingUser
-  readListing(ref: ListingRef, ctx: Ctx): Promise<RemoteListingState>;
-  // Optional: listListings, listOrdersSince, parseWebhook, parseEmail, refreshCredentials
-  healthCheck(conn: Connection): Promise<Health>;
+  capabilities(connection?: ConnectionRef | null): MarketplaceCapabilities;
+  buildPayload(item: ItemSnapshot, variant: ListingVariant, connection: ConnectionRef | null): P; // pure
+  validate(payload: P, connection: ConnectionRef | null): ValidationIssue[]; // pure
+  execute(op: OperationRequest<P>, ctx: AdapterContext): Promise<Outcome>;
+  // Outcome: confirmed | rejected | transient | unknown | pendingUser
+  readListing(ref: ListingRef, ctx: AdapterContext): Promise<RemoteListingState>;
+  healthCheck(ctx: AdapterContext): Promise<Health>; // ok | degraded | reauth_required | revoked
 }
 ```
+
+Imports, orders, webhooks, emails, and credential refresh join the interface as optional
+members with the tasks that first use them (T-16, T-17, T-23, T-36).
 
 | Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
 | ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
@@ -274,10 +279,39 @@ interface MarketplaceAdapter {
 | Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms | DKIM-verified forwarded emails, scheduled browser check, manual |
 | Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark                                                                                                                           | Forwarded emails, scheduled browser check, manual               |
 
-`@listora/marketplaces` implements the part of this interface the operation engine needs (T-06):
-`id`, `capabilities`, `execute`, `readListing`, and the `Outcome` union. T-10 adds the rest
-without changing those members. `execute` never throws for a marketplace error; it returns an
-outcome. `readListing` throws when the marketplace cannot be read, and must find the effect of
+**Capabilities route every operation.** `operationMode(capabilities, kind)` (`capabilities.ts`)
+reads the flag for the kind (`create`, `updateDetails` for a revise, `updatePrice`, `delist` for
+an end, `relist`, `markSold`) under the listing's connection: `api` (Listora sends it and a
+read-back decides), `assisted` (only the user's confirmation finishes it), or `unsupported`
+(`none`, `bulk_file`, `not_needed`, or an API write without API reads), which fails without
+being sent. `checkCapabilities` rejects contradictory flags, such as an API write with
+`verifyRead: 'user_confirm'`.
+
+**Registry.** `createAdapterRegistry` (`registry.ts`) holds one adapter per marketplace and
+refuses, at startup, a duplicate or an adapter whose capabilities are incoherent without a
+connection or under either connection mode. The worker passes its `lookup` to the engine
+(`apps/worker/src/adapters.ts`), and the API asks it for capabilities under a connection.
+
+**Listing content and payloads.** A create, revise, or relist publishes listing content
+(`content.ts`): an `ItemSnapshot` (canonical attributes and photos with their listing URLs) and
+the marketplace's `ListingVariant` (title, description, price, category, condition, aspects,
+hashtags), mirroring the API contract. `enqueueOperation` stores it on the operation and derives
+the operation's desired state from it (`desiredStateForContent`), so what is sent and what a
+read-back checks cannot disagree. Every attempt builds the payload from that stored content
+with the adapter's pure `buildPayload`, under the connection it runs with, so a queued item edit
+never changes an operation in flight. The engine sends nothing the adapter's `validate` refuses:
+the operation fails with the first issue's message (for example "eBay titles can be at most 80
+characters.") and every issue in its history. Builders sort photos by `position` and never trust
+the input order. Each adapter's payload, validation results, and assisted tasks are pinned by
+golden files in its `__golden__` directory; `npx vitest -u` rewrites them after a deliberate
+change, and the diff is reviewed like code.
+
+**Execute and read-back rules.** `execute` never throws for a marketplace error; it returns an
+outcome. A rate limit is `transient` with the marketplace's `Retry-After`, a 5xx is `transient`
+(even when it hid an applied write, which the next attempt's read-back finds), validation and
+expired authorization (`reauth_required`) are `rejected`, a timeout after sending is `unknown`,
+and ending an ended listing is `confirmed` so that a read-back decides. `readListing` throws when
+the marketplace cannot be read (5xx, 429, auth error, unreachable), and must find the effect of
 an earlier attempt even when that attempt's outcome was unknown (by external id or SKU).
 When it finds no listing, it says whether that is `authoritative`: only when the marketplace
 definitively reports that the listing with the requested id no longer exists (a "removed" or
@@ -292,10 +326,38 @@ remote revision, or a last-modified time in milliseconds that differs for every 
 adapter whose marketplace has no such marker declares `readFreshness: 'none'` and returns
 `revision: null`.
 
-Assisted adapters implement `execute` by returning `pendingUser` with the user task (deep link
-plus copy-assist payload); the engine records the `user_task` in the same transaction as the
-`needs_user_action` status. An assisted operation can finish only through a user confirmation
-event.
+**Assisted adapters.** `AssistedAdapter` (`assisted/assisted-adapter.ts`) is the base for
+assisted mode. `createPoshmarkAdapter`, `createMercariAdapter`, and `createDepopAssistedAdapter`
+configure it: those marketplaces run on it until the browser runner (decision D1, below) or
+Depop's partner API takes over, and it stays their fallback when automation meets a check it
+must not pass. `execute` never contacts the marketplace: it returns
+`pendingUser` with a user task, `list_manually` (create, relist), `edit_manually` (revise,
+price), or `delist_manually` (end), with a deep link and a copy-assist payload (title,
+description, price, and photo URLs in posting order). The engine records the task in the same
+transaction as the `needs_user_action` status, and only `confirmOperationByUser` can finish the
+operation. Assisted capabilities establish success by `user_confirm`, `readListing` always
+throws, and the engine never reads back an assisted operation, so no read can ever confirm one.
+New listings open the marketplace's site; changes open the listing's own page once the user has
+linked it, and only when that URL is an https page on the marketplace's own domain. Deeper app
+links and the Poshmark and Mercari text limits are not verified yet (plan RF15), so the base
+enforces only a positive price and at least one photo for them.
+
+**Connection-aware capabilities.** `ConnectionAwareAdapter` serves one marketplace in more than
+one mode: its assisted adapter without a connection or under an assisted one, and its API adapter
+under an `api` connection (still assisted when no API adapter is configured). Every mode reads
+and writes the same `marketplace_listing` rows, so switching Depop to the API is a change to the
+connection's `mode` and needs no data migration. The browser runner's mode joins it the same way
+when that task lands.
+
+**Conformance.** Every adapter passes the shared suite in `conformance/suite.ts`
+(`describeAdapterConformance`), once per connection mode it serves, against its own fake
+marketplace: coherent capabilities, pure golden-tested payloads and validation, create, price
+and detail updates, end (twice), relist, mark sold, read-back by SKU and id with freshness,
+stale reads, not-found classification, error mapping (429 with and without `Retry-After`, 5xx
+before and after the change, validation, expired authorization, timeout after send,
+unreachable), failing reads that throw, health checks, and, for assisted kinds, user tasks that
+never touch the network and never confirm themselves. A new marketplace fake must be able to
+produce each failure mode the suite asks for (`ConformanceMarketplace`).
 
 **Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
 only". The marketplaces granted the product owner permission to automate where no API exists,
@@ -364,18 +426,22 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
 (`@listora/operations`; the state diagram is in `state-machine.ts`).
 
 1. **Write path.** The API, or the auto-delist orchestrator, calls `enqueueOperation`. It
-   inserts the operation (`queued`, `idempotency_key`, desired-state snapshot) and enqueues its
-   Graphile Worker job **in the same transaction**. Enqueueing the same key again returns the
-   existing operation. The desired state names the fields a read-back must show, so an empty
-   one is refused.
+   inserts the operation (`queued`, `idempotency_key`, desired-state snapshot, and for a
+   create, revise, or relist its listing content) and enqueues its Graphile Worker job **in
+   the same transaction**. Enqueueing the same key again returns the existing operation. The
+   desired state names the fields a read-back must show, so an empty one is refused; for a
+   content operation it comes from the content (section 4).
 2. **Execution.** One job runs one step. A step commits `running` before it can send anything,
    so a step cut short is detectable afterwards. No transaction stays open during a
    marketplace call, and a step records its result only if the operation is still exactly as
    the step found it. Jobs run one at a time per listing (`queue_name = listing:<id>`,
    `job_key = operation:<id>`), and a newer operation waits until every older one on its
    listing is finished, so changes apply in order even while an older one waits to retry. A
-   daily job deletes listing queues that have no jobs left. The adapter outcome determines the
-   next state:
+   daily job deletes listing queues that have no jobs left. Each step runs in the operation's
+   capability mode under the listing's connection (`operationMode`, section 4): an
+   `unsupported` operation fails without being sent, and a send builds its payload from the
+   stored content and fails without sending when the adapter's validation refuses it. The
+   adapter outcome determines the next state:
    - `confirmed`: the API succeeded **and** `readListing` shows the desired state → `succeeded`.
      A read-back that disagrees or fails → `verifying`.
    - `rejected` (validation or permanent error) → `failed`, with a user-readable reason and fix.
@@ -386,7 +452,9 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
      throws or misses its deadline) → `verifying`. `readListing` decides: the desired state
      holds → `succeeded`; it does not → `retrying`. The request is never re-sent blindly.
    - `pendingUser` (assisted) → `needs_user_action` until the user confirms
-     (`confirmOperationByUser`).
+     (`confirmOperationByUser`). An assisted operation is never read back, and any other
+     outcome for it (`confirmed`, `unknown`) fails as unconfirmed; an API operation that answers
+     with a user task fails the same way.
 3. **Attempts.** Every step, a send or a read-back, uses one attempt, and an operation gets
    seven. A step whose result is unknown is always followed by a read-back, even after the
    last attempt. Retry (`retryOperation`) gives a failed operation a fresh set of attempts; it
@@ -454,6 +522,10 @@ minutes it escalates the alert. A second sale opens a double-sale incident.
 **Status vocabulary** shown to users: `Active (confirmed by eBay)`, `Delisting... retry 2 of 6`,
 `Delist failed - Retry`, `Checking...`, `Action needed - delist on Poshmark`,
 `Done (you confirmed)`. Assisted listings never show "confirmed by <marketplace>".
+`describeListingStatus` (`status-display.ts`) renders these labels from the listing's newest
+operation: "confirmed by <marketplace>" only for a read-back's evidence, "you confirmed" only
+for the user's confirmation, and a listing without a successful operation is never shown as
+confirmed. The API serves them as `statusDisplay` (T-19).
 
 ## 7. Local development: fakes and environment switches
 
@@ -465,6 +537,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | ---------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------- | ------------------------------------ |
 | Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                   | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`  |
 | Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)              | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`               |
+| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands     | The same                   | none                                 |
 | Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                             | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`           |
 | AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                          | Anthropic API              | `AI_PROVIDER=fake\|anthropic`        |
 | eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production` |
@@ -629,8 +702,9 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   or other triggers. So an operation and its `operation_event` history go away only with the
   account.
 - **Invariants in the schema.** An operation can be `succeeded` only with `success_evidence`
-  (`read_back` or `user_confirmation`), and `failed` only with a user-readable error. Assisted
-  connections can never hold credentials. `inventory_item.version` is bumped by a trigger on
+  (`read_back` or `user_confirmation`), and `failed` only with a user-readable error. A create,
+  revise, or relist has listing `content`, and no other kind does. Assisted connections can
+  never hold credentials. `inventory_item.version` is bumped by a trigger on
   every update, for optimistic locking.
 
 Tables by area:
@@ -656,7 +730,8 @@ Tables by area:
   Monthly totals come from `UsageStore.monthlyUsage` (section 8).
 - **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
   `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot and
-  newest seen revision, desired/applied version), `marketplace_operation`, and the append-only `operation_event`.
+  newest seen revision, desired/applied version), `marketplace_operation` (with the listing
+  `content` a create, revise, or relist publishes), and the append-only `operation_event`.
 - **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
   provider event id, so an id that repeats in another account or on another marketplace is
   never dropped as a duplicate). `sale` is one marketplace order (unique per account,
@@ -743,6 +818,9 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   throwaway database with `createScratchDatabase` from `@listora/testing` and drop it after.
 - Tests cover acceptance criteria **and failure paths**. Process-level tests start the real
   entry points with `node src/main.ts` (see `startNodeProcess` in `@listora/testing`).
+- Every marketplace adapter passes the shared conformance suite against its fake, and its
+  payloads, validation results, and assisted tasks are pinned by golden files (section 4).
+  Sample listing content for tests in any workspace comes from `@listora/marketplaces/testing`.
 - **API contract.** `packages/api-contract/openapi.yaml` is the only place an endpoint or
   payload shape is defined. The server imports its types from `@listora/api-contract` and
   the iOS app uses the generated `ListoraAPI` Swift package. `npm run contract:check` lints

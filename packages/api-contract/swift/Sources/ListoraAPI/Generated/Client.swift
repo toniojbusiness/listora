@@ -3291,6 +3291,8 @@ public struct Client: APIProtocol {
     /// Change a live listing's details
     ///
     /// Queues a `revise` operation with the new variant (title, description, aspects, price).
+    /// Assisted marketplaces get an `edit_manually` task.
+    ///
     ///
     /// - Remark: HTTP `POST /v1/listings/{listingId}/revise`.
     /// - Remark: Generated from `#/paths//v1/listings/{listingId}/revise/post(reviseListing)`.
@@ -3452,6 +3454,8 @@ public struct Client: APIProtocol {
     /// Change a live listing's price
     ///
     /// Queues a `price` operation. The listed price changes only once it is confirmed.
+    /// Assisted marketplaces get an `edit_manually` task.
+    ///
     ///
     /// - Remark: HTTP `POST /v1/listings/{listingId}/price`.
     /// - Remark: Generated from `#/paths//v1/listings/{listingId}/price/post(changeListingPrice)`.

@@ -12,6 +12,9 @@
  *   POST  /:marketplace/listings/:id/end      end (409 `already_ended` when it is not active)
  *   POST  /:marketplace/listings/:id/relist   relist an ended listing
  *   POST  /:marketplace/listings/:id/mark-sold
+ *   GET   /:marketplace/health                a cheap call for connection health checks
+ *
+ * A create needs one to 24 photo URLs, and a title of at most 80 characters, like eBay.
  *
  * Like eBay's `AddFixedPriceItem`, create is not idempotent by itself: sending it twice without
  * the same `Idempotency-Key` creates two listings, which is what the chaos tests look for.
@@ -39,10 +42,12 @@ export interface FakeListing {
   priceCents: number;
   currency: CurrencyCode;
   url: string;
+  /** Photo URLs in posting order. */
+  photoUrls: string[];
   revision: number;
 }
 
-export type FakeAction = 'create' | 'update' | 'end' | 'relist' | 'mark_sold' | 'read';
+export type FakeAction = 'create' | 'update' | 'end' | 'relist' | 'mark_sold' | 'read' | 'health';
 
 export type FakeFault =
   /** 429 with an optional `Retry-After`; nothing is applied. */
@@ -51,6 +56,8 @@ export type FakeFault =
   | { type: 'server_error'; status?: number; afterApply?: boolean }
   /** 400 validation error; nothing is applied. */
   | { type: 'reject'; message?: string }
+  /** 401: the seller's access token is invalid or expired; nothing is applied. */
+  | { type: 'unauthorized' }
   /** The change is applied, then the answer comes after `delayMs` (after the client gave up). */
   | { type: 'timeout_after_send'; delayMs?: number }
   /** The request is held without an answer until the server closes (a crash mid-operation). */
@@ -268,9 +275,9 @@ export class FakeMarketplace {
       .filter(Boolean);
     const marketplace = isMarketplace(marketplaceSegment) ? marketplaceSegment : undefined;
     const route =
-      marketplace === undefined || collection !== 'listings' || rest.length > 0
+      marketplace === undefined || rest.length > 0
         ? undefined
-        : resolveRoute(request.method ?? 'GET', id, verb);
+        : resolveRoute(request.method ?? 'GET', collection, id, verb);
     if (marketplace === undefined || route === undefined) {
       send(response, { status: 404, body: errorBody('not_found', 'No such endpoint') });
       return;
@@ -313,7 +320,7 @@ export class FakeMarketplace {
     const apply = (): Reply => {
       try {
         const reply = this.#apply(marketplace, route, id, url, body, idempotencyKey, fault);
-        record.applied = reply.status < 300 && route !== 'read';
+        record.applied = reply.status < 300 && route !== 'read' && route !== 'health';
         return reply;
       } catch (error) {
         if (error instanceof HttpError) {
@@ -356,6 +363,13 @@ export class FakeMarketplace {
           body: errorBody('validation_failed', fault.message ?? 'The listing is invalid'),
         });
         return;
+      case 'unauthorized':
+        this.#record(record);
+        reply({
+          status: 401,
+          body: errorBody('unauthorized', 'The access token is invalid or expired'),
+        });
+        return;
       case 'timeout_after_send': {
         const result = apply();
         this.#record(record);
@@ -389,6 +403,7 @@ export class FakeMarketplace {
     idempotencyKey: string | null,
     fault: FakeFault | undefined,
   ): Reply {
+    if (route === 'health') return { status: 200, body: { ok: true } };
     if (route === 'create') {
       const duplicate =
         idempotencyKey === null
@@ -441,10 +456,10 @@ export class FakeMarketplace {
           throw new HttpError(409, 'not_ended', 'Only ended listings can be relisted');
         }
         if (this.#relistIssuesNewId) {
-          const { sku, title, description, priceCents, currency } = stored.current;
+          const { sku, title, description, priceCents, currency, photoUrls } = stored.current;
           const relisted = this.#create(
             marketplace,
-            { sku, status: 'active', title, description, priceCents, currency },
+            { sku, status: 'active', title, description, priceCents, currency, photoUrls },
             null,
           );
           return { status: 200, body: { listing: relisted.current } };
@@ -538,9 +553,14 @@ export class FakeMarketplace {
 
 function resolveRoute(
   method: string,
+  collection: string | undefined,
   id: string | undefined,
   verb: string | undefined,
 ): FakeAction | undefined {
+  if (collection === 'health') {
+    return method === 'GET' && id === undefined ? 'health' : undefined;
+  }
+  if (collection !== 'listings') return undefined;
   if (id === undefined) {
     if (method === 'POST') return 'create';
     if (method === 'GET') return 'read';
@@ -561,7 +581,15 @@ function resolveRoute(
 function validateCreate(
   body: Record<string, unknown>,
 ): Omit<FakeListing, 'id' | 'url' | 'revision'> {
-  const { sku, title, description = '', priceCents, currency = 'USD', status = 'active' } = body;
+  const {
+    sku,
+    title,
+    description = '',
+    priceCents,
+    currency = 'USD',
+    status = 'active',
+    photoUrls,
+  } = body;
   if (typeof sku !== 'string' || sku === '') {
     throw new HttpError(400, 'validation_failed', 'sku is required');
   }
@@ -575,6 +603,7 @@ function validateCreate(
     description: validDescription(description),
     priceCents: validPrice(priceCents),
     currency: validCurrency(currency),
+    photoUrls: validPhotoUrls(photoUrls),
   };
 }
 
@@ -586,6 +615,7 @@ function validateUpdate(body: Record<string, unknown>): Partial<FakeListing> {
   }
   if (body['priceCents'] !== undefined) changes.priceCents = validPrice(body['priceCents']);
   if (body['currency'] !== undefined) changes.currency = validCurrency(body['currency']);
+  if (body['photoUrls'] !== undefined) changes.photoUrls = validPhotoUrls(body['photoUrls']);
   if (Object.keys(changes).length === 0) {
     throw new HttpError(400, 'validation_failed', 'nothing to change');
   }
@@ -611,6 +641,15 @@ function validPrice(value: unknown): number {
     throw new HttpError(400, 'validation_failed', 'price must be a positive number of cents');
   }
   return value;
+}
+
+function validPhotoUrls(value: unknown): string[] {
+  const urls = Array.isArray(value) ? (value as unknown[]) : [];
+  const valid = urls.every((url) => typeof url === 'string' && /^https?:\/\/\S+$/.test(url));
+  if (!valid || urls.length < 1 || urls.length > 24) {
+    throw new HttpError(400, 'validation_failed', 'a listing needs 1 to 24 photo URLs');
+  }
+  return urls as string[];
 }
 
 function validCurrency(value: unknown): CurrencyCode {

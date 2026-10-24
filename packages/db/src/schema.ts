@@ -354,6 +354,8 @@ export interface MarketplaceOperationTable {
   delist_run_id: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  /** The listing content a create, revise, or relist publishes; null for every other kind. */
+  content: NullableJsonb<JsonObject>;
 }
 
 /** Append-only: the database rejects updates and deletes. */

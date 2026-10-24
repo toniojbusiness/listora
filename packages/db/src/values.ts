@@ -118,6 +118,7 @@ export type OperationOrigin = (typeof OPERATION_ORIGINS)[number];
 export const USER_TASK_KINDS = [
   'list_manually',
   'delist_manually',
+  'edit_manually',
   'confirm_sale',
   'reconnect',
   'review_match',

@@ -5285,6 +5285,7 @@ extension Components {
         @frozen public enum KnownUserTaskKind: String, Codable, Hashable, Sendable, CaseIterable {
             case listManually = "list_manually"
             case delistManually = "delist_manually"
+            case editManually = "edit_manually"
             case confirmSale = "confirm_sale"
             case reconnect = "reconnect"
             case reviewMatch = "review_match"
@@ -5475,7 +5476,7 @@ extension Components {
         /// - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
         ///   `rejectMatch: true` when nothing matches. Exactly one of the two is required.
         /// - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
-        /// - `delist_manually`, `reconnect`: nothing besides `note`.
+        /// - `delist_manually`, `edit_manually`, `reconnect`: nothing besides `note`.
         /// - Every kind: optional `note`.
         ///
         ///

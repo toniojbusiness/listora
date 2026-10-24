@@ -32,7 +32,9 @@ export function canTransition(from: OperationStatus, to: OperationStatus): boole
 /**
  * Statuses in which an operation is not finished. A newer operation on the same listing waits
  * until every older one has left these statuses, so operations apply in the order they were
- * created even when an older one is waiting to retry.
+ * created even when an older one is waiting to retry. The one exception is a delist (an end or
+ * mark-sold): it supersedes older operations waiting for the user, and those queued behind them
+ * that never went through the API, instead (executor.ts).
  */
 export const UNFINISHED_STATUSES = [
   'queued',

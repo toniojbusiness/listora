@@ -16,6 +16,8 @@
  * - an operation that was sent before is read back first on every later attempt, and succeeds
  *   without sending again if the change already took effect;
  * - a step found `running` was interrupted, so its result is read back as if it were unknown;
+ *   one that nothing can read back fails as unconfirmed if this or any earlier step of the
+ *   operation could have gone through the API, and only a purely assisted one runs again;
  * - a read-back decides only when it is current: one older than a revision already seen of the
  *   listing is stale and is followed by another read (with no freshness marker, a match must
  *   repeat in a later read);
@@ -23,6 +25,18 @@
  *   as its pending id, which every later step and operation targets until a read-back confirms
  *   it; an end also targets the older verified id, which may still be live, and succeeds only
  *   when every targeted id reads back ended.
+ *
+ * Each operation runs in the mode its capability flag gives it under the listing's connection
+ * (`operationMode`): an `api` operation succeeds only by a read-back, an `assisted` one only by
+ * the user's confirmation (an adapter answer other than a user task cannot finish it), and an
+ * `unsupported` one fails without being sent. A send builds the payload from the operation's
+ * listing content with the adapter's pure builder, and sends nothing the adapter's own
+ * validation refuses.
+ *
+ * Operations on a listing apply in creation order, with one exception: an end or mark-sold never
+ * waits behind an older operation that waits for the user (an assisted edit nobody answered, say).
+ * It closes those, and the operations queued behind them that never went through the API, as
+ * superseded, and goes ahead, so a delist after a sale is never stuck.
  */
 import type { Selectable } from 'kysely';
 import { sql } from 'kysely';
@@ -35,12 +49,19 @@ import {
   type OperationStatus,
 } from '@listora/db';
 import {
+  isContentKind,
   MARKETPLACE_NAMES,
+  operationMode,
+  parseListingContent,
+  unsupportedMessage,
   type AdapterLookup,
   type ConnectionRef,
   type DesiredListingState,
+  type ListingContent,
+  type ListingPayload,
   type ListingRef,
   type MarketplaceAdapter,
+  type OperationMode,
   type OperationRequest,
   type Outcome,
   type RemoteListingState,
@@ -58,9 +79,10 @@ import {
   type SuccessProof,
 } from './evidence.ts';
 import type { OperationJobPayload } from './jobs.ts';
-import { scheduleOperationJob } from './jobs.ts';
+import { removeOperationJob, scheduleOperationJob } from './jobs.ts';
 import { createdBefore } from './ordering.ts';
 import { delayAfterAttempt, maxAttempts, type RetryPolicy } from './policy.ts';
+import { dismissOpenTasks } from './commands.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
 import {
   operationPriority,
@@ -90,6 +112,11 @@ interface StepContext {
   adapter: MarketplaceAdapter;
   connection: ConnectionRef | null;
   desired: DesiredListingState;
+  /** The listing content a create, revise, or relist publishes; `null` for other kinds. */
+  content: ListingContent | null;
+  /** How the operation runs under the connection; an `unsupported` one is never sent. */
+  mode: OperationMode;
+  /** Whether a read-back can decide the operation: only in `api` mode. */
   canReadBack: boolean;
   /** How a read-back shows it is current (the adapter's `readFreshness`). */
   freshness: 'revision' | 'none';
@@ -214,8 +241,10 @@ async function claimStep(
       return null;
     }
     let desired: DesiredListingState;
+    let content: ListingContent | null = null;
     try {
       desired = validateDesiredState(op.kind, op.desired);
+      if (isContentKind(op.kind)) content = parseListingContent(op.content);
     } catch (error) {
       await transitionOperation(
         trx,
@@ -229,13 +258,16 @@ async function claimStep(
       return null;
     }
     const connection = await loadConnection(trx, listing);
-    const capabilities = adapter.capabilities(connection ?? undefined);
-    const canReadBack = capabilities.verifyRead === 'api';
+    const capabilities = adapter.capabilities(connection);
+    const mode = operationMode(capabilities, op.kind);
+    const canReadBack = mode === 'api';
     const base = {
       listing,
       adapter,
       connection,
       desired,
+      content,
+      mode,
       canReadBack,
       freshness: capabilities.readFreshness,
       targets: listingTargets(listing, desired),
@@ -249,6 +281,10 @@ async function claimStep(
         code: 'interrupted',
         message: `Listora was interrupted and is checking the listing on ${name}.`,
       };
+      // Only a step that was assisted throughout has no remote effect (it only creates a user
+      // task, atomically with its result); one that went through the API may have reached the
+      // marketplace, even when the listing is served assisted now.
+      const purelyAssisted = mode === 'assisted' && !(await wasSentThroughApi(trx, op));
       if (canReadBack) {
         await transitionOperation(
           trx,
@@ -256,9 +292,7 @@ async function claimStep(
           { to: 'verifying', delayMs: 0, error: interrupted },
           { recovered: true },
         );
-      } else if (op.attempts < max) {
-        // Without a read-back the step had no remote effect (assisted steps only create a
-        // user task, atomically with their result), so it simply runs again.
+      } else if (purelyAssisted && op.attempts < max) {
         await transitionOperation(
           trx,
           op,
@@ -268,7 +302,10 @@ async function claimStep(
       } else {
         await transitionOperation(trx, op, {
           to: 'failed',
-          error: { code: 'interrupted', message: 'Listora was interrupted. Tap Retry.' },
+          // A step that may have reached the marketplace and can't be read back is unconfirmed.
+          error: purelyAssisted
+            ? { code: 'interrupted', message: 'Listora was interrupted. Tap Retry.' }
+            : cannotConfirm(name),
         });
       }
       log.warn({ attempt: op.attempts }, 'recovered an interrupted operation step');
@@ -286,7 +323,11 @@ async function claimStep(
       return { type: 'check', ctx: { op, ...base }, attempt: op.attempts + 1 };
     }
 
-    // queued or retrying: a new attempt, once every older operation on the listing is done.
+    // queued or retrying: a new attempt, once every older operation on the listing is done. A
+    // delist does not wait for older operations that wait for the user; it supersedes them.
+    if (isDelistKind(op.kind) && mode !== 'unsupported' && op.attempts < max) {
+      await supersedeUserSteps(trx, op, log);
+    }
     if (await hasOlderUnfinishedOperation(trx, op)) {
       await scheduleOperationJob(trx, {
         accountId: op.account_id,
@@ -298,10 +339,13 @@ async function claimStep(
       log.debug('operation waits for an older operation on its listing');
       return null;
     }
-    if (op.kind === 'verify' && !canReadBack) {
+    if (mode === 'unsupported') {
       await transitionOperation(trx, op, {
         to: 'failed',
-        error: { code: 'cannot_verify', message: `Listora can't check ${name} listings itself.` },
+        error: {
+          code: op.kind === 'verify' ? 'cannot_verify' : 'not_supported',
+          message: unsupportedMessage(op.kind, listing.marketplace),
+        },
       });
       return null;
     }
@@ -321,7 +365,7 @@ async function claimStep(
       trx,
       op,
       { to: 'running' },
-      { step: op.kind === 'verify' ? 'check' : 'send', precheck },
+      { step: op.kind === 'verify' ? 'check' : 'send', precheck, mode },
     );
     const ctx = { op: running, ...base };
     return op.kind === 'verify'
@@ -350,16 +394,24 @@ async function loadConnection(
  * when a pending one exists, since either may still be live.
  */
 function listingTargets(listing: ListingRow, desired: DesiredListingState): Targets {
-  const ref = (externalListingId: string | null): ListingRef => ({
+  // The listing's URL is the verified listing's page; a pending id has none known yet.
+  const ref = (externalListingId: string | null, externalUrl: string | null): ListingRef => ({
     listingId: listing.id,
     externalListingId,
     externalSku: listing.external_sku,
+    externalUrl,
   });
   const pending = listing.pending_external_listing_id;
   const verified = listing.external_listing_id;
-  if (pending === null) return [ref(verified)];
-  if (desired.status === 'ended' && verified !== null) return [ref(pending), ref(verified)];
-  return [ref(pending)];
+  const verifiedRef = ref(verified, listing.external_url);
+  if (pending === null) return [verifiedRef];
+  if (desired.status === 'ended' && verified !== null) return [ref(pending, null), verifiedRef];
+  return [ref(pending, null)];
+}
+
+/** An end or mark-sold: the delist that must not wait behind an unanswered user task. */
+function isDelistKind(kind: OperationRow['kind']): boolean {
+  return kind === 'end' || kind === 'mark_sold';
 }
 
 /** Whether an older operation on the same listing is still unfinished (FIFO per listing). */
@@ -374,6 +426,67 @@ async function hasOlderUnfinishedOperation(trx: DbTransaction, op: OperationRow)
     .limit(1)
     .executeTakeFirst();
   return older !== undefined;
+}
+
+/**
+ * Closes the older operations on a delist's listing that wait for the user, and the ones queued
+ * or waiting to retry behind them that never went through the API (they have had no remote
+ * effect, and the delist makes them moot). Each is canceled as superseded by the delist, in its
+ * history, and its open tasks are dismissed, never marked done. Without an older operation that
+ * waits for the user, nothing is closed and the listing's order stands. The delist creates its
+ * own task when the listing is assisted.
+ */
+async function supersedeUserSteps(
+  trx: DbTransaction,
+  delist: OperationRow,
+  log: Logger,
+): Promise<void> {
+  const older = await trx
+    .selectFrom('marketplace_operation')
+    .selectAll()
+    .where('account_id', '=', delist.account_id)
+    .where('listing_id', '=', delist.listing_id)
+    .where('status', 'in', ['needs_user_action', 'queued', 'retrying'])
+    .where(createdBefore(delist))
+    .orderBy('created_at')
+    .orderBy('id')
+    .forUpdate()
+    .execute();
+  const firstWaiting = older.findIndex((candidate) => candidate.status === 'needs_user_action');
+  if (firstWaiting === -1) return;
+  const superseded: string[] = [];
+  for (const candidate of older.slice(firstWaiting)) {
+    if (candidate.status !== 'needs_user_action' && (await wasSentThroughApi(trx, candidate))) {
+      continue;
+    }
+    await transitionOperation(
+      trx,
+      candidate,
+      { to: 'canceled' },
+      { action: 'supersede', reason: 'superseded by delist', supersededBy: delist.id },
+    );
+    await removeOperationJob(trx, candidate.id);
+    await dismissOpenTasks(trx, candidate);
+    superseded.push(candidate.id);
+  }
+  log.info({ superseded }, 'a delist superseded operations waiting for the user');
+}
+
+/**
+ * Whether any step of the operation started under a mode other than assisted, so its request
+ * may have reached the marketplace. A `running` event without a recorded mode counts.
+ */
+async function wasSentThroughApi(trx: DbTransaction, op: OperationRow): Promise<boolean> {
+  const event = await trx
+    .selectFrom('operation_event')
+    .select('id')
+    .where('account_id', '=', op.account_id)
+    .where('operation_id', '=', op.id)
+    .where('to_status', '=', 'running')
+    .where(sql<string | null>`detail->>'mode'`, 'is distinct from', 'assisted')
+    .limit(1)
+    .executeTakeFirst();
+  return event !== undefined;
 }
 
 /** Whether any earlier step started sending this operation (its history has a `running`). */
@@ -453,6 +566,13 @@ async function sendTo(
 
   const kind = ctx.op.kind;
   if (kind === 'verify') throw new Error('verify operations are checked, never sent');
+  const prepared = preparePayload(deps, ctx);
+  if (!prepared.ok) {
+    return {
+      resolution: { type: 'failed', error: prepared.error },
+      detail: { step: 'send', sent: false, ...prepared.detail },
+    };
+  }
   const request: OperationRequest = {
     operationId: ctx.op.id,
     kind,
@@ -460,6 +580,7 @@ async function sendTo(
     attempt: step.attempt,
     desired: ctx.desired,
     listing: ref,
+    payload: prepared.payload,
   };
   const outcome = await executeOnce(deps, ctx, request, signal);
   const detail: Record<string, unknown> = {
@@ -558,9 +679,52 @@ async function sendTo(
         detail,
       };
     case 'pendingUser':
+      // Only an assisted operation waits for the user; an api one must be read back.
+      if (ctx.mode !== 'assisted') {
+        return {
+          resolution: { type: 'failed', error: cannotConfirm(ctx.name) },
+          detail: { ...detail, reason: 'a user task for an api operation' },
+        };
+      }
       return { resolution: { type: 'user', task: outcome.task }, detail };
     default:
       return assertNever(outcome, 'adapter outcome');
+  }
+}
+
+type PreparedPayload =
+  | { ok: true; payload: ListingPayload | null }
+  | { ok: false; error: OperationError; detail: Record<string, unknown> };
+
+/**
+ * Builds the payload of a create, revise, or relist from its listing content with the adapter's
+ * pure builder, under the connection the step runs with, and refuses it when the adapter's
+ * validation finds issues. Other kinds carry no payload.
+ */
+function preparePayload(deps: StepDependencies, ctx: StepContext): PreparedPayload {
+  if (ctx.content === null) return { ok: true, payload: null };
+  const { item, variant } = ctx.content;
+  try {
+    const payload = ctx.adapter.buildPayload(item, variant, ctx.connection);
+    const issues = ctx.adapter.validate(payload, ctx.connection);
+    const [first] = issues;
+    if (first === undefined) return { ok: true, payload };
+    return {
+      ok: false,
+      error: {
+        code: 'validation_failed',
+        message: `${first.message} Fix the listing, then try again.`,
+      },
+      detail: { issues: issues.map(({ field, code, message }) => ({ field, code, message })) },
+    };
+  } catch (error) {
+    // The builders are pure functions of the content; one that throws is a bug.
+    deps.logger.error({ err: error, operationId: ctx.op.id }, 'building the payload failed');
+    return {
+      ok: false,
+      error: { code: 'invalid_operation', message: `This change can't be sent to ${ctx.name}.` },
+      detail: { reason: 'the payload builder threw' },
+    };
   }
 }
 

@@ -16,6 +16,7 @@ const SHIPPED = [
   '0006_read_freshness',
   '0007_pending_listing_id',
   '0008_item_analysis',
+  '0009_listing_content',
 ];
 const LATEST = SHIPPED.at(-1) ?? '';
 

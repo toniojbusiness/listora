@@ -220,6 +220,7 @@ const COLUMNS = {
     'delist_run_id',
     'created_at',
     'updated_at',
+    'content',
   ],
   operation_event: [
     'id',
@@ -486,7 +487,7 @@ describe('schema types and values match the database', () => {
       const { rows } = await sql<{ definition: string }>`
       select pg_get_constraintdef(oid) as definition from pg_constraint
       where conrelid = ${table}::regclass and contype = 'c'
-        and (pg_get_constraintdef(oid) like ${`%(${column} = ANY (ARRAY[%`}
+        and (pg_get_constraintdef(oid) like ${`CHECK ((${column} = ANY (ARRAY[%`}
           or pg_get_constraintdef(oid) ~ ${`^CHECK \\(\\(${column} = '[^']*'::text\\)\\)$`})
     `.execute(database.db);
       expect(rows).toHaveLength(1);

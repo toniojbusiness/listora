@@ -17,6 +17,7 @@ import {
 import { createInventoryItem, inTransaction, type Marketplace } from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
 import { FakeMarketplace } from '@listora/marketplaces';
+import { contentWith } from '@listora/marketplaces/testing';
 import { enqueueOperation, LIVENESS_APPLICATION_PREFIX } from '@listora/operations';
 import { graphilePhotoJobs, itemPhotoSet, storageKeys } from '@listora/photos';
 import { photoSetHash, sha256Hex } from '@listora/shared';
@@ -89,7 +90,7 @@ describe('worker process (real Postgres)', () => {
       listingId: listing.id,
       kind: 'create',
       idempotencyKey: `process-${listing.id}`,
-      desired: { status: 'active', title: 'Process test jacket', priceCents: 5500 },
+      content: contentWith({ title: 'Process test jacket', priceCents: 5500 }),
       origin: 'user',
     });
     return { listing, operation };
@@ -321,6 +322,28 @@ describe('worker process (real Postgres)', () => {
     // AI_AUTO_ESCALATE=off leaves the premium identification to the user.
     expect(others).toEqual([]);
   }, 60_000);
+
+  it('serves Poshmark assisted: a user task, and nothing sent to any marketplace', async () => {
+    await startWorker();
+    const { listing, operation } = await createOperation('poshmark');
+
+    const waiting = await waitForOperation(operation.id, 'needs_user_action');
+    expect(waiting.success_evidence).toBeNull();
+    const tasks = await database.db
+      .selectFrom('user_task')
+      .select(['kind', 'deep_link', 'listing_id', 'status'])
+      .where('operation_id', '=', operation.id)
+      .execute();
+    expect(tasks).toEqual([
+      {
+        kind: 'list_manually',
+        deep_link: 'https://poshmark.com/',
+        listing_id: listing.id,
+        status: 'open',
+      },
+    ]);
+    expect(fake.requests.filter((request) => request.sku === listing.id)).toEqual([]);
+  });
 
   it('exits at once when it loses its liveness session', async () => {
     const worker = await startWorker();

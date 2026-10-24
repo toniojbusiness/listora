@@ -19,7 +19,7 @@ try {
   const worker = await startOperationWorker({
     connectionString: config.databaseUrl,
     db,
-    adapters: createAdapters(config),
+    adapters: createAdapters(config).lookup,
     tasks: createWorkerTasks({
       db,
       storage: createStorage(config.storage),

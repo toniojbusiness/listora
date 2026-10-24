@@ -37,5 +37,7 @@ export {
   UNFINISHED_STATUSES,
 } from './state-machine.ts';
 export type { OperationChange, OperationError, OperationRow } from './transitions.ts';
+export { describeListingStatus } from './status-display.ts';
+export type { ListingStatusInput, StatusDisplay, StatusTone } from './status-display.ts';
 export { startOperationWorker } from './worker.ts';
 export type { OperationWorker, OperationWorkerOptions, WorkerTask } from './worker.ts';

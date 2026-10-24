@@ -16,3 +16,5 @@ apps/ios/Packages/Features/Tests/TagReadingFeatureTests/Fixtures/
 # CDK synthesis output, and template snapshots written by the infra tests
 infra/cdk.out/
 infra/src/__snapshots__/
+# Golden payloads and validation results, written by the conformance suite (`vitest -u`)
+**/__golden__/
