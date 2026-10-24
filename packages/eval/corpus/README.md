@@ -42,8 +42,8 @@ Each provider runs two tasks (`--task tags`, `--task analysis`, or `all`, the de
 
 - `tags` (`provider:<id>`): reads the tag facts with their own small schema (`tag_values`).
 - `analysis` (`analysis:<id>`): the production item analysis (`analyzeItem` from
-  `@listora/analysis`) with the tag as the item's one `tag` photo: the same prompt, strict
-  schema, one retry of a schema-violating answer, provenance rules, and metering as in the
+  `@listora/analysis`) with the tag as the item's one `tag` photo: the same prompt, output
+  schema validation, one retry of a schema-violating answer, provenance rules, and metering as in the
   app. It is scored on the tag facts an item records (RN, UPC, size, style), and an item has
   one value per detail, so a field counts as right when its one value is among the printed
   ones (`one_of` scoring). Fields it does not report show `-`.

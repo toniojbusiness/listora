@@ -100,7 +100,8 @@ The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
 ```text
 apps/
   api/          Fastify HTTP API (@listora/api)
-  worker/       Background worker: operation engine, polls, health jobs (@listora/worker)
+  worker/       Background worker: operation engine, polls, health jobs, photo processing,
+                item analysis (@listora/worker)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
