@@ -10,6 +10,7 @@
     { "path": "../../packages/api-contract" },
     { "path": "../../packages/db" },
     { "path": "../../packages/photos" },
+    { "path": "../../packages/pricing" },
     { "path": "../../packages/shared" },
     { "path": "../../packages/storage" },
     { "path": "../../packages/testing" }

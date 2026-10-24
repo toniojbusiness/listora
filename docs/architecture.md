@@ -92,6 +92,8 @@ apps/
 packages/
   ai/           AI provider layer: provider interface, model registry, price table, usage
                 metering, budget guards, fake and Anthropic providers (@listora/ai)
+  pricing/      Pricing v1: versioned fee tables, cost floor, AI-estimate tiers, research
+                links, sold-data label guard; pure, no I/O (@listora/pricing)
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
   db/           SQL migrations, migration runner, Kysely types, SKU allocator (@listora/db)
   storage/      Object storage: local-disk driver with signed upload URLs, S3 driver
@@ -132,6 +134,7 @@ src/
   items/ photos/ One folder per resource: routes.ts, repository.ts, mapping and views
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
+  pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -251,6 +254,32 @@ Depop rules allow Pricing Inspiration only inside that Depop listing. Without re
 Listora shows a cost-based floor, an estimate labeled **"AI estimate - not based on sold
 listings"**, and research links that open in the user's browser. The words "comps" and "sold"
 appear only next to real sold data, and a test enforces this (T-14).
+
+`@listora/pricing` implements these rules; `GET /v1/items/{itemId}/pricing` serves them.
+
+- **Floor** ("Don't sell below"), per marketplace: the least price P with P = cost + fees(P) +
+  shipping + minimum profit, so the breakdown adds up exactly. Shipping and minimum profit are
+  query parameters (default 0). No cost means no floors.
+- **Fee tables** live in `packages/pricing/src/fee-tables.ts`, one versioned table per
+  marketplace schedule with its official source URL and the day it was checked. A fee change
+  adds a table; every floor names its `feeTableVersion`. Estimates use the item price only and
+  round each fee up. A test checks that every table's fees never fall as the price rises.
+- **Actual fees.** With at least three recent single-item sales that have `actual` marketplace
+  or payment `fee_line`s, a marketplace's table is scaled to what it really charged
+  (`feeSource: actual_fees`). eBay order data never feeds a price
+  (`ORDER_DATA_MAY_ADJUST_FEES`), so eBay floors always use the published table.
+- **Tiers** (quick sale, recommended, higher profit) are the AI estimate's low, mid, and high,
+  each raised to the highest floor when below it, and labeled "(AI estimate)" or "(cost
+  floor)". Sold data is shown as `soldComparables` but never sets a tier.
+- **Snapshots.** `pricing_snapshot` holds source-labeled price data, validated against its
+  source's payload schema on write and on read (a malformed row is skipped and logged). The
+  estimate of the item's current analysis (the accepted one, else the latest succeeded) is
+  recorded as one `ai_estimate` snapshot per analysis; it is read from the analysis output's
+  `priceEstimate` (the contract's `AnalysisResult` shape). Sold data snapshots are shown while
+  unexpired, the latest per source and marketplace context.
+- **Label guard.** `buildPricingSuggestion` runs `labelGuardViolations` on every suggestion
+  and throws instead of returning one that breaks the rules, so the API answers `500` rather
+  than mislabeling a price.
 
 ## 6. Operation engine: never false success
 
@@ -438,7 +467,8 @@ Tables by area:
   `fee_line` belongs to a sale and optionally to one of its items. Also `user_task` and
   `expense`. Auto-delist operations have `origin = 'auto_delist'` and reference their
   `delist_run`.
-- **Pricing:** `pricing_snapshot` (source-labeled).
+- **Pricing:** `pricing_snapshot` (source-labeled; payloads per source in
+  `@listora/pricing`, see section 5).
 - **Billing:** `subscription`, `entitlement`, and `usage_counter`.
 - **History:** `audit_log` (item changes the user can see).
 - **API:** `idempotency_record` (the stored first successful response per account and

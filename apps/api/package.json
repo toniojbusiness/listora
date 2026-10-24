@@ -12,6 +12,7 @@
     "@listora/api-contract": "*",
     "@listora/db": "*",
     "@listora/photos": "*",
+    "@listora/pricing": "*",
     "@listora/shared": "*",
     "@listora/storage": "*",
     "ajv": "^8.20.0",

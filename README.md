@@ -97,6 +97,7 @@ apps/api/              Fastify HTTP API (@listora/api)
 apps/worker/           Background worker (@listora/worker)
 apps/ios/              iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift packages
 packages/ai/           AI provider layer: providers, price table, metering, budget guards (@listora/ai)
+packages/pricing/      Fee tables, cost floor, price tiers, research links, label guard (@listora/pricing)
 packages/api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
 packages/db/           SQL migrations, migration runner, Kysely types (@listora/db)
 packages/storage/      Object storage drivers: local disk (.local/storage) and S3 (@listora/storage)

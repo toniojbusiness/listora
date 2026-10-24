@@ -3305,8 +3305,9 @@ public enum Operations {
     /// Get price suggestions for an item
     ///
     /// Every number carries its source. Without real sold data the response has no
-    /// `soldComparables`, and tiers are based on the labeled AI estimate and the cost floor.
-    /// Computing suggestions never calls AI; the estimate comes from the item's analysis.
+    /// `soldComparables`, says so in `noSoldDataMessage`, and its tiers are based on the
+    /// labeled AI estimate and the cost floor. Computing suggestions never calls AI; the
+    /// estimate comes from the item's analysis. No eBay content is used to compute any price.
     ///
     ///
     /// - Remark: HTTP `GET /v1/items/{itemId}/pricing`.
@@ -3327,6 +3328,34 @@ public enum Operations {
                 }
             }
             public var path: Operations.GetItemPricing.Input.Path
+            /// - Remark: Generated from `#/paths/v1/items/{itemId}/pricing/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// What the seller expects to pay for shipping, in cents of the item's currency.
+                /// Added to every floor. Defaults to 0 (the buyer pays shipping).
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/pricing/GET/query/shippingCents`.
+                public var shippingCents: Swift.Int64?
+                /// The least profit the seller accepts on this item, in cents of the item's currency.
+                /// Added to every floor. Defaults to 0 (break even).
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/{itemId}/pricing/GET/query/minimumProfitCents`.
+                public var minimumProfitCents: Swift.Int64?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - shippingCents: What the seller expects to pay for shipping, in cents of the item's currency.
+                ///   - minimumProfitCents: The least profit the seller accepts on this item, in cents of the item's currency.
+                public init(
+                    shippingCents: Swift.Int64? = nil,
+                    minimumProfitCents: Swift.Int64? = nil
+                ) {
+                    self.shippingCents = shippingCents
+                    self.minimumProfitCents = minimumProfitCents
+                }
+            }
+            public var query: Operations.GetItemPricing.Input.Query
             /// - Remark: Generated from `#/paths/v1/items/{itemId}/pricing/GET/header`.
             public struct Headers: Sendable, Hashable {
                 public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetItemPricing.AcceptableContentType>]
@@ -3343,12 +3372,15 @@ public enum Operations {
             ///
             /// - Parameters:
             ///   - path:
+            ///   - query:
             ///   - headers:
             public init(
                 path: Operations.GetItemPricing.Input.Path,
+                query: Operations.GetItemPricing.Input.Query = .init(),
                 headers: Operations.GetItemPricing.Input.Headers = .init()
             ) {
                 self.path = path
+                self.query = query
                 self.headers = headers
             }
         }

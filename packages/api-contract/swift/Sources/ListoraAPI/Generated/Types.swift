@@ -149,8 +149,9 @@ public protocol APIProtocol: Sendable {
     /// Get price suggestions for an item
     ///
     /// Every number carries its source. Without real sold data the response has no
-    /// `soldComparables`, and tiers are based on the labeled AI estimate and the cost floor.
-    /// Computing suggestions never calls AI; the estimate comes from the item's analysis.
+    /// `soldComparables`, says so in `noSoldDataMessage`, and its tiers are based on the
+    /// labeled AI estimate and the cost floor. Computing suggestions never calls AI; the
+    /// estimate comes from the item's analysis. No eBay content is used to compute any price.
     ///
     ///
     /// - Remark: HTTP `GET /v1/items/{itemId}/pricing`.
@@ -670,18 +671,21 @@ extension APIProtocol {
     /// Get price suggestions for an item
     ///
     /// Every number carries its source. Without real sold data the response has no
-    /// `soldComparables`, and tiers are based on the labeled AI estimate and the cost floor.
-    /// Computing suggestions never calls AI; the estimate comes from the item's analysis.
+    /// `soldComparables`, says so in `noSoldDataMessage`, and its tiers are based on the
+    /// labeled AI estimate and the cost floor. Computing suggestions never calls AI; the
+    /// estimate comes from the item's analysis. No eBay content is used to compute any price.
     ///
     ///
     /// - Remark: HTTP `GET /v1/items/{itemId}/pricing`.
     /// - Remark: Generated from `#/paths//v1/items/{itemId}/pricing/get(getItemPricing)`.
     public func getItemPricing(
         path: Operations.GetItemPricing.Input.Path,
+        query: Operations.GetItemPricing.Input.Query = .init(),
         headers: Operations.GetItemPricing.Input.Headers = .init()
     ) async throws -> Operations.GetItemPricing.Output {
         try await getItemPricing(Operations.GetItemPricing.Input(
             path: path,
+            query: query,
             headers: headers
         ))
     }

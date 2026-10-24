@@ -320,8 +320,9 @@ export interface paths {
         /**
          * Get price suggestions for an item
          * @description Every number carries its source. Without real sold data the response has no
-         *     `soldComparables`, and tiers are based on the labeled AI estimate and the cost floor.
-         *     Computing suggestions never calls AI; the estimate comes from the item's analysis.
+         *     `soldComparables`, says so in `noSoldDataMessage`, and its tiers are based on the
+         *     labeled AI estimate and the cost floor. Computing suggestions never calls AI; the
+         *     estimate comes from the item's analysis. No eBay content is used to compute any price.
          */
         get: operations["getItemPricing"];
         put?: never;
@@ -1515,8 +1516,21 @@ export interface components {
             marketplace: components["schemas"]["Marketplace"];
             floorPrice: components["schemas"]["Money"];
             breakdown: components["schemas"]["FloorBreakdown"];
+            /** @description The versioned fee table the estimated fees come from. */
             feeTableVersion: string;
+            feeSource?: components["schemas"]["FeeEstimateSource"];
         };
+        /**
+         * @description A `KnownFeeEstimateSource`, or a source added after this client was built. Every
+         *     source is an estimate.
+         */
+        FeeEstimateSource: components["schemas"]["KnownFeeEstimateSource"];
+        /**
+         * @description `fee_table` is the marketplace's published fee schedule. `actual_fees` is that schedule
+         *     scaled to the fees the marketplace actually charged on the account's recent sales.
+         * @enum {string}
+         */
+        KnownFeeEstimateSource: "fee_table" | "actual_fees";
         /** @description A page the user opens in their own browser. Listora does not fetch or scrape it. */
         ResearchLink: {
             label: string;
@@ -1527,8 +1541,16 @@ export interface components {
             itemId: components["schemas"]["Id"];
             /** @description Absent or empty when there is no real sold data for this item. */
             soldComparables?: components["schemas"]["SoldComparables"][];
+            /**
+             * @description "No sold data available for this item". Present exactly when there are no
+             *     `soldComparables`; clients show it in place of sold data.
+             */
+            noSoldDataMessage?: string;
             aiEstimate?: components["schemas"]["AiPriceEstimate"];
-            /** @description Empty when there is neither an estimate nor sold data. */
+            /**
+             * @description Quick sale, recommended, and higher profit, in that order, each labeled with its
+             *     basis. Never below the highest of `floors`. Empty when there is no estimate.
+             */
             tiers: components["schemas"]["PriceTier"][];
             /** @description One per marketplace the item is or may be listed on. Empty when the item has no cost. */
             floors: components["schemas"]["MarketplaceFloor"][];
@@ -2251,6 +2273,8 @@ export type KnownPriceBasis = components['schemas']['KnownPriceBasis'];
 export type PriceTier = components['schemas']['PriceTier'];
 export type FloorBreakdown = components['schemas']['FloorBreakdown'];
 export type MarketplaceFloor = components['schemas']['MarketplaceFloor'];
+export type FeeEstimateSource = components['schemas']['FeeEstimateSource'];
+export type KnownFeeEstimateSource = components['schemas']['KnownFeeEstimateSource'];
 export type ResearchLink = components['schemas']['ResearchLink'];
 export type PricingSuggestion = components['schemas']['PricingSuggestion'];
 export type ListingStatus = components['schemas']['ListingStatus'];
@@ -2858,7 +2882,18 @@ export interface operations {
     };
     getItemPricing: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description What the seller expects to pay for shipping, in cents of the item's currency.
+                 *     Added to every floor. Defaults to 0 (the buyer pays shipping).
+                 */
+                shippingCents?: number;
+                /**
+                 * @description The least profit the seller accepts on this item, in cents of the item's currency.
+                 *     Added to every floor. Defaults to 0 (break even).
+                 */
+                minimumProfitCents?: number;
+            };
             header?: never;
             path: {
                 itemId: components["parameters"]["ItemId"];
@@ -3782,6 +3817,7 @@ export const knownAnalysisProvenanceValues: ReadonlyArray<FlattenedDeepRequired<
 export const knownSoldDataSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSoldDataSource"]> = ["depop_inspiration", "ebay_mi", "own_history"];
 export const priceTierNameValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PriceTierName"]> = ["quick_sale", "recommended", "higher_profit"];
 export const knownPriceBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPriceBasis"]> = ["sold_data", "ai_estimate", "cost_floor"];
+export const knownFeeEstimateSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeEstimateSource"]> = ["fee_table", "actual_fees"];
 export const knownListingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingStatus"]> = ["draft", "queued", "publishing", "active", "ending", "ended", "sold", "error", "unknown", "needs_user_action"];
 export const knownListingActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingAction"]> = ["publish", "revise", "change_price", "end", "relist", "verify"];
 export const listingEndReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ListingEndReason"]> = ["sold_elsewhere", "not_available", "other"];

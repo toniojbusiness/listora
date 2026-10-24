@@ -2116,8 +2116,9 @@ public struct Client: APIProtocol {
     /// Get price suggestions for an item
     ///
     /// Every number carries its source. Without real sold data the response has no
-    /// `soldComparables`, and tiers are based on the labeled AI estimate and the cost floor.
-    /// Computing suggestions never calls AI; the estimate comes from the item's analysis.
+    /// `soldComparables`, says so in `noSoldDataMessage`, and its tiers are based on the
+    /// labeled AI estimate and the cost floor. Computing suggestions never calls AI; the
+    /// estimate comes from the item's analysis. No eBay content is used to compute any price.
     ///
     ///
     /// - Remark: HTTP `GET /v1/items/{itemId}/pricing`.
@@ -2138,6 +2139,20 @@ public struct Client: APIProtocol {
                     method: .get
                 )
                 suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "shippingCents",
+                    value: input.query.shippingCents
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "minimumProfitCents",
+                    value: input.query.minimumProfitCents
+                )
                 converter.setAcceptHeader(
                     in: &request.headerFields,
                     contentTypes: input.headers.accept

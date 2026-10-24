@@ -490,8 +490,30 @@ paths:
       summary: Get price suggestions for an item
       description: |
         Every number carries its source. Without real sold data the response has no
-        `soldComparables`, and tiers are based on the labeled AI estimate and the cost floor.
-        Computing suggestions never calls AI; the estimate comes from the item's analysis.
+        `soldComparables`, says so in `noSoldDataMessage`, and its tiers are based on the
+        labeled AI estimate and the cost floor. Computing suggestions never calls AI; the
+        estimate comes from the item's analysis. No eBay content is used to compute any price.
+      parameters:
+        - name: shippingCents
+          in: query
+          description: |
+            What the seller expects to pay for shipping, in cents of the item's currency.
+            Added to every floor. Defaults to 0 (the buyer pays shipping).
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            maximum: 10000000
+        - name: minimumProfitCents
+          in: query
+          description: |
+            The least profit the seller accepts on this item, in cents of the item's currency.
+            Added to every floor. Defaults to 0 (break even).
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+            maximum: 10000000
       responses:
         '200':
           description: Price suggestions.
@@ -2510,6 +2532,23 @@ components:
         feeTableVersion:
           type: string
           maxLength: 64
+          description: The versioned fee table the estimated fees come from.
+        feeSource:
+          $ref: '#/components/schemas/FeeEstimateSource'
+    FeeEstimateSource:
+      description: |
+        A `KnownFeeEstimateSource`, or a source added after this client was built. Every
+        source is an estimate.
+      anyOf:
+        - $ref: '#/components/schemas/KnownFeeEstimateSource'
+        - type: string
+          maxLength: 64
+    KnownFeeEstimateSource:
+      type: string
+      description: |
+        `fee_table` is the marketplace's published fee schedule. `actual_fees` is that schedule
+        scaled to the fees the marketplace actually charged on the account's recent sales.
+      enum: [fee_table, actual_fees]
     ResearchLink:
       type: object
       description: A page the user opens in their own browser. Listora does not fetch or scrape it.
@@ -2532,11 +2571,19 @@ components:
           description: Absent or empty when there is no real sold data for this item.
           items:
             $ref: '#/components/schemas/SoldComparables'
+        noSoldDataMessage:
+          type: string
+          maxLength: 120
+          description: |
+            "No sold data available for this item". Present exactly when there are no
+            `soldComparables`; clients show it in place of sold data.
         aiEstimate:
           $ref: '#/components/schemas/AiPriceEstimate'
         tiers:
           type: array
-          description: Empty when there is neither an estimate nor sold data.
+          description: |
+            Quick sale, recommended, and higher profit, in that order, each labeled with its
+            basis. Never below the highest of `floors`. Empty when there is no estimate.
           items:
             $ref: '#/components/schemas/PriceTier'
         floors:

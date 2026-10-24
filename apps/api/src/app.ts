@@ -11,6 +11,7 @@ import { registerHealthRoutes, type HealthDependencies } from './health.ts';
 import { registerItemRoutes } from './items/routes.ts';
 import { registerPhotoRoutes } from './photos/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
+import { registerPricingRoutes } from './pricing/routes.ts';
 import { registerLocalStorageRoutes } from './storage/local-routes.ts';
 import { registerUploadRoutes } from './uploads/routes.ts';
 import { SessionPhotoUploads } from './uploads/uploads.ts';
@@ -69,6 +70,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     uploads: deps.uploads ?? new SessionPhotoUploads(deps.storage, now),
     photoJobs: deps.photoJobs,
   });
+  registerPricingRoutes(app, routeDeps);
   return app;
 }
 

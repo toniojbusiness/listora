@@ -2577,32 +2577,100 @@ extension Components {
             public var floorPrice: Components.Schemas.Money
             /// - Remark: Generated from `#/components/schemas/MarketplaceFloor/breakdown`.
             public var breakdown: Components.Schemas.FloorBreakdown
+            /// The versioned fee table the estimated fees come from.
+            ///
             /// - Remark: Generated from `#/components/schemas/MarketplaceFloor/feeTableVersion`.
             public var feeTableVersion: Swift.String
+            /// - Remark: Generated from `#/components/schemas/MarketplaceFloor/feeSource`.
+            public var feeSource: Components.Schemas.FeeEstimateSource?
             /// Creates a new `MarketplaceFloor`.
             ///
             /// - Parameters:
             ///   - marketplace:
             ///   - floorPrice:
             ///   - breakdown:
-            ///   - feeTableVersion:
+            ///   - feeTableVersion: The versioned fee table the estimated fees come from.
+            ///   - feeSource:
             public init(
                 marketplace: Components.Schemas.Marketplace,
                 floorPrice: Components.Schemas.Money,
                 breakdown: Components.Schemas.FloorBreakdown,
-                feeTableVersion: Swift.String
+                feeTableVersion: Swift.String,
+                feeSource: Components.Schemas.FeeEstimateSource? = nil
             ) {
                 self.marketplace = marketplace
                 self.floorPrice = floorPrice
                 self.breakdown = breakdown
                 self.feeTableVersion = feeTableVersion
+                self.feeSource = feeSource
             }
             public enum CodingKeys: String, CodingKey {
                 case marketplace
                 case floorPrice
                 case breakdown
                 case feeTableVersion
+                case feeSource
             }
+        }
+        /// A `KnownFeeEstimateSource`, or a source added after this client was built. Every
+        /// source is an estimate.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/FeeEstimateSource`.
+        public struct FeeEstimateSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/FeeEstimateSource/value1`.
+            public var value1: Components.Schemas.KnownFeeEstimateSource?
+            /// - Remark: Generated from `#/components/schemas/FeeEstimateSource/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `FeeEstimateSource`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownFeeEstimateSource? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `fee_table` is the marketplace's published fee schedule. `actual_fees` is that schedule
+        /// scaled to the fees the marketplace actually charged on the account's recent sales.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownFeeEstimateSource`.
+        @frozen public enum KnownFeeEstimateSource: String, Codable, Hashable, Sendable, CaseIterable {
+            case feeTable = "fee_table"
+            case actualFees = "actual_fees"
         }
         /// A page the user opens in their own browser. Listora does not fetch or scrape it.
         ///
@@ -2637,9 +2705,17 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/PricingSuggestion/soldComparables`.
             public var soldComparables: [Components.Schemas.SoldComparables]?
+            /// "No sold data available for this item". Present exactly when there are no
+            /// `soldComparables`; clients show it in place of sold data.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PricingSuggestion/noSoldDataMessage`.
+            public var noSoldDataMessage: Swift.String?
             /// - Remark: Generated from `#/components/schemas/PricingSuggestion/aiEstimate`.
             public var aiEstimate: Components.Schemas.AiPriceEstimate?
-            /// Empty when there is neither an estimate nor sold data.
+            /// Quick sale, recommended, and higher profit, in that order, each labeled with its
+            /// basis. Never below the highest of `floors`. Empty when there is no estimate.
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/PricingSuggestion/tiers`.
             public var tiers: [Components.Schemas.PriceTier]
@@ -2656,14 +2732,16 @@ extension Components {
             /// - Parameters:
             ///   - itemId:
             ///   - soldComparables: Absent or empty when there is no real sold data for this item.
+            ///   - noSoldDataMessage: "No sold data available for this item". Present exactly when there are no
             ///   - aiEstimate:
-            ///   - tiers: Empty when there is neither an estimate nor sold data.
+            ///   - tiers: Quick sale, recommended, and higher profit, in that order, each labeled with its
             ///   - floors: One per marketplace the item is or may be listed on. Empty when the item has no cost.
             ///   - researchLinks:
             ///   - generatedAt:
             public init(
                 itemId: Components.Schemas.Id,
                 soldComparables: [Components.Schemas.SoldComparables]? = nil,
+                noSoldDataMessage: Swift.String? = nil,
                 aiEstimate: Components.Schemas.AiPriceEstimate? = nil,
                 tiers: [Components.Schemas.PriceTier],
                 floors: [Components.Schemas.MarketplaceFloor],
@@ -2672,6 +2750,7 @@ extension Components {
             ) {
                 self.itemId = itemId
                 self.soldComparables = soldComparables
+                self.noSoldDataMessage = noSoldDataMessage
                 self.aiEstimate = aiEstimate
                 self.tiers = tiers
                 self.floors = floors
@@ -2681,6 +2760,7 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case itemId
                 case soldComparables
+                case noSoldDataMessage
                 case aiEstimate
                 case tiers
                 case floors

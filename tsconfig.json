@@ -9,6 +9,7 @@
     { "path": "packages/storage" },
     { "path": "packages/photos" },
     { "path": "packages/ai" },
+    { "path": "packages/pricing" },
     { "path": "packages/tag-parse" },
     { "path": "packages/eval" },
     { "path": "apps/api" },
