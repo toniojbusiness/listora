@@ -415,7 +415,14 @@ function escalationOf(
   details: AnalyzedDetails,
 ): { reason: string; automatic: boolean } | undefined {
   const reasons: { text: string; automatic: boolean }[] = [];
-  const add = (text: string, automatic = true) => reasons.push({ text, automatic });
+  // A rule's reason the model already gave, in any case, is not repeated.
+  const add = (text: string, automatic = true) => {
+    const same = reasons.find(
+      (reason) => reason.text.trim().toLowerCase() === text.trim().toLowerCase(),
+    );
+    if (same === undefined) reasons.push({ text, automatic });
+    else same.automatic ||= automatic;
+  };
   if (output.needsEscalation && output.escalationReason !== null) add(output.escalationReason);
   const { brand, productName } = details;
   if (brand === undefined) add('The brand was not identified.', false);

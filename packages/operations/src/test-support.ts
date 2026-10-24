@@ -108,6 +108,14 @@ export async function createEngineHarness(prefix: string): Promise<EngineHarness
     ],
   ]);
   const adapters: AdapterLookup = (marketplace) => registered.get(marketplace);
+  // One read through each API adapter first, so a test's first call does not pay the cold
+  // start (connection, JIT) and trip the short request timeout on a loaded machine.
+  for (const marketplace of ['ebay', 'depop'] as const) {
+    await registered.get(marketplace)?.readListing(
+      { listingId: 'harness-warmup', externalListingId: null, externalSku: null },
+      { signal: AbortSignal.timeout(10_000), connection: null },
+    );
+  }
 
   const operation = (operationId: string): Promise<OperationRow> =>
     db

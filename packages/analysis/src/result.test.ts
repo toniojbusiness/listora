@@ -279,6 +279,16 @@ describe('buildAnalysisResult escalation', () => {
     ).toBe(true);
   });
 
+  it("does not repeat a rule's reason the model already gave", () => {
+    const output = answer({
+      ...attributes({ brand: { value: 'Gucci', confidence: 0.45, source: 'photo' } }),
+      needsEscalation: true,
+      escalationReason: 'the brand is uncertain.',
+      looksVintage: true,
+    });
+    expect(result(output).escalationReason).toBe('the brand is uncertain. It looks vintage.');
+  });
+
   it('suggests, but does not start, a premium identification for an unidentified brand', () => {
     // Many items are unbranded: the user decides whether a premium call is worth it.
     const unbranded = built(answer(attributes({ brand: null })), noReads);
