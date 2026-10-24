@@ -104,7 +104,7 @@ one runs at the same time.
 ```text
 apps/api/               Fastify HTTP API (@listora/api)
 apps/worker/            Background worker (@listora/worker)
-apps/admin/             Operator CLI: AI cost reports, spend check, AI kill switch (@listora/admin)
+apps/admin/             Operator CLI: AI cost reports, spend check, kill switch, blocks (@listora/admin)
 apps/ios/               iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift packages
 packages/ai/            AI provider layer: providers, price table, metering, budget guards, quota counter (@listora/ai)
 packages/analysis/      Item analysis: prompt, output schema, provenance, marketplace copy, the job (@listora/analysis)
