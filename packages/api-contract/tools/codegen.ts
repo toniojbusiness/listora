@@ -14,7 +14,9 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import openapiTS, { astToString, oapiRef, type SchemaObject } from 'openapi-typescript';
+import openapiTS, { astToString, oapiRef } from 'openapi-typescript';
+
+import { openEnumKnownRef } from './open-enum.ts';
 
 const packageDir = resolve(import.meta.dirname, '..');
 const repoRoot = resolve(packageDir, '../..');
@@ -45,20 +47,6 @@ export const TARGETS: readonly GenerationTarget[] = [
   { name: 'Swift client', dir: 'swift/Sources/ListoraAPI/Generated', generate: generateSwift },
 ];
 
-/**
- * The `KnownX` ref of an open enum (`anyOf: [KnownX, string]`), or undefined for any other
- * schema. The server is always the newest party, so its types allow only known values;
- * the Swift client keeps the open form and tolerates values added after it was built.
- */
-export function openEnumKnownRef(schema: SchemaObject): string | undefined {
-  if (!('anyOf' in schema) || schema.anyOf.length !== 2) return undefined;
-  const [known, other] = schema.anyOf;
-  const ref = known && '$ref' in known ? known.$ref : undefined;
-  if (!ref || !/^#\/components\/schemas\/Known[A-Z]\w*$/.test(ref)) return undefined;
-  const isPlainString = other && !('$ref' in other) && other.type === 'string' && !other.enum;
-  return isPlainString ? ref : undefined;
-}
-
 /** Writes `openapi.ts` (types only, plus `as const` enum value arrays) into `outDir`. */
 export async function generateTypeScript(outDir: string): Promise<void> {
   const ast = await openapiTS(pathToFileURL(specPath), {
@@ -67,6 +55,8 @@ export async function generateTypeScript(outDir: string): Promise<void> {
     rootTypesNoSchemaPrefix: true,
     enumValues: true,
     silent: true,
+    // The server is always the newest party, so its types allow only known values; the
+    // Swift client keeps the open form and tolerates values added after it was built.
     transform: (schema) => {
       const knownRef = openEnumKnownRef(schema);
       return knownRef ? oapiRef(knownRef) : undefined;

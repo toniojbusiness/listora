@@ -15,6 +15,7 @@ from it, committed, and checked for drift in CI.
 | `swift/Sources/ListoraAPI/Generated`  | Generated Swift types and client (swift-openapi-generator). Do not edit. |
 | `swift/openapi-generator-config.yaml` | Swift generator settings.                                                |
 | `tools/codegen.ts`                    | Generate, drift check, and Swift test runner.                            |
+| `tools/open-enum.ts`                  | The one open-enum test, shared by codegen and the contract rules.        |
 | `tools/swift-generator/`              | Pins the exact swift-openapi-generator version (`Package.resolved`).     |
 
 ## Commands
@@ -138,7 +139,10 @@ A response enum that grows with marketplaces, integrations, or workflows is open
 `X` is `anyOf: [KnownX, string]`, like `ErrorCode`. `KnownX` lists today's values. Request
 bodies and query and path parameters use `KnownX` directly, so the server still rejects
 values it does not know. Schemas shared by requests and responses (such as `ItemDetails`)
-keep `X`, so the app can send back a value it does not know unchanged.
+keep `X` for decoding, but requests are held to the same rule: the server validates every
+enum value in a request against `KnownX` and rejects an unknown value with
+`422 validation_failed` and a `fieldErrors` entry naming the field (for example
+`details.fieldProvenance.title`). It never stores or interprets a value it does not know.
 
 The two sides read open enums differently, on purpose:
 

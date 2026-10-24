@@ -10,6 +10,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
+import { openEnumKnownRef } from '../tools/open-enum.ts';
+
 interface Schema {
   $ref?: string;
   type?: string | string[];
@@ -248,17 +250,6 @@ describe('schemas', () => {
   });
 });
 
-/** `{ anyOf: [Known*, string] }`: a response value that may grow without breaking old clients. */
-function isOpenEnum(schema: Schema): boolean {
-  const [known, other] = schema.anyOf ?? [];
-  return (
-    schema.anyOf?.length === 2 &&
-    /^#\/components\/schemas\/Known[A-Z]\w*$/.test(known?.$ref ?? '') &&
-    other?.type === 'string' &&
-    other.enum === undefined
-  );
-}
-
 /**
  * Every closed enum a response can contain, by component name or inline location. Each was
  * chosen to stay closed: adding a value to one breaks installed apps (see README.md).
@@ -310,7 +301,7 @@ function collectEnums(roots: Schema[]): {
       visit(resolve(schema), name);
       return;
     }
-    if (isOpenEnum(schema)) {
+    if (openEnumKnownRef(schema)) {
       open.add(at);
       return;
     }
