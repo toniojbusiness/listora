@@ -157,14 +157,16 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
     if (result.type !== 'response') {
       throw new Error(`${this.#name} could not be read (${result.code})`);
     }
-    if (byId && result.status === 404) return { found: false };
+    // Only a removed listing is definitely gone; a 404 may be a listing not visible yet.
+    if (byId && result.status === 410) return { found: false, authoritative: true };
+    if (byId && result.status === 404) return { found: false, authoritative: false };
     if (result.status !== 200) {
       throw new Error(`${this.#name} could not be read (HTTP ${String(result.status)})`);
     }
     const body = result.body as { listing?: FakeListingBody; listings?: FakeListingBody[] };
     // A SKU should match at most one listing; the newest wins if a duplicate ever exists.
     const listing = byId ? body.listing : body.listings?.at(-1);
-    if (listing === undefined) return { found: false };
+    if (listing === undefined) return { found: false, authoritative: false };
     return {
       found: true,
       externalListingId: listing.id,
@@ -282,7 +284,7 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter {
         excerpt,
       };
     }
-    if (status === 404) {
+    if (status === 404 || status === 410) {
       return {
         type: 'rejected',
         code: 'not_found',

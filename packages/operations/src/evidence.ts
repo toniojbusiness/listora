@@ -55,10 +55,15 @@ export type ReadBackResult =
 
 const COMPARED_FIELDS = ['status', 'title', 'description', 'priceCents', 'currency'] as const;
 
+/** Statuses that take a listing off the marketplace: where it is absent, it cannot be live. */
+const REMOVED_STATUSES: readonly (DesiredListingState['status'] | undefined)[] = ['ended', 'sold'];
+
 /**
  * Compares a read-back with the desired state; every desired field must match exactly, and the
  * read must be current. A stale read is reported as `stale` whether or not it matches, so it
- * never decides anything.
+ * never decides anything. A change that only takes the listing off the marketplace (an end or
+ * mark-sold) is also satisfied by an authoritative absence: a listing that does not exist
+ * cannot be live. Nothing else is: a create or relist is never confirmed by an absence.
  */
 export function confirmByReadBack(
   desired: DesiredListingState,
@@ -69,7 +74,21 @@ export function confirmByReadBack(
   if (!COMPARED_FIELDS.some((field) => desired[field] !== undefined)) {
     return { matches: false, reason: 'nothing_desired', fields: [] };
   }
-  if (!remote.found) return { matches: false, reason: 'not_found', fields: [] };
+  if (!remote.found) {
+    if (!remote.authoritative || !onlyRemoves(desired)) {
+      return { matches: false, reason: 'not_found', fields: [] };
+    }
+    if (freshness.kind === 'repeat' && !freshness.previousReadMatched) {
+      return { matches: false, reason: 'unrepeated', fields: [] };
+    }
+    return {
+      matches: true,
+      proof: createProof('read_back', {
+        evidence: 'read_back',
+        remote: { found: false, authoritative: true },
+      }),
+    };
+  }
   if (freshness.kind === 'revision' && !isCurrent(remote.revision, freshness.newestSeen)) {
     return { matches: false, reason: 'stale', fields: [] };
   }
@@ -84,6 +103,14 @@ export function confirmByReadBack(
     matches: true,
     proof: createProof('read_back', { evidence: 'read_back', remote: remoteSnapshot(remote) }),
   };
+}
+
+/** Whether the desired state asks only that the listing be off the marketplace. */
+function onlyRemoves(desired: DesiredListingState): boolean {
+  return (
+    REMOVED_STATUSES.includes(desired.status) &&
+    COMPARED_FIELDS.every((field) => field === 'status' || desired[field] === undefined)
+  );
 }
 
 /** A read without a revision cannot show it is current. */

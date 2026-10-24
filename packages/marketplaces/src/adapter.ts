@@ -118,7 +118,14 @@ export interface OperationRequest {
 
 /** A listing as read back from the marketplace, normalized to Listora's fields. */
 export type RemoteListingState =
-  | { found: false }
+  /**
+   * No listing found. `authoritative` only when the marketplace definitively says the listing
+   * with the requested id no longer exists (for example a "removed" or 410 Gone answer for that
+   * id), never for an answer that could be a listing not visible yet (a plain 404 from an
+   * eventually consistent API), a search that came back empty, a timeout, an auth error, or any
+   * other unclear answer. An end or mark-sold counts an authoritative absence as "cannot be live".
+   */
+  | { found: false; authoritative: boolean }
   | {
       found: true;
       externalListingId: string;

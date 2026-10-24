@@ -56,12 +56,39 @@ describe('confirmByReadBack', () => {
     });
   });
 
-  it('never confirms a listing that was not found', () => {
-    expect(confirmByReadBack({ status: 'ended' }, { found: false }, CURRENT)).toEqual({
+  it('never confirms a listing that was not found, unless the absence is authoritative', () => {
+    expect(
+      confirmByReadBack({ status: 'ended' }, { found: false, authoritative: false }, CURRENT),
+    ).toEqual({ matches: false, reason: 'not_found', fields: [] });
+  });
+
+  it('counts an authoritative absence as done only for an end or mark-sold', () => {
+    const absent = { found: false, authoritative: true } as const;
+    for (const status of ['ended', 'sold'] as const) {
+      expect(confirmByReadBack({ status }, absent, CURRENT)).toMatchObject({
+        matches: true,
+        proof: {
+          evidence: 'read_back',
+          detail: { remote: { found: false, authoritative: true } },
+        },
+      });
+    }
+    // A create or relist is never confirmed by an absence, nor an edit that comes with it.
+    expect(confirmByReadBack({ status: 'active' }, absent, CURRENT)).toMatchObject({
       matches: false,
       reason: 'not_found',
-      fields: [],
     });
+    expect(confirmByReadBack({ status: 'ended', title: 'Coat' }, absent, CURRENT)).toMatchObject({
+      matches: false,
+      reason: 'not_found',
+    });
+    // Without a freshness marker, an absence must repeat like any other match.
+    expect(
+      confirmByReadBack({ status: 'ended' }, absent, {
+        kind: 'repeat',
+        previousReadMatched: false,
+      }),
+    ).toMatchObject({ matches: false, reason: 'unrepeated' });
   });
 
   it('never confirms an empty desired state', () => {

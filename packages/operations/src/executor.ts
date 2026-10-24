@@ -114,7 +114,14 @@ type Step =
   | { type: 'check'; ctx: StepContext; attempt: number };
 
 type Resolution =
-  | { type: 'succeeded'; proof: SuccessProof; remote: FoundRemote }
+  | {
+      type: 'succeeded';
+      proof: SuccessProof;
+      /** The first targeted listing the read-backs found; `null` when every one is absent. */
+      remote: FoundRemote | null;
+      /** Targeted listing ids the marketplace says do not exist; the listing row retires them. */
+      absentIds: string[];
+    }
   /** Send again later, if attempts remain. */
   | { type: 'retry'; error: OperationError; retryAfterMs?: number }
   /**
@@ -431,9 +438,9 @@ async function sendTo(
       };
     }
     const comparison = compareReadBack(ctx, read.remote, seen, false);
-    if (comparison.matches && read.remote.found) {
+    if (comparison.matches) {
       return {
-        resolution: { type: 'succeeded', proof: comparison.proof, remote: read.remote },
+        resolution: readBackSuccess(comparison.proof, read.remote, ref),
         detail: { step: 'send', precheck: { matches: true }, sent: false },
       };
     }
@@ -487,9 +494,9 @@ async function sendTo(
         };
       }
       const comparison = compareReadBack(ctx, read.remote, seen, false);
-      if (comparison.matches && read.remote.found) {
+      if (comparison.matches) {
         return {
-          resolution: { type: 'succeeded', proof: comparison.proof, remote: read.remote },
+          resolution: readBackSuccess(comparison.proof, read.remote, target),
           detail,
           ...withId,
         };
@@ -497,27 +504,39 @@ async function sendTo(
       return {
         resolution: undecidedRead(ctx, comparison, true) ?? {
           type: 'verify',
-          error: notShown(ctx.name, comparison.matches ? [] : comparison.fields),
+          error: notShown(ctx.name, comparison.fields),
           unknownResult: true,
         },
-        detail: { ...detail, readBack: comparison.matches ? {} : comparison },
+        detail: { ...detail, readBack: comparison },
         ...withId,
       };
     }
-    case 'rejected':
-      return {
-        resolution: {
-          type: 'failed',
-          error: {
-            code: outcome.code,
-            message:
-              outcome.fixHint === undefined
-                ? outcome.message
-                : `${outcome.message} ${outcome.fixHint}`,
-          },
-        },
-        detail,
+    case 'rejected': {
+      const error = {
+        code: outcome.code,
+        message:
+          outcome.fixHint === undefined ? outcome.message : `${outcome.message} ${outcome.fixHint}`,
       };
+      // An end or mark-sold the marketplace refused (for a listing it no longer has, say) may
+      // have nothing left to do; only a read-back can tell.
+      if (ctx.canReadBack && (ctx.desired.status === 'ended' || ctx.desired.status === 'sold')) {
+        const read = await readOnce(deps, ctx, ref, signal);
+        if (read.ok) {
+          const comparison = compareReadBack(ctx, read.remote, seen, false);
+          if (comparison.matches) {
+            return {
+              resolution: readBackSuccess(comparison.proof, read.remote, ref),
+              detail: { ...detail, readBack: { matches: true } },
+            };
+          }
+          const undecided = undecidedRead(ctx, comparison, false);
+          if (undecided !== undefined) {
+            return { resolution: undecided, detail: { ...detail, readBack: comparison } };
+          }
+        }
+      }
+      return { resolution: { type: 'failed', error }, detail };
+    }
     case 'transient':
       return {
         resolution: {
@@ -565,16 +584,16 @@ async function checkTarget(
   const previousReadMatched =
     ctx.op.status === 'verifying' && ctx.op.error_code === UNREPEATED_READ_CODE;
   const comparison = compareReadBack(ctx, read.remote, seen, previousReadMatched);
-  if (comparison.matches && read.remote.found) {
+  if (comparison.matches) {
     return {
-      resolution: { type: 'succeeded', proof: comparison.proof, remote: read.remote },
+      resolution: readBackSuccess(comparison.proof, read.remote, ref),
       detail: { step: 'check' },
     };
   }
-  const detail = { step: 'check', readBack: comparison.matches ? {} : comparison };
+  const detail = { step: 'check', readBack: comparison };
   const undecided = undecidedRead(ctx, comparison, false);
   if (undecided !== undefined) return { resolution: undecided, detail };
-  const fields = comparison.matches ? [] : comparison.fields;
+  const { fields } = comparison;
   if (ctx.op.kind === 'verify') {
     return {
       resolution: {
@@ -649,23 +668,37 @@ function combineResults(
     return { resolution: { ...repeat, unknownResult }, detail, ...withId };
   }
 
-  const proofs: SuccessProof[] = [];
+  const successes: Extract<Resolution, { type: 'succeeded' }>[] = [];
   for (const resolution of resolutions) {
     if (resolution.type !== 'succeeded') throw new Error('every target should have succeeded');
-    proofs.push(resolution.proof);
+    successes.push(resolution);
   }
-  const [first, ...rest] = proofs;
-  if (primary.resolution.type !== 'succeeded' || first === undefined) {
-    throw new Error('the primary target should have succeeded');
-  }
+  const [first, ...rest] = successes.map((success) => success.proof);
+  if (first === undefined) throw new Error('a step has at least one target');
   return {
     resolution: {
       type: 'succeeded',
       proof: confirmEveryReadBack([first, ...rest]),
-      remote: primary.resolution.remote,
+      remote: successes.find((success) => success.remote !== null)?.remote ?? null,
+      absentIds: successes.flatMap((success) => success.absentIds),
     },
     detail,
     ...withId,
+  };
+}
+
+/** A target's success: the listing read back, or the id the marketplace says does not exist. */
+function readBackSuccess(
+  proof: SuccessProof,
+  remote: RemoteListingState,
+  ref: ListingRef,
+): Extract<Resolution, { type: 'succeeded' }> {
+  if (remote.found) return { type: 'succeeded', proof, remote, absentIds: [] };
+  return {
+    type: 'succeeded',
+    proof,
+    remote: null,
+    absentIds: ref.externalListingId === null ? [] : [ref.externalListingId],
   };
 }
 
@@ -911,8 +944,9 @@ async function applyResolution(
 
   switch (resolution.type) {
     case 'succeeded': {
-      const { remote } = resolution;
+      const { remote, absentIds } = resolution;
       if (
+        remote !== null &&
         remote.externalListingId !== ctx.listing.external_listing_id &&
         (await externalIdTaken(trx, ctx.listing, remote.externalListingId))
       ) {
@@ -930,7 +964,7 @@ async function applyResolution(
         { to: 'succeeded', attempts, proof: resolution.proof },
         detail,
       );
-      await applyVerifiedListing(trx, ctx.listing, remote);
+      await applyVerifiedListing(trx, ctx.listing, ctx.desired, remote, absentIds);
       return 'succeeded';
     }
     case 'retry': {
@@ -1004,37 +1038,58 @@ async function applyResolution(
 
 /**
  * Records what the marketplace confirmed on the listing row. A confirmed pending id becomes the
- * verified one and keeps its revisions; an id new to the row starts its own.
+ * verified one and keeps its revisions; an id new to the row starts its own. Ids the
+ * marketplace says do not exist are retired.
  */
 async function applyVerifiedListing(
   trx: DbTransaction,
   listing: ListingRow,
-  remote: FoundRemote,
+  desired: DesiredListingState,
+  remote: FoundRemote | null,
+  absentIds: readonly string[],
 ): Promise<void> {
-  const active = remote.status === 'active';
+  const status = remote?.status ?? desired.status;
+  if (status === undefined) throw new Error('an absent listing confirms only a status change');
+  const absent = sql<string[]>`${[...absentIds]}::text[]`;
+  const pendingSettled =
+    remote === null
+      ? sql<boolean>`pending_external_listing_id = any(${absent})`
+      : sql<boolean>`(pending_external_listing_id = ${remote.externalListingId}
+          or pending_external_listing_id = any(${absent}))`;
+  const verified =
+    remote === null
+      ? {
+          external_listing_id: sql<string | null>`
+            case when external_listing_id = any(${absent}) then null else external_listing_id end`,
+          external_url: sql<string | null>`
+            case when external_listing_id = any(${absent}) then null else external_url end`,
+          remote_revision: sql<number | null>`
+            case when external_listing_id = any(${absent}) then null else remote_revision end`,
+        }
+      : {
+          external_listing_id: remote.externalListingId,
+          external_url: remote.externalUrl,
+          remote_snapshot: jsonb(remoteSnapshot(remote)),
+          remote_revision: sql<number | null>`
+            case
+              when external_listing_id = ${remote.externalListingId}
+                then greatest(remote_revision, ${remote.revision}::bigint)
+              when pending_external_listing_id = ${remote.externalListingId}
+                then greatest(pending_remote_revision, ${remote.revision}::bigint)
+              else ${remote.revision}::bigint
+            end`,
+        };
   await trx
     .updateTable('marketplace_listing')
     .set({
-      status: remote.status,
-      external_listing_id: remote.externalListingId,
-      external_url: remote.externalUrl,
-      remote_snapshot: jsonb(remoteSnapshot(remote)),
-      remote_revision: sql<number | null>`
-        case
-          when external_listing_id = ${remote.externalListingId}
-            then greatest(remote_revision, ${remote.revision}::bigint)
-          when pending_external_listing_id = ${remote.externalListingId}
-            then greatest(pending_remote_revision, ${remote.revision}::bigint)
-          else ${remote.revision}::bigint
-        end`,
+      status,
+      ...verified,
       pending_external_listing_id: sql<string | null>`
-        case when pending_external_listing_id = ${remote.externalListingId}
-          then null else pending_external_listing_id end`,
+        case when ${pendingSettled} then null else pending_external_listing_id end`,
       pending_remote_revision: sql<number | null>`
-        case when pending_external_listing_id = ${remote.externalListingId}
-          then null else pending_remote_revision end`,
+        case when ${pendingSettled} then null else pending_remote_revision end`,
       last_verified_at: sql<Date>`now()`,
-      ...(active
+      ...(status === 'active'
         ? { listed_at: sql<Date>`coalesce(listed_at, now())`, ended_at: null }
         : { ended_at: sql<Date>`coalesce(ended_at, now())` }),
     })

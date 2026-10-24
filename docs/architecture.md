@@ -261,6 +261,11 @@ interface MarketplaceAdapter {
 without changing those members. `execute` never throws for a marketplace error; it returns an
 outcome. `readListing` throws when the marketplace cannot be read, and must find the effect of
 an earlier attempt even when that attempt's outcome was unknown (by external id or SKU).
+When it finds no listing, it says whether that is `authoritative`: only when the marketplace
+definitively reports that the listing with the requested id no longer exists (a "removed" or
+410 Gone answer for that id), never for an answer that could be a listing not visible yet (a
+plain 404 from an eventually consistent API), an empty SKU search, a timeout, an auth error, or
+another unclear answer.
 
 Reads may be stale (eventually consistent APIs), so a read carries a freshness marker: a
 `revision`, a non-negative integer that grows with every change to the marketplace listing (a
@@ -379,7 +384,12 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    pending one over the verified one, so a new listing is never lost even when its read-backs
    fail. A read-back that confirms it promotes it to `external_listing_id`. An end on a listing
    with both ids targets both, since either may be live, and succeeds only when each reads
-   back ended under the freshness rule (`confirmEveryReadBack` joins the proofs).
+   back ended under the freshness rule (`confirmEveryReadBack` joins the proofs) or is
+   authoritatively absent. **Absent listings.** The goal of an end or mark-sold is that nothing
+   is live, so an authoritative not-found satisfies its target (eBay drops ended listings
+   after a while): a refused end is read back before it fails, a precheck that finds the id
+   absent sends nothing to it, and on success the absent id is retired from the listing row. A
+   create, relist, or edit is never confirmed by an absence.
 5. **Read freshness.** A stale read can show an older state that happens to match (after end,
    relist, end, the first end), so a read-back confirms only when it is current
    (`confirmByReadBack` in `evidence.ts`, the only maker of read-back proofs). Listora keeps the

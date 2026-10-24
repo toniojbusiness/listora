@@ -16,6 +16,9 @@
  * Like eBay's `AddFixedPriceItem`, create is not idempotent by itself: sending it twice without
  * the same `Idempotency-Key` creates two listings, which is what the chaos tests look for.
  *
+ * A listing removed with `remove` answers 410 Gone, like a marketplace that dropped it; a plain
+ * 404 means only that the fake does not show the listing (yet, for a stale read).
+ *
  * Every listing has a `revision` that starts at 1 and grows by one with every applied change; a
  * stale read serves the older revision along with the older state.
  */
@@ -113,6 +116,7 @@ class HttpError extends Error {
 export class FakeMarketplace {
   readonly #server: Server;
   readonly #listings = new Map<Marketplace, StoredListing[]>();
+  readonly #removed = new Set<string>();
   readonly #faults: (FaultRule & { remaining: number })[] = [];
   readonly #requests: FakeRequest[] = [];
   readonly #waiters = new Set<() => void>();
@@ -209,6 +213,15 @@ export class FakeMarketplace {
     const created = this.#create(marketplace, listing, null);
     created.previous = created.current;
     return { ...created.current };
+  }
+
+  /** Drops a listing, as eBay does with ended listings after a while; it answers 410 Gone. */
+  remove(marketplace: Marketplace, id: string): void {
+    this.#removed.add(`${marketplace}:${id}`);
+    this.#listings.set(
+      marketplace,
+      this.#all(marketplace).filter((stored) => stored.current.id !== id),
+    );
   }
 
   /** Resolves with the first request matching `predicate`, waiting for it if needed. */
@@ -397,7 +410,12 @@ export class FakeMarketplace {
     }
 
     const stored = id === undefined ? undefined : this.#find(marketplace, id);
-    if (stored === undefined) throw new HttpError(404, 'not_found', 'Listing not found');
+    if (stored === undefined) {
+      if (id !== undefined && this.#removed.has(`${marketplace}:${id}`)) {
+        throw new HttpError(410, 'gone', 'The listing was removed');
+      }
+      throw new HttpError(404, 'not_found', 'Listing not found');
+    }
 
     switch (route) {
       case 'read': {

@@ -184,11 +184,14 @@ describe('operation step executor (real Postgres)', () => {
 
   it('without a freshness marker, lets a second read that disagrees overrule the first', async () => {
     const { op, payload } = await newCreate();
-    const answers: RemoteListingState[] = [{ ...ACTIVE, revision: null }, { found: false }];
+    const answers: RemoteListingState[] = [
+      { ...ACTIVE, revision: null },
+      { found: false, authoritative: false },
+    ];
     const adapter = stubAdapter({
       readFreshness: 'none',
       execute: () => Promise.resolve({ type: 'confirmed', externalListingId: 'STUB-5' }),
-      read: () => Promise.resolve(answers.shift() ?? { found: false }),
+      read: () => Promise.resolve(answers.shift() ?? { found: false, authoritative: false }),
     });
 
     await runOperationStep(deps(adapter), payload, new AbortController().signal);

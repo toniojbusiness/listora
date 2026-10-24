@@ -99,10 +99,27 @@ describe('FakeMarketplaceAdapter against the fake marketplace', () => {
   });
 
   it('reports a listing that does not exist as not found', async () => {
-    expect(await adapter.readListing(newRef(), ctx())).toEqual({ found: false });
+    // Neither a SKU search that finds nothing nor a 404 (maybe not visible yet) proves absence.
+    expect(await adapter.readListing(newRef(), ctx())).toEqual({
+      found: false,
+      authoritative: false,
+    });
     expect(
       await adapter.readListing({ ...newRef(), externalListingId: 'EBAY-999999' }, ctx()),
-    ).toEqual({ found: false });
+    ).toEqual({ found: false, authoritative: false });
+  });
+
+  it('reports a listing the marketplace removed as authoritatively absent', async () => {
+    const ref = await created();
+    fake.remove('ebay', ref.externalListingId ?? '');
+    expect(await adapter.readListing(ref, ctx())).toEqual({ found: false, authoritative: true });
+    expect(
+      await adapter.execute({ ...create(ref), kind: 'end', desired: { status: 'ended' } }, ctx()),
+    ).toMatchObject({
+      type: 'rejected',
+      code: 'not_found',
+      excerpt: { response: { status: 410 } },
+    });
   });
 
   it('maps 429 to a transient outcome with Retry-After', async () => {

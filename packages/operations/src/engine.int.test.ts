@@ -379,6 +379,64 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     });
   });
 
+  // Regression: when the old listing id no longer existed (eBay drops ended listings), the end
+  // on it was rejected, so the delist failed on every Retry while nothing was live.
+  it('delists when the old listing id is gone and the pending one reads back ended', async () => {
+    const listing = await liveListing(1000);
+    const oldId = listing.external_listing_id ?? '';
+    const end = await harness.enqueue(listing, 'end', { status: 'ended' });
+    await harness.waitForStatus(end.id, ['succeeded']);
+    harness.fake.setRelistIssuesNewId(true);
+    harness.fake.inject({
+      action: 'read',
+      sku: listing.id,
+      fault: { type: 'server_error' },
+      times: Infinity,
+    });
+    const relist = await harness.enqueue(listing, 'relist', { status: 'active' });
+    await harness.waitForStatus(relist.id, ['failed']);
+    harness.fake.clearFaults();
+    const [relisted] = harness.fake
+      .listings('ebay', listing.id)
+      .filter((remote) => remote.id !== oldId);
+    harness.fake.remove('ebay', oldId);
+    // The first end on the new listing is rate-limited, so the second attempt reads both ids
+    // back first, and must not send again to the one it already found gone.
+    harness.fake.inject({ action: 'end', sku: listing.id, fault: { type: 'rate_limited' } });
+
+    const delistRunId = await recordSale(harness, listing);
+    const delist = await harness.enqueue(
+      listing,
+      'end',
+      { status: 'ended' },
+      { origin: 'auto_delist', delistRunId },
+    );
+    expect(await harness.waitForStatus(delist.id, SETTLED)).toMatchObject({
+      status: 'succeeded',
+      success_evidence: 'read_back',
+      attempts: 2,
+    });
+    expect(harness.fake.listings('ebay', listing.id)).toEqual([
+      expect.objectContaining({ id: relisted?.id, status: 'ended' }),
+    ]);
+    const ends = (id: string | undefined) =>
+      harness.fake.requests
+        .filter((request) => request.action === 'end' && request.listingId === id)
+        .map((request) => request.status);
+    expect(ends(oldId)).toEqual([200, 410]);
+    expect(ends(relisted?.id)).toEqual([429, 200]);
+    expect((await harness.events(delist.id)).at(-1)?.detail).toMatchObject({
+      remote: { externalListingId: relisted?.id, status: 'ended' },
+      otherRemotes: [{ found: false, authoritative: true }],
+    });
+    // The pending id was confirmed, and the absent one is retired.
+    expect(await harness.listing(listing.id)).toMatchObject({
+      status: 'ended',
+      external_listing_id: relisted?.id,
+      pending_external_listing_id: null,
+    });
+  });
+
   it('stops cleanly mid-operation and leaves the step to be verified, not guessed', async () => {
     // A request timeout longer than the shutdown grace, so shutdown is what ends the request.
     await worker?.stop();
