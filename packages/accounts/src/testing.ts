@@ -5,8 +5,9 @@
 import type { Db } from '@listora/db';
 import { sql } from 'kysely';
 
-import type { CognitoUserAdmin } from './cognito-user-admin.ts';
+import type { CognitoUserAdmin, CognitoUserToDelete } from './cognito-user-admin.ts';
 import { ACCOUNT_DELETION_TASK, accountDeletionJobKey } from './deletion.ts';
+import { subjectSha256 } from './identity.ts';
 import {
   completeAccountDeletion,
   type AccountDeletionDependencies,
@@ -14,14 +15,29 @@ import {
 } from './job.ts';
 import type { GrantToRevoke, MarketplaceAccessRevoker } from './marketplace-access.ts';
 
-/** Records deleted usernames; `failWith` makes the next deletions throw. */
+/**
+ * Records deleted usernames; `failWith` makes the next deletions throw. A username belongs to
+ * the identity being deleted unless `recreateUser` gave it to a newer user, which a deletion
+ * then leaves alone, like `AwsCognitoUserAdmin`.
+ */
 export class FakeCognitoUserAdmin implements CognitoUserAdmin {
   readonly deleted: string[] = [];
   failWith: Error | undefined;
+  readonly #recreated = new Map<string, string>();
 
-  deleteUser(username: string): Promise<void> {
+  /** The person signed in again: Cognito reused `username` for a new user with `sub`. */
+  recreateUser(username: string, sub: string): void {
+    this.#recreated.set(username, sub);
+  }
+
+  deleteUser(user: CognitoUserToDelete): Promise<void> {
     if (this.failWith) return Promise.reject(this.failWith);
-    this.deleted.push(username);
+    const sub = this.#recreated.get(user.username);
+    if (sub !== undefined && !subjectSha256(sub).equals(user.subjectSha256)) {
+      return Promise.resolve();
+    }
+    this.#recreated.delete(user.username);
+    this.deleted.push(user.username);
     return Promise.resolve();
   }
 }

@@ -198,6 +198,25 @@ describe('account deletion job (real Postgres)', () => {
     expect(deps.cognito.deleted).toEqual([identity.username, identity.username]);
   });
 
+  it("never deletes a newer Cognito user that got the deleted user's name", async () => {
+    const deps = harness();
+    const identity = cognitoIdentity();
+    const username = identity.username ?? '';
+    const deletionId = await start(identity);
+    await failUpdatesOf('account_deletion');
+    try {
+      await expect(completeAccountDeletion(deps, deletionId)).rejects.toThrow(/simulated/);
+    } finally {
+      await restoreUpdatesOf('account_deletion');
+    }
+    // Before the rerun, the person signs in with Apple again: Cognito reuses the username for
+    // a new user with a new `sub`.
+    deps.cognito.recreateUser(username, randomUUID());
+
+    expect(await completeAccountDeletion(deps, deletionId)).toBe('completed');
+    expect(deps.cognito.deleted).toEqual([username]);
+  });
+
   describe('marketplace grants', () => {
     function grant(marketplace: 'ebay' | 'depop' = 'ebay') {
       return {

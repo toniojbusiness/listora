@@ -39,7 +39,8 @@ create table account_deletion (
   -- users, who exist only as signed tokens.
   provider_username text check (char_length(provider_username) between 1 and 255),
   requested_at timestamptz not null default now(),
-  -- When the provider confirmed the user is gone (for dev, when the job first ran).
+  -- When the provider confirmed the user is gone (for dev, at once: dev users exist only as
+  -- signed tokens).
   identity_deleted_at timestamptz,
   -- Runs of the job that left work for later; the next run waits longer.
   attempts integer not null default 0 check (attempts >= 0),

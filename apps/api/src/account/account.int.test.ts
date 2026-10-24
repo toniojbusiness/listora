@@ -286,13 +286,7 @@ describe('deleteAccount (real Postgres)', () => {
 
     api.clock.now = Date.now() + 2000;
     try {
-      // Not before the job has deleted the person at the identity provider.
-      const early = await api.signIn(email);
-      expect((await api.call('listItems', { token: early })).status).toBe(401);
-      expect(await userCount(api.db, email)).toBe(0);
-      expect(await api.accountDeletions.runAll()).toEqual(['completed']);
-
-      api.clock.now = Date.now() + 4000;
+      // A dev identity has nothing to delete at a provider, so this needs no worker.
       const again = await api.signIn(email);
       const items = await api.call('listItems', { token: again });
       expect(items.status).toBe(200);
@@ -300,6 +294,7 @@ describe('deleteAccount (real Postgres)', () => {
       const after = await api.tenantOf(email);
       expect(after.accountId).not.toBe(before.accountId);
       expect(after.userId).not.toBe(before.userId);
+      expect(await api.accountDeletions.runAll()).toEqual(['completed']);
     } finally {
       api.clock.now = Date.now();
     }

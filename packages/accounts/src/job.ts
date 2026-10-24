@@ -2,9 +2,11 @@
  * The `account_deletion` job: finishes a committed account deletion with the outside services
  * (docs/auth.md, "Account deletion"). Every run, for what is still open:
  *
- * 1. Deletes the person at the identity provider (`AdminDeleteUser` for Cognito; dev users exist
- *    only as signed tokens). A user that is already gone counts as deleted. Once it is done,
- *    the identity's tokens issued until then are refused, and a new sign-in works again.
+ * 1. Deletes the person at the identity provider (for Cognito, `AdminDeleteUser` once
+ *    `AdminGetUser` shows the username still belongs to the deleted `sub`; a dev deletion is
+ *    recorded as done when it starts, since dev users exist only as signed tokens). A user that
+ *    is already gone, or whose name now belongs to a newer user, counts as deleted. Once it is
+ *    done, the identity's tokens issued until then are refused, and a new sign-in works again.
  * 2. Asks each pending marketplace grant's marketplace to revoke Listora's access. A confirmed
  *    revocation deletes the grant's tokens. When the revocation window has passed, an
  *    unconfirmed grant's tokens are deleted too and it is recorded as `manual`: the seller must
@@ -175,7 +177,10 @@ async function deleteIdentity(
       }
       if (deletion.provider_username === null) throw new Error('Cognito deletion without user');
       try {
-        await deps.cognito.deleteUser(deletion.provider_username);
+        await deps.cognito.deleteUser({
+          username: deletion.provider_username,
+          subjectSha256: deletion.auth_subject_sha256,
+        });
       } catch (error) {
         log.warn({ err: error }, 'the identity provider could not delete the user; retrying');
         return false;

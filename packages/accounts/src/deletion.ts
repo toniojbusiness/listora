@@ -101,6 +101,8 @@ export async function startAccountDeletion(
       // Cognito's AdminDeleteUser also accepts the `sub` of a user who signed up in the pool.
       provider_username:
         identity.provider === 'cognito' ? (identity.username ?? identity.subject) : null,
+      // Dev users exist only as signed tokens, so there is nothing to wait for.
+      identity_deleted_at: identity.provider === 'dev' ? deletedAt : null,
     })
     .returning('id')
     .executeTakeFirstOrThrow();

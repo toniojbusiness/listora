@@ -1,5 +1,9 @@
 export { AwsCognitoUserAdmin, USER_POOL_ID_PATTERN, userPoolRegion } from './cognito-user-admin.ts';
-export type { AwsCognitoUserAdminOptions, CognitoUserAdmin } from './cognito-user-admin.ts';
+export type {
+  AwsCognitoUserAdminOptions,
+  CognitoUserAdmin,
+  CognitoUserToDelete,
+} from './cognito-user-admin.ts';
 export {
   ACCOUNT_DELETION_JOB_MAX_ATTEMPTS,
   ACCOUNT_DELETION_TASK,

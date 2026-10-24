@@ -73,12 +73,13 @@ export interface paths {
          *     the same token. A retry after a lost success response gets `401 unauthenticated`, which
          *     means the account is gone.
          *
-         *     `marketplaceAccess` reports each API marketplace connection honestly: `revoked` is
-         *     true only when the marketplace had confirmed it before the deletion. For any other
-         *     entry the revocation is not confirmed (Listora keeps the encrypted tokens only to keep
-         *     asking, and deletes them once the marketplace confirms or after 7 days), so the app
-         *     tells the user to remove Listora in that marketplace's connected-apps settings to be
-         *     sure.
+         *     `marketplaceAccess` reports each API marketplace connection honestly, by marketplace and
+         *     the seller's name there: `revoked` is true only when the marketplace had confirmed it
+         *     before the deletion. Every entry with `revoked: false` names a marketplace whose access
+         *     the user must revoke manually: Listora keeps asking that marketplace (it keeps the
+         *     encrypted tokens only for that, and deletes them once the marketplace confirms or after
+         *     7 days), but the app cannot learn the outcome, so it lists these marketplaces and tells
+         *     the user to remove Listora in each one's connected-apps settings.
          */
         delete: operations["deleteAccount"];
         options?: never;
@@ -1149,9 +1150,9 @@ export interface components {
             displayName?: string;
             /**
              * @description True only when the marketplace had confirmed, before the deletion, that Listora's
-             *     access is revoked. False means it is not confirmed: Listora keeps asking the
-             *     marketplace for up to 7 days (when it still holds the connection's tokens), so the
-             *     user should remove Listora in the marketplace's settings to be sure.
+             *     access is revoked. False means it is not confirmed, so the user must revoke it
+             *     manually in the marketplace's settings (Listora also keeps asking the marketplace
+             *     for up to 7 days when it still holds the connection's tokens).
              */
             revoked: boolean;
         };
