@@ -257,7 +257,8 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
    rollups and per-plan quotas in reseller units. There is a per-account daily dollar circuit
    breaker (default $1/day), a global kill switch, and budget alarms.
 
-`@listora/ai` implements steps 3 to 6 for every caller:
+`@listora/ai` is the provider layer behind steps 3, 4, and 6, and implements step 7's metering
+and guards (budget alarms are T-29):
 
 - **`AiClient` is the only way to call AI.** A call names its account, purpose, and tier
   (`standard` is the Fast tier, `premium` the escalation). The client checks the guards in
