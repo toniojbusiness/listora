@@ -68,10 +68,11 @@ export interface ListoraService {
  * tasks through a VPC link and Cloud Map (`ingress`). The two processes run as two services,
  * or as two containers of one service (`services.layout`).
  *
- * With a domain, the API is served at `https://api.<domain>` only, with an ACM certificate
- * and an alias record in the domain's zone. Without one (HTTP API only), it answers at its
- * default `execute-api` URL, which AWS serves over TLS, and no DNS resource is created. The
- * `ApiUrl` output is the endpoint either way.
+ * With a domain, the API is served at `https://api.<domain>`, with an ACM certificate and an
+ * alias record in the domain's zone, and that is the `ApiUrl` output. Without one (HTTP API
+ * only), it answers at its default `execute-api` URL, which AWS serves over TLS, no DNS
+ * resource is created, and `ApiUrl` is that URL. The HTTP API keeps the `execute-api` URL
+ * alongside a domain unless `disableDefaultEndpoint` is set.
  *
  * Container configuration comes from `containerEnvironment` (src/containers.ts). The database
  * password reaches the processes only as `PGPASSWORD`, injected by ECS from the RDS-generated
@@ -111,7 +112,7 @@ export class ComputeStack extends ListoraStack {
       portMappings: service === 'api' ? [{ containerPort: API_PORT }] : [],
       // Without a load balancer, ECS itself checks the API (the same liveness path) and
       // replaces a task that fails.
-      ...(service === 'api' && settings.ingress === 'http-api'
+      ...(service === 'api' && settings.ingress.via === 'http-api'
         ? { healthCheck: apiHealthCheck() }
         : {}),
       readonlyRootFilesystem: true,
@@ -165,7 +166,7 @@ export class ComputeStack extends ListoraStack {
 
     const apiDomain = target.dns === undefined ? undefined : this.apiDomain(target.dns);
     let apiUrl: string;
-    switch (settings.ingress) {
+    switch (settings.ingress.via) {
       case 'load-balancer': {
         // loadDeployTarget requires a domain for this ingress.
         if (apiDomain === undefined) throw new Error('a load balancer needs the API domain');
@@ -231,6 +232,11 @@ export class ComputeStack extends ListoraStack {
           subnets: taskPlacement(settings).subnets,
           securityGroups: [props.ingressSecurityGroup],
         });
+        const { disableDefaultEndpoint } = settings.ingress;
+        // loadDeployTarget requires a domain when the execute-api URL is off.
+        if (disableDefaultEndpoint && apiDomain === undefined) {
+          throw new Error('an HTTP API without its default endpoint needs the API domain');
+        }
         const custom =
           apiDomain === undefined
             ? undefined
@@ -245,9 +251,9 @@ export class ComputeStack extends ListoraStack {
         const httpApi = new apigwv2.HttpApi(this, 'HttpApi', {
           apiName: `listora-${environment}-api`,
           description: `Listora ${environment} API`,
-          // With a domain, only https://api.<domain> serves the API; without one, the
-          // execute-api URL is the endpoint.
-          disableExecuteApiEndpoint: custom !== undefined,
+          // Kept on after a domain is added, until every URL registered with a third party
+          // has moved to https://api.<domain>.
+          disableExecuteApiEndpoint: disableDefaultEndpoint,
           createDefaultStage: false,
           defaultIntegration: new integrations.HttpServiceDiscoveryIntegration('Api', discovery, {
             vpcLink,
@@ -369,7 +375,7 @@ export class ComputeStack extends ListoraStack {
       minHealthyPercent: 100,
       maxHealthyPercent: 200,
       propagateTags: ecs.PropagatedTagSource.SERVICE,
-      ...(runsApi && settings.ingress === 'load-balancer'
+      ...(runsApi && settings.ingress.via === 'load-balancer'
         ? { healthCheckGracePeriod: Duration.seconds(60) }
         : {}),
     });

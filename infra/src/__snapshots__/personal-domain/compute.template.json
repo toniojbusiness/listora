@@ -790,7 +790,7 @@
       "Type": "AWS::ApiGatewayV2::Api",
       "Properties": {
         "Description": "Listora personal API",
-        "DisableExecuteApiEndpoint": true,
+        "DisableExecuteApiEndpoint": false,
         "Name": "listora-personal-api",
         "ProtocolType": "HTTP"
       }

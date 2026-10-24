@@ -173,6 +173,28 @@ describe('loadDeployTarget', () => {
     ).toBeUndefined();
   });
 
+  it('requires a domain once the HTTP API serves only api.<domain>', () => {
+    const settings = {
+      ...ENVIRONMENT_SETTINGS,
+      personal: {
+        ...ENVIRONMENT_SETTINGS.personal,
+        ingress: { via: 'http-api', disableDefaultEndpoint: true },
+      },
+    } as const;
+    const load = (context: Record<string, unknown>) =>
+      loadDeployTarget(fromRecord({ ...context, env: 'personal' }), {}, settings);
+    expect(() => load(NO_DOMAIN)).toThrow(
+      new DeployConfigError([
+        'domain (context) or LISTORA_DOMAIN (environment) is required',
+        'hostedZoneId (context) or LISTORA_HOSTED_ZONE_ID (environment) is required',
+      ]),
+    );
+    expect(load(VALID).dns).toEqual({
+      domain: 'staging.example.com',
+      hostedZoneId: 'Z0123456789ABCDEFGHIJ',
+    });
+  });
+
   it('requires a domain behind a load balancer, which serves only api.<domain>', () => {
     for (const env of ['staging', 'prod']) {
       expect(issuesOf({ ...NO_DOMAIN, env }), env).toEqual([
@@ -217,7 +239,7 @@ describe('ENVIRONMENT_SETTINGS', () => {
     expect(staging.database.multiAz).toBe(false);
     expect(staging.network.taskEgress).toEqual({ via: 'nat', natGateways: 1 });
     for (const settings of [staging, prod]) {
-      expect(settings.ingress).toBe('load-balancer');
+      expect(settings.ingress).toEqual({ via: 'load-balancer' });
       expect(settings.services.layout).toBe('separate');
       expect(settings.network.rejectedFlowLogs).toBe(true);
     }
@@ -229,7 +251,8 @@ describe('ENVIRONMENT_SETTINGS', () => {
     // No NAT gateway and no load balancer: their hourly charges dwarf everything else.
     expect(personal.network.taskEgress).toEqual({ via: 'public-ip' });
     expect(personal.network.rejectedFlowLogs).toBe(false);
-    expect(personal.ingress).toBe('http-api');
+    // The execute-api URL stays on, so adding a domain breaks no registered callback URL.
+    expect(personal.ingress).toEqual({ via: 'http-api', disableDefaultEndpoint: false });
     // The smallest Graviton class, one zone, autoscaled storage, automated backups.
     expect(personal.database).toMatchObject({
       instanceType: 't4g.micro',

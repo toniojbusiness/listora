@@ -106,7 +106,9 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         return id;
       };
       const [ingressGroup, api, worker, db] = [
-        settings.ingress === 'load-balancer' ? 'LoadBalancerSecurityGroup' : 'VpcLinkSecurityGroup',
+        settings.ingress.via === 'load-balancer'
+          ? 'LoadBalancerSecurityGroup'
+          : 'VpcLinkSecurityGroup',
         'ApiSecurityGroup',
         'WorkerSecurityGroup',
         'DatabaseSecurityGroup',
@@ -121,7 +123,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       const open = inline.filter(({ rule }) => rule['CidrIp'] === '0.0.0.0/0');
       // Tasks in public subnets have public addresses, but no group admits the internet.
       expect(open.map(({ id, rule }) => [id, rule['FromPort']])).toEqual(
-        settings.ingress === 'load-balancer'
+        settings.ingress.via === 'load-balancer'
           ? [
               [ingressGroup, 443],
               [ingressGroup, 80],
@@ -537,8 +539,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           Name: `api.${dns.domain}.`,
           Type: 'A',
         });
-        // The iOS Prod configuration's API_BASE_URL is personal's ApiUrl (infra/README.md),
-        // and any execute-api URL is disabled, so this output is the only endpoint.
+        // The iOS Prod configuration's API_BASE_URL is personal's ApiUrl (infra/README.md).
         t.hasOutput('ApiUrl', { Value: `https://api.${dns.domain}` });
       });
     } else {
@@ -554,7 +555,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       });
     }
 
-    if (settings.ingress === 'load-balancer') {
+    if (settings.ingress.via === 'load-balancer') {
       it('serves the API through the load balancer over HTTPS only, checked on /health/live', () => {
         t.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
           Port: 443,
@@ -592,13 +593,16 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(container('api')['HealthCheck']).toBeUndefined();
       });
     } else {
+      const { disableDefaultEndpoint } = settings.ingress;
       it('serves the API through an HTTP API and a VPC link, with no other endpoint', () => {
         t.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 0);
         t.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
         t.hasResourceProperties('AWS::ApiGatewayV2::Api', { ProtocolType: 'HTTP' });
         if (dns !== undefined) {
-          // The custom domain replaces the execute-api URL.
-          t.hasResourceProperties('AWS::ApiGatewayV2::Api', { DisableExecuteApiEndpoint: true });
+          // The execute-api URL stays on next to the custom domain unless disabled on its own.
+          t.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+            DisableExecuteApiEndpoint: disableDefaultEndpoint,
+          });
           t.hasResourceProperties('AWS::ApiGatewayV2::DomainName', {
             DomainName: `api.${dns.domain}`,
             DomainNameConfigurations: [
@@ -742,7 +746,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       const alarms = resources(t, 'AWS::CloudWatch::Alarm');
       const names = alarms.map((alarm) => alarm.Properties?.['AlarmName']);
       const endpointAlarms =
-        settings.ingress === 'load-balancer'
+        settings.ingress.via === 'load-balancer'
           ? ['api-5xx', 'load-balancer-5xx', 'api-unhealthy-tasks', 'api-latency-p95']
           : ['api-5xx', 'api-latency-p95', 'api-no-running-task'];
       const serviceNames = settings.services.layout === 'separate' ? ['api', 'worker'] : ['app'];
@@ -764,7 +768,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       t.resourceCountIs('AWS::SNS::Subscription', 0);
     });
 
-    if (settings.ingress === 'http-api') {
+    if (settings.ingress.via === 'http-api') {
       const alarmNamed = (name: string) => {
         const found = resources(t, 'AWS::CloudWatch::Alarm').find(
           (alarm) => alarm.Properties?.['AlarmName'] === `listora-${environment}-${name}`,

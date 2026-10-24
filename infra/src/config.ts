@@ -59,11 +59,17 @@ export type TaskEgress =
  * - `load-balancer`: an internet-facing Application Load Balancer at `api.<domain>` that
  *   health-checks the tasks (`/health/live`) and redirects HTTP to HTTPS. Needs a domain.
  * - `http-api`: an API Gateway HTTP API with a VPC link to the tasks, found through Cloud Map,
- *   at `api.<domain>` or, without a domain, at its default `execute-api` URL. No hourly
+ *   at its default `execute-api` URL and, with a domain, at `api.<domain>` too. No hourly
  *   charge, but requests are limited to 30 seconds and 10 MB (photo uploads go to S3
- *   directly), and ECS health-checks the API container itself.
+ *   directly), and ECS health-checks the API container itself. `disableDefaultEndpoint`
+ *   turns the `execute-api` URL off, leaving only `api.<domain>`, so it needs a domain. It is
+ *   separate from adding the domain: marketplaces and payment providers call back URLs
+ *   registered at the `execute-api` URL until they are re-registered at `api.<domain>`
+ *   (infra/README.md, Adding a domain later).
  */
-export type ApiIngress = 'load-balancer' | 'http-api';
+export type ApiIngress =
+  | { readonly via: 'load-balancer' }
+  | { readonly via: 'http-api'; readonly disableDefaultEndpoint: boolean };
 
 export interface EnvironmentSettings {
   /**
@@ -115,7 +121,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       taskEgress: { via: 'nat', natGateways: 1 },
       rejectedFlowLogs: true,
     },
-    ingress: 'load-balancer',
+    ingress: { via: 'load-balancer' },
     database: {
       instanceType: 't4g.micro',
       multiAz: false,
@@ -140,7 +146,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       taskEgress: { via: 'nat', natGateways: 2 },
       rejectedFlowLogs: true,
     },
-    ingress: 'load-balancer',
+    ingress: { via: 'load-balancer' },
     database: {
       instanceType: 't4g.medium',
       multiAz: true,
@@ -173,7 +179,9 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       rejectedFlowLogs: false,
     },
     // An ALB costs about $24 a month with its two public addresses; the HTTP API costs cents.
-    ingress: 'http-api',
+    // The execute-api URL stays on until every URL registered with a third party has moved
+    // to api.<domain>.
+    ingress: { via: 'http-api', disableDefaultEndpoint: false },
     database: {
       // Single-AZ Graviton RDS beats Aurora Serverless v2: the worker keeps connections open,
       // so Aurora never pauses and bills at least 0.5 ACU around the clock.
@@ -233,8 +241,9 @@ export interface DeployTarget {
   readonly region: string;
   /**
    * The environment's domain. Required where the API is behind a load balancer (staging and
-   * prod), optional behind the HTTP API (personal): without one, the API answers at its
-   * default `execute-api` URL and no sale email is received (infra/README.md).
+   * prod) or only at `api.<domain>` (`disableDefaultEndpoint`), optional behind the HTTP API
+   * otherwise (personal): without one, the API answers at its default `execute-api` URL and
+   * no sale email is received (infra/README.md).
    */
   readonly dns: DnsTarget | undefined;
   /** Tag of the application image in the environment's ECR repository (the git commit). */
@@ -321,6 +330,7 @@ export type ContextReader = (key: string) => unknown;
 export function loadDeployTarget(
   context: ContextReader,
   env: NodeJS.ProcessEnv = process.env,
+  settings: Readonly<Record<EnvironmentName, EnvironmentSettings>> = ENVIRONMENT_SETTINGS,
 ): DeployTarget {
   const issues: string[] = [];
 
@@ -359,9 +369,11 @@ export function loadDeployTarget(
   const account = required(SOURCES.account, ACCOUNT, 'a 12-digit AWS account id');
   const region = read(SOURCES.region) ?? DEFAULT_REGION;
   if (!REGION.test(region)) issues.push(`${describe(SOURCES.region)} must be an AWS region`);
-  // A load balancer serves only https://api.<domain>; the HTTP API also has its own URL. A
-  // domain and its hosted zone are set together or, where optional, not at all.
-  const domainOptional = ENVIRONMENT_SETTINGS[environment].ingress === 'http-api';
+  // A load balancer serves only https://api.<domain>; the HTTP API also has its own URL unless
+  // it is disabled. A domain and its hosted zone are set together or, where optional, not at
+  // all.
+  const { ingress } = settings[environment];
+  const domainOptional = ingress.via === 'http-api' && !ingress.disableDefaultEndpoint;
   const dnsSet = read(SOURCES.domain) !== undefined || read(SOURCES.hostedZoneId) !== undefined;
   const dns: DnsTarget | undefined =
     domainOptional && !dnsSet

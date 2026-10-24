@@ -39,15 +39,15 @@ need removed. It costs about $32 a month, or about $33 a month with browser auto
 $0.56 more once a domain is added; [docs/costs.md](../docs/costs.md) has the line items, the
 alternatives each choice beat, and the levers left.
 
-| Piece       | staging and prod                                              | personal                                                                                                                                                                                                            |
-| ----------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Egress      | Tasks in private `app` subnets behind NAT gateways            | No `app` tier and no NAT: tasks run in the public subnets with a public IPv4 address, and their groups admit nothing from the internet                                                                              |
-| API ingress | HTTPS ALB at `api.<domain>`, health-checked on `/health/live` | API Gateway HTTP API (TLS 1.2+, throttled) with a VPC link to the task, found through Cloud Map (SRV): at `api.<domain>` with the execute-api URL off, or without a domain at the execute-api URL                   |
-| Health      | The ALB's target health check                                 | The API container's own ECS health check on `/health/live`; an `api-no-running-task` alarm and an EventBridge rule that sends unplanned task stops (crash loops) to the alarm topic replace the target-group alarms |
-| Services    | `api` and `worker`, each its own service and task role        | One `app` service whose task runs both containers (0.25 vCPU, 1 GiB), with one task role holding both sets of grants                                                                                                |
-| Database    | `t4g.micro` single-AZ (staging), `t4g.medium` Multi-AZ (prod) | `t4g.micro` single-AZ, 20 to 50 GiB, 7-day backups, deletion protection                                                                                                                                             |
-| Domain      | Required: the API certificate, SES inbound mail, and DKIM     | Optional: see [Without a domain](#without-a-domain)                                                                                                                                                                 |
-| Logs        | Rejected-traffic flow logs; 30 or 90 days                     | No flow logs; 7 days                                                                                                                                                                                                |
+| Piece       | staging and prod                                              | personal                                                                                                                                                                                                                         |
+| ----------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Egress      | Tasks in private `app` subnets behind NAT gateways            | No `app` tier and no NAT: tasks run in the public subnets with a public IPv4 address, and their groups admit nothing from the internet                                                                                           |
+| API ingress | HTTPS ALB at `api.<domain>`, health-checked on `/health/live` | API Gateway HTTP API (TLS 1.2+, throttled) with a VPC link to the task, found through Cloud Map (SRV): at the execute-api URL and, with a domain, at `api.<domain>` too (`disableDefaultEndpoint` turns the execute-api URL off) |
+| Health      | The ALB's target health check                                 | The API container's own ECS health check on `/health/live`; an `api-no-running-task` alarm and an EventBridge rule that sends unplanned task stops (crash loops) to the alarm topic replace the target-group alarms              |
+| Services    | `api` and `worker`, each its own service and task role        | One `app` service whose task runs both containers (0.25 vCPU, 1 GiB), with one task role holding both sets of grants                                                                                                             |
+| Database    | `t4g.micro` single-AZ (staging), `t4g.medium` Multi-AZ (prod) | `t4g.micro` single-AZ, 20 to 50 GiB, 7-day backups, deletion protection                                                                                                                                                          |
+| Domain      | Required: the API certificate, SES inbound mail, and DKIM     | Optional: see [Without a domain](#without-a-domain)                                                                                                                                                                              |
+| Logs        | Rejected-traffic flow logs; 30 or 90 days                     | No flow logs; 7 days                                                                                                                                                                                                             |
 
 The HTTP API limits each request to 30 seconds and 10 MB. Photos upload straight to S3, so no
 request comes near them. If no request passes through the VPC link for 60 days, API Gateway
@@ -84,12 +84,26 @@ load balancer serves only `api.<domain>`. Without a domain:
   hours) and by marketplace API webhooks; forwarded sale emails are enabled once a domain is
   added.
 
-**Adding a domain later.** Create the hosted zone (step 1), set `DOMAIN` and `HOSTED_ZONE_ID`
-in the GitHub environment, and run the Deploy workflow. That deploy creates
-`https://api.<domain>` and the SES inbound pieces, and turns the execute-api URL off, so an
-app build still pointing at it stops reaching the API: set the new `ApiUrl` in the app
-(step 8) and ship a TestFlight build right after the deploy. Then activate the receipt rule
-set (step 6) and point the marketplaces' sale emails at `in.<domain>`.
+**Adding a domain later.** Without a domain, every URL registered with a third party points
+at the execute-api URL: the marketplace OAuth redirect (`/v1/connections/{marketplace}/callback`,
+the eBay RuName accept URL and the Depop redirect URI), marketplace sale webhooks, and Stripe
+and App Store Server Notifications. Adding the domain keeps the execute-api URL on, so none of
+them breaks; turning it off is a separate, later step:
+
+1. Create the hosted zone (step 1), set `DOMAIN` and `HOSTED_ZONE_ID` in the GitHub
+   environment, and run the Deploy workflow. That deploy adds `https://api.<domain>` (now the
+   `ApiUrl` output) and the SES inbound pieces; the execute-api URL keeps serving.
+2. Re-register every third-party URL above at `https://api.<domain>`: the eBay RuName accept
+   URL, the Depop redirect URI, each marketplace's webhook endpoints, the Stripe webhook
+   endpoint, and the App Store Server Notifications URL.
+3. Set the new `ApiUrl` in the app (step 8) and ship a TestFlight build.
+4. Activate the receipt rule set (step 6) and point the marketplaces' sale emails at
+   `in.<domain>`.
+5. Confirm everything works at the new URL: connect a marketplace, see a webhook and a Stripe
+   and App Store notification arrive, and check that the app in use is the new build.
+6. Only then, optionally, set `disableDefaultEndpoint: true` in personal's `ingress`
+   (`src/config.ts`), refresh the snapshots, and deploy, so only `https://api.<domain>`
+   serves the API. A URL still registered at the execute-api URL fails from that deploy on.
 
 ### How the pieces connect
 
@@ -201,7 +215,8 @@ listora/staging/<name> --secret-string ...`, then redeploy or force a new ECS de
 "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text`. Set it as
    `API_BASE_URL` in `apps/ios/Config/Prod.xcconfig` (see
    [apps/ios/README.md](../apps/ios/README.md#environments)) before the next TestFlight build.
-   Run this again whenever the URL changes (adding a domain later changes it).
+   Run this again whenever the URL changes (adding a domain later changes it; see
+   [Adding a domain later](#without-a-domain)).
 
 Later deploys are step 5 only.
 

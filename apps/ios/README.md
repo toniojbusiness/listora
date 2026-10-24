@@ -163,8 +163,8 @@ error that names the key.
   points at the personal environment, which is production for now (there is no separate
   Personal configuration): at that environment's first deploy, set its `API_BASE_URL` to the
   compute stack's `ApiUrl` output: the HTTP API's `execute-api` URL until the environment has
-  a domain, then `https://api.<domain>`, which turns the `execute-api` URL off, so update it
-  and ship a build when the domain is added
+  a domain, then `https://api.<domain>`, so update it and ship a build when the domain is
+  added, before the `execute-api` URL is turned off
   ([infra/README.md](../../infra/README.md#without-a-domain)). Staging's domain arrives
   with the staging AWS account (gate G-AWS, T-30).
 - To point Dev at a different port or host (for example a LAN address for a physical device),

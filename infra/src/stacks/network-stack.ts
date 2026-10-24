@@ -63,7 +63,7 @@ export class NetworkStack extends ListoraStack {
     }
 
     let ingressName: string;
-    switch (settings.ingress) {
+    switch (settings.ingress.via) {
       case 'load-balancer':
         ingressName = 'the load balancer';
         this.ingressSecurityGroup = this.securityGroup('LoadBalancer', 'API load balancer');
