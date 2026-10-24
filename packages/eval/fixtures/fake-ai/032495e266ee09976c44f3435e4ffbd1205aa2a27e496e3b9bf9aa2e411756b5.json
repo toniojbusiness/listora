@@ -1,0 +1,39 @@
+{
+  "description": "care-label-052: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [
+        "168746"
+      ],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "numeric",
+          "value": "0"
+        }
+      ],
+      "fiber": [
+        {
+          "part": "shell",
+          "material": "wool",
+          "percent": 70
+        },
+        {
+          "part": "shell",
+          "material": "nylon",
+          "percent": 30
+        },
+        {
+          "part": "lining",
+          "material": "acetate",
+          "percent": 100
+        }
+      ],
+      "origin": [
+        "VN"
+      ],
+      "style": []
+    }
+  }
+}

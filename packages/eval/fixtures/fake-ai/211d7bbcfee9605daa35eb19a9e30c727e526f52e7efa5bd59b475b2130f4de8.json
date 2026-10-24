@@ -1,0 +1,36 @@
+{
+  "description": "care-label-004: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [
+        "87215"
+      ],
+      "ca": [],
+      "gtin": [],
+      "size": [],
+      "fiber": [
+        {
+          "part": "body",
+          "material": "cotton",
+          "percent": 95
+        },
+        {
+          "part": "body",
+          "material": "spandex",
+          "percent": 5
+        },
+        {
+          "part": "rib",
+          "material": "cotton",
+          "percent": 100
+        }
+      ],
+      "origin": [
+        "PK"
+      ],
+      "style": [
+        "S-10190"
+      ]
+    }
+  }
+}

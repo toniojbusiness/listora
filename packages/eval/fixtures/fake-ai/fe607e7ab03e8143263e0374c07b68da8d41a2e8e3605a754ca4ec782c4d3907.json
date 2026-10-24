@@ -1,0 +1,25 @@
+{
+  "description": "hang-tag-107: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "one_size",
+          "value": "OS"
+        }
+      ],
+      "fiber": [
+        {
+          "part": null,
+          "material": "lyocell",
+          "percent": 100
+        }
+      ],
+      "origin": [],
+      "style": []
+    }
+  }
+}

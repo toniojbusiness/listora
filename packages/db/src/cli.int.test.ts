@@ -6,7 +6,12 @@ import { createScratchDatabase, startNodeProcess, type ScratchDatabase } from '@
 
 const entry = fileURLToPath(new URL('cli.ts', import.meta.url));
 /** The migrations shipped in migrations/, in order. */
-const SHIPPED = ['0001_schema_v1', '0003_idempotency', '0004_item_pre_archive_status'];
+const SHIPPED = [
+  '0001_schema_v1',
+  '0002_ai_metering',
+  '0003_idempotency',
+  '0004_item_pre_archive_status',
+];
 const LATEST = SHIPPED.at(-1) ?? '';
 
 /** Runs the real migrate command (`node src/cli.ts ...`) to completion. */

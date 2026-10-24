@@ -45,9 +45,9 @@ export class EvalProviderError extends Error {
 }
 
 /**
- * The seam between the harness and an AI provider. The provider package (plan task T-08)
- * supplies the real implementation behind its own interface; an adapter maps it onto this one,
- * so the harness never depends on a vendor SDK or credential.
+ * The seam between the harness and an AI provider. `AiEvalProvider` (in `ai-provider.ts`) maps
+ * the `@listora/ai` client onto it, so the harness itself never depends on a vendor SDK or
+ * credential.
  */
 export interface EvalProvider {
   readonly id: string;
@@ -61,9 +61,8 @@ export interface StubProviderOptions {
 }
 
 /**
- * Stand-in provider until the AI provider package (plan task T-08) lands with the fake and real
- * providers. It makes no network call and returns
- * the deterministic parser facts as its answer, which is the floor a real provider must beat.
+ * Echoes the deterministic parser facts as its answer, with no AI call: the floor a real
+ * provider must beat.
  */
 export class StubProvider implements EvalProvider {
   readonly id = 'stub';

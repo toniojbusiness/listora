@@ -1,0 +1,37 @@
+{
+  "description": "hang-tag-199: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [
+        {
+          "format": "upc_a",
+          "digits": "084636589726"
+        }
+      ],
+      "size": [
+        {
+          "system": "letter",
+          "value": "XS"
+        }
+      ],
+      "fiber": [
+        {
+          "part": null,
+          "material": "hemp",
+          "percent": 55
+        },
+        {
+          "part": null,
+          "material": "cotton",
+          "percent": 45
+        }
+      ],
+      "origin": [],
+      "style": [
+        "GS0398"
+      ]
+    }
+  }
+}

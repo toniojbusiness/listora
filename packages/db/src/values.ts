@@ -52,6 +52,9 @@ export type AnalysisStatus = (typeof ANALYSIS_STATUSES)[number];
 export const AI_PROVIDERS = ['fake', 'anthropic'] as const;
 export type AiProvider = (typeof AI_PROVIDERS)[number];
 
+export const AI_USAGE_OUTCOMES = ['succeeded', 'failed'] as const;
+export type AiUsageOutcome = (typeof AI_USAGE_OUTCOMES)[number];
+
 export const CONNECTION_MODES = ['api', 'assisted'] as const;
 export type ConnectionMode = (typeof CONNECTION_MODES)[number];
 

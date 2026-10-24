@@ -1,0 +1,41 @@
+{
+  "description": "denim-label-170: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [
+        "31404"
+      ],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "waist_inseam",
+          "value": "33x32"
+        }
+      ],
+      "fiber": [
+        {
+          "part": null,
+          "material": "cotton",
+          "percent": 60
+        },
+        {
+          "part": null,
+          "material": "polyester",
+          "percent": 35
+        },
+        {
+          "part": null,
+          "material": "spandex",
+          "percent": 5
+        }
+      ],
+      "origin": [
+        "CN"
+      ],
+      "style": [
+        "HZ2512"
+      ]
+    }
+  }
+}
