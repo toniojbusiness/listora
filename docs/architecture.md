@@ -603,7 +603,11 @@ Tables by area:
 **Migrations.** Each migration is a pair of plain SQL files, `NNNN_name.up.sql` and
 `NNNN_name.down.sql`, run by Kysely's migrator in one transaction with a lock (`npm run
 db:migrate`; in AWS, the deploy runs them before new code starts, see section 10). Never edit
-a migration that has been merged; add a new one. A schema change
+a migration that has been merged; add a new one. Numbers must be unique and are never
+reused, but gaps are allowed: take the number firstmate assigns, or else the next free one
+on `origin/main`, and keep it. Merge migration-bearing branches in numeric order, because
+the migrator refuses to apply a migration that sorts before one already applied (Kysely's
+default; it is never turned off); `migrations.test.ts` checks the numbering. A schema change
 updates the Kysely table types in `packages/db/src/schema.ts` and the value lists in
 `values.ts` in the same change; `schema.int.test.ts` fails when they drift. `bigint` columns
 read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as

@@ -15,21 +15,18 @@ async function migrationsDir(files: readonly string[]): Promise<string> {
   return directory;
 }
 
-/** Migration numbers used by more than one migration, and numbers missing from 0001..max. */
+/**
+ * Numbers used by more than one migration. Gaps are allowed: firstmate pre-assigns numbers to
+ * open branches and merges them in order.
+ */
 function numberingProblems(files: readonly string[]): string[] {
-  const byNumber = new Map<number, Set<string>>();
-  for (const file of files) {
-    const name = file.split('.')[0] ?? file;
-    const number = Number(name.slice(0, 4));
-    byNumber.set(number, (byNumber.get(number) ?? new Set()).add(name));
-  }
+  const owners = new Map<string, string>();
   const problems: string[] = [];
-  const highest = Math.max(0, ...byNumber.keys());
-  for (let number = 1; number <= highest; number += 1) {
-    const label = String(number).padStart(4, '0');
-    const names = [...(byNumber.get(number) ?? [])].sort();
-    if (names.length === 0) problems.push(`${label} is missing`);
-    if (names.length > 1) problems.push(`${label} is used by ${names.join(' and ')}`);
+  for (const name of [...new Set(files.map((file) => file.split('.')[0] ?? file))].sort()) {
+    const number = name.slice(0, 4);
+    const owner = owners.get(number);
+    if (owner === undefined) owners.set(number, name);
+    else problems.push(`${number} is used by ${owner} and ${name}`);
   }
   return problems;
 }
@@ -76,20 +73,20 @@ describe('SqlFileMigrationProvider', () => {
     );
   });
 
-  it('ships migrations numbered 0001 to N, each number used once, with no gaps', async () => {
-    // Parallel branches can each add "the next" migration; whichever merges second must
-    // renumber, and this fails until it does.
+  it('ships migrations with unique numbers (gaps allowed)', async () => {
+    // Numbers are assigned up front and branches merge in numeric order, so a gap is only a
+    // migration that has not merged yet. A reused number fails here.
     expect(numberingProblems(await readdir(MIGRATIONS_DIR))).toEqual([]);
   });
 
-  it('numbering check reports shared numbers and gaps', () => {
+  it('numbering check reports shared numbers and allows gaps', () => {
     const pair = (name: string) => [`${name}.up.sql`, `${name}.down.sql`];
     expect(numberingProblems([...pair('0001_a'), ...pair('0002_b')])).toEqual([]);
+    expect(numberingProblems([...pair('0001_a'), ...pair('0003_c')])).toEqual([]);
+    expect(numberingProblems(pair('0002_b'))).toEqual([]);
     expect(numberingProblems([...pair('0001_a'), ...pair('0002_b'), ...pair('0002_c')])).toEqual([
       '0002 is used by 0002_b and 0002_c',
     ]);
-    expect(numberingProblems([...pair('0001_a'), ...pair('0003_c')])).toEqual(['0002 is missing']);
-    expect(numberingProblems(pair('0002_b'))).toEqual(['0001 is missing']);
   });
 
   it('loads the migrations shipped with this package', async () => {
