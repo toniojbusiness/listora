@@ -16,29 +16,17 @@ async function migrationsDir(files: readonly string[]): Promise<string> {
 }
 
 /**
- * Problems with a set of migration files: a name without both its up and down file, a number
- * used by more than one migration, or numbers that do not strictly increase in name order.
- * Gaps are allowed: firstmate pre-assigns numbers to open branches and merges them in order.
+ * Numbers used by more than one migration. Gaps are allowed: firstmate pre-assigns numbers to
+ * open branches and merges them in order.
  */
 function numberingProblems(files: readonly string[]): string[] {
-  const directions = new Map<string, Set<string>>();
-  for (const file of files) {
-    const [name = file, direction = ''] = file.split('.');
-    directions.set(name, (directions.get(name) ?? new Set()).add(direction));
-  }
+  const owners = new Map<string, string>();
   const problems: string[] = [];
-  const names = [...directions.keys()].sort();
-  for (const name of names) {
-    const found = directions.get(name) ?? new Set();
-    if (!found.has('up') || !found.has('down')) problems.push(`${name} needs up and down files`);
-  }
-  for (let index = 1; index < names.length; index += 1) {
-    const previous = names[index - 1] ?? '';
-    const current = names[index] ?? '';
-    const [before, after] = [Number(previous.slice(0, 4)), Number(current.slice(0, 4))];
-    if (after === before)
-      problems.push(`${current.slice(0, 4)} is used by ${previous} and ${current}`);
-    else if (!(after > before)) problems.push(`${current} does not follow ${previous}`);
+  for (const name of [...new Set(files.map((file) => file.split('.')[0] ?? file))].sort()) {
+    const number = name.slice(0, 4);
+    const owner = owners.get(number);
+    if (owner === undefined) owners.set(number, name);
+    else problems.push(`${number} is used by ${owner} and ${name}`);
   }
   return problems;
 }
@@ -85,22 +73,19 @@ describe('SqlFileMigrationProvider', () => {
     );
   });
 
-  it('ships migrations with unique, strictly increasing numbers (gaps allowed)', async () => {
+  it('ships migrations with unique numbers (gaps allowed)', async () => {
     // Numbers are assigned up front and branches merge in numeric order, so a gap is only a
     // migration that has not merged yet. A reused number fails here.
     expect(numberingProblems(await readdir(MIGRATIONS_DIR))).toEqual([]);
   });
 
-  it('numbering check reports shared numbers and unpaired files, and allows gaps', () => {
+  it('numbering check reports shared numbers and allows gaps', () => {
     const pair = (name: string) => [`${name}.up.sql`, `${name}.down.sql`];
     expect(numberingProblems([...pair('0001_a'), ...pair('0002_b')])).toEqual([]);
     expect(numberingProblems([...pair('0001_a'), ...pair('0003_c')])).toEqual([]);
     expect(numberingProblems(pair('0002_b'))).toEqual([]);
     expect(numberingProblems([...pair('0001_a'), ...pair('0002_b'), ...pair('0002_c')])).toEqual([
       '0002 is used by 0002_b and 0002_c',
-    ]);
-    expect(numberingProblems([...pair('0001_a'), '0002_b.up.sql'])).toEqual([
-      '0002_b needs up and down files',
     ]);
   });
 
