@@ -112,7 +112,9 @@ describe('deploy workflow', () => {
     expect(run).toContain(`--task-definition "${names.family}"`);
     expect(run).toContain(`--stack-name "${names.stack}"`);
     for (const output of Object.values(MIGRATE_OUTPUTS)) expect(run).toContain(`output ${output}`);
-    expect(run).toContain('aws ecs wait tasks-stopped');
+    expect(run).not.toContain('aws ecs wait');
+    expect(run).toContain('.tasks[0].lastStatus');
+    expect(run).toMatch(/while true; do\n[\s\S]*"\$status" == STOPPED \]\]; then break; fi/);
     expect(run).toContain('.tasks[0].containers[0].exitCode');
     expect(run).toMatch(/if \[\[ "\$code" != 0 \]\]; then\n.*\n\s*exit 1/);
   });

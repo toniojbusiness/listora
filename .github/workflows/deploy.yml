@@ -116,8 +116,17 @@ jobs:
             exit 1
           fi
           echo "Schema migration task $task"
-          aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$task"
-          stopped=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task" --output json)
+          # No fixed wait limit: a long migration runs until it stops, bounded by the job timeout.
+          while true; do
+            stopped=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task" --output json)
+            status=$(jq --raw-output '.tasks[0].lastStatus // "MISSING"' <<<"$stopped")
+            if [[ "$status" == STOPPED ]]; then break; fi
+            if [[ "$status" == MISSING ]]; then
+              echo "::error::The schema migration task disappeared: $(jq --compact-output '.failures' <<<"$stopped")"
+              exit 1
+            fi
+            sleep 15
+          done
           code=$(jq --raw-output '.tasks[0].containers[0].exitCode // "none"' <<<"$stopped")
           if [[ "$code" != 0 ]]; then
             echo "::error::Schema migrations failed (exit code $code): $(jq --raw-output '.tasks[0].stoppedReason // ""' <<<"$stopped")"

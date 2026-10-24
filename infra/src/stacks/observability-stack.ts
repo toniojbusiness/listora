@@ -3,7 +3,8 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import type * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import type * as rds from 'aws-cdk-lib/aws-rds';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import type { Construct } from 'constructs';
@@ -23,7 +24,9 @@ const GIB = 1024 ** 3;
 /**
  * Baseline alarms on the platform: API errors, health, and latency; service CPU and memory;
  * database CPU, storage, and memory. Every alarm notifies the alarm topic when it fires and
- * when it recovers. Log groups live next to what writes them (compute, migrate, data, network)
+ * when it recovers. Database storage has two signals: the free-storage alarm (autoscaling is
+ * not keeping up) and RDS's own low-storage events, which include storage autoscaling
+ * reaching its ceiling, so the ceiling alerts well before writes stop. Log groups live next to what writes them (compute, migrate, data, network)
  * with the environment's retention. Product SLO alarms (delist latency, verified-success
  * rate, unverified operations, AI cost) are T-32.
  */
@@ -149,6 +152,32 @@ export class ObservabilityStack extends ListoraStack {
         missingData: cloudwatch.TreatMissingData.BREACHING,
       },
     );
+    // RDS's 'low storage' event category: free space running low, storage exhausted, and
+    // storage autoscaling reaching its maximum. RDS publishes them straight to the topic.
+    const storageEvents = `${prefix}-database-storage`;
+    const { policyDependable } = this.alarmTopic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'RdsStorageEvents',
+        actions: ['sns:Publish'],
+        principals: [new iam.ServicePrincipal('events.rds.amazonaws.com')],
+        resources: [this.alarmTopic.topicArn],
+        conditions: {
+          ArnEquals: {
+            'aws:SourceArn': `arn:${this.partition}:rds:${this.region}:${this.account}:es:${storageEvents}`,
+          },
+        },
+      }),
+    );
+    const subscription = new rds.CfnEventSubscription(this, 'DatabaseStorageEvents', {
+      subscriptionName: storageEvents,
+      snsTopicArn: this.alarmTopic.topicArn,
+      sourceType: 'db-instance',
+      sourceIds: [db.instanceIdentifier],
+      eventCategories: ['low storage'],
+      enabled: true,
+    });
+    if (policyDependable !== undefined) subscription.node.addDependency(policyDependable);
+
     alarm(
       'database-free-memory',
       'Database freeable memory stayed below 64 MiB for 15 minutes.',

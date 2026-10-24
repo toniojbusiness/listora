@@ -25,6 +25,22 @@
                 "Ref": "Alarms04B5A0BF"
               },
               "Sid": "AllowPublishThroughSSLOnly"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": "arn:aws:rds:us-east-1:111111111111:es:listora-staging-database-storage"
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.rds.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "RdsStorageEvents"
             }
           ],
           "Version": "2012-10-17"
@@ -634,6 +650,32 @@
         "Threshold": 1073741824,
         "TreatMissingData": "breaching"
       }
+    },
+    "DatabaseStorageEvents": {
+      "Type": "AWS::RDS::EventSubscription",
+      "Properties": {
+        "Enabled": true,
+        "EventCategories": [
+          "low storage"
+        ],
+        "SnsTopicArn": {
+          "Ref": "Alarms04B5A0BF"
+        },
+        "SourceIds": [
+          {
+            "Fn::GetStackOutput": {
+              "StackName": "listora-staging-data",
+              "Region": "us-east-1",
+              "OutputName": "PublishOutputRefPostgres9DC8BB0494FCDEA9"
+            }
+          }
+        ],
+        "SourceType": "db-instance",
+        "SubscriptionName": "listora-staging-database-storage"
+      },
+      "DependsOn": [
+        "AlarmsPolicy5C860CFE"
+      ]
     },
     "databasefreememory3B37BAB9": {
       "Type": "AWS::CloudWatch::Alarm",

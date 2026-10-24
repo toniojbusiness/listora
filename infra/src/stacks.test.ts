@@ -565,6 +565,43 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
       t.resourceCountIs('AWS::SNS::Subscription', 0);
     });
 
+    it('forwards the database low-storage events, including the autoscaling ceiling', () => {
+      const topic = { Ref: Match.stringLikeRegexp('^Alarms') };
+      t.hasResourceProperties('AWS::RDS::EventSubscription', {
+        SubscriptionName: `listora-${environment}-database-storage`,
+        SnsTopicArn: topic,
+        SourceType: 'db-instance',
+        SourceIds: [
+          {
+            'Fn::GetStackOutput': Match.objectLike({
+              StackName: `listora-${environment}-data`,
+              OutputName: Match.stringLikeRegexp('^PublishOutputRefPostgres'),
+            }),
+          },
+        ],
+        EventCategories: ['low storage'],
+        Enabled: true,
+      });
+      t.hasResourceProperties('AWS::SNS::TopicPolicy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'RdsStorageEvents',
+              Effect: 'Allow',
+              Action: 'sns:Publish',
+              Principal: { Service: 'events.rds.amazonaws.com' },
+              Resource: topic,
+              Condition: {
+                ArnEquals: {
+                  'aws:SourceArn': `arn:aws:rds:${target.region}:${target.account}:es:listora-${environment}-database-storage`,
+                },
+              },
+            }),
+          ]),
+        },
+      });
+    });
+
     it('alarms on free storage only once autoscaling stops keeping up', () => {
       const threshold = resources(t, 'AWS::CloudWatch::Alarm').find(
         (alarm) =>
