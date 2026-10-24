@@ -13,6 +13,30 @@ export function staticKillSwitch(engaged: boolean): KillSwitch {
   return { isEngaged: () => Promise.resolve(engaged) };
 }
 
+/** Engaged when any of `switches` is: the deploy-time `AI_KILL_SWITCH` or the operator's. */
+export function anyKillSwitch(...switches: readonly KillSwitch[]): KillSwitch {
+  return {
+    isEngaged: async () => {
+      for (const killSwitch of switches) if (await killSwitch.isEngaged()) return true;
+      return false;
+    },
+  };
+}
+
+/**
+ * Accounts an operator has blocked from AI. Asked on every call, like the kill switch, so a
+ * block takes effect on the account's next call.
+ */
+export interface AccountBlocks {
+  isBlocked(accountId: string): Promise<boolean>;
+}
+
+/** No account is blocked; the default when no control store is wired in. */
+export const NO_ACCOUNT_BLOCKS: AccountBlocks = { isBlocked: () => Promise.resolve(false) };
+
+/** The operator-managed controls (`PostgresAiControls` in production). */
+export interface AiControls extends KillSwitch, AccountBlocks {}
+
 /**
  * Plan quotas are counted in reseller units (`usage_counter.metric`), not dollars: one item
  * analyzed, one premium identification. The caller says which unit a call uses.

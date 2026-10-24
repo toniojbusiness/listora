@@ -2,7 +2,9 @@ import type { Logger } from '@listora/shared';
 
 import { AiCallError, AiGuardError, AiProviderError } from './errors.ts';
 import {
+  NO_ACCOUNT_BLOCKS,
   UNLIMITED_QUOTA,
+  type AccountBlocks,
   type KillSwitch,
   type QuotaCharge,
   type QuotaContext,
@@ -54,6 +56,8 @@ export interface AiClientOptions {
   readonly registry: ModelRegistry;
   readonly usageStore: UsageStore;
   readonly killSwitch: KillSwitch;
+  /** Accounts an operator has blocked from AI; none by default. */
+  readonly accountBlocks?: AccountBlocks;
   /** Per-account circuit breaker: no new call once today's (UTC) spend reaches this. */
   readonly dailyBudgetMicros: number;
   readonly quota?: QuotaPolicy;
@@ -65,8 +69,8 @@ export interface AiClientOptions {
 
 /**
  * The only way the rest of Listora calls AI. For each call it:
- * 1. checks the guards, in order: global kill switch, the account's daily dollar budget, and
- *    the plan quota. A tripped guard throws `AiGuardError` before anything is sent, and
+ * 1. checks the guards, in order: global kill switch, an operator's block on the account, the
+ *    account's daily dollar budget, and the plan quota. A tripped guard throws `AiGuardError` before anything is sent, and
  *    nothing billable is recorded;
  * 2. resolves the tier to its configured model and sends one provider request;
  * 3. records an `ai_usage_event` priced from the versioned price table, for a failed call
@@ -80,6 +84,7 @@ export class AiClient {
   readonly #registry: ModelRegistry;
   readonly #usageStore: UsageStore;
   readonly #killSwitch: KillSwitch;
+  readonly #accountBlocks: AccountBlocks;
   readonly #dailyBudgetMicros: number;
   readonly #quota: QuotaPolicy;
   readonly #prices: PriceTable;
@@ -94,6 +99,7 @@ export class AiClient {
     this.#registry = options.registry;
     this.#usageStore = options.usageStore;
     this.#killSwitch = options.killSwitch;
+    this.#accountBlocks = options.accountBlocks ?? NO_ACCOUNT_BLOCKS;
     this.#dailyBudgetMicros = options.dailyBudgetMicros;
     this.#quota = options.quota ?? UNLIMITED_QUOTA;
     this.#prices = options.prices ?? CURRENT_PRICE_TABLE;
@@ -220,6 +226,9 @@ export class AiClient {
   async #checkGuards(accountId: string, quota: QuotaContext | undefined): Promise<void> {
     if (await this.#killSwitch.isEngaged()) {
       throw new AiGuardError({ kind: 'kill_switch' });
+    }
+    if (await this.#accountBlocks.isBlocked(accountId)) {
+      throw new AiGuardError({ kind: 'account_blocked' });
     }
     const spentMicros = await this.#usageStore.spentTodayMicros(accountId);
     if (spentMicros >= this.#dailyBudgetMicros) {

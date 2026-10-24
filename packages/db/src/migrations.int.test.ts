@@ -41,7 +41,7 @@ async function tablesAndViews(db: Db): Promise<string[]> {
 }
 
 /** Every migration in packages/db/migrations, in order. */
-const MIGRATIONS = ['0001_schema_v1', '0002_ai_metering'];
+const MIGRATIONS = ['0001_schema_v1', '0002_ai_metering', '0003_ai_controls'];
 
 describe('schema migrations (real Postgres)', () => {
   let scratch: ScratchDatabase;

@@ -49,6 +49,7 @@ configuration key is documented there. Never commit `.env`.
 | `npm run dev:api`            | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                            |
 | `npm run dev:worker`         | Run the worker with reload on change                                                                                |
 | `npm run db:migrate`         | Apply pending migrations to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one         |
+| `npm run admin -- --help`    | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail)      |
 | `npm run eval`               | Score the tag parsers and the fake AI provider on the synthetic corpus; `-- --provider anthropic` uses the real API |
 | `npm run corpus:render`      | Regenerate the synthetic tag corpus and its fake AI fixtures after changing the corpus generator                    |
 | `scripts/dev-db.sh start`    | Initialize if needed and start the cluster; create the `listora` and `listora_test` databases (the default command) |
@@ -76,6 +77,7 @@ one runs at the same time.
 ```text
 apps/api/              Fastify HTTP API (@listora/api)
 apps/worker/           Background worker (@listora/worker)
+apps/admin/            Operator CLI: AI cost reports, spend check, AI kill switch (@listora/admin)
 apps/ios/              iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift packages
 packages/ai/           AI provider layer: providers, price table, metering, budget guards (@listora/ai)
 packages/api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)

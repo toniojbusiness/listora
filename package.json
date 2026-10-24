@@ -10,7 +10,8 @@
   "workspaces": [
     "packages/*",
     "apps/api",
-    "apps/worker"
+    "apps/worker",
+    "apps/admin"
   ],
   "scripts": {
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run contract:check && npm run test:unit && npm run test:integration",
@@ -25,6 +26,7 @@
     "dev:api": "npm run dev --workspace @listora/api",
     "dev:worker": "npm run dev --workspace @listora/worker",
     "db:migrate": "npm run migrate --workspace @listora/db --",
+    "admin": "npm run admin --workspace @listora/admin --",
     "eval": "npm run eval --workspace @listora/eval --",
     "corpus:render": "npm run corpus:render --workspace @listora/eval"
   },

@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { AiClient, type AiCall } from './client.ts';
 import { AiCallError, AiGuardError, AiProviderError } from './errors.ts';
 import { FakeAiProvider, inMemoryFixtures, type FakeFixture } from './fake-provider.ts';
-import { staticKillSwitch, type KillSwitch, type QuotaPolicy } from './guards.ts';
+import {
+  anyKillSwitch,
+  staticKillSwitch,
+  type AccountBlocks,
+  type KillSwitch,
+  type QuotaPolicy,
+} from './guards.ts';
 import { createModelRegistry } from './models.ts';
 import { photoSetHashOfImages } from './photo-set-hash.ts';
 import { costMicros, CURRENT_PRICE_TABLE } from './prices.ts';
@@ -37,6 +43,7 @@ interface Setup {
   fixture?: FakeFixture;
   provider?: AiProvider;
   killSwitch?: KillSwitch;
+  accountBlocks?: AccountBlocks;
   dailyBudgetMicros?: number;
   quota?: QuotaPolicy;
 }
@@ -58,6 +65,7 @@ function setup(options: Setup = {}) {
     dailyBudgetMicros: options.dailyBudgetMicros ?? 1_000_000,
     now: () => NOW,
     ...(options.quota === undefined ? {} : { quota: options.quota }),
+    ...(options.accountBlocks === undefined ? {} : { accountBlocks: options.accountBlocks }),
   });
   return { client, store, generate };
 }
@@ -281,6 +289,68 @@ describe('AiClient budget guards', () => {
     // Turning it off again takes effect on the next call.
     engaged = false;
     await client.generate(call());
+  });
+
+  it('an operator block refuses that account only, before anything is sent or recorded', async () => {
+    const blocked = new Set<string>();
+    const { client, store, generate } = setup({
+      accountBlocks: { isBlocked: (accountId) => Promise.resolve(blocked.has(accountId)) },
+    });
+    await client.generate(call());
+    blocked.add(ACCOUNT);
+    const error = await rejection(client.generate(call()), AiGuardError);
+    expect(error.reason).toEqual({ kind: 'account_blocked' });
+    expect(error.message).toBe('AI is turned off for this account by an operator');
+    // Other accounts keep working.
+    await client.generate(
+      call({ context: { accountId: OTHER_ACCOUNT, purpose: 'item_analysis' } }),
+    );
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(store.events).toHaveLength(2);
+    // Lifting the block takes effect on the next call.
+    blocked.delete(ACCOUNT);
+    await client.generate(call());
+  });
+
+  it('checks the kill switch first, then the account block, then the daily budget', async () => {
+    const order: string[] = [];
+    const { client } = setup({
+      killSwitch: {
+        isEngaged: () => {
+          order.push('kill_switch');
+          return Promise.resolve(false);
+        },
+      },
+      accountBlocks: {
+        isBlocked: () => {
+          order.push('account_block');
+          return Promise.resolve(true);
+        },
+      },
+      dailyBudgetMicros: 0,
+    });
+    await expect(client.generate(call())).rejects.toMatchObject({
+      reason: { kind: 'account_blocked' },
+    });
+    expect(order).toEqual(['kill_switch', 'account_block']);
+
+    const engaged = setup({
+      killSwitch: staticKillSwitch(true),
+      accountBlocks: { isBlocked: () => Promise.resolve(true) },
+    });
+    await expect(engaged.client.generate(call())).rejects.toMatchObject({
+      reason: { kind: 'kill_switch' },
+    });
+  });
+
+  it('anyKillSwitch is engaged when any of its switches is', async () => {
+    expect(await anyKillSwitch().isEngaged()).toBe(false);
+    expect(await anyKillSwitch(staticKillSwitch(false), staticKillSwitch(false)).isEngaged()).toBe(
+      false,
+    );
+    expect(await anyKillSwitch(staticKillSwitch(false), staticKillSwitch(true)).isEngaged()).toBe(
+      true,
+    );
   });
 
   it('asks the plan quota hook before the call and consumes units only on success', async () => {

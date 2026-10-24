@@ -133,6 +133,9 @@ const COLUMNS = {
     'updated_at',
     'failed_calls',
   ],
+  ai_kill_switch: ['singleton', 'engaged', 'changed_by', 'reason', 'created_at', 'updated_at'],
+  ai_account_block: ['account_id', 'blocked_by', 'reason', 'created_at'],
+  ai_control_audit: ['id', 'action', 'account_id', 'actor', 'reason', 'created_at'],
   marketplace_connection: [
     'id',
     'account_id',
@@ -378,6 +381,7 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['ai_usage_event', 'provider', values.AI_PROVIDERS],
   ['ai_usage_event', 'tier', values.ANALYSIS_TIERS],
   ['ai_usage_event', 'outcome', values.AI_USAGE_OUTCOMES],
+  ['ai_control_audit', 'action', values.AI_CONTROL_ACTIONS],
   ['marketplace_connection', 'mode', values.CONNECTION_MODES],
   ['marketplace_connection', 'status', values.CONNECTION_STATUSES],
   ['marketplace_listing', 'status', values.LISTING_STATUSES],
@@ -482,12 +486,13 @@ describe('schema types and values match the database', () => {
     expect(rows.filter((row) => !row.has_trigger)).toEqual([]);
   });
 
-  it('gives every table except app_user a non-null tenant account_id', async () => {
+  // Platform tables hold settings and history that belong to no single tenant.
+  it('gives every table except app_user and the platform tables a non-null tenant account_id', async () => {
     const { rows } = await sql<{ table_name: string }>`
       select t.table_name from information_schema.tables t
       where t.table_schema = 'public' and t.table_type = 'BASE TABLE'
         and t.table_name not like 'kysely_migration%'
-        and t.table_name not in ('account', 'app_user')
+        and t.table_name not in ('account', 'app_user', 'ai_kill_switch', 'ai_control_audit')
         and not exists (
           select 1 from information_schema.columns c
           where c.table_schema = t.table_schema and c.table_name = t.table_name

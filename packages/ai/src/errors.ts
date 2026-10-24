@@ -86,6 +86,7 @@ export class AiCallError extends Error {
 /** Why a budget guard refused a call before it reached the provider. */
 export type AiGuardReason =
   | { readonly kind: 'kill_switch' }
+  | { readonly kind: 'account_blocked' }
   | {
       readonly kind: 'daily_budget';
       readonly spentMicros: number;
@@ -118,6 +119,8 @@ function guardMessage(reason: AiGuardReason): string {
   switch (reason.kind) {
     case 'kill_switch':
       return 'AI is turned off for every account (global kill switch)';
+    case 'account_blocked':
+      return 'AI is turned off for this account by an operator';
     case 'daily_budget':
       return (
         `AI daily budget reached for this account: ${dollars(reason.spentMicros)} of ` +

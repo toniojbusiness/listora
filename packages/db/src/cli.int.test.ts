@@ -32,7 +32,7 @@ describe('migrate command (real Postgres)', () => {
     expect(applied.logs).toContainEqual(
       expect.objectContaining({
         msg: 'migrations applied',
-        applied: ['0001_schema_v1', '0002_ai_metering'],
+        applied: ['0001_schema_v1', '0002_ai_metering', '0003_ai_controls'],
       }),
     );
 
@@ -42,21 +42,21 @@ describe('migrate command (real Postgres)', () => {
 
     const status = await migrate(env, 'status');
     expect(status.code).toBe(0);
-    for (const migration of ['0001_schema_v1', '0002_ai_metering']) {
+    for (const migration of ['0001_schema_v1', '0002_ai_metering', '0003_ai_controls']) {
       expect(status.logs).toContainEqual(expect.objectContaining({ msg: 'applied', migration }));
     }
 
-    const reverted = await migrate(env, 'down', '0002_ai_metering');
+    const reverted = await migrate(env, 'down', '0003_ai_controls');
     expect(reverted.code).toBe(0);
     expect(reverted.logs).toContainEqual(
-      expect.objectContaining({ msg: 'migration reverted', reverted: ['0002_ai_metering'] }),
+      expect.objectContaining({ msg: 'migration reverted', reverted: ['0003_ai_controls'] }),
     );
     const pending = await migrate(env, 'status');
     expect(pending.logs).toContainEqual(
-      expect.objectContaining({ msg: 'applied', migration: '0001_schema_v1' }),
+      expect.objectContaining({ msg: 'applied', migration: '0002_ai_metering' }),
     );
     expect(pending.logs).toContainEqual(
-      expect.objectContaining({ msg: 'pending', migration: '0002_ai_metering' }),
+      expect.objectContaining({ msg: 'pending', migration: '0003_ai_controls' }),
     );
   });
 
@@ -69,10 +69,10 @@ describe('migrate command (real Postgres)', () => {
     const failure = refused.logs.find((line) => line['msg'] === 'migration command failed');
     expect(failure?.['err']).toMatchObject({
       message:
-        'Refusing to revert: the latest applied migration is 0002_ai_metering, not 0000_wrong',
+        'Refusing to revert: the latest applied migration is 0003_ai_controls, not 0000_wrong',
     });
     expect((await migrate(env, 'status')).logs).toContainEqual(
-      expect.objectContaining({ msg: 'applied', migration: '0002_ai_metering' }),
+      expect.objectContaining({ msg: 'applied', migration: '0003_ai_controls' }),
     );
   });
 
