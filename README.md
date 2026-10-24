@@ -107,7 +107,8 @@ packages/testing/      Test-only helpers (@listora/testing)
 packages/tag-parse/    Deterministic tag-text parsers (@listora/tag-parse)
 packages/eval/         Synthetic tag corpus and eval harness CLI (@listora/eval)
 infra/                 AWS CDK stacks and deploy setup (@listora/infra; see infra/README.md)
-scripts/               dev-db.sh (local PostgreSQL 18 cluster), container-smoke.sh (image smoke test)
+scripts/               dev-db.sh (local PostgreSQL 18 cluster), container-smoke.sh (image smoke test),
+                       ios-release.sh (iOS archive and TestFlight upload)
 Dockerfile             Application image: one image runs the API and the worker
 Makefile               iOS commands (make ios-*)
 docs/                  Architecture overview and roadmap
@@ -156,3 +157,8 @@ Deploys are separate: `.github/workflows/deploy.yml` runs only when started by h
 `staging` or `prod`, inside the protected GitHub environment of that name, and reaches AWS
 through OIDC with no stored keys. Setup and the first deploy are described in
 [infra/README.md](infra/README.md).
+
+TestFlight uploads are separate too: `.github/workflows/testflight.yml` runs only when started
+by hand on `main` for the `staging` or `prod` app, and uploads a signed iOS build from a macOS
+runner. Setup and the release steps are in
+[Releases in apps/ios/README.md](apps/ios/README.md#releases).

@@ -75,6 +75,13 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # The app is iPhone-only and portrait. On iPad it runs as an iPhone app, which iPadOS 26
+        # windows freely, so the iPad key lists every orientation (Xcode warns otherwise).
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(BASE_BUNDLE_IDENTIFIER)$(BUNDLE_ID_SUFFIX)

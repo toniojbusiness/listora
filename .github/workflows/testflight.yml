@@ -1,0 +1,66 @@
+name: TestFlight
+
+# Manual only: an operator picks the app in the Actions tab. This workflow never runs on pushes
+# or pull requests, because macOS minutes bill at 10 times Linux minutes. It signs with an App
+# Store Connect API key stored as secrets of the ios-staging or ios-prod GitHub environment;
+# no personal Apple ID is involved. Setup and the release guide: "Releases" in apps/ios/README.md.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: App to build and upload
+        type: choice
+        options: [staging, prod]
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    name: TestFlight ${{ inputs.environment }}
+    # Only what is on main is released.
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 45
+    # Separate from the AWS deploy environments, so the Apple secrets and the AWS deploy role
+    # never share an environment. Its protection rules gate every upload.
+    environment: ios-${{ inputs.environment }}
+    env:
+      # Pinned to the Xcode used for local development and CI (apps/ios/README.md).
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      IOS_RELEASE_CONFIGURATION: ${{ inputs.environment == 'prod' && 'Prod-Release' || 'Staging-Release' }}
+      # The run number of this workflow rises by one per run, for both apps, so every upload has
+      # a higher build number than the one before. A re-run keeps its number, and App Store
+      # Connect rejects a number it already has, so one build is never uploaded twice.
+      IOS_BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Before anything slow, so a missing secret costs seconds. Secrets reach only the steps
+      # that read them.
+      - name: Check the App Store Connect credentials
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: scripts/ios-release.sh check-credentials
+      - name: Show Xcode
+        run: xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Archive, sign, and upload to TestFlight
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: make ios-testflight IOS_RELEASE_CONFIGURATION="$IOS_RELEASE_CONFIGURATION" IOS_BUILD_NUMBER="$IOS_BUILD_NUMBER"
