@@ -155,9 +155,10 @@ src/
   (absent means no value).
 - **Item status.** The user moves an item between `draft` and `ready` while the server does
   not own its status, and archives it once no listing is live; archiving records the earlier
-  status. An archived item goes back to `draft` or `ready` only if it was one of them before
-  and has no sale. A listed, sold, or shipped item stays archived (409
-  `invalid_state_transition`), so its server-owned status is never lost.
+  status. Unarchiving an item that was `draft` or `ready` when archived, and has no sale,
+  lands on whichever of the two the request asks for, since the user may already move
+  between them. An item that was listed, sold, or shipped, or that has a sale, stays archived
+  (409 `invalid_state_transition`), so its server-owned status is never lost.
 - **Shutdown.** On SIGTERM the server stops accepting connections, finishes in-flight
   requests (asking their keep-alive clients to close), then closes the database pool.
 

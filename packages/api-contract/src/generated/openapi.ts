@@ -1073,7 +1073,10 @@ export interface components {
         /**
          * @description `draft` and `ready` are set by the user; `archived` by the user for an item with no
          *     live listing. `listed`, `sold_pending_delist`, `sold`, and `shipped` are set by the
-         *     server from listings and sales.
+         *     server from listings and sales. An archived item can be set back to either `draft` or
+         *     `ready` only if it was `draft` or `ready` when it was archived and has never been sold;
+         *     otherwise the server answers `409 invalid_state_transition` and the item stays
+         *     archived.
          * @enum {string}
          */
         KnownItemStatus: "draft" | "ready" | "listed" | "sold_pending_delist" | "sold" | "shipped" | "archived";

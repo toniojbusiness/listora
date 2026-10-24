@@ -215,9 +215,11 @@ interface StatusChange {
 /**
  * The status after a replace. `draft` and `ready` are the user's to set only while the server
  * does not own the status (it does once the item is listed or sold); `archived` needs every
- * listing to be off the marketplaces and records the status the item had. An archived item
- * goes back to `draft` or `ready` only if it was one of them before and has no sale, so a
- * sold item can never become available inventory again.
+ * listing to be off the marketplaces and records the status the item had. Unarchiving moves
+ * an item that was `draft` or `ready` when archived, and has no sale, to whichever of `draft`
+ * or `ready` is requested: both are pre-listing states the user may already move between. An
+ * item that was listed, sold, or shipped, or that has a sale, stays archived, so a sold item
+ * can never become available inventory again.
  */
 async function nextStatus(
   db: DbExecutor,
