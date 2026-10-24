@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
-import { openEnumKnownRef } from '../tools/open-enum.ts';
+import { openEnumKnownRef } from './open-enum.ts';
 
 interface Schema {
   $ref?: string;

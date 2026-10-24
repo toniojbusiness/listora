@@ -16,7 +16,7 @@ import { pathToFileURL } from 'node:url';
 
 import openapiTS, { astToString, oapiRef } from 'openapi-typescript';
 
-import { openEnumKnownRef } from './open-enum.ts';
+import { openEnumKnownRef } from '../src/open-enum.ts';
 
 const packageDir = resolve(import.meta.dirname, '..');
 const repoRoot = resolve(packageDir, '../..');

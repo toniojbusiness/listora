@@ -3,42 +3,74 @@ import { describe, expect, it } from 'vitest';
 import { ConfigError, loadApiConfig } from './config.ts';
 
 const DATABASE_URL = 'postgres://listora:hunter2@127.0.0.1:55432/listora';
+const REQUIRED = { DATABASE_URL, AUTH_DRIVER: 'dev' };
 
 describe('loadApiConfig', () => {
-  it('applies defaults when only DATABASE_URL is set', () => {
-    expect(loadApiConfig({ DATABASE_URL })).toEqual({
+  it('applies defaults when only the required keys are set', () => {
+    expect(loadApiConfig(REQUIRED)).toEqual({
       host: '127.0.0.1',
       port: 3000,
       databaseUrl: DATABASE_URL,
       logLevel: 'info',
+      auth: { driver: 'dev', devSecret: undefined },
     });
   });
 
   it('reads explicit values', () => {
     expect(
-      loadApiConfig({ DATABASE_URL, API_HOST: '0.0.0.0', API_PORT: '0', LOG_LEVEL: 'debug' }),
-    ).toMatchObject({ host: '0.0.0.0', port: 0, logLevel: 'debug' });
+      loadApiConfig({
+        ...REQUIRED,
+        API_HOST: '0.0.0.0',
+        API_PORT: '0',
+        LOG_LEVEL: 'debug',
+        AUTH_DEV_SECRET: 'x'.repeat(32),
+      }),
+    ).toMatchObject({
+      host: '0.0.0.0',
+      port: 0,
+      logLevel: 'debug',
+      auth: { driver: 'dev', devSecret: 'x'.repeat(32) },
+    });
   });
 
   it('reports every invalid key at once', () => {
     const error = captureConfigError({ API_PORT: '70000', LOG_LEVEL: 'loud' });
     expect(error.issues).toEqual([
       'API_PORT must be an integer from 0 to 65535',
+      'AUTH_DRIVER is required',
       'DATABASE_URL is required',
       'LOG_LEVEL must be one of fatal, error, warn, info, debug, trace, silent',
     ]);
   });
 
   it.each(['3000abc', '-1', '1.5', ''])('rejects API_PORT=%j', (API_PORT) => {
-    expect(captureConfigError({ DATABASE_URL, API_PORT }).issues).toEqual([
+    expect(captureConfigError({ ...REQUIRED, API_PORT }).issues).toEqual([
       'API_PORT must be an integer from 0 to 65535',
     ]);
   });
 
   it('rejects a non-postgres DATABASE_URL without echoing its value', () => {
-    const error = captureConfigError({ DATABASE_URL: 'mysql://root:hunter2@db/x' });
+    const error = captureConfigError({ ...REQUIRED, DATABASE_URL: 'mysql://root:hunter2@db/x' });
     expect(error.issues).toEqual(['DATABASE_URL must be a postgres:// URL']);
     expect(error.message).not.toContain('hunter2');
+  });
+
+  it('rejects an empty DATABASE_URL', () => {
+    expect(captureConfigError({ ...REQUIRED, DATABASE_URL: '' }).issues).toEqual([
+      'DATABASE_URL is required',
+    ]);
+  });
+
+  it('rejects an auth driver this build does not have', () => {
+    expect(captureConfigError({ ...REQUIRED, AUTH_DRIVER: 'cognito' }).issues).toEqual([
+      'AUTH_DRIVER must be one of dev',
+    ]);
+  });
+
+  it('rejects a short AUTH_DEV_SECRET without echoing it', () => {
+    const error = captureConfigError({ ...REQUIRED, AUTH_DEV_SECRET: 'tooshort-secret' });
+    expect(error.issues).toEqual(['AUTH_DEV_SECRET must be at least 32 characters']);
+    expect(error.message).not.toContain('tooshort-secret');
   });
 });
 

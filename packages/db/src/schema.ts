@@ -41,6 +41,7 @@ import type {
   OperationStatus,
   PhotoRole,
   Plan,
+  PreArchiveItemStatus,
   PricingSource,
   SaleDetectionSource,
   SaleStatus,
@@ -166,6 +167,8 @@ export interface InventoryItemTable {
   version: DatabaseManaged<number>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  /** The status before the item was archived; set exactly when `status` is `archived`. */
+  pre_archive_status: Nullable<PreArchiveItemStatus>;
 }
 
 export interface PhotoTable {
@@ -502,6 +505,24 @@ export interface AuditLogTable {
   created_at: CreatedAt;
 }
 
+// API ---------------------------------------------------------------------------------------
+
+/**
+ * The stored first successful response to a POST, keyed by its `Idempotency-Key`. Written once
+ * in the transaction of the change it reports; deleted in batches by later POSTs once it
+ * expires, or with its account.
+ */
+export interface IdempotencyRecordTable {
+  account_id: string;
+  key: string;
+  operation_id: string;
+  request_hash: string;
+  response_status: number;
+  response_body: NullableJsonb<JsonValue>;
+  created_at: CreatedAt;
+  expires_at: Timestamp;
+}
+
 /** Every table and view in the schema, keyed by name. */
 export interface Database {
   account: AccountTable;
@@ -531,4 +552,5 @@ export interface Database {
   entitlement: EntitlementTable;
   usage_counter: UsageCounterTable;
   audit_log: AuditLogTable;
+  idempotency_record: IdempotencyRecordTable;
 }

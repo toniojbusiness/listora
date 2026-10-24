@@ -34,6 +34,24 @@ npm run check          # format, lint, type check, unit + integration tests
 run the API, or to change a port, copy `.env.example` to `.env` and edit it. Every
 configuration key is documented there. Never commit `.env`.
 
+### Signing in locally
+
+With `AUTH_DRIVER=dev` (the `.env.example` setting), the API signs people in with a one-time
+code that it prints to its log instead of emailing it. The first sign-in of an email creates
+its account.
+
+```sh
+curl -X POST localhost:3000/dev/auth/codes -H 'content-type: application/json' \
+  -d '{"email": "you@example.com"}'
+# The API log shows: dev sign-in code for you@example.com: 123456
+curl -X POST localhost:3000/dev/auth/sessions -H 'content-type: application/json' \
+  -d '{"email": "you@example.com", "code": "123456"}'
+# → {"accessToken": "...", "tokenType": "Bearer", "expiresInSeconds": 86400}
+```
+
+Send the token as `Authorization: Bearer <accessToken>` on every `/v1` request, and an
+`Idempotency-Key` header (a new UUID per action) on every POST.
+
 ## Commands
 
 | Command                      | What it does                                                                                                        |

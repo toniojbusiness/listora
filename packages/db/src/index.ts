@@ -1,5 +1,5 @@
-export { createDatabase, inTransaction, parseSafeInteger } from './database.ts';
-export type { DatabaseOptions, Db, DbExecutor, DbTransaction } from './database.ts';
+export { createDatabase, createPool, inTransaction, parseSafeInteger } from './database.ts';
+export type { DatabaseOptions, DatabasePool, Db, DbExecutor, DbTransaction } from './database.ts';
 export { createInventoryItem } from './items.ts';
 export type { InventoryItem, NewInventoryItem } from './items.ts';
 export { jsonb } from './json.ts';

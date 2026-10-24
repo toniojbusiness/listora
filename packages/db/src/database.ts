@@ -4,6 +4,8 @@ import pg from 'pg';
 import type { Database } from './schema.ts';
 
 export type Db = Kysely<Database>;
+/** The node-postgres pool behind a `Db`, for callers that need driver features (query timeouts). */
+export type DatabasePool = pg.Pool;
 export type DbTransaction = Transaction<Database>;
 /** Either a database handle or an open transaction. */
 export type DbExecutor = Db | DbTransaction;
@@ -40,8 +42,8 @@ export function parseSafeInteger(value: string): number {
   return parsed;
 }
 
-/** Creates the typed Kysely handle every backend process uses. Call `destroy()` on shutdown. */
-export function createDatabase(options: DatabaseOptions): Db {
+/** Creates a connection pool with Listora's value parsers (see `typeParsers` above). */
+export function createPool(options: DatabaseOptions): DatabasePool {
   const pool = new pg.Pool({
     connectionString: options.connectionString,
     connectionTimeoutMillis: options.connectionTimeoutMillis ?? 5_000,
@@ -51,6 +53,15 @@ export function createDatabase(options: DatabaseOptions): Db {
   // An idle client can error when the server restarts; without a listener that crashes the
   // process. The next query gets a fresh connection.
   pool.on('error', () => undefined);
+  return pool;
+}
+
+/**
+ * Creates the typed Kysely handle every backend process uses, on a new pool or on one from
+ * `createPool`. Call `destroy()` on shutdown; it also ends the pool.
+ */
+export function createDatabase(source: DatabaseOptions | DatabasePool): Db {
+  const pool = source instanceof pg.Pool ? source : createPool(source);
   return new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
 }
 

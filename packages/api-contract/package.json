@@ -12,9 +12,11 @@
     "lint": "redocly lint openapi.yaml",
     "check": "npm run lint && node tools/codegen.ts check && node tools/codegen.ts swift-test"
   },
+  "dependencies": {
+    "yaml": "^2.9.1"
+  },
   "devDependencies": {
     "@redocly/cli": "^2.71.0",
-    "openapi-typescript": "^7.13.0",
-    "yaml": "^2.9.1"
+    "openapi-typescript": "^7.13.0"
   }
 }

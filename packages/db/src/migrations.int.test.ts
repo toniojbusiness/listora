@@ -41,7 +41,12 @@ async function tablesAndViews(db: Db): Promise<string[]> {
 }
 
 /** Every migration in packages/db/migrations, in order. */
-const MIGRATIONS = ['0001_schema_v1', '0002_ai_metering'];
+const MIGRATIONS = [
+  '0001_schema_v1',
+  '0002_ai_metering',
+  '0003_idempotency',
+  '0004_item_pre_archive_status',
+];
 
 describe('schema migrations (real Postgres)', () => {
   let scratch: ScratchDatabase;
@@ -63,6 +68,7 @@ describe('schema migrations (real Postgres)', () => {
 
     expect(await migrator.migrateToLatest()).toEqual(MIGRATIONS);
     expect(await tablesAndViews(db)).toContain('inventory_item');
+    expect(await tablesAndViews(db)).toContain('idempotency_record');
     expect(await tablesAndViews(db)).toContain('delist_run_listing');
     expect((await migrator.status()).every((migration) => migration.executedAt !== null)).toBe(
       true,

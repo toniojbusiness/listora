@@ -49,8 +49,9 @@ These two rules from the product owner override every other design choice.
   and are consumed as `@listora/<name>`.
 - TypeScript is pinned to 6.0.x because typescript-eslint does not support TypeScript 7 yet.
 - Configuration comes only from environment variables. Each process parses them once at
-  startup and fails fast. Error messages name the bad key but never print its value. Every
-  key is documented in `.env.example`.
+  startup and fails fast (the API with a zod schema in `apps/api/src/config.ts`). Error
+  messages name the bad key but never print its value. Every key is documented in
+  `.env.example`.
 - Logging goes through `createLogger()` from `@listora/shared`: structured JSON (pino),
   with credentials redacted by `REDACTED_LOG_PATHS`. Never log tokens, passwords, or full
   marketplace payloads that contain secrets.
@@ -109,6 +110,55 @@ adapters). Add each one to the root
 `tsconfig.json` references. Tests sit next to the code: `*.test.ts` files are unit tests with
 no external services, and `*.int.test.ts` files are integration tests against the real local
 Postgres.
+
+### The API (`apps/api`)
+
+```text
+src/
+  main.ts        Entry point: config, logger, database, auth driver, graceful shutdown
+  app.ts         buildApp(): request ids, error handling, routes (tests drive it with inject)
+  config.ts      Environment, parsed once with a zod schema
+  errors.ts      ApiError and the contract's ErrorResponse; HTTP status per error code
+  contract/      Validators compiled from openapi.yaml, and contractRoute()
+  auth/          AuthDriver interface; the dev driver and its /dev/auth endpoints
+  tenancy.ts     Tenant resolution: the tenancy guard
+  idempotency.ts Idempotency-Key handling for POSTs
+  items/ photos/ One folder per resource: routes.ts, repository.ts, mapping and views
+```
+
+- **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
+  the method and URL from `openapi.yaml` by operationId and validates path, query, and body
+  against the contract's own schemas (`loadContractDocument()` from `@listora/api-contract`,
+  compiled with Ajv). A malformed path id is `404`; a query or body that breaks the schema is
+  `422 validation_failed` with `fieldErrors`. Requests are held to `KnownX` values even where
+  the shared schema is an open enum. Handler input and reply types are the generated contract
+  types, so a reply that does not match the contract fails `tsc`. Integration tests also
+  validate every response body against the contract (`call` in `src/test-support.ts`).
+- **Tenancy guard.** Every `/v1` route is authenticated before its body is read, and its
+  handler receives a `Tenant` (account and user). `AccountId` is a branded type that only
+  `tenancy.ts` creates, and every repository function takes the `Tenant` and filters on its
+  account, so another account's rows read as `404 not_found` and cannot be changed.
+  `contractRoute` refuses operations the contract marks public. A person's first request
+  creates their user, an account (SKU prefix from the email's initials), and the owner
+  membership; a user without exactly one account gets `403 forbidden`.
+- **Idempotency.** A POST runs in one transaction that takes an advisory lock on (account,
+  key) and stores its successful response in `idempotency_record` together with the change,
+  so a retry replays it, a concurrent retry gets `409`, and a failure stores nothing. Each
+  stored response also deletes up to 100 expired records (any account, oldest first, skipping
+  rows another request holds), so the table stays about one retention period in size.
+- **Errors and logs.** Every error is the contract's `ErrorResponse`; unexpected failures are
+  a generic `500 internal_error` and only the log has details. Each request has an id (a
+  sane incoming `X-Request-Id`, otherwise a UUID) that is in the response header, in
+  `error.requestId`, and as `requestId` on every log line of the request.
+- **Writes** that change an item append an `audit_log` entry in the same transaction.
+  `fieldProvenance` is server-owned: a detail written through the API is `user`, an unchanged
+  one keeps its source (values compare as key-sorted JSON). Responses omit empty values
+  (absent means no value).
+- **Item status.** Archiving records the item's earlier status in `pre_archive_status`, so
+  unarchiving never overwrites a status the server owns (listed, sold, shipped). Which
+  transitions the user may make is part of the contract: see `ItemStatus` in `openapi.yaml`.
+- **Shutdown.** On SIGTERM the server stops accepting connections, finishes in-flight
+  requests (asking their keep-alive clients to close), then closes the database pool.
 
 ## 4. Marketplace adapter model
 
@@ -218,7 +268,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection) | Sandbox, then production | `EBAY_ENV=fake\|sandbox\|production` |
 | Depop            | `fake-depop` generated from Depop's OpenAPI spec                                                             | Sandbox, then production | `DEPOP_ENV`                          |
 | Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                         | SES inbound              | `EMAIL_INGEST=folder\|ses`           |
-| Auth             | Dev OTP printed to the console                                                                               | Cognito                  | `AUTH_DRIVER=dev\|cognito`           |
+| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                           | Cognito (T-31)           | `AUTH_DRIVER=dev\|cognito`           |
 | Payments         | Fake Stripe client + StoreKit configuration file                                                             | Stripe, App Store        | `BILLING_DRIVER=fake\|stripe`        |
 | Push             | Recording fake                                                                                               | APNs                     | `PUSH_DRIVER`                        |
 | Token encryption | Local AES-GCM key from `.env`                                                                                | KMS envelope encryption  | `TOKEN_KMS_KEY_ID`                   |
@@ -327,7 +377,8 @@ Tables by area:
   `membership` as the plan's data model sketched: SKUs and their counter are per account
   (decision D12), so every member of an account creates SKUs with the same prefix.
 - **Inventory:** `inventory_item` (status, canonical attributes, prices, cost,
-  `field_provenance`, optimistic-lock `version`), `photo` (role, hashes, derivatives, OCR and
+  `field_provenance`, optimistic-lock `version`, and `pre_archive_status`, the status an
+  archived item had before it was archived), `photo` (role, hashes, derivatives, OCR and
   barcodes), and `storage_location`. `photo` stores pixel `width` and `height` but no byte
   size; the stored object's size is available from object storage when needed.
 - **AI:** `ai_analysis` (unique per photo-set hash and tier), `ai_usage_event` (one
@@ -351,6 +402,9 @@ Tables by area:
 - **Pricing:** `pricing_snapshot` (source-labeled).
 - **Billing:** `subscription`, `entitlement`, and `usage_counter`.
 - **History:** `audit_log` (item changes the user can see).
+- **API:** `idempotency_record` (the stored first successful response per account and
+  `Idempotency-Key`, kept 24 hours; written once, so it has no `updated_at`, and deleted in
+  batches by later POSTs once expired).
 
 **Migrations.** Each migration is a pair of plain SQL files, `NNNN_name.up.sql` and
 `NNNN_name.down.sql`, run by Kysely's migrator in one transaction with a lock (`npm run

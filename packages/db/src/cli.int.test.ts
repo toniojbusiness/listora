@@ -5,6 +5,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createScratchDatabase, startNodeProcess, type ScratchDatabase } from '@listora/testing';
 
 const entry = fileURLToPath(new URL('cli.ts', import.meta.url));
+/** The migrations shipped in migrations/, in order. */
+const SHIPPED = [
+  '0001_schema_v1',
+  '0002_ai_metering',
+  '0003_idempotency',
+  '0004_item_pre_archive_status',
+];
+const LATEST = SHIPPED.at(-1) ?? '';
 
 /** Runs the real migrate command (`node src/cli.ts ...`) to completion. */
 async function migrate(env: NodeJS.ProcessEnv, ...args: string[]) {
@@ -30,10 +38,7 @@ describe('migrate command (real Postgres)', () => {
     const applied = await migrate(env, 'latest');
     expect(applied.code).toBe(0);
     expect(applied.logs).toContainEqual(
-      expect.objectContaining({
-        msg: 'migrations applied',
-        applied: ['0001_schema_v1', '0002_ai_metering'],
-      }),
+      expect.objectContaining({ msg: 'migrations applied', applied: SHIPPED }),
     );
 
     const again = await migrate(env);
@@ -42,21 +47,21 @@ describe('migrate command (real Postgres)', () => {
 
     const status = await migrate(env, 'status');
     expect(status.code).toBe(0);
-    for (const migration of ['0001_schema_v1', '0002_ai_metering']) {
+    for (const migration of SHIPPED) {
       expect(status.logs).toContainEqual(expect.objectContaining({ msg: 'applied', migration }));
     }
 
-    const reverted = await migrate(env, 'down', '0002_ai_metering');
+    const reverted = await migrate(env, 'down', LATEST);
     expect(reverted.code).toBe(0);
     expect(reverted.logs).toContainEqual(
-      expect.objectContaining({ msg: 'migration reverted', reverted: ['0002_ai_metering'] }),
+      expect.objectContaining({ msg: 'migration reverted', reverted: [LATEST] }),
     );
     const pending = await migrate(env, 'status');
+    for (const migration of SHIPPED.slice(0, -1)) {
+      expect(pending.logs).toContainEqual(expect.objectContaining({ msg: 'applied', migration }));
+    }
     expect(pending.logs).toContainEqual(
-      expect.objectContaining({ msg: 'applied', migration: '0001_schema_v1' }),
-    );
-    expect(pending.logs).toContainEqual(
-      expect.objectContaining({ msg: 'pending', migration: '0002_ai_metering' }),
+      expect.objectContaining({ msg: 'pending', migration: LATEST }),
     );
   });
 
@@ -68,11 +73,10 @@ describe('migrate command (real Postgres)', () => {
     expect(refused.code).toBe(1);
     const failure = refused.logs.find((line) => line['msg'] === 'migration command failed');
     expect(failure?.['err']).toMatchObject({
-      message:
-        'Refusing to revert: the latest applied migration is 0002_ai_metering, not 0000_wrong',
+      message: `Refusing to revert: the latest applied migration is ${LATEST}, not 0000_wrong`,
     });
     expect((await migrate(env, 'status')).logs).toContainEqual(
-      expect.objectContaining({ msg: 'applied', migration: '0002_ai_metering' }),
+      expect.objectContaining({ msg: 'applied', migration: LATEST }),
     );
   });
 

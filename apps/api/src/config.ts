@@ -1,10 +1,24 @@
-import { isLogLevel, type LogLevel } from '@listora/shared';
+import { z } from 'zod';
+
+import { LOG_LEVELS, type LogLevel } from '@listora/shared';
+
+/** Auth drivers this build can run. `cognito` arrives with plan task T-31. */
+export const AUTH_DRIVERS = ['dev'] as const;
+export type AuthDriverName = (typeof AUTH_DRIVERS)[number];
+
+/** Shortest accepted AUTH_DEV_SECRET: 32 characters, about 256 bits when random. */
+export const MIN_DEV_SECRET_LENGTH = 32;
 
 export interface ApiConfig {
   host: string;
   port: number;
   databaseUrl: string;
   logLevel: LogLevel;
+  auth: {
+    driver: AuthDriverName;
+    /** HMAC key for dev session tokens; absent means a random key per process. */
+    devSecret: string | undefined;
+  };
 }
 
 export class ConfigError extends Error {
@@ -18,32 +32,52 @@ export class ConfigError extends Error {
 }
 
 /**
- * Reads API settings from the environment (see `.env.example`). Error messages name the
- * offending key but never echo its value, because values such as DATABASE_URL hold secrets.
+ * The environment keys the API reads, in the order problems are reported. Each message names
+ * the key but never its value, because values such as DATABASE_URL hold secrets; zod's own
+ * messages are never used for the same reason.
  */
+const envSchema = z.object({
+  API_HOST: z.string({ error: 'API_HOST must be a host name or IP address' }).default('127.0.0.1'),
+  API_PORT: z
+    .string()
+    .default('3000')
+    .refine((value) => /^\d+$/.test(value) && Number(value) <= 65_535, {
+      error: 'API_PORT must be an integer from 0 to 65535',
+    })
+    .transform(Number),
+  AUTH_DRIVER: z.enum(AUTH_DRIVERS, {
+    error: (issue) =>
+      issue.input === undefined
+        ? 'AUTH_DRIVER is required'
+        : `AUTH_DRIVER must be one of ${AUTH_DRIVERS.join(', ')}`,
+  }),
+  AUTH_DEV_SECRET: z
+    .string()
+    .min(MIN_DEV_SECRET_LENGTH, {
+      error: `AUTH_DEV_SECRET must be at least ${String(MIN_DEV_SECRET_LENGTH)} characters`,
+    })
+    .optional(),
+  DATABASE_URL: z
+    .string({ error: 'DATABASE_URL is required' })
+    .min(1, { error: 'DATABASE_URL is required', abort: true })
+    .regex(/^postgres(ql)?:\/\//, { error: 'DATABASE_URL must be a postgres:// URL' }),
+  LOG_LEVEL: z
+    .enum(LOG_LEVELS, { error: `LOG_LEVEL must be one of ${LOG_LEVELS.join(', ')}` })
+    .default('info'),
+});
+
+/** Reads API settings from the environment (see `.env.example`) and reports every problem at once. */
 export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
-  const issues: string[] = [];
-
-  const host = env['API_HOST'] ?? '127.0.0.1';
-
-  const rawPort = env['API_PORT'] ?? '3000';
-  const port = Number(rawPort);
-  if (!/^\d+$/.test(rawPort) || port > 65_535) {
-    issues.push('API_PORT must be an integer from 0 to 65535');
+  const parsed = envSchema.safeParse(env);
+  if (!parsed.success) {
+    throw new ConfigError(parsed.error.issues.map((issue) => issue.message));
   }
-
-  const databaseUrl = env['DATABASE_URL'] ?? '';
-  if (databaseUrl === '') {
-    issues.push('DATABASE_URL is required');
-  } else if (!/^postgres(ql)?:\/\//.test(databaseUrl)) {
-    issues.push('DATABASE_URL must be a postgres:// URL');
-  }
-
-  const logLevel = env['LOG_LEVEL'] ?? 'info';
-  if (!isLogLevel(logLevel)) {
-    issues.push('LOG_LEVEL must be one of fatal, error, warn, info, debug, trace, silent');
-  }
-
-  if (issues.length > 0 || !isLogLevel(logLevel)) throw new ConfigError(issues);
-  return { host, port, databaseUrl, logLevel };
+  const values = parsed.data;
+  return {
+    host: values.API_HOST,
+    port: values.API_PORT,
+    databaseUrl: values.DATABASE_URL,
+    logLevel: values.LOG_LEVEL,
+    auth: { driver: values.AUTH_DRIVER, devSecret: values.AUTH_DEV_SECRET },
+  };
 }

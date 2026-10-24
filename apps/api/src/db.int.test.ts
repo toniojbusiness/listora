@@ -2,9 +2,10 @@ import { createServer, connect, type AddressInfo, type Socket } from 'node:net';
 
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { createPool } from '@listora/db';
 import { testDatabaseUrl } from '@listora/testing';
 
-import { createDatabasePool, pingDatabase } from './db.ts';
+import { pingDatabase } from './db.ts';
 
 /**
  * TCP proxy to Postgres that can stop forwarding traffic while keeping connections open,
@@ -54,7 +55,7 @@ async function startFreezableProxy(
 }
 
 describe('database connectivity (real Postgres)', () => {
-  const pool = createDatabasePool({ connectionString: testDatabaseUrl() });
+  const pool = createPool({ connectionString: testDatabaseUrl() });
 
   afterAll(async () => {
     await pool.end();
@@ -71,7 +72,7 @@ describe('database connectivity (real Postgres)', () => {
 
   it('rejects promptly when Postgres is unreachable', async () => {
     // Port 1 is reserved and never runs Postgres, so the connection is refused.
-    const unreachable = createDatabasePool({
+    const unreachable = createPool({
       connectionString: 'postgres://listora@127.0.0.1:1/listora_test',
       connectionTimeoutMillis: 2_000,
     });
@@ -84,7 +85,7 @@ describe('database connectivity (real Postgres)', () => {
 
   it('rejects promptly when an open connection stops answering', async () => {
     const proxy = await startFreezableProxy(testDatabaseUrl());
-    const stalled = createDatabasePool({ connectionString: proxy.url, max: 1 });
+    const stalled = createPool({ connectionString: proxy.url, max: 1 });
     try {
       await pingDatabase(stalled);
       proxy.freeze();

@@ -1073,7 +1073,10 @@ export interface components {
         /**
          * @description `draft` and `ready` are set by the user; `archived` by the user for an item with no
          *     live listing. `listed`, `sold_pending_delist`, `sold`, and `shipped` are set by the
-         *     server from listings and sales.
+         *     server from listings and sales. An archived item can be set back to either `draft` or
+         *     `ready` only if it was `draft` or `ready` when it was archived and has never been sold;
+         *     otherwise the server answers `409 invalid_state_transition` and the item stays
+         *     archived.
          * @enum {string}
          */
         KnownItemStatus: "draft" | "ready" | "listed" | "sold_pending_delist" | "sold" | "shipped" | "archived";
@@ -2133,10 +2136,12 @@ export interface components {
     parameters: {
         /**
          * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-         *     every retry of that action. The server stores the first response for at least 24
-         *     hours: a retry with the same key and body gets that response again without repeating
-         *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-         *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+         *     every retry of that action. The server stores the first successful response for at
+         *     least 24 hours: a retry with the same key and body gets that response again without
+         *     repeating the action; the same key with a different body gets
+         *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+         *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+         *     stored, so retrying it with the same key runs it again.
          */
         IdempotencyKey: string;
         /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
@@ -2426,10 +2431,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -2563,10 +2570,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -2623,10 +2632,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -2744,10 +2755,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -2803,10 +2816,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -2887,10 +2902,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3009,10 +3026,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3036,10 +3055,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3067,10 +3088,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3098,10 +3121,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3128,10 +3153,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3154,10 +3181,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3264,10 +3293,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3298,10 +3329,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3401,10 +3434,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3520,10 +3555,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3634,10 +3671,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
@@ -3673,10 +3712,12 @@ export interface operations {
             header: {
                 /**
                  * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                 *     every retry of that action. The server stores the first response for at least 24
-                 *     hours: a retry with the same key and body gets that response again without repeating
-                 *     the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                 *     retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
                  */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
