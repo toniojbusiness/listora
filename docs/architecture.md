@@ -49,8 +49,9 @@ These two rules from the product owner override every other design choice.
   and are consumed as `@listora/<name>`.
 - TypeScript is pinned to 6.0.x because typescript-eslint does not support TypeScript 7 yet.
 - Configuration comes only from environment variables. Each process parses them once at
-  startup and fails fast (the API with a zod schema in `apps/api/src/config.ts`). Error messages name the bad key but never print its value. Every
-  key is documented in `.env.example`.
+  startup and fails fast (the API with a zod schema in `apps/api/src/config.ts`). Error
+  messages name the bad key but never print its value. Every key is documented in
+  `.env.example`.
 - Logging goes through `createLogger()` from `@listora/shared`: structured JSON (pino),
   with credentials redacted by `REDACTED_LOG_PATHS`. Never log tokens, passwords, or full
   marketplace payloads that contain secrets.
@@ -153,12 +154,9 @@ src/
   `fieldProvenance` is server-owned: a detail written through the API is `user`, an unchanged
   one keeps its source (values compare as key-sorted JSON). Responses omit empty values
   (absent means no value).
-- **Item status.** The user moves an item between `draft` and `ready` while the server does
-  not own its status, and archives it once no listing is live; archiving records the earlier
-  status. Unarchiving an item that was `draft` or `ready` when archived, and has no sale,
-  lands on whichever of the two the request asks for, since the user may already move
-  between them. An item that was listed, sold, or shipped, or that has a sale, stays archived
-  (409 `invalid_state_transition`), so its server-owned status is never lost.
+- **Item status.** Archiving records the item's earlier status in `pre_archive_status`, so
+  unarchiving never overwrites a status the server owns (listed, sold, shipped). Which
+  transitions the user may make is part of the contract: see `ItemStatus` in `openapi.yaml`.
 - **Shutdown.** On SIGTERM the server stops accepting connections, finishes in-flight
   requests (asking their keep-alive clients to close), then closes the database pool.
 
