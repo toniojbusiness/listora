@@ -57,7 +57,7 @@ Gates: **G-eBay** (developer keys), **G-AI** (Anthropic key), **G-Apple** (devel
 | ID   | Task                                                                                     | Deps       | Group | Gate              |
 | ---- | ---------------------------------------------------------------------------------------- | ---------- | ----- | ----------------- |
 | T-28 | Billing + entitlements: Stripe (fake), StoreKit 2, App Store notifications, plan quotas  | T-05, T-11 | K     | G-Stripe, G-Apple |
-| T-29 | AI cost dashboards, alerts, kill switch                                                  | T-08       | K     | -                 |
+| T-29 | AI cost reports, spend alerts, kill switch and account blocks (admin CLI)                | T-08       | K     | -                 |
 | T-30 | Infra as code: CDK stacks + GitHub OIDC deploy workflow (`cdk synth` offline)            | T-01       | K     | G-AWS             |
 | T-31 | Production auth: Cognito driver (Sign in with Apple, email OTP), in-app account deletion | T-05       | K     | G-AWS, G-Apple    |
 | T-32 | Observability/SLO metrics and alarms (delist latency, verified-success rate, AI cost)    | T-06       | K     | -                 |

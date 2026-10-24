@@ -104,6 +104,8 @@ apps/
   api/          Fastify HTTP API (@listora/api)
   worker/       Background worker: operation engine, account deletion, polls, health jobs,
                 photo processing, item analysis (@listora/worker)
+  admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
+                and account blocks (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
@@ -600,7 +602,7 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
 7. **Metering from day one.** Every call writes an `ai_usage_event` (tokens, images, searches,
    `cost_micros` from a versioned price table). The system also keeps daily and monthly
    rollups and per-plan quotas in reseller units. There is a per-account daily dollar circuit
-   breaker (default $1/day), a global kill switch, and budget alarms.
+   breaker (default $1/day), a global kill switch, per-account blocks, and spend alerts.
 
 `@listora/analysis` implements steps 3 to 5 on top of `@listora/ai`:
 
@@ -659,14 +661,15 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
   reason and whether asking again may help. Only a database outage while recording throws;
   the queue then runs the job again with backoff.
 
-`@listora/ai` is the provider layer behind steps 3, 4, and 6, and implements step 7's metering
-and guards (budget alarms are T-29):
+`@listora/ai` is the provider layer behind steps 3, 4, and 6, and implements step 7's metering,
+guards, cost reports, and spend check:
 
 - **`AiClient` is the only way to call AI.** A call names its account, purpose, and tier
   (`standard` is the Fast tier, `premium` the escalation). The client checks the guards in
-  order: the global kill switch (`AI_KILL_SWITCH`), the account's spend today in UTC against
+  order: the global kill switch (`AI_KILL_SWITCH`, or the operator's switch in Postgres), an
+  operator's block on the account, the account's spend today in UTC against
   `AI_DAILY_BUDGET_USD`, and the plan quota hook (`QuotaPolicy`, in reseller units such as
-  `ai_items`). A tripped guard throws `AiGuardError` before anything is sent and records
+  `ai_items`). `createAiClient` adds the operator controls when given `PostgresAiControls`. A tripped guard throws `AiGuardError` before anything is sent and records
   nothing. Quota units are consumed only when a call succeeds.
 - **Tiers map to models by configuration** (`AI_MODEL_STANDARD`, `AI_MODEL_PREMIUM`); the
   default registry is Haiku 5.5 at low effort and Sonnet 5.5 at medium effort. Every
@@ -686,6 +689,26 @@ and guards (budget alarms are T-29):
   images, and web searches) by summing the month's daily rows; the table's
   `(account_id, usage_date)` primary key serves that range scan, so there is no separate
   monthly table or index.
+- **Operator controls.** `PostgresAiControls` keeps the global kill switch (`ai_kill_switch`,
+  one row) and per-account blocks (`ai_account_block`) in Postgres. The client asks them on
+  every call, so a change takes effect on the next call in every process, with no deploy.
+  Operators change them only through `npm run admin -- ai-kill-switch on|off` and
+  `ai-block on|off <account>`, which require `--actor` and `--reason`. Each change and its
+  `ai_control_audit` row commit in one transaction, and a request that changes nothing
+  (switching on a switch that is already on) records nothing. `AI_KILL_SWITCH=on` stays as a
+  deploy-time switch: either one refuses calls.
+- **Cost reports.** `npm run admin -- ai-cost ...` reports, for a UTC day or month: top
+  accounts by spend and one account's usage (from `ai_usage_daily`, and for one account's month
+  from `UsageStore.monthlyUsage`), AI cost per item worked on, and spend by purpose, tier, and
+  model (from `ai_usage_event`). An item's cost includes its failed calls and escalations.
+- **Spend check.** `checkAiSpend` (run once with `npm run admin -- ai-alerts check`; the worker
+  will schedule it) flags accounts approaching (`AI_ALERT_WARN_PERCENT`, default 80%) or over
+  the daily circuit breaker or an AI plan quota in `usage_counter`, and all accounts together
+  approaching or over `AI_GLOBAL_DAILY_ALERT_USD` per UTC day. It only reads. It logs one
+  `event: "ai_spend_alert"` line per alert (warn when approaching, error when over) and one
+  `event: "ai_spend_check"` summary with numeric counts. CloudWatch metric filters and alarms
+  (T-30) key on these field names, so they change only together with the alarms. Alerts name
+  accounts by id only.
 - **Timeouts.** `AI_REQUEST_TIMEOUT_MS` defaults to 600000 (the SDK's own default), so long
   Premium calls are not cut off. A timed-out call may still be billed but is metered at zero.
 - **Providers.** `FakeAiProvider` answers from fixture JSON keyed by the request's
@@ -703,8 +726,9 @@ and guards (budget alarms are T-29):
 PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations` (T-04).
 
 - **Tenancy.** Every table has a non-null `account_id`, except `account` itself, `app_user`
-  (a person's identity is global, and `membership` links it to accounts), and the deleted
-  identity tables `deleted_identity`, `account_deletion`, and `account_deletion_grant`. Child
+  (a person's identity is global, and `membership` links it to accounts), the deleted
+  identity tables `deleted_identity`, `account_deletion`, and `account_deletion_grant`, and the
+  platform tables `ai_kill_switch` and `ai_control_audit`, which belong to no single tenant. Child
   rows reference parents through composite `(account_id, <parent>_id)` foreign keys, so the
   database rejects a row that points at another tenant's data. Deleting an account deletes
   all of its data.
@@ -712,7 +736,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   column (`currency_code` domain, USD only for now). Status-like columns are text with a
   CHECK of allowed values, mirrored by the lists in `packages/db/src/values.ts`.
 - **Timestamps.** `created_at` and `updated_at` default to `now()`, and a trigger maintains
-  `updated_at`. The append-only tables (`operation_event`, `audit_log`, `ai_usage_event`) have
+  `updated_at`. The append-only tables (`operation_event`, `audit_log`, `ai_usage_event`,
+  `ai_control_audit`) have
   only `created_at`, since their rows never change.
 - **History is kept.** A trigger rejects updates and deletes on the append-only tables, and
   deletes on `marketplace_operation`. The only changes it lets through are foreign-key actions
@@ -745,7 +770,8 @@ Tables by area:
   `ai_usage_event` (one
   append-only row per provider call, with its tier, outcome, and error code), and
   `ai_usage_daily`, which a trigger on `ai_usage_event` keeps in step per account and UTC day.
-  Monthly totals come from `UsageStore.monthlyUsage` (section 8).
+  Monthly totals come from `UsageStore.monthlyUsage` (section 8). The operator controls are
+  `ai_kill_switch`, `ai_account_block`, and the append-only `ai_control_audit`.
 - **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
   `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot and
   newest seen revision, desired/applied version), `marketplace_operation` (with the listing

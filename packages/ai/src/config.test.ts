@@ -6,10 +6,12 @@ import {
   createAiClient,
   createAiProvider,
   DEFAULT_FAKE_FIXTURES_DIR,
+  loadAiAlertConfig,
   loadAiConfig,
   parseDollarsToMicros,
 } from './config.ts';
 import { FakeAiProvider } from './fake-provider.ts';
+import { staticKillSwitch } from './guards.ts';
 import { COLOR_OUTPUT } from './test-support.ts';
 import { InMemoryUsageStore } from './usage-store.ts';
 
@@ -107,6 +109,60 @@ describe('parseDollarsToMicros', () => {
   );
 });
 
+describe('loadAiAlertConfig', () => {
+  function alertIssuesOf(env: NodeJS.ProcessEnv): readonly string[] {
+    try {
+      loadAiAlertConfig(env);
+    } catch (error) {
+      if (error instanceof AiConfigError) return error.issues;
+      throw error;
+    }
+    throw new Error('expected an AiConfigError');
+  }
+
+  it('defaults to the $1 daily budget, a $25 global threshold, and warnings from 80%', () => {
+    expect(loadAiAlertConfig({})).toEqual({
+      dailyBudgetMicros: 1_000_000,
+      globalDailyAlertMicros: 25_000_000,
+      warnPercent: 80,
+    });
+  });
+
+  it('reads the thresholds from the environment', () => {
+    expect(
+      loadAiAlertConfig({
+        AI_DAILY_BUDGET_USD: '0.50',
+        AI_GLOBAL_DAILY_ALERT_USD: '120',
+        AI_ALERT_WARN_PERCENT: '100',
+      }),
+    ).toEqual({
+      dailyBudgetMicros: 500_000,
+      globalDailyAlertMicros: 120_000_000,
+      warnPercent: 100,
+    });
+  });
+
+  it('rejects bad values, naming every bad key but not its value', () => {
+    const issues = alertIssuesOf({
+      AI_DAILY_BUDGET_USD: 'lots',
+      AI_GLOBAL_DAILY_ALERT_USD: '0',
+      AI_ALERT_WARN_PERCENT: '0',
+    });
+    expect(issues).toEqual([
+      'AI_DAILY_BUDGET_USD must be a dollar amount such as 1.00 (up to 6 decimals)',
+      'AI_GLOBAL_DAILY_ALERT_USD must be a dollar amount above zero such as 25.00',
+      'AI_ALERT_WARN_PERCENT must be an integer from 1 to 100',
+    ]);
+    expect(issues.join(' ')).not.toContain('lots');
+  });
+
+  it.each(['101', '-5', '80.5', '', 'eighty'])('rejects AI_ALERT_WARN_PERCENT=%j', (value) => {
+    expect(alertIssuesOf({ AI_ALERT_WARN_PERCENT: value })).toEqual([
+      'AI_ALERT_WARN_PERCENT must be an integer from 1 to 100',
+    ]);
+  });
+});
+
 describe('createAiProvider', () => {
   it('builds the provider the configuration selects', () => {
     expect(createAiProvider(loadAiConfig({}))).toBeInstanceOf(FakeAiProvider);
@@ -130,5 +186,47 @@ describe('createAiProvider', () => {
         output: COLOR_OUTPUT,
       }),
     ).rejects.toMatchObject({ name: 'AiGuardError', reason: { kind: 'kill_switch' } });
+  });
+
+  it('wires the operator controls: their kill switch and account blocks refuse calls too', async () => {
+    let engaged = false;
+    let blocked = false;
+    const client = createAiClient(loadAiConfig({}), {
+      usageStore: new InMemoryUsageStore(),
+      controls: {
+        isEngaged: () => Promise.resolve(engaged),
+        isBlocked: () => Promise.resolve(blocked),
+      },
+    });
+    const call = () =>
+      client.generate({
+        context: { accountId: 'account', purpose: 'test' },
+        tier: 'standard',
+        system: 's',
+        prompt: 'p',
+        images: [],
+        output: COLOR_OUTPUT,
+      });
+    blocked = true;
+    await expect(call()).rejects.toMatchObject({ reason: { kind: 'account_blocked' } });
+    engaged = true;
+    await expect(call()).rejects.toMatchObject({ reason: { kind: 'kill_switch' } });
+  });
+
+  it('keeps AI_KILL_SWITCH=on in force when the operator switch is off', async () => {
+    const client = createAiClient(loadAiConfig({ AI_KILL_SWITCH: 'on' }), {
+      usageStore: new InMemoryUsageStore(),
+      controls: { ...staticKillSwitch(false), isBlocked: () => Promise.resolve(false) },
+    });
+    await expect(
+      client.generate({
+        context: { accountId: 'account', purpose: 'test' },
+        tier: 'standard',
+        system: 's',
+        prompt: 'p',
+        images: [],
+        output: COLOR_OUTPUT,
+      }),
+    ).rejects.toMatchObject({ reason: { kind: 'kill_switch' } });
   });
 });
