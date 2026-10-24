@@ -244,9 +244,10 @@ Money columns are integer cents with a currency. T-04 defines the schema.
   and integration tests. It must pass before merge. When iOS code is touched, `make ios-test`
   must pass too (T-02).
 - Integration tests use a real Postgres: the local `listora_test` database from
-  `scripts/dev-db.sh`, or `TEST_DATABASE_URL` in CI. They fail, and never skip, when the
+  `scripts/dev-db.sh` (locally and in CI), or `TEST_DATABASE_URL` when set. They fail, and never skip, when the
   database is unreachable.
 - Tests cover acceptance criteria **and failure paths**. Process-level tests start the real
   entry points with `node src/main.ts` (see `startNodeProcess` in `@listora/testing`).
-- CI (`.github/workflows/ci.yml`) runs `npm ci` and `npm run check` on Linux against a
-  `postgres:18` service. T-02 adds the macOS iOS job.
+- CI (`.github/workflows/ci.yml`) runs `npm ci`, `scripts/dev-db.sh`, and `npm run check` on
+  Linux, using PostgreSQL 18 from the PGDG apt repository (`PG_BIN_DIR`). T-02 adds the macOS
+  iOS job.

@@ -139,7 +139,7 @@ cmd_start() {
       pg initdb -D "$DATA_DIR" -U "$DB_USER" --auth=trust --encoding=UTF8 --locale=C >/dev/null
     fi
     log "starting on 127.0.0.1:$PORT (log: $LOG_FILE)"
-    pg pg_ctl start -D "$DATA_DIR" -l "$LOG_FILE" -w -t 30 \
+    LC_ALL=C pg pg_ctl start -D "$DATA_DIR" -l "$LOG_FILE" -w -t 30 \
       -o "-p $PORT -c listen_addresses=127.0.0.1 -c unix_socket_directories=''" >/dev/null ||
       die "server failed to start; see $LOG_FILE"
   fi

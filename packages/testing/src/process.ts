@@ -7,8 +7,12 @@ export type LogLine = Record<string, unknown>;
 export interface StartedProcess {
   /** Every JSON line the process has written to stdout so far. */
   readonly logs: readonly LogLine[];
+  /** Everything the process has written to stderr so far. */
+  readonly stderr: string;
   /** Resolves with the first log line matching `predicate`; rejects on exit or timeout. */
   waitForLog(predicate: (line: LogLine) => boolean, timeoutMs?: number): Promise<LogLine>;
+  /** Resolves with the exit code once the process exits on its own; rejects on timeout. */
+  waitForExit(timeoutMs?: number): Promise<number | null>;
   /** Sends `signal` and resolves with the exit code. */
   stop(signal?: NodeJS.Signals): Promise<number | null>;
 }
@@ -24,6 +28,7 @@ export function startNodeProcess(entry: string, env: NodeJS.ProcessEnv): Started
   });
   const logs: LogLine[] = [];
   let stderr = '';
+  let closed = false;
   const listeners = new Set<() => void>();
 
   if (!child.stdout || !child.stderr) throw new Error('child process has no stdio pipes');
@@ -39,36 +44,67 @@ export function startNodeProcess(entry: string, env: NodeJS.ProcessEnv): Started
     stderr += chunk.toString();
   });
 
-  const exited = once(child, 'exit') as Promise<[number | null, NodeJS.Signals | null]>;
+  const exited = once(child, 'close') as Promise<[number | null, NodeJS.Signals | null]>;
+  void exited.then(
+    () => {
+      closed = true;
+    },
+    () => undefined,
+  );
 
   return {
     logs,
+    get stderr() {
+      return stderr;
+    },
     waitForLog(predicate, timeoutMs = 10_000) {
       return new Promise((resolve, reject) => {
-        const check = (): void => {
+        const check = (): boolean => {
           const match = logs.find(predicate);
           if (match) {
             cleanup();
             resolve(match);
           }
+          return match !== undefined;
         };
         const timer = setTimeout(() => {
           cleanup();
           reject(new Error(`timed out waiting for log line; stderr:\n${stderr}`));
         }, timeoutMs);
-        const onExit = (): void => {
+        const onClose = (): void => {
+          if (check()) return;
           cleanup();
           reject(new Error(`process exited before the expected log line; stderr:\n${stderr}`));
         };
         const cleanup = (): void => {
           clearTimeout(timer);
           listeners.delete(check);
-          child.off('exit', onExit);
+          child.off('close', onClose);
         };
+        if (check()) return;
+        if (closed) {
+          onClose();
+          return;
+        }
         listeners.add(check);
-        child.once('exit', onExit);
-        check();
+        child.once('close', onClose);
       });
+    },
+    async waitForExit(timeoutMs = 10_000) {
+      let timer: NodeJS.Timeout | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new Error(`process did not exit within ${String(timeoutMs)} ms; stderr:\n${stderr}`),
+          );
+        }, timeoutMs);
+      });
+      try {
+        const [code] = await Promise.race([exited, timeout]);
+        return code;
+      } finally {
+        clearTimeout(timer);
+      }
     },
     async stop(signal = 'SIGTERM') {
       if (child.exitCode === null && child.signalCode === null) child.kill(signal);

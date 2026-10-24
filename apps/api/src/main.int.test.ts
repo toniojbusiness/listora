@@ -54,7 +54,20 @@ describe('api process (real Postgres)', () => {
   });
 
   it('refuses to start without DATABASE_URL', async () => {
-    const started = startNodeProcess(entry, { PATH: process.env['PATH'] });
-    expect(await started.stop()).not.toBe(0);
+    api = startNodeProcess(entry, { PATH: process.env['PATH'] });
+
+    expect(await api.waitForExit()).toBe(1);
+    expect(api.stderr).toContain('DATABASE_URL is required');
+  });
+
+  it('refuses to start with an invalid DATABASE_URL without echoing it', async () => {
+    api = startNodeProcess(entry, {
+      PATH: process.env['PATH'],
+      DATABASE_URL: 'mysql://listora:hunter2-secret@127.0.0.1/listora',
+    });
+
+    expect(await api.waitForExit()).toBe(1);
+    expect(api.stderr).toContain('DATABASE_URL must be a postgres:// URL');
+    expect(api.stderr).not.toContain('hunter2-secret');
   });
 });

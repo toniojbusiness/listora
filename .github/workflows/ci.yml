@@ -17,30 +17,22 @@ jobs:
     name: Backend check (Linux)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: listora
-          POSTGRES_DB: listora_test
-          # Ephemeral CI database reachable only from this job.
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U listora -d listora_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
     env:
-      TEST_DATABASE_URL: postgres://listora@127.0.0.1:5432/listora_test
+      PG_BIN_DIR: /usr/lib/postgresql/18/bin
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Install PostgreSQL 18 from PGDG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-18
       - run: npm ci
+      - run: scripts/dev-db.sh
       - run: npm run check
 
   # ---------------------------------------------------------------------------

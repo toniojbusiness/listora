@@ -5,21 +5,36 @@ export type { Logger } from 'pino';
 export const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
+const SENSITIVE_LOG_FIELDS = [
+  'password',
+  'token',
+  'accessToken',
+  'refreshToken',
+  'clientSecret',
+  'apiKey',
+] as const;
+
+/** Deepest nesting level (0 = top-level field) at which sensitive fields are redacted. */
+export const MAX_REDACTED_FIELD_DEPTH = 4;
+
 /**
  * Log paths that may carry credentials. Marketplace tokens and auth headers must never reach
- * logs; add new sensitive field names here rather than redacting at call sites.
+ * logs; add new sensitive field names to SENSITIVE_LOG_FIELDS rather than redacting at call
+ * sites. Pino's redaction has no recursive wildcard, so each field is matched at the top level
+ * and under up to MAX_REDACTED_FIELD_DEPTH levels of nesting; never log credential-bearing
+ * objects nested deeper than that.
  */
 export const REDACTED_LOG_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
   'headers.authorization',
   'headers.cookie',
-  '*.password',
-  '*.token',
-  '*.accessToken',
-  '*.refreshToken',
-  '*.clientSecret',
-  '*.apiKey',
+  ...SENSITIVE_LOG_FIELDS.flatMap((field) =>
+    Array.from(
+      { length: MAX_REDACTED_FIELD_DEPTH + 1 },
+      (_, depth) => `${'*.'.repeat(depth)}${field}`,
+    ),
+  ),
 ];
 
 export function isLogLevel(value: string): value is LogLevel {

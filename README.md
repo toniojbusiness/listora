@@ -67,6 +67,8 @@ docs/              Architecture overview and roadmap
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs `npm ci` and `npm run check` on Linux
-against a `postgres:18` service container on every pull request and on every push to `main`.
+GitHub Actions (`.github/workflows/ci.yml`) runs the same fresh-clone path as local
+development on every pull request and on every push to `main`: on Linux it installs
+PostgreSQL 18 from the PGDG apt repository, then runs `npm ci`, `scripts/dev-db.sh` (with
+`PG_BIN_DIR=/usr/lib/postgresql/18/bin`), and `npm run check`.
 T-02 adds the macOS iOS job.

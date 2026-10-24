@@ -1,14 +1,21 @@
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { startNodeProcess } from '@listora/testing';
+import { startNodeProcess, type StartedProcess } from '@listora/testing';
 
 const entry = fileURLToPath(new URL('main.ts', import.meta.url));
 
 describe('worker process', () => {
+  let worker: StartedProcess | undefined;
+
+  afterEach(async () => {
+    await worker?.stop();
+    worker = undefined;
+  });
+
   it('starts, reports ready, and exits 0 on SIGTERM', async () => {
-    const worker = startNodeProcess(entry, { PATH: process.env['PATH'], LOG_LEVEL: 'info' });
+    worker = startNodeProcess(entry, { PATH: process.env['PATH'], LOG_LEVEL: 'info' });
     await worker.waitForLog((line) => line['msg'] === 'worker ready');
 
     expect(await worker.stop('SIGTERM')).toBe(0);
@@ -20,7 +27,14 @@ describe('worker process', () => {
   });
 
   it('refuses to start with invalid configuration', async () => {
-    const worker = startNodeProcess(entry, { PATH: process.env['PATH'], LOG_LEVEL: 'loud' });
-    expect(await worker.stop('SIGTERM')).not.toBe(0);
+    worker = startNodeProcess(entry, {
+      PATH: process.env['PATH'],
+      LOG_LEVEL: 'invalid-level-value',
+    });
+
+    expect(await worker.waitForExit()).toBe(1);
+    expect(worker.stderr).toContain('LOG_LEVEL must be one of');
+    expect(worker.stderr).not.toContain('invalid-level-value');
+    expect(worker.logs).toEqual([]);
   });
 });
