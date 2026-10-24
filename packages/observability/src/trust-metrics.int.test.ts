@@ -74,6 +74,9 @@ describe('trust metrics (real Postgres)', () => {
         kind: options.kind,
         idempotency_key: `${listingId}-${options.kind}-${String(Math.random())}`,
         desired: jsonb({ status: 'ended' }),
+        content: ['create', 'revise', 'relist'].includes(options.kind)
+          ? jsonb({ variant: { title: 'Metrics test item' } })
+          : null,
         status: options.status,
         origin: options.delistRunId === undefined ? 'user' : 'auto_delist',
         delist_run_id: options.delistRunId ?? null,
