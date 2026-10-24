@@ -23,6 +23,7 @@ import {
   normalizeText,
   parseTagText,
   toGtin,
+  type FiberComponent,
   type Parsed,
   type TagFacts,
   type TagValueTypes,
@@ -45,9 +46,22 @@ export const CONTRADICTED_CONFIDENCE = 0.5;
 /** A brand or product proposed below this confidence asks for the premium identification. */
 export const LOW_IDENTITY_CONFIDENCE = 0.6;
 
+/** Fiber facts for these parts (or for no named part) describe the item's main material. */
+const MAIN_FIBER_PARTS: ReadonlySet<FiberComponent['part']> = new Set([null, 'shell', 'body']);
+
+/** An analysis result, and whether the job queues the premium identification on its own. */
+export interface BuiltAnalysisResult {
+  readonly result: AnalysisResult;
+  /**
+   * True when the result asks for escalation for a reason worth a premium call without the
+   * user asking: an unidentified brand or product alone only suggests "Identify harder".
+   */
+  readonly autoEscalate: boolean;
+}
+
 interface Evidence {
-  /** Every OCR line, normalized for matching (`normalizeText` without spaces). */
-  readonly ocrText: readonly string[];
+  /** Every OCR line as its words (`normalizeText`, split at anything but letters and digits). */
+  readonly ocrWords: readonly (readonly string[])[];
   /** Every barcode payload, trimmed. */
   readonly barcodes: readonly string[];
   readonly facts: TagFacts;
@@ -60,16 +74,16 @@ export function buildAnalysisResult(
   input: AnalysisInput,
   facts: TagFacts,
   tier: AiTier,
-): AnalysisResult {
+): BuiltAnalysisResult {
   const evidence: Evidence = {
-    ocrText: input.photos.flatMap((photo) => photo.ocrLines.map((line) => squash(line.text))),
+    ocrWords: input.photos.flatMap((photo) => photo.ocrLines.map((line) => words(line.text))),
     barcodes: input.photos.flatMap((photo) => photo.barcodes.map((code) => code.payload.trim())),
     facts,
   };
   const details = analyzedDetails(withCanonicalSize(output), evidence);
-  const escalation = tier === 'standard' ? escalationReason(output, details) : undefined;
+  const escalation = tier === 'standard' ? escalationOf(output, details) : undefined;
   const price = output.priceEstimate;
-  return {
+  const result: AnalysisResult = {
     details,
     variants: variants(output),
     ...(price === null
@@ -84,8 +98,9 @@ export function buildAnalysisResult(
           },
         }),
     needsEscalation: escalation !== undefined,
-    ...(escalation === undefined ? {} : { escalationReason: escalation }),
+    ...(escalation === undefined ? {} : { escalationReason: escalation.reason }),
   };
+  return { result, autoEscalate: escalation?.automatic ?? false };
 }
 
 function analyzedDetails(output: ItemAnalysisOutput, evidence: Evidence): AnalyzedDetails {
@@ -201,8 +216,8 @@ function condition(field: Field<AnalyzedCondition['value']>): AnalyzedCondition 
 
 /**
  * A value read off a tag or barcode is `barcode` when a scanned barcode is the value, `ocr`
- * when a phone OCR line contains it, and otherwise `ai` (the model read it itself). A value
- * judged from the photos is always `ai`.
+ * when a phone OCR line contains it as whole words, and otherwise `ai` (the model read it
+ * itself). A value judged from the photos is always `ai`.
  */
 function verifiedProvenance(
   source: EvidenceSource,
@@ -213,8 +228,7 @@ function verifiedProvenance(
     case 'tag_text':
     case 'barcode': {
       if (evidence.barcodes.includes(value)) return 'barcode';
-      const needle = squash(value);
-      return needle !== '' && evidence.ocrText.some((line) => line.includes(needle)) ? 'ocr' : 'ai';
+      return evidence.ocrWords.some((line) => spells(line, value)) ? 'ocr' : 'ai';
     }
     case 'photo':
       return 'ai';
@@ -326,8 +340,9 @@ function category(output: ItemAnalysisOutput): AnalyzedText | undefined {
 }
 
 /**
- * Materials agree with the fiber facts when they name the same materials; the facts list the
- * main material first.
+ * Materials agree with the fiber facts when every one is on the tag and none of the main
+ * material's fibers (no named part, the shell, or the body) is missing: a lining or trim
+ * fiber may be left out. Filled in from the facts, the main material comes first.
  */
 function materials(
   field: { values: string[]; confidence: number; source: EvidenceSource } | null,
@@ -336,20 +351,27 @@ function materials(
   const fibers = evidence.facts.fiber.filter(
     (fact) => fact.confidence >= PARSED_FACT_MIN_CONFIDENCE,
   );
+  const isMain = (fact: (typeof fibers)[number]) => MAIN_FIBER_PARTS.has(fact.value.part);
   const fromFacts = [
     ...new Set(
       [...fibers]
-        .sort((a, b) => b.value.percent - a.value.percent)
+        .sort((a, b) => Number(isMain(b)) - Number(isMain(a)) || b.value.percent - a.value.percent)
         .map((fact) => fact.value.material),
     ),
   ];
+  const main = new Set(fibers.filter(isMain).map((fact) => fact.value.material));
   const confidence = Math.min(...fibers.map((fact) => fact.confidence));
   if (field === null) {
     if (fromFacts.length === 0) return undefined;
     return { values: fromFacts, confidence: round(confidence), provenance: 'ocr' };
   }
   const values = [...new Set(field.values)];
-  if (fromFacts.length > 0 && sameSet(values, fromFacts)) {
+  const onTag = new Set<string>(fromFacts);
+  const agrees =
+    values.length > 0 &&
+    values.every((value) => onTag.has(value)) &&
+    [...main].every((material) => values.includes(material));
+  if (fromFacts.length > 0 && agrees) {
     return {
       values,
       confidence: round(Math.max(field.confidence, confidence)),
@@ -383,27 +405,32 @@ function variants(output: ItemAnalysisOutput): VariantSuggestion[] {
  * Why a standard analysis should be escalated to the premium identification, or undefined.
  * The model's own judgment counts, and so do rules it cannot talk its way out of: a brand or
  * product proposed with low confidence, and items that look vintage or designer, where a
- * closer look is worth the most.
+ * closer look is worth the most. Those escalate on their own. A brand or product the model
+ * did not identify at all only suggests it: many items are unbranded, and a premium call
+ * costs the user's quota, so the user decides.
  */
-function escalationReason(
+function escalationOf(
   output: ItemAnalysisOutput,
   details: AnalyzedDetails,
-): string | undefined {
-  const reasons: string[] = [];
-  if (output.needsEscalation && output.escalationReason !== null) {
-    reasons.push(output.escalationReason);
-  }
+): { reason: string; automatic: boolean } | undefined {
+  const reasons: { text: string; automatic: boolean }[] = [];
+  const add = (text: string, automatic = true) => reasons.push({ text, automatic });
+  if (output.needsEscalation && output.escalationReason !== null) add(output.escalationReason);
   const { brand, productName } = details;
-  if (brand !== undefined && brand.confidence < LOW_IDENTITY_CONFIDENCE) {
-    reasons.push('The brand is uncertain.');
-  }
-  if (productName !== undefined && productName.confidence < LOW_IDENTITY_CONFIDENCE) {
-    reasons.push('The product is uncertain.');
-  }
-  if (output.looksDesigner) reasons.push('It looks like a designer item.');
-  if (output.looksVintage) reasons.push('It looks vintage.');
+  if (brand === undefined) add('The brand was not identified.', false);
+  else if (brand.confidence < LOW_IDENTITY_CONFIDENCE) add('The brand is uncertain.');
+  if (productName === undefined) add('The product was not identified.', false);
+  else if (productName.confidence < LOW_IDENTITY_CONFIDENCE) add('The product is uncertain.');
+  if (output.looksDesigner) add('It looks like a designer item.');
+  if (output.looksVintage) add('It looks vintage.');
   if (reasons.length === 0) return undefined;
-  return reasons.join(' ').slice(0, 500);
+  return {
+    reason: reasons
+      .map((reason) => reason.text)
+      .join(' ')
+      .slice(0, 500),
+    automatic: reasons.some((reason) => reason.automatic),
+  };
 }
 
 /** Uppercase letters and digits only, so "RN 12345" and "rn12345" compare. */
@@ -411,9 +438,30 @@ function squash(value: string): string {
   return normalizeText(value).replace(/[^A-Z0-9]/g, '');
 }
 
-function sameSet(a: readonly string[], b: readonly string[]): boolean {
-  const set = new Set(a);
-  return set.size === new Set(b).size && b.every((value) => set.has(value));
+/** A text's words: `normalizeText`, split at anything but letters and digits. */
+function words(text: string): string[] {
+  return normalizeText(text)
+    .split(/[^A-Z0-9]+/)
+    .filter((word) => word !== '');
+}
+
+/**
+ * Whether consecutive words of a line spell the value, ignoring spaces and punctuation:
+ * "SIZE M" spells "M" and "LEVIS" spells "Levi's", but "MADE IN USA" does not spell "M" and
+ * "SINGAPORE" does not spell "Gap".
+ */
+function spells(line: readonly string[], value: string): boolean {
+  const needle = squash(value);
+  if (needle === '') return false;
+  return line.some((_, start) => {
+    let joined = '';
+    for (const word of line.slice(start)) {
+      joined += word;
+      if (joined === needle) return true;
+      if (joined.length >= needle.length) return false;
+    }
+    return false;
+  });
 }
 
 function round(value: number): number {

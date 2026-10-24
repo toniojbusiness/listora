@@ -6,21 +6,23 @@ describe('photoSetHash', () => {
   const a = sha256Hex('front');
   const b = sha256Hex('tag');
 
-  it('hashes the ordered photo hashes, one per line', () => {
-    expect(photoSetHash([a, b])).toBe(sha256Hex(`${a}\n${b}\n`));
+  it('hashes the sorted photo hashes, one per line', () => {
+    const [first, second] = [a, b].sort();
+    expect(photoSetHash([a, b])).toBe(sha256Hex(`${String(first)}\n${String(second)}\n`));
     expect(isSha256Hex(photoSetHash([a, b]))).toBe(true);
   });
 
-  it('is stable for the same photos in the same order', () => {
+  it('is stable for the same photos', () => {
     expect(photoSetHash([a, b])).toBe(photoSetHash([a, b]));
     expect(photoSetHash([a, b])).toBe(
-      '178f399d862edd4f1e5f89e3d98181219da36212c3322dd000efc57ab37d4b23',
+      '3f07813fff31d67f920a9ae27a98b67b7baa5d897db004b92e3d31a057ee4d2e',
     );
   });
 
-  it('depends on the order and the membership of the photos', () => {
-    expect(photoSetHash([a, b])).not.toBe(photoSetHash([b, a]));
+  it('depends on the membership of the photos, not their order', () => {
+    expect(photoSetHash([b, a])).toBe(photoSetHash([a, b]));
     expect(photoSetHash([a])).not.toBe(photoSetHash([a, b]));
+    expect(photoSetHash([a, a])).not.toBe(photoSetHash([a]));
   });
 
   it('rejects anything that is not a lowercase sha256', () => {

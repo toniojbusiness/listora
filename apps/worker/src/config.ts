@@ -1,12 +1,21 @@
+import { AiConfigError, loadAiConfig, type AiConfig } from '@listora/ai';
+import { AnalysisConfigError, loadAnalysisConfig, type AnalysisConfig } from '@listora/analysis';
 import { isLogLevel, type LogLevel } from '@listora/shared';
+import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
 export interface WorkerConfig {
   databaseUrl: string;
   logLevel: LogLevel;
-  /** Operation steps run at the same time. */
+  /** Jobs run at the same time: operation steps, photo processing, and item analysis. */
   concurrency: number;
   /** Base URL of the fake marketplace every adapter uses (development and tests only). */
   fakeMarketplaceUrl: string | undefined;
+  /** STORAGE_* keys, read by @listora/storage: where photo processing and analysis read. */
+  storage: StorageConfig;
+  /** AI_* keys, read by @listora/ai: the provider and guards item analysis calls through. */
+  ai: AiConfig;
+  /** AI_AUTO_ESCALATE, read by @listora/analysis. */
+  analysis: AnalysisConfig;
 }
 
 export class ConfigError extends Error {
@@ -51,6 +60,33 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     issues.push('FAKE_MARKETPLACE_URL must be an http:// or https:// URL');
   }
 
-  if (issues.length > 0 || !isLogLevel(logLevel)) throw new ConfigError(issues);
-  return { databaseUrl, logLevel, concurrency, fakeMarketplaceUrl };
+  const storage = collect(issues, StorageConfigError, () => loadStorageConfig(env));
+  const ai = collect(issues, AiConfigError, () => loadAiConfig(env));
+  const analysis = collect(issues, AnalysisConfigError, () => loadAnalysisConfig(env));
+
+  if (
+    issues.length > 0 ||
+    !isLogLevel(logLevel) ||
+    storage === undefined ||
+    ai === undefined ||
+    analysis === undefined
+  ) {
+    throw new ConfigError(issues);
+  }
+  return { databaseUrl, logLevel, concurrency, fakeMarketplaceUrl, storage, ai, analysis };
+}
+
+/** A package's own configuration, or undefined with its problems added to `issues`. */
+function collect<T>(
+  issues: string[],
+  type: new (...args: never[]) => Error & { readonly issues: readonly string[] },
+  load: () => T,
+): T | undefined {
+  try {
+    return load();
+  } catch (error) {
+    if (!(error instanceof type)) throw error;
+    issues.push(...error.issues);
+    return undefined;
+  }
 }

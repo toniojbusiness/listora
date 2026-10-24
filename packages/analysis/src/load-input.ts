@@ -6,13 +6,18 @@ import { photoSetHash } from '@listora/shared';
 import type { ObjectStorage } from '@listora/storage';
 
 import { AnalysisFailedError } from './analyze.ts';
-import { selectAnalysisPhotos, type AnalysisInput, type AnalysisPhoto } from './input.ts';
+import {
+  MAX_TAG_CROPS,
+  selectAnalysisPhotos,
+  type AnalysisInput,
+  type AnalysisPhoto,
+} from './input.ts';
 import type { AnalysisRow } from './repository.ts';
 
 /**
  * Loads what an analysis sends from the database and storage: the selected photos' `ai`
- * derivatives, a crop of each selected tag photo from its `original`, and the reads the phone
- * uploaded with each photo. The item's photos must still be the analyzed photo set; anything
+ * derivatives, a crop of the first `MAX_TAG_CROPS` tag photos from their `original`, and the
+ * reads the phone uploaded with each photo. The item's photos must still be the analyzed photo set; anything
  * else fails the analysis with a reason the user can act on.
  */
 export async function loadAnalysisInput(
@@ -47,14 +52,16 @@ export async function loadAnalysisInput(
     );
   }
 
+  const selected = selectAnalysisPhotos(rows);
+  const toCrop = new Set(selected.filter((row) => row.role === 'tag').slice(0, MAX_TAG_CROPS));
   const photos = await Promise.all(
-    selectAnalysisPhotos(rows).map(async (row): Promise<AnalysisPhoto> => {
+    selected.map(async (row): Promise<AnalysisPhoto> => {
       const derivatives = parsePhotoDerivatives(row.derivatives);
       // The database refuses a ready photo without its derivatives.
       if (derivatives === undefined) throw new Error(`ready photo ${row.id} has no derivatives`);
       const image = await loadImage(storage, derivatives.ai);
       let crop: AiImage | undefined;
-      if (row.role === 'tag') {
+      if (toCrop.has(row)) {
         const original = await storage.get(derivatives.original.key);
         if (original === undefined) throw missingImage();
         const cropped = await tagCrop(original);

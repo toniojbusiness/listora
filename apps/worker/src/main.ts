@@ -1,9 +1,12 @@
+import { createAiClient, PostgresQuotaPolicy, PostgresUsageStore } from '@listora/ai';
 import { createDatabase } from '@listora/db';
 import { startOperationWorker } from '@listora/operations';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
+import { createStorage } from '@listora/storage';
 
 import { createAdapters } from './adapters.ts';
 import { loadWorkerConfig } from './config.ts';
+import { createWorkerTasks } from './tasks.ts';
 
 const config = loadWorkerConfig();
 const logger = createLogger({ service: 'worker', level: config.logLevel });
@@ -14,6 +17,17 @@ try {
     connectionString: config.databaseUrl,
     db,
     adapters: createAdapters(config),
+    tasks: createWorkerTasks({
+      db,
+      storage: createStorage(config.storage),
+      ai: createAiClient(config.ai, {
+        usageStore: new PostgresUsageStore(db),
+        quota: new PostgresQuotaPolicy(db),
+        logger,
+      }),
+      logger,
+      autoEscalate: config.analysis.autoEscalate,
+    }),
     logger,
     concurrency: config.concurrency,
     onFatalError: (error) => {
@@ -33,7 +47,11 @@ try {
   });
 
   logger.info(
-    { poolId: worker.poolId, fakeMarketplace: config.fakeMarketplaceUrl !== undefined },
+    {
+      poolId: worker.poolId,
+      fakeMarketplace: config.fakeMarketplaceUrl !== undefined,
+      aiProvider: config.ai.provider,
+    },
     'worker ready',
   );
 } catch (error) {

@@ -32,9 +32,10 @@ npm run check          # format, lint, type check, unit + integration tests
 
 `.env` is optional for local development because the defaults match `scripts/dev-db.sh`. To
 run the API or the worker, or to change a port, copy `.env.example` to `.env` and edit it.
-Every configuration key is documented there. Never commit `.env`. To watch the worker run
-marketplace operations locally, also set `FAKE_MARKETPLACE_URL` and start
-`npm run dev:fake-marketplace` next to `npm run dev:worker`.
+Every configuration key is documented there. Never commit `.env`. The worker processes
+photos and runs item analyses for the API, so run `npm run dev:worker` next to
+`npm run dev:api`; both use the same `STORAGE_LOCAL_DIR`. To watch the worker run marketplace
+operations locally, also set `FAKE_MARKETPLACE_URL` and start `npm run dev:fake-marketplace`.
 
 ### Signing in locally
 

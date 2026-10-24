@@ -236,6 +236,25 @@ describe('item analysis (real Postgres)', () => {
       expect(api.analysisJobs.jobs).toHaveLength(1);
     });
 
+    it('keeps the analysis when the photos are only reordered, even before its job runs', async () => {
+      const { itemId, analysisId } = await analyzedItem();
+      const item = await api.call('getItem', { token, params: { itemId } });
+      const photoIds = item.body.photos.map((photo) => photo.id).reverse();
+      const reordered = await api.call('reorderItemPhotos', {
+        token,
+        params: { itemId },
+        body: { photoIds },
+      });
+      expect(reordered.status).toBe(200);
+
+      // A new cover is the same photo set: the queued analysis runs, and nothing new is paid for.
+      expect(await api.analysisJobs.runAll()).toEqual(['succeeded']);
+      const again = await api.call('startItemAnalysis', { token, params: { itemId } });
+      expect(again.body).toMatchObject({ id: analysisId, status: 'completed' });
+      expect(api.analysisJobs.jobs).toEqual([]);
+      expect(await usageEvents(itemId)).toHaveLength(1);
+    });
+
     it('analyzes again when the photo set changes', async () => {
       const { itemId, analysisId } = await analyzedItem();
       await api.analysisJobs.runAll();

@@ -35,6 +35,8 @@ export interface AnalyzeOptions {
 
 export interface AnalysisOutcome {
   readonly result: AnalysisResult;
+  /** Whether the result is worth a premium identification without the user asking for it. */
+  readonly autoEscalate: boolean;
   readonly model: string;
   /** Provider calls made, failed ones included. */
   readonly attempts: number;
@@ -104,13 +106,15 @@ export async function analyzeItem(
         ...(options.signal === undefined ? {} : { signal: options.signal }),
       });
       costMicros += answer.costMicros;
+      const { result, autoEscalate } = buildAnalysisResult(
+        decodeAnalysisAnswer(answer.output),
+        input,
+        request.tagFacts,
+        options.tier,
+      );
       return {
-        result: buildAnalysisResult(
-          decodeAnalysisAnswer(answer.output),
-          input,
-          request.tagFacts,
-          options.tier,
-        ),
+        result,
+        autoEscalate,
         model: answer.model,
         attempts,
         costMicros,

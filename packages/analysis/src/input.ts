@@ -19,20 +19,27 @@ export interface AnalysisInput {
   readonly accountId: string;
   readonly userId: string | null;
   readonly itemId: string | null;
-  /** `ai_analysis.photo_set_hash`: over the uploads' sha256s, not over `photos[].image`. */
+  /**
+   * `ai_analysis.photo_set_hash`: over the uploads' sha256s in any order, not over
+   * `photos[].image`.
+   */
   readonly photoSetHash: string;
   /** In display order; the first is the cover. */
   readonly photos: readonly AnalysisPhoto[];
 }
 
-/** Photos sent per analysis at most (`selectAnalysisPhotos` picks them). */
-export const MAX_ANALYSIS_PHOTOS = 8;
-/** Tag crops sent per analysis, from the first tag photos. */
-export const MAX_TAG_CROPS = 2;
+/**
+ * Photos sent per analysis at most (`selectAnalysisPhotos` picks them): the plan's cost basis
+ * is 3-5 `ai` derivatives and one tag crop per call (architecture section 8).
+ */
+export const MAX_ANALYSIS_PHOTOS = 5;
+/** Tag crops sent per analysis, from the first tag photo. */
+export const MAX_TAG_CROPS = 1;
 
 /**
  * The photos an analysis sends, in display order: the first `MAX_TAG_CROPS` tag photos
- * wherever they are, then the others in display order up to `MAX_ANALYSIS_PHOTOS` in all.
+ * wherever they are (their crops are the ones sent), then the others in display order up to
+ * `MAX_ANALYSIS_PHOTOS` in all.
  */
 export function selectAnalysisPhotos<P extends { readonly role: PhotoRole }>(
   photos: readonly P[],

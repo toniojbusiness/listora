@@ -109,12 +109,15 @@ describe('FakeAiProvider', () => {
     expect(result.usage).toMatchObject({ inputTokens: 5, cacheReadTokens: 7 });
   });
 
-  it('fails with fixture_missing for an unknown photo set, a reordered set, or another schema', async () => {
+  it('fails with fixture_missing for an unknown photo set or another schema', async () => {
     const fake = provider(fixtures);
     const unknown = await failure(fake.generate(request([FRONT])));
     expect(unknown.code).toBe('fixture_missing');
     expect(unknown.message).toContain(photoSetHashOfImages([FRONT]));
-    expect((await failure(fake.generate(request([TAG, FRONT])))).code).toBe('fixture_missing');
+    // The same photos in another order are the same photo set.
+    await expect(fake.generate(request([TAG, FRONT]))).resolves.toMatchObject({
+      output: { color: 'navy' },
+    });
     expect(
       (
         await failure(

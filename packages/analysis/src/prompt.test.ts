@@ -74,6 +74,6 @@ describe('selectAnalysisPhotos', () => {
     );
     const selected = selectAnalysisPhotos(photos).map((entry) => entry.photoId);
     expect(selected).toHaveLength(MAX_ANALYSIS_PHOTOS);
-    expect(selected).toEqual(['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p9', 'p10']);
+    expect(selected).toEqual(['p0', 'p1', 'p2', 'p3', 'p9']);
   });
 });

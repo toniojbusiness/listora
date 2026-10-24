@@ -32,7 +32,12 @@ export type {
 } from './output-schema.ts';
 export { buildAnalysisRequest, ITEM_ANALYSIS_SYSTEM, tagFactsOf } from './prompt.ts';
 export type { AnalysisRequest as AnalysisCallRequest } from './prompt.ts';
-export { analysisJobKey, isAnalysisJobPayload, ITEM_ANALYSIS_TASK } from './queue.ts';
+export {
+  analysisJobKey,
+  graphileAnalysisJobs,
+  isAnalysisJobPayload,
+  ITEM_ANALYSIS_TASK,
+} from './queue.ts';
 export type { AnalysisJobPayload, AnalysisJobQueue } from './queue.ts';
 export {
   analysisResultOf,
@@ -49,6 +54,7 @@ export {
   LOW_IDENTITY_CONFIDENCE,
   PARSED_FACT_MIN_CONFIDENCE,
 } from './result.ts';
+export type { BuiltAnalysisResult } from './result.ts';
 export {
   CATEGORIES,
   CATEGORY_TREE,

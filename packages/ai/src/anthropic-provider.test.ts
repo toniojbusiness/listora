@@ -285,6 +285,12 @@ describe('AnthropicProvider with the schema in the prompt', () => {
     await expect(wrapped.provider.generate(PROMPTED)).resolves.toMatchObject({
       output: { color: 'red' },
     });
+    const trailing = providerReturning(
+      message({ text: '{"color":"red","confidence":0.7}\nLet me know if you need more.' }),
+    );
+    await expect(trailing.provider.generate(PROMPTED)).resolves.toMatchObject({
+      output: { color: 'red', confidence: 0.7 },
+    });
     const prose = providerReturning(message({ text: 'The color is red.' }));
     expect((await failure(prose.provider.generate(PROMPTED))).code).toBe('invalid_output');
   });

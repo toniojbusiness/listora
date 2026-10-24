@@ -1,7 +1,8 @@
 /**
  * Runs the operation engine on Graphile Worker: the job runner, the liveness session, and the
- * periodic recovery of stopped workers' jobs (recovery.ts). `apps/worker` starts it; tests start
- * it in process with a short retry schedule.
+ * periodic recovery of stopped workers' jobs (recovery.ts). The same runner takes the other
+ * background jobs the worker is given (`tasks`), with the same liveness and recovery.
+ * `apps/worker` starts it; tests start it in process with a short retry schedule.
  */
 import { EventEmitter } from 'node:events';
 
@@ -17,6 +18,12 @@ import { MAINTENANCE_CRONTAB, MAINTENANCE_TASK, runJobQueueMaintenance } from '.
 import { DEFAULT_RETRY_POLICY, type RetryPolicy } from './policy.ts';
 import { reapStoppedWorkers, WorkerLiveness } from './recovery.ts';
 
+/**
+ * A background job other than an operation step, given its payload as added. It throws only
+ * when the job should run again later (an outage); outcomes the user sees go on its own row.
+ */
+export type WorkerTask = (payload: unknown, signal: AbortSignal) => Promise<void>;
+
 export interface OperationWorkerOptions {
   /** The database for the job queue's own connections and the liveness session. */
   connectionString: string;
@@ -24,7 +31,9 @@ export interface OperationWorkerOptions {
   db: Db;
   adapters: AdapterLookup;
   logger: Logger;
-  /** Operation steps run at the same time (default 5). */
+  /** Other jobs this worker runs (photo processing, item analysis), by task name. */
+  tasks?: Readonly<Record<string, WorkerTask>>;
+  /** Jobs run at the same time, operation steps and `tasks` together (default 5). */
   concurrency?: number;
   policy?: RetryPolicy;
   /** Deadline for one marketplace call (default 60 s). */
@@ -55,6 +64,10 @@ export async function startOperationWorker(
   options: OperationWorkerOptions,
 ): Promise<OperationWorker> {
   const { logger } = options;
+  const tasks = options.tasks ?? {};
+  for (const name of [OPERATION_TASK, MAINTENANCE_TASK]) {
+    if (Object.hasOwn(tasks, name)) throw new Error(`task ${name} is the worker's own`);
+  }
   const deps: StepDependencies = {
     db: options.db,
     adapters: options.adapters,
@@ -92,6 +105,16 @@ export async function startOperationWorker(
   });
 
   const taskList: TaskList = {
+    ...Object.fromEntries(
+      Object.entries(tasks).map(([name, task]): [string, TaskList[string]] => [
+        name,
+        async (payload, helpers) => {
+          // Like operation steps: no job runs before other workers can see this one is alive.
+          await registered;
+          await task(payload, helpers.abortSignal);
+        },
+      ]),
+    ),
     [OPERATION_TASK]: async (payload, helpers) => {
       if (!isOperationJobPayload(payload)) {
         helpers.logger.error('operation job with an invalid payload; dropping it');

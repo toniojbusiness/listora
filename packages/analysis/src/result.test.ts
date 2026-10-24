@@ -8,12 +8,34 @@ import { answer, attributes, photo, tagInput } from './test-support.ts';
 import type { AnalysisInput } from './input.ts';
 import type { ItemAnalysisOutput } from './output-schema.ts';
 
-function result(
+function built(
   output: ItemAnalysisOutput,
   input: AnalysisInput = tagInput(),
   tier: AiTier = 'standard',
 ) {
   return buildAnalysisResult(output, input, tagFactsOf(input), tier);
+}
+
+function result(
+  output: ItemAnalysisOutput,
+  input: AnalysisInput = tagInput(),
+  tier: AiTier = 'standard',
+) {
+  return built(output, input, tier).result;
+}
+
+/** The same front photo with a tag photo whose phone reads are `lines`. */
+function readingTag(...lines: string[]): AnalysisInput {
+  return tagInput({
+    photos: [
+      photo({ photoId: 'front' }),
+      photo({
+        photoId: 'tag',
+        role: 'tag',
+        ocrLines: lines.map((text) => ({ text, confidence: 0.95 })),
+      }),
+    ],
+  });
 }
 
 /** The same item with no phone reads: everything the model says is its own reading. */
@@ -32,6 +54,32 @@ describe('buildAnalysisResult provenance', () => {
     expect(unread.brand).toEqual({ value: "Levi's", confidence: 0.95, provenance: 'ai' });
     expect(unread.rnNumber).toMatchObject({ value: '12345', provenance: 'ai' });
     expect(unread.upc).toMatchObject({ value: '036000291452', provenance: 'ai' });
+  });
+
+  it('credits OCR only when whole words of a line spell the value', () => {
+    const read = (value: string, ...lines: string[]) =>
+      result(
+        answer(attributes({ brand: { value, confidence: 0.9, source: 'tag_text' } })),
+        readingTag(...lines),
+      ).details.brand?.provenance;
+    expect(read('Gap', 'MADE IN SINGAPORE')).toBe('ai');
+    expect(read('Gap', 'GAP KIDS')).toBe('ocr');
+    expect(read("Levi's", 'LEVIS STRAUSS & CO')).toBe('ocr');
+    expect(read('Tommy Hilfiger', 'TOMMY', 'HILFIGER')).toBe('ai');
+    expect(read('Tommy Hilfiger', 'TOMMY-HILFIGER')).toBe('ocr');
+
+    const size = (value: string, ...lines: string[]) =>
+      result(
+        answer(
+          attributes({
+            sizeLabel: { value, confidence: 0.9, source: 'tag_text' },
+            sizeSystem: null,
+          }),
+        ),
+        readingTag(...lines),
+      ).details.sizeLabel?.provenance;
+    expect(size('S', 'MADE IN USA', 'MACHINE WASH')).toBe('ai');
+    expect(size('S', 'TALLA S')).toBe('ocr');
   });
 
   it('marks what the model judged from the photos as ai, whatever source it claims', () => {
@@ -84,6 +132,35 @@ describe('buildAnalysisResult provenance', () => {
     ).details;
     expect(details.rnNumber).toEqual({ value: '54321', confidence: 0.5, provenance: 'ai' });
     expect(details.materials).toEqual({ values: ['wool'], confidence: 0.5, provenance: 'ai' });
+  });
+
+  it('agrees with a tag listing a lining or trim fiber the materials leave out', () => {
+    const shell = (values: ItemAnalysisOutput['attributes']['materials']) =>
+      result(
+        answer(attributes({ materials: values })),
+        readingTag('SHELL: 100% NYLON', 'LINING: 100% POLYESTER'),
+      ).details.materials;
+    expect(shell({ values: ['nylon'], confidence: 0.8, source: 'tag_text' })).toEqual({
+      values: ['nylon'],
+      confidence: expect.any(Number) as unknown,
+      provenance: 'ocr',
+    });
+    expect(shell({ values: ['nylon', 'polyester'], confidence: 0.8, source: 'tag_text' })).toEqual(
+      expect.objectContaining({ provenance: 'ocr' }),
+    );
+    // Leaving out the shell's fiber, or naming one not on the tag, still contradicts it.
+    expect(shell({ values: ['polyester'], confidence: 0.8, source: 'tag_text' })).toEqual({
+      values: ['polyester'],
+      confidence: 0.5,
+      provenance: 'ai',
+    });
+    expect(shell({ values: ['nylon', 'wool'], confidence: 0.8, source: 'tag_text' })).toEqual(
+      expect.objectContaining({ confidence: 0.5, provenance: 'ai' }),
+    );
+    // Filled in from the facts, the shell comes first.
+    expect(shell(null)).toEqual(
+      expect.objectContaining({ values: ['nylon', 'polyester'], provenance: 'ocr' }),
+    );
   });
 
   it('puts the size in canonical form, so it agrees with the tag facts', () => {
@@ -173,7 +250,10 @@ describe('buildAnalysisResult copy and price', () => {
 
 describe('buildAnalysisResult escalation', () => {
   it('does not escalate a confident, ordinary item', () => {
-    expect(result(answer())).toMatchObject({ needsEscalation: false });
+    expect(built(answer())).toEqual({
+      result: expect.objectContaining({ needsEscalation: false }) as unknown,
+      autoEscalate: false,
+    });
     expect(result(answer())).not.toHaveProperty('escalationReason');
   });
 
@@ -193,8 +273,27 @@ describe('buildAnalysisResult escalation', () => {
     expect(
       reason(answer({ needsEscalation: true, escalationReason: 'The logo is hard to read.' })),
     ).toBe('The logo is hard to read.');
-    // No brand at all is not an uncertain brand: a stronger model would not find one either.
-    expect(result(answer(attributes({ brand: null })), noReads).needsEscalation).toBe(false);
+    expect(
+      built(answer(attributes({ brand: { value: 'Gucci', confidence: 0.4, source: 'photo' } })))
+        .autoEscalate,
+    ).toBe(true);
+  });
+
+  it('suggests, but does not start, a premium identification for an unidentified brand or product', () => {
+    // Many items are unbranded: the user decides whether a premium call is worth it.
+    const unbranded = built(answer(attributes({ brand: null })), noReads);
+    expect(unbranded.result).toMatchObject({
+      needsEscalation: true,
+      escalationReason: 'The brand was not identified.',
+    });
+    expect(unbranded.autoEscalate).toBe(false);
+    expect(built(answer(attributes({ productName: null }))).result.escalationReason).toBe(
+      'The product was not identified.',
+    );
+    // Another reason still starts it.
+    const vintage = built(answer({ ...attributes({ brand: null }), looksVintage: true }), noReads);
+    expect(vintage.result.escalationReason).toBe('The brand was not identified. It looks vintage.');
+    expect(vintage.autoEscalate).toBe(true);
   });
 
   it('never asks to escalate a premium analysis', () => {
@@ -205,5 +304,6 @@ describe('buildAnalysisResult escalation', () => {
     );
     expect(premium.needsEscalation).toBe(false);
     expect(premium).not.toHaveProperty('escalationReason');
+    expect(built(answer({ looksDesigner: true }), tagInput(), 'premium').autoEscalate).toBe(false);
   });
 });

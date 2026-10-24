@@ -1,16 +1,36 @@
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_FAKE_FIXTURES_DIR } from '@listora/ai';
+
 import { ConfigError, loadWorkerConfig } from './config.ts';
 
 const DATABASE_URL = 'postgres://listora:hunter2@127.0.0.1:55432/listora';
 
 describe('loadWorkerConfig', () => {
   it('applies defaults when only DATABASE_URL is set', () => {
-    expect(loadWorkerConfig({ DATABASE_URL })).toEqual({
+    expect(loadWorkerConfig({ DATABASE_URL })).toMatchObject({
       databaseUrl: DATABASE_URL,
       logLevel: 'info',
       concurrency: 5,
       fakeMarketplaceUrl: undefined,
+      storage: { driver: 'local' },
+      ai: { provider: 'fake', fakeFixturesDir: DEFAULT_FAKE_FIXTURES_DIR },
+      analysis: { autoEscalate: true },
+    });
+  });
+
+  it('reads the storage, AI, and analysis settings the jobs need', () => {
+    expect(
+      loadWorkerConfig({
+        DATABASE_URL,
+        STORAGE_LOCAL_DIR: '/tmp/listora-storage',
+        AI_FAKE_FIXTURES_DIR: '/tmp/listora-fixtures',
+        AI_AUTO_ESCALATE: 'off',
+      }),
+    ).toMatchObject({
+      storage: { driver: 'local', rootDir: '/tmp/listora-storage' },
+      ai: { fakeFixturesDir: '/tmp/listora-fixtures' },
+      analysis: { autoEscalate: false },
     });
   });
 
@@ -41,12 +61,14 @@ describe('loadWorkerConfig', () => {
         LOG_LEVEL: 'loud',
         WORKER_CONCURRENCY: '0',
         FAKE_MARKETPLACE_URL: 'ftp://fake',
+        AI_AUTO_ESCALATE: 'sometimes',
       }).issues,
     ).toEqual([
       'DATABASE_URL is required',
       'LOG_LEVEL must be one of fatal, error, warn, info, debug, trace, silent',
       'WORKER_CONCURRENCY must be an integer from 1 to 100',
       'FAKE_MARKETPLACE_URL must be an http:// or https:// URL',
+      'AI_AUTO_ESCALATE must be on or off',
     ]);
   });
 

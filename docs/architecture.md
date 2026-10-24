@@ -212,13 +212,16 @@ src/
   sRGB JPEGs: `original` (full size) and `ai` (1024 px) privately, and `thumbnail` (400 px)
   and `listing` (1600 px) under an unguessable public key. It stores their keys, sizes, and
   hashes in `photo.derivatives`, the upright size, and a 64-bit DCT pHash, then deletes the
-  upload, which may carry GPS. Every step is safe to rerun. The job queue (Graphile Worker,
-  T-06) runs only operation jobs so far: the API's `PhotoJobQueue` only logs, so photos stay
-  `processing` in development. Wiring it means adding the job with Graphile's `add_job` (job
-  key `photoJobKey`) and registering `processPhoto` in the worker. Analyses wait the same way
-  (`unscheduledAnalysisJobs`; `analysisJobKey`, `runItemAnalysis`).
+  upload, which may carry GPS. Every step is safe to rerun. The API adds the job to the job
+  queue (Graphile Worker, `graphilePhotoJobs`, job key `photoJobKey`) in the transaction that
+  attaches the photo, and the worker runs it (`processPhoto`, task `photo_processing`) next to
+  the operation steps. Analyses go the same way (`graphileAnalysisJobs`, `analysisJobKey`,
+  `runItemAnalysis`, task `item_analysis`). The API and the worker must share photo storage.
 - **Photo-set hash.** `itemPhotoSet` returns an item's photos in order and `photoSetHash`
-  (from `@listora/shared`) over their upload sha256s, the key analysis is idempotent by.
+  (from `@listora/shared`) over their upload sha256s, the key analysis is idempotent by. The
+  hash sorts the sha256s, so reordering the photos or choosing another cover keeps the
+  analysis; only adding or removing photos makes a new photo set. The display order reaches
+  only the prompt.
 - Deleting a photo, or its item, deletes its stored objects after the transaction commits.
 
 ## 4. Marketplace adapter model
@@ -481,7 +484,8 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
    (check digit verified), sizes with their system, fiber percentages, country of origin, and
    labeled style numbers from OCR lines and barcode payloads. Every value carries a confidence
    and its source line. Never scrape or call the FTC RN database.
-3. **One multimodal call** (Claude Haiku 5.5, low effort, strict JSON schema). It returns
+3. **One multimodal call** (Claude Haiku 5.5, low effort, a JSON schema every answer is
+   validated against; not strict structured output, see the deviation below). It returns
    canonical attributes with per-field confidence and provenance, plus every marketplace
    variant and a labeled price estimate. Typical cost is about $0.0015-0.003 per item.
 4. **Escalation** (Sonnet 5.5) only for low confidence, designer or vintage items, or when the
@@ -512,9 +516,12 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
   runs the AI guards (`AiClient.checkGuards`) with the tier's plan unit, so a request that
   would be refused gets `503` (kill switch), `429` (daily budget), or `402` (quota) instead.
   The row and its job commit together (`requestAnalysis`).
-- **The call.** `analyzeItem` sends up to 8 photos' `ai` derivatives (tag photos first), a
-  784 px centered crop of each of the first two tag photos when it is sharper than the `ai`
-  image (`tagCrop` in `@listora/photos`), and a JSON prompt with the phone's OCR lines and
+- **The call.** `analyzeItem` sends at most 5 photos' `ai` derivatives (the first tag photo
+  wherever it is, then the others in display order) and at most one tag crop: a 784 px
+  centered crop of that tag photo when it is sharper than the `ai` image (`tagCrop` in
+  `@listora/photos`). Those caps (`MAX_ANALYSIS_PHOTOS`, `MAX_TAG_CROPS` in `input.ts`) are the
+  plan's cost basis (3-5 photos and one tag crop per call), which the plan limits and the
+  daily circuit breaker were sized for. The prompt is JSON with the phone's OCR lines and
   barcodes and the `@listora/tag-parse` facts. The system prompt holds every rule and the
   canonical vocabulary (`vocabulary.ts`: category tree, departments, colors, patterns,
   materials, size systems, conditions) and nothing per item, so it caches. The answer's
@@ -523,9 +530,15 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
   is `invalid_output`, retried once, then the analysis fails with a reason the user sees.
   The answer is flat (details as plain values, empty when not found, with their confidences
   in a parallel object; decoded before use), and its schema travels in the system prompt
-  (`enforcement: 'prompt'`): Anthropic refused it as a strict structured-output grammar
-  ("compiled grammar is too large") even flat, so validation and the one retry hold the
-  model to it instead.
+  (`enforcement: 'prompt'`).
+- **Deviation from the plan: no strict structured output.** Plan section 5.1 calls for
+  structured output with a strict JSON schema (constrained decoding). In the live runs
+  Anthropic refused this schema as a strict grammar ("compiled grammar is too large"), even
+  after flattening it, so strict mode is not possible for it. The adopted fallback: the full
+  JSON schema in the cached system prompt, every answer validated against the Zod schema
+  (`itemAnalysisSchema`), and one retry of an answer that breaks it. The cost is an
+  occasional billed `invalid_output` retry, and a visible failure after a second bad answer;
+  an invalid answer is never stored.
 - **Provenance** is the server's: a value is `ocr` or `barcode` only when the phone's reads
   contain it, otherwise `ai`. A confident parsed fact the model agrees with gives its source;
   one the model left out fills the value in; one it contradicts caps the value's confidence
@@ -534,7 +547,10 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
   product is uncertain (confidence below 0.6), the item looks designer or vintage, or the
   model says so. With `AI_AUTO_ESCALATE=on` the job then queues the premium analysis (same
   photos plus the first result) in the transaction that stores the result, when the premium
-  quota allows; otherwise the user starts it (`escalateAnalysis`).
+  quota allows; otherwise the user starts it (`escalateAnalysis`). A brand or product the
+  model did not identify at all also sets `needsEscalation` (with the reason "The brand was
+  not identified."), so the app makes "Identify harder" prominent, but never escalates on its
+  own: many items are unbranded, and a premium identification costs the user's quota.
 - **Quotas.** A standard call uses one `ai_items` unit and a premium call one
   `premium_identifications` unit when it succeeds. `PostgresQuotaPolicy` counts them in
   `usage_counter` per UTC month and enforces the row's `quota` (null means unlimited until
@@ -542,9 +558,11 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
 - **Applying.** `applyAnalysis` copies the proposals into the item with their provenance and
   sets `acceptedAnalysisId`, never overwriting a detail whose provenance is `user`. A later
   `replaceItem` value equal to the accepted analysis's proposal keeps the analysis's source.
-- **The job** (`runItemAnalysis`, task `item_analysis`) records every outcome on the row,
-  unexpected errors included (`internal_error`, retryable), so an analysis never stays
-  `running` or claims a result it does not have.
+- **The job** (`runItemAnalysis`, task `item_analysis`, run by the worker) records every
+  outcome on the row, unexpected errors included (`internal_error`, retryable), so an
+  analysis never stays `running` or claims a result it does not have: a failed one shows its
+  reason and whether asking again may help. Only a database outage while recording throws;
+  the queue then runs the job again with backoff.
 
 `@listora/ai` is the provider layer behind steps 3, 4, and 6, and implements step 7's metering
 and guards (budget alarms are T-29):

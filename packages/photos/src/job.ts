@@ -8,7 +8,7 @@
  * never while the photo row may point at them; the row changes only in one conditional update,
  * and the upload is deleted only after that update commits.
  */
-import { jsonb, type Db, type DbExecutor, type JsonObject } from '@listora/db';
+import { addJob, jsonb, type Db, type DbExecutor, type JsonObject } from '@listora/db';
 import type { Logger } from '@listora/shared';
 import { sha256Hex } from '@listora/shared';
 import type { ObjectStorage } from '@listora/storage';
@@ -44,11 +44,21 @@ export function photoJobKey(photoId: string): string {
 
 /**
  * Adds a photo's processing job on the caller's connection, so the job commits or rolls back
- * with the photo. The Graphile Worker queue (plan task T-06) implements it.
+ * with the photo. `graphilePhotoJobs` is the production one; tests record jobs instead.
  */
 export interface PhotoJobQueue {
   enqueue(executor: DbExecutor, job: PhotoJobPayload): Promise<void>;
 }
+
+/** The Graphile Worker queue: the worker runs each job with `processPhoto`. */
+export const graphilePhotoJobs: PhotoJobQueue = {
+  enqueue: (executor, job) =>
+    addJob(executor, {
+      task: PHOTO_PROCESSING_TASK,
+      payload: { accountId: job.accountId, photoId: job.photoId },
+      jobKey: photoJobKey(job.photoId),
+    }),
+};
 
 export interface PhotoProcessingDependencies {
   db: Db;

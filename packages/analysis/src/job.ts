@@ -5,8 +5,9 @@
  * every failure, expected or not, is recorded on the row.
  *
  * A standard analysis that asks for escalation queues its premium analysis in the same
- * transaction as its result, when automatic escalation is on and the plan's premium quota
- * still allows one.
+ * transaction as its result, when automatic escalation is on, the reason is worth a premium
+ * call without the user asking (not just an unidentified brand or product), and the plan's
+ * premium quota still allows one.
  */
 import { AiGuardError, type AiClient } from '@listora/ai';
 import { inTransaction, type Db } from '@listora/db';
@@ -69,7 +70,7 @@ export async function runItemAnalysis(
     });
     const escalate =
       analysis.tier === 'standard' &&
-      outcome.result.needsEscalation &&
+      outcome.autoEscalate &&
       deps.autoEscalate &&
       (await premiumAllowed(deps, analysis, log));
     const stored = await inTransaction(deps.db, async (trx) => {

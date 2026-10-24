@@ -140,7 +140,7 @@ function jsonText(text: string): string {
   if (fenced?.[1] !== undefined) return fenced[1];
   const start = trimmed.indexOf('{');
   const end = trimmed.lastIndexOf('}');
-  return start > 0 && end > start ? trimmed.slice(start, end + 1) : trimmed;
+  return start >= 0 && end > start ? trimmed.slice(start, end + 1) : trimmed;
 }
 
 function readResponse<T>(
