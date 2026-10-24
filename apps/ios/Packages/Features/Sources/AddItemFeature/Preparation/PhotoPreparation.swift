@@ -61,10 +61,8 @@ enum PhotoPreparation {
     }
 
     private static func decodeUpright(_ data: Data, maxLongEdge: Int?) throws(PhotoPreparationError) -> CGImage {
-        guard let source = CGImageSourceCreateWithData(
-                  data as CFData,
-                  [kCGImageSourceShouldCache: false] as CFDictionary,
-              ),
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions),
               CGImageSourceGetCount(source) > 0,
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let pixelWidth = properties[kCGImagePropertyPixelWidth] as? Int,
