@@ -18,11 +18,15 @@ export interface StartedProcess {
 }
 
 /**
- * Starts a TypeScript entry point the way production does (`node <file>.ts`) and collects its
- * structured JSON logs, so tests prove the real process boots and shuts down.
+ * Starts a TypeScript entry point the way production does (`node <file>.ts [args]`) and collects
+ * its structured JSON logs, so tests prove the real process boots and shuts down.
  */
-export function startNodeProcess(entry: string, env: NodeJS.ProcessEnv): StartedProcess {
-  const child: ChildProcess = spawn(process.execPath, [entry], {
+export function startNodeProcess(
+  entry: string,
+  env: NodeJS.ProcessEnv,
+  args: readonly string[] = [],
+): StartedProcess {
+  const child: ChildProcess = spawn(process.execPath, [entry, ...args], {
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });

@@ -4,6 +4,7 @@
   "references": [
     { "path": "packages/shared" },
     { "path": "packages/testing" },
+    { "path": "packages/db" },
     { "path": "apps/api" },
     { "path": "apps/worker" }
   ]

@@ -1,0 +1,22 @@
+{
+  "name": "@listora/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Listora PostgreSQL schema: SQL migrations, migration runner, Kysely types, SKU allocator.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "migrate": "node --env-file-if-exists=../../.env src/cli.ts"
+  },
+  "dependencies": {
+    "@listora/shared": "*",
+    "kysely": "^0.29.7",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@listora/testing": "*",
+    "@types/pg": "^8.23.1"
+  }
+}

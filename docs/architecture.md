@@ -68,16 +68,17 @@ apps/
   worker/       Background worker: operation engine, polls, health jobs (@listora/worker)
   ios/          iPhone app (T-02; not an npm workspace)
 packages/
+  db/           SQL migrations, migration runner, Kysely types, SKU allocator (@listora/db)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
-  testing/      Test-only helpers: test DB URL, process harness (@listora/testing)
+  testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
 infra/          AWS CDK stacks (T-30)
 scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
 docs/           This overview and the roadmap
 ```
 
-New backend libraries go in `packages/<name>` (for example `packages/db` for migrations and
-query helpers, and `packages/marketplaces` for adapters). Add each one to the root
+New backend libraries go in `packages/<name>` (for example `packages/marketplaces` for
+adapters). Add each one to the root
 `tsconfig.json` references. Tests sit next to the code: `*.test.ts` files are unit tests with
 no external services, and `*.int.test.ts` files are integration tests against the real local
 Postgres.
@@ -166,7 +167,7 @@ worker.
    token buckets.
 
 **Auto-delist.** A sale event (webhook, poll, email, or manual entry) is deduplicated by
-`(marketplace, external_order_id)`. Then, in one transaction, Listora records the sale, sets
+its order (see `sale` in section 9). Then, in one transaction, Listora records the sale, sets
 the item to `sold_pending_delist`, and creates a high-priority delist operation or urgent
 assisted task for every other listing. A `delist_run` gathers the per-marketplace results. If
 anything is still unconfirmed after 10 minutes, Listora alerts the user again, and after 30
@@ -211,8 +212,9 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
    variant and a labeled price estimate. Typical cost is about $0.0015-0.003 per item.
 4. **Escalation** (Sonnet 5.5) only for low confidence, designer or vintage items, or when the
    user taps "Identify harder". It counts against the plan's premium quota.
-5. **Analyze once.** There is one `ai_analysis` per photo-set hash. Edits, repricing, delist,
-   sync, and profit tracking never call AI. Bulk work uses the Batch API.
+5. **Analyze once.** There is one `ai_analysis` per photo-set hash and tier (`standard`, plus
+   `premium` only after escalation). Edits, repricing, delist, sync, and profit tracking never
+   call AI. Bulk work uses the Batch API.
 6. **Metering from day one.** Every call writes an `ai_usage_event` (tokens, images, searches,
    `cost_micros` from a versioned price table). The system also keeps daily and monthly
    rollups and per-plan quotas in reseller units. There is a per-account daily dollar circuit
@@ -220,23 +222,67 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
 
 ## 9. Data model outline
 
-PostgreSQL, one schema. Every table has `account_id` (tenant), `created_at`, and `updated_at`.
-Money columns are integer cents with a currency. T-04 defines the schema.
+PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations` (T-04).
 
-- **Tenancy:** `account` (with `sku_prefix`), `app_user`, `membership`, and `sku_sequence`
-  (gapless per-account SKUs such as `AJ-000184`).
+- **Tenancy.** Every table has a non-null `account_id`, except `account` itself and
+  `app_user` (a person's identity is global, and `membership` links it to accounts). Child
+  rows reference parents through composite `(account_id, <parent>_id)` foreign keys, so the
+  database rejects a row that points at another tenant's data. Deleting an account deletes
+  all of its data.
+- **Columns.** Ids are `uuidv7()`. Money is `bigint` cents (`*_cents`) plus a `currency`
+  column (`currency_code` domain, USD only for now). Status-like columns are text with a
+  CHECK of allowed values, mirrored by the lists in `packages/db/src/values.ts`.
+- **Timestamps.** `created_at` and `updated_at` default to `now()`, and a trigger maintains
+  `updated_at`. The append-only tables (`operation_event`, `audit_log`) have only
+  `created_at`, since their rows never change.
+- **History is kept.** A trigger rejects updates and deletes on the append-only tables, and
+  deletes on `marketplace_operation`. The only changes it lets through are foreign-key actions
+  caused by deleting a parent row (for example deleting the account), never direct statements
+  or other triggers. So an operation and its `operation_event` history go away only with the
+  account.
+- **Invariants in the schema.** An operation can be `succeeded` only with `success_evidence`
+  (`read_back` or `user_confirmation`), and `failed` only with a user-readable error. Assisted
+  connections can never hold credentials. `inventory_item.version` is bumped by a trigger on
+  every update, for optimistic locking.
+
+Tables by area:
+
+- **Tenancy:** `account`, `app_user`, `membership`, and `sku_sequence` (gapless per-account
+  SKUs such as `AJ-000184`, allocated by `createInventoryItem` / `allocateSku` in
+  `@listora/db` inside the item-create transaction). `sku_prefix` lives on `account`, not on
+  `membership` as the plan's data model sketched: SKUs and their counter are per account
+  (decision D12), so every member of an account creates SKUs with the same prefix.
 - **Inventory:** `inventory_item` (status, canonical attributes, prices, cost,
   `field_provenance`, optimistic-lock `version`), `photo` (role, hashes, derivatives, OCR and
-  barcodes), and `storage_location`.
-- **AI:** `ai_analysis` (unique per photo-set hash), `ai_usage_event`, and `ai_usage_daily`.
+  barcodes), and `storage_location`. `photo` stores pixel `width` and `height` but no byte
+  size; the stored object's size is available from object storage when needed.
+- **AI:** `ai_analysis` (unique per photo-set hash and tier), `ai_usage_event`, and
+  `ai_usage_daily`.
 - **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
   `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot,
   desired/applied version), `marketplace_operation`, and the append-only `operation_event`.
-- **Sales and delist:** `inbound_event` (deduplicated per source), `sale`, `delist_run`,
-  `user_task`, `fee_line`, and `expense`.
+- **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
+  provider event id, so an id that repeats in another account or on another marketplace is
+  never dropped as a duplicate). `sale` is one marketplace order (unique per account,
+  marketplace, and external order id) with the order-level fields: sold time, currency,
+  shipping charged, detection source, status, and ship-by. Its `sale_item` rows are the items
+  it sold, one per item (an order can be a bundle), each with its price and, when known, the
+  item's listing on the sale's marketplace. `delist_run` is one per sold item and must point
+  at an item of its sale; the `delist_run_listing` view lists its operations and user tasks.
+  `fee_line` belongs to a sale and optionally to one of its items. Also `user_task` and
+  `expense`. Auto-delist operations have `origin = 'auto_delist'` and reference their
+  `delist_run`.
 - **Pricing:** `pricing_snapshot` (source-labeled).
 - **Billing:** `subscription`, `entitlement`, and `usage_counter`.
 - **History:** `audit_log` (item changes the user can see).
+
+**Migrations.** Each migration is a pair of plain SQL files, `NNNN_name.up.sql` and
+`NNNN_name.down.sql`, run by Kysely's migrator in one transaction with a lock (`npm run
+db:migrate`). Never edit a migration that has been merged; add a new one. A schema change
+updates the Kysely table types in `packages/db/src/schema.ts` and the value lists in
+`values.ts` in the same change; `schema.int.test.ts` fails when they drift. `bigint` columns
+read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
+`YYYY-MM-DD` strings. Write `jsonb` values with `jsonb(value)`.
 
 ## 10. Testing and CI
 
@@ -245,7 +291,8 @@ Money columns are integer cents with a currency. T-04 defines the schema.
   must pass too (T-02).
 - Integration tests use a real Postgres: the local `listora_test` database from
   `scripts/dev-db.sh` (locally and in CI), or `TEST_DATABASE_URL` when set. They fail, and
-  never skip, when the database is unreachable.
+  never skip, when the database is unreachable. Tests that need their own schema create a
+  throwaway database with `createScratchDatabase` from `@listora/testing` and drop it after.
 - Tests cover acceptance criteria **and failure paths**. Process-level tests start the real
   entry points with `node src/main.ts` (see `startNodeProcess` in `@listora/testing`).
 - CI runs the same fresh-clone path as local development; see the CI section of the

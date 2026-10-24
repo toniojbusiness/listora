@@ -22,6 +22,7 @@ tasks and how they depend on each other.
 ```sh
 npm ci                 # install the exact locked dependencies
 scripts/dev-db.sh      # start this checkout's Postgres 18 cluster (.local/pg)
+npm run db:migrate     # apply the schema migrations to the dev database
 npm run check          # format, lint, type check, unit + integration tests
 ```
 
@@ -41,6 +42,7 @@ configuration key is documented there. Never commit `.env`.
 | `npm run test:integration`   | Integration tests (`*.int.test.ts`) against the local Postgres                                                      |
 | `npm run dev:api`            | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                            |
 | `npm run dev:worker`         | Run the worker with reload on change                                                                                |
+| `npm run db:migrate`         | Apply pending migrations to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one         |
 | `scripts/dev-db.sh start`    | Initialize if needed and start the cluster; create the `listora` and `listora_test` databases (the default command) |
 | `scripts/dev-db.sh stop`     | Stop the cluster                                                                                                    |
 | `scripts/dev-db.sh reset`    | Delete all local data and start a fresh cluster                                                                     |
@@ -58,6 +60,7 @@ one runs at the same time.
 apps/api/          Fastify HTTP API (@listora/api)
 apps/worker/       Background worker (@listora/worker)
 apps/ios/          iPhone app (placeholder until T-02)
+packages/db/       SQL migrations, migration runner, Kysely types (@listora/db)
 packages/shared/   Shared types and utilities (@listora/shared)
 packages/testing/  Test-only helpers (@listora/testing)
 infra/             AWS CDK (placeholder until T-30)
