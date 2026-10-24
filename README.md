@@ -15,7 +15,9 @@ tasks and how they depend on each other.
   missing. On a machine without Homebrew, set `PG_BIN_DIR` to a PostgreSQL 18 `bin` directory.
 - **shellcheck**, used by `npm run lint`. Install it with `brew install shellcheck`.
 - Docker is not needed.
-- Xcode 26 with the iPhone 17 simulator is needed for the iOS app once T-02 lands.
+- For the iOS app only: **Xcode 26.3** with the iPhone 17 simulator, plus XcodeGen, SwiftLint,
+  and SwiftFormat (`brew install xcodegen swiftlint swiftformat`). See
+  [apps/ios/README.md](apps/ios/README.md).
 
 ## Setup
 
@@ -50,6 +52,15 @@ configuration key is documented there. Never commit `.env`.
 | `scripts/dev-db.sh url test` | Print a connection URL (`dev` or `test`)                                                                            |
 | `scripts/dev-db.sh psql`     | Open psql on the dev database                                                                                       |
 
+The iOS app has its own `make` targets, run from the repository root. The full list is in
+[apps/ios/README.md](apps/ios/README.md#commands).
+
+| Command         | What it does                                                         |
+| --------------- | -------------------------------------------------------------------- |
+| `make ios-test` | Generate the Xcode project, then run every iOS test on the simulator |
+| `make ios-lint` | SwiftLint (strict) and the SwiftFormat check                         |
+| `make ios-open` | Generate the Xcode project and open it in Xcode                      |
+
 The cluster listens only on `127.0.0.1`, on port `LISTORA_PG_PORT` (default 55432). Each
 worktree has its own cluster. Give each worktree a different port in its `.env` if more than
 one runs at the same time.
@@ -59,12 +70,13 @@ one runs at the same time.
 ```text
 apps/api/          Fastify HTTP API (@listora/api)
 apps/worker/       Background worker (@listora/worker)
-apps/ios/          iPhone app (placeholder until T-02)
+apps/ios/          iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift packages
 packages/db/       SQL migrations, migration runner, Kysely types (@listora/db)
 packages/shared/   Shared types and utilities (@listora/shared)
 packages/testing/  Test-only helpers (@listora/testing)
 infra/             AWS CDK (placeholder until T-30)
 scripts/dev-db.sh  Local PostgreSQL 18 cluster
+Makefile           iOS commands (make ios-*)
 docs/              Architecture overview and roadmap
 ```
 
@@ -73,5 +85,6 @@ docs/              Architecture overview and roadmap
 GitHub Actions (`.github/workflows/ci.yml`) runs the same fresh-clone path as local
 development on every pull request and on every push to `main`: on Linux it installs
 PostgreSQL 18 from the PGDG apt repository, then runs `npm ci`, `scripts/dev-db.sh` (with
-`PG_BIN_DIR=/usr/lib/postgresql/18/bin`), and `npm run check`.
-T-02 adds the macOS iOS job.
+`PG_BIN_DIR=/usr/lib/postgresql/18/bin`), and `npm run check`. A second job on a macOS
+runner, with Xcode 26.3, installs XcodeGen, SwiftLint, and SwiftFormat from Homebrew, then runs
+`make ios-lint` and `make ios-test`.

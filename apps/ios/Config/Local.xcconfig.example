@@ -1,0 +1,4 @@
+// Per-checkout Dev overrides. Copy to Local.xcconfig (gitignored), then run `make ios-generate`.
+// Only the Dev configuration reads this file.
+
+// API_BASE_URL = http:/$()/127.0.0.1:3001

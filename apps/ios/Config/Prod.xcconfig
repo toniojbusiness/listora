@@ -1,0 +1,9 @@
+// Prod: the App Store build. The ".invalid" host is a deliberate placeholder that never
+// resolves; the real domain arrives with the AWS accounts (gate G-AWS, task T-30).
+
+#include "Base.xcconfig"
+
+LISTORA_ENVIRONMENT = prod
+APP_DISPLAY_NAME = Listora
+BUNDLE_ID_SUFFIX =
+API_BASE_URL = https:/$()/api.listora.invalid

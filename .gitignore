@@ -9,6 +9,12 @@ node_modules/
 
 # Build output and caches kept inside the worktree (Xcode DerivedData, SwiftPM)
 .build/
+.swiftpm/
+
+# iOS: XcodeGen output (regenerate with `make ios-generate`) and per-checkout Dev overrides
+apps/ios/Listora.xcodeproj/
+apps/ios/Generated/
+apps/ios/Config/Local.xcconfig
 
 # Test output
 coverage/

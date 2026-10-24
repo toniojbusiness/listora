@@ -1,0 +1,7 @@
+// Settings shared by every build configuration. Environment files include this first.
+
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+
+// Placeholder until the Apple Developer Program account exists (gate G-Apple).
+BASE_BUNDLE_IDENTIFIER = com.listora.app

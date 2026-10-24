@@ -60,13 +60,34 @@ These two rules from the product owner override every other design choice.
   is on. Adding a capability mode or status then fails the type check until every switch
   handles it.
 
+### iOS conventions
+
+The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
+
+- `apps/ios/project.yml` is the only source of the Xcode project. XcodeGen generates
+  `Listora.xcodeproj`, which is gitignored and never edited by hand.
+- Swift 6 language mode with complete strict concurrency, and warnings are errors.
+- Code lives in local Swift packages: `Core` (models and utilities, no UI), `DesignSystem`
+  (palette, typography, spacing, components), `APIClient` (generated from the OpenAPI
+  contract in T-03), and `Features` (one library per feature). A feature never imports another
+  feature; `AppFeature` composes them into the tab shell. The app target only starts
+  `AppFeature`.
+- Configuration comes only from the build configuration's xcconfig file (`Dev-Debug`,
+  `Staging-Release`, `Prod-Release`) through Info.plist. `AppConfiguration` validates it at
+  launch and stops the app with an error that names the bad key. Only Dev may use plain HTTP.
+- Views use `DesignSystem` tokens, never raw colors or sizes, so light and dark mode stay
+  consistent. A test checks WCAG AA contrast for every text and background pair.
+- Tests use Swift Testing; UI tests use XCTest. `make ios-lint` (SwiftLint and SwiftFormat)
+  must be clean.
+
 ## 3. Repository layout
 
 ```text
 apps/
   api/          Fastify HTTP API (@listora/api)
   worker/       Background worker: operation engine, polls, health jobs (@listora/worker)
-  ios/          iPhone app (T-02; not an npm workspace)
+  ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
+                (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
   db/           SQL migrations, migration runner, Kysely types, SKU allocator (@listora/db)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
@@ -75,6 +96,7 @@ infra/          AWS CDK stacks (T-30)
 scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
 docs/           This overview and the roadmap
+Makefile        iOS commands (make ios-test, ios-lint, ...)
 ```
 
 New backend libraries go in `packages/<name>` (for example `packages/marketplaces` for
@@ -287,8 +309,9 @@ read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
 ## 10. Testing and CI
 
 - `npm run check` runs the format check, lint (ESLint and shellcheck), type check, unit tests,
-  and integration tests. It must pass before merge. When iOS code is touched, `make ios-test`
-  must pass too (T-02).
+  and integration tests. It must pass before merge. When iOS code is touched, `make ios-lint`
+  and `make ios-test` must pass too. `make ios-test` runs the package, unit, and UI tests on an
+  existing iPhone 17 simulator and keeps DerivedData in `.build/ios`.
 - Integration tests use a real Postgres: the local `listora_test` database from
   `scripts/dev-db.sh` (locally and in CI), or `TEST_DATABASE_URL` when set. They fail, and
   never skip, when the database is unreachable. Tests that need their own schema create a
@@ -296,4 +319,4 @@ read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
 - Tests cover acceptance criteria **and failure paths**. Process-level tests start the real
   entry points with `node src/main.ts` (see `startNodeProcess` in `@listora/testing`).
 - CI runs the same fresh-clone path as local development; see the CI section of the
-  [README](../README.md#ci). T-02 adds the macOS iOS job.
+  [README](../README.md#ci). A macOS job runs `make ios-lint` and `make ios-test`.
