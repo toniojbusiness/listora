@@ -267,8 +267,9 @@ guards, cost reports, and spend check:
   order: the global kill switch (`AI_KILL_SWITCH`, or the operator's switch in Postgres), an
   operator's block on the account, the account's spend today in UTC against
   `AI_DAILY_BUDGET_USD`, and the plan quota hook (`QuotaPolicy`, in reseller units such as
-  `ai_items`). `createAiClient` adds the operator controls when given `PostgresAiControls`. A tripped guard throws `AiGuardError` before anything is sent and records
-  nothing. Quota units are consumed only when a call succeeds.
+  `ai_items`). `createAiClient` adds the operator controls when given `PostgresAiControls`. A
+  tripped guard throws `AiGuardError` before anything is sent and records nothing. Quota units
+  are consumed only when a call succeeds.
 - **Tiers map to models by configuration** (`AI_MODEL_STANDARD`, `AI_MODEL_PREMIUM`); the
   default registry is Haiku 5.5 at low effort and Sonnet 5.5 at medium effort. Every
   configured model must be in the price table, so every call can be priced.
@@ -305,8 +306,8 @@ guards, cost reports, and spend check:
   approaching or over `AI_GLOBAL_DAILY_ALERT_USD` per UTC day. It only reads. It logs one
   `event: "ai_spend_alert"` line per alert (warn when approaching, error when over) and one
   `event: "ai_spend_check"` summary with numeric counts. CloudWatch metric filters and alarms
-  (T-30) key on these field names, so they change only together with the alarms. Alerts name
-  accounts by id only.
+  (T-30, T-32) key on these field names, so they change only together with the alarms. Alerts
+  name accounts by id only.
 - **Timeouts.** `AI_REQUEST_TIMEOUT_MS` defaults to 600000 (the SDK's own default), so long
   Premium calls are not cut off. A timed-out call may still be billed but is metered at zero.
 - **Providers.** `FakeAiProvider` answers from fixture JSON keyed by photo-set hash and output
