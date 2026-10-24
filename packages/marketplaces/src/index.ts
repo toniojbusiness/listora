@@ -65,7 +65,11 @@ export {
   parseDesiredListingState,
 } from './desired-state.ts';
 export { FakeMarketplaceAdapter } from './fake/fake-adapter.ts';
-export type { FakeAdapterOptions, FakeListingPayload } from './fake/fake-adapter.ts';
+export type {
+  FakeAdapterOptions,
+  FakeCapabilityOverrides,
+  FakeListingPayload,
+} from './fake/fake-adapter.ts';
 export { FakeMarketplace } from './fake/fake-marketplace.ts';
 export type {
   FakeAction,

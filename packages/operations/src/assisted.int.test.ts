@@ -185,6 +185,87 @@ describe('assisted operations and connection-aware capabilities (real Postgres)'
     expect(poshmark.reads).toBe(0);
   });
 
+  it('delists after a sale at once, past an edit the user never answered', async () => {
+    await startWith({});
+    const created = await harness.createListing('poshmark');
+    const listing = await harness.db
+      .updateTable('marketplace_listing')
+      .set({ status: 'active' })
+      .where('id', '=', created.id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    // A price change on Poshmark waits for the user, who ignores it.
+    const edit = await harness.enqueue(listing, 'price', { priceCents: 3900 });
+    expect(await harness.waitForStatus(edit.id, SETTLED)).toMatchObject({
+      status: 'needs_user_action',
+    });
+    expect(await statusOf(listing, edit)).toBe('Action needed - change the price on Poshmark');
+
+    // The item sells on eBay, and the auto-delist ends the Poshmark listing.
+    const sale = await harness.db
+      .insertInto('sale')
+      .values({
+        account_id: harness.accountId,
+        marketplace: 'ebay',
+        sold_at: new Date(),
+        detection_source: 'manual',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await harness.db
+      .insertInto('sale_item')
+      .values({
+        account_id: harness.accountId,
+        sale_id: sale.id,
+        marketplace: 'ebay',
+        item_id: listing.item_id,
+        sale_price_cents: 3900,
+      })
+      .execute();
+    const run = await harness.db
+      .insertInto('delist_run')
+      .values({ account_id: harness.accountId, sale_id: sale.id, item_id: listing.item_id })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const end = await harness.enqueue(
+      listing,
+      'end',
+      { status: 'ended' },
+      { origin: 'auto_delist', delistRunId: run.id },
+    );
+
+    // Well within the harness's 60 s recheck of a blocked operation: the end never waited.
+    expect(await harness.waitForStatus(end.id, SETTLED, 5_000)).toMatchObject({
+      status: 'needs_user_action',
+      success_evidence: null,
+    });
+    expect(await statusOf(listing, end)).toBe('Action needed - delist on Poshmark');
+    expect(await tasksOf(end.id)).toEqual([
+      expect.objectContaining({
+        kind: 'delist_manually',
+        status: 'open',
+        urgency: 'urgent',
+        delist_run_id: run.id,
+      }),
+    ]);
+
+    // The edit is closed as superseded, in its history, and never shown as done.
+    expect(await harness.operation(edit.id)).toMatchObject({
+      status: 'canceled',
+      success_evidence: null,
+    });
+    expect((await harness.events(edit.id)).at(-1)).toMatchObject({
+      from_status: 'needs_user_action',
+      to_status: 'canceled',
+      detail: { action: 'supersede', reason: 'superseded by delist', supersededBy: end.id },
+    });
+    expect(await tasksOf(edit.id)).toEqual([
+      expect.objectContaining({ kind: 'edit_manually', status: 'dismissed' }),
+    ]);
+    expect(await statusOf(listing, edit)).not.toBe('Done (you confirmed)');
+  });
+
   it.each([
     ['confirmed', { type: 'confirmed', externalListingId: 'POSH-9' }],
     ['unknown', { type: 'unknown', code: 'timeout', message: "Poshmark didn't answer in time." }],

@@ -36,7 +36,17 @@ export interface FakeAdapterOptions {
    * marketplace whose reads carry no freshness marker.
    */
   readFreshness?: MarketplaceCapabilities['readFreshness'];
+  /**
+   * Flags that differ from the fake's defaults, so it can stand in for a marketplace that
+   * describes itself differently (Depop never reuses an external SKU). How success is
+   * established is not one of them.
+   */
+  capabilities?: FakeCapabilityOverrides;
 }
+
+export type FakeCapabilityOverrides = Partial<
+  Omit<MarketplaceCapabilities, 'verifyRead' | 'readFreshness'>
+>;
 
 const CAPABILITIES: MarketplaceCapabilities = {
   connect: 'oauth',
@@ -92,7 +102,11 @@ export class FakeMarketplaceAdapter implements MarketplaceAdapter<FakeListingPay
     this.id = options.marketplace;
     this.#baseUrl = `${options.baseUrl.replace(/\/+$/, '')}/${options.marketplace}`;
     this.#timeoutMs = options.requestTimeoutMs ?? 10_000;
-    this.#capabilities = { ...CAPABILITIES, readFreshness: options.readFreshness ?? 'revision' };
+    this.#capabilities = {
+      ...CAPABILITIES,
+      ...options.capabilities,
+      readFreshness: options.readFreshness ?? 'revision',
+    };
     this.#name = MARKETPLACE_NAMES[options.marketplace];
   }
 

@@ -29,6 +29,10 @@ describe('createAdapters', () => {
     expect(depop).toBeInstanceOf(ConnectionAwareAdapter);
     expect(depop?.capabilities(null).verifyRead).toBe('user_confirm');
     expect(depop?.capabilities(api).verifyRead).toBe('api');
+    // The flags describe Depop itself in either mode.
+    expect(depop?.capabilities(null).externalSkuReusable).toBe(false);
+    expect(depop?.capabilities(api).externalSkuReusable).toBe(false);
+    expect(adapters.capabilities('ebay', api)?.externalSkuReusable).toBe(true);
     // Poshmark and Mercari have no api; they stay assisted until the browser runner lands.
     for (const marketplace of ['poshmark', 'mercari'] as const) {
       expect(adapters.capabilities(marketplace, api)).toMatchObject({

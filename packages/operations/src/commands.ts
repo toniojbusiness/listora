@@ -232,15 +232,23 @@ export async function cancelOperation(
       { action: 'cancel', ...(target.reason === undefined ? {} : { reason: target.reason }) },
     );
     await removeOperationJob(trx, op.id);
-    await trx
-      .updateTable('user_task')
-      .set({ status: 'dismissed', completed_at: sql<Date>`now()` })
-      .where('account_id', '=', op.account_id)
-      .where('operation_id', '=', op.id)
-      .where('status', '=', 'open')
-      .execute();
+    await dismissOpenTasks(trx, op);
     return canceled;
   });
+}
+
+/** Dismisses an operation's open user tasks, which no longer finish it. */
+export async function dismissOpenTasks(
+  trx: DbTransaction,
+  op: Pick<OperationRow, 'account_id' | 'id'>,
+): Promise<void> {
+  await trx
+    .updateTable('user_task')
+    .set({ status: 'dismissed', completed_at: sql<Date>`now()` })
+    .where('account_id', '=', op.account_id)
+    .where('operation_id', '=', op.id)
+    .where('status', '=', 'open')
+    .execute();
 }
 
 /**

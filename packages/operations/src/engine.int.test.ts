@@ -820,10 +820,11 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
       priceCents: 2600,
     });
     await harness.waitForStatus(create.id, ['needs_user_action']);
-    const end = await harness.enqueue(listing, 'end', { status: 'ended' });
+    // Only a delist goes past an older user step (assisted.int.test.ts); a price change waits.
+    const price = await harness.enqueue(listing, 'price', { priceCents: 2400 });
 
     await new Promise((resolve) => setTimeout(resolve, 200));
-    expect(await harness.operation(end.id)).toMatchObject({ status: 'queued', attempts: 0 });
+    expect(await harness.operation(price.id)).toMatchObject({ status: 'queued', attempts: 0 });
 
     const userId = await harness.addMember(`owner-${create.id}`);
     await confirmOperationByUser(harness.db, {
@@ -832,7 +833,7 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
       userId,
     });
     // Woken by the older operation finishing, not by the 60 s recheck.
-    expect(await harness.waitForStatus(end.id, SETTLED, 3_000)).toMatchObject({
+    expect(await harness.waitForStatus(price.id, SETTLED, 3_000)).toMatchObject({
       status: 'needs_user_action',
     });
   });

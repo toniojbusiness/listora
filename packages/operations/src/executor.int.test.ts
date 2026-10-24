@@ -253,6 +253,87 @@ describe('operation step executor (real Postgres)', () => {
     });
   });
 
+  /** Flags of an assisted marketplace: every write is the user's. */
+  const ASSISTED: Partial<MarketplaceCapabilities> = {
+    create: 'assisted',
+    updatePrice: 'assisted',
+    updateDetails: 'assisted',
+    delist: 'assisted',
+    relist: 'assisted',
+    markSold: 'not_needed',
+    verifyRead: 'user_confirm',
+    readFreshness: 'none',
+  };
+
+  /** Starts a step whose send hangs until answered, and waits until it is `running`. */
+  async function interruptedSend(adapterCapabilities: Partial<MarketplaceCapabilities>) {
+    const created = await newCreate();
+    let answer: (outcome: Outcome) => void = () => undefined;
+    const adapter = stubAdapter({
+      capabilities: adapterCapabilities,
+      execute: () =>
+        new Promise<Outcome>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    const step = runOperationStep(deps(adapter), created.payload, new AbortController().signal);
+    await harness.waitForStatus(created.op.id, ['running']);
+    const finish = async () => {
+      answer({ type: 'transient', code: 'server_error', message: 'Too late.' });
+      await step;
+    };
+    return { ...created, finish };
+  }
+
+  async function tasksOf(operationId: string) {
+    return harness.db
+      .selectFrom('user_task')
+      .selectAll()
+      .where('account_id', '=', harness.accountId)
+      .where('operation_id', '=', operationId)
+      .execute();
+  }
+
+  it('fails an interrupted api send as unconfirmed when the listing is served assisted now', async () => {
+    const { op, payload, finish } = await interruptedSend({});
+    // The worker restarts without the api adapter, so the listing resolves to assisted.
+    const assisted = stubAdapter({
+      capabilities: ASSISTED,
+      execute: () =>
+        Promise.reject(new Error('an interrupted api send is never handed to the user')),
+    });
+    await runOperationStep(deps(assisted), payload, new AbortController().signal);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'failed',
+      error_code: 'unconfirmed',
+    });
+    // The interrupted step's late answer is discarded.
+    await finish();
+    expect(await harness.operation(op.id)).toMatchObject({ status: 'failed' });
+    expect(await tasksOf(op.id)).toEqual([]);
+  });
+
+  it('runs an interrupted step again when it was assisted throughout', async () => {
+    const { op, payload, finish } = await interruptedSend(ASSISTED);
+    const assisted = stubAdapter({
+      capabilities: ASSISTED,
+      execute: () =>
+        Promise.resolve({
+          type: 'pendingUser',
+          task: { kind: 'list_manually', deepLink: null, payload: {} },
+        }),
+    });
+    await runOperationStep(deps(assisted), payload, new AbortController().signal);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'retrying',
+      error_code: 'interrupted',
+    });
+    await finish();
+    await runOperationStep(deps(assisted), payload, new AbortController().signal);
+    expect(await harness.operation(op.id)).toMatchObject({ status: 'needs_user_action' });
+    expect(await tasksOf(op.id)).toEqual([expect.objectContaining({ kind: 'list_manually' })]);
+  });
+
   it('discards a step result when another worker took the operation over', async () => {
     const { op, payload } = await newCreate();
     let release: (outcome: Outcome) => void = () => undefined;

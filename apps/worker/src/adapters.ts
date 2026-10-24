@@ -7,6 +7,7 @@ import {
   createPoshmarkAdapter,
   FakeMarketplaceAdapter,
   type AdapterRegistry,
+  type FakeCapabilityOverrides,
 } from '@listora/marketplaces';
 
 import type { WorkerConfig } from './config.ts';
@@ -24,9 +25,21 @@ import type { WorkerConfig } from './config.ts';
  */
 export function createAdapters(config: Pick<WorkerConfig, 'fakeMarketplaceUrl'>): AdapterRegistry {
   const baseUrl = config.fakeMarketplaceUrl;
-  const fake = (marketplace: Marketplace): FakeMarketplaceAdapter[] =>
-    baseUrl === undefined ? [] : [new FakeMarketplaceAdapter({ marketplace, baseUrl })];
-  const [depopApi] = fake('depop');
+  const fake = (
+    marketplace: Marketplace,
+    capabilities?: FakeCapabilityOverrides,
+  ): FakeMarketplaceAdapter[] =>
+    baseUrl === undefined
+      ? []
+      : [
+          new FakeMarketplaceAdapter({
+            marketplace,
+            baseUrl,
+            ...(capabilities === undefined ? {} : { capabilities }),
+          }),
+        ];
+  // Depop never reuses an external SKU, whichever mode serves it.
+  const [depopApi] = fake('depop', { externalSkuReusable: false });
   return createAdapterRegistry([
     ...fake('ebay'),
     new ConnectionAwareAdapter({

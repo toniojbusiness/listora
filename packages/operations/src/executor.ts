@@ -16,6 +16,8 @@
  * - an operation that was sent before is read back first on every later attempt, and succeeds
  *   without sending again if the change already took effect;
  * - a step found `running` was interrupted, so its result is read back as if it were unknown;
+ *   one that nothing can read back fails as unconfirmed if this or any earlier step of the
+ *   operation could have gone through the API, and only a purely assisted one runs again;
  * - a read-back decides only when it is current: one older than a revision already seen of the
  *   listing is stale and is followed by another read (with no freshness marker, a match must
  *   repeat in a later read);
@@ -30,6 +32,10 @@
  * `unsupported` one fails without being sent. A send builds the payload from the operation's
  * listing content with the adapter's pure builder, and sends nothing the adapter's own
  * validation refuses.
+ *
+ * Operations on a listing apply in creation order, with one exception: an end or mark-sold never
+ * waits behind an older operation that waits for the user (an assisted edit nobody answered, say).
+ * It closes those as superseded and goes ahead, so a delist after a sale is never stuck.
  */
 import type { Selectable } from 'kysely';
 import { sql } from 'kysely';
@@ -75,6 +81,7 @@ import type { OperationJobPayload } from './jobs.ts';
 import { scheduleOperationJob } from './jobs.ts';
 import { createdBefore } from './ordering.ts';
 import { delayAfterAttempt, maxAttempts, type RetryPolicy } from './policy.ts';
+import { dismissOpenTasks } from './commands.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
 import {
   operationPriority,
@@ -273,6 +280,10 @@ async function claimStep(
         code: 'interrupted',
         message: `Listora was interrupted and is checking the listing on ${name}.`,
       };
+      // Only a step that was assisted throughout has no remote effect (it only creates a user
+      // task, atomically with its result); one that went through the API may have reached the
+      // marketplace, even when the listing is served assisted now.
+      const purelyAssisted = mode === 'assisted' && !(await wasSentThroughApi(trx, op));
       if (canReadBack) {
         await transitionOperation(
           trx,
@@ -280,9 +291,7 @@ async function claimStep(
           { to: 'verifying', delayMs: 0, error: interrupted },
           { recovered: true },
         );
-      } else if (mode === 'assisted' && op.attempts < max) {
-        // An assisted step has no remote effect (it only creates a user task, atomically with
-        // its result), so it simply runs again.
+      } else if (purelyAssisted && op.attempts < max) {
         await transitionOperation(
           trx,
           op,
@@ -293,10 +302,9 @@ async function claimStep(
         await transitionOperation(trx, op, {
           to: 'failed',
           // A step that may have reached the marketplace and can't be read back is unconfirmed.
-          error:
-            mode === 'assisted'
-              ? { code: 'interrupted', message: 'Listora was interrupted. Tap Retry.' }
-              : cannotConfirm(name),
+          error: purelyAssisted
+            ? { code: 'interrupted', message: 'Listora was interrupted. Tap Retry.' }
+            : cannotConfirm(name),
         });
       }
       log.warn({ attempt: op.attempts }, 'recovered an interrupted operation step');
@@ -314,8 +322,10 @@ async function claimStep(
       return { type: 'check', ctx: { op, ...base }, attempt: op.attempts + 1 };
     }
 
-    // queued or retrying: a new attempt, once every older operation on the listing is done.
-    if (await hasOlderUnfinishedOperation(trx, op)) {
+    // queued or retrying: a new attempt, once every older operation on the listing is done. A
+    // delist does not wait for older operations that wait for the user; it supersedes them.
+    const delist = isDelistKind(op.kind);
+    if (await hasOlderUnfinishedOperation(trx, op, { pastUserSteps: delist })) {
       await scheduleOperationJob(trx, {
         accountId: op.account_id,
         operationId: op.id,
@@ -352,8 +362,9 @@ async function claimStep(
       trx,
       op,
       { to: 'running' },
-      { step: op.kind === 'verify' ? 'check' : 'send', precheck },
+      { step: op.kind === 'verify' ? 'check' : 'send', precheck, mode },
     );
+    if (delist) await supersedeUserSteps(trx, running, log);
     const ctx = { op: running, ...base };
     return op.kind === 'verify'
       ? { type: 'check', ctx, attempt: running.attempts }
@@ -396,18 +407,85 @@ function listingTargets(listing: ListingRow, desired: DesiredListingState): Targ
   return [ref(pending, null)];
 }
 
-/** Whether an older operation on the same listing is still unfinished (FIFO per listing). */
-async function hasOlderUnfinishedOperation(trx: DbTransaction, op: OperationRow): Promise<boolean> {
+/** An end or mark-sold: the delist that must not wait behind an unanswered user task. */
+function isDelistKind(kind: OperationRow['kind']): boolean {
+  return kind === 'end' || kind === 'mark_sold';
+}
+
+/**
+ * Whether an older operation on the same listing is still unfinished (FIFO per listing). With
+ * `pastUserSteps`, older operations waiting for the user do not count.
+ */
+async function hasOlderUnfinishedOperation(
+  trx: DbTransaction,
+  op: OperationRow,
+  options: { pastUserSteps: boolean },
+): Promise<boolean> {
+  const statuses = options.pastUserSteps
+    ? UNFINISHED_STATUSES.filter((status) => status !== 'needs_user_action')
+    : UNFINISHED_STATUSES;
   const older = await trx
     .selectFrom('marketplace_operation')
     .select('id')
     .where('account_id', '=', op.account_id)
     .where('listing_id', '=', op.listing_id)
-    .where('status', 'in', UNFINISHED_STATUSES)
+    .where('status', 'in', statuses)
     .where(createdBefore(op))
     .limit(1)
     .executeTakeFirst();
   return older !== undefined;
+}
+
+/**
+ * Closes the older operations on a delist's listing that wait for the user: each is canceled as
+ * superseded by the delist, in its history, and its open tasks are dismissed, never marked done.
+ * The delist creates its own task when the listing is assisted.
+ */
+async function supersedeUserSteps(
+  trx: DbTransaction,
+  delist: OperationRow,
+  log: Logger,
+): Promise<void> {
+  const waiting = await trx
+    .selectFrom('marketplace_operation')
+    .selectAll()
+    .where('account_id', '=', delist.account_id)
+    .where('listing_id', '=', delist.listing_id)
+    .where('status', '=', 'needs_user_action')
+    .where(createdBefore(delist))
+    .orderBy('created_at')
+    .orderBy('id')
+    .forUpdate()
+    .execute();
+  for (const older of waiting) {
+    await transitionOperation(
+      trx,
+      older,
+      { to: 'canceled' },
+      { action: 'supersede', reason: 'superseded by delist', supersededBy: delist.id },
+    );
+    await dismissOpenTasks(trx, older);
+  }
+  if (waiting.length > 0) {
+    log.info({ superseded: waiting.map((older) => older.id) }, 'a delist superseded user steps');
+  }
+}
+
+/**
+ * Whether any step of the operation started under a mode other than assisted, so its request
+ * may have reached the marketplace. A `running` event without a recorded mode counts.
+ */
+async function wasSentThroughApi(trx: DbTransaction, op: OperationRow): Promise<boolean> {
+  const event = await trx
+    .selectFrom('operation_event')
+    .select('id')
+    .where('account_id', '=', op.account_id)
+    .where('operation_id', '=', op.id)
+    .where('to_status', '=', 'running')
+    .where(sql<string | null>`detail->>'mode'`, 'is distinct from', 'assisted')
+    .limit(1)
+    .executeTakeFirst();
+  return event !== undefined;
 }
 
 /** Whether any earlier step started sending this operation (its history has a `running`). */
