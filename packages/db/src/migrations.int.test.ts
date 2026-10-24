@@ -11,6 +11,8 @@ import { createDatabase, type Db } from './database.ts';
 import { MigrationError, SchemaMigrator, SqlFileMigrationProvider } from './migrations.ts';
 
 const KYSELY_TABLES = ['kysely_migration', 'kysely_migration_lock'];
+/** The migrations shipped in migrations/, in order. */
+const SHIPPED = ['0001_schema_v1', '0002_idempotency'];
 
 /** Every object in the public schema other than Kysely's bookkeeping tables. */
 async function publicObjects(db: Db): Promise<string[]> {
@@ -58,8 +60,9 @@ describe('schema migrations (real Postgres)', () => {
     const migrator = new SchemaMigrator(db);
     expect(await publicObjects(db)).toEqual([]);
 
-    expect(await migrator.migrateToLatest()).toEqual(['0001_schema_v1']);
+    expect(await migrator.migrateToLatest()).toEqual(SHIPPED);
     expect(await tablesAndViews(db)).toContain('inventory_item');
+    expect(await tablesAndViews(db)).toContain('idempotency_record');
     expect(await tablesAndViews(db)).toContain('delist_run_listing');
     expect((await migrator.status()).every((migration) => migration.executedAt !== null)).toBe(
       true,
@@ -68,7 +71,13 @@ describe('schema migrations (real Postgres)', () => {
     // Running again is a no-op.
     expect(await migrator.migrateToLatest()).toEqual([]);
 
-    expect(await migrator.migrateToEmpty()).toEqual(['0001_schema_v1']);
+    // Each down migration reverts only its own up migration.
+    expect(await migrator.migrateDown()).toEqual(['0002_idempotency']);
+    expect(await tablesAndViews(db)).not.toContain('idempotency_record');
+    expect(await tablesAndViews(db)).toContain('inventory_item');
+    expect(await migrator.migrateUp()).toEqual(['0002_idempotency']);
+
+    expect(await migrator.migrateToEmpty()).toEqual([...SHIPPED].reverse());
     expect(await publicObjects(db)).toEqual([]);
     expect((await migrator.status()).every((migration) => migration.executedAt === null)).toBe(
       true,
@@ -87,7 +96,7 @@ describe('schema migrations (real Postgres)', () => {
         new SchemaMigrator(db).migrateToLatest(),
         new SchemaMigrator(other).migrateToLatest(),
       ]);
-      expect(results.flat()).toEqual(['0001_schema_v1']);
+      expect(results.flat()).toEqual(SHIPPED);
     } finally {
       await other.destroy();
     }

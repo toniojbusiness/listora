@@ -355,6 +355,16 @@ const COLUMNS = {
     'changes',
     'created_at',
   ],
+  idempotency_record: [
+    'account_id',
+    'key',
+    'operation_id',
+    'request_hash',
+    'response_status',
+    'response_body',
+    'created_at',
+    'expires_at',
+  ],
 } as const satisfies { [Table in keyof Database]: readonly (keyof Database[Table])[] };
 
 type MissingColumns = {

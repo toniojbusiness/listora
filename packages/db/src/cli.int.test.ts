@@ -30,7 +30,10 @@ describe('migrate command (real Postgres)', () => {
     const applied = await migrate(env, 'latest');
     expect(applied.code).toBe(0);
     expect(applied.logs).toContainEqual(
-      expect.objectContaining({ msg: 'migrations applied', applied: ['0001_schema_v1'] }),
+      expect.objectContaining({
+        msg: 'migrations applied',
+        applied: ['0001_schema_v1', '0002_idempotency'],
+      }),
     );
 
     const again = await migrate(env);
@@ -42,15 +45,21 @@ describe('migrate command (real Postgres)', () => {
     expect(status.logs).toContainEqual(
       expect.objectContaining({ msg: 'applied', migration: '0001_schema_v1' }),
     );
+    expect(status.logs).toContainEqual(
+      expect.objectContaining({ msg: 'applied', migration: '0002_idempotency' }),
+    );
 
-    const reverted = await migrate(env, 'down', '0001_schema_v1');
+    const reverted = await migrate(env, 'down', '0002_idempotency');
     expect(reverted.code).toBe(0);
     expect(reverted.logs).toContainEqual(
-      expect.objectContaining({ msg: 'migration reverted', reverted: ['0001_schema_v1'] }),
+      expect.objectContaining({ msg: 'migration reverted', reverted: ['0002_idempotency'] }),
     );
     const pending = await migrate(env, 'status');
     expect(pending.logs).toContainEqual(
-      expect.objectContaining({ msg: 'pending', migration: '0001_schema_v1' }),
+      expect.objectContaining({ msg: 'applied', migration: '0001_schema_v1' }),
+    );
+    expect(pending.logs).toContainEqual(
+      expect.objectContaining({ msg: 'pending', migration: '0002_idempotency' }),
     );
   });
 
@@ -62,10 +71,11 @@ describe('migrate command (real Postgres)', () => {
     expect(refused.code).toBe(1);
     const failure = refused.logs.find((line) => line['msg'] === 'migration command failed');
     expect(failure?.['err']).toMatchObject({
-      message: 'Refusing to revert: the latest applied migration is 0001_schema_v1, not 0000_wrong',
+      message:
+        'Refusing to revert: the latest applied migration is 0002_idempotency, not 0000_wrong',
     });
     expect((await migrate(env, 'status')).logs).toContainEqual(
-      expect.objectContaining({ msg: 'applied', migration: '0001_schema_v1' }),
+      expect.objectContaining({ msg: 'applied', migration: '0002_idempotency' }),
     );
   });
 

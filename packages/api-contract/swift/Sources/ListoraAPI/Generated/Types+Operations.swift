@@ -493,10 +493,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/items/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/POST/header/Idempotency-Key`.
@@ -1436,10 +1438,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/upload-sessions/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/upload-sessions/POST/header/Idempotency-Key`.
@@ -1828,10 +1832,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/items/{itemId}/photos/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/{itemId}/photos/POST/header/Idempotency-Key`.
@@ -2650,10 +2656,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/items/{itemId}/analyses/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/{itemId}/analyses/POST/header/Idempotency-Key`.
@@ -3058,10 +3066,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/analyses/{analysisId}/escalate/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/analyses/{analysisId}/escalate/POST/header/Idempotency-Key`.
@@ -3665,10 +3675,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/items/{itemId}/listings/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/{itemId}/listings/POST/header/Idempotency-Key`.
@@ -4506,10 +4518,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/listings/{listingId}/publish/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/listings/{listingId}/publish/POST/header/Idempotency-Key`.
@@ -4712,10 +4726,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/listings/{listingId}/revise/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/listings/{listingId}/revise/POST/header/Idempotency-Key`.
@@ -4927,10 +4943,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/listings/{listingId}/price/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/listings/{listingId}/price/POST/header/Idempotency-Key`.
@@ -5142,10 +5160,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/listings/{listingId}/end/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/listings/{listingId}/end/POST/header/Idempotency-Key`.
@@ -5337,10 +5357,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/listings/{listingId}/relist/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/listings/{listingId}/relist/POST/header/Idempotency-Key`.
@@ -5522,10 +5544,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/listings/{listingId}/verify/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/listings/{listingId}/verify/POST/header/Idempotency-Key`.
@@ -6298,10 +6322,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/operations/{operationId}/retry/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/operations/{operationId}/retry/POST/header/Idempotency-Key`.
@@ -6512,10 +6538,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/operations/{operationId}/cancel/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/operations/{operationId}/cancel/POST/header/Idempotency-Key`.
@@ -7205,10 +7233,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/authorizations/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/authorizations/POST/header/Idempotency-Key`.
@@ -7969,10 +7999,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/sales/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/sales/POST/header/Idempotency-Key`.
@@ -8745,10 +8777,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/tasks/{taskId}/complete/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/tasks/{taskId}/complete/POST/header/Idempotency-Key`.
@@ -8990,10 +9024,12 @@ public enum Operations {
             /// - Remark: Generated from `#/paths/v1/tasks/{taskId}/dismiss/POST/header`.
             public struct Headers: Sendable, Hashable {
                 /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
-                /// every retry of that action. The server stores the first response for at least 24
-                /// hours: a retry with the same key and body gets that response again without repeating
-                /// the action; the same key with a different body gets `422 idempotency_key_reused`; a
-                /// retry while the first request is still running gets `409 idempotency_key_in_progress`.
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
                 ///
                 ///
                 /// - Remark: Generated from `#/paths/v1/tasks/{taskId}/dismiss/POST/header/Idempotency-Key`.

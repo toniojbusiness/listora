@@ -15,7 +15,8 @@ from it, committed, and checked for drift in CI.
 | `swift/Sources/ListoraAPI/Generated`  | Generated Swift types and client (swift-openapi-generator). Do not edit. |
 | `swift/openapi-generator-config.yaml` | Swift generator settings.                                                |
 | `tools/codegen.ts`                    | Generate, drift check, and Swift test runner.                            |
-| `tools/open-enum.ts`                  | The one open-enum test, shared by codegen and the contract rules.        |
+| `src/document.ts`                     | Loads the parsed `openapi.yaml`; the API builds its validators from it.  |
+| `src/open-enum.ts`                    | The one open-enum test, shared by codegen, the contract rules, the API.  |
 | `tools/swift-generator/`              | Pins the exact swift-openapi-generator version (`Package.resolved`).     |
 
 ## Commands
@@ -58,6 +59,11 @@ import { IDEMPOTENCY_KEY_HEADER, knownListingStatusValues } from '@listora/api-c
 type ListItemsQuery = operations['listItems']['parameters']['query'];
 app.get<{ Reply: HealthReady }>('/health/ready', handler);
 ```
+
+The API does not copy any of this by hand: it serves each operation with `contractRoute`,
+which takes the method and URL from `openapi.yaml` and validates every request against the
+contract's own schemas, loaded with `loadContractDocument()` (see the API section of
+[docs/architecture.md](../../docs/architecture.md#the-api-appsapi)).
 
 **iOS (Swift).** The app depends on the local package by path, plus a transport. With
 XcodeGen (`apps/ios/project.yml`):
@@ -114,9 +120,11 @@ These are checked by `src/contract-rules.test.ts` where a test can check them.
   know by using `message` and `retryable`. `KnownErrorCode` documents each code's HTTP
   status. Every `/v1` operation declares a `default` error response.
 - **Idempotency.** Every POST requires an `Idempotency-Key` header (a UUID per logical
-  action, reused on every retry of it). The same key and body replay the first response for
-  at least 24 hours, the same key with a different body is `422 idempotency_key_reused`, and
-  a retry while the first request still runs is `409 idempotency_key_in_progress`.
+  action, reused on every retry of it). The same key and body replay the first successful
+  response for at least 24 hours, the same key with a different body is
+  `422 idempotency_key_reused`, and a retry while the first request still runs is
+  `409 idempotency_key_in_progress`. A failed request changed nothing and is not stored, so a
+  retry with the same key runs it again.
 - **Optimistic locking.** `replaceItem` takes `expectedVersion`; a stale version is
   `409 version_conflict`.
 - **Pagination.** Unbounded lists take `cursor` and `limit` (1-100, default 25) and return
