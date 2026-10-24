@@ -282,6 +282,214 @@ public enum Operations {
             }
         }
     }
+    /// Delete my account
+    ///
+    /// In-app account deletion (App Store Review Guideline 5.1.1(v)). Deletes the signed-in
+    /// person and, when they own their account, the account with all of its data: items,
+    /// photos, listing records, sales, and history. Live listings themselves stay on the
+    /// marketplaces.
+    ///
+    /// A success means the deletion is committed and final: the data is gone, and the bearer
+    /// token stops working at once (any other token issued before the deletion too). Listora
+    /// then finishes on its own, whether or not the app is still running: it deletes the
+    /// person from the sign-in provider, so they cannot sign in to the deleted account again,
+    /// and asks each connected marketplace to revoke its access, retrying for up to 7 days.
+    /// Until the sign-in provider has deleted the person, signing in again is refused; after
+    /// that, it creates a new, empty account.
+    ///
+    /// Any error, including a retryable `500` or `503`, means nothing was deleted; retry with
+    /// the same token. A retry after a lost success response gets `401 unauthenticated`, which
+    /// means the account is gone.
+    ///
+    /// `marketplaceAccess` reports each API marketplace connection honestly, by marketplace and
+    /// the seller's name there: `revoked` is true only when the marketplace had confirmed it
+    /// before the deletion. Every entry with `revoked: false` names a marketplace whose access
+    /// the user must revoke manually: Listora keeps asking that marketplace (it keeps the
+    /// encrypted tokens only for that, and deletes them once the marketplace confirms or after
+    /// 7 days), but the app cannot learn the outcome, so it lists these marketplaces and tells
+    /// the user to remove Listora in each one's connected-apps settings.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/account`.
+    /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)`.
+    public enum DeleteAccount {
+        public static let id: Swift.String = "deleteAccount"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/account/DELETE/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteAccount.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteAccount.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.DeleteAccount.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.DeleteAccount.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/account/DELETE/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/account/DELETE/responses/200/content/application\/json`.
+                    case json(Components.Schemas.AccountDeletion)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.AccountDeletion {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.DeleteAccount.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.DeleteAccount.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The account is deleted.
+            ///
+            /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.DeleteAccount.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.DeleteAccount.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Forbidden: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/account/DELETE/responses/403/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/account/DELETE/responses/403/content/application\/json`.
+                    case json(Components.Schemas.ErrorResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ErrorResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.DeleteAccount.Output.Forbidden.Body
+                /// Creates a new `Forbidden`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.DeleteAccount.Output.Forbidden.Body) {
+                    self.body = body
+                }
+            }
+            /// The account has other members, so it cannot be deleted with this person
+            /// (`forbidden`); they must leave first.
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Operations.DeleteAccount.Output.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Operations.DeleteAccount.Output.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// List items
     ///
     /// Newest first. Filters combine with AND.

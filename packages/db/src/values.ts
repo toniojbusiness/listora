@@ -195,3 +195,10 @@ export type AuditActorKind = (typeof AUDIT_ACTOR_KINDS)[number];
 
 export const DELIST_RUN_LISTING_SOURCES = ['operation', 'user_task'] as const;
 export type DelistRunListingSource = (typeof DELIST_RUN_LISTING_SOURCES)[number];
+
+/**
+ * A deleted account's marketplace grant: still to be revoked, confirmed revoked, or given up on
+ * (the seller must remove Listora in the marketplace's settings).
+ */
+export const ACCOUNT_DELETION_GRANT_OUTCOMES = ['pending', 'revoked', 'manual'] as const;
+export type AccountDeletionGrantOutcome = (typeof ACCOUNT_DELETION_GRANT_OUTCOMES)[number];

@@ -14,6 +14,7 @@ describe('loadWorkerConfig', () => {
       concurrency: 5,
       taskConcurrency: 2,
       fakeMarketplaceUrl: undefined,
+      cognitoUserPool: undefined,
       storage: { driver: 'local' },
       ai: { provider: 'fake', fakeFixturesDir: DEFAULT_FAKE_FIXTURES_DIR },
       analysis: { autoEscalate: true },
@@ -43,19 +44,21 @@ describe('loadWorkerConfig', () => {
         WORKER_CONCURRENCY: '12',
         WORKER_TASK_CONCURRENCY: '3',
         FAKE_MARKETPLACE_URL: 'http://127.0.0.1:4100',
+        COGNITO_USER_POOL_ID: 'eu-west-2_AbC123xyZ',
       }),
     ).toMatchObject({
       logLevel: 'debug',
       concurrency: 12,
       taskConcurrency: 3,
       fakeMarketplaceUrl: 'http://127.0.0.1:4100',
+      cognitoUserPool: { region: 'eu-west-2', userPoolId: 'eu-west-2_AbC123xyZ' },
     });
   });
 
-  it('treats an empty FAKE_MARKETPLACE_URL as unset', () => {
-    expect(loadWorkerConfig({ DATABASE_URL, FAKE_MARKETPLACE_URL: '' })).toMatchObject({
-      fakeMarketplaceUrl: undefined,
-    });
+  it('treats an empty FAKE_MARKETPLACE_URL or COGNITO_USER_POOL_ID as unset', () => {
+    expect(
+      loadWorkerConfig({ DATABASE_URL, FAKE_MARKETPLACE_URL: '', COGNITO_USER_POOL_ID: '' }),
+    ).toMatchObject({ fakeMarketplaceUrl: undefined, cognitoUserPool: undefined });
   });
 
   it('reports every invalid key at once', () => {
@@ -66,6 +69,7 @@ describe('loadWorkerConfig', () => {
         WORKER_TASK_CONCURRENCY: '101',
         FAKE_MARKETPLACE_URL: 'ftp://fake',
         AI_AUTO_ESCALATE: 'sometimes',
+        COGNITO_USER_POOL_ID: 'my-pool',
       }).issues,
     ).toEqual([
       'DATABASE_URL is required',
@@ -73,6 +77,7 @@ describe('loadWorkerConfig', () => {
       'WORKER_CONCURRENCY must be an integer from 1 to 100',
       'WORKER_TASK_CONCURRENCY must be an integer from 1 to 100',
       'FAKE_MARKETPLACE_URL must be an http:// or https:// URL',
+      'COGNITO_USER_POOL_ID must be a user pool id such as us-east-1_AbC123xyZ',
       'AI_AUTO_ESCALATE must be on or off',
     ]);
   });

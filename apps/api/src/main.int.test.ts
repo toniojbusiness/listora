@@ -197,6 +197,37 @@ describe('api process (real Postgres)', () => {
     );
   });
 
+  it('runs with AUTH_DRIVER=cognito without the dev sign-in endpoints', async () => {
+    const started = await startApi(scratch.url, {
+      AUTH_DRIVER: 'cognito',
+      AUTH_DEV_SECRET: undefined,
+      COGNITO_USER_POOL_ID: 'us-east-1_ProcessTest',
+      COGNITO_CLIENT_IDS: 'processtestclient000000000',
+    });
+    api = started.api;
+    expect((await fetch(`${started.baseUrl}/health/ready`)).status).toBe(200);
+    const devCodes = await fetch(`${started.baseUrl}/dev/auth/codes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'nobody@example.com' }),
+    });
+    expect(devCodes.status).toBe(404);
+    // No token, so nothing is verified and Cognito is never contacted.
+    expect((await fetch(`${started.baseUrl}/v1/items`)).status).toBe(401);
+  });
+
+  it('refuses to start with AUTH_DRIVER=cognito but no user pool', async () => {
+    api = startNodeProcess(entry, {
+      PATH: process.env['PATH'],
+      AUTH_DRIVER: 'cognito',
+      DATABASE_URL: scratch.url,
+    });
+
+    expect(await api.waitForExit()).toBe(1);
+    expect(api.stderr).toContain('COGNITO_USER_POOL_ID is required when AUTH_DRIVER=cognito');
+    expect(api.stderr).toContain('COGNITO_CLIENT_IDS is required when AUTH_DRIVER=cognito');
+  });
+
   it('refuses to start without DATABASE_URL or AUTH_DRIVER', async () => {
     api = startNodeProcess(entry, { PATH: process.env['PATH'] });
 

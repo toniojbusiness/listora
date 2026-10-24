@@ -9,6 +9,8 @@
     "dev": "node --watch --env-file-if-exists=../../.env src/main.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1156.0",
+    "@listora/accounts": "*",
     "@listora/ai": "*",
     "@listora/analysis": "*",
     "@listora/api-contract": "*",

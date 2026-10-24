@@ -552,6 +552,68 @@ extension Components {
             case marketplaceAuthorizationDenied = "marketplace_authorization_denied"
             case marketplaceAuthorizationFailed = "marketplace_authorization_failed"
         }
+        /// - Remark: Generated from `#/components/schemas/AccountDeletion`.
+        public struct AccountDeletion: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AccountDeletion/deletedAt`.
+            public var deletedAt: Components.Schemas.Timestamp
+            /// One entry per API marketplace connection the account had; assisted connections hold no access.
+            ///
+            /// - Remark: Generated from `#/components/schemas/AccountDeletion/marketplaceAccess`.
+            public var marketplaceAccess: [Components.Schemas.MarketplaceAccessRevocation]
+            /// Creates a new `AccountDeletion`.
+            ///
+            /// - Parameters:
+            ///   - deletedAt:
+            ///   - marketplaceAccess: One entry per API marketplace connection the account had; assisted connections hold no access.
+            public init(
+                deletedAt: Components.Schemas.Timestamp,
+                marketplaceAccess: [Components.Schemas.MarketplaceAccessRevocation]
+            ) {
+                self.deletedAt = deletedAt
+                self.marketplaceAccess = marketplaceAccess
+            }
+            public enum CodingKeys: String, CodingKey {
+                case deletedAt
+                case marketplaceAccess
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MarketplaceAccessRevocation`.
+        public struct MarketplaceAccessRevocation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceAccessRevocation/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// The seller's name on the marketplace.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceAccessRevocation/displayName`.
+            public var displayName: Swift.String?
+            /// True only when the marketplace had confirmed, before the deletion, that Listora's
+            /// access is revoked. False means it is not confirmed, so the user must revoke it
+            /// manually in the marketplace's settings (Listora also keeps asking the marketplace
+            /// for up to 7 days when it still holds the connection's tokens).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceAccessRevocation/revoked`.
+            public var revoked: Swift.Bool
+            /// Creates a new `MarketplaceAccessRevocation`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - displayName: The seller's name on the marketplace.
+            ///   - revoked: True only when the marketplace had confirmed, before the deletion, that Listora's
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                displayName: Swift.String? = nil,
+                revoked: Swift.Bool
+            ) {
+                self.marketplace = marketplace
+                self.displayName = displayName
+                self.revoked = revoked
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case displayName
+                case revoked
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/HealthCheckStatus`.
         @frozen public enum HealthCheckStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case ok = "ok"

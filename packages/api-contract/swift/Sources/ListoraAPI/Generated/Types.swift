@@ -21,6 +21,37 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /health/ready`.
     /// - Remark: Generated from `#/paths//health/ready/get(getReadiness)`.
     func getReadiness(_ input: Operations.GetReadiness.Input) async throws -> Operations.GetReadiness.Output
+    /// Delete my account
+    ///
+    /// In-app account deletion (App Store Review Guideline 5.1.1(v)). Deletes the signed-in
+    /// person and, when they own their account, the account with all of its data: items,
+    /// photos, listing records, sales, and history. Live listings themselves stay on the
+    /// marketplaces.
+    ///
+    /// A success means the deletion is committed and final: the data is gone, and the bearer
+    /// token stops working at once (any other token issued before the deletion too). Listora
+    /// then finishes on its own, whether or not the app is still running: it deletes the
+    /// person from the sign-in provider, so they cannot sign in to the deleted account again,
+    /// and asks each connected marketplace to revoke its access, retrying for up to 7 days.
+    /// Until the sign-in provider has deleted the person, signing in again is refused; after
+    /// that, it creates a new, empty account.
+    ///
+    /// Any error, including a retryable `500` or `503`, means nothing was deleted; retry with
+    /// the same token. A retry after a lost success response gets `401 unauthenticated`, which
+    /// means the account is gone.
+    ///
+    /// `marketplaceAccess` reports each API marketplace connection honestly, by marketplace and
+    /// the seller's name there: `revoked` is true only when the marketplace had confirmed it
+    /// before the deletion. Every entry with `revoked: false` names a marketplace whose access
+    /// the user must revoke manually: Listora keeps asking that marketplace (it keeps the
+    /// encrypted tokens only for that, and deletes them once the marketplace confirms or after
+    /// 7 days), but the app cannot learn the outcome, so it lists these marketplaces and tells
+    /// the user to remove Listora in each one's connected-apps settings.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/account`.
+    /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)`.
+    func deleteAccount(_ input: Operations.DeleteAccount.Input) async throws -> Operations.DeleteAccount.Output
     /// List items
     ///
     /// Newest first. Filters combine with AND.
@@ -441,6 +472,39 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//health/ready/get(getReadiness)`.
     public func getReadiness(headers: Operations.GetReadiness.Input.Headers = .init()) async throws -> Operations.GetReadiness.Output {
         try await getReadiness(Operations.GetReadiness.Input(headers: headers))
+    }
+    /// Delete my account
+    ///
+    /// In-app account deletion (App Store Review Guideline 5.1.1(v)). Deletes the signed-in
+    /// person and, when they own their account, the account with all of its data: items,
+    /// photos, listing records, sales, and history. Live listings themselves stay on the
+    /// marketplaces.
+    ///
+    /// A success means the deletion is committed and final: the data is gone, and the bearer
+    /// token stops working at once (any other token issued before the deletion too). Listora
+    /// then finishes on its own, whether or not the app is still running: it deletes the
+    /// person from the sign-in provider, so they cannot sign in to the deleted account again,
+    /// and asks each connected marketplace to revoke its access, retrying for up to 7 days.
+    /// Until the sign-in provider has deleted the person, signing in again is refused; after
+    /// that, it creates a new, empty account.
+    ///
+    /// Any error, including a retryable `500` or `503`, means nothing was deleted; retry with
+    /// the same token. A retry after a lost success response gets `401 unauthenticated`, which
+    /// means the account is gone.
+    ///
+    /// `marketplaceAccess` reports each API marketplace connection honestly, by marketplace and
+    /// the seller's name there: `revoked` is true only when the marketplace had confirmed it
+    /// before the deletion. Every entry with `revoked: false` names a marketplace whose access
+    /// the user must revoke manually: Listora keeps asking that marketplace (it keeps the
+    /// encrypted tokens only for that, and deletes them once the marketplace confirms or after
+    /// 7 days), but the app cannot learn the outcome, so it lists these marketplaces and tells
+    /// the user to remove Listora in each one's connected-apps settings.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/account`.
+    /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)`.
+    public func deleteAccount(headers: Operations.DeleteAccount.Input.Headers = .init()) async throws -> Operations.DeleteAccount.Output {
+        try await deleteAccount(Operations.DeleteAccount.Input(headers: headers))
     }
     /// List items
     ///

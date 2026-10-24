@@ -8,6 +8,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { AccountDeletionDependencies, AccountDeletionOutcome } from '@listora/accounts';
+import {
+  accountDeletionJobs,
+  FakeCognitoUserAdmin,
+  FakeMarketplaceAccess,
+  runAccountDeletionJobs,
+  type AccountDeletionJob,
+} from '@listora/accounts/testing';
 import {
   AiClient,
   createModelRegistry,
@@ -27,7 +35,13 @@ import {
   type AnalysisJobPayload,
   type AnalysisJobQueue,
 } from '@listora/analysis';
-import { createDatabase, SchemaMigrator, type Db, type DbExecutor } from '@listora/db';
+import {
+  createDatabase,
+  migrateJobQueue,
+  SchemaMigrator,
+  type Db,
+  type DbExecutor,
+} from '@listora/db';
 import {
   processPhoto,
   storageKeys,
@@ -44,6 +58,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { buildApp, type AppDependencies } from './app.ts';
 import { DevAuthDriver } from './auth/dev-driver.ts';
+import type { AuthDriver } from './auth/driver.ts';
 import { operationSpec, responseContractErrors } from './contract/contract.ts';
 import type { ContractReply, OperationId } from './contract/routes.ts';
 import { resolveTenant, type Tenant } from './tenancy.ts';
@@ -242,9 +257,29 @@ export interface TestAiControls {
   autoEscalate: boolean;
 }
 
+/**
+ * The worker's side of account deletion, in process: `runAll()` runs every queued
+ * `account_deletion` job once, with a fake Cognito and fake marketplace revocations.
+ */
+export interface TestAccountDeletions {
+  cognito: FakeCognitoUserAdmin;
+  marketplaceAccess: FakeMarketplaceAccess;
+  /** The queued jobs, oldest first. */
+  jobs(): Promise<AccountDeletionJob[]>;
+  runAll(): Promise<AccountDeletionOutcome[]>;
+}
+
+export interface TestApiOptions {
+  /** Replaces the dev driver (whose `signIn` and `tenantOf` then do not work). */
+  auth?: AuthDriver;
+}
+
 export interface TestApi {
   app: FastifyInstance;
   db: Db;
+  /** The dev driver behind `signIn`. */
+  devAuth: DevAuthDriver;
+  accountDeletions: TestAccountDeletions;
   /** URL of the scratch database, for tests that need a second session. */
   databaseUrl: string;
   uploads: TestUploads;
@@ -268,11 +303,19 @@ export interface TestApi {
   close(): Promise<void>;
 }
 
-export async function createTestApi(prefix = 'api'): Promise<TestApi> {
+export async function createTestApi(
+  prefix = 'api',
+  options: TestApiOptions = {},
+): Promise<TestApi> {
   const scratch: ScratchDatabase = await createScratchDatabase(prefix);
   const db = createDatabase({ connectionString: scratch.url, max: 10 });
   try {
     await new SchemaMigrator(db).migrateToLatest();
+    // `deleteAccount` enqueues its job in the deletion's transaction.
+    await migrateJobQueue({
+      connectionString: scratch.url,
+      logger: createLogger({ service: 'api-test', level: 'silent' }),
+    });
   } catch (error) {
     await db.destroy();
     await scratch.drop();
@@ -288,7 +331,7 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
     },
   });
   const clock = { now: Date.now() };
-  const auth = new DevAuthDriver({ secret: TEST_AUTH_SECRET, logger, now: () => clock.now });
+  const devAuth = new DevAuthDriver({ secret: TEST_AUTH_SECRET, logger, now: () => clock.now });
   const storageDir = await mkdtemp(join(tmpdir(), `listora-${prefix}-storage-`));
   const storage = new LocalDiskStorage({
     rootDir: storageDir,
@@ -313,9 +356,18 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
     logger,
     autoEscalate: aiControls.autoEscalate,
   }));
+  const cognito = new FakeCognitoUserAdmin();
+  const marketplaceAccess = new FakeMarketplaceAccess();
+  const deletionDeps: AccountDeletionDependencies = { db, cognito, marketplaceAccess, logger };
+  const accountDeletions: TestAccountDeletions = {
+    cognito,
+    marketplaceAccess,
+    jobs: () => accountDeletionJobs(db),
+    runAll: () => runAccountDeletionJobs(deletionDeps),
+  };
   const app = buildApp({
     db,
-    auth,
+    auth: options.auth ?? devAuth,
     storage,
     photoJobs,
     ai,
@@ -398,7 +450,7 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
 
   const tenantOf = async (email: string): Promise<Tenant> => {
     const token = tokens.get(email) ?? (await signIn(email));
-    const identity = await auth.verifyAccessToken(token);
+    const identity = await devAuth.verifyAccessToken(token);
     if (!identity) throw new Error(`token for ${email} no longer verifies`);
     return resolveTenant(db, identity);
   };
@@ -406,6 +458,8 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
   return {
     app,
     db,
+    devAuth,
+    accountDeletions,
     databaseUrl: scratch.url,
     uploads,
     storage,

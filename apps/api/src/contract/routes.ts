@@ -12,7 +12,7 @@ import type { operations } from '@listora/api-contract';
 import type { Db, DbExecutor, JsonValue } from '@listora/db';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import type { AuthDriver } from '../auth/driver.ts';
+import type { AuthDriver, Identity } from '../auth/driver.ts';
 import { ApiError, validationFailed } from '../errors.ts';
 import { runIdempotent } from '../idempotency.ts';
 import { authenticate, type Tenant } from '../tenancy.ts';
@@ -54,6 +54,8 @@ export type ContractReply<K extends OperationId> = {
 
 export interface ContractInput<K extends OperationId> {
   tenant: Tenant;
+  /** The verified identity behind `tenant` (account deletion needs it). */
+  identity: Identity;
   /** Use for every query. For an idempotent POST it is the request's transaction. */
   db: DbExecutor;
   params: PathParams<K>;
@@ -92,11 +94,15 @@ export function contractRoute<K extends OperationId>(
     url: spec.url,
     // Before the body is parsed, so an unauthenticated client cannot make the server read it.
     onRequest: async (request) => {
-      request.tenant = await authenticate(request, deps.auth, deps.db);
+      const { identity, tenant } = await authenticate(request, deps.auth, deps.db);
+      request.identity = identity;
+      request.tenant = tenant;
     },
     handler: async (request: FastifyRequest, reply: FastifyReply) => {
-      const tenant = request.tenant;
-      if (!tenant) throw new Error(`${operationId} reached its handler without a tenant`);
+      const { tenant, identity } = request;
+      if (!tenant || !identity) {
+        throw new Error(`${operationId} reached its handler without a tenant`);
+      }
 
       const path = spec.validatePath(request.params);
       // A malformed id names nothing that could exist.
@@ -122,6 +128,7 @@ export function contractRoute<K extends OperationId>(
       ): Promise<{ status: number; body: JsonValue | undefined }> => {
         const result = await handler({
           tenant,
+          identity,
           db,
           params: path.value as PathParams<K>,
           query: (query.value ?? {}) as QueryParams<K>,
