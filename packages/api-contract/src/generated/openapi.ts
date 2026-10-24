@@ -1003,8 +1003,7 @@ export interface components {
         };
         /**
          * @description A `KnownProvenance`, or a source added after this client was built. Clients treat an
-         *     unknown source as not entered by the user (highlight it for review) and send it back
-         *     unchanged.
+         *     unknown source as not entered by the user (highlight it for review).
          */
         Provenance: components["schemas"]["KnownProvenance"];
         /**
@@ -1139,11 +1138,8 @@ export interface components {
             quantity: number;
             /** @description The storage location where the item is kept (for example a bin or shelf). */
             storageLocationId?: components["schemas"]["Id"];
+            /** @description The analysis whose proposals the user accepted; see `Item.fieldProvenance`. */
             acceptedAnalysisId?: components["schemas"]["Id"];
-            /** @description Where each detail came from, keyed by property name, for example `{"brand": "ocr"}`. */
-            fieldProvenance?: {
-                [key: string]: components["schemas"]["Provenance"];
-            };
         };
         ItemCreate: {
             details?: components["schemas"]["ItemDetails"];
@@ -1167,6 +1163,15 @@ export interface components {
              */
             version: number;
             details: components["schemas"]["ItemDetails"];
+            /**
+             * @description Read-only: where each detail came from, keyed by property name, for example
+             *     `{"brand": "ocr"}`. The server owns it and clients never send it. A detail whose
+             *     value equals the accepted analysis's value keeps that analysis's source; any other
+             *     detail written through the API is `user`.
+             */
+            fieldProvenance?: {
+                [key: string]: components["schemas"]["Provenance"];
+            };
             /** @description Read-only; the location `details.storageLocationId` refers to. */
             storageLocation?: components["schemas"]["StorageLocationSummary"];
             /** @description In display order; the first is the cover. */

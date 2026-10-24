@@ -362,6 +362,45 @@ describe('enums', () => {
     expect([...open]).toEqual([]);
   });
 
+  it('keep server-owned provenance out of every request', () => {
+    const requestSchemas = operations.flatMap(({ op, parameters }) => [
+      ...Object.values(op.requestBody?.content ?? {}).flatMap(({ schema }) =>
+        schema ? [schema] : [],
+      ),
+      ...parameters.flatMap((parameter) => {
+        const { schema } = resolve(parameter);
+        return schema ? [schema] : [];
+      }),
+    ]);
+    const visited = new Set<string>();
+    const properties: string[] = [];
+    const visit = (schema: Schema): void => {
+      if (schema.$ref) {
+        if (visited.has(schema.$ref)) return;
+        visited.add(schema.$ref);
+        visit(resolve(schema));
+        return;
+      }
+      for (const [name, child] of Object.entries(schema.properties ?? {})) {
+        properties.push(name);
+        visit(child);
+      }
+      if (schema.items) visit(schema.items);
+      if (typeof schema.additionalProperties === 'object') visit(schema.additionalProperties);
+      for (const child of [
+        ...(schema.anyOf ?? []),
+        ...(schema.oneOf ?? []),
+        ...(schema.allOf ?? []),
+      ]) {
+        visit(child);
+      }
+    };
+    for (const schema of requestSchemas) visit(schema);
+    expect(properties).toContain('details');
+    expect(properties).not.toContain('fieldProvenance');
+    expect(doc.components.schemas['Item']?.properties?.['fieldProvenance']).toBeDefined();
+  });
+
   it('accept only known values in request-only enums', () => {
     // Shared schemas (ItemDetails, ...) keep open values so clients can send them back.
     for (const name of ['ListingCreate', 'SaleCreate']) {

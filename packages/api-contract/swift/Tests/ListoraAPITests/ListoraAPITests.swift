@@ -27,6 +27,7 @@ import Testing
         #expect(item.sku == "AJ-000184")
         #expect(item.status.value1 == .draft)
         #expect(item.storageLocation?.code == "B-12")
+        #expect(item.fieldProvenance?.additionalProperties["title"]?.value1 == .user)
         #expect(item.details.listPrice?.amountCents == 3400)
         #expect(item.details.listPrice?.currency == .usd)
         #expect(item.listings.first?.statusDisplay.label == "Active (confirmed by eBay)")
@@ -186,9 +187,9 @@ private let itemJSON = """
       "details": {
         "title": "Vintage denim jacket",
         "listPrice": { "amountCents": 3400, "currency": "USD" },
-        "fieldProvenance": { "title": "user" },
         "storageLocationId": "3c2b1a0f-9e8d-4c7b-8a6f-5e4d3c2b1a0f"
       },
+      "fieldProvenance": { "title": "user" },
       "storageLocation": { "id": "3c2b1a0f-9e8d-4c7b-8a6f-5e4d3c2b1a0f", "code": "B-12", "label": "Garage shelf 3, bin 12" },
       "photos": [],
       "listings": [

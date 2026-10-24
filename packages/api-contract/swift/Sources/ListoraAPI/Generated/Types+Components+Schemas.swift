@@ -306,8 +306,7 @@ extension Components {
             }
         }
         /// A `KnownProvenance`, or a source added after this client was built. Clients treat an
-        /// unknown source as not entered by the user (highlight it for review) and send it back
-        /// unchanged.
+        /// unknown source as not entered by the user (highlight it for review).
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/Provenance`.
@@ -804,32 +803,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ItemDetails/storageLocationId`.
             public var storageLocationId: Components.Schemas.Id?
+            /// The analysis whose proposals the user accepted; see `Item.fieldProvenance`.
+            ///
             /// - Remark: Generated from `#/components/schemas/ItemDetails/acceptedAnalysisId`.
             public var acceptedAnalysisId: Components.Schemas.Id?
-            /// Where each detail came from, keyed by property name, for example `{"brand": "ocr"}`.
-            ///
-            /// - Remark: Generated from `#/components/schemas/ItemDetails/fieldProvenance`.
-            public struct FieldProvenancePayload: Codable, Hashable, Sendable {
-                /// A container of undocumented properties.
-                public var additionalProperties: [String: Components.Schemas.Provenance]
-                /// Creates a new `FieldProvenancePayload`.
-                ///
-                /// - Parameters:
-                ///   - additionalProperties: A container of undocumented properties.
-                public init(additionalProperties: [String: Components.Schemas.Provenance] = .init()) {
-                    self.additionalProperties = additionalProperties
-                }
-                public init(from decoder: any Swift.Decoder) throws {
-                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
-                }
-                public func encode(to encoder: any Swift.Encoder) throws {
-                    try encoder.encodeAdditionalProperties(additionalProperties)
-                }
-            }
-            /// Where each detail came from, keyed by property name, for example `{"brand": "ocr"}`.
-            ///
-            /// - Remark: Generated from `#/components/schemas/ItemDetails/fieldProvenance`.
-            public var fieldProvenance: Components.Schemas.ItemDetails.FieldProvenancePayload?
             /// Creates a new `ItemDetails`.
             ///
             /// - Parameters:
@@ -859,8 +836,7 @@ extension Components {
             ///   - purchaseSource:
             ///   - quantity:
             ///   - storageLocationId: The storage location where the item is kept (for example a bin or shelf).
-            ///   - acceptedAnalysisId:
-            ///   - fieldProvenance: Where each detail came from, keyed by property name, for example `{"brand": "ocr"}`.
+            ///   - acceptedAnalysisId: The analysis whose proposals the user accepted; see `Item.fieldProvenance`.
             public init(
                 title: Swift.String? = nil,
                 description: Swift.String? = nil,
@@ -888,8 +864,7 @@ extension Components {
                 purchaseSource: Swift.String? = nil,
                 quantity: Swift.Int32? = nil,
                 storageLocationId: Components.Schemas.Id? = nil,
-                acceptedAnalysisId: Components.Schemas.Id? = nil,
-                fieldProvenance: Components.Schemas.ItemDetails.FieldProvenancePayload? = nil
+                acceptedAnalysisId: Components.Schemas.Id? = nil
             ) {
                 self.title = title
                 self.description = description
@@ -918,7 +893,6 @@ extension Components {
                 self.quantity = quantity
                 self.storageLocationId = storageLocationId
                 self.acceptedAnalysisId = acceptedAnalysisId
-                self.fieldProvenance = fieldProvenance
             }
             public enum CodingKeys: String, CodingKey {
                 case title
@@ -948,7 +922,6 @@ extension Components {
                 case quantity
                 case storageLocationId
                 case acceptedAnalysisId
-                case fieldProvenance
             }
         }
         /// - Remark: Generated from `#/components/schemas/ItemCreate`.
@@ -1011,6 +984,38 @@ extension Components {
             public var version: Swift.Int64
             /// - Remark: Generated from `#/components/schemas/Item/details`.
             public var details: Components.Schemas.ItemDetails
+            /// Read-only: where each detail came from, keyed by property name, for example
+            /// `{"brand": "ocr"}`. The server owns it and clients never send it. A detail whose
+            /// value equals the accepted analysis's value keeps that analysis's source; any other
+            /// detail written through the API is `user`.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/fieldProvenance`.
+            public struct FieldProvenancePayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: [String: Components.Schemas.Provenance]
+                /// Creates a new `FieldProvenancePayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: [String: Components.Schemas.Provenance] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// Read-only: where each detail came from, keyed by property name, for example
+            /// `{"brand": "ocr"}`. The server owns it and clients never send it. A detail whose
+            /// value equals the accepted analysis's value keeps that analysis's source; any other
+            /// detail written through the API is `user`.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/fieldProvenance`.
+            public var fieldProvenance: Components.Schemas.Item.FieldProvenancePayload?
             /// Read-only; the location `details.storageLocationId` refers to.
             ///
             /// - Remark: Generated from `#/components/schemas/Item/storageLocation`.
@@ -1035,6 +1040,7 @@ extension Components {
             ///   - status:
             ///   - version: Increases on every change; send it back as `expectedVersion`.
             ///   - details:
+            ///   - fieldProvenance: Read-only: where each detail came from, keyed by property name, for example
             ///   - storageLocation: Read-only; the location `details.storageLocationId` refers to.
             ///   - photos: In display order; the first is the cover.
             ///   - listings:
@@ -1047,6 +1053,7 @@ extension Components {
                 status: Components.Schemas.ItemStatus,
                 version: Swift.Int64,
                 details: Components.Schemas.ItemDetails,
+                fieldProvenance: Components.Schemas.Item.FieldProvenancePayload? = nil,
                 storageLocation: Components.Schemas.StorageLocationSummary? = nil,
                 photos: [Components.Schemas.Photo],
                 listings: [Components.Schemas.Listing],
@@ -1059,6 +1066,7 @@ extension Components {
                 self.status = status
                 self.version = version
                 self.details = details
+                self.fieldProvenance = fieldProvenance
                 self.storageLocation = storageLocation
                 self.photos = photos
                 self.listings = listings
@@ -1072,6 +1080,7 @@ extension Components {
                 case status
                 case version
                 case details
+                case fieldProvenance
                 case storageLocation
                 case photos
                 case listings

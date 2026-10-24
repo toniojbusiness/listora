@@ -1545,8 +1545,7 @@ components:
     Provenance:
       description: |
         A `KnownProvenance`, or a source added after this client was built. Clients treat an
-        unknown source as not entered by the user (highlight it for review) and send it back
-        unchanged.
+        unknown source as not entered by the user (highlight it for review).
       anyOf:
         - $ref: '#/components/schemas/KnownProvenance'
         - type: string
@@ -1826,13 +1825,7 @@ components:
           description: The storage location where the item is kept (for example a bin or shelf).
         acceptedAnalysisId:
           $ref: '#/components/schemas/Id'
-        fieldProvenance:
-          type: object
-          description: >-
-            Where each detail came from, keyed by property name, for example
-            `{"brand": "ocr"}`.
-          additionalProperties:
-            $ref: '#/components/schemas/Provenance'
+          description: The analysis whose proposals the user accepted; see `Item.fieldProvenance`.
     ItemCreate:
       type: object
       properties:
@@ -1868,6 +1861,15 @@ components:
           description: Increases on every change; send it back as `expectedVersion`.
         details:
           $ref: '#/components/schemas/ItemDetails'
+        fieldProvenance:
+          type: object
+          description: |
+            Read-only: where each detail came from, keyed by property name, for example
+            `{"brand": "ocr"}`. The server owns it and clients never send it. A detail whose
+            value equals the accepted analysis's value keeps that analysis's source; any other
+            detail written through the API is `user`.
+          additionalProperties:
+            $ref: '#/components/schemas/Provenance'
         storageLocation:
           $ref: '#/components/schemas/StorageLocationSummary'
           description: Read-only; the location `details.storageLocationId` refers to.

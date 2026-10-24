@@ -142,7 +142,9 @@ values it does not know. Schemas shared by requests and responses (such as `Item
 keep `X` for decoding, but requests are held to the same rule: the server validates every
 enum value in a request against `KnownX` and rejects an unknown value with
 `422 validation_failed` and a `fieldErrors` entry naming the field (for example
-`details.fieldProvenance.title`). It never stores or interprets a value it does not know.
+`details.condition`). It never stores or interprets a value it does not know. Values only
+the server sets, such as `Item.fieldProvenance`, are in responses only, so an app never has
+to send back a value it does not know.
 
 The two sides read open enums differently, on purpose:
 
