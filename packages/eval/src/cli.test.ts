@@ -20,7 +20,9 @@ function runCli(...args: string[]) {
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-describe('eval CLI', () => {
+// Each test spawns at most two CLI processes with a 60s budget each; the test timeout must
+// cover both, or a loaded machine fails the test long before the processes would.
+describe('eval CLI', { timeout: 120_000 }, () => {
   it('prints parser and fake-provider accuracy and the metered cost per item by default', () => {
     const { status, stdout, stderr } = runCli();
     expect(stderr).toBe('');

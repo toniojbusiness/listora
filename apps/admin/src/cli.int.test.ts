@@ -50,7 +50,9 @@ afterAll(async () => {
   await database.close();
 });
 
-describe('admin CLI (real process, real Postgres)', () => {
+// A test spawns up to four CLI processes with a 20s budget each; the test timeout must cover
+// all of them, or a loaded machine fails the test long before the processes would.
+describe('admin CLI (real process, real Postgres)', { timeout: 90_000 }, () => {
   it('turns the kill switch on, shows it, audits it, and turns it off', async () => {
     const on = await cli(env, 'ai-kill-switch', 'on', '--actor', 'ops', '--reason', 'drill');
     expect(on).toMatchObject({ code: 0, stdout: 'AI kill switch is now on.\n' });
