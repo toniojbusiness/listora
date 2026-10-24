@@ -2,7 +2,7 @@ import type { DbExecutor, PhotoStatus } from '@listora/db';
 import { photoSetHash } from '@listora/shared';
 
 export interface ItemPhotoSet {
-  /** `photoSetHash` over the photos' sha256s in display order (`ai_analysis.photo_set_hash`). */
+  /** `photoSetHash` over the photos' sha256s, in any order (`ai_analysis.photo_set_hash`). */
   hash: string;
   /** The photos in display order; the first is the cover. */
   photos: { id: string; sha256: string; status: PhotoStatus }[];
@@ -10,9 +10,10 @@ export interface ItemPhotoSet {
 
 /**
  * An item's current photo set and its hash, the key analysis is idempotent by: the same photos
- * in the same order give the same hash, so the item is not analyzed (and paid for) twice.
- * The hash covers the uploaded files' sha256s, which never change, not the derived images.
- * Undefined when the item has no photos.
+ * give the same hash whatever their order, so the item is not analyzed (and paid for) twice,
+ * not even after a new cover. The display order reaches only the prompt. The hash covers the
+ * uploaded files' sha256s, which never change, not the derived images. Undefined when the
+ * item has no photos.
  */
 export async function itemPhotoSet(
   db: DbExecutor,

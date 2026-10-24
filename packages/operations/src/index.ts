@@ -38,4 +38,4 @@ export {
 } from './state-machine.ts';
 export type { OperationChange, OperationError, OperationRow } from './transitions.ts';
 export { startOperationWorker } from './worker.ts';
-export type { OperationWorker, OperationWorkerOptions } from './worker.ts';
+export type { OperationWorker, OperationWorkerOptions, WorkerTask } from './worker.ts';

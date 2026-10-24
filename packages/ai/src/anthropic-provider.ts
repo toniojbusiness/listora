@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import { z } from 'zod';
 
 import { AiProviderError, type AiErrorCode } from './errors.ts';
 import type { AiProvider, ProviderRequest, ProviderResponse } from './provider.ts';
@@ -24,7 +25,8 @@ export interface AnthropicProviderOptions {
 /**
  * Claude through the official SDK. Each call is one Messages API request with:
  * - strict structured output (`output_config.format`, a JSON schema derived from the Zod
- *   schema; constrained decoding guarantees it parses) and the tier's `effort`;
+ *   schema; constrained decoding guarantees it parses) and the tier's `effort`, or, for an
+ *   output with `enforcement: 'prompt'`, the JSON schema as system-prompt instructions;
  * - the photos as base64 image blocks, then the per-request text;
  * - a cache breakpoint on the system prompt, so the stable prefix (system prompt and the
  *   structured-output instructions) is billed at the cache-read price on repeat calls.
@@ -68,11 +70,23 @@ export class AnthropicProvider implements AiProvider {
 export function buildParams(
   request: ProviderRequest<unknown>,
 ): Anthropic.MessageCreateParamsNonStreaming {
-  const format = zodOutputFormat(request.output.schema);
+  const byPrompt = request.output.enforcement === 'prompt';
+  // The cache breakpoint goes on the last system block, so the schema is cached with the
+  // instructions when it travels in the prompt.
+  const system: Anthropic.TextBlockParam[] = byPrompt
+    ? [
+        { type: 'text', text: request.system },
+        {
+          type: 'text',
+          text: schemaInstructions(request.output.schema),
+          cache_control: { type: 'ephemeral' },
+        },
+      ]
+    : [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }];
   return {
     model: request.model,
     max_tokens: request.maxOutputTokens,
-    system: [{ type: 'text', text: request.system, cache_control: { type: 'ephemeral' } }],
+    system,
     messages: [
       {
         role: 'user',
@@ -91,11 +105,42 @@ export function buildParams(
     ],
     // Only the JSON schema goes on the wire; parsing happens below so that a response that
     // fails validation is still metered.
-    output_config: {
-      effort: request.effort,
-      format: { type: 'json_schema', schema: format.schema },
-    },
+    output_config: byPrompt
+      ? { effort: request.effort }
+      : {
+          effort: request.effort,
+          format: {
+            type: 'json_schema',
+            schema: zodOutputFormat(request.output.schema).schema,
+          },
+        },
   };
+}
+
+/**
+ * The schema as instructions, for `enforcement: 'prompt'`: the full JSON schema, with the
+ * enums, lengths, and patterns that constrained decoding would have dropped into descriptions.
+ */
+export function schemaInstructions(schema: ProviderRequest<unknown>['output']['schema']): string {
+  return (
+    'Answer with exactly one JSON object and nothing else: no prose and no code fence. It ' +
+    'must be valid against this JSON Schema, every property present:\n' +
+    JSON.stringify(z.toJSONSchema(schema))
+  );
+}
+
+/**
+ * The JSON object in an answer: the whole text, or, for an answer whose schema travelled in
+ * the prompt, the object inside a Markdown code fence or surrounding prose. What it finds is
+ * still validated against the schema.
+ */
+function jsonText(text: string): string {
+  const trimmed = text.trim();
+  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/.exec(trimmed);
+  if (fenced?.[1] !== undefined) return fenced[1];
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  return start >= 0 && end > start ? trimmed.slice(start, end + 1) : trimmed;
 }
 
 function readResponse<T>(
@@ -130,7 +175,7 @@ function readResponse<T>(
     .join('');
   let json: unknown;
   try {
-    json = JSON.parse(text);
+    json = JSON.parse(jsonText(text));
   } catch {
     throw new AiProviderError('invalid_output', 'the output is not valid JSON', { usage });
   }

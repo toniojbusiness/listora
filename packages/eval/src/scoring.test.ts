@@ -61,3 +61,39 @@ describe('scoreItem', () => {
     expect(recall(t.rn)).toBe(0);
   });
 });
+
+describe('scoreItem in one_of mode', () => {
+  const sizes = {
+    ...emptyTagValues(),
+    size: [
+      { system: 'us', value: '4' },
+      { system: 'uk', value: '8' },
+    ],
+  } as const;
+
+  it('accepts one value that is among the truth values', () => {
+    const t = tallies();
+    expect(scoreItem(t, sizes, { size: [{ system: 'uk', value: '8' }] }, 'one_of')).toEqual([]);
+    expect(t.size).toMatchObject({ correct: 1, truePositives: 1, falseNegatives: 1 });
+  });
+
+  it('rejects a wrong value, more than one value, and a value where the tag has none', () => {
+    const t = tallies();
+    expect(scoreItem(t, sizes, { size: [{ system: 'eu', value: '36' }] }, 'one_of')).toHaveLength(
+      1,
+    );
+    expect(scoreItem(t, sizes, { size: [...sizes.size] }, 'one_of')).toHaveLength(1);
+    expect(scoreItem(t, sizes, {}, 'one_of')).toHaveLength(1);
+    expect(scoreItem(tallies(), emptyTagValues(), { rn: ['12345'] }, 'one_of')).toEqual([
+      { field: 'rn', expected: [], actual: ['12345'] },
+    ]);
+    // None of the three sized tags above was scored correct.
+    expect(t.size).toMatchObject({ items: 3, correct: 0 });
+  });
+
+  it('scores only the fields it has tallies for', () => {
+    const t: Partial<Record<TagField, FieldTally>> = { rn: emptyTally() };
+    expect(scoreItem(t, sizes, {}, 'one_of')).toEqual([]);
+    expect(Object.keys(t)).toEqual(['rn']);
+  });
+});

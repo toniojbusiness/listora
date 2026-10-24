@@ -13,6 +13,7 @@
     { "path": "packages/marketplaces" },
     { "path": "packages/operations" },
     { "path": "packages/tag-parse" },
+    { "path": "packages/analysis" },
     { "path": "packages/eval" },
     { "path": "apps/api" },
     { "path": "apps/worker" },

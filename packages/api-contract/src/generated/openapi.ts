@@ -252,10 +252,15 @@ export interface paths {
         /**
          * Analyze the item's current photos
          * @description Starts the default ("fast") analysis of the item's current photo set. Analysis runs
-         *     once per photo set: when an analysis for the same photo-set hash exists, it is
-         *     returned instead of running (and paying for) a new one. Poll `getAnalysis` until
-         *     `status` is `completed` or `failed`. `409 invalid_state_transition` when the item has no
-         *     ready photo; `429 ai_budget_exceeded` when the account's daily AI budget is used up.
+         *     once per item and photo set: when an analysis of the same photo-set hash exists, it is
+         *     returned instead of running (and paying for) a new one; a `failed` one is queued again,
+         *     since asking again is how a failure is retried. Poll `getAnalysis` until `status` is
+         *     `completed` or `failed`. The photo set is every photo of the item, so all of them must
+         *     be `ready`: `409 invalid_state_transition` when the item has no photos or one is still
+         *     `processing` or `failed` (remove or replace it first). Refused before anything is
+         *     queued: `402 quota_exceeded` when the plan's AI items for the month are used up,
+         *     `429 ai_budget_exceeded` when the account's daily AI budget is used up, and
+         *     `503 service_unavailable` while AI is switched off.
          */
         post: operations["startItemAnalysis"];
         delete?: never;
@@ -298,10 +303,42 @@ export interface paths {
          * Identify harder (premium analysis)
          * @description Runs the premium identification on the same photos plus the first result. Counts
          *     against the plan's premium quota (`402 quota_exceeded` when used up). Repeating the
-         *     request for the same analysis returns the existing premium analysis.
-         *     `409 invalid_state_transition` until the analysis has `completed`.
+         *     request for the same analysis returns the existing premium analysis, or queues it
+         *     again when it `failed`. The server also starts it on its own when a fast analysis
+         *     needs it (`needsEscalation`) and the quota allows; the fast analysis then names it in
+         *     `escalationAnalysisId`. `409 invalid_state_transition` until the analysis has
+         *     `completed`, and for an analysis that is already `premium`. `429 ai_budget_exceeded`
+         *     and `503 service_unavailable` as for `startItemAnalysis`.
          */
         post: operations["escalateAnalysis"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/analyses/{analysisId}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysisId: components["parameters"]["AnalysisId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fill the item's details from an analysis
+         * @description Copies the completed analysis's proposed details into its item and records it as the
+         *     item's `acceptedAnalysisId`. Each copied detail takes the analysis's provenance (`ai`,
+         *     `ocr`, or `barcode`) in `fieldProvenance`. Details the user entered or edited
+         *     (provenance `user`) are never overwritten, and a detail the analysis did not find is
+         *     left as it is. `expectedVersion` must equal the item's current `version`
+         *     (`409 version_conflict` otherwise); `409 invalid_state_transition` until the analysis
+         *     has `completed`. Never calls AI.
+         */
+        post: operations["applyAnalysis"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1117,11 +1154,17 @@ export interface components {
             upc?: string;
             /** @description Canonical department, for example `women`, `men`, `kids`, `unisex`. */
             department?: string;
-            /** @description Canonical taxonomy path, for example `clothing/tops/t_shirts`. */
+            /**
+             * @description Canonical taxonomy path `<category>/<subcategory>`, for example
+             *     `clothing/tops/t_shirts` (`CATEGORY_TREE` in @listora/analysis).
+             */
             category?: string;
             /** @description The size as printed, for example `M` or `32x30`. */
             sizeLabel?: string;
-            /** @description For example `us`, `uk`, `eu`, `intl`. */
+            /**
+             * @description How to read `sizeLabel`: `letter` (XS to XXXL), `numeric`, `waist_inseam`
+             *     (`32x30`), `us`, `uk`, or `eu` (labeled on the tag), or `one_size`.
+             */
             sizeSystem?: string;
             colors?: string[];
             pattern?: string;
@@ -1418,7 +1461,13 @@ export interface components {
             flaws?: components["schemas"]["AnalyzedTextList"];
             keywords?: components["schemas"]["AnalyzedTextList"];
         };
-        /** @description Marketplace-specific copy written by the analysis. */
+        /**
+         * @description Marketplace-specific copy written by the analysis, within that marketplace's limits:
+         *     eBay and Poshmark titles up to 80 characters, a Poshmark description up to 1,500, and
+         *     a Mercari title and description up to 80 and 1,000. Depop has no title (this one is a
+         *     short headline); its `description` and `hashtags` (up to 5, without the `#`) together
+         *     fit Depop's 1,000 characters once the hashtags are appended on their own line.
+         */
         VariantSuggestion: {
             marketplace: components["schemas"]["Marketplace"];
             title: string;
@@ -1429,12 +1478,26 @@ export interface components {
             details: components["schemas"]["AnalyzedDetails"];
             variants: components["schemas"]["VariantSuggestion"][];
             priceEstimate?: components["schemas"]["AiPriceEstimate"];
-            /** @description True when the analysis suggests "Identify harder". */
+            /**
+             * @description True when a fast analysis suggests "Identify harder": its brand or product is
+             *     uncertain, the item looks designer or vintage, or the model asked for it. Always
+             *     false for a premium analysis.
+             */
             needsEscalation: boolean;
             escalationReason?: string;
         };
+        /**
+         * @description Why the analysis failed. Starting or escalating it again queues it again; `retryable`
+         *     says whether that may succeed without changing anything (for example after a
+         *     provider outage), as opposed to needing other photos or a plan change.
+         */
         AnalysisFailure: {
+            /**
+             * @description Stable snake_case, for example `invalid_output` (the AI's answer broke the schema
+             *     twice), `rate_limited`, `ai_budget_exceeded`, `quota_exceeded`, `photo_set_changed`.
+             */
             code: string;
+            /** @description Safe to show to the user. */
             message: string;
             retryable: boolean;
         };
@@ -1446,9 +1509,20 @@ export interface components {
             status: components["schemas"]["AnalysisStatus"];
             result?: components["schemas"]["AnalysisResult"];
             failure?: components["schemas"]["AnalysisFailure"];
+            /** @description For a `premium` analysis, the fast analysis it escalates. */
             escalatedFromAnalysisId?: components["schemas"]["Id"];
+            /** @description For a fast analysis, the premium analysis that escalates it, once started. */
+            escalationAnalysisId?: components["schemas"]["Id"];
             createdAt: components["schemas"]["Timestamp"];
+            /** @description When the analysis completed or failed. */
             completedAt?: components["schemas"]["Timestamp"];
+        };
+        AnalysisApply: {
+            /**
+             * Format: int64
+             * @description The item `version` the client last read (optimistic lock).
+             */
+            expectedVersion: number;
         };
         /**
          * @description A model's guess, not market data. `label` is always
@@ -2153,6 +2227,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description A service the request needs is switched off or down (`service_unavailable`). */
+        ServiceUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description The operation was queued. Watch `operation.status` or the listing's `statusDisplay`. */
         ListingOperationAccepted: {
             headers: {
@@ -2263,6 +2346,7 @@ export type VariantSuggestion = components['schemas']['VariantSuggestion'];
 export type AnalysisResult = components['schemas']['AnalysisResult'];
 export type AnalysisFailure = components['schemas']['AnalysisFailure'];
 export type Analysis = components['schemas']['Analysis'];
+export type AnalysisApply = components['schemas']['AnalysisApply'];
 export type AiPriceEstimate = components['schemas']['AiPriceEstimate'];
 export type SoldDataSource = components['schemas']['SoldDataSource'];
 export type KnownSoldDataSource = components['schemas']['KnownSoldDataSource'];
@@ -2361,6 +2445,7 @@ export type ResponseValidationFailed = components['responses']['ValidationFailed
 export type ResponsePayloadTooLarge = components['responses']['PayloadTooLarge'];
 export type ResponseQuotaExceeded = components['responses']['QuotaExceeded'];
 export type ResponseRateLimited = components['responses']['RateLimited'];
+export type ResponseServiceUnavailable = components['responses']['ServiceUnavailable'];
 export type ResponseListingOperationAccepted = components['responses']['ListingOperationAccepted'];
 export type ParameterIdempotencyKey = components['parameters']['IdempotencyKey'];
 export type ParameterCursor = components['parameters']['Cursor'];
@@ -2812,9 +2897,11 @@ export interface operations {
                     "application/json": components["schemas"]["Analysis"];
                 };
             };
+            402: components["responses"]["QuotaExceeded"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2877,6 +2964,48 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    applyAnalysis: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                analysisId: components["parameters"]["AnalysisId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnalysisApply"];
+            };
+        };
+        responses: {
+            /** @description The updated item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Item"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
     };

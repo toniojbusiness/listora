@@ -762,7 +762,9 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ItemDetails/department`.
             public var department: Swift.String?
-            /// Canonical taxonomy path, for example `clothing/tops/t_shirts`.
+            /// Canonical taxonomy path `<category>/<subcategory>`, for example
+            /// `clothing/tops/t_shirts` (`CATEGORY_TREE` in @listora/analysis).
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/ItemDetails/category`.
             public var category: Swift.String?
@@ -770,7 +772,9 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ItemDetails/sizeLabel`.
             public var sizeLabel: Swift.String?
-            /// For example `us`, `uk`, `eu`, `intl`.
+            /// How to read `sizeLabel`: `letter` (XS to XXXL), `numeric`, `waist_inseam`
+            /// (`32x30`), `us`, `uk`, or `eu` (labeled on the tag), or `one_size`.
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/ItemDetails/sizeSystem`.
             public var sizeSystem: Swift.String?
@@ -821,9 +825,9 @@ extension Components {
             ///   - rnNumber: Registered identification number from the care tag.
             ///   - upc: UPC or EAN digits, checksum-validated by the server.
             ///   - department: Canonical department, for example `women`, `men`, `kids`, `unisex`.
-            ///   - category: Canonical taxonomy path, for example `clothing/tops/t_shirts`.
+            ///   - category: Canonical taxonomy path `<category>/<subcategory>`, for example
             ///   - sizeLabel: The size as printed, for example `M` or `32x30`.
-            ///   - sizeSystem: For example `us`, `uk`, `eu`, `intl`.
+            ///   - sizeSystem: How to read `sizeLabel`: `letter` (XS to XXXL), `numeric`, `waist_inseam`
             ///   - colors:
             ///   - pattern:
             ///   - materials:
@@ -2079,7 +2083,12 @@ extension Components {
                 case keywords
             }
         }
-        /// Marketplace-specific copy written by the analysis.
+        /// Marketplace-specific copy written by the analysis, within that marketplace's limits:
+        /// eBay and Poshmark titles up to 80 characters, a Poshmark description up to 1,500, and
+        /// a Mercari title and description up to 80 and 1,000. Depop has no title (this one is a
+        /// short headline); its `description` and `hashtags` (up to 5, without the `#`) together
+        /// fit Depop's 1,000 characters once the hashtags are appended on their own line.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/VariantSuggestion`.
         public struct VariantSuggestion: Codable, Hashable, Sendable {
@@ -2124,7 +2133,10 @@ extension Components {
             public var variants: [Components.Schemas.VariantSuggestion]
             /// - Remark: Generated from `#/components/schemas/AnalysisResult/priceEstimate`.
             public var priceEstimate: Components.Schemas.AiPriceEstimate?
-            /// True when the analysis suggests "Identify harder".
+            /// True when a fast analysis suggests "Identify harder": its brand or product is
+            /// uncertain, the item looks designer or vintage, or the model asked for it. Always
+            /// false for a premium analysis.
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/AnalysisResult/needsEscalation`.
             public var needsEscalation: Swift.Bool
@@ -2136,7 +2148,7 @@ extension Components {
             ///   - details:
             ///   - variants:
             ///   - priceEstimate:
-            ///   - needsEscalation: True when the analysis suggests "Identify harder".
+            ///   - needsEscalation: True when a fast analysis suggests "Identify harder": its brand or product is
             ///   - escalationReason:
             public init(
                 details: Components.Schemas.AnalyzedDetails,
@@ -2159,10 +2171,21 @@ extension Components {
                 case escalationReason
             }
         }
+        /// Why the analysis failed. Starting or escalating it again queues it again; `retryable`
+        /// says whether that may succeed without changing anything (for example after a
+        /// provider outage), as opposed to needing other photos or a plan change.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/AnalysisFailure`.
         public struct AnalysisFailure: Codable, Hashable, Sendable {
+            /// Stable snake_case, for example `invalid_output` (the AI's answer broke the schema
+            /// twice), `rate_limited`, `ai_budget_exceeded`, `quota_exceeded`, `photo_set_changed`.
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/AnalysisFailure/code`.
             public var code: Swift.String
+            /// Safe to show to the user.
+            ///
             /// - Remark: Generated from `#/components/schemas/AnalysisFailure/message`.
             public var message: Swift.String
             /// - Remark: Generated from `#/components/schemas/AnalysisFailure/retryable`.
@@ -2170,8 +2193,8 @@ extension Components {
             /// Creates a new `AnalysisFailure`.
             ///
             /// - Parameters:
-            ///   - code:
-            ///   - message:
+            ///   - code: Stable snake_case, for example `invalid_output` (the AI's answer broke the schema
+            ///   - message: Safe to show to the user.
             ///   - retryable:
             public init(
                 code: Swift.String,
@@ -2204,10 +2227,18 @@ extension Components {
             public var result: Components.Schemas.AnalysisResult?
             /// - Remark: Generated from `#/components/schemas/Analysis/failure`.
             public var failure: Components.Schemas.AnalysisFailure?
+            /// For a `premium` analysis, the fast analysis it escalates.
+            ///
             /// - Remark: Generated from `#/components/schemas/Analysis/escalatedFromAnalysisId`.
             public var escalatedFromAnalysisId: Components.Schemas.Id?
+            /// For a fast analysis, the premium analysis that escalates it, once started.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Analysis/escalationAnalysisId`.
+            public var escalationAnalysisId: Components.Schemas.Id?
             /// - Remark: Generated from `#/components/schemas/Analysis/createdAt`.
             public var createdAt: Components.Schemas.Timestamp
+            /// When the analysis completed or failed.
+            ///
             /// - Remark: Generated from `#/components/schemas/Analysis/completedAt`.
             public var completedAt: Components.Schemas.Timestamp?
             /// Creates a new `Analysis`.
@@ -2220,9 +2251,10 @@ extension Components {
             ///   - status:
             ///   - result:
             ///   - failure:
-            ///   - escalatedFromAnalysisId:
+            ///   - escalatedFromAnalysisId: For a `premium` analysis, the fast analysis it escalates.
+            ///   - escalationAnalysisId: For a fast analysis, the premium analysis that escalates it, once started.
             ///   - createdAt:
-            ///   - completedAt:
+            ///   - completedAt: When the analysis completed or failed.
             public init(
                 id: Components.Schemas.Id,
                 itemId: Components.Schemas.Id,
@@ -2232,6 +2264,7 @@ extension Components {
                 result: Components.Schemas.AnalysisResult? = nil,
                 failure: Components.Schemas.AnalysisFailure? = nil,
                 escalatedFromAnalysisId: Components.Schemas.Id? = nil,
+                escalationAnalysisId: Components.Schemas.Id? = nil,
                 createdAt: Components.Schemas.Timestamp,
                 completedAt: Components.Schemas.Timestamp? = nil
             ) {
@@ -2243,6 +2276,7 @@ extension Components {
                 self.result = result
                 self.failure = failure
                 self.escalatedFromAnalysisId = escalatedFromAnalysisId
+                self.escalationAnalysisId = escalationAnalysisId
                 self.createdAt = createdAt
                 self.completedAt = completedAt
             }
@@ -2255,8 +2289,26 @@ extension Components {
                 case result
                 case failure
                 case escalatedFromAnalysisId
+                case escalationAnalysisId
                 case createdAt
                 case completedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AnalysisApply`.
+        public struct AnalysisApply: Codable, Hashable, Sendable {
+            /// The item `version` the client last read (optimistic lock).
+            ///
+            /// - Remark: Generated from `#/components/schemas/AnalysisApply/expectedVersion`.
+            public var expectedVersion: Swift.Int64
+            /// Creates a new `AnalysisApply`.
+            ///
+            /// - Parameters:
+            ///   - expectedVersion: The item `version` the client last read (optimistic lock).
+            public init(expectedVersion: Swift.Int64) {
+                self.expectedVersion = expectedVersion
+            }
+            public enum CodingKeys: String, CodingKey {
+                case expectedVersion
             }
         }
         /// A model's guess, not market data. `label` is always

@@ -6,11 +6,44 @@
  * process enqueues a job.
  */
 import { Logger as JobQueueLogger, runMigrations, type LogFunctionFactory } from 'graphile-worker';
+import { sql } from 'kysely';
 
 import type { Logger } from '@listora/shared';
 
+import type { DbExecutor } from './database.ts';
+
 /** Postgres schema that holds the job queue's tables and functions. */
 export const JOB_QUEUE_SCHEMA = 'graphile_worker';
+
+/**
+ * Graphile retries a job whose handler throws (a database or storage outage, a bug) with its
+ * own backoff, capped near six hours. The maximum smallint means a job is never dropped while
+ * the row it works on still waits for it.
+ */
+export const JOB_MAX_ATTEMPTS = 32_767;
+
+export interface BackgroundJob {
+  /** The task name the worker runs the job with. */
+  readonly task: string;
+  readonly payload: Readonly<Record<string, string>>;
+  /** One pending job per key: adding the job again replaces the pending one. */
+  readonly jobKey: string;
+}
+
+/**
+ * Adds a job on the caller's connection, so it commits or rolls back together with the row
+ * that needs it. The worker runs it as soon as it commits.
+ */
+export async function addJob(executor: DbExecutor, job: BackgroundJob): Promise<void> {
+  await sql`
+    select ${sql.id(JOB_QUEUE_SCHEMA)}.add_job(
+      identifier => ${job.task},
+      payload => ${JSON.stringify(job.payload)}::json,
+      max_attempts => ${JOB_MAX_ATTEMPTS},
+      job_key => ${job.jobKey}
+    )
+  `.execute(executor);
+}
 
 /**
  * Routes Graphile Worker's log messages into a Listora structured logger. Graphile logs every

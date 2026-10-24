@@ -1,12 +1,26 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { sql } from 'kysely';
+import sharp from 'sharp';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { createInventoryItem, type Marketplace } from '@listora/db';
+import {
+  encodeAnalysisAnswer,
+  graphileAnalysisJobs,
+  ITEM_ANALYSIS_OUTPUT_NAME,
+  requestAnalysis,
+  type ItemAnalysisOutput,
+} from '@listora/analysis';
+import { createInventoryItem, inTransaction, type Marketplace } from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
 import { FakeMarketplace } from '@listora/marketplaces';
 import { enqueueOperation, LIVENESS_APPLICATION_PREFIX } from '@listora/operations';
+import { graphilePhotoJobs, itemPhotoSet, storageKeys } from '@listora/photos';
+import { photoSetHash, sha256Hex } from '@listora/shared';
+import { createStorage, type ObjectStorage } from '@listora/storage';
 import { startNodeProcess, type StartedProcess } from '@listora/testing';
 
 const entry = fileURLToPath(new URL('main.ts', import.meta.url));
@@ -16,17 +30,30 @@ describe('worker process (real Postgres)', () => {
   let database: MigratedDatabase;
   let fake: FakeMarketplace;
   let accountId: string;
+  let storageDir: string;
+  let fixturesDir: string;
+  let storage: ObjectStorage;
   const workers: StartedProcess[] = [];
 
   beforeAll(async () => {
     database = await createMigratedDatabase('worker', { jobQueue: true });
     fake = await FakeMarketplace.start();
     accountId = await insertAccount(database.db, 'WRK');
+    storageDir = await mkdtemp(join(tmpdir(), 'listora-worker-storage-'));
+    fixturesDir = await mkdtemp(join(tmpdir(), 'listora-worker-fixtures-'));
+    storage = createStorage({
+      driver: 'local',
+      rootDir: storageDir,
+      baseUrl: 'http://127.0.0.1:3000',
+      signingSecret: undefined,
+    });
   });
 
   afterAll(async () => {
     await fake.close();
     await database.close();
+    await rm(storageDir, { recursive: true, force: true });
+    await rm(fixturesDir, { recursive: true, force: true });
   });
 
   afterEach(async () => {
@@ -39,6 +66,9 @@ describe('worker process (real Postgres)', () => {
       PATH: process.env['PATH'],
       DATABASE_URL: database.scratch.url,
       FAKE_MARKETPLACE_URL: fake.url,
+      STORAGE_LOCAL_DIR: storageDir,
+      AI_PROVIDER: 'fake',
+      AI_FAKE_FIXTURES_DIR: fixturesDir,
       LOG_LEVEL: 'info',
       ...env,
     });
@@ -77,6 +107,86 @@ describe('worker process (real Postgres)', () => {
       if (Date.now() > deadline) throw new Error(`operation is ${op.status}, not ${status}`);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
+  }
+
+  /** An item with one tag photo, attached as the API attaches it: the row and its job together. */
+  async function itemWithPhoto(seed: number) {
+    const item = await createInventoryItem(database.db, accountId, { title: 'Analysis test item' });
+    const upload = new Uint8Array(
+      await sharp({
+        create: { width: 1600, height: 1200, channels: 3, background: { r: seed, g: 90, b: 160 } },
+      })
+        .jpeg()
+        .toBuffer(),
+    );
+    const storageKey = storageKeys.upload(accountId, crypto.randomUUID());
+    await storage.put(storageKey, upload, { contentType: 'image/jpeg' });
+    const photo = await inTransaction(database.db, async (trx) => {
+      const row = await trx
+        .insertInto('photo')
+        .values({
+          account_id: accountId,
+          item_id: item.id,
+          position: 0,
+          role: 'tag',
+          storage_key: storageKey,
+          width: 1600,
+          height: 1200,
+          sha256: sha256Hex(upload),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await graphilePhotoJobs.enqueue(trx, { accountId, photoId: row.id });
+      return row;
+    });
+    return { itemId: item.id, photoId: photo.id, hash: photoSetHash([sha256Hex(upload)]) };
+  }
+
+  /** Makes the fake provider answer for the photo set, as `AI_FAKE_FIXTURES_DIR` files do. */
+  async function writeAnalysisFixture(hash: string, output: ItemAnalysisOutput) {
+    const fixture = { outputs: { [ITEM_ANALYSIS_OUTPUT_NAME]: encodeAnalysisAnswer(output) } };
+    await writeFile(join(fixturesDir, `${hash}.json`), JSON.stringify(fixture));
+  }
+
+  async function waitFor<T>(read: () => Promise<T>, done: (value: T) => boolean, what: string) {
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      const value = await read();
+      if (done(value)) return value;
+      if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+
+  async function readyPhotoSet(itemId: string) {
+    return waitFor(
+      () => itemPhotoSet(database.db, accountId, itemId),
+      (set) => set?.photos.every((photo) => photo.status === 'ready') === true,
+      'the photo to be processed',
+    );
+  }
+
+  function analyses(itemId: string) {
+    return database.db
+      .selectFrom('ai_analysis')
+      .selectAll()
+      .where('item_id', '=', itemId)
+      .orderBy('created_at')
+      .execute();
+  }
+
+  async function startAnalysis(itemId: string, hash: string) {
+    const { row } = await inTransaction(database.db, (trx) =>
+      requestAnalysis(trx, graphileAnalysisJobs, {
+        accountId,
+        itemId,
+        photoSetHash: hash,
+        tier: 'standard',
+        model: 'claude-haiku-5-5',
+        requestedByUserId: null,
+      }),
+    );
+    return row;
   }
 
   it('starts, reports ready, and exits 0 on SIGTERM', async () => {
@@ -148,6 +258,70 @@ describe('worker process (real Postgres)', () => {
     expect(fake.listings('ebay', listing.id)).toEqual([]);
   }, 60_000);
 
+  it('processes photos, then analyzes the item and escalates it on its own', async () => {
+    await startWorker();
+    const { itemId, hash } = await itemWithPhoto(40);
+    await writeAnalysisFixture(hash, analysisAnswer({ looksVintage: true }));
+    expect((await readyPhotoSet(itemId))?.hash).toBe(hash);
+
+    const fast = await startAnalysis(itemId, hash);
+    const [standard, premium] = await waitFor(
+      () => analyses(itemId),
+      (rows) => rows.length === 2 && rows.every((row) => row.status === 'succeeded'),
+      'the analysis and its escalation',
+    );
+    expect(standard).toMatchObject({ id: fast.id, tier: 'standard', attempts: 1 });
+    expect(standard?.output).toMatchObject({
+      needsEscalation: true,
+      escalationReason: 'It looks vintage.',
+      details: { brand: { value: "Levi's" } },
+    });
+    expect(premium).toMatchObject({
+      tier: 'premium',
+      model: 'claude-sonnet-5-5',
+      escalated_from_analysis_id: fast.id,
+    });
+    expect(premium?.output).toMatchObject({ needsEscalation: false });
+    const usage = await database.db
+      .selectFrom('ai_usage_event')
+      .select(['model', 'outcome'])
+      .where('item_id', '=', itemId)
+      .orderBy('created_at')
+      .execute();
+    expect(usage.map((event) => event.model)).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5']);
+  }, 60_000);
+
+  it('records a failed analysis with its reason, and runs it again when asked', async () => {
+    await startWorker({ AI_AUTO_ESCALATE: 'off' });
+    const { itemId, hash } = await itemWithPhoto(200);
+    await readyPhotoSet(itemId);
+
+    // No fixture for these photos: the fake provider fails the way a real one can.
+    const analysis = await startAnalysis(itemId, hash);
+    const [failed] = await waitFor(
+      () => analyses(itemId),
+      (rows) => rows[0]?.status === 'failed',
+      'the analysis to fail',
+    );
+    expect(failed).toMatchObject({
+      id: analysis.id,
+      error_code: 'fixture_missing',
+      error_retryable: false,
+      output: null,
+    });
+
+    await writeAnalysisFixture(hash, analysisAnswer({ looksVintage: true }));
+    expect(await startAnalysis(itemId, hash)).toMatchObject({ id: analysis.id, status: 'pending' });
+    const [succeeded, ...others] = await waitFor(
+      () => analyses(itemId),
+      (rows) => rows[0]?.status === 'succeeded',
+      'the analysis to run again',
+    );
+    expect(succeeded).toMatchObject({ id: analysis.id, error_code: null });
+    // AI_AUTO_ESCALATE=off leaves the premium identification to the user.
+    expect(others).toEqual([]);
+  }, 60_000);
+
   it('exits at once when it loses its liveness session', async () => {
     const worker = await startWorker();
     await sql`
@@ -189,3 +363,46 @@ describe('worker process (real Postgres)', () => {
     expect(worker.logs).toContainEqual(expect.objectContaining({ msg: 'worker failed to start' }));
   });
 });
+
+/** A valid analysis answer for a tag photo; the tests override what they look at. */
+function analysisAnswer(overrides: Partial<ItemAnalysisOutput> = {}): ItemAnalysisOutput {
+  return {
+    attributes: {
+      brand: { value: "Levi's", confidence: 0.95, source: 'tag_text' },
+      productName: { value: '501 Original', confidence: 0.8, source: 'tag_text' },
+      styleNumber: null,
+      rnNumber: null,
+      upc: null,
+      department: { value: 'men', confidence: 0.9, source: 'photo' },
+      category: { value: 'clothing/bottoms', confidence: 0.95, source: 'photo' },
+      subcategory: { value: 'jeans', confidence: 0.9, source: 'photo' },
+      sizeLabel: { value: 'M', confidence: 0.9, source: 'tag_text' },
+      sizeSystem: { value: 'letter', confidence: 0.9, source: 'tag_text' },
+      colors: { values: ['blue'], confidence: 0.9, source: 'photo' },
+      pattern: { value: 'solid', confidence: 0.85, source: 'photo' },
+      materials: { values: ['cotton'], confidence: 0.85, source: 'tag_text' },
+      condition: { value: 'pre_owned_good', confidence: 0.8, source: 'photo' },
+      conditionNotes: null,
+      flaws: null,
+      keywords: { values: ['denim'], confidence: 0.7, source: 'photo' },
+    },
+    title: { value: "Levi's 501 Original Jeans, Men's M", confidence: 0.85 },
+    description: { value: "Men's Levi's 501 jeans in blue.", confidence: 0.8 },
+    variants: {
+      ebay: { title: "Levi's 501 Original Jeans Mens M Blue Denim", description: 'Blue jeans.' },
+      depop: {
+        title: "Levi's 501s",
+        description: 'Classic blue 501s.',
+        hashtags: ['levis', 'denim'],
+      },
+      poshmark: { title: "Levi's 501 Original Jeans", description: 'A wardrobe staple.' },
+      mercari: { title: "Levi's 501 Jeans Men's M", description: 'Blue jeans.' },
+    },
+    priceEstimate: { lowCents: 2_000, midCents: 2_800, highCents: 3_500, confidence: 0.6 },
+    looksVintage: false,
+    looksDesigner: false,
+    needsEscalation: false,
+    escalationReason: null,
+    ...overrides,
+  };
+}

@@ -4,8 +4,14 @@ export { createDatabase, createPool, inTransaction, parseSafeInteger } from './d
 export type { DatabaseOptions, DatabasePool, Db, DbExecutor, DbTransaction } from './database.ts';
 export { createInventoryItem } from './items.ts';
 export type { InventoryItem, NewInventoryItem } from './items.ts';
-export { createJobQueueLogger, JOB_QUEUE_SCHEMA, migrateJobQueue } from './job-queue.ts';
-export type { JobQueueMigrationOptions } from './job-queue.ts';
+export {
+  addJob,
+  createJobQueueLogger,
+  JOB_MAX_ATTEMPTS,
+  JOB_QUEUE_SCHEMA,
+  migrateJobQueue,
+} from './job-queue.ts';
+export type { BackgroundJob, JobQueueMigrationOptions } from './job-queue.ts';
 export { jsonb } from './json.ts';
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from './json.ts';
 export {

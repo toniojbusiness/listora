@@ -3,14 +3,17 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { photoSetHashOfImages, type FakeFixture } from '@listora/ai';
+import { encodeAnalysisAnswer, ITEM_ANALYSIS_OUTPUT_NAME } from '@listora/analysis';
 
 import { TAG_VALUES_OUTPUT } from './ai-provider.ts';
+import { fakeAnalysisAnswer } from './analysis-provider.ts';
 import { imagePath, toJson, type LoadedCorpus } from './corpus/store.ts';
 
 /**
  * Fixtures for `--provider fake`: one `<photo-set hash>.json` per corpus tag, answering the
- * `tag_values` schema. They are generated from the corpus ground truth, so the fake measures
- * the plumbing (fixture lookup, schema validation, metering, cost report), not a model.
+ * `tag_values` schema (tag reading) and the `item_analysis` schema (the full analysis). They
+ * are generated from the corpus ground truth, so the fake measures the plumbing (fixture
+ * lookup, schema validation, provenance, metering, cost report), not a model.
  */
 export const DEFAULT_FAKE_FIXTURES_DIR = fileURLToPath(
   new URL('../fixtures/fake-ai', import.meta.url),
@@ -26,7 +29,12 @@ export async function buildFakeFixtures(
     const file = `${photoSetHashOfImages([{ data }])}.json`;
     const fixture: FakeFixture = {
       description: `${corpusCase.id}: the corpus ground truth`,
-      outputs: { [TAG_VALUES_OUTPUT.name]: corpusCase.truth },
+      outputs: {
+        [TAG_VALUES_OUTPUT.name]: corpusCase.truth,
+        [ITEM_ANALYSIS_OUTPUT_NAME]: encodeAnalysisAnswer(
+          fakeAnalysisAnswer(corpusCase.id, corpusCase.truth),
+        ),
+      },
     };
     if (fixtures.has(file)) throw new Error(`two corpus cases render the same image: ${file}`);
     fixtures.set(file, fixture);

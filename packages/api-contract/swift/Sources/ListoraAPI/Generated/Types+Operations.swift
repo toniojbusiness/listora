@@ -2631,10 +2631,15 @@ public enum Operations {
     /// Analyze the item's current photos
     ///
     /// Starts the default ("fast") analysis of the item's current photo set. Analysis runs
-    /// once per photo set: when an analysis for the same photo-set hash exists, it is
-    /// returned instead of running (and paying for) a new one. Poll `getAnalysis` until
-    /// `status` is `completed` or `failed`. `409 invalid_state_transition` when the item has no
-    /// ready photo; `429 ai_budget_exceeded` when the account's daily AI budget is used up.
+    /// once per item and photo set: when an analysis of the same photo-set hash exists, it is
+    /// returned instead of running (and paying for) a new one; a `failed` one is queued again,
+    /// since asking again is how a failure is retried. Poll `getAnalysis` until `status` is
+    /// `completed` or `failed`. The photo set is every photo of the item, so all of them must
+    /// be `ready`: `409 invalid_state_transition` when the item has no photos or one is still
+    /// `processing` or `failed` (remove or replace it first). Refused before anything is
+    /// queued: `402 quota_exceeded` when the plan's AI items for the month are used up,
+    /// `429 ai_budget_exceeded` when the account's daily AI budget is used up, and
+    /// `503 service_unavailable` while AI is switched off.
     ///
     ///
     /// - Remark: HTTP `POST /v1/items/{itemId}/analyses`.
@@ -2748,6 +2753,29 @@ public enum Operations {
                     }
                 }
             }
+            /// The plan's quota for this action is used up (`quota_exceeded`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/analyses/post(startItemAnalysis)/responses/402`.
+            ///
+            /// HTTP response code: `402 code402`.
+            case code402(Components.Responses.QuotaExceeded)
+            /// The associated value of the enum case if `self` is `.code402`.
+            ///
+            /// - Throws: An error if `self` is not `.code402`.
+            /// - SeeAlso: `.code402`.
+            public var code402: Components.Responses.QuotaExceeded {
+                get throws {
+                    switch self {
+                    case let .code402(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "code402",
+                            response: self
+                        )
+                    }
+                }
+            }
             /// The resource does not exist in this account (`not_found`).
             ///
             /// - Remark: Generated from `#/paths//v1/items/{itemId}/analyses/post(startItemAnalysis)/responses/404`.
@@ -2814,6 +2842,29 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "tooManyRequests",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// A service the request needs is switched off or down (`service_unavailable`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/items/{itemId}/analyses/post(startItemAnalysis)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
                             response: self
                         )
                     }
@@ -3043,8 +3094,12 @@ public enum Operations {
     ///
     /// Runs the premium identification on the same photos plus the first result. Counts
     /// against the plan's premium quota (`402 quota_exceeded` when used up). Repeating the
-    /// request for the same analysis returns the existing premium analysis.
-    /// `409 invalid_state_transition` until the analysis has `completed`.
+    /// request for the same analysis returns the existing premium analysis, or queues it
+    /// again when it `failed`. The server also starts it on its own when a fast analysis
+    /// needs it (`needsEscalation`) and the quota allows; the fast analysis then names it in
+    /// `escalationAnalysisId`. `409 invalid_state_transition` until the analysis has
+    /// `completed`, and for an analysis that is already `premium`. `429 ai_budget_exceeded`
+    /// and `503 service_unavailable` as for `startItemAnalysis`.
     ///
     ///
     /// - Remark: HTTP `POST /v1/analyses/{analysisId}/escalate`.
@@ -3252,9 +3307,284 @@ public enum Operations {
                     }
                 }
             }
+            /// A service the request needs is switched off or down (`service_unavailable`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/escalate/post(escalateAnalysis)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Components.Responses.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Components.Responses.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
             /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
             ///
             /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/escalate/post(escalateAnalysis)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Fill the item's details from an analysis
+    ///
+    /// Copies the completed analysis's proposed details into its item and records it as the
+    /// item's `acceptedAnalysisId`. Each copied detail takes the analysis's provenance (`ai`,
+    /// `ocr`, or `barcode`) in `fieldProvenance`. Details the user entered or edited
+    /// (provenance `user`) are never overwritten, and a detail the analysis did not find is
+    /// left as it is. `expectedVersion` must equal the item's current `version`
+    /// (`409 version_conflict` otherwise); `409 invalid_state_transition` until the analysis
+    /// has `completed`. Never calls AI.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/analyses/{analysisId}/apply`.
+    /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)`.
+    public enum ApplyAnalysis {
+        public static let id: Swift.String = "applyAnalysis"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/analyses/{analysisId}/apply/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/analyses/{analysisId}/apply/POST/path/analysisId`.
+                public var analysisId: Components.Parameters.AnalysisId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - analysisId:
+                public init(analysisId: Components.Parameters.AnalysisId) {
+                    self.analysisId = analysisId
+                }
+            }
+            public var path: Operations.ApplyAnalysis.Input.Path
+            /// - Remark: Generated from `#/paths/v1/analyses/{analysisId}/apply/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/analyses/{analysisId}/apply/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ApplyAnalysis.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ApplyAnalysis.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ApplyAnalysis.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/analyses/{analysisId}/apply/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/analyses/{analysisId}/apply/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.AnalysisApply)
+            }
+            public var body: Operations.ApplyAnalysis.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.ApplyAnalysis.Input.Path,
+                headers: Operations.ApplyAnalysis.Input.Headers,
+                body: Operations.ApplyAnalysis.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/analyses/{analysisId}/apply/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/analyses/{analysisId}/apply/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Item)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Item {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ApplyAnalysis.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ApplyAnalysis.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The updated item.
+            ///
+            /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ApplyAnalysis.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ApplyAnalysis.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request conflicts with the current state, for example `version_conflict`,
+            /// `invalid_state_transition`, `already_exists`, or a marketplace that is not connected.
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)/responses/default`.
             ///
             /// HTTP response code: `default`.
             case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)

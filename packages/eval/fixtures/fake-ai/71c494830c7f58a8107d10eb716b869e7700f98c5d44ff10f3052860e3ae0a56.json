@@ -24,6 +24,82 @@
         "BD"
       ],
       "style": []
+    },
+    "item_analysis": {
+      "attributes": {
+        "brand": "",
+        "productName": "",
+        "styleNumber": "",
+        "rnNumber": "",
+        "upc": "",
+        "department": "",
+        "category": "",
+        "subcategory": "",
+        "sizeLabel": "",
+        "sizeSystem": "",
+        "colors": [],
+        "pattern": "",
+        "materials": [
+          "cotton",
+          "polyester"
+        ],
+        "condition": "",
+        "conditionNotes": "",
+        "flaws": [],
+        "keywords": []
+      },
+      "confidence": {
+        "title": 0.5,
+        "description": 0.5,
+        "brand": 0,
+        "productName": 0,
+        "styleNumber": 0,
+        "rnNumber": 0,
+        "upc": 0,
+        "department": 0,
+        "category": 0,
+        "subcategory": 0,
+        "sizeLabel": 0,
+        "sizeSystem": 0,
+        "colors": 0,
+        "pattern": 0,
+        "materials": 0.9,
+        "condition": 0,
+        "conditionNotes": 0,
+        "flaws": 0,
+        "keywords": 0
+      },
+      "title": "Synthetic tag care-label-181",
+      "description": "Synthetic tag care-label-181, read from its care label.",
+      "variants": {
+        "ebay": {
+          "title": "Synthetic tag care-label-181",
+          "description": "Synthetic tag care-label-181"
+        },
+        "depop": {
+          "title": "Synthetic tag care-label-181",
+          "description": "Synthetic tag care-label-181",
+          "hashtags": []
+        },
+        "poshmark": {
+          "title": "Synthetic tag care-label-181",
+          "description": "Synthetic tag care-label-181"
+        },
+        "mercari": {
+          "title": "Synthetic tag care-label-181",
+          "description": "Synthetic tag care-label-181"
+        }
+      },
+      "priceEstimate": {
+        "lowCents": 0,
+        "midCents": 0,
+        "highCents": 0,
+        "confidence": 0
+      },
+      "looksVintage": false,
+      "looksDesigner": false,
+      "needsEscalation": false,
+      "escalationReason": ""
     }
   }
 }

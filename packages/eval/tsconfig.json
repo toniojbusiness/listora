@@ -6,5 +6,11 @@
     "tsBuildInfoFile": ".tsbuild/tsconfig.tsbuildinfo"
   },
   "include": ["src"],
-  "references": [{ "path": "../ai" }, { "path": "../tag-parse" }]
+  "references": [
+    { "path": "../ai" },
+    { "path": "../analysis" },
+    { "path": "../api-contract" },
+    { "path": "../photos" },
+    { "path": "../tag-parse" }
+  ]
 }

@@ -32,21 +32,52 @@ describe('eval CLI', { timeout: 2 * CLI_TIMEOUT_MS }, () => {
     expect(status).toBe(0);
     expect(stdout).toMatch(/^Tag eval: \d+ items from listora-synthetic-tags/);
     expect(stdout).toContain('provider:fake: fake AI provider');
+    expect(stdout).toContain('analysis:fake: item analysis on the fake AI provider');
     expect(stdout).toContain('metered at claude-haiku-5-5 prices');
     expect(stdout).toMatch(/^origin\s+\d+\.\d% \(\d+\/\d+\)/m);
-    // The parsers cost nothing; the fake provider is metered at Haiku 5.5 prices.
-    expect(stdout).toMatch(/^cost\/item\s+\$0\.000000\s+\$0\.0000[1-9]\d$/m);
+    // The parsers cost nothing; the fake provider is metered at Haiku 5.5 prices, and the
+    // full analysis (a longer prompt and answer) costs more than reading the tag alone.
+    expect(stdout).toMatch(/^cost\/item\s+\$0\.000000\s+\$0\.0000[1-9]\d\s+\$0\.000[1-9]\d\d$/m);
+    // The analysis reports no CA number, origin, or fiber percentages, so it is not scored there.
+    expect(stdout).toMatch(/^ca\s.*\s-$/m);
   });
 
   it('meters the premium tier at its model prices', () => {
-    const { status, stdout } = runCli('--tier', 'premium', '--json');
+    // Tag reading only: the full premium analysis of every tag costs more than the default
+    // $1 daily budget, which the analysis provider tests cover.
+    const { status, stdout } = runCli('--tier', 'premium', '--task', 'tags', '--json');
     expect(status).toBe(0);
     const report = JSON.parse(stdout) as EvalReport;
-    const standard = JSON.parse(runCli('--json').stdout) as EvalReport;
+    const standard = JSON.parse(runCli('--task', 'tags', '--json').stdout) as EvalReport;
     expect(report.systems[1]?.description).toContain('claude-sonnet-5-5');
     expect(report.systems[1]?.costMicrosTotal).toBeGreaterThan(
       (standard.systems[1]?.costMicrosTotal ?? 0) * 10,
     );
+  });
+
+  it('runs only the full item analysis with --task analysis', () => {
+    const { status, stdout } = runCli('--task', 'analysis', '--json');
+    expect(status).toBe(0);
+    const report = JSON.parse(stdout) as EvalReport;
+    expect(report.systems.map((system) => system.id)).toEqual(['parsers', 'analysis:fake']);
+    expect(report.systems[1]?.scoredFields).toEqual(['rn', 'gtin', 'size', 'style']);
+  });
+
+  it('scores only the first items with --limit, and rejects a bad limit', () => {
+    const { status, stdout } = runCli('--limit', '10', '--task', 'analysis', '--json');
+    expect(status).toBe(0);
+    const report = JSON.parse(stdout) as EvalReport;
+    expect(report.corpus.items).toBe(10);
+    expect(report.systems[1]?.fields.rn?.items).toBe(10);
+    const bad = runCli('--limit', '0');
+    expect(bad.status).toBe(2);
+    expect(bad.stderr).toContain('--limit must be a whole number from 1');
+  });
+
+  it('refuses a task the provider cannot run', () => {
+    const { status, stderr } = runCli('--provider', 'stub', '--task', 'analysis');
+    expect(status).toBe(2);
+    expect(stderr).toContain('provider "stub" cannot run the analysis task');
   });
 
   it('still offers the stub provider, which costs nothing', () => {
@@ -90,7 +121,7 @@ describe('eval CLI', { timeout: 2 * CLI_TIMEOUT_MS }, () => {
     expect(status).toBe(0);
     const report = JSON.parse(stdout) as EvalReport;
     expect(report.systems.map((system) => system.id)).toEqual(['parsers']);
-    expect(report.systems[0]?.fields.rn.items).toBe(report.corpus.items);
+    expect(report.systems[0]?.fields.rn?.items).toBe(report.corpus.items);
   });
 
   it.each([

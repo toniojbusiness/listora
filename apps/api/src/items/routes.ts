@@ -1,4 +1,10 @@
-import type { FieldError, ItemStatus, UserSettableItemStatus } from '@listora/api-contract';
+import { analysisResultOf, findAnalysis } from '@listora/analysis';
+import type {
+  AnalyzedDetails,
+  FieldError,
+  ItemStatus,
+  UserSettableItemStatus,
+} from '@listora/api-contract';
 import {
   inTransaction,
   SkuAllocationError,
@@ -135,10 +141,11 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
           columns,
           status,
           preArchiveStatus,
-          provenance: provenanceAfterWrite(details, {
-            details: before,
-            provenance: provenanceFromRow(row),
-          }),
+          provenance: provenanceAfterWrite(
+            details,
+            { details: before, provenance: provenanceFromRow(row) },
+            await acceptedAnalysisDetails(trx, tenant, details.acceptedAnalysisId),
+          ),
         });
       } catch (error) {
         throw translateWriteError(error);
@@ -189,8 +196,19 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
   });
 }
 
+/** What the item's accepted analysis proposed, when it has one that completed. */
+async function acceptedAnalysisDetails(
+  db: DbExecutor,
+  tenant: Tenant,
+  analysisId: string | undefined,
+): Promise<AnalyzedDetails | undefined> {
+  if (analysisId === undefined) return undefined;
+  const analysis = await findAnalysis(db, tenant.accountId, analysisId);
+  return analysis === undefined ? undefined : analysisResultOf(analysis)?.details;
+}
+
 /** Contract rules beyond the JSON Schema, plus references that must exist in this account. */
-async function assertValidDetails(
+export async function assertValidDetails(
   db: DbExecutor,
   tenant: Tenant,
   itemId: string | undefined,
@@ -276,7 +294,7 @@ async function nextStatus(
   );
 }
 
-function versionConflict(): ApiError {
+export function versionConflict(): ApiError {
   return new ApiError(
     'version_conflict',
     'This item was changed since you loaded it. Reload it and try again.',
@@ -284,7 +302,7 @@ function versionConflict(): ApiError {
 }
 
 /** The database's last word on references and SKUs, for races the checks above cannot see. */
-function translateWriteError(error: unknown): unknown {
+export function translateWriteError(error: unknown): unknown {
   if (error instanceof SkuAllocationError) {
     return new ApiError(
       'invalid_state_transition',

@@ -114,6 +114,11 @@ const COLUMNS = {
     'error_message',
     'created_at',
     'updated_at',
+    'requested_by_user_id',
+    'escalated_from_analysis_id',
+    'attempts',
+    'error_retryable',
+    'completed_at',
   ],
   ai_usage_event: [
     'id',

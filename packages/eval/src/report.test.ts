@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { TAG_FIELDS, type TagField } from '@listora/tag-parse';
+import { TAG_FIELDS } from '@listora/tag-parse';
 
 import type { EvalReport, FieldReport, SystemReport } from './harness.ts';
 import { formatReport } from './report.ts';
@@ -17,10 +17,9 @@ const field = (correct: number): FieldReport => ({
 const system = (id: string, overrides: Partial<SystemReport> = {}): SystemReport => ({
   id,
   description: `${id} description`,
-  fields: Object.fromEntries(TAG_FIELDS.map((name) => [name, field(4)])) as Record<
-    TagField,
-    FieldReport
-  >,
+  fields: Object.fromEntries(TAG_FIELDS.map((name) => [name, field(4)])),
+  scoredFields: TAG_FIELDS,
+  scoring: 'exact',
   overallAccuracy: 1,
   minFieldAccuracy: 1,
   costMicrosTotal: 0,

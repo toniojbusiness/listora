@@ -39,6 +39,14 @@ export interface AiCall<T> {
   readonly signal?: AbortSignal;
 }
 
+/** What `AiClient.checkGuards` needs to know about a call that is about to be made. */
+export interface AiGuardRequest {
+  readonly accountId: string;
+  readonly tier: AiTier;
+  readonly purpose: string;
+  readonly quota?: QuotaCharge;
+}
+
 export interface AiResult<T> {
   readonly output: T;
   readonly provider: AiProviderId;
@@ -111,16 +119,12 @@ export class AiClient {
     if (!isSha256Hex(call.photoSetHash)) {
       throw new TypeError('AI call photoSetHash must be lowercase sha256 hex');
     }
-    if (
-      call.quota !== undefined &&
-      (!Number.isSafeInteger(call.quota.units) || call.quota.units < 1)
-    ) {
-      throw new RangeError('AI call quota units must be a positive integer');
-    }
-    const quotaContext: QuotaContext | undefined =
-      call.quota === undefined
-        ? undefined
-        : { accountId: context.accountId, tier, purpose: context.purpose, charge: call.quota };
+    const quotaContext = this.#quotaContext({
+      accountId: context.accountId,
+      tier,
+      purpose: context.purpose,
+      ...(call.quota === undefined ? {} : { quota: call.quota }),
+    });
 
     await this.#checkGuards(context.accountId, quotaContext);
 
@@ -202,6 +206,35 @@ export class AiClient {
       priceTableVersion: this.#prices.version,
       latencyMs,
       usageEventId: recorded.id,
+    };
+  }
+
+  /** The model the tier's calls go to. */
+  modelFor(tier: AiTier): string {
+    return this.#registry[tier].model;
+  }
+
+  /**
+   * Runs the same guards `generate` runs first, without calling the provider or recording
+   * anything, so a caller can refuse work up front (for example an API request that would
+   * queue an analysis) with the reason a call would be refused. Throws `AiGuardError`. The
+   * call itself checks again when it runs.
+   */
+  async checkGuards(request: AiGuardRequest): Promise<void> {
+    await this.#checkGuards(request.accountId, this.#quotaContext(request));
+  }
+
+  #quotaContext(request: AiGuardRequest): QuotaContext | undefined {
+    const { quota } = request;
+    if (quota === undefined) return undefined;
+    if (!Number.isSafeInteger(quota.units) || quota.units < 1) {
+      throw new RangeError('AI call quota units must be a positive integer');
+    }
+    return {
+      accountId: request.accountId,
+      tier: request.tier,
+      purpose: request.purpose,
+      charge: quota,
     };
   }
 

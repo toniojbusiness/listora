@@ -40,14 +40,14 @@ describe('deterministic parsers on the synthetic corpus', () => {
 
   it('report no false positives: every value they return is on the tag', async () => {
     const [parsers] = (await runEval(corpus)).systems;
-    for (const field of TAG_FIELDS) expect(parsers?.fields[field].falsePositives, field).toBe(0);
+    for (const field of TAG_FIELDS) expect(parsers?.fields[field]?.falsePositives, field).toBe(0);
   });
 });
 
 describe('runEval with a provider', () => {
   it('scores the stub provider and reports its cost per item', async () => {
     const report = await runEval(corpus, {
-      provider: new StubProvider({ costMicrosPerItem: 1500 }),
+      providers: [new StubProvider({ costMicrosPerItem: 1500 })],
     });
     const [parsers, stub] = report.systems;
     expect(stub?.id).toBe('provider:stub');
@@ -67,7 +67,7 @@ describe('runEval with a provider', () => {
         return { values: {}, usage: { costMicros: 0 } };
       },
     };
-    await runEval(corpus, { provider: recording });
+    await runEval(corpus, { providers: [recording] });
     expect(inputs).toHaveLength(corpus.cases.length);
     const [first] = inputs;
     expect(first?.caseId).toBe(corpus.cases[0]?.id);
@@ -88,7 +88,7 @@ describe('runEval with a provider', () => {
         return new StubProvider().extract(input);
       },
     };
-    const report = await runEval(corpus, { provider: flaky });
+    const report = await runEval(corpus, { providers: [flaky] });
     const [parsers, provider] = report.systems;
     expect(provider?.errors).toHaveLength(Math.floor(report.corpus.items / 2));
     expect(provider?.errors[0]).toEqual({ caseId: corpus.cases[1]?.id, message: 'upstream 503' });
@@ -110,7 +110,7 @@ describe('runEval with a provider', () => {
         return new StubProvider({ costMicrosPerItem: 1000 }).extract(input);
       },
     };
-    const report = await runEval(corpus, { provider: billedFailures });
+    const report = await runEval(corpus, { providers: [billedFailures] });
     const [, provider] = report.systems;
     const failed = Math.floor(report.corpus.items / 2);
     const succeeded = report.corpus.items - failed;
@@ -129,7 +129,7 @@ describe('runEval with a provider', () => {
         throw new EvalProviderError('upstream 500', { usage: { costMicros: -1 } });
       },
     };
-    const [, provider] = (await runEval(corpus, { provider: badFailure })).systems;
+    const [, provider] = (await runEval(corpus, { providers: [badFailure] })).systems;
     expect(provider?.errors).toHaveLength(corpus.cases.length);
     expect(provider?.errors[0]?.message).toBe(
       'upstream 500; provider reported an invalid costMicros: -1',
@@ -143,7 +143,7 @@ describe('runEval with a provider', () => {
       description: 'reports fractional micro-dollars',
       extract: async () => ({ values: {}, usage: { costMicros: 0.5 } }),
     };
-    const [, provider] = (await runEval(corpus, { provider: badCost })).systems;
+    const [, provider] = (await runEval(corpus, { providers: [badCost] })).systems;
     expect(provider?.errors).toHaveLength(corpus.cases.length);
     expect(provider?.errors[0]?.message).toMatch(/invalid costMicros/);
     expect(provider?.costMicrosTotal).toBe(0);

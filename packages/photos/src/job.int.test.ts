@@ -322,7 +322,8 @@ describe('processPhoto (real Postgres and local storage)', () => {
         .execute();
       const reordered = await itemPhotoSet(db, accountId, first.itemId);
       expect(reordered?.photos.map((photo) => photo.id)).toEqual([second.photoId, first.photoId]);
-      expect(reordered?.hash).not.toBe(set?.hash);
+      // A new order (another cover) is the same photo set: no new analysis to pay for.
+      expect(reordered?.hash).toBe(set?.hash);
     });
 
     it('is undefined for an item without photos or in another account', async () => {

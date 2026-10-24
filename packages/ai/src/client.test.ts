@@ -343,6 +343,52 @@ describe('AiClient budget guards', () => {
   });
 });
 
+describe('AiClient.checkGuards', () => {
+  it('refuses up front for the reason a call would be refused, without sending or recording', async () => {
+    const { client, store, generate } = setup({ dailyBudgetMicros: 1_430 });
+    await client.checkGuards({ accountId: ACCOUNT, tier: 'standard', purpose: 'item_analysis' });
+    await client.generate(call());
+    const error = await rejection(
+      client.checkGuards({ accountId: ACCOUNT, tier: 'standard', purpose: 'item_analysis' }),
+      AiGuardError,
+    );
+    expect(error.reason).toMatchObject({ kind: 'daily_budget', spentMicros: 1_430 });
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(store.events).toHaveLength(1);
+  });
+
+  it('checks the kill switch and the quota the call would use, consuming nothing', async () => {
+    const consume = vi.fn(() => Promise.resolve());
+    const quota: QuotaPolicy = {
+      check: () => Promise.resolve({ allowed: false, used: 15, limit: 15 }),
+      consume,
+    };
+    const request = {
+      accountId: ACCOUNT,
+      tier: 'premium',
+      purpose: 'item_analysis',
+      quota: { metric: 'premium_identifications', units: 1 },
+    } as const;
+    const quotaError = await rejection(setup({ quota }).client.checkGuards(request), AiGuardError);
+    expect(quotaError.reason).toEqual({
+      kind: 'quota',
+      metric: 'premium_identifications',
+      used: 15,
+      limit: 15,
+    });
+    expect(consume).not.toHaveBeenCalled();
+    const killed = setup({ quota, killSwitch: staticKillSwitch(true) });
+    const killError = await rejection(killed.client.checkGuards(request), AiGuardError);
+    expect(killError.reason).toEqual({ kind: 'kill_switch' });
+  });
+
+  it('names the model each tier is served by', () => {
+    const { client } = setup();
+    expect(client.modelFor('standard')).toBe('claude-haiku-5-5');
+    expect(client.modelFor('premium')).toBe('claude-sonnet-5-5');
+  });
+});
+
 describe('AiProviderError defaults', () => {
   it('is not retryable and bills nothing unless told otherwise', () => {
     const error = new AiProviderError('bad_request', 'nope');

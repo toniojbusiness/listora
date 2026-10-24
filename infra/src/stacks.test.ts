@@ -441,10 +441,36 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         );
         expect(secrets.map((secret) => secret.Name)).toEqual(containerSecretNames(service));
         expect(env.map((entry) => entry.Name)).toEqual(
-          Object.keys(containerEnvironment(service, 'postgres://')),
+          Object.keys(
+            containerEnvironment(service, 'postgres://', {
+              bucket: '',
+              region: '',
+              publicBaseUrl: '',
+            }),
+          ),
         );
         // Nothing secret-looking travels as plain environment.
         for (const { Name } of env) expect(Name).not.toMatch(/PASSWORD|SECRET|KEY/);
+      }
+    });
+
+    it('gives api and worker the photo bucket and CDN and the Anthropic provider', () => {
+      for (const service of SERVICE_NAMES) {
+        const env = Object.fromEntries(
+          (container(service)['Environment'] as { Name: string; Value: unknown }[]).map((entry) => [
+            entry.Name,
+            entry.Value,
+          ]),
+        );
+        expect(env).toMatchObject({
+          AI_PROVIDER: 'anthropic',
+          STORAGE_DRIVER: 's3',
+          STORAGE_S3_REGION: target.region,
+        });
+        expect(JSON.stringify(env['STORAGE_S3_BUCKET'])).toContain('RefPhotos');
+        expect(JSON.stringify(env['STORAGE_PUBLIC_BASE_URL'])).toContain('https://');
+        expect(JSON.stringify(env['STORAGE_PUBLIC_BASE_URL'])).toContain('PhotoCdn');
+        expect(containerSecretNames(service)).toContain('ANTHROPIC_API_KEY');
       }
     });
 
@@ -703,7 +729,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       expect(JSON.stringify(container['Image'])).toContain(`:${target.imageTag}"`);
       const env = container['Environment'] as { Name: string; Value: unknown }[];
       expect(env.map((entry) => entry.Name)).toEqual(
-        Object.keys(containerEnvironment('worker', 'postgres://')),
+        Object.keys(containerEnvironment('migrate', 'postgres://')),
       );
       expect(JSON.stringify(env.find((entry) => entry.Name === 'DATABASE_URL')?.Value)).toContain(
         'postgres://listora@',

@@ -249,6 +249,53 @@ describe('toProviderError', () => {
   });
 });
 
+describe('AnthropicProvider with the schema in the prompt', () => {
+  const PROMPTED = { ...REQUEST, output: { ...COLOR_OUTPUT, enforcement: 'prompt' as const } };
+
+  it('sends the JSON schema as cached system instructions instead of a grammar', () => {
+    const params = buildParams(PROMPTED);
+    expect(params.output_config).toEqual({ effort: 'low' });
+    expect(params.system).toEqual([
+      { type: 'text', text: REQUEST.system },
+      {
+        type: 'text',
+        text: expect.stringContaining('"color"') as unknown,
+        cache_control: { type: 'ephemeral' },
+      },
+    ]);
+    // The full schema, as Zod states it.
+    expect(JSON.stringify(params.system)).toContain('required');
+  });
+
+  it('validates the answer against the schema, tolerating a code fence', async () => {
+    const fenced = providerReturning(
+      message({ text: '```json\n{"color":"red","confidence":0.9}\n```' }),
+    );
+    await expect(fenced.provider.generate(PROMPTED)).resolves.toMatchObject({
+      output: { color: 'red', confidence: 0.9 },
+    });
+    const wrong = providerReturning(message({ text: '{"colour":"red"}' }));
+    expect(await failure(wrong.provider.generate(PROMPTED))).toMatchObject({
+      code: 'invalid_output',
+      usage: { inputTokens: 1_200, outputTokens: 80 },
+    });
+    const wrapped = providerReturning(
+      message({ text: 'Here is the answer:\n{"color":"red","confidence":0.8}\nDone.' }),
+    );
+    await expect(wrapped.provider.generate(PROMPTED)).resolves.toMatchObject({
+      output: { color: 'red' },
+    });
+    const trailing = providerReturning(
+      message({ text: '{"color":"red","confidence":0.7}\nLet me know if you need more.' }),
+    );
+    await expect(trailing.provider.generate(PROMPTED)).resolves.toMatchObject({
+      output: { color: 'red', confidence: 0.7 },
+    });
+    const prose = providerReturning(message({ text: 'The color is red.' }));
+    expect((await failure(prose.provider.generate(PROMPTED))).code).toBe('invalid_output');
+  });
+});
+
 // Live smoke test against the real API. It runs only when ANTHROPIC_API_KEY is set (never in
 // CI) and costs a fraction of a cent: one tiny image on Haiku 5.5.
 const apiKey = process.env['ANTHROPIC_API_KEY'] ?? '';

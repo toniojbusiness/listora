@@ -114,6 +114,11 @@ them breaks; turning it off is a separate, later step:
 - **Container configuration.** `src/containers.ts` is the only place the container
   environment is defined. `containers.test.ts` runs the API's and worker's real config loaders
   on it, so a task that adds a required config key fails the tests until it adds the key there.
+  The API and the worker share the photo bucket (`STORAGE_DRIVER=s3`, with the bucket, its
+  region, and the CloudFront URL from the storage stack): the API stores uploads, and the
+  worker processes and analyzes them. Both call the Anthropic API (`AI_PROVIDER=anthropic`)
+  with the `anthropic-api-key` secret, which must be set by hand before analyses succeed;
+  until then they fail visibly with the reason.
 - **Task roles (least privilege).** Both services: read and write the photo bucket, and
   `kms:GenerateDataKey` / `kms:Decrypt` on the token key. Worker only: read raw sale email
   under `inbound/`. Each service can read only its own secrets. These grants are the designed

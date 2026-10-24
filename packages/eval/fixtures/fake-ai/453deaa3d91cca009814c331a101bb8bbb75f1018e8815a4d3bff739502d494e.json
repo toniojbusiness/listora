@@ -29,6 +29,82 @@
       "style": [
         "NE5690-382"
       ]
+    },
+    "item_analysis": {
+      "attributes": {
+        "brand": "",
+        "productName": "",
+        "styleNumber": "NE5690-382",
+        "rnNumber": "",
+        "upc": "",
+        "department": "",
+        "category": "",
+        "subcategory": "",
+        "sizeLabel": "32x28",
+        "sizeSystem": "waist_inseam",
+        "colors": [],
+        "pattern": "",
+        "materials": [
+          "cotton",
+          "other"
+        ],
+        "condition": "",
+        "conditionNotes": "",
+        "flaws": [],
+        "keywords": []
+      },
+      "confidence": {
+        "title": 0.5,
+        "description": 0.5,
+        "brand": 0,
+        "productName": 0,
+        "styleNumber": 0.9,
+        "rnNumber": 0,
+        "upc": 0,
+        "department": 0,
+        "category": 0,
+        "subcategory": 0,
+        "sizeLabel": 0.9,
+        "sizeSystem": 0.9,
+        "colors": 0,
+        "pattern": 0,
+        "materials": 0.9,
+        "condition": 0,
+        "conditionNotes": 0,
+        "flaws": 0,
+        "keywords": 0
+      },
+      "title": "Synthetic tag denim-label-099",
+      "description": "Synthetic tag denim-label-099, read from its care label.",
+      "variants": {
+        "ebay": {
+          "title": "Synthetic tag denim-label-099",
+          "description": "Synthetic tag denim-label-099"
+        },
+        "depop": {
+          "title": "Synthetic tag denim-label-099",
+          "description": "Synthetic tag denim-label-099",
+          "hashtags": []
+        },
+        "poshmark": {
+          "title": "Synthetic tag denim-label-099",
+          "description": "Synthetic tag denim-label-099"
+        },
+        "mercari": {
+          "title": "Synthetic tag denim-label-099",
+          "description": "Synthetic tag denim-label-099"
+        }
+      },
+      "priceEstimate": {
+        "lowCents": 0,
+        "midCents": 0,
+        "highCents": 0,
+        "confidence": 0
+      },
+      "looksVintage": false,
+      "looksDesigner": false,
+      "needsEscalation": false,
+      "escalationReason": ""
     }
   }
 }

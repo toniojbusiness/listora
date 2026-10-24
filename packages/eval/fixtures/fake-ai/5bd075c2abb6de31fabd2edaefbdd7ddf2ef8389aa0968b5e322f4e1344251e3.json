@@ -36,6 +36,83 @@
       "style": [
         "HZ2512"
       ]
+    },
+    "item_analysis": {
+      "attributes": {
+        "brand": "",
+        "productName": "",
+        "styleNumber": "HZ2512",
+        "rnNumber": "31404",
+        "upc": "",
+        "department": "",
+        "category": "",
+        "subcategory": "",
+        "sizeLabel": "33x32",
+        "sizeSystem": "waist_inseam",
+        "colors": [],
+        "pattern": "",
+        "materials": [
+          "cotton",
+          "polyester",
+          "spandex"
+        ],
+        "condition": "",
+        "conditionNotes": "",
+        "flaws": [],
+        "keywords": []
+      },
+      "confidence": {
+        "title": 0.5,
+        "description": 0.5,
+        "brand": 0,
+        "productName": 0,
+        "styleNumber": 0.9,
+        "rnNumber": 0.9,
+        "upc": 0,
+        "department": 0,
+        "category": 0,
+        "subcategory": 0,
+        "sizeLabel": 0.9,
+        "sizeSystem": 0.9,
+        "colors": 0,
+        "pattern": 0,
+        "materials": 0.9,
+        "condition": 0,
+        "conditionNotes": 0,
+        "flaws": 0,
+        "keywords": 0
+      },
+      "title": "Synthetic tag denim-label-170",
+      "description": "Synthetic tag denim-label-170, read from its care label.",
+      "variants": {
+        "ebay": {
+          "title": "Synthetic tag denim-label-170",
+          "description": "Synthetic tag denim-label-170"
+        },
+        "depop": {
+          "title": "Synthetic tag denim-label-170",
+          "description": "Synthetic tag denim-label-170",
+          "hashtags": []
+        },
+        "poshmark": {
+          "title": "Synthetic tag denim-label-170",
+          "description": "Synthetic tag denim-label-170"
+        },
+        "mercari": {
+          "title": "Synthetic tag denim-label-170",
+          "description": "Synthetic tag denim-label-170"
+        }
+      },
+      "priceEstimate": {
+        "lowCents": 0,
+        "midCents": 0,
+        "highCents": 0,
+        "confidence": 0
+      },
+      "looksVintage": false,
+      "looksDesigner": false,
+      "needsEscalation": false,
+      "escalationReason": ""
     }
   }
 }

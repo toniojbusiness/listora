@@ -1,7 +1,7 @@
 export { AnthropicProvider } from './anthropic-provider.ts';
 export type { AnthropicMessagesApi, AnthropicProviderOptions } from './anthropic-provider.ts';
 export { AiClient } from './client.ts';
-export type { AiCall, AiCallContext, AiClientOptions, AiResult } from './client.ts';
+export type { AiCall, AiCallContext, AiClientOptions, AiGuardRequest, AiResult } from './client.ts';
 export {
   AiConfigError,
   createAiClient,
@@ -44,7 +44,7 @@ export {
 } from './prices.ts';
 export type { BillableUsage, ModelPrices, PriceTable, TokenPrices } from './prices.ts';
 export type { AiProvider, ProviderRequest, ProviderResponse } from './provider.ts';
-export { AI_EFFORTS, AI_IMAGE_MEDIA_TYPES, ZERO_USAGE } from './types.ts';
+export { AI_EFFORTS, AI_IMAGE_MEDIA_TYPES, SCHEMA_ENFORCEMENTS, ZERO_USAGE } from './types.ts';
 export type {
   AiEffort,
   AiImage,
@@ -52,7 +52,10 @@ export type {
   AiProviderId,
   AiTier,
   OutputSchema,
+  SchemaEnforcement,
   TokenUsage,
 } from './types.ts';
+export { PostgresQuotaPolicy, utcMonthPeriod } from './quota.ts';
+export type { PostgresQuotaPolicyOptions, QuotaPeriod } from './quota.ts';
 export { InMemoryUsageStore, PostgresUsageStore, utcMonthRange } from './usage-store.ts';
 export type { UsageEventInput, UsageStore, UsageTotals } from './usage-store.ts';

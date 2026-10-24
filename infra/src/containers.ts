@@ -21,6 +21,14 @@ export const SERVICE_COMMANDS: Readonly<Record<ServiceName, readonly string[]>> 
 /** The migration task's command: apply every pending migration (packages/db/src/cli.ts). */
 export const MIGRATE_COMMAND: readonly string[] = ['node', 'packages/db/src/cli.ts', 'latest'];
 
+/** The photo storage the API and the worker share: the storage stack's bucket and CDN. */
+export interface PhotoStorage {
+  readonly bucket: string;
+  readonly region: string;
+  /** The CloudFront URL that serves the bucket's `public/` keys. */
+  readonly publicBaseUrl: string;
+}
+
 /**
  * Plain (non-secret) environment of a container: only keys the process reads
  * (`.env.example`). A task that adds a required key adds it here, and `containers.test.ts`
@@ -29,17 +37,42 @@ export const MIGRATE_COMMAND: readonly string[] = ['node', 'packages/db/src/cli.
  *
  * `databaseUrl` names the host, port, database, and user but no password: node-postgres
  * falls back to `PGPASSWORD` for a URL without one, and ECS injects that from the RDS secret.
+ * The API and the worker share the S3 photo storage (the API stores uploads, the worker
+ * processes and analyzes them) and call the Anthropic API with the injected
+ * `ANTHROPIC_API_KEY`.
  */
+export function containerEnvironment(
+  container: 'migrate',
+  databaseUrl: string,
+): Record<string, string>;
 export function containerEnvironment(
   container: ContainerName,
   databaseUrl: string,
+  photoStorage: PhotoStorage,
+): Record<string, string>;
+export function containerEnvironment(
+  container: ContainerName,
+  databaseUrl: string,
+  photoStorage?: PhotoStorage,
 ): Record<string, string> {
   const common = { DATABASE_URL: databaseUrl, LOG_LEVEL: 'info' };
+  const services = (): Record<string, string> => {
+    if (photoStorage === undefined) throw new Error(`the ${container} container needs storage`);
+    return {
+      ...common,
+      AI_PROVIDER: 'anthropic',
+      STORAGE_DRIVER: 's3',
+      STORAGE_S3_BUCKET: photoStorage.bucket,
+      STORAGE_S3_REGION: photoStorage.region,
+      STORAGE_PUBLIC_BASE_URL: photoStorage.publicBaseUrl,
+    };
+  };
   switch (container) {
     case 'api':
       // `dev` is the only auth driver this build has; T-31 switches deployed APIs to `cognito`.
-      return { API_HOST: '0.0.0.0', API_PORT: String(API_PORT), AUTH_DRIVER: 'dev', ...common };
+      return { API_HOST: '0.0.0.0', API_PORT: String(API_PORT), AUTH_DRIVER: 'dev', ...services() };
     case 'worker':
+      return services();
     case 'migrate':
       return common;
     default:

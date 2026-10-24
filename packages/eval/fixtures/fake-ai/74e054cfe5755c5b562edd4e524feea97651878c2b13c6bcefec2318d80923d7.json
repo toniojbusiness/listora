@@ -31,6 +31,82 @@
       "style": [
         "5022-11"
       ]
+    },
+    "item_analysis": {
+      "attributes": {
+        "brand": "",
+        "productName": "",
+        "styleNumber": "5022-11",
+        "rnNumber": "127175",
+        "upc": "",
+        "department": "",
+        "category": "",
+        "subcategory": "",
+        "sizeLabel": "26x32",
+        "sizeSystem": "waist_inseam",
+        "colors": [],
+        "pattern": "",
+        "materials": [
+          "cotton",
+          "spandex"
+        ],
+        "condition": "",
+        "conditionNotes": "",
+        "flaws": [],
+        "keywords": []
+      },
+      "confidence": {
+        "title": 0.5,
+        "description": 0.5,
+        "brand": 0,
+        "productName": 0,
+        "styleNumber": 0.9,
+        "rnNumber": 0.9,
+        "upc": 0,
+        "department": 0,
+        "category": 0,
+        "subcategory": 0,
+        "sizeLabel": 0.9,
+        "sizeSystem": 0.9,
+        "colors": 0,
+        "pattern": 0,
+        "materials": 0.9,
+        "condition": 0,
+        "conditionNotes": 0,
+        "flaws": 0,
+        "keywords": 0
+      },
+      "title": "Synthetic tag denim-label-009",
+      "description": "Synthetic tag denim-label-009, read from its care label.",
+      "variants": {
+        "ebay": {
+          "title": "Synthetic tag denim-label-009",
+          "description": "Synthetic tag denim-label-009"
+        },
+        "depop": {
+          "title": "Synthetic tag denim-label-009",
+          "description": "Synthetic tag denim-label-009",
+          "hashtags": []
+        },
+        "poshmark": {
+          "title": "Synthetic tag denim-label-009",
+          "description": "Synthetic tag denim-label-009"
+        },
+        "mercari": {
+          "title": "Synthetic tag denim-label-009",
+          "description": "Synthetic tag denim-label-009"
+        }
+      },
+      "priceEstimate": {
+        "lowCents": 0,
+        "midCents": 0,
+        "highCents": 0,
+        "confidence": 0
+      },
+      "looksVintage": false,
+      "looksDesigner": false,
+      "needsEscalation": false,
+      "escalationReason": ""
     }
   }
 }

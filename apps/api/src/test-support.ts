@@ -8,6 +8,25 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import {
+  AiClient,
+  createModelRegistry,
+  CURRENT_PRICE_TABLE,
+  FakeAiProvider,
+  inMemoryFixtures,
+  PostgresQuotaPolicy,
+  PostgresUsageStore,
+  staticKillSwitch,
+  type FakeFixture,
+  type KillSwitch,
+} from '@listora/ai';
+import {
+  runItemAnalysis,
+  type AnalysisJobDependencies,
+  type AnalysisJobOutcome,
+  type AnalysisJobPayload,
+  type AnalysisJobQueue,
+} from '@listora/analysis';
 import { createDatabase, SchemaMigrator, type Db, type DbExecutor } from '@listora/db';
 import {
   processPhoto,
@@ -83,6 +102,33 @@ export class RecordingPhotoJobs implements PhotoJobQueue {
   }
 }
 
+/** An AnalysisJobQueue that records jobs; `runAll` runs them the way the worker will. */
+export class RecordingAnalysisJobs implements AnalysisJobQueue {
+  readonly jobs: AnalysisJobPayload[] = [];
+  readonly #deps: () => AnalysisJobDependencies;
+
+  constructor(deps: () => AnalysisJobDependencies) {
+    this.#deps = deps;
+  }
+
+  enqueue(_executor: DbExecutor, job: AnalysisJobPayload): Promise<void> {
+    this.jobs.push(job);
+    return Promise.resolve();
+  }
+
+  /**
+   * Runs every recorded job in order, including jobs those runs add (an automatic
+   * escalation), and forgets them.
+   */
+  async runAll(): Promise<AnalysisJobOutcome[]> {
+    const outcomes: AnalysisJobOutcome[] = [];
+    for (let job = this.jobs.shift(); job !== undefined; job = this.jobs.shift()) {
+      outcomes.push(await runItemAnalysis(this.#deps(), job));
+    }
+    return outcomes;
+  }
+}
+
 export type TestUploadState = 'uploaded' | 'pending' | 'expired' | 'attached';
 
 /**
@@ -141,9 +187,17 @@ export class TestUploads {
   }
 }
 
-/** Storage and a job queue for unit tests that build the app but never upload anything. */
-export function offlinePhotoDependencies(): Pick<AppDependencies, 'storage' | 'photoJobs'> {
+/** Storage, AI, and job queues for unit tests that build the app but never use them. */
+export function offlineDependencies(): Pick<
+  AppDependencies,
+  'storage' | 'photoJobs' | 'ai' | 'analysisJobs'
+> {
   return {
+    ai: testAiClient({
+      usageStore: { record: unused, spentTodayMicros: unused, monthlyUsage: unused },
+      fixtures: {},
+    }),
+    analysisJobs: { enqueue: () => Promise.resolve() },
     storage: new LocalDiskStorage({
       rootDir: join(tmpdir(), 'listora-unused-storage'),
       baseUrl: 'http://localhost',
@@ -151,6 +205,41 @@ export function offlinePhotoDependencies(): Pick<AppDependencies, 'storage' | 'p
     }),
     photoJobs: { enqueue: () => Promise.resolve() },
   };
+}
+
+function unused(): never {
+  throw new Error('offline test dependencies are not used');
+}
+
+/**
+ * The AI client of the test API: the fake provider answering from `fixtures` (keyed by
+ * photo-set hash; tests add entries), metered at real prices, with a kill switch and daily
+ * budget tests can change.
+ */
+function testAiClient(options: {
+  usageStore: ConstructorParameters<typeof AiClient>[0]['usageStore'];
+  fixtures: Record<string, FakeFixture>;
+  quota?: PostgresQuotaPolicy;
+  killSwitch?: KillSwitch;
+  dailyBudgetMicros?: number;
+}): AiClient {
+  return new AiClient({
+    provider: new FakeAiProvider({ fixtures: inMemoryFixtures(options.fixtures) }),
+    registry: createModelRegistry({}, CURRENT_PRICE_TABLE),
+    usageStore: options.usageStore,
+    killSwitch: options.killSwitch ?? staticKillSwitch(false),
+    dailyBudgetMicros: options.dailyBudgetMicros ?? 1_000_000,
+    ...(options.quota === undefined ? {} : { quota: options.quota }),
+  });
+}
+
+export interface TestAiControls {
+  /** Fake provider answers by photo-set hash; add an entry before running the job. */
+  fixtures: Record<string, FakeFixture>;
+  /** Turns the global kill switch on or off. */
+  killed: boolean;
+  /** Queue premium analyses on their own when a fast one asks for it (`AI_AUTO_ESCALATE`). */
+  autoEscalate: boolean;
 }
 
 export interface TestApi {
@@ -164,6 +253,11 @@ export interface TestApi {
   storageDir: string;
   /** Jobs `addItemPhoto` added; `photoJobs.runAll()` processes them. */
   photoJobs: RecordingPhotoJobs;
+  /** Jobs analysis requests added; `analysisJobs.runAll()` runs them with the fake provider. */
+  analysisJobs: RecordingAnalysisJobs;
+  aiControls: TestAiControls;
+  /** The AI client the API and the jobs share. */
+  ai: AiClient;
   /** The clock for dev sign-in and upload sessions, in milliseconds; move it to expire them. */
   clock: { now: number };
   /** Signs in through the dev endpoints and returns the bearer token. */
@@ -204,11 +298,28 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
   });
   const photoJobs = new RecordingPhotoJobs(() => ({ db, storage, logger }));
   const uploads = new TestUploads(db, storage, clock);
+  const aiControls: TestAiControls = { fixtures: {}, killed: false, autoEscalate: true };
+  const ai = testAiClient({
+    usageStore: new PostgresUsageStore(db),
+    fixtures: aiControls.fixtures,
+    quota: new PostgresQuotaPolicy(db),
+    killSwitch: { isEngaged: () => Promise.resolve(aiControls.killed) },
+  });
+  const analysisJobs: RecordingAnalysisJobs = new RecordingAnalysisJobs(() => ({
+    db,
+    storage,
+    ai,
+    jobs: analysisJobs,
+    logger,
+    autoEscalate: aiControls.autoEscalate,
+  }));
   const app = buildApp({
     db,
     auth,
     storage,
     photoJobs,
+    ai,
+    analysisJobs,
     now: () => new Date(clock.now),
     pingDatabase: () => Promise.resolve(),
   });
@@ -300,6 +411,9 @@ export async function createTestApi(prefix = 'api'): Promise<TestApi> {
     storage,
     storageDir,
     photoJobs,
+    analysisJobs,
+    aiControls,
+    ai,
     clock,
     signIn,
     tenantOf,

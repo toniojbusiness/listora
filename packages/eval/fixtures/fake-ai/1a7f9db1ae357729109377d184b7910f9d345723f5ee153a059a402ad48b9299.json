@@ -22,6 +22,81 @@
       "style": [
         "JE9598-172"
       ]
+    },
+    "item_analysis": {
+      "attributes": {
+        "brand": "",
+        "productName": "",
+        "styleNumber": "JE9598-172",
+        "rnNumber": "",
+        "upc": "",
+        "department": "",
+        "category": "",
+        "subcategory": "",
+        "sizeLabel": "L",
+        "sizeSystem": "letter",
+        "colors": [],
+        "pattern": "",
+        "materials": [
+          "linen"
+        ],
+        "condition": "",
+        "conditionNotes": "",
+        "flaws": [],
+        "keywords": []
+      },
+      "confidence": {
+        "title": 0.5,
+        "description": 0.5,
+        "brand": 0,
+        "productName": 0,
+        "styleNumber": 0.9,
+        "rnNumber": 0,
+        "upc": 0,
+        "department": 0,
+        "category": 0,
+        "subcategory": 0,
+        "sizeLabel": 0.9,
+        "sizeSystem": 0.9,
+        "colors": 0,
+        "pattern": 0,
+        "materials": 0.9,
+        "condition": 0,
+        "conditionNotes": 0,
+        "flaws": 0,
+        "keywords": 0
+      },
+      "title": "Synthetic tag hang-tag-016",
+      "description": "Synthetic tag hang-tag-016, read from its care label.",
+      "variants": {
+        "ebay": {
+          "title": "Synthetic tag hang-tag-016",
+          "description": "Synthetic tag hang-tag-016"
+        },
+        "depop": {
+          "title": "Synthetic tag hang-tag-016",
+          "description": "Synthetic tag hang-tag-016",
+          "hashtags": []
+        },
+        "poshmark": {
+          "title": "Synthetic tag hang-tag-016",
+          "description": "Synthetic tag hang-tag-016"
+        },
+        "mercari": {
+          "title": "Synthetic tag hang-tag-016",
+          "description": "Synthetic tag hang-tag-016"
+        }
+      },
+      "priceEstimate": {
+        "lowCents": 0,
+        "midCents": 0,
+        "highCents": 0,
+        "confidence": 0
+      },
+      "looksVintage": false,
+      "looksDesigner": false,
+      "needsEscalation": false,
+      "escalationReason": ""
     }
   }
 }

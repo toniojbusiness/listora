@@ -3,18 +3,23 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Listora background worker (operation engine host).",
+  "description": "Listora background worker: the operation engine, photo processing, and item analysis.",
   "scripts": {
     "start": "node src/main.ts",
     "dev": "node --watch --env-file-if-exists=../../.env src/main.ts"
   },
   "dependencies": {
+    "@listora/ai": "*",
+    "@listora/analysis": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",
     "@listora/operations": "*",
-    "@listora/shared": "*"
+    "@listora/photos": "*",
+    "@listora/shared": "*",
+    "@listora/storage": "*"
   },
   "devDependencies": {
-    "@listora/testing": "*"
+    "@listora/testing": "*",
+    "sharp": "^0.35.5"
   }
 }

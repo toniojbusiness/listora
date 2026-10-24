@@ -3,7 +3,8 @@
 `FakeAiProvider` answers from these files instead of calling a model. Each file is named
 `<photo-set hash>.json`, where the photo-set hash is the request's `photoSetHash`: the item's
 `ai_analysis.photo_set_hash`, which is `photoSetHash()` (from `@listora/shared`) over the sha256
-of each uploaded photo, in display order (`itemPhotoSet()` in `@listora/photos` computes it).
+of each uploaded photo, sorted so the display order does not change it (`itemPhotoSet()` in
+`@listora/photos` computes it).
 It is not a hash of the image bytes in the request, which are usually the smaller `ai`
 derivatives. Point `AI_FAKE_FIXTURES_DIR` at another directory to use a different set.
 
@@ -26,3 +27,9 @@ derivatives. Point `AI_FAKE_FIXTURES_DIR` at another directory to use a differen
   budgets and the eval harness's cost report behave as they would in production.
 - `error` is optional. It makes every call on this photo set fail with that code, still billing
   `usage`, to test failure paths.
+
+The item analysis (`@listora/analysis`) asks for the `item_analysis` schema
+(`itemAnalysisSchema`). With `AI_PROVIDER=fake`, an item's analysis fails visibly with
+`fixture_missing` until this directory has a `<photo-set hash>.json` for its photos with an
+`item_analysis` answer; the analysis tests build theirs in memory, and the eval corpus has one
+per tag in `packages/eval/fixtures/fake-ai/`.

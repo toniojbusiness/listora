@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { addJob } from '@listora/db';
 import { FakeMarketplaceAdapter, type FakeAction } from '@listora/marketplaces';
 
 import {
@@ -811,6 +812,52 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
       status: 'succeeded',
       success_evidence: 'read_back',
     });
+  });
+
+  it('runs an auto-delist at once while photo and analysis jobs fill their own pool', async () => {
+    await worker?.stop();
+    let release: () => void = () => undefined;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const started: unknown[] = [];
+    worker = await harness.startWorker({
+      concurrency: 1,
+      taskConcurrency: 1,
+      tasks: {
+        slow_analysis: async (payload) => {
+          started.push(payload);
+          await blocked;
+        },
+      },
+    });
+    try {
+      const listing = await liveListing(1000);
+      for (const n of ['1', '2', '3']) {
+        await addJob(harness.db, { task: 'slow_analysis', payload: { n }, jobKey: `slow:${n}` });
+      }
+      for (let tries = 0; started.length === 0; tries += 1) {
+        if (tries > 200) throw new Error('the slow job never started');
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      const delistRunId = await recordSale(harness, listing);
+      const delist = await harness.enqueue(
+        listing,
+        'end',
+        { status: 'ended' },
+        { origin: 'auto_delist', delistRunId },
+      );
+      expect(await harness.waitForStatus(delist.id, SETTLED, 5_000)).toMatchObject({
+        status: 'succeeded',
+      });
+      // The background pool is still full: the delist did not wait for it.
+      expect(started).toEqual([{ n: '1' }]);
+      expect(worker.taskPoolId).toBeDefined();
+      expect(worker.taskPoolId).not.toBe(worker.poolId);
+    } finally {
+      release();
+    }
   });
 
   it('keeps every history event redacted and in step with the operation row', async () => {
