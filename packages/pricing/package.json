@@ -1,0 +1,14 @@
+{
+  "name": "@listora/pricing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pricing v1: versioned fee tables, the cost floor, AI-estimate tiers, research links, and the sold-data label guard.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/api-contract": "*",
+    "zod": "^4.6.7"
+  }
+}
