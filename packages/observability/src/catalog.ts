@@ -29,10 +29,11 @@ export type MetricDimension = (typeof METRIC_DIMENSIONS)[number];
 export const TRUST_METRICS = {
   VerifiedSuccess: {
     unit: 'Count',
-    dimensionSets: [['Marketplace', 'Kind']],
+    dimensionSets: [['Marketplace', 'Kind'], ['Marketplace']],
     description:
       'One sample per settled operation: 1 when it succeeded (verified by read-back or ' +
-      'confirmed by the user), 0 when it failed. Average is the verified-success rate.',
+      'confirmed by the user), 0 when it failed. Average is the verified-success rate, per ' +
+      'marketplace and kind, and per marketplace.',
   },
   OperationFailed: {
     unit: 'Count',

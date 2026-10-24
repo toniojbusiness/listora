@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 
+import { MARKETPLACES } from '@listora/db';
 import { METRIC_NAMESPACE, TRUST_METRICS } from '@listora/observability/catalog';
 
 import { APP_SECRETS, ENVIRONMENT_SETTINGS, SERVICE_NAMES } from './config.ts';
@@ -800,6 +801,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           'delist-failed',
           'ai-daily-cost',
           'connection-needs-relink',
+          ...MARKETPLACES.map((marketplace) => `delist-latency-${marketplace}`),
+          ...MARKETPLACES.map((marketplace) => `verified-success-${marketplace}`),
           'database-cpu',
           'database-free-storage',
           'database-free-memory',
@@ -816,9 +819,9 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
 
     if (environment === 'personal') {
       it('has the alarm count docs/costs.md prices', () => {
-        // Two beyond the always-free ten standard alarms, at $0.10 each a month.
+        // Ten beyond the always-free ten standard alarms, at $0.10 each a month.
         const count = resources(t, 'AWS::CloudWatch::Alarm').length;
-        expect(count).toBe(12);
+        expect(count).toBe(20);
         const costs = readFileSync(new URL('../../docs/costs.md', import.meta.url), 'utf8');
         expect(costs).toContain(`| ${String(count)} standard alarms;`);
       });
@@ -928,6 +931,53 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(TRUST_METRICS[metricName].dimensionSets).toContainEqual([]);
       }
       expect(String(alarmNamed('ai-daily-cost')['AlarmDescription'])).toContain('$0.80');
+    });
+
+    it('alarms per marketplace on p95 delist latency and the verified-success rate', () => {
+      expect(Object.keys(settings.delistLatencyAlarmMinutes)).toEqual([...MARKETPLACES]);
+      expect(settings.delistLatencyAlarmMinutes).toEqual({
+        ebay: 10,
+        depop: 13 * 60,
+        poshmark: 13 * 60,
+        mercari: 13 * 60,
+      });
+      for (const marketplace of MARKETPLACES) {
+        const dimensions = [{ Name: 'Marketplace', Value: marketplace }];
+        expect(alarmNamed(`delist-latency-${marketplace}`)).toEqual(
+          expect.objectContaining({
+            Namespace: METRIC_NAMESPACE,
+            MetricName: 'DelistLatency',
+            ExtendedStatistic: 'p95',
+            Dimensions: dimensions,
+            Period: 3600,
+            // DelistLatency is in milliseconds.
+            Threshold: settings.delistLatencyAlarmMinutes[marketplace] * 60_000,
+            ComparisonOperator: 'GreaterThanThreshold',
+            EvaluationPeriods: 1,
+            TreatMissingData: 'notBreaching',
+          }),
+        );
+        expect(alarmNamed(`verified-success-${marketplace}`)).toEqual(
+          expect.objectContaining({
+            Namespace: METRIC_NAMESPACE,
+            MetricName: 'VerifiedSuccess',
+            Statistic: 'Average',
+            Dimensions: dimensions,
+            Period: 86_400,
+            Threshold: 0.9,
+            ComparisonOperator: 'LessThanThreshold',
+            EvaluationPeriods: 1,
+            TreatMissingData: 'notBreaching',
+          }),
+        );
+      }
+      // The alarms read each metric per marketplace alone, so the worker must publish that set.
+      expect(TRUST_METRICS.DelistLatency.dimensionSets).toContainEqual(['Marketplace']);
+      expect(TRUST_METRICS.VerifiedSuccess.dimensionSets).toContainEqual(['Marketplace']);
+      expect(String(alarmNamed('delist-latency-ebay')['AlarmDescription'])).toContain('10 minutes');
+      expect(String(alarmNamed('delist-latency-mercari')['AlarmDescription'])).toContain(
+        '13 hours',
+      );
     });
 
     it('sends unplanned task stops (crash loops) to the alarm topic, not deploy stops', () => {

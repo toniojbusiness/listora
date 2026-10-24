@@ -944,16 +944,22 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   after downtime) computes them from committed rows, so a rolled-back change is never counted
   and every writer (worker steps, user confirmations through the API) is covered. For minute T
   it publishes the operations that settled in [T - 2 min, T - 1 min): `VerifiedSuccess` (1 or 0
-  per settled operation, so Average is the verified-success rate) and `OperationFailed` per
-  marketplace and kind, `DelistFailed`, and `DelistLatency` from the recorded sale to the
-  verified delist per marketplace (p50, p95). On time, it also publishes the state:
+  per settled operation, so Average is the verified-success rate) per marketplace and kind and
+  per marketplace, `OperationFailed` per marketplace and kind, `DelistFailed`, and
+  `DelistLatency` from the recorded sale to the verified delist per marketplace (p50, p95).
+  Every scheduled tick, however late, also publishes the state at the time it runs (the job
+  runs ahead of every operation step in the queue, so a backlog cannot silence it):
   `StuckOperations` and `OldestStuckOperationAge` per status (verifying, retrying,
   needs_user_action), `OldestUnverifiedOperationAge`, `AiDailyCostUsd` per account (UTC day),
   `MarketplaceConnections` per marketplace and status, and `ConnectionsNeedingRelink`. The
   observability stack alarms on an operation unverified for 30 minutes, any failed delist, an
-  account's AI cost today over `aiDailyCostAlarmUsd`, a connection needing relink, and every
-  service running fewer tasks than it should, and sends unplanned task stops to the alarm
-  topic. A new metric adds a catalog entry; keep dimensions few, since CloudWatch bills each
+  account's AI cost today over `aiDailyCostAlarmUsd`, a connection needing relink, and per
+  marketplace on p95 delist latency over an hour above `delistLatencyAlarmMinutes` (10 minutes
+  for eBay's API, 13 hours for the browser-automated marketplaces and their 12-hour sale
+  checks) and a verified-success rate below 90% over a day, and on every service running
+  fewer tasks than it should, and sends unplanned task stops to the alarm topic. The relink
+  alarm fires on a level, which suits one seller; an environment with many sellers should
+  alarm on increases instead, so one unlinked connection does not mask the next. A new metric adds a catalog entry; keep dimensions few, since CloudWatch bills each
   combination of values as a metric ([costs.md](costs.md)).
 - **Offline.** Synthesis never calls AWS: no `fromLookup`, zones resolve at deploy time, and
   `npm run infra:synth` (part of `npm run check`) runs `cdk synth` of every environment with

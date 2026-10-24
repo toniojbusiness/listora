@@ -32,32 +32,45 @@ describe('formatEmf', () => {
   it('writes one EMF line: the _aws directive, dimension values, and metric values', () => {
     const group: MetricGroup = {
       timestamp: AT,
-      dimensions: { Marketplace: 'ebay', Kind: 'end' },
-      values: { VerifiedSuccess: [1, 1, 0], OperationFailed: [1] },
+      dimensions: { Status: 'verifying' },
+      values: { StuckOperations: [3], OldestStuckOperationAge: [120, 60] },
     };
     const lines = formatEmf(group, { service: 'worker' });
 
     expect(lines).toHaveLength(1);
     expect(parse(lines[0] ?? '')).toEqual({
       service: 'worker',
-      Marketplace: 'ebay',
-      Kind: 'end',
+      Status: 'verifying',
       _aws: {
         Timestamp: AT.getTime(),
         CloudWatchMetrics: [
           {
             Namespace: METRIC_NAMESPACE,
-            Dimensions: [['Marketplace', 'Kind']],
+            Dimensions: [['Status']],
             Metrics: [
-              { Name: 'VerifiedSuccess', Unit: 'Count' },
-              { Name: 'OperationFailed', Unit: 'Count' },
+              { Name: 'StuckOperations', Unit: 'Count' },
+              { Name: 'OldestStuckOperationAge', Unit: 'Seconds' },
             ],
           },
         ],
       },
-      VerifiedSuccess: [1, 1, 0],
       // A single value is written as a number, as CloudWatch's own libraries do.
-      OperationFailed: 1,
+      StuckOperations: 3,
+      OldestStuckOperationAge: [120, 60],
+    });
+  });
+
+  it('publishes verified success per marketplace and kind, and per marketplace alone', () => {
+    const [line] = formatEmf({
+      timestamp: AT,
+      dimensions: { Marketplace: 'ebay', Kind: 'end' },
+      values: { VerifiedSuccess: [1, 1, 0] },
+    });
+    expect(parse(line ?? '')).toMatchObject({
+      Marketplace: 'ebay',
+      Kind: 'end',
+      VerifiedSuccess: [1, 1, 0],
+      _aws: { CloudWatchMetrics: [{ Dimensions: [['Marketplace', 'Kind'], ['Marketplace']] }] },
     });
   });
 
@@ -97,7 +110,7 @@ describe('formatEmf', () => {
       formatEmf({
         timestamp: AT,
         dimensions: { Marketplace: 'ebay', Kind: 'create' },
-        values: { VerifiedSuccess: [1], DelistFailed: [0] },
+        values: { VerifiedSuccess: [1], OperationFailed: [0] },
       }),
     ).toThrow('different dimensions');
     expect(() =>

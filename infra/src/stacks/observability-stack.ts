@@ -312,18 +312,23 @@ export class ObservabilityStack extends ListoraStack {
   /**
    * The product's trust alarms, on the metrics the worker publishes (@listora/observability):
    * an operation unverified for over 30 minutes, any failed delist, an account's AI cost today
-   * over the threshold, and a connection the seller must link again. Missing data is not
-   * breaching: the worker publishes nothing while it is down, which the running-tasks alarm
-   * covers.
+   * over the threshold, a connection the seller must link again, and per marketplace, the p95
+   * delist latency over an hour above its threshold and a verified-success rate over a day
+   * below 90%. Missing data is not breaching: the worker publishes nothing while it is down,
+   * which the running-tasks alarm covers, and nothing for a marketplace without operations.
    */
   private trustAlarms(alarm: AlarmFactory, settings: EnvironmentSettings): void {
-    const fiveMinutes = Duration.minutes(5);
-    const trust = (metricName: TrustMetricName, statistic: string): cloudwatch.Metric =>
+    const trust = (
+      metricName: TrustMetricName,
+      statistic: string,
+      options: { period?: Duration; dimensions?: Record<string, string> } = {},
+    ): cloudwatch.Metric =>
       new cloudwatch.Metric({
         namespace: METRIC_NAMESPACE,
         metricName,
         statistic,
-        period: fiveMinutes,
+        period: options.period ?? Duration.minutes(5),
+        ...(options.dimensions === undefined ? {} : { dimensionsMap: options.dimensions }),
       });
     alarm(
       'operation-unverified',
@@ -347,6 +352,9 @@ export class ObservabilityStack extends ListoraStack {
       settings.aiDailyCostAlarmUsd,
       { evaluationPeriods: 1 },
     );
+    // A level, not an increase: while one connection waits for its seller, the alarm stays in
+    // ALARM and another connection breaking sends nothing new. That suits one seller
+    // (personal); an environment with many sellers should alarm on increases instead.
     alarm(
       'connection-needs-relink',
       'A marketplace connection needs the seller to link it again (reauth_required or revoked).',
@@ -354,6 +362,35 @@ export class ObservabilityStack extends ListoraStack {
       1,
       { evaluationPeriods: 1 },
     );
+    const latencies = Object.entries(settings.delistLatencyAlarmMinutes);
+    for (const [marketplace, minutes] of latencies) {
+      const limit =
+        minutes % 60 === 0 ? `${String(minutes / 60)} hours` : `${String(minutes)} minutes`;
+      alarm(
+        `delist-latency-${marketplace}`,
+        `The p95 delist latency on ${marketplace} over the last hour (from the sale being ` +
+          `recorded to the verified delist) exceeded ${limit}: sold items stay for sale there.`,
+        trust('DelistLatency', 'p95', {
+          period: Duration.hours(1),
+          dimensions: { Marketplace: marketplace },
+        }),
+        minutes * 60_000,
+        { comparison: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD, evaluationPeriods: 1 },
+      );
+    }
+    for (const [marketplace] of latencies) {
+      alarm(
+        `verified-success-${marketplace}`,
+        `Fewer than 90% of the ${marketplace} operations that settled over the last day ` +
+          'succeeded with a verified result.',
+        trust('VerifiedSuccess', 'Average', {
+          period: Duration.days(1),
+          dimensions: { Marketplace: marketplace },
+        }),
+        0.9,
+        { comparison: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD, evaluationPeriods: 1 },
+      );
+    }
   }
 
   /**
