@@ -47,6 +47,13 @@ describe('size parsing', () => {
     ['U5 0 / UK 4 / EU 32', ['us:0', 'uk:4', 'eu:32']],
     ['US 4 UK 8EU 36', ['us:4', 'uk:8', 'eu:36']],
     ['_M (8-10)', ['letter:M']],
+    ['US 10.5 M', ['us:10.5']],
+    ['US 10.5M', ['us:10.5']],
+    ['US 9 W', ['us:9']],
+    ['US 11 D / UK 10.5 / EU 45', ['us:11', 'uk:10.5', 'eu:45']],
+    ['SIZE US 8 M', ['us:8']],
+    ['US 7 2E', ['us:7']],
+    ['42 EU N', ['eu:42']],
   ])('reads %j', (text, expected) => {
     expect(sizesOf(text)).toEqual(expected);
   });

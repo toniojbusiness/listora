@@ -22,13 +22,15 @@ const SYSTEMS: Readonly<Record<string, SizeSystem>> = {
   EUROPE: 'eu',
 };
 const SYSTEM_NUMBER = String.raw`([0-9]{1,2}(?:[.,]5)?)`;
+/** A shoe width after a system size ("US 10.5 M", "9 US W") is part of it, not a letter size. */
+const SHOE_WIDTH = String.raw`(?:\s*(?:[BDEMNW]|[2-6]E|EE|WW|XW)(?![A-Z0-9]))?`;
 // `U5` is OCR's most common misread of `US` ahead of a number.
 const SYSTEM_PREFIXED = new RegExp(
-  String.raw`(?<![A-Z0-9])(US|U5|USA|UK|EUR|EUROPE|EU)\s*:?\s*${SYSTEM_NUMBER}(?![0-9]|[.,][0-9])`,
+  String.raw`(?<![A-Z0-9])(US|U5|USA|UK|EUR|EUROPE|EU)\s*:?\s*${SYSTEM_NUMBER}(?![0-9]|[.,][0-9])${SHOE_WIDTH}`,
   'g',
 );
 const SYSTEM_SUFFIXED = new RegExp(
-  String.raw`(?<![0-9A-Z.,])${SYSTEM_NUMBER}\s*(US|UK|EUR|EU)(?![A-Z])`,
+  String.raw`(?<![0-9A-Z.,])${SYSTEM_NUMBER}\s*(US|UK|EUR|EU)(?![A-Z])${SHOE_WIDTH}`,
   'g',
 );
 const SYSTEM_RANGES: Readonly<Record<'us' | 'uk' | 'eu', readonly [number, number]>> = {

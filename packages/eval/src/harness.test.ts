@@ -6,7 +6,12 @@ import { TAG_FIELDS } from '@listora/tag-parse';
 
 import { DEFAULT_CORPUS_DIR, loadCorpus, type LoadedCorpus } from './corpus/store.ts';
 import { runEval } from './harness.ts';
-import { StubProvider, type EvalProvider, type EvalProviderInput } from './provider.ts';
+import {
+  EvalProviderError,
+  StubProvider,
+  type EvalProvider,
+  type EvalProviderInput,
+} from './provider.ts';
 
 /** Acceptance threshold from plan task T-09. */
 const REQUIRED_ACCURACY = 0.95;
@@ -88,6 +93,48 @@ describe('runEval with a provider', () => {
     expect(provider?.errors).toHaveLength(Math.floor(report.corpus.items / 2));
     expect(provider?.errors[0]).toEqual({ caseId: corpus.cases[1]?.id, message: 'upstream 503' });
     expect(provider?.overallAccuracy).toBeLessThan(parsers?.overallAccuracy ?? 0);
+  });
+
+  it('adds the billed cost of failed calls to the cost totals', async () => {
+    let calls = 0;
+    const billedFailures: EvalProvider = {
+      id: 'billed-failures',
+      description: 'every other call is billed, then fails validation',
+      extract: async (input) => {
+        calls += 1;
+        if (calls % 2 === 0) {
+          throw new EvalProviderError('response broke the schema', {
+            usage: { costMicros: 700, inputTokens: 900, outputTokens: 120 },
+          });
+        }
+        return new StubProvider({ costMicrosPerItem: 1000 }).extract(input);
+      },
+    };
+    const report = await runEval(corpus, { provider: billedFailures });
+    const [, provider] = report.systems;
+    const failed = Math.floor(report.corpus.items / 2);
+    const succeeded = report.corpus.items - failed;
+    const total = succeeded * 1000 + failed * 700;
+    expect(provider?.errors).toHaveLength(failed);
+    expect(provider?.errors[0]?.message).toBe('response broke the schema');
+    expect(provider?.costMicrosTotal).toBe(total);
+    expect(provider?.costMicrosPerItem).toBe(total / report.corpus.items);
+  });
+
+  it('counts a failed call that reports an invalid cost as unbilled and says why', async () => {
+    const badFailure: EvalProvider = {
+      id: 'bad-failure-cost',
+      description: 'fails with a negative cost',
+      extract: async () => {
+        throw new EvalProviderError('upstream 500', { usage: { costMicros: -1 } });
+      },
+    };
+    const [, provider] = (await runEval(corpus, { provider: badFailure })).systems;
+    expect(provider?.errors).toHaveLength(corpus.cases.length);
+    expect(provider?.errors[0]?.message).toBe(
+      'upstream 500; provider reported an invalid costMicros: -1',
+    );
+    expect(provider?.costMicrosTotal).toBe(0);
   });
 
   it('rejects a provider that reports an invalid cost', async () => {

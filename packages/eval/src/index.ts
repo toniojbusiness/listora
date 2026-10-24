@@ -7,6 +7,18 @@ export {
   writeCorpus,
 } from './corpus/store.ts';
 export type { LoadedCorpus } from './corpus/store.ts';
+export {
+  LICENSES_FILE,
+  OPEN_LICENSES,
+  auditCorpusLicenses,
+  readLicenseManifest,
+} from './corpus/licenses.ts';
+export type {
+  LicenseAudit,
+  LicenseManifest,
+  OpenLicense,
+  ThirdPartyFile,
+} from './corpus/licenses.ts';
 export type {
   CaseSpec,
   CorpusCase,
@@ -17,6 +29,11 @@ export type {
 } from './corpus/types.ts';
 export { runEval } from './harness.ts';
 export type { EvalReport, FieldReport, SystemReport } from './harness.ts';
-export { StubProvider } from './provider.ts';
-export type { EvalProvider, EvalProviderInput, EvalProviderResult } from './provider.ts';
+export { EvalProviderError, StubProvider } from './provider.ts';
+export type {
+  EvalProvider,
+  EvalProviderInput,
+  EvalProviderResult,
+  EvalProviderUsage,
+} from './provider.ts';
 export { formatReport } from './report.ts';

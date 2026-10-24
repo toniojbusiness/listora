@@ -28,6 +28,8 @@ describe('fiber parsing', () => {
     ['SHELL: 100% NYLON LINING: 100% POLYESTER', ['shell:nylon:100', 'lining:polyester:100']],
     ['SHELL/EXTERIOR: 100% NYLON', ['shell:nylon:100']],
     ['LINING 100% POLYESTER', ['lining:polyester:100']],
+    ['LINER 100% ACETATE', ['lining:acetate:100']],
+    ['LINER: 100% LINEN', ['lining:linen:100']],
   ])('reads %j', (text, expected) => {
     expect(fibersOf(text)).toEqual(expected);
   });
@@ -44,6 +46,15 @@ describe('fiber parsing', () => {
       'shell:polyester:40',
       'lining:acetate:100',
     ]);
+  });
+
+  it('reads LINER as the lining label, not a misread of LINEN', () => {
+    const parsed = parse('SHELL: 100% NYLON', 'LINER: 100% POLYESTER');
+    expect(parsed.map(({ value }) => value)).toEqual([
+      { part: 'shell', material: 'nylon', percent: 100 },
+      { part: 'lining', material: 'polyester', percent: 100 },
+    ]);
+    expect(parsed.map(({ confidence }) => confidence)).toEqual([0.95, 0.95]);
   });
 
   it('drops a part label at the first line that is not about fibers', () => {

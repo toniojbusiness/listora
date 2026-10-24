@@ -10,7 +10,10 @@ import { runEval } from './harness.ts';
 import { StubProvider, type EvalProvider } from './provider.ts';
 import { formatReport } from './report.ts';
 
-/** Providers the CLI can construct. T-08 adds the fake and Anthropic providers here. */
+/**
+ * Providers the CLI can construct. The stub stands until plan task T-08, which owns the fake
+ * and Anthropic providers and adds them here.
+ */
 const PROVIDERS: Readonly<Record<string, (() => EvalProvider) | null>> = {
   stub: () => new StubProvider(),
   none: null,

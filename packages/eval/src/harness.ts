@@ -7,7 +7,7 @@ import {
 } from '@listora/tag-parse';
 
 import { imagePath, type LoadedCorpus } from './corpus/store.ts';
-import type { EvalProvider } from './provider.ts';
+import { EvalProviderError, type EvalProvider } from './provider.ts';
 import {
   accuracy,
   emptyTally,
@@ -38,7 +38,10 @@ export interface SystemReport {
   readonly minFieldAccuracy: number;
   readonly costMicrosTotal: number;
   readonly costMicrosPerItem: number;
-  /** Items whose provider call failed; scored as "no values" so failures cost accuracy. */
+  /**
+   * Items whose provider call failed; scored as "no values" so failures cost accuracy. A
+   * failure's billed cost (from `EvalProviderError.usage`) is included in the cost totals.
+   */
   readonly errors: readonly { readonly caseId: string; readonly message: string }[];
   readonly mismatches: readonly (FieldMismatch & { readonly caseId: string })[];
 }
@@ -88,7 +91,7 @@ export async function runEval(
       assertCostMicros(result.usage.costMicros);
       providerSystem.add(corpusCase.id, corpusCase.truth, result.values, result.usage.costMicros);
     } catch (error) {
-      providerSystem.fail(corpusCase.id, corpusCase.truth, error);
+      providerSystem.fail(corpusCase.id, corpusCase.truth, failedCall(error));
     }
   }
 
@@ -107,6 +110,23 @@ function assertCostMicros(value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new RangeError(`provider reported an invalid costMicros: ${String(value)}`);
   }
+}
+
+/** The message and billed cost of a failed call; an invalid reported cost counts as 0. */
+function failedCall(error: unknown): { message: string; costMicros: number } {
+  const message = errorMessage(error);
+  const usage = error instanceof EvalProviderError ? error.usage : undefined;
+  if (usage === undefined) return { message, costMicros: 0 };
+  try {
+    assertCostMicros(usage.costMicros);
+  } catch (costError) {
+    return { message: `${message}; ${errorMessage(costError)}`, costMicros: 0 };
+  }
+  return { message, costMicros: usage.costMicros };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 class SystemAccumulator {
@@ -133,9 +153,13 @@ class SystemAccumulator {
     }
   }
 
-  fail(caseId: string, truth: TagValues, error: unknown): void {
-    this.#errors.push({ caseId, message: error instanceof Error ? error.message : String(error) });
-    this.add(caseId, truth, {}, 0);
+  fail(
+    caseId: string,
+    truth: TagValues,
+    failure: { readonly message: string; readonly costMicros: number },
+  ): void {
+    this.#errors.push({ caseId, message: failure.message });
+    this.add(caseId, truth, {}, failure.costMicros);
   }
 
   report(): SystemReport {

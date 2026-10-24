@@ -16,15 +16,32 @@ export interface EvalProviderInput {
   readonly parsed: TagFacts;
 }
 
+export interface EvalProviderUsage {
+  /** Cost of this call in micro-dollars (1,000,000 = $1), as an integer. */
+  readonly costMicros: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+}
+
 export interface EvalProviderResult {
   /** The provider's answer per field; a missing field counts as "no value found". */
   readonly values: Partial<TagValues>;
-  readonly usage: {
-    /** Cost of this call in micro-dollars (1,000,000 = $1), as an integer. */
-    readonly costMicros: number;
-    readonly inputTokens?: number;
-    readonly outputTokens?: number;
-  };
+  readonly usage: EvalProviderUsage;
+}
+
+/**
+ * A failed provider call. A call can fail after it was billed (a response that breaks the
+ * schema, a truncated answer); the provider reports that usage here so the harness counts its
+ * real cost. Any other thrown error is treated as an unbilled failure.
+ */
+export class EvalProviderError extends Error {
+  override readonly name = 'EvalProviderError';
+  readonly usage: EvalProviderUsage | undefined;
+
+  constructor(message: string, options: { usage?: EvalProviderUsage; cause?: unknown } = {}) {
+    super(message, { cause: options.cause });
+    this.usage = options.usage;
+  }
 }
 
 /**
@@ -44,7 +61,8 @@ export interface StubProviderOptions {
 }
 
 /**
- * Stand-in provider until the AI provider package lands. It makes no network call and returns
+ * Stand-in provider until the AI provider package (plan task T-08) lands with the fake and real
+ * providers. It makes no network call and returns
  * the deterministic parser facts as its answer, which is the floor a real provider must beat.
  */
 export class StubProvider implements EvalProvider {

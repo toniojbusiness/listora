@@ -49,7 +49,7 @@ configuration key is documented there. Never commit `.env`.
 | `npm run dev:api`            | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                            |
 | `npm run dev:worker`         | Run the worker with reload on change                                                                                |
 | `npm run db:migrate`         | Apply pending migrations to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one         |
-| `npm run eval`               | Score the tag parsers and the AI provider (a stub until T-08) on the synthetic corpus; see `-- --help`              |
+| `npm run eval`               | Score the tag parsers and a provider on the synthetic corpus; the stub stands until T-08 adds the fake provider     |
 | `npm run corpus:render`      | Regenerate the synthetic tag corpus in `packages/eval/corpus` after changing its generator                          |
 | `scripts/dev-db.sh start`    | Initialize if needed and start the cluster; create the `listora` and `listora_test` databases (the default command) |
 | `scripts/dev-db.sh stop`     | Stop the cluster                                                                                                    |

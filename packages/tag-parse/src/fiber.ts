@@ -146,7 +146,14 @@ function fiberEvents(text: string): FiberEvent[] {
       continue;
     }
     const wordsAhead = tokens.slice(i).map((t) => (t.kind === 'word' ? t.raw.text : null));
-    const material = matchSpelling(MATERIAL_SPELLINGS, wordsAhead);
+    const exact = matchSpelling(MATERIAL_SPELLINGS, wordsAhead, { fuzzy: false });
+    const part = exact === null ? matchPartLabel(tokens.slice(i), wordsAhead) : null;
+    if (part !== null) {
+      events.push({ kind: 'part', part: part.part });
+      i += part.length;
+      continue;
+    }
+    const material = exact ?? matchSpelling(MATERIAL_SPELLINGS, wordsAhead);
     if (material !== null) {
       events.push({
         kind: 'material',
@@ -154,12 +161,6 @@ function fiberEvents(text: string): FiberEvent[] {
         approximate: material.approximate || token.raw.repaired,
       });
       i += material.length;
-      continue;
-    }
-    const part = matchPartLabel(tokens.slice(i), wordsAhead);
-    if (part !== null) {
-      events.push({ kind: 'part', part: part.part });
-      i += part.length;
       continue;
     }
     i += 1;
