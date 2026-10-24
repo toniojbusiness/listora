@@ -110,6 +110,7 @@ infra/          AWS CDK v2 app: one environment per synth, stacks per lifecycle 
 scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
+  ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
 Dockerfile      Application image; the API and the worker run from the same image
 docs/           This overview and the roadmap
 Makefile        iOS commands (make ios-test, ios-lint, ...)
