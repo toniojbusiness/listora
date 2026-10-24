@@ -1,7 +1,13 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { createDatabase, createInventoryItem, SchemaMigrator, type Db } from '@listora/db';
+import {
+  createDatabase,
+  createInventoryItem,
+  inTransaction,
+  SchemaMigrator,
+  type Db,
+} from '@listora/db';
 import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
 
 import { AiClient } from './client.ts';
@@ -11,6 +17,7 @@ import { staticKillSwitch } from './guards.ts';
 import { createModelRegistry } from './models.ts';
 import { photoSetHashOfImages } from './photo-set-hash.ts';
 import { CURRENT_PRICE_TABLE } from './prices.ts';
+import type { AiProvider } from './provider.ts';
 import { COLOR_OUTPUT, image } from './test-support.ts';
 import { PostgresUsageStore, type UsageEventInput } from './usage-store.ts';
 
@@ -66,6 +73,48 @@ function event(overrides: Partial<UsageEventInput> = {}): UsageEventInput {
 
 async function daily() {
   return db.selectFrom('ai_usage_daily').selectAll().where('account_id', '=', accountId).execute();
+}
+
+async function createUser(subject: string): Promise<string> {
+  const { id } = await db
+    .insertInto('app_user')
+    .values({ auth_provider: 'dev', auth_subject: `${subject}-${accountId}` })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return id;
+}
+
+async function storedEvent(id: string) {
+  return db
+    .selectFrom('ai_usage_event')
+    .select(['account_id', 'user_id', 'item_id', 'cost_micros'])
+    .where('id', '=', id)
+    .executeTakeFirstOrThrow();
+}
+
+/** Inserts an event created at `createdAt`; the trigger files it under that UTC day. */
+async function insertEventAt(createdAt: string, costMicros: number, failed = false) {
+  await db
+    .insertInto('ai_usage_event')
+    .values({
+      account_id: accountId,
+      purpose: 'item_analysis',
+      tier: 'standard',
+      provider: 'fake',
+      model: 'claude-haiku-5-5',
+      input_tokens: 10,
+      output_tokens: 20,
+      cache_read_tokens: 3,
+      cache_write_tokens: 4,
+      images: 2,
+      web_searches: 1,
+      cost_micros: costMicros,
+      price_table_version: CURRENT_PRICE_TABLE.version,
+      outcome: failed ? 'failed' : 'succeeded',
+      error_code: failed ? 'truncated' : null,
+      created_at: new Date(createdAt),
+    })
+    .execute();
 }
 
 describe('PostgresUsageStore (real Postgres)', () => {
@@ -179,6 +228,91 @@ describe('PostgresUsageStore (real Postgres)', () => {
     expect(await daily()).toEqual([]);
   });
 
+  it('still meters an event whose item and user were deleted before it was recorded', async () => {
+    const store = new PostgresUsageStore(db);
+    const item = await createInventoryItem(db, accountId);
+    const userId = await createUser('deleted');
+    await db.deleteFrom('inventory_item').where('id', '=', item.id).execute();
+    await db.deleteFrom('app_user').where('id', '=', userId).execute();
+
+    const { id } = await store.record(event({ itemId: item.id, userId }));
+    expect(await storedEvent(id)).toEqual({
+      account_id: accountId,
+      user_id: null,
+      item_id: null,
+      cost_micros: 1_430,
+    });
+    expect(await daily()).toEqual([expect.objectContaining({ calls: 1, cost_micros: 1_430 })]);
+  });
+
+  it('keeps the references that still exist when only one was deleted', async () => {
+    const store = new PostgresUsageStore(db);
+    const item = await createInventoryItem(db, accountId);
+    const userId = await createUser('kept');
+    await db.deleteFrom('inventory_item').where('id', '=', item.id).execute();
+
+    const { id } = await store.record(event({ itemId: item.id, userId }));
+    expect(await storedEvent(id)).toMatchObject({ user_id: userId, item_id: null });
+  });
+
+  it('retries inside a caller transaction without aborting it', async () => {
+    const store = new PostgresUsageStore(db);
+    const item = await createInventoryItem(db, accountId);
+    await db.deleteFrom('inventory_item').where('id', '=', item.id).execute();
+
+    const ids = await inTransaction(db, async (trx) => {
+      const transactional = new PostgresUsageStore(trx);
+      const first = await transactional.record(event({ itemId: item.id }));
+      const second = await transactional.record(event());
+      return [first.id, second.id];
+    });
+    expect(ids).toHaveLength(2);
+    expect(await daily()).toEqual([expect.objectContaining({ calls: 2, cost_micros: 2_860 })]);
+    expect(await store.spentTodayMicros(accountId)).toBe(2_860);
+  });
+
+  it('still enforces the account reference', async () => {
+    await expect(
+      new PostgresUsageStore(db).record(
+        event({ accountId: '00000000-0000-7000-8000-000000000000' }),
+      ),
+    ).rejects.toMatchObject({ code: '23503', constraint: 'ai_usage_event_account_id_fkey' });
+  });
+
+  it('sums a UTC calendar month from the daily rollup, boundaries included', async () => {
+    const store = new PostgresUsageStore(db);
+    await insertEventAt('2026-09-30T23:59:59.999Z', 1);
+    await insertEventAt('2026-10-01T00:00:00.000Z', 100);
+    await insertEventAt('2026-10-15T12:00:00.000Z', 200, true);
+    await insertEventAt('2026-10-31T23:59:59.999Z', 300);
+    await insertEventAt('2026-11-01T00:00:00.000Z', 2);
+
+    expect(await store.monthlyUsage(accountId, '2026-10')).toEqual({
+      costMicros: 600,
+      calls: 3,
+      failedCalls: 1,
+      inputTokens: 30,
+      outputTokens: 60,
+      cacheReadTokens: 9,
+      cacheWriteTokens: 12,
+      images: 6,
+      webSearches: 3,
+    });
+    expect((await store.monthlyUsage(accountId, '2026-09')).costMicros).toBe(1);
+    expect((await store.monthlyUsage(accountId, '2026-11')).costMicros).toBe(2);
+    expect(await store.monthlyUsage(accountId, '2026-08')).toEqual({
+      costMicros: 0,
+      calls: 0,
+      failedCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      images: 0,
+      webSearches: 0,
+    });
+  });
+
   it('rejects a failed event without an error code, and a success with one', async () => {
     const store = new PostgresUsageStore(db);
     await expect(store.record(event({ outcome: 'failed', errorCode: null }))).rejects.toMatchObject(
@@ -250,5 +384,37 @@ describe('AiClient with Postgres metering', () => {
     expect(await daily()).toEqual([
       expect.objectContaining({ calls: 2, failed_calls: 1, cost_micros: 2_860 }),
     ]);
+  });
+
+  it('meters a billed call whose item is deleted while the call runs', async () => {
+    const item = await createInventoryItem(db, accountId);
+    const fake = new FakeAiProvider({ fixtures });
+    const deletingProvider: AiProvider = {
+      id: fake.id,
+      generate: async (request) => {
+        const response = await fake.generate(request);
+        await db.deleteFrom('inventory_item').where('id', '=', item.id).execute();
+        return response;
+      },
+    };
+    const ai = new AiClient({
+      provider: deletingProvider,
+      registry: createModelRegistry({}, CURRENT_PRICE_TABLE),
+      usageStore: new PostgresUsageStore(db),
+      killSwitch: staticKillSwitch(false),
+      dailyBudgetMicros: 1_000_000,
+    });
+
+    const result = await ai.generate({
+      ...call(),
+      context: { ...call().context, itemId: item.id },
+    });
+    expect(await storedEvent(result.usageEventId)).toEqual({
+      account_id: accountId,
+      user_id: null,
+      item_id: null,
+      cost_micros: 1_430,
+    });
+    expect(await daily()).toEqual([expect.objectContaining({ calls: 1, cost_micros: 1_430 })]);
   });
 });

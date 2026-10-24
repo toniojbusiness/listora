@@ -7,6 +7,7 @@ export {
   createAiClient,
   createAiProvider,
   DEFAULT_FAKE_FIXTURES_DIR,
+  DEFAULT_REQUEST_TIMEOUT_MS,
   loadAiConfig,
   parseDollarsToMicros,
 } from './config.ts';
@@ -53,5 +54,5 @@ export type {
   OutputSchema,
   TokenUsage,
 } from './types.ts';
-export { InMemoryUsageStore, PostgresUsageStore } from './usage-store.ts';
-export type { UsageEventInput, UsageStore } from './usage-store.ts';
+export { InMemoryUsageStore, PostgresUsageStore, utcMonthRange } from './usage-store.ts';
+export type { UsageEventInput, UsageStore, UsageTotals } from './usage-store.ts';

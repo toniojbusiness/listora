@@ -195,6 +195,12 @@ export function toProviderError(error: unknown): AiProviderError {
   }
   if (error instanceof Anthropic.APIError) {
     const status: number = typeof error.status === 'number' ? error.status : 0;
+    if (status === 408) {
+      return fail('timeout', true, 'the Anthropic API timed out the request (408)');
+    }
+    if (status === 409) {
+      return fail('provider_unavailable', true, 'the Anthropic API reported a conflict (409)');
+    }
     if (status >= 400 && status < 500) {
       return fail('bad_request', false, `the Anthropic API rejected the request: ${error.message}`);
     }

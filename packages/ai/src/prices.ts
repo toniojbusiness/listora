@@ -33,9 +33,14 @@ export interface PriceTable {
   readonly models: Readonly<Record<string, ModelPrices>>;
 }
 
-/** Anthropic list prices, verified 2026-10-23 (plan section 5.2). */
-const PRICES_2026_10_23: PriceTable = {
-  version: '2026-10-23',
+/**
+ * Anthropic list prices, verified on 2026-10-24 against the live pricing page,
+ * https://platform.claude.com/docs/en/about-claude/pricing.md. Cache reads are 0.1x the base
+ * input price on Haiku 5.5 and 0.05x on Sonnet 5.5 and Opus 5.5; 5-minute cache writes are
+ * 1.25x on every model.
+ */
+const PRICES_2026_10_24: PriceTable = {
+  version: '2026-10-24',
   source: 'https://platform.claude.com/docs/en/about-claude/pricing',
   webSearchMicros: 10_000,
   batchDiscountPercent: 50,
@@ -66,9 +71,9 @@ const PRICES_2026_10_23: PriceTable = {
 };
 
 /** Every table ever used, oldest first. Never edit or remove one that has been released. */
-export const PRICE_TABLES: readonly PriceTable[] = [PRICES_2026_10_23];
+export const PRICE_TABLES: readonly PriceTable[] = [PRICES_2026_10_24];
 
-export const CURRENT_PRICE_TABLE: PriceTable = PRICES_2026_10_23;
+export const CURRENT_PRICE_TABLE: PriceTable = PRICES_2026_10_24;
 
 export class UnpricedModelError extends Error {
   readonly model: string;

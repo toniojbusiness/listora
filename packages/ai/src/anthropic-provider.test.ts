@@ -217,6 +217,16 @@ describe('toProviderError', () => {
       'bad_request',
       false,
     ],
+    [
+      Anthropic.APIError.generate(408, body('timeout_error'), 'request timeout', headers),
+      'timeout',
+      true,
+    ],
+    [
+      Anthropic.APIError.generate(409, body('conflict_error'), 'conflict', headers),
+      'provider_unavailable',
+      true,
+    ],
     [new Anthropic.APIConnectionTimeoutError(), 'timeout', true],
     [new Anthropic.APIConnectionError({ message: 'reset' }), 'connection', true],
     [new Anthropic.APIUserAbortError(), 'aborted', false],

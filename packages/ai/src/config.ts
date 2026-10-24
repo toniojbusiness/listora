@@ -38,6 +38,13 @@ export class AiConfigError extends Error {
   }
 }
 
+/**
+ * The Anthropic SDK's own default for non-streaming requests. A Premium call (medium effort,
+ * up to 16,000 output tokens) can run for minutes, and a timed-out call may still be billed
+ * while it is metered at zero, so the default must not cut long calls short.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 600_000;
+
 const MODEL_KEYS: Readonly<Record<AiTier, string>> = {
   standard: 'AI_MODEL_STANDARD',
   premium: 'AI_MODEL_PREMIUM',
@@ -82,7 +89,7 @@ export function loadAiConfig(
   const killSwitch = env['AI_KILL_SWITCH'] ?? 'off';
   if (killSwitch !== 'on' && killSwitch !== 'off') issues.push('AI_KILL_SWITCH must be on or off');
 
-  const timeout = env['AI_REQUEST_TIMEOUT_MS'] ?? '60000';
+  const timeout = env['AI_REQUEST_TIMEOUT_MS'] ?? String(DEFAULT_REQUEST_TIMEOUT_MS);
   const requestTimeoutMs = Number(timeout);
   if (!/^\d+$/.test(timeout) || requestTimeoutMs < 1_000 || requestTimeoutMs > 600_000) {
     issues.push('AI_REQUEST_TIMEOUT_MS must be an integer from 1000 to 600000');

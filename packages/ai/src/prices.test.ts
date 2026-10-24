@@ -7,6 +7,7 @@ import {
   priceTable,
   UnpricedModelError,
   type BillableUsage,
+  type TokenPrices,
 } from './prices.ts';
 
 const table = CURRENT_PRICE_TABLE;
@@ -115,6 +116,26 @@ describe('price tables', () => {
   it('finds a table by version and rejects unknown versions', () => {
     expect(priceTable(CURRENT_PRICE_TABLE.version)).toBe(CURRENT_PRICE_TABLE);
     expect(() => priceTable('1999-01-01')).toThrow(RangeError);
+  });
+
+  it('prices cache reads and 5-minute cache writes at the published ratios of base input', () => {
+    // Ratios as integer fractions (cache read = input / divisor) so the check is exact.
+    const haiku = CURRENT_PRICE_TABLE.models['claude-haiku-5-5'];
+    const cacheReadDivisors: [string, TokenPrices | undefined, number][] = [
+      ['claude-haiku-5-5', haiku, 10],
+      ['claude-haiku-5-5 over 100K tokens', haiku?.longContext?.prices, 10],
+      ['claude-sonnet-5-5', CURRENT_PRICE_TABLE.models['claude-sonnet-5-5'], 20],
+      ['claude-opus-5-5', CURRENT_PRICE_TABLE.models['claude-opus-5-5'], 20],
+    ];
+    for (const [name, prices, divisor] of cacheReadDivisors) {
+      expect(prices, name).toBeDefined();
+      expect((prices?.cacheRead ?? 0) * divisor, `${name} cache read`).toBe(prices?.input);
+    }
+    for (const [model, prices] of Object.entries(CURRENT_PRICE_TABLE.models)) {
+      for (const tier of [prices, ...(prices.longContext ? [prices.longContext.prices] : [])]) {
+        expect(tier.cacheWrite * 4, `${model} cache write`).toBe(tier.input * 5);
+      }
+    }
   });
 
   it('keeps every version unique and every price an integer', () => {

@@ -32,7 +32,7 @@ describe('loadAiConfig', () => {
       dailyBudgetMicros: 1_000_000,
       killSwitch: false,
       fakeFixturesDir: DEFAULT_FAKE_FIXTURES_DIR,
-      requestTimeoutMs: 60_000,
+      requestTimeoutMs: 600_000,
     });
   });
 
@@ -78,7 +78,7 @@ describe('loadAiConfig', () => {
 
   it('rejects unpriced models, so every call can be metered', () => {
     expect(issuesOf({ AI_MODEL_STANDARD: 'claude-haiku-4-5' })).toEqual([
-      'AI_MODEL_STANDARD must be a model in price table 2026-10-23',
+      'AI_MODEL_STANDARD must be a model in price table 2026-10-24',
     ]);
   });
 
