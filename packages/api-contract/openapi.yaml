@@ -250,7 +250,9 @@ paths:
         Returns one pre-signed upload target per file. The client sends each file's bytes
         with the given method, URL, and headers (directly to object storage; background
         uploads are fine), then attaches each uploaded file to an item with `addItemPhoto`.
-        Clients resize to at most 2048 px on the long edge and strip GPS before uploading.
+        Clients resize to at most 2048 px on the long edge, encode JPEG, and strip GPS before
+        uploading. Upload targets expire after 15 minutes (`getUploadSession` returns fresh
+        ones) and the session after 24 hours; files must be attached before it expires.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -1989,7 +1991,10 @@ components:
       enum: [processing, ready, failed]
     ImageContentType:
       type: string
-      enum: [image/jpeg, image/heic]
+      description: |
+        JPEG only: the server's image pipeline cannot decode HEIC, so clients convert photos to
+        JPEG when they resize them.
+      enum: [image/jpeg]
     OcrLine:
       type: object
       description: A text line recognized on the device (Vision).
@@ -2016,7 +2021,7 @@ components:
           maxLength: 2048
     PhotoUrls:
       type: object
-      description: Unguessable URLs of the derived images.
+      description: Unguessable URLs of the derived images; present only when the photo is `ready`.
       required: [thumbnail, listing]
       properties:
         thumbnail:
@@ -2056,6 +2061,10 @@ components:
           $ref: '#/components/schemas/Sha256'
         urls:
           $ref: '#/components/schemas/PhotoUrls'
+        failureReason:
+          type: string
+          maxLength: 500
+          description: Why the file is not a usable image, for the user; present only when `status` is `failed`.
         ocrLines:
           type: array
           items:

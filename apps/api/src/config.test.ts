@@ -1,3 +1,4 @@
+import { DEFAULT_LOCAL_STORAGE_BASE_URL, DEFAULT_LOCAL_STORAGE_DIR } from '@listora/storage';
 import { describe, expect, it } from 'vitest';
 
 import { ConfigError, loadApiConfig } from './config.ts';
@@ -13,6 +14,12 @@ describe('loadApiConfig', () => {
       databaseUrl: DATABASE_URL,
       logLevel: 'info',
       auth: { driver: 'dev', devSecret: undefined },
+      storage: {
+        driver: 'local',
+        rootDir: DEFAULT_LOCAL_STORAGE_DIR,
+        baseUrl: DEFAULT_LOCAL_STORAGE_BASE_URL,
+        signingSecret: undefined,
+      },
     });
   });
 
@@ -40,6 +47,18 @@ describe('loadApiConfig', () => {
       'AUTH_DRIVER is required',
       'DATABASE_URL is required',
       'LOG_LEVEL must be one of fatal, error, warn, info, debug, trace, silent',
+    ]);
+  });
+
+  it('reports storage problems together with the API ones', () => {
+    const error = captureConfigError({ API_PORT: 'x', STORAGE_DRIVER: 's3' });
+    expect(error.issues).toEqual([
+      'API_PORT must be an integer from 0 to 65535',
+      'AUTH_DRIVER is required',
+      'DATABASE_URL is required',
+      'STORAGE_S3_BUCKET must be an S3 bucket name',
+      'STORAGE_S3_REGION must be an AWS region such as us-east-1',
+      'STORAGE_PUBLIC_BASE_URL must be an http(s) URL when STORAGE_DRIVER is s3',
     ]);
   });
 

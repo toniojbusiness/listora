@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { LOG_LEVELS, type LogLevel } from '@listora/shared';
+import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
 /** Auth drivers this build can run. `cognito` arrives with plan task T-31. */
 export const AUTH_DRIVERS = ['dev'] as const;
@@ -19,6 +20,8 @@ export interface ApiConfig {
     /** HMAC key for dev session tokens; absent means a random key per process. */
     devSecret: string | undefined;
   };
+  /** STORAGE_* keys, read by @listora/storage. */
+  storage: StorageConfig;
 }
 
 export class ConfigError extends Error {
@@ -69,9 +72,15 @@ const envSchema = z.object({
 /** Reads API settings from the environment (see `.env.example`) and reports every problem at once. */
 export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const parsed = envSchema.safeParse(env);
-  if (!parsed.success) {
-    throw new ConfigError(parsed.error.issues.map((issue) => issue.message));
+  const issues = parsed.success ? [] : parsed.error.issues.map((issue) => issue.message);
+  let storage: StorageConfig | undefined;
+  try {
+    storage = loadStorageConfig(env);
+  } catch (error) {
+    if (!(error instanceof StorageConfigError)) throw error;
+    issues.push(...error.issues);
   }
+  if (!parsed.success || storage === undefined) throw new ConfigError(issues);
   const values = parsed.data;
   return {
     host: values.API_HOST,
@@ -79,5 +88,6 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     databaseUrl: values.DATABASE_URL,
     logLevel: values.LOG_LEVEL,
     auth: { driver: values.AUTH_DRIVER, devSecret: values.AUTH_DEV_SECRET },
+    storage,
   };
 }

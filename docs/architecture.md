@@ -27,7 +27,7 @@ These two rules from the product owner override every other design choice.
 | Contract   | OpenAPI 3.1 in `packages/api-contract` → generated TS types and Swift client; CI fails on drift | Client and server cannot drift apart                                                      |
 | Database   | PostgreSQL 18 (Homebrew locally, RDS in prod), Kysely, plain SQL migrations                     | Relational inventory, strong constraints, JSONB for marketplace payloads                  |
 | Jobs       | Graphile Worker (Postgres-backed), enqueued in the same transaction as the operation row        | No second datastore; an operation can't be recorded without its job, or the reverse       |
-| Photos     | Client resizes and strips GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives  | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
+| Photos     | Client sends JPEG without GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives  | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
 | Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                  | Managed and in the same AWS account                                                       |
 | Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                  | App Store rule 3.1.3(b)                                                                   |
 | Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK (`infra`) | Standard, robust, one security boundary                                                   |
@@ -94,6 +94,10 @@ packages/
                 metering, budget guards, fake and Anthropic providers (@listora/ai)
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
   db/           SQL migrations, migration runner, Kysely types, SKU allocator (@listora/db)
+  storage/      Object storage: local-disk driver with signed upload URLs, S3 driver
+                (@listora/storage)
+  photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
+                the photo processing job, an item's photo-set hash (@listora/photos)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
@@ -126,6 +130,8 @@ src/
   tenancy.ts     Tenant resolution: the tenancy guard
   idempotency.ts Idempotency-Key handling for POSTs
   items/ photos/ One folder per resource: routes.ts, repository.ts, mapping and views
+  uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
+  storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -161,6 +167,33 @@ src/
   transitions the user may make is part of the contract: see `ItemStatus` in `openapi.yaml`.
 - **Shutdown.** On SIGTERM the server stops accepting connections, finishes in-flight
   requests (asking their keep-alive clients to close), then closes the database pool.
+
+### Photos and storage (`packages/storage`, `packages/photos`)
+
+- **Upload flow.** `createUploadSession` returns one upload target per declared file (JPEG,
+  at most 20 MiB, with its SHA-256). The client PUTs the bytes straight to storage, then
+  `addItemPhoto` attaches the file: the server checks that the stored object has the declared
+  size and checksum, creates the photo as `processing`, and adds its processing job in the
+  same transaction. Targets last 15 minutes (`getUploadSession` returns fresh ones after a
+  relaunch); a session lasts 24 hours, and a file is attached at most once.
+- **Storage drivers** implement `ObjectStorage`. Both sign the content type, exact size, and
+  `x-amz-checksum-sha256` of each upload, so storage itself refuses any other body: S3 with
+  presigned PUTs, and the local driver (files in `.local/storage`) with HMAC-signed URLs that
+  the API serves under `/storage/`. Keys under `public/` are readable by URL (CloudFront in
+  production); every other key is private and never served.
+- **Processing** (`processPhoto`, a job function under the task name `photo_processing`)
+  verifies the upload's sha256, decodes it with `sharp` (a non-JPEG or broken file makes the
+  photo `failed` with a reason the user can read), turns it upright, and writes metadata-free
+  sRGB JPEGs: `original` (full size) and `ai` (1024 px) privately, and `thumbnail` (400 px)
+  and `listing` (1600 px) under an unguessable public key. It stores their keys, sizes, and
+  hashes in `photo.derivatives`, the upright size, and a 64-bit DCT pHash, then deletes the
+  upload, which may carry GPS. Every step is safe to rerun. Until the job queue (T-06) is
+  merged, the API's `PhotoJobQueue` only logs, so photos stay `processing` in development;
+  wiring it means adding the job with Graphile's `add_job` (job key `photoJobKey`) and
+  registering `processPhoto` in the worker.
+- **Photo-set hash.** `itemPhotoSet` returns an item's photos in order and `photoSetHash`
+  (from `@listora/shared`) over their upload sha256s, the key analysis is idempotent by.
+- Deleting a photo, or its item, deletes its stored objects after the transaction commits.
 
 ## 4. Marketplace adapter model
 
@@ -265,7 +298,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | Dependency       | Dev/test                                                                                                     | Production               | Switch                               |
 | ---------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------ |
 | Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                   | RDS                      | `DATABASE_URL`, `TEST_DATABASE_URL`  |
-| Storage          | Local-disk driver with signed upload URLs                                                                    | S3 + CloudFront          | `STORAGE_DRIVER=local\|s3`           |
+| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                             | S3 + CloudFront          | `STORAGE_DRIVER=local\|s3`           |
 | AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                          | Anthropic API            | `AI_PROVIDER=fake\|anthropic`        |
 | eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection) | Sandbox, then production | `EBAY_ENV=fake\|sandbox\|production` |
 | Depop            | `fake-depop` generated from Depop's OpenAPI spec                                                             | Sandbox, then production | `DEPOP_ENV`                          |
@@ -380,9 +413,12 @@ Tables by area:
   (decision D12), so every member of an account creates SKUs with the same prefix.
 - **Inventory:** `inventory_item` (status, canonical attributes, prices, cost,
   `field_provenance`, optimistic-lock `version`, and `pre_archive_status`, the status an
-  archived item had before it was archived), `photo` (role, hashes, derivatives, OCR and
-  barcodes), and `storage_location`. `photo` stores pixel `width` and `height` but no byte
-  size; the stored object's size is available from object storage when needed.
+  archived item had before it was archived), `photo` (role, status, failure reason, hashes,
+  derivatives, OCR and barcodes), and `storage_location`. `photo` stores the upright pixel
+  `width` and `height`; each entry of `derivatives` records its key, size, byte size, and
+  sha256.
+- **Uploads:** `upload_session` (expiry) and its `upload_file` rows (declared type, size,
+  sha256, storage key, and status `pending`, `uploaded`, or `attached`).
 - **AI:** `ai_analysis` (unique per photo-set hash and tier), `ai_usage_event` (one
   append-only row per provider call, with its tier, outcome, and error code), and
   `ai_usage_daily`, which a trigger on `ai_usage_event` keeps in step per account and UTC day.

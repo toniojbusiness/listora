@@ -43,6 +43,16 @@ export type PreArchiveItemStatus = (typeof PRE_ARCHIVE_ITEM_STATUSES)[number];
 export const PHOTO_ROLES = ['front', 'back', 'tag', 'flaw', 'detail'] as const;
 export type PhotoRole = (typeof PHOTO_ROLES)[number];
 
+export const PHOTO_STATUSES = ['processing', 'ready', 'failed'] as const;
+export type PhotoStatus = (typeof PHOTO_STATUSES)[number];
+
+/** Upload formats the image pipeline can decode. */
+export const IMAGE_CONTENT_TYPES = ['image/jpeg'] as const;
+export type ImageContentType = (typeof IMAGE_CONTENT_TYPES)[number];
+
+export const UPLOAD_FILE_STATUSES = ['pending', 'uploaded', 'attached'] as const;
+export type UploadFileStatus = (typeof UPLOAD_FILE_STATUSES)[number];
+
 export const ANALYSIS_TIERS = ['standard', 'premium'] as const;
 export type AnalysisTier = (typeof ANALYSIS_TIERS)[number];
 

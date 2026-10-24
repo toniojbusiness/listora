@@ -39,7 +39,9 @@ import type {
   OperationKind,
   OperationOrigin,
   OperationStatus,
+  ImageContentType,
   PhotoRole,
+  PhotoStatus,
   Plan,
   PreArchiveItemStatus,
   PricingSource,
@@ -48,6 +50,7 @@ import type {
   SubscriptionSource,
   SubscriptionStatus,
   SuccessEvidence,
+  UploadFileStatus,
   UserTaskKind,
   UserTaskStatus,
   UserTaskUrgency,
@@ -185,6 +188,33 @@ export interface PhotoTable {
   derivatives: DefaultedJsonb<JsonObject>;
   ocr_lines: DefaultedJsonb<JsonArray>;
   barcodes: DefaultedJsonb<JsonArray>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+  status: Generated<PhotoStatus>;
+  failure_reason: Nullable<string>;
+  processed_at: NullableTimestamp;
+}
+
+export interface UploadSessionTable {
+  id: Id;
+  account_id: string;
+  expires_at: Timestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+export interface UploadFileTable {
+  id: Id;
+  account_id: string;
+  session_id: string;
+  position: number;
+  content_type: ImageContentType;
+  byte_size: number;
+  sha256: string;
+  storage_key: string;
+  status: Generated<UploadFileStatus>;
+  uploaded_at: NullableTimestamp;
+  attached_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -532,6 +562,8 @@ export interface Database {
   storage_location: StorageLocationTable;
   inventory_item: InventoryItemTable;
   photo: PhotoTable;
+  upload_session: UploadSessionTable;
+  upload_file: UploadFileTable;
   ai_analysis: AiAnalysisTable;
   ai_usage_event: AiUsageEventTable;
   ai_usage_daily: AiUsageDailyTable;

@@ -1,3 +1,4 @@
+import { sha256Hex } from '@listora/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Tenant } from '../tenancy.ts';
@@ -26,11 +27,11 @@ describe('photos (real Postgres)', () => {
   }
 
   async function addPhoto(itemId: string, body: Record<string, unknown> = {}) {
-    const uploadFileId = api.uploads.add(tenant, { width: 1536, height: 2048 });
+    const uploadFileId = await api.uploads.add(tenant);
     return api.call('addItemPhoto', {
       token,
       params: { itemId },
-      body: { uploadFileId, role: 'front', ...body },
+      body: { uploadFileId, role: 'front', width: 1536, height: 2048, ...body },
     });
   }
 
@@ -47,17 +48,16 @@ describe('photos (real Postgres)', () => {
   describe('addItemPhoto', () => {
     it('attaches an uploaded file as a processing photo with the on-device text and barcodes', async () => {
       const itemId = await newItem();
-      const uploadFileId = api.uploads.add(tenant, {
-        width: 1536,
-        height: 2048,
-        sha256: 'b'.repeat(64),
-      });
+      const bytes = new TextEncoder().encode('tag photo bytes');
+      const uploadFileId = await api.uploads.add(tenant, { bytes });
       const response = await api.call('addItemPhoto', {
         token,
         params: { itemId },
         body: {
           uploadFileId,
           role: 'tag',
+          width: 1536,
+          height: 2048,
           ocrLines: [{ text: 'RN 12345', confidence: 0.92 }],
           barcodes: [{ symbology: 'ean13', payload: '4006381333931' }],
         },
@@ -70,12 +70,16 @@ describe('photos (real Postgres)', () => {
         status: 'processing',
         width: 1536,
         height: 2048,
-        sha256: 'b'.repeat(64),
+        sha256: sha256Hex(bytes),
         ocrLines: [{ text: 'RN 12345', confidence: 0.92 }],
         barcodes: [{ symbology: 'ean13', payload: '4006381333931' }],
       });
-      // No derived images yet (plan task T-07), so no URLs.
+      // No derived images until the worker has processed it, so no URLs.
       expect(response.body).not.toHaveProperty('urls');
+      expect(api.photoJobs.jobs.at(-1)).toEqual({
+        accountId: tenant.accountId,
+        photoId: response.body.id,
+      });
 
       const item = await api.call('getItem', { token, params: { itemId } });
       expect(item.body.photos).toEqual([response.body]);
@@ -95,9 +99,9 @@ describe('photos (real Postgres)', () => {
       expect(summary?.coverPhoto?.id).toBe(front);
     });
 
-    it('takes the size from the request when the server has not read it from the file', async () => {
+    it('takes the size from the request until the worker has read it from the file', async () => {
       const itemId = await newItem();
-      const sized = api.uploads.add(tenant);
+      const sized = await api.uploads.add(tenant);
       const response = await api.call('addItemPhoto', {
         token,
         params: { itemId },
@@ -105,7 +109,7 @@ describe('photos (real Postgres)', () => {
       });
       expect(response.body).toMatchObject({ width: 800, height: 600 });
 
-      const unsized = api.uploads.add(tenant);
+      const unsized = await api.uploads.add(tenant);
       const missing = await api.call('addItemPhoto', {
         token,
         params: { itemId },
@@ -121,15 +125,16 @@ describe('photos (real Postgres)', () => {
     it('reports upload problems with the contract codes', async () => {
       const itemId = await newItem();
       const cases = [
-        { status: 'incomplete', http: 409, code: 'upload_incomplete', retryable: false },
-        { status: 'expired', http: 409, code: 'upload_expired', retryable: false },
+        { state: 'pending', http: 409, code: 'upload_incomplete', retryable: false },
+        { state: 'expired', http: 409, code: 'upload_expired', retryable: false },
+        { state: 'attached', http: 409, code: 'already_exists', retryable: false },
       ] as const;
-      for (const { status, http, code, retryable } of cases) {
-        const uploadFileId = api.uploads.add(tenant, {}, status);
+      for (const { state: status, http, code, retryable } of cases) {
+        const uploadFileId = await api.uploads.add(tenant, {}, status);
         const response = await api.call('addItemPhoto', {
           token,
           params: { itemId },
-          body: { uploadFileId, role: 'front' },
+          body: { uploadFileId, role: 'front', width: 1, height: 1 },
         });
         expect(response.status, status).toBe(http);
         expect(response.error).toMatchObject({ code, retryable });
@@ -137,7 +142,7 @@ describe('photos (real Postgres)', () => {
       const unknown = await api.call('addItemPhoto', {
         token,
         params: { itemId },
-        body: { uploadFileId: crypto.randomUUID(), role: 'front' },
+        body: { uploadFileId: crypto.randomUUID(), role: 'front', width: 1, height: 1 },
       });
       expect(unknown.status).toBe(404);
       expect(await photoIds(itemId)).toEqual([]);
@@ -145,8 +150,8 @@ describe('photos (real Postgres)', () => {
 
     it('refuses to attach the same uploaded file twice', async () => {
       const itemId = await newItem();
-      const uploadFileId = api.uploads.add(tenant, { width: 10, height: 10 });
-      const body = { uploadFileId, role: 'front' };
+      const uploadFileId = await api.uploads.add(tenant);
+      const body = { uploadFileId, role: 'front', width: 10, height: 10 };
       expect((await api.call('addItemPhoto', { token, params: { itemId }, body })).status).toBe(
         201,
       );

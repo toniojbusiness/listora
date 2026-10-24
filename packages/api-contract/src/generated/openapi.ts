@@ -137,7 +137,9 @@ export interface paths {
          * @description Returns one pre-signed upload target per file. The client sends each file's bytes
          *     with the given method, URL, and headers (directly to object storage; background
          *     uploads are fine), then attaches each uploaded file to an item with `addItemPhoto`.
-         *     Clients resize to at most 2048 px on the long edge and strip GPS before uploading.
+         *     Clients resize to at most 2048 px on the long edge, encode JPEG, and strip GPS before
+         *     uploading. Upload targets expire after 15 minutes (`getUploadSession` returns fresh
+         *     ones) and the session after 24 hours; files must be attached before it expires.
          */
         post: operations["createUploadSession"];
         delete?: never;
@@ -1239,8 +1241,12 @@ export interface components {
          * @enum {string}
          */
         PhotoStatus: "processing" | "ready" | "failed";
-        /** @enum {string} */
-        ImageContentType: "image/jpeg" | "image/heic";
+        /**
+         * @description JPEG only: the server's image pipeline cannot decode HEIC, so clients convert photos to
+         *     JPEG when they resize them.
+         * @enum {string}
+         */
+        ImageContentType: "image/jpeg";
         /** @description A text line recognized on the device (Vision). */
         OcrLine: {
             text: string;
@@ -1252,7 +1258,7 @@ export interface components {
             symbology: string;
             payload: string;
         };
-        /** @description Unguessable URLs of the derived images. */
+        /** @description Unguessable URLs of the derived images; present only when the photo is `ready`. */
         PhotoUrls: {
             /**
              * Format: uri
@@ -1278,6 +1284,8 @@ export interface components {
             height: number;
             sha256: components["schemas"]["Sha256"];
             urls?: components["schemas"]["PhotoUrls"];
+            /** @description Why the file is not a usable image, for the user; present only when `status` is `failed`. */
+            failureReason?: string;
             ocrLines: components["schemas"]["OcrLine"][];
             barcodes: components["schemas"]["Barcode"][];
             createdAt: components["schemas"]["Timestamp"];
@@ -3765,7 +3773,7 @@ export const itemConditionValues: ReadonlyArray<FlattenedDeepRequired<components
 export const measurementUnitValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MeasurementUnit"]> = ["in", "cm"];
 export const photoRoleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PhotoRole"]> = ["front", "back", "tag", "flaw", "detail"];
 export const photoStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PhotoStatus"]> = ["processing", "ready", "failed"];
-export const imageContentTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ImageContentType"]> = ["image/jpeg", "image/heic"];
+export const imageContentTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ImageContentType"]> = ["image/jpeg"];
 export const uploadFileStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UploadFileStatus"]> = ["pending", "uploaded", "attached"];
 export const uploadTargetMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UploadTarget"]["method"]> = ["PUT"];
 export const analysisTierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnalysisTier"]> = ["fast", "premium"];
