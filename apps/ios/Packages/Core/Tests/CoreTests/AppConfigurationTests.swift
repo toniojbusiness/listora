@@ -1,0 +1,128 @@
+import Core
+import Foundation
+import Testing
+
+struct AppConfigurationTests {
+    private func info(environment: String? = "dev", url: String? = "http://127.0.0.1:3000") -> [String: Any] {
+        var info: [String: Any] = [:]
+        info[AppConfiguration.InfoKey.environment] = environment
+        info[AppConfiguration.InfoKey.apiBaseURL] = url
+        return info
+    }
+
+    @Test
+    func `parses a Dev configuration pointing at the local API`() throws {
+        let config = try AppConfiguration(infoDictionary: info())
+        #expect(config.environment == .dev)
+        #expect(config.apiBaseURL == URL(string: "http://127.0.0.1:3000"))
+    }
+
+    @Test(arguments: ["staging", "prod"])
+    func `accepts https outside Dev`(environment: String) throws {
+        let config = try AppConfiguration(infoDictionary: info(
+            environment: environment,
+            url: "https://api.example.com/v1",
+        ))
+        #expect(config.environment.rawValue == environment)
+        #expect(config.apiBaseURL.absoluteString == "https://api.example.com/v1")
+    }
+
+    @Test
+    func `trims surrounding whitespace`() throws {
+        let config = try AppConfiguration(infoDictionary: info(environment: " dev\n", url: " http://localhost:3000 "))
+        #expect(config.apiBaseURL.absoluteString == "http://localhost:3000")
+    }
+
+    @Test(arguments: ["staging", "prod"])
+    func `rejects plain http outside Dev`(environment: String) {
+        #expect(throws: ConfigurationError.invalid(key: "ListoraAPIBaseURL", reason: "must use https outside Dev")) {
+            try AppConfiguration(infoDictionary: info(environment: environment, url: "http://api.example.com"))
+        }
+    }
+
+    @Test(arguments: [
+        (nil as String?, "ListoraEnvironment"),
+        ("", "ListoraEnvironment"),
+        ("$(LISTORA_ENVIRONMENT)", "ListoraEnvironment"),
+    ])
+    func `reports a missing environment`(value: String?, key: String) {
+        #expect(throws: ConfigurationError.missing(key: key)) {
+            try AppConfiguration(infoDictionary: info(environment: value))
+        }
+    }
+
+    @Test(arguments: [nil as String?, "", "   ", "$(API_BASE_URL)"])
+    func `reports a missing API base URL`(value: String?) {
+        #expect(throws: ConfigurationError.missing(key: "ListoraAPIBaseURL")) {
+            try AppConfiguration(infoDictionary: info(url: value))
+        }
+    }
+
+    @Test
+    func `rejects an unknown environment`() {
+        #expect(throws: ConfigurationError.invalid(
+            key: "ListoraEnvironment",
+            reason: "must be one of dev, staging, prod",
+        )) {
+            try AppConfiguration(infoDictionary: info(environment: "production"))
+        }
+    }
+
+    @Test(arguments: ["127.0.0.1:3000", "/v1", "ftp://example.com", "http://", "file:///tmp/api"])
+    func `rejects a URL that is not absolute http(s) with a host`(value: String) {
+        #expect(throws: ConfigurationError.invalid(
+            key: "ListoraAPIBaseURL",
+            reason: "must be an absolute http(s) URL with a host",
+        )) {
+            try AppConfiguration(infoDictionary: info(url: value))
+        }
+    }
+
+    @Test(arguments: ["http://127.0.0.1:3000?debug=1", "http://127.0.0.1:3000#top"])
+    func `rejects a query or fragment`(value: String) {
+        #expect(throws: ConfigurationError.invalid(
+            key: "ListoraAPIBaseURL",
+            reason: "must not have a query or fragment",
+        )) {
+            try AppConfiguration(infoDictionary: info(url: value))
+        }
+    }
+
+    @Test(arguments: [
+        ("dev", "http://user@127.0.0.1:3000"),
+        ("dev", "http://:hunter2@127.0.0.1:3000"),
+        ("prod", "https://user:hunter2@api.example.com"),
+    ])
+    func `rejects a user or password without echoing it`(environment: String, value: String) {
+        do {
+            _ = try AppConfiguration(infoDictionary: info(environment: environment, url: value))
+            Issue.record("expected an error")
+        } catch {
+            #expect(error == .invalid(key: "ListoraAPIBaseURL", reason: "must not contain a user or password"))
+            #expect(!error.description.contains("hunter2"))
+            #expect(!error.description.contains("user@"))
+        }
+    }
+
+    @Test
+    func `rejects a value of the wrong type`() {
+        var dictionary = info()
+        dictionary[AppConfiguration.InfoKey.apiBaseURL] = 3000
+        #expect(throws: ConfigurationError.invalid(key: "ListoraAPIBaseURL", reason: "must be a string")) {
+            try AppConfiguration(infoDictionary: dictionary)
+        }
+    }
+
+    @Test
+    func `error messages name the key but never the value`() {
+        let secretLooking = "https://user:hunter2@api.example.com?token=abc"
+        do {
+            _ = try AppConfiguration(infoDictionary: info(environment: "prod", url: secretLooking))
+            Issue.record("expected an error")
+        } catch {
+            #expect(error.description.contains("ListoraAPIBaseURL"))
+            #expect(!error.description.contains("hunter2"))
+            #expect(!error.description.contains("token"))
+        }
+    }
+}

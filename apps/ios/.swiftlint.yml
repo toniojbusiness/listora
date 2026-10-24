@@ -1,0 +1,59 @@
+# SwiftLint configuration for apps/ios. Run with `make ios-lint` (strict: warnings fail).
+# SwiftFormat owns layout; SwiftLint checks correctness and conventions.
+
+included:
+  - Listora
+  - ListoraTests
+  - ListoraUITests
+  - ShareExtension
+  - Packages
+
+excluded:
+  - Packages/*/.build
+  - Packages/*/.swiftpm
+
+disabled_rules:
+  # Layout rules that SwiftFormat already enforces, so the two tools never disagree.
+  - opening_brace
+  - trailing_comma
+  - vertical_parameter_alignment
+
+opt_in_rules:
+  - array_init
+  - closure_spacing
+  - collection_alignment
+  - contains_over_filter_count
+  - contains_over_first_not_nil
+  - discouraged_optional_boolean
+  - empty_count
+  - empty_string
+  - explicit_init
+  - fatal_error_message
+  - first_where
+  - force_unwrapping
+  - identical_operands
+  - implicitly_unwrapped_optional
+  - last_where
+  - legacy_multiple
+  - modifier_order
+  - overridden_super_call
+  - private_swiftui_state
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+  - unowned_variable_capture
+  - yoda_condition
+
+line_length:
+  warning: 120
+  ignores_urls: true
+
+identifier_name:
+  excluded:
+    - id
+    - lg
+    - md
+    - sm
+    - xl
+    - xs

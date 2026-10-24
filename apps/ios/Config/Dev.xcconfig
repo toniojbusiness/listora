@@ -1,0 +1,14 @@
+// Dev: the local stack on this Mac. The simulator reaches the host's 127.0.0.1, where
+// `npm run dev:api` listens (API_HOST and API_PORT in .env.example).
+
+#include "Base.xcconfig"
+
+LISTORA_ENVIRONMENT = dev
+APP_DISPLAY_NAME = Listora Dev
+BUNDLE_ID_SUFFIX = .dev
+// "$()" stops xcconfig from reading "//" as a comment.
+API_BASE_URL = http:/$()/127.0.0.1:3000
+
+// Optional, gitignored per-checkout overrides, for example a different API port or a LAN
+// address for a physical device. Copy Local.xcconfig.example to Local.xcconfig.
+#include? "Local.xcconfig"

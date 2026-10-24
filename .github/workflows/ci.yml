@@ -35,8 +35,27 @@ jobs:
       - run: scripts/dev-db.sh
       - run: npm run check
 
-  # ---------------------------------------------------------------------------
-  # PLACEHOLDER - iOS job (macOS). Plan task T-02 adds it here: a macOS runner with
-  # Xcode that runs `make ios-test` on the iPhone 17 simulator. Do not add iOS steps
-  # to the Linux job above.
-  # ---------------------------------------------------------------------------
+  ios:
+    name: iOS lint, build and test (macOS)
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      # Pinned to the Xcode used for local development (README prerequisites).
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Show Xcode and simulators
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available | grep iPhone
+      - name: Install XcodeGen, SwiftLint, and SwiftFormat
+        run: brew install xcodegen swiftlint swiftformat
+      - run: make ios-lint
+      - run: make ios-test
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-test-results
+          path: .build/ios/Test.xcresult
+          retention-days: 7

@@ -1,0 +1,158 @@
+# The single source of the Xcode project. `make ios-generate` runs XcodeGen to write
+# Listora.xcodeproj (gitignored); never edit the generated project by hand.
+name: Listora
+
+options:
+  bundleIdPrefix: com.listora
+  deploymentTarget:
+    iOS: '18.0'
+  developmentLanguage: en
+  createIntermediateGroups: true
+  groupSortPosition: top
+  # Dev reaches the API on the developer's Mac over plain HTTP, so only the Dev Info.plist carries
+  # the ATS local-networking exception. It is derived from the shared plist after generation.
+  postGenCommand: >-
+    plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}'
+    -o Generated/Listora-Dev-Info.plist Generated/Listora-Info.plist
+
+# One configuration per environment. The build type is part of the name because Xcode builds
+# Swift packages with debug settings (testability, no optimization, active arch only) only for
+# configurations whose name contains "Debug".
+configs:
+  Dev-Debug: debug
+  Staging-Release: release
+  Prod-Release: release
+
+configFiles:
+  Dev-Debug: Config/Dev.xcconfig
+  Staging-Release: Config/Staging.xcconfig
+  Prod-Release: Config/Prod.xcconfig
+
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    TARGETED_DEVICE_FAMILY: '1'
+    CODE_SIGN_STYLE: Automatic
+    DEAD_CODE_STRIPPING: YES
+
+packages:
+  Core:
+    path: Packages/Core
+  DesignSystem:
+    path: Packages/DesignSystem
+  APIClient:
+    path: Packages/APIClient
+  Features:
+    path: Packages/Features
+
+targets:
+  Listora:
+    type: application
+    platform: iOS
+    sources:
+      - Listora
+    dependencies:
+      - package: Core
+      - package: Features
+        product: AppFeature
+      - target: ShareExtension
+    info:
+      path: Generated/Listora-Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ListoraEnvironment: $(LISTORA_ENVIRONMENT)
+        ListoraAPIBaseURL: $(API_BASE_URL)
+        ITSAppUsesNonExemptEncryption: false
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BASE_BUNDLE_IDENTIFIER)$(BUNDLE_ID_SUFFIX)
+      configs:
+        Dev-Debug:
+          INFOPLIST_FILE: Generated/Listora-Dev-Info.plist
+
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ShareExtension
+    dependencies:
+      - package: DesignSystem
+    info:
+      path: Generated/ShareExtension-Info.plist
+      properties:
+        CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BASE_BUNDLE_IDENTIFIER)$(BUNDLE_ID_SUFFIX).share
+        APPLICATION_EXTENSION_API_ONLY: YES
+
+  ListoraTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - ListoraTests
+    # Only the host app links the packages; the test bundle imports their modules and resolves
+    # symbols from the host, so there is a single copy of each package at run time.
+    dependencies:
+      - target: Listora
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(BASE_BUNDLE_IDENTIFIER).tests
+
+  ListoraUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - ListoraUITests
+    dependencies:
+      - target: Listora
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: $(BASE_BUNDLE_IDENTIFIER).uitests
+
+schemes:
+  Listora:
+    build:
+      targets:
+        Listora: all
+    run:
+      config: Dev-Debug
+    test:
+      config: Dev-Debug
+      gatherCoverageData: true
+      targets:
+        - ListoraTests
+        - ListoraUITests
+        - package: Core/CoreTests
+        - package: DesignSystem/DesignSystemTests
+        - package: APIClient/APIClientTests
+        - package: Features/AppFeatureTests
+        - package: Features/SettingsFeatureTests
+    profile:
+      config: Prod-Release
+    analyze:
+      config: Dev-Debug
+    archive:
+      config: Prod-Release

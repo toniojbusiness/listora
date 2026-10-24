@@ -1,0 +1,9 @@
+// Staging: the hosted staging stack. The ".invalid" host is a deliberate placeholder that never
+// resolves; the real domain arrives with the AWS accounts (gate G-AWS, task T-30).
+
+#include "Base.xcconfig"
+
+LISTORA_ENVIRONMENT = staging
+APP_DISPLAY_NAME = Listora Staging
+BUNDLE_ID_SUFFIX = .staging
+API_BASE_URL = https:/$()/api.staging.listora.invalid

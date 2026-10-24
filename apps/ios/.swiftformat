@@ -1,0 +1,14 @@
+# SwiftFormat configuration for apps/ios. `make ios-format` rewrites; `make ios-lint` checks.
+
+--swiftversion 6.2
+--exclude Packages/*/.build,Packages/*/.swiftpm,Generated,Listora.xcodeproj
+
+--indent 4
+--maxwidth 120
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--commas always
+--self remove
+--importgrouping testable-last
+--extensionacl on-declarations
