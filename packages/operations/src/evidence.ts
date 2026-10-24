@@ -6,6 +6,7 @@
  * - `confirmByReadBack` returns a proof only when the listing read back from the marketplace
  *   holds every field of the desired state **and** the read is current (`Freshness`), so a stale
  *   read that shows an older state which happens to match can never confirm a change;
+ *   `confirmEveryReadBack` joins the proofs when a change targets several marketplace listings;
  * - `confirmByUser` records an explicit user confirmation of an assisted step.
  *
  * The brand is a module-private symbol, so no other module can build a proof without a cast.
@@ -89,6 +90,25 @@ export function confirmByReadBack(
 function isCurrent(revision: number | null, newestSeen: number | null): boolean {
   if (revision === null) return false;
   return newestSeen === null || revision >= newestSeen;
+}
+
+/**
+ * Joins the read-back proofs of every marketplace listing a change targeted (an end reaches each
+ * listing id that may still be live). The first proof is the primary one; `remote` stays its
+ * snapshot, and the others follow in `otherRemotes`.
+ */
+export function confirmEveryReadBack(
+  proofs: readonly [SuccessProof, ...SuccessProof[]],
+): SuccessProof {
+  const [primary, ...others] = proofs;
+  if (others.length === 0) return primary;
+  if (proofs.some((proof) => proof.evidence !== 'read_back')) {
+    throw new Error('only read-back proofs can be joined');
+  }
+  return createProof('read_back', {
+    ...primary.detail,
+    otherRemotes: others.map((proof) => proof.detail['remote'] ?? null),
+  });
 }
 
 /** Records that a user confirmed an assisted step themselves. */

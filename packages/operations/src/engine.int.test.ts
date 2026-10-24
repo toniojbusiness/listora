@@ -305,12 +305,77 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     expect(live).toHaveLength(1);
     expect(live[0]?.id).not.toBe(listing.external_listing_id);
     expect(requests(listing, 'relist')).toHaveLength(1);
-    expect(await harness.operation(relist.id)).toMatchObject({ external_listing_id: live[0]?.id });
-    // Verified, so the listing now points at the new marketplace listing and its revisions.
+    // Verified, so the pending id became the listing's id, with its own revisions.
     expect(await harness.listing(listing.id)).toMatchObject({
       status: 'active',
       external_listing_id: live[0]?.id,
       remote_revision: 1,
+      pending_external_listing_id: null,
+      pending_remote_revision: null,
+    });
+  });
+
+  // Regression: an unverified id from a relist used to be invisible to later operations, so an
+  // auto-delist ended only the old, already ended listing and reported success.
+  it('delists every listing id a relist may have left live, verified or not', async () => {
+    const listing = await liveListing(1000);
+    const end = await harness.enqueue(listing, 'end', { status: 'ended' });
+    await harness.waitForStatus(end.id, ['succeeded']);
+    harness.fake.setRelistIssuesNewId(true);
+    // Every read-back of the relisted listing fails, so the relist fails honestly, but it is live.
+    harness.fake.inject({
+      action: 'read',
+      sku: listing.id,
+      fault: { type: 'server_error' },
+      times: Infinity,
+    });
+    const relist = await harness.enqueue(listing, 'relist', { status: 'active' });
+    expect(await harness.waitForStatus(relist.id, SETTLED)).toMatchObject({
+      status: 'failed',
+      error_code: 'unconfirmed',
+    });
+    harness.fake.clearFaults();
+    const [relisted] = harness.fake
+      .listings('ebay', listing.id)
+      .filter((remote) => remote.status === 'active');
+    expect(relisted?.id).toBeDefined();
+    expect(await harness.listing(listing.id)).toMatchObject({
+      external_listing_id: listing.external_listing_id,
+      pending_external_listing_id: relisted?.id,
+    });
+
+    // The item sells on Depop; the auto-delist reaches both eBay listing ids.
+    const delistRunId = await recordSale(harness, listing);
+    const delist = await harness.enqueue(
+      listing,
+      'end',
+      { status: 'ended' },
+      { origin: 'auto_delist', delistRunId },
+    );
+    expect(await harness.waitForStatus(delist.id, SETTLED)).toMatchObject({
+      status: 'succeeded',
+      success_evidence: 'read_back',
+    });
+    expect(
+      harness.fake.listings('ebay', listing.id).map((remote) => [remote.id, remote.status]),
+    ).toEqual([
+      [listing.external_listing_id, 'ended'],
+      [relisted?.id, 'ended'],
+    ]);
+    expect(
+      harness.fake.requests.filter(
+        (request) => request.action === 'end' && request.listingId === relisted?.id,
+      ),
+    ).toHaveLength(1);
+    // The success was proven by a read-back of each id.
+    expect((await harness.events(delist.id)).at(-1)?.detail).toMatchObject({
+      remote: { externalListingId: relisted?.id, status: 'ended' },
+      otherRemotes: [{ externalListingId: listing.external_listing_id, status: 'ended' }],
+    });
+    expect(await harness.listing(listing.id)).toMatchObject({
+      status: 'ended',
+      external_listing_id: relisted?.id,
+      pending_external_listing_id: null,
     });
   });
 
@@ -711,6 +776,36 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
     ).rejects.toMatchObject({ code: '23001' });
   });
 });
+
+/** Records a manual Depop sale of the listing's item and returns its delist run. */
+async function recordSale(harness: EngineHarness, listing: ListingRow): Promise<string> {
+  const sale = await harness.db
+    .insertInto('sale')
+    .values({
+      account_id: harness.accountId,
+      marketplace: 'depop',
+      sold_at: new Date(),
+      detection_source: 'manual',
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  await harness.db
+    .insertInto('sale_item')
+    .values({
+      account_id: harness.accountId,
+      sale_id: sale.id,
+      marketplace: 'depop',
+      item_id: listing.item_id,
+      sale_price_cents: 1000,
+    })
+    .execute();
+  const run = await harness.db
+    .insertInto('delist_run')
+    .values({ account_id: harness.accountId, sale_id: sale.id, item_id: listing.item_id })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return run.id;
+}
 
 async function addMember(harness: EngineHarness, subject: string): Promise<string> {
   const { id } = await harness.db

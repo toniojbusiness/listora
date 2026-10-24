@@ -195,6 +195,8 @@ const COLUMNS = {
     'created_at',
     'updated_at',
     'remote_revision',
+    'pending_external_listing_id',
+    'pending_remote_revision',
   ],
   marketplace_operation: [
     'id',
@@ -213,8 +215,6 @@ const COLUMNS = {
     'delist_run_id',
     'created_at',
     'updated_at',
-    'external_listing_id',
-    'remote_revision',
   ],
   operation_event: [
     'id',

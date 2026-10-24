@@ -132,9 +132,14 @@ describe('operation step executor (real Postgres)', () => {
       error_code: 'read_failed',
       success_evidence: null,
     });
-    // The id the marketplace returned is kept, so later read-backs can find the listing.
+    // The id the marketplace returned is kept as the listing's pending id, so later read-backs
+    // can find the listing, but it is not verified.
     const listing = await harness.listing(op.listing_id);
-    expect(listing).toMatchObject({ external_listing_id: 'STUB-2', last_verified_at: null });
+    expect(listing).toMatchObject({
+      external_listing_id: null,
+      pending_external_listing_id: 'STUB-2',
+      last_verified_at: null,
+    });
   });
 
   it('without a freshness marker, succeeds only after a second matching read', async () => {
@@ -208,8 +213,10 @@ describe('operation step executor (real Postgres)', () => {
       status: 'verifying',
       error_code: 'stale_read',
       success_evidence: null,
-      external_listing_id: 'STUB-6',
-      remote_revision: 3,
+    });
+    expect(await harness.listing(op.listing_id)).toMatchObject({
+      pending_external_listing_id: 'STUB-6',
+      pending_remote_revision: 3,
     });
     // After the step, the stored revision still rules out the stale read.
     await runOperationStep(deps(adapter), payload, new AbortController().signal);
@@ -219,8 +226,9 @@ describe('operation step executor (real Postgres)', () => {
       success_evidence: null,
     });
     expect(await harness.listing(op.listing_id)).toMatchObject({
-      external_listing_id: 'STUB-6',
-      remote_revision: 3,
+      external_listing_id: null,
+      pending_external_listing_id: 'STUB-6',
+      pending_remote_revision: 3,
     });
   });
 

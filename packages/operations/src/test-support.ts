@@ -66,7 +66,7 @@ export interface EngineHarness {
     listing: Pick<ListingRow, 'id'>,
     kind: OperationKind,
     desired: DesiredListingState,
-    options?: { idempotencyKey?: string; origin?: OperationOrigin },
+    options?: { idempotencyKey?: string; origin?: OperationOrigin; delistRunId?: string },
   ): Promise<OperationRow>;
   operation(operationId: string): Promise<OperationRow>;
   listing(listingId: string): Promise<ListingRow>;
@@ -172,6 +172,7 @@ export async function createEngineHarness(prefix: string): Promise<EngineHarness
         desired,
         idempotencyKey: options.idempotencyKey ?? `test-${prefix}-${String(sequence)}`,
         origin: options.origin ?? 'user',
+        delistRunId: options.delistRunId ?? null,
       });
       return created;
     },

@@ -19,8 +19,10 @@
  * - a read-back decides only when it is current: one older than a revision already seen of the
  *   listing is stale and is followed by another read (with no freshness marker, a match must
  *   repeat in a later read);
- * - a listing id a send returned (a relist can issue a new one) is kept on the operation, and
- *   its later read-backs read that id.
+ * - a listing id a send returned (a relist can issue a new one) is kept on the listing at once
+ *   as its pending id, which every later step and operation targets until a read-back confirms
+ *   it; an end also targets the older verified id, which may still be live, and succeeds only
+ *   when every targeted id reads back ended.
  */
 import type { Selectable } from 'kysely';
 import { sql } from 'kysely';
@@ -49,6 +51,7 @@ import { assertNever, type Logger } from '@listora/shared';
 import { validateDesiredState } from './desired.ts';
 import {
   confirmByReadBack,
+  confirmEveryReadBack,
   remoteSnapshot,
   type Freshness,
   type ReadBackResult,
@@ -64,7 +67,6 @@ import {
   transitionOperation,
   type OperationError,
   type OperationRow,
-  type TargetLearned,
 } from './transitions.ts';
 
 export interface StepDependencies {
@@ -91,11 +93,16 @@ interface StepContext {
   canReadBack: boolean;
   /** How a read-back shows it is current (the adapter's `readFreshness`). */
   freshness: 'revision' | 'none';
-  /** The marketplace listing the operation targets: a listing id it learned, else the listing's. */
-  ref: ListingRef;
+  /**
+   * The marketplace listings the step targets, newest id first (see `listingTargets`); a step
+   * succeeds only when every one of them reads back the desired state.
+   */
+  targets: Targets;
   /** The marketplace's display name, for messages. */
   name: string;
 }
+
+type Targets = readonly [ListingRef, ...ListingRef[]];
 
 /** The newest revision seen per marketplace listing id: stored ones, then this step's. */
 type SeenRevisions = Map<string, number>;
@@ -224,11 +231,7 @@ async function claimStep(
       desired,
       canReadBack,
       freshness: capabilities.readFreshness,
-      ref: {
-        listingId: listing.id,
-        externalListingId: op.external_listing_id ?? listing.external_listing_id,
-        externalSku: listing.external_sku,
-      },
+      targets: listingTargets(listing, desired),
       name,
     };
     const max = maxAttempts(deps.policy);
@@ -334,6 +337,24 @@ async function loadConnection(
   return connection ?? null;
 }
 
+/**
+ * The marketplace listings an operation targets: the newest known id, where a pending one (not
+ * yet confirmed by a read-back) wins over the verified one. An end also targets the verified id
+ * when a pending one exists, since either may still be live.
+ */
+function listingTargets(listing: ListingRow, desired: DesiredListingState): Targets {
+  const ref = (externalListingId: string | null): ListingRef => ({
+    listingId: listing.id,
+    externalListingId,
+    externalSku: listing.external_sku,
+  });
+  const pending = listing.pending_external_listing_id;
+  const verified = listing.external_listing_id;
+  if (pending === null) return [ref(verified)];
+  if (desired.status === 'ended' && verified !== null) return [ref(pending), ref(verified)];
+  return [ref(pending)];
+}
+
 /** Whether an older operation on the same listing is still unfinished (FIFO per listing). */
 async function hasOlderUnfinishedOperation(trx: DbTransaction, op: OperationRow): Promise<boolean> {
   const older = await trx
@@ -369,10 +390,40 @@ async function performSend(
   seen: SeenRevisions,
   signal: AbortSignal,
 ): Promise<StepResult> {
+  const [primary, ...others] = step.ctx.targets;
+  const results: [StepResult, ...StepResult[]] = [await sendTo(deps, step, primary, seen, signal)];
+  for (const target of others) results.push(await sendTo(deps, step, target, seen, signal));
+  return combineResults(step.ctx, results);
+}
+
+async function performCheck(
+  deps: StepDependencies,
+  step: Extract<Step, { type: 'check' }>,
+  seen: SeenRevisions,
+  signal: AbortSignal,
+): Promise<StepResult> {
+  const [primary, ...others] = step.ctx.targets;
+  const results: [StepResult, ...StepResult[]] = [
+    await checkTarget(deps, step, primary, seen, signal),
+  ];
+  for (const target of others) {
+    results.push(await checkTarget(deps, step, target, seen, signal));
+  }
+  return combineResults(step.ctx, results);
+}
+
+/** Sends the operation to one targeted marketplace listing, reading it back first if needed. */
+async function sendTo(
+  deps: StepDependencies,
+  step: Extract<Step, { type: 'send' }>,
+  ref: ListingRef,
+  seen: SeenRevisions,
+  signal: AbortSignal,
+): Promise<StepResult> {
   const { ctx } = step;
 
   if (step.precheck) {
-    const read = await readOnce(deps, ctx, ctx.ref, signal);
+    const read = await readOnce(deps, ctx, ref, signal);
     if (!read.ok) {
       return {
         resolution: { type: 'verify', error: cannotCheck(ctx.name), unknownResult: false },
@@ -401,7 +452,7 @@ async function performSend(
     idempotencyKey: ctx.op.idempotency_key,
     attempt: step.attempt,
     desired: ctx.desired,
-    listing: ctx.ref,
+    listing: ref,
   };
   const outcome = await executeOnce(deps, ctx, request, signal);
   const detail: Record<string, unknown> = {
@@ -422,7 +473,7 @@ async function performSend(
           ...withId,
         };
       }
-      const target = { ...ctx.ref, externalListingId: learned ?? ctx.ref.externalListingId };
+      const target = { ...ref, externalListingId: learned ?? ref.externalListingId };
       // The read-back must not be older than the write it verifies.
       if (ctx.freshness === 'revision') {
         noteRevision(seen, target.externalListingId, outcome.revision);
@@ -494,21 +545,23 @@ async function performSend(
   }
 }
 
-async function performCheck(
+/** Reads one targeted marketplace listing back to learn whether the desired state holds. */
+async function checkTarget(
   deps: StepDependencies,
   step: Extract<Step, { type: 'check' }>,
+  ref: ListingRef,
   seen: SeenRevisions,
   signal: AbortSignal,
 ): Promise<StepResult> {
   const { ctx } = step;
-  const read = await readOnce(deps, ctx, ctx.ref, signal);
+  const read = await readOnce(deps, ctx, ref, signal);
   if (!read.ok) {
     return {
       resolution: { type: 'verify', error: cannotCheck(ctx.name), unknownResult: false },
       detail: { step: 'check', readBack: { error: read.error } },
     };
   }
-  // The step before this one read a match and scheduled this read to repeat it.
+  // The step before this one read a match of every target and scheduled this read to repeat it.
   const previousReadMatched =
     ctx.op.status === 'verifying' && ctx.op.error_code === UNREPEATED_READ_CODE;
   const comparison = compareReadBack(ctx, read.remote, seen, previousReadMatched);
@@ -536,6 +589,84 @@ async function performCheck(
   }
   // Read back and not applied: sending again is no longer blind.
   return { resolution: { type: 'retry', error: notShown(ctx.name, fields) }, detail };
+}
+
+/**
+ * Joins the results of a step's targets: it succeeds only when every target succeeded, and
+ * otherwise takes the result that decides least (a failure, a read that decided nothing, a
+ * resend, then a match still to repeat).
+ */
+function combineResults(
+  ctx: StepContext,
+  results: readonly [StepResult, ...StepResult[]],
+): StepResult {
+  const [primary, ...others] = results;
+  if (others.length === 0) return primary;
+  const detail = {
+    step: primary.detail['step'],
+    targets: results.map((result, index) => ({
+      externalListingId: ctx.targets[index]?.externalListingId ?? null,
+      ...result.detail,
+    })),
+  };
+  const withId =
+    primary.externalListingId === undefined ? {} : { externalListingId: primary.externalListingId };
+  const resolutions = results.map((result) => result.resolution);
+  const unknownResult = resolutions.some(
+    (resolution) => resolution.type === 'verify' && resolution.unknownResult,
+  );
+
+  const decisive =
+    resolutions.find((resolution) => resolution.type === 'failed') ??
+    resolutions.find((resolution) => resolution.type === 'user') ??
+    resolutions.find(
+      (resolution) =>
+        resolution.type === 'verify' && resolution.error.code !== UNREPEATED_READ_CODE,
+    );
+  if (decisive !== undefined) {
+    return {
+      resolution: decisive.type === 'verify' ? { ...decisive, unknownResult } : decisive,
+      detail,
+      ...withId,
+    };
+  }
+  const retries = resolutions.filter((resolution) => resolution.type === 'retry');
+  const [retry] = retries;
+  if (retry !== undefined) {
+    const retryAfterMs = Math.max(0, ...retries.map((resolution) => resolution.retryAfterMs ?? 0));
+    return {
+      resolution: {
+        type: 'retry',
+        error: retry.error,
+        ...(retryAfterMs > 0 ? { retryAfterMs } : {}),
+      },
+      detail,
+      ...withId,
+    };
+  }
+  const repeat = resolutions.find((resolution) => resolution.type === 'verify');
+  if (repeat !== undefined) {
+    return { resolution: { ...repeat, unknownResult }, detail, ...withId };
+  }
+
+  const proofs: SuccessProof[] = [];
+  for (const resolution of resolutions) {
+    if (resolution.type !== 'succeeded') throw new Error('every target should have succeeded');
+    proofs.push(resolution.proof);
+  }
+  const [first, ...rest] = proofs;
+  if (primary.resolution.type !== 'succeeded' || first === undefined) {
+    throw new Error('the primary target should have succeeded');
+  }
+  return {
+    resolution: {
+      type: 'succeeded',
+      proof: confirmEveryReadBack([first, ...rest]),
+      remote: primary.resolution.remote,
+    },
+    detail,
+    ...withId,
+  };
 }
 
 /**
@@ -583,13 +714,17 @@ function undecidedRead(
   }
 }
 
-/** The revisions stored for the listing and for the operation's target, when they are used. */
+/** The revisions stored for the listing's verified and pending ids, when they are used. */
 function storedRevisions(ctx: StepContext): SeenRevisions {
   const seen: SeenRevisions = new Map();
   if (ctx.freshness !== 'revision') return seen;
   noteRevision(seen, ctx.listing.external_listing_id, ctx.listing.remote_revision);
-  noteRevision(seen, ctx.ref.externalListingId, ctx.op.remote_revision);
+  noteRevision(seen, ctx.listing.pending_external_listing_id, ctx.listing.pending_remote_revision);
   return seen;
+}
+
+function revisionOf(seen: SeenRevisions, externalListingId: string | null): number | undefined {
+  return externalListingId === null ? undefined : seen.get(externalListingId);
 }
 
 function noteRevision(
@@ -705,51 +840,56 @@ async function recordResult(
       return;
     }
 
-    // What the step learned about the marketplace listing it targets, for the operation's
-    // later steps: a listing id the send returned, and the newest revision seen of it.
-    const targetId = result.externalListingId ?? ctx.ref.externalListingId;
-    const targetRevision = targetId === null ? undefined : seen.get(targetId);
-    const learned: TargetLearned = {
-      ...(result.externalListingId !== undefined &&
-      result.externalListingId !== ctx.ref.externalListingId
-        ? { externalListingId: result.externalListingId }
-        : {}),
-      ...(targetRevision === undefined ? {} : { revision: targetRevision }),
-    };
-
-    let listingExternalId = ctx.listing.external_listing_id;
-    if (result.externalListingId !== undefined && listingExternalId === null) {
-      if (await externalIdTaken(trx, ctx.listing, result.externalListingId)) {
+    // A listing id the marketplace returned becomes the listing's pending id at once, so every
+    // later step and operation on the listing reaches it, verified or not.
+    const learned = result.externalListingId;
+    let pendingId = ctx.listing.pending_external_listing_id;
+    if (
+      learned !== undefined &&
+      learned !== ctx.listing.external_listing_id &&
+      learned !== pendingId
+    ) {
+      if (await externalIdTaken(trx, ctx.listing, learned)) {
         await transitionOperation(
           trx,
           op,
-          { to: 'failed', attempts: step.attempt, error: linkedElsewhere(ctx.name), learned },
+          { to: 'failed', attempts: step.attempt, error: linkedElsewhere(ctx.name) },
           result.detail,
         );
         return;
       }
       await trx
         .updateTable('marketplace_listing')
-        .set({ external_listing_id: result.externalListingId })
+        .set({ pending_external_listing_id: learned, pending_remote_revision: null })
         .where('account_id', '=', op.account_id)
         .where('id', '=', op.listing_id)
         .execute();
-      listingExternalId = result.externalListingId;
+      pendingId = learned;
     }
-    // The newest revision seen of the listing's marketplace listing, kept for every later read.
-    const listingRevision = listingExternalId === null ? undefined : seen.get(listingExternalId);
-    if (listingRevision !== undefined) {
+    // The newest revisions seen of the listing's ids, kept for every later read.
+    const verifiedRevision = revisionOf(seen, ctx.listing.external_listing_id);
+    const pendingRevision = revisionOf(seen, pendingId);
+    if (verifiedRevision !== undefined || pendingRevision !== undefined) {
       await trx
         .updateTable('marketplace_listing')
         .set({
-          remote_revision: sql<number>`greatest(remote_revision, ${listingRevision}::bigint)`,
+          ...(verifiedRevision === undefined
+            ? {}
+            : {
+                remote_revision: sql<number>`greatest(remote_revision, ${verifiedRevision}::bigint)`,
+              }),
+          ...(pendingRevision === undefined
+            ? {}
+            : {
+                pending_remote_revision: sql<number>`greatest(pending_remote_revision, ${pendingRevision}::bigint)`,
+              }),
         })
         .where('account_id', '=', op.account_id)
         .where('id', '=', op.listing_id)
         .execute();
     }
 
-    const to = await applyResolution(deps, trx, step, op, result, learned);
+    const to = await applyResolution(deps, trx, step, op, result);
     log.info(
       { kind: op.kind, from: op.status, to, attempt: step.attempt },
       'operation step recorded',
@@ -763,7 +903,6 @@ async function applyResolution(
   step: Step,
   op: OperationRow,
   result: StepResult,
-  learned: TargetLearned,
 ): Promise<OperationStatus> {
   const { ctx } = step;
   const { resolution, detail } = result;
@@ -780,7 +919,7 @@ async function applyResolution(
         await transitionOperation(
           trx,
           op,
-          { to: 'failed', attempts, error: linkedElsewhere(ctx.name), learned },
+          { to: 'failed', attempts, error: linkedElsewhere(ctx.name) },
           detail,
         );
         return 'failed';
@@ -788,7 +927,7 @@ async function applyResolution(
       await transitionOperation(
         trx,
         op,
-        { to: 'succeeded', attempts, proof: resolution.proof, learned },
+        { to: 'succeeded', attempts, proof: resolution.proof },
         detail,
       );
       await applyVerifiedListing(trx, ctx.listing, remote);
@@ -799,7 +938,7 @@ async function applyResolution(
         await transitionOperation(
           trx,
           op,
-          { to: 'failed', attempts, error: resolution.error, learned },
+          { to: 'failed', attempts, error: resolution.error },
           detail,
         );
         return 'failed';
@@ -808,7 +947,7 @@ async function applyResolution(
       await transitionOperation(
         trx,
         op,
-        { to: 'retrying', attempts, delayMs, error: resolution.error, learned },
+        { to: 'retrying', attempts, delayMs, error: resolution.error },
         detail,
       );
       return 'retrying';
@@ -818,7 +957,7 @@ async function applyResolution(
         await transitionOperation(
           trx,
           op,
-          { to: 'failed', attempts, error: cannotConfirm(ctx.name), learned },
+          { to: 'failed', attempts, error: cannotConfirm(ctx.name) },
           { ...detail, lastError: resolution.error },
         );
         return 'failed';
@@ -827,7 +966,7 @@ async function applyResolution(
       await transitionOperation(
         trx,
         op,
-        { to: 'verifying', attempts, delayMs, error: resolution.error, learned },
+        { to: 'verifying', attempts, delayMs, error: resolution.error },
         detail,
       );
       return 'verifying';
@@ -836,12 +975,12 @@ async function applyResolution(
       await transitionOperation(
         trx,
         op,
-        { to: 'failed', attempts, error: resolution.error, learned },
+        { to: 'failed', attempts, error: resolution.error },
         detail,
       );
       return 'failed';
     case 'user': {
-      await transitionOperation(trx, op, { to: 'needs_user_action', learned }, detail);
+      await transitionOperation(trx, op, { to: 'needs_user_action' }, detail);
       await trx
         .insertInto('user_task')
         .values({
@@ -864,8 +1003,8 @@ async function applyResolution(
 }
 
 /**
- * Records what the marketplace confirmed on the listing row. A marketplace listing id that is
- * new to the row (a relist can issue one) starts its own revisions.
+ * Records what the marketplace confirmed on the listing row. A confirmed pending id becomes the
+ * verified one and keeps its revisions; an id new to the row starts its own.
  */
 async function applyVerifiedListing(
   trx: DbTransaction,
@@ -881,9 +1020,19 @@ async function applyVerifiedListing(
       external_url: remote.externalUrl,
       remote_snapshot: jsonb(remoteSnapshot(remote)),
       remote_revision: sql<number | null>`
-        case when external_listing_id = ${remote.externalListingId}
-          then greatest(remote_revision, ${remote.revision}::bigint)
-          else ${remote.revision}::bigint end`,
+        case
+          when external_listing_id = ${remote.externalListingId}
+            then greatest(remote_revision, ${remote.revision}::bigint)
+          when pending_external_listing_id = ${remote.externalListingId}
+            then greatest(pending_remote_revision, ${remote.revision}::bigint)
+          else ${remote.revision}::bigint
+        end`,
+      pending_external_listing_id: sql<string | null>`
+        case when pending_external_listing_id = ${remote.externalListingId}
+          then null else pending_external_listing_id end`,
+      pending_remote_revision: sql<number | null>`
+        case when pending_external_listing_id = ${remote.externalListingId}
+          then null else pending_remote_revision end`,
       last_verified_at: sql<Date>`now()`,
       ...(active
         ? { listed_at: sql<Date>`coalesce(listed_at, now())`, ended_at: null }
@@ -894,7 +1043,10 @@ async function applyVerifiedListing(
     .execute();
 }
 
-/** Whether another of the account's listings is already linked to this marketplace listing. */
+/**
+ * Whether another of the account's listings is already linked to this marketplace listing, by
+ * its verified or its pending id.
+ */
 async function externalIdTaken(
   trx: DbTransaction,
   listing: ListingRow,
@@ -905,7 +1057,12 @@ async function externalIdTaken(
     .select('id')
     .where('account_id', '=', listing.account_id)
     .where('marketplace', '=', listing.marketplace)
-    .where('external_listing_id', '=', externalListingId)
+    .where((eb) =>
+      eb.or([
+        eb('external_listing_id', '=', externalListingId),
+        eb('pending_external_listing_id', '=', externalListingId),
+      ]),
+    )
     .where('id', '<>', listing.id)
     .executeTakeFirst();
   return other !== undefined;

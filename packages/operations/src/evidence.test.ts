@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { RemoteListingState } from '@listora/marketplaces';
 
-import { confirmByReadBack, confirmByUser, type Freshness } from './evidence.ts';
+import {
+  confirmByReadBack,
+  confirmByUser,
+  confirmEveryReadBack,
+  type Freshness,
+  type SuccessProof,
+} from './evidence.ts';
 
 /** A current read: nothing newer was seen before. */
 const CURRENT: Freshness = { kind: 'revision', newestSeen: 7 };
@@ -102,6 +108,44 @@ describe('confirmByReadBack', () => {
     expect(
       confirmByReadBack({ status: 'ended' }, plain, { kind: 'repeat', previousReadMatched: true }),
     ).toMatchObject({ matches: false, reason: 'mismatch', fields: ['status'] });
+  });
+});
+
+describe('confirmEveryReadBack', () => {
+  function proofOf(externalListingId: string): SuccessProof {
+    const ended: RemoteListingState = {
+      found: true,
+      externalListingId,
+      externalUrl: null,
+      status: 'ended',
+      title: null,
+      description: null,
+      priceCents: null,
+      currency: null,
+      revision: 7,
+    };
+    const result = confirmByReadBack({ status: 'ended' }, ended, CURRENT);
+    if (!result.matches) throw new Error('expected a proof');
+    return result.proof;
+  }
+
+  it('keeps a single proof as it is', () => {
+    const proof = proofOf('EBAY-1');
+    expect(confirmEveryReadBack([proof])).toBe(proof);
+  });
+
+  it('joins the read-backs of every targeted listing, the primary one first', () => {
+    expect(confirmEveryReadBack([proofOf('EBAY-2'), proofOf('EBAY-1')])).toMatchObject({
+      evidence: 'read_back',
+      detail: {
+        remote: { externalListingId: 'EBAY-2' },
+        otherRemotes: [{ externalListingId: 'EBAY-1' }],
+      },
+    });
+  });
+
+  it('never joins a user confirmation', () => {
+    expect(() => confirmEveryReadBack([proofOf('EBAY-1'), confirmByUser('user-1')])).toThrow();
   });
 });
 

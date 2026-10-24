@@ -323,6 +323,10 @@ export interface MarketplaceListingTable {
   updated_at: UpdatedAt;
   /** The newest revision seen of the marketplace listing `external_listing_id` names. */
   remote_revision: Nullable<number>;
+  /** The newest listing id the marketplace returned that no read-back has confirmed yet. */
+  pending_external_listing_id: Nullable<string>;
+  /** The newest revision seen of the marketplace listing `pending_external_listing_id` names. */
+  pending_remote_revision: Nullable<number>;
 }
 
 export interface MarketplaceOperationTable {
@@ -342,10 +346,6 @@ export interface MarketplaceOperationTable {
   delist_run_id: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
-  /** A marketplace listing id this operation's send returned; its later read-backs read it. */
-  external_listing_id: Nullable<string>;
-  /** The newest revision this operation saw of the marketplace listing it targets. */
-  remote_revision: Nullable<number>;
 }
 
 /** Append-only: the database rejects updates and deletes. */

@@ -371,17 +371,22 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
 4. **Idempotent re-execution.** An operation that was sent before is read back before every
    later send, and succeeds without sending again when the change already took effect (a 5xx
    can hide an applied write). Adapters also pass the operation's idempotency key to the
-   marketplace's own duplicate protection where it has one. A listing id a send returns (eBay's
-   `RelistItem` issues a new one) is kept on the operation (`external_listing_id`), so its
-   later read-backs read the new listing, not the ended one. The listing row takes a new id
-   once a read-back verifies it (a listing without an id yet takes the first one at once).
+   marketplace's own duplicate protection where it has one.
+   **Pending listing ids.** A listing id a send returns (eBay's `RelistItem` issues a new one)
+   is stored at once, in the transaction that records the step, as the listing's
+   `pending_external_listing_id`: unverified, and never linked to another listing of the
+   account. Every later step and operation on the listing targets the newest known id, the
+   pending one over the verified one, so a new listing is never lost even when its read-backs
+   fail. A read-back that confirms it promotes it to `external_listing_id`. An end on a listing
+   with both ids targets both, since either may be live, and succeeds only when each reads
+   back ended under the freshness rule (`confirmEveryReadBack` joins the proofs).
 5. **Read freshness.** A stale read can show an older state that happens to match (after end,
    relist, end, the first end), so a read-back confirms only when it is current
    (`confirmByReadBack` in `evidence.ts`, the only maker of read-back proofs). Listora keeps the
-   newest revision it has seen of each marketplace listing, from reads and confirmed sends:
-   `marketplace_listing.remote_revision`, and `marketplace_operation.remote_revision` for the
-   listing an operation targets, which also holds the revision its send was confirmed with, so
-   the rule survives a crash. A read older than that revision is stale and decides nothing,
+   newest revision it has seen of each marketplace listing, from reads and confirmed sends,
+   including the revision a send was confirmed with, so the rule survives a crash:
+   `marketplace_listing.remote_revision` for the verified id and `pending_remote_revision` for
+   the pending one. A read older than that revision is stale and decides nothing,
    neither success nor a resend; another read follows after the backoff delay. With
    `readFreshness: 'none'`, a matching read confirms only when the operation's previous read, a
    delay earlier and with no send in between, matched too (the operation waits in `verifying`
@@ -395,8 +400,8 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    runner must be started through `startOperationWorker`, with the same database role, on a
    direct connection (not a transaction pooler).
 7. **Listing truth.** A verified success records what the marketplace showed on the
-   `marketplace_listing`: status, external id and URL, `remote_snapshot` (with its revision),
-   `remote_revision`, `last_verified_at`.
+   `marketplace_listing`: status, external id and URL (a confirmed pending id becomes the
+   external id), `remote_snapshot` (with its revision), `remote_revision`, `last_verified_at`.
    A user confirmation changes only the status.
 8. **History.** Every transition appends an `operation_event` with a redacted request/response
    excerpt (`redactForStorage` in `@listora/shared`), error code, and attempt number.

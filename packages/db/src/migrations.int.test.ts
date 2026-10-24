@@ -48,6 +48,7 @@ const MIGRATIONS = [
   '0004_item_pre_archive_status',
   '0005_photo_pipeline',
   '0006_read_freshness',
+  '0007_pending_listing_id',
 ];
 
 describe('schema migrations (real Postgres)', () => {
