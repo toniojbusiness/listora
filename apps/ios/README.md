@@ -181,8 +181,8 @@ Both take `IOS_RELEASE_CONFIGURATION` (`Prod-Release`, the default, or `Staging-
 `make ios-archive IOS_RELEASE_CONFIGURATION=Staging-Release IOS_BUILD_NUMBER=7` writes
 `.build/ios/archives/Listora-Staging-Release-unsigned.xcarchive`. After archiving, the script
 checks that the app and the Share Extension have the same version and build number, that the
-extension's bundle id is the app's plus `.share`, that the app is the requested environment, and
-that it has no ATS exception. The unsigned archive cannot be installed or uploaded; it proves
+extension's bundle id is the app's plus `.share`, that the app is the requested environment, that
+it has the `AppIcon` icon, and that it has no ATS exception. The unsigned archive cannot be installed or uploaded; it proves
 that the release configuration compiles and archives without credentials.
 
 `make ios-testflight` reads `APP_STORE_CONNECT_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,
