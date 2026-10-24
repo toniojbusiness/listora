@@ -31,7 +31,7 @@ IOS_RELEASE := IOS_BUILD_DIR='$(IOS_BUILD_DIR)' scripts/ios-release.sh
 require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Install it with: brew install $(2)" >&2; exit 1; }
 
 .PHONY: ios-generate ios-build ios-test ios-check-ats ios-lint ios-format ios-open ios-clean ios-simulator \
-	ios-tag-fixtures ios-archive ios-testflight
+	ios-tag-fixtures ios-app-icon ios-archive ios-testflight
 
 ## Generate Listora.xcodeproj from apps/ios/project.yml.
 ios-generate:
@@ -87,6 +87,12 @@ ios-tag-fixtures:
 	mkdir -p $(IOS_BUILD_DIR)/tools
 	xcrun swiftc -O -o $(IOS_BUILD_DIR)/tools/generate-tag-fixtures $(IOS_DIR)/Tools/generate-tag-fixtures.swift
 	$(IOS_BUILD_DIR)/tools/generate-tag-fixtures
+
+## Re-render the placeholder app icon PNGs in Listora/Assets.xcassets/AppIcon.appiconset.
+ios-app-icon:
+	mkdir -p $(IOS_BUILD_DIR)/tools
+	xcrun swiftc -O -o $(IOS_BUILD_DIR)/tools/generate-app-icon $(IOS_DIR)/Tools/generate-app-icon.swift
+	$(IOS_BUILD_DIR)/tools/generate-app-icon $(IOS_DIR)/Listora/Assets.xcassets/AppIcon.appiconset
 
 ## Archive a release configuration without signing, to prove the archive step works with no
 ## Apple account. Output: .build/ios/archives/Listora-<configuration>-unsigned.xcarchive.

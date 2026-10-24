@@ -27,4 +27,13 @@ struct AppConfigurationIntegrationTests {
         #expect(dependencies.version.marketing != "?")
         #expect(dependencies.version.build != "?")
     }
+
+    @Test
+    func `the app bundle has the AppIcon icon`() throws {
+        let icons = try #require(Bundle.main.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any])
+        let primary = try #require(icons["CFBundlePrimaryIcon"] as? [String: Any])
+        #expect(primary["CFBundleIconName"] as? String == "AppIcon")
+        let assets = try #require(Bundle.main.url(forResource: "Assets", withExtension: "car"))
+        #expect(FileManager.default.fileExists(atPath: assets.path))
+    }
 }

@@ -33,6 +33,7 @@ Run these from the repository root.
 | `make ios-format`       | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes |
 | `make ios-clean`        | Delete the generated project and `.build/ios`                  |
 | `make ios-tag-fixtures` | Re-render the tag-reading test photos (see Tag reading)        |
+| `make ios-app-icon`     | Re-render the placeholder app icon (see App icon)              |
 | `make ios-archive`      | Unsigned release archive; needs no Apple account (Releases)    |
 | `make ios-testflight`   | Signed release archive uploaded to TestFlight (Releases)       |
 
@@ -117,6 +118,26 @@ Core Image's Code 128 and QR generators); nothing is downloaded. To change a fix
 generator and run `make ios-tag-fixtures` on a Mac, then commit the images and manifest. A test
 fails if the whole-photo pass starts reading a size-tab fixture on its own, so the fixtures keep
 exercising the size-tab pass.
+
+## App icon
+
+The icon is the `AppIcon` set in `Listora/Assets.xcassets`, named by
+`ASSETCATALOG_COMPILER_APPICON_NAME` in `project.yml`. It holds three 1024 x 1024 PNGs, and
+Xcode derives every smaller size from them:
+
+| File                 | Appearance | Requirements                                   |
+| -------------------- | ---------- | ---------------------------------------------- |
+| `AppIcon.png`        | Default    | Opaque (no alpha channel); App Store icon too  |
+| `AppIcon-Dark.png`   | Dark       | Transparent background; iOS draws the backdrop |
+| `AppIcon-Tinted.png` | Tinted     | Grayscale on transparent; iOS applies the tint |
+
+The Share Extension has no icon of its own; the share sheet shows the containing app's icon.
+
+The current icon is a placeholder: a price tag on the brand teal, drawn by
+`Tools/generate-app-icon.swift`. To change it, edit that tool and run `make ios-app-icon`. To
+ship a real design, export the three PNGs above from the design file, replace the files (keep
+the names, or update `Contents.json`), delete the tool and the `ios-app-icon` target, and run
+`make ios-test` and `make ios-archive`. Both check that the built app names the `AppIcon` asset.
 
 ## Environments
 
@@ -238,8 +259,8 @@ the new one everywhere below.
    These environments are separate from the AWS `staging` and `prod` deploy environments, so the
    Apple key and the AWS deploy role never share one.
 
-7. **App icon.** App Store Connect rejects an upload without an app icon, and the app has none
-   yet. Add an `AppIcon` asset before the first upload.
+7. **App icon.** App Store Connect rejects an upload without an app icon. The app ships the
+   placeholder icon (see App icon); replace it with the real design before a public release.
 
 Notes:
 

@@ -69,7 +69,7 @@ plist_value() {
 
 # Checks what App Store Connect checks first: the app and its Share Extension share one version
 # and build number, the extension's bundle id extends the app's, and the build is the requested
-# environment without the Dev-only ATS exception.
+# environment with the app icon and without the Dev-only ATS exception.
 verify_archive() {
   local archive=$1 configuration=$2 build_number=$3
   local app=$archive/Products/Applications/Listora.app
@@ -95,6 +95,9 @@ verify_archive() {
     fail "The Share Extension bundle id $extension_id must be $app_id.share."
   [[ $extension_version == "$app_version" && $extension_build == "$app_build" ]] ||
     fail "The Share Extension is $extension_version ($extension_build) but the app is $app_version ($app_build)."
+  [[ $(plist_value "$app/Info.plist" CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName) == AppIcon ]] ||
+    fail "The app's Info.plist does not name the AppIcon asset."
+  [[ -f $app/Assets.car ]] || fail "The app has no compiled asset catalog (Assets.car), so no icon."
   if plutil -extract NSAppTransportSecurity xml1 -o /dev/null "$app/Info.plist" 2>/dev/null; then
     fail "The $configuration app must not carry the Dev-only NSAppTransportSecurity exception."
   fi
