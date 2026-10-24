@@ -69,13 +69,18 @@ The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
   `Listora.xcodeproj`, which is gitignored and never edited by hand.
 - Swift 6 language mode with complete strict concurrency, and warnings are errors.
 - Code lives in local Swift packages: `Core` (models and utilities, no UI), `DesignSystem`
-  (palette, typography, spacing, components), `APIClient` (generated from the OpenAPI
-  contract in T-03), and `Features` (one library per feature). A feature never imports another
+  (palette, typography, spacing, components), `APIClient` (the client generated from the
+  OpenAPI contract, with the session's bearer token and the error model), and `Features` (one
+  library per feature). A feature never imports another
   feature; `AppFeature` composes them into the tab shell. The app target only starts
   `AppFeature`.
 - Configuration comes only from the build configuration's xcconfig file (`Dev-Debug`,
   `Staging-Release`, `Prod-Release`) through Info.plist. `AppConfiguration` validates it at
   launch and stops the app with an error that names the bad key. Only Dev may use plain HTTP.
+- On-device state the user creates (drafts and their photos) is written to the GRDB database
+  first, and work against the server goes through a persistent queue whose every request has a
+  stored `Idempotency-Key`, so it resumes after a relaunch without duplicates and shows each
+  failure with a Retry. The Add Item upload queue is the model (`apps/ios/README.md`).
 - Views use `DesignSystem` tokens, never raw colors or sizes, so light and dark mode stay
   consistent. A test checks WCAG AA contrast for every text and background pair.
 - Tests use Swift Testing; UI tests use XCTest. `make ios-lint` (SwiftLint and SwiftFormat)

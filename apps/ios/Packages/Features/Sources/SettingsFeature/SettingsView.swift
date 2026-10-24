@@ -15,18 +15,24 @@ public struct SettingsContent: Equatable, Sendable {
     }
 }
 
-/// Account, marketplace connections, and app information. Only the About section exists until
-/// the account (T-28) and connection (T-16, T-25) tasks.
+/// Account, marketplace connections, and app information. Dev builds also have a developer
+/// sign-in; the real account (T-28, T-31) and connection (T-16, T-25) sections come later.
 public struct SettingsView: View {
     private let content: SettingsContent
+    private let devSignIn: DevSignInModel?
 
-    public init(content: SettingsContent) {
+    public init(content: SettingsContent, devSignIn: DevSignInModel? = nil) {
         self.content = content
+        self.devSignIn = devSignIn
     }
 
     public var body: some View {
         NavigationStack {
             List {
+                if let devSignIn {
+                    DevSignInSection(model: devSignIn)
+                        .listRowBackground(Palette.surface.color)
+                }
                 Section("About") {
                     row("Version", content.version, id: "settings.version")
                     row("Environment", content.environment, id: "settings.environment")
@@ -60,4 +66,54 @@ public struct SettingsView: View {
         configuration: configuration,
         version: AppVersion(marketing: "1.0", build: "1"),
     ))
+}
+
+/// Sign in against the local API's dev auth driver: the code appears in the API's log.
+struct DevSignInSection: View {
+    @Bindable var model: DevSignInModel
+
+    var body: some View {
+        Section {
+            switch model.stage {
+            case .enterEmail:
+                TextField("Email", text: $model.email)
+                    .textContentType(.emailAddress)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("devSignIn.email")
+                Button("Send code") { Task { await model.requestCode() } }
+                    .disabled(!model.canRequestCode)
+                    .accessibilityIdentifier("devSignIn.sendCode")
+            case .enterCode:
+                Text("Enter the code from the API's log for \(model.email).")
+                    .foregroundStyle(Palette.textSecondary)
+                TextField("6-digit code", text: $model.code)
+                    .textContentType(.oneTimeCode)
+                    .keyboardType(.numberPad)
+                    .accessibilityIdentifier("devSignIn.code")
+                Button("Sign in") { Task { await model.signIn() } }
+                    .disabled(!model.canSignIn)
+                    .accessibilityIdentifier("devSignIn.signIn")
+                Button("Use a different email") { model.signOut() }
+            case let .signedIn(email):
+                LabeledContent("Signed in as") {
+                    Text(email)
+                        .foregroundStyle(Palette.textSecondary)
+                        .accessibilityIdentifier("devSignIn.signedInEmail")
+                }
+                Button("Sign out", role: .destructive) { model.signOut() }
+            }
+            if let message = model.message {
+                Text(message)
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.danger)
+            }
+        } header: {
+            Text("Developer sign-in")
+        } footer: {
+            Text("Dev builds only. Start the API with AUTH_DRIVER=dev.")
+        }
+        .onAppear { model.refresh() }
+    }
 }

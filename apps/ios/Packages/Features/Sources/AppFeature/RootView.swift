@@ -1,4 +1,5 @@
 import AddItemFeature
+import APIClient
 import Core
 import DesignSystem
 import InventoryFeature
@@ -25,6 +26,7 @@ public struct RootView: View {
             }
         }
         .tint(Palette.brand.color)
+        .task { dependencies.startBackgroundWork() }
     }
 
     @ViewBuilder
@@ -33,14 +35,14 @@ public struct RootView: View {
         case .inventory:
             InventoryView { selection = .addItem }
         case .addItem:
-            AddItemView()
+            AddItemView(environment: dependencies.addItem)
         case .tasks:
             TasksView()
         case .settings:
-            SettingsView(content: SettingsContent(
-                configuration: dependencies.configuration,
-                version: dependencies.version,
-            ))
+            SettingsView(
+                content: SettingsContent(configuration: dependencies.configuration, version: dependencies.version),
+                devSignIn: dependencies.devSignIn,
+            )
         }
     }
 }
@@ -51,5 +53,7 @@ public struct RootView: View {
     RootView(dependencies: AppDependencies(
         configuration: configuration,
         version: AppVersion(marketing: "1.0", build: "1"),
+        dataDirectory: URL.temporaryDirectory.appending(path: "ListoraPreview"),
+        accessGrantStorage: InMemoryAccessGrantStorage(),
     ))
 }

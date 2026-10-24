@@ -1,0 +1,118 @@
+import APIClient
+import Foundation
+@testable import AddItemFeature
+
+/// The upload queue wired to a ``FakeListoraServer`` through a `URLProtocol` stub: the real
+/// generated API client, the real URLSession upload transport (in a foreground session, since
+/// background sessions cannot use a stub), and a draft database in a temporary directory.
+/// ``relaunch()`` builds everything again over the same directory, as an app relaunch does.
+@MainActor
+final class UploadHarness {
+    let server: FakeListoraServer
+    let directory: TemporaryDirectory
+    let grants: InMemoryAccessGrantStorage
+    let tokens: AccessTokenStore
+    let tagReader = FakeTagReader()
+    let activity = UploadActivity()
+    let policy: RetryPolicy
+    private var wiring: Wiring
+
+    var store: DraftStore {
+        wiring.store
+    }
+
+    var uploader: PhotoUploader {
+        wiring.uploader
+    }
+
+    init(server: FakeListoraServer = FakeListoraServer(), signedIn: Bool = true, policy: RetryPolicy = .test) throws {
+        self.server = server
+        self.policy = policy
+        directory = try TemporaryDirectory()
+        grants = InMemoryAccessGrantStorage(signedIn ? Self.grant : nil)
+        tokens = AccessTokenStore(storage: grants)
+        wiring = try Wiring(
+            directory: directory.url,
+            server: server,
+            tokens: tokens,
+            parts: Parts(tagReader: tagReader, activity: activity, policy: policy),
+        )
+    }
+
+    static let grant = AccessGrant(accessToken: "test-token", expiresAt: .distantFuture, email: "seller@example.com")
+
+    func start() async {
+        await uploader.start()
+    }
+
+    /// Stops the queue and its session as if the app were terminated, then starts a new queue,
+    /// store, and session over the same database.
+    func relaunch() async throws {
+        await uploader.stop()
+        wiring.transport.invalidate()
+        wiring = try Wiring(
+            directory: directory.url,
+            server: server,
+            tokens: tokens,
+            parts: Parts(tagReader: tagReader, activity: activity, policy: policy),
+        )
+        await uploader.start()
+    }
+
+    func stop() async {
+        await uploader.stop()
+        wiring.transport.invalidate()
+    }
+
+    /// A new draft with one photo per role, prepared as the app prepares them.
+    func createDraft(roles: [PhotoRole]) throws -> DraftRecord {
+        let photos = try roles.enumerated().map { index, role in
+            try (TestImages.prepared(seed: UInt64(index + 1)), role)
+        }
+        return try store.createDraft(photos: photos)
+    }
+
+    func draft(_ id: String) throws -> Draft? {
+        try store.draft(id: id)
+    }
+
+    /// True when every photo is attached and the server has the draft's order.
+    func isFullyUploaded(_ id: String) throws -> Bool {
+        guard let draft = try store.draft(id: id) else { return false }
+        return draft.photos.allSatisfy { $0.step == .done && $0.serverRole == $0.role }
+            && draft.record.syncedPhotoOrder == draft.photos.compactMap(\.serverPhotoID)
+    }
+
+    /// What the queue shares across relaunches.
+    private struct Parts {
+        var tagReader: FakeTagReader
+        var activity: UploadActivity
+        var policy: RetryPolicy
+    }
+
+    /// What a launch builds: the store over the database, the transport, and the queue.
+    private struct Wiring {
+        let store: DraftStore
+        let transport: URLSessionUploadTransport
+        let uploader: PhotoUploader
+
+        init(directory: URL, server: FakeListoraServer, tokens: AccessTokenStore, parts: Parts) throws {
+            store = try DraftStore(database: DraftDatabase(directory: directory))
+            transport = URLSessionUploadTransport(configuration: StubURLProtocol.configuration())
+            let api = APIClient(
+                baseURL: server.baseURL,
+                accessTokens: tokens,
+                session: URLSession(configuration: StubURLProtocol.configuration()),
+            )
+            uploader = PhotoUploader(
+                store: store,
+                api: UploadAPI(client: api.client),
+                accessTokens: tokens,
+                tagReader: parts.tagReader,
+                transport: transport,
+                activity: parts.activity,
+                policy: parts.policy,
+            )
+        }
+    }
+}
