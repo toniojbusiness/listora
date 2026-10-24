@@ -1,5 +1,5 @@
 // CDK app entry point (`cdk.json` runs `node src/main.ts`). Synthesizes one environment, chosen
-// with `-c env=staging|prod` (or LISTORA_ENV); see infra/README.md for every setting.
+// with `-c env=staging|prod|personal` (or LISTORA_ENV); see infra/README.md for every setting.
 import { App } from 'aws-cdk-lib';
 
 import { defineListora } from './app.ts';

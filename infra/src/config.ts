@@ -225,7 +225,7 @@ export function secretName(environment: EnvironmentName, name: string): string {
 /** Where one environment is deployed. Nothing here is committed to the repository. */
 export interface DeployTarget {
   readonly environment: EnvironmentName;
-  /** 12-digit AWS account id; staging and prod are separate accounts. */
+  /** 12-digit AWS account id; each environment has its own account. */
   readonly account: string;
   readonly region: string;
   /**
