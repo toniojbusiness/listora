@@ -45,8 +45,9 @@ function isDelist(kind: OperationKind): boolean {
 
 /**
  * Operations that succeeded or failed in the window, timestamped at its start:
- * `VerifiedSuccess` and `OperationFailed` per marketplace and kind, `DelistFailed` when any
- * delist settled, and `DelistLatency` per marketplace for delists after a sale.
+ * `VerifiedSuccess` and `OperationFailed` per marketplace and kind (`VerifiedSuccess` per
+ * marketplace too), `DelistFailed` when any delist settled, and `DelistLatency` per marketplace
+ * for delists after a sale.
  */
 export async function collectSettledOperations(
   db: Db,
@@ -110,14 +111,19 @@ export async function collectSettledOperations(
   }
 
   const timestamp = window.from;
-  const groups: MetricGroup[] = [...outcomes.values()].map(({ marketplace, kind, verified }) => ({
-    timestamp,
-    dimensions: { Marketplace: marketplace, Kind: kind },
-    values: {
-      VerifiedSuccess: verified,
-      OperationFailed: [verified.filter((value) => value === 0).length],
+  const groups: MetricGroup[] = [...outcomes.values()].flatMap(
+    ({ marketplace, kind, verified }) => {
+      const dimensions = { Marketplace: marketplace, Kind: kind };
+      return [
+        { timestamp, dimensions, values: { VerifiedSuccess: verified } },
+        {
+          timestamp,
+          dimensions,
+          values: { OperationFailed: [verified.filter((value) => value === 0).length] },
+        },
+      ];
     },
-  }));
+  );
   if (delists > 0) {
     groups.push({ timestamp, dimensions: {}, values: { DelistFailed: [delistFailures] } });
   }

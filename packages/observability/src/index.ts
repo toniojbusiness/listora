@@ -3,10 +3,10 @@ export type { MetricDefinition, MetricDimension, MetricUnit, TrustMetricName } f
 export { createMetricsEmitter, formatEmf, MAX_VALUES_PER_LINE } from './emf.ts';
 export type { MetricGroup, MetricsEmitter, MetricsEmitterOptions } from './emf.ts';
 export {
-  CURRENT_TICK_MS,
   cronTick,
   runTrustMetricsTick,
   TRUST_METRICS_CRONTAB,
+  TRUST_METRICS_PRIORITY,
   TRUST_METRICS_TASK,
 } from './job.ts';
 export type { TrustMetricsDependencies } from './job.ts';

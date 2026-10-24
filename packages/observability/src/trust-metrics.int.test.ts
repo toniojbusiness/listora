@@ -175,12 +175,22 @@ describe('trust metrics (real Postgres)', () => {
         {
           timestamp: window.from,
           dimensions: { Marketplace: 'ebay', Kind: 'create' },
-          values: { VerifiedSuccess: [1, 1, 0], OperationFailed: [1] },
+          values: { VerifiedSuccess: [1, 1, 0] },
+        },
+        {
+          timestamp: window.from,
+          dimensions: { Marketplace: 'ebay', Kind: 'create' },
+          values: { OperationFailed: [1] },
         },
         {
           timestamp: window.from,
           dimensions: { Marketplace: 'depop', Kind: 'price' },
-          values: { VerifiedSuccess: [1], OperationFailed: [0] },
+          values: { VerifiedSuccess: [1] },
+        },
+        {
+          timestamp: window.from,
+          dimensions: { Marketplace: 'depop', Kind: 'price' },
+          values: { OperationFailed: [0] },
         },
       ]);
     });
@@ -211,7 +221,8 @@ describe('trust metrics (real Postgres)', () => {
       const groups = await collectSettledOperations(db, window);
 
       expect(groups).toEqual([
-        expect.objectContaining({ values: { VerifiedSuccess: [1], OperationFailed: [0] } }),
+        expect.objectContaining({ values: { VerifiedSuccess: [1] } }),
+        expect.objectContaining({ values: { OperationFailed: [0] } }),
       ]);
     });
 
@@ -468,6 +479,11 @@ describe('trust metrics (real Postgres)', () => {
         Marketplace: 'ebay',
         Kind: 'end',
         VerifiedSuccess: 0,
+        _aws: { CloudWatchMetrics: [{ Dimensions: [['Marketplace', 'Kind'], ['Marketplace']] }] },
+      });
+      expect(line('OperationFailed')).toMatchObject({
+        Marketplace: 'ebay',
+        Kind: 'end',
         OperationFailed: 1,
         _aws: { CloudWatchMetrics: [{ Dimensions: [['Marketplace', 'Kind']] }] },
       });
@@ -494,12 +510,24 @@ describe('trust metrics (real Postgres)', () => {
       expect(new Set(metricNames(backfilled))).toEqual(
         new Set(['VerifiedSuccess', 'OperationFailed', 'DelistFailed']),
       );
-      // A tick that runs late (a busy queue) also leaves the current state to a later tick.
+    });
+
+    it('publishes the current state from a scheduled tick that runs late (a busy queue)', async () => {
+      await operation({
+        marketplace: 'ebay',
+        kind: 'create',
+        status: 'queued',
+        queuedAt: at(-40 * MINUTE),
+      });
+
       const late = await tick(
         { _cron: { ts: TICK.toISOString(), backfilled: false } },
-        at(3 * MINUTE),
+        at(10 * MINUTE),
       );
-      expect(metricNames(late)).not.toContain('StuckOperations');
+      expect(late.find((line) => 'OldestUnverifiedOperationAge' in line)).toMatchObject({
+        OldestUnverifiedOperationAge: 50 * 60,
+        _aws: { Timestamp: at(10 * MINUTE).getTime() },
+      });
     });
 
     it('skips a job without a cron timestamp', async () => {

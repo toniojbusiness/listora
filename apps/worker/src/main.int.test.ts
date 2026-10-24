@@ -245,16 +245,12 @@ describe('worker process (real Postgres)', () => {
       service: 'worker',
       Marketplace: 'ebay',
       Kind: 'create',
-      OperationFailed: 0,
       _aws: {
         CloudWatchMetrics: [
           {
             Namespace: 'Listora',
-            Dimensions: [['Marketplace', 'Kind']],
-            Metrics: [
-              { Name: 'VerifiedSuccess', Unit: 'Count' },
-              { Name: 'OperationFailed', Unit: 'Count' },
-            ],
+            Dimensions: [['Marketplace', 'Kind'], ['Marketplace']],
+            Metrics: [{ Name: 'VerifiedSuccess', Unit: 'Count' }],
           },
         ],
       },
