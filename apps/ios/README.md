@@ -162,8 +162,10 @@ error that names the key.
 - The Staging and Prod hosts end in `.invalid` and never resolve until they are set. Prod
   points at the personal environment, which is production for now (there is no separate
   Personal configuration): at that environment's first deploy, set its `API_BASE_URL` to the
-  compute stack's `ApiUrl` output, `https://api.<domain>`
-  ([infra/README.md](../../infra/README.md#the-personal-environment)). Staging's domain arrives
+  compute stack's `ApiUrl` output: the HTTP API's `execute-api` URL until the environment has
+  a domain, then `https://api.<domain>`, which turns the `execute-api` URL off, so update it
+  and ship a build when the domain is added
+  ([infra/README.md](../../infra/README.md#without-a-domain)). Staging's domain arrives
   with the staging AWS account (gate G-AWS, T-30).
 - To point Dev at a different port or host (for example a LAN address for a physical device),
   copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` (gitignored) and set

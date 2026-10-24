@@ -1,21 +1,29 @@
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 
-import { APP_SECRETS, ENVIRONMENT_NAMES, ENVIRONMENT_SETTINGS, SERVICE_NAMES } from './config.ts';
+import { APP_SECRETS, ENVIRONMENT_SETTINGS, SERVICE_NAMES } from './config.ts';
 import { containerEnvironment, containerSecretNames, MIGRATE_COMMAND } from './containers.ts';
 import type { ListoraStacks } from './app.ts';
 import { HTTP_API_THROTTLE } from './stacks/compute-stack.ts';
+import { PLACEHOLDER_SHAPES } from './placeholders.ts';
 import { MIGRATE_OUTPUTS, migrateTaskNames } from './stacks/migrate-stack.ts';
 import { stackList, synthesize } from './test-support.ts';
 
 type Resource = { Type: string; Properties?: Record<string, unknown> } & Record<string, unknown>;
 
-const synthesized = Object.fromEntries(
-  ENVIRONMENT_NAMES.map((environment) => [environment, synthesize(environment)]),
-) as Record<(typeof ENVIRONMENT_NAMES)[number], ReturnType<typeof synthesize>>;
+/** Each environment, plus personal with a domain (it deploys without one until then). */
+const synthesized = new Map(
+  PLACEHOLDER_SHAPES.map((shape) => [shape.name, synthesize(shape.environment, shape.overrides)]),
+);
 
-function template(environment: (typeof ENVIRONMENT_NAMES)[number], stack: keyof ListoraStacks) {
-  return Template.fromStack(synthesized[environment].stacks[stack]);
+function synthesizedShape(shape: string): ReturnType<typeof synthesize> {
+  const result = synthesized.get(shape);
+  if (result === undefined) throw new Error(`no placeholder shape ${shape}`);
+  return result;
+}
+
+function template(shape: string, stack: keyof ListoraStacks) {
+  return Template.fromStack(synthesizedShape(shape).stacks[stack]);
 }
 
 function resources(t: Template, type: string): Resource[] {
@@ -34,9 +42,10 @@ function asList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [value];
 }
 
-describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
+describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, overrides }) => {
   const settings = ENVIRONMENT_SETTINGS[environment];
-  const { stacks, target } = synthesized[environment];
+  const { stacks, target } = synthesizedShape(shape);
+  const dns = target.dns;
 
   it('deploys every stack to the target account and region, protected with its data', () => {
     for (const stack of stackList(stacks)) {
@@ -49,7 +58,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   });
 
   describe('network', () => {
-    const t = template(environment, 'network');
+    const t = template(shape, 'network');
 
     const egress = settings.network.taskEgress;
 
@@ -159,7 +168,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   });
 
   describe('data', () => {
-    const t = template(environment, 'data');
+    const t = template(shape, 'data');
 
     it('runs encrypted, private PostgreSQL 18 with backups and per-environment redundancy', () => {
       t.hasResource('AWS::RDS::DBInstance', {
@@ -192,7 +201,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   });
 
   describe('storage', () => {
-    const t = template(environment, 'storage');
+    const t = template(shape, 'storage');
 
     it('keeps the photo bucket private, encrypted, versioned, TLS-only, and retained', () => {
       t.hasResource('AWS::S3::Bucket', {
@@ -265,52 +274,68 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   });
 
   describe('email', () => {
-    const t = template(environment, 'email');
+    const t = template(shape, 'email');
 
-    it('receives in.<domain> mail into a private bucket, scanned, over TLS', () => {
-      t.hasResourceProperties('AWS::Route53::RecordSet', {
-        Name: `in.${target.domain}.`,
-        Type: 'MX',
-        ResourceRecords: [`10 inbound-smtp.${target.region}.amazonaws.com`],
-      });
-      t.hasResourceProperties('AWS::SES::ReceiptRuleSet', {
-        RuleSetName: `listora-${environment}`,
-      });
-      t.hasResourceProperties('AWS::SES::ReceiptRule', {
-        Rule: Match.objectLike({
-          Enabled: true,
-          Recipients: [`in.${target.domain}`],
-          ScanEnabled: true,
-          TlsPolicy: 'Require',
-          Actions: [{ S3Action: Match.objectLike({ ObjectKeyPrefix: 'inbound/' }) }],
-        }),
-      });
-      t.hasResourceProperties('AWS::SES::EmailIdentity', {
-        EmailIdentity: target.domain,
-      });
+    it('keeps raw sale email in a private bucket for 90 days', () => {
       t.hasResourceProperties('AWS::S3::Bucket', {
         PublicAccessBlockConfiguration: Match.objectLike({ BlockPublicPolicy: true }),
         LifecycleConfiguration: {
           Rules: [Match.objectLike({ ExpirationInDays: 90, Prefix: 'inbound/' })],
         },
       });
-      // Only SES, for this account, may write raw messages.
-      t.hasResourceProperties('AWS::S3::BucketPolicy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Action: 's3:PutObject',
-              Principal: { Service: 'ses.amazonaws.com' },
-              Condition: { StringEquals: { 'aws:SourceAccount': { Ref: 'AWS::AccountId' } } },
-            }),
-          ]),
-        },
-      });
     });
+
+    if (dns !== undefined) {
+      it('receives in.<domain> mail into the bucket, scanned, over TLS', () => {
+        t.hasResourceProperties('AWS::Route53::RecordSet', {
+          Name: `in.${dns.domain}.`,
+          Type: 'MX',
+          ResourceRecords: [`10 inbound-smtp.${target.region}.amazonaws.com`],
+        });
+        t.hasResourceProperties('AWS::SES::ReceiptRuleSet', {
+          RuleSetName: `listora-${environment}`,
+        });
+        t.hasResourceProperties('AWS::SES::ReceiptRule', {
+          Rule: Match.objectLike({
+            Enabled: true,
+            Recipients: [`in.${dns.domain}`],
+            ScanEnabled: true,
+            TlsPolicy: 'Require',
+            Actions: [{ S3Action: Match.objectLike({ ObjectKeyPrefix: 'inbound/' }) }],
+          }),
+        });
+        t.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: dns.domain });
+        // Only SES, for this account, may write raw messages.
+        t.hasResourceProperties('AWS::S3::BucketPolicy', {
+          PolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Action: 's3:PutObject',
+                Principal: { Service: 'ses.amazonaws.com' },
+                Condition: { StringEquals: { 'aws:SourceAccount': { Ref: 'AWS::AccountId' } } },
+              }),
+            ]),
+          },
+        });
+      });
+    } else {
+      it('receives no email without a domain: no SES identity, MX record, or receipt rule', () => {
+        for (const type of [
+          'AWS::SES::EmailIdentity',
+          'AWS::SES::ReceiptRuleSet',
+          'AWS::SES::ReceiptRule',
+          'AWS::Route53::RecordSet',
+        ]) {
+          t.resourceCountIs(type, 0);
+        }
+        expect(JSON.stringify(t.toJSON())).not.toContain('ses.amazonaws.com');
+        expect(Object.keys(t.findOutputs('*'))).not.toContain('InboundMailDomain');
+      });
+    }
   });
 
   describe('secrets', () => {
-    const t = template(environment, 'secrets');
+    const t = template(shape, 'secrets');
 
     it('creates a rotating, retained KMS key for token envelope encryption', () => {
       t.hasResource('AWS::KMS::Key', {
@@ -334,7 +359,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
 
   describe('registry', () => {
     it('keeps immutable, scanned images', () => {
-      template(environment, 'registry').hasResource('AWS::ECR::Repository', {
+      template(shape, 'registry').hasResource('AWS::ECR::Repository', {
         DeletionPolicy: 'Retain',
         Properties: Match.objectLike({
           RepositoryName: 'listora/app',
@@ -346,7 +371,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   });
 
   describe('compute', () => {
-    const t = template(environment, 'compute');
+    const t = template(shape, 'compute');
     const taskDefinitions = resources(t, 'AWS::ECS::TaskDefinition');
     const layout = settings.services;
     /** Each ECS service of the layout, the containers its task runs, and its size. */
@@ -502,19 +527,32 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
       }
     });
 
-    it('serves the API at https://api.<domain> only, with a certificate validated in DNS', () => {
-      t.hasResourceProperties('AWS::CertificateManager::Certificate', {
-        DomainName: `api.${target.domain}`,
-        ValidationMethod: 'DNS',
+    if (dns !== undefined) {
+      it('serves the API at https://api.<domain> only, with a certificate validated in DNS', () => {
+        t.hasResourceProperties('AWS::CertificateManager::Certificate', {
+          DomainName: `api.${dns.domain}`,
+          ValidationMethod: 'DNS',
+        });
+        t.hasResourceProperties('AWS::Route53::RecordSet', {
+          Name: `api.${dns.domain}.`,
+          Type: 'A',
+        });
+        // The iOS Prod configuration's API_BASE_URL is personal's ApiUrl (infra/README.md),
+        // and any execute-api URL is disabled, so this output is the only endpoint.
+        t.hasOutput('ApiUrl', { Value: `https://api.${dns.domain}` });
       });
-      t.hasResourceProperties('AWS::Route53::RecordSet', {
-        Name: `api.${target.domain}.`,
-        Type: 'A',
+    } else {
+      it('serves the API at its default execute-api URL, with no DNS resource', () => {
+        t.resourceCountIs('AWS::CertificateManager::Certificate', 0);
+        t.resourceCountIs('AWS::Route53::RecordSet', 0);
+        t.resourceCountIs('AWS::ApiGatewayV2::DomainName', 0);
+        t.resourceCountIs('AWS::ApiGatewayV2::ApiMapping', 0);
+        t.hasResourceProperties('AWS::ApiGatewayV2::Api', { DisableExecuteApiEndpoint: false });
+        // https://<api id>.execute-api.<region>.amazonaws.com, which AWS serves over TLS.
+        const [httpApiId] = Object.keys(t.findResources('AWS::ApiGatewayV2::Api'));
+        t.hasOutput('ApiUrl', { Value: { 'Fn::GetAtt': [httpApiId, 'ApiEndpoint'] } });
       });
-      // The iOS Prod configuration's API_BASE_URL is personal's ApiUrl (infra/README.md), and
-      // the HTTP API's execute-api URL is disabled, so this output is the only endpoint.
-      t.hasOutput('ApiUrl', { Value: `https://api.${target.domain}` });
-    });
+    }
 
     if (settings.ingress === 'load-balancer') {
       it('serves the API through the load balancer over HTTPS only, checked on /health/live', () => {
@@ -556,17 +594,19 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
     } else {
       it('serves the API through an HTTP API and a VPC link, with no other endpoint', () => {
         t.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 0);
-        t.hasResourceProperties('AWS::ApiGatewayV2::Api', {
-          ProtocolType: 'HTTP',
-          DisableExecuteApiEndpoint: true,
-        });
-        t.hasResourceProperties('AWS::ApiGatewayV2::DomainName', {
-          DomainName: `api.${target.domain}`,
-          DomainNameConfigurations: [
-            Match.objectLike({ EndpointType: 'REGIONAL', SecurityPolicy: 'TLS_1_2' }),
-          ],
-        });
-        t.hasResourceProperties('AWS::ApiGatewayV2::ApiMapping', { Stage: Match.anyValue() });
+        t.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
+        t.hasResourceProperties('AWS::ApiGatewayV2::Api', { ProtocolType: 'HTTP' });
+        if (dns !== undefined) {
+          // The custom domain replaces the execute-api URL.
+          t.hasResourceProperties('AWS::ApiGatewayV2::Api', { DisableExecuteApiEndpoint: true });
+          t.hasResourceProperties('AWS::ApiGatewayV2::DomainName', {
+            DomainName: `api.${dns.domain}`,
+            DomainNameConfigurations: [
+              Match.objectLike({ EndpointType: 'REGIONAL', SecurityPolicy: 'TLS_1_2' }),
+            ],
+          });
+          t.hasResourceProperties('AWS::ApiGatewayV2::ApiMapping', { Stage: Match.anyValue() });
+        }
         // Every path and method goes to the API tasks, through the VPC link.
         t.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: '$default' });
         t.resourceCountIs('AWS::ApiGatewayV2::Route', 1);
@@ -617,7 +657,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   });
 
   describe('migrate', () => {
-    const t = template(environment, 'migrate');
+    const t = template(shape, 'migrate');
     const names = migrateTaskNames(environment);
     const definition = () => {
       const [task] = resources(t, 'AWS::ECS::TaskDefinition');
@@ -696,7 +736,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   });
 
   describe('observability', () => {
-    const t = template(environment, 'observability');
+    const t = template(shape, 'observability');
 
     it('defines baseline alarms that notify the alarm topic on alarm and recovery', () => {
       const alarms = resources(t, 'AWS::CloudWatch::Alarm');
@@ -879,7 +919,10 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
     });
 
     it('subscribes the alarm email when one is configured', () => {
-      const { stacks: withEmail } = synthesize(environment, { alarmEmail: 'ops@example.com' });
+      const { stacks: withEmail } = synthesize(environment, {
+        ...overrides,
+        alarmEmail: 'ops@example.com',
+      });
       Template.fromStack(withEmail.observability).hasResourceProperties('AWS::SNS::Subscription', {
         Protocol: 'email',
         Endpoint: 'ops@example.com',
@@ -888,7 +931,7 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
   });
 
   describe('deploy access', () => {
-    const t = template(environment, 'deployAccess');
+    const t = template(shape, 'deployAccess');
 
     it('trusts only GitHub OIDC tokens for this repository and GitHub environment', () => {
       t.hasResourceProperties('AWS::IAM::OIDCProvider', {

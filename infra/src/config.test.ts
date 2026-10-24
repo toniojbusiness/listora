@@ -26,6 +26,9 @@ const VALID = {
   githubRepository: 'acme/listora',
 };
 
+/** `VALID` with no domain and no hosted zone. */
+const NO_DOMAIN = { ...VALID, domain: undefined, hostedZoneId: undefined };
+
 const fromRecord =
   (record: Record<string, unknown>) =>
   (key: string): unknown =>
@@ -47,8 +50,7 @@ describe('loadDeployTarget', () => {
       environment: 'staging',
       account: '123456789012',
       region: 'us-east-1',
-      domain: 'staging.example.com',
-      hostedZoneId: 'Z0123456789ABCDEFGHIJ',
+      dns: { domain: 'staging.example.com', hostedZoneId: 'Z0123456789ABCDEFGHIJ' },
       imageTag: '3f1c2a9',
       githubRepository: 'acme/listora',
       alarmEmail: undefined,
@@ -152,6 +154,47 @@ describe('loadDeployTarget', () => {
     ]) {
       expect(issuesOf({ ...VALID, availabilityZones: zones }), zones).toEqual([issue]);
     }
+  });
+
+  it('lets personal deploy without a domain, since its HTTP API has its own URL', () => {
+    expect(loadDeployTarget(fromRecord({ ...NO_DOMAIN, env: 'personal' }), {}).dns).toBeUndefined();
+    expect(
+      loadDeployTarget(fromRecord({ ...VALID, env: 'personal' }), {
+        LISTORA_DOMAIN: '',
+        LISTORA_HOSTED_ZONE_ID: '',
+      }).dns,
+    ).toEqual({ domain: 'staging.example.com', hostedZoneId: 'Z0123456789ABCDEFGHIJ' });
+    // The deploy workflow passes unset GitHub variables as empty strings.
+    expect(
+      loadDeployTarget(fromRecord({ ...NO_DOMAIN, env: 'personal' }), {
+        LISTORA_DOMAIN: '',
+        LISTORA_HOSTED_ZONE_ID: '',
+      }).dns,
+    ).toBeUndefined();
+  });
+
+  it('requires a domain behind a load balancer, which serves only api.<domain>', () => {
+    for (const env of ['staging', 'prod']) {
+      expect(issuesOf({ ...NO_DOMAIN, env }), env).toEqual([
+        'domain (context) or LISTORA_DOMAIN (environment) is required',
+        'hostedZoneId (context) or LISTORA_HOSTED_ZONE_ID (environment) is required',
+      ]);
+    }
+  });
+
+  it('takes a domain and its hosted zone together, never one alone', () => {
+    for (const env of ['staging', 'personal']) {
+      expect(issuesOf({ ...NO_DOMAIN, env, domain: 'example.com' }), env).toEqual([
+        'hostedZoneId (context) or LISTORA_HOSTED_ZONE_ID (environment) is required',
+      ]);
+      expect(issuesOf({ ...NO_DOMAIN, env }, { LISTORA_HOSTED_ZONE_ID: 'Z9' }), env).toEqual([
+        'domain (context) or LISTORA_DOMAIN (environment) is required',
+      ]);
+    }
+    expect(issuesOf({ ...NO_DOMAIN, env: 'personal', domain: 'Not A Domain' })).toEqual([
+      'domain (context) or LISTORA_DOMAIN (environment) must be a lowercase DNS name such as example.com',
+      'hostedZoneId (context) or LISTORA_HOSTED_ZONE_ID (environment) is required',
+    ]);
   });
 
   it('refuses the mutable latest tag, so a deploy always names the image it runs', () => {
@@ -275,7 +318,7 @@ describe('docs/costs.md', () => {
   const sum = (cents: readonly number[]) => cents.reduce((total, value) => total + value, 0);
   const dollars = (cents: number | undefined) => String(Math.round((cents ?? NaN) / 100));
 
-  it('has line items that add up to its totals, with and without browser automation', () => {
+  it('has line items that add up to its totals, with and without browser automation and a domain', () => {
     const base = amounts(section('Line items'));
     const baseTotal = base.bold.get('Total');
     expect(base.items.length).toBeGreaterThan(10);
@@ -293,6 +336,19 @@ describe('docs/costs.md', () => {
     const headline = `about $${dollars(baseTotal)} a month, or about $${dollars(withAutomation)} a month with browser automation`;
     expect(costs.replace(/\s+/g, ' ')).toContain(headline);
     expect(readme.replace(/\s+/g, ' ')).toContain(headline);
+
+    // A domain (added later) prices on top of the base, with or without automation.
+    const domain = amounts(section('With a domain'));
+    const domainCents = sum(domain.items);
+    expect(domain.items.length).toBe(2);
+    expect(domain.bold.get('Total with a domain')).toBe((baseTotal ?? NaN) + domainCents);
+    const cents = (value: number) => `$${(value / 100).toFixed(2)}`;
+    expect(costs.replace(/\s+/g, ' ')).toContain(
+      `the total is ${cents((withAutomation ?? NaN) + domainCents)}`,
+    );
+    for (const text of [costs, readme]) {
+      expect(text.replace(/\s+/g, ' ')).toContain(`${cents(domainCents)} more once a domain`);
+    }
   });
 });
 

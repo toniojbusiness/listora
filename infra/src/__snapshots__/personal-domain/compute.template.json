@@ -1,0 +1,966 @@
+{
+  "Description": "Listora personal: ECS Fargate api and worker behind an API Gateway HTTP API",
+  "Resources": {
+    "ClusterEB0386A7": {
+      "Type": "AWS::ECS::Cluster",
+      "Properties": {
+        "ClusterName": "listora-personal",
+        "ClusterSettings": [
+          {
+            "Name": "containerInsights",
+            "Value": "disabled"
+          }
+        ]
+      }
+    },
+    "apilogs31139245": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/listora/personal/api",
+        "RetentionInDays": 7
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "workerlogsA075403B": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/listora/personal/worker",
+        "RetentionInDays": 7
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "apptaskTaskRoleB0806AA3": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      }
+    },
+    "apptaskTaskRoleDefaultPolicyFAF2B7B8": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "s3:Abort*",
+                "s3:DeleteObject*",
+                "s3:GetBucket*",
+                "s3:GetObject*",
+                "s3:List*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-storage",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputFnGetAttPhotosB9552D0DArn4592B8DA"
+                  }
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-personal-storage",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputFnGetAttPhotosB9552D0DArn4592B8DA"
+                        }
+                      },
+                      "/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": [
+                "s3:GetBucket*",
+                "s3:GetObject*",
+                "s3:List*"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-email",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputFnGetAttInboundMailDA244C94Arn018032F9"
+                  }
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-personal-email",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputFnGetAttInboundMailDA244C94Arn018032F9"
+                        }
+                      },
+                      "/inbound/*"
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-personal-secrets",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
+                }
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "apptaskTaskRoleDefaultPolicyFAF2B7B8",
+        "Roles": [
+          {
+            "Ref": "apptaskTaskRoleB0806AA3"
+          }
+        ]
+      }
+    },
+    "apptaskADEF7AA5": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "ContainerDefinitions": [
+          {
+            "Command": [
+              "node",
+              "apps/api/src/main.ts"
+            ],
+            "Environment": [
+              {
+                "Name": "API_HOST",
+                "Value": "0.0.0.0"
+              },
+              {
+                "Name": "API_PORT",
+                "Value": "3000"
+              },
+              {
+                "Name": "AUTH_DRIVER",
+                "Value": "dev"
+              },
+              {
+                "Name": "DATABASE_URL",
+                "Value": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "postgres://listora@",
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-personal-data",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputFnGetAttPostgres9DC8BB04EndpointAddress8027D079"
+                        }
+                      },
+                      ":",
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-personal-data",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputFnGetAttPostgres9DC8BB04EndpointPort135F2474"
+                        }
+                      },
+                      "/listora?sslmode=verify-full"
+                    ]
+                  ]
+                }
+              },
+              {
+                "Name": "LOG_LEVEL",
+                "Value": "info"
+              }
+            ],
+            "Essential": true,
+            "HealthCheck": {
+              "Command": [
+                "CMD",
+                "node",
+                "-e",
+                "fetch('http://127.0.0.1:3000/health/live').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+              ],
+              "Interval": 15,
+              "Retries": 3,
+              "StartPeriod": 30,
+              "Timeout": 5
+            },
+            "Image": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Fn::Select": [
+                      4,
+                      {
+                        "Fn::Split": [
+                          ":",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-personal-registry",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputFnGetAttAppF1B96344ArnC08BF777"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  ".dkr.ecr.",
+                  {
+                    "Fn::Select": [
+                      3,
+                      {
+                        "Fn::Split": [
+                          ":",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-personal-registry",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputFnGetAttAppF1B96344ArnC08BF777"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  ".",
+                  {
+                    "Ref": "AWS::URLSuffix"
+                  },
+                  "/",
+                  {
+                    "Fn::GetStackOutput": {
+                      "StackName": "listora-personal-registry",
+                      "Region": "us-east-1",
+                      "OutputName": "PublishOutputRefAppF1B9634437DCFBAC"
+                    }
+                  },
+                  ":synth-check"
+                ]
+              ]
+            },
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "apilogs31139245"
+                },
+                "awslogs-stream-prefix": "api",
+                "awslogs-region": "us-east-1"
+              }
+            },
+            "Name": "api",
+            "PortMappings": [
+              {
+                "ContainerPort": 3000,
+                "Protocol": "tcp"
+              }
+            ],
+            "ReadonlyRootFilesystem": true,
+            "Secrets": [
+              {
+                "Name": "PGPASSWORD",
+                "ValueFrom": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-personal-data",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputRefPostgresSecretAttachment75CD6F6FCF33B882"
+                        }
+                      },
+                      ":password::"
+                    ]
+                  ]
+                }
+              },
+              {
+                "Name": "ANTHROPIC_API_KEY",
+                "ValueFrom": "arn:aws:secretsmanager:us-east-1:333333333333:secret:listora/personal/anthropic-api-key"
+              }
+            ],
+            "StopTimeout": 30
+          },
+          {
+            "Command": [
+              "node",
+              "apps/worker/src/main.ts"
+            ],
+            "Environment": [
+              {
+                "Name": "DATABASE_URL",
+                "Value": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "postgres://listora@",
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-personal-data",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputFnGetAttPostgres9DC8BB04EndpointAddress8027D079"
+                        }
+                      },
+                      ":",
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-personal-data",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputFnGetAttPostgres9DC8BB04EndpointPort135F2474"
+                        }
+                      },
+                      "/listora?sslmode=verify-full"
+                    ]
+                  ]
+                }
+              },
+              {
+                "Name": "LOG_LEVEL",
+                "Value": "info"
+              }
+            ],
+            "Essential": true,
+            "Image": {
+              "Fn::Join": [
+                "",
+                [
+                  {
+                    "Fn::Select": [
+                      4,
+                      {
+                        "Fn::Split": [
+                          ":",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-personal-registry",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputFnGetAttAppF1B96344ArnC08BF777"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  ".dkr.ecr.",
+                  {
+                    "Fn::Select": [
+                      3,
+                      {
+                        "Fn::Split": [
+                          ":",
+                          {
+                            "Fn::GetStackOutput": {
+                              "StackName": "listora-personal-registry",
+                              "Region": "us-east-1",
+                              "OutputName": "PublishOutputFnGetAttAppF1B96344ArnC08BF777"
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  ".",
+                  {
+                    "Ref": "AWS::URLSuffix"
+                  },
+                  "/",
+                  {
+                    "Fn::GetStackOutput": {
+                      "StackName": "listora-personal-registry",
+                      "Region": "us-east-1",
+                      "OutputName": "PublishOutputRefAppF1B9634437DCFBAC"
+                    }
+                  },
+                  ":synth-check"
+                ]
+              ]
+            },
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "workerlogsA075403B"
+                },
+                "awslogs-stream-prefix": "worker",
+                "awslogs-region": "us-east-1"
+              }
+            },
+            "Name": "worker",
+            "ReadonlyRootFilesystem": true,
+            "Secrets": [
+              {
+                "Name": "PGPASSWORD",
+                "ValueFrom": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetStackOutput": {
+                          "StackName": "listora-personal-data",
+                          "Region": "us-east-1",
+                          "OutputName": "PublishOutputRefPostgresSecretAttachment75CD6F6FCF33B882"
+                        }
+                      },
+                      ":password::"
+                    ]
+                  ]
+                }
+              },
+              {
+                "Name": "ANTHROPIC_API_KEY",
+                "ValueFrom": "arn:aws:secretsmanager:us-east-1:333333333333:secret:listora/personal/anthropic-api-key"
+              }
+            ],
+            "StopTimeout": 30
+          }
+        ],
+        "Cpu": "256",
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "apptaskExecutionRole73129190",
+            "Arn"
+          ]
+        },
+        "Family": "listora-personal-app",
+        "Memory": "1024",
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "RuntimePlatform": {
+          "CpuArchitecture": "X86_64",
+          "OperatingSystemFamily": "LINUX"
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "apptaskTaskRoleB0806AA3",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "apptaskExecutionRole73129190": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sts:AssumeRole",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        }
+      }
+    },
+    "apptaskExecutionRoleDefaultPolicyE842FDE0": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": [
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:BatchGetImage",
+                "ecr:GetDownloadUrlForLayer"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-personal-registry",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputFnGetAttAppF1B96344ArnC08BF777"
+                }
+              }
+            },
+            {
+              "Action": "ecr:GetAuthorizationToken",
+              "Effect": "Allow",
+              "Resource": "*"
+            },
+            {
+              "Action": [
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "apilogs31139245",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "workerlogsA075403B",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Action": [
+                "secretsmanager:DescribeSecret",
+                "secretsmanager:GetSecretValue"
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                "arn:aws:secretsmanager:us-east-1:333333333333:secret:listora/personal/anthropic-api-key-??????",
+                {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-data",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefPostgresSecretAttachment75CD6F6FCF33B882"
+                  }
+                }
+              ]
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "PolicyName": "apptaskExecutionRoleDefaultPolicyE842FDE0",
+        "Roles": [
+          {
+            "Ref": "apptaskExecutionRole73129190"
+          }
+        ]
+      }
+    },
+    "appserviceServiceA5AB3AA1": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "Cluster": {
+          "Ref": "ClusterEB0386A7"
+        },
+        "DeploymentConfiguration": {
+          "DeploymentCircuitBreaker": {
+            "Enable": true,
+            "Rollback": true
+          },
+          "MaximumPercent": 200,
+          "MinimumHealthyPercent": 100
+        },
+        "EnableECSManagedTags": false,
+        "LaunchType": "FARGATE",
+        "LoadBalancers": [],
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "ENABLED",
+            "SecurityGroups": [
+              {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-personal-network",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputFnGetAttApiSecurityGroup4E5BB726GroupIdF3427EAD"
+                }
+              },
+              {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-personal-network",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputFnGetAttWorkerSecurityGroup5529CF0BGroupId1D09B9A4"
+                }
+              }
+            ],
+            "Subnets": [
+              {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-personal-network",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputRefVpcpublicSubnet1Subnet2BB74ED7A7A9244B"
+                }
+              },
+              {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-personal-network",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputRefVpcpublicSubnet2SubnetE34B022A584D7750"
+                }
+              }
+            ]
+          }
+        },
+        "PropagateTags": "SERVICE",
+        "ServiceName": "app",
+        "ServiceRegistries": [
+          {
+            "ContainerName": "api",
+            "ContainerPort": 3000,
+            "RegistryArn": {
+              "Fn::GetAtt": [
+                "appserviceCloudmapServiceDE5918A8",
+                "Arn"
+              ]
+            }
+          }
+        ],
+        "TaskDefinition": {
+          "Ref": "apptaskADEF7AA5"
+        }
+      },
+      "DependsOn": [
+        "apptaskTaskRoleDefaultPolicyFAF2B7B8",
+        "apptaskTaskRoleB0806AA3"
+      ]
+    },
+    "appserviceTaskCountTarget6A45B083": {
+      "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+      "Properties": {
+        "MaxCapacity": 1,
+        "MinCapacity": 1,
+        "ResourceId": {
+          "Fn::Join": [
+            "",
+            [
+              "service/",
+              {
+                "Ref": "ClusterEB0386A7"
+              },
+              "/",
+              {
+                "Fn::GetAtt": [
+                  "appserviceServiceA5AB3AA1",
+                  "Name"
+                ]
+              }
+            ]
+          ]
+        },
+        "RoleARN": "arn:aws:iam::333333333333:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService",
+        "ScalableDimension": "ecs:service:DesiredCount",
+        "ServiceNamespace": "ecs"
+      },
+      "DependsOn": [
+        "apptaskTaskRoleDefaultPolicyFAF2B7B8",
+        "apptaskTaskRoleB0806AA3"
+      ]
+    },
+    "appserviceCloudmapServiceDE5918A8": {
+      "Type": "AWS::ServiceDiscovery::Service",
+      "Properties": {
+        "DnsConfig": {
+          "DnsRecords": [
+            {
+              "TTL": 10,
+              "Type": "SRV"
+            }
+          ],
+          "NamespaceId": {
+            "Fn::GetAtt": [
+              "Namespace9B63B8C8",
+              "Id"
+            ]
+          },
+          "RoutingPolicy": "MULTIVALUE"
+        },
+        "HealthCheckCustomConfig": {
+          "FailureThreshold": 1
+        },
+        "Name": "api",
+        "NamespaceId": {
+          "Fn::GetAtt": [
+            "Namespace9B63B8C8",
+            "Id"
+          ]
+        }
+      },
+      "DependsOn": [
+        "apptaskTaskRoleDefaultPolicyFAF2B7B8",
+        "apptaskTaskRoleB0806AA3"
+      ]
+    },
+    "ApiCertificate1D5B2B3B": {
+      "Type": "AWS::CertificateManager::Certificate",
+      "Properties": {
+        "DomainName": "api.personal.example.com",
+        "DomainValidationOptions": [
+          {
+            "DomainName": "api.personal.example.com",
+            "HostedZoneId": "Z000000000PERSONAL"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "listora-personal-compute/ApiCertificate"
+          }
+        ],
+        "ValidationMethod": "DNS"
+      }
+    },
+    "Namespace9B63B8C8": {
+      "Type": "AWS::ServiceDiscovery::PrivateDnsNamespace",
+      "Properties": {
+        "Description": "Listora personal service discovery",
+        "Name": "personal.listora.internal",
+        "Vpc": {
+          "Fn::GetStackOutput": {
+            "StackName": "listora-personal-network",
+            "Region": "us-east-1",
+            "OutputName": "PublishOutputRefVpc8378EB385002A76F"
+          }
+        }
+      }
+    },
+    "VpcLink42ED6FF0": {
+      "Type": "AWS::ApiGatewayV2::VpcLink",
+      "Properties": {
+        "Name": "listora-personal-api",
+        "SecurityGroupIds": [
+          {
+            "Fn::GetStackOutput": {
+              "StackName": "listora-personal-network",
+              "Region": "us-east-1",
+              "OutputName": "PublishOutputFnGetAttVpcLinkSecurityGroupB3941EDCGroupId0F48BF55"
+            }
+          }
+        ],
+        "SubnetIds": [
+          {
+            "Fn::GetStackOutput": {
+              "StackName": "listora-personal-network",
+              "Region": "us-east-1",
+              "OutputName": "PublishOutputRefVpcpublicSubnet1Subnet2BB74ED7A7A9244B"
+            }
+          },
+          {
+            "Fn::GetStackOutput": {
+              "StackName": "listora-personal-network",
+              "Region": "us-east-1",
+              "OutputName": "PublishOutputRefVpcpublicSubnet2SubnetE34B022A584D7750"
+            }
+          }
+        ]
+      }
+    },
+    "ApiDomain2D27DFFC": {
+      "Type": "AWS::ApiGatewayV2::DomainName",
+      "Properties": {
+        "DomainName": "api.personal.example.com",
+        "DomainNameConfigurations": [
+          {
+            "CertificateArn": {
+              "Ref": "ApiCertificate1D5B2B3B"
+            },
+            "EndpointType": "REGIONAL",
+            "SecurityPolicy": "TLS_1_2"
+          }
+        ]
+      }
+    },
+    "HttpApiF5A9A8A7": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "Description": "Listora personal API",
+        "DisableExecuteApiEndpoint": true,
+        "Name": "listora-personal-api",
+        "ProtocolType": "HTTP"
+      }
+    },
+    "HttpApiDefaultRouteApi5C644F2D": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApiF5A9A8A7"
+        },
+        "ConnectionId": {
+          "Ref": "VpcLink42ED6FF0"
+        },
+        "ConnectionType": "VPC_LINK",
+        "IntegrationMethod": "ANY",
+        "IntegrationType": "HTTP_PROXY",
+        "IntegrationUri": {
+          "Fn::GetAtt": [
+            "appserviceCloudmapServiceDE5918A8",
+            "Arn"
+          ]
+        },
+        "PayloadFormatVersion": "1.0"
+      }
+    },
+    "HttpApiDefaultRoute146696CE": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApiF5A9A8A7"
+        },
+        "AuthorizationType": "NONE",
+        "RouteKey": "$default",
+        "Target": {
+          "Fn::Join": [
+            "",
+            [
+              "integrations/",
+              {
+                "Ref": "HttpApiDefaultRouteApi5C644F2D"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "DefaultStageEE28A986": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApiF5A9A8A7"
+        },
+        "AutoDeploy": true,
+        "DefaultRouteSettings": {
+          "ThrottlingBurstLimit": 100,
+          "ThrottlingRateLimit": 50
+        },
+        "StageName": "$default"
+      },
+      "DependsOn": [
+        "ApiDomain2D27DFFC"
+      ]
+    },
+    "DefaultStagelistorapersonalcomputeApiDomainundefinedED8E6E58": {
+      "Type": "AWS::ApiGatewayV2::ApiMapping",
+      "Properties": {
+        "ApiId": {
+          "Ref": "HttpApiF5A9A8A7"
+        },
+        "DomainName": {
+          "Ref": "ApiDomain2D27DFFC"
+        },
+        "Stage": "$default"
+      },
+      "DependsOn": [
+        "ApiDomain2D27DFFC",
+        "DefaultStageEE28A986"
+      ]
+    },
+    "ApiAliasF1DE69EE": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "AliasTarget": {
+          "DNSName": {
+            "Fn::GetAtt": [
+              "ApiDomain2D27DFFC",
+              "RegionalDomainName"
+            ]
+          },
+          "HostedZoneId": {
+            "Fn::GetAtt": [
+              "ApiDomain2D27DFFC",
+              "RegionalHostedZoneId"
+            ]
+          }
+        },
+        "HostedZoneId": "Z000000000PERSONAL",
+        "Name": "api.personal.example.com.",
+        "Type": "A"
+      }
+    }
+  },
+  "Outputs": {
+    "ApiUrl": {
+      "Value": "https://api.personal.example.com"
+    },
+    "ClusterName": {
+      "Value": {
+        "Ref": "ClusterEB0386A7"
+      }
+    },
+    "PublishOutputRefHttpApiF5A9A8A73B77AB98": {
+      "Value": {
+        "Ref": "HttpApiF5A9A8A7"
+      }
+    },
+    "PublishOutputRefClusterEB0386A7D87642F6": {
+      "Value": {
+        "Ref": "ClusterEB0386A7"
+      }
+    },
+    "PublishOutputFnGetAttappserviceServiceA5AB3AA1Name13268485": {
+      "Value": {
+        "Fn::GetAtt": [
+          "appserviceServiceA5AB3AA1",
+          "Name"
+        ]
+      }
+    },
+    "PublishOutputFnGetAttClusterEB0386A7Arn0CAA3DA3": {
+      "Value": {
+        "Fn::GetAtt": [
+          "ClusterEB0386A7",
+          "Arn"
+        ]
+      }
+    }
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+    }
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  {
+                    "Ref": "BootstrapVersion"
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+        }
+      ]
+    }
+  }
+}
