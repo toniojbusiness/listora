@@ -1,0 +1,20 @@
+{
+  "name": "@listora/marketplaces",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Marketplace adapter interface and the fake marketplace (with fault injection) used in development and tests.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "fake": "node --env-file-if-exists=../../.env src/fake/cli.ts"
+  },
+  "dependencies": {
+    "@listora/db": "*",
+    "@listora/shared": "*"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

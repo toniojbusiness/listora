@@ -49,7 +49,9 @@ These two rules from the product owner override every other design choice.
 - Relative imports name the real file, `./money.ts`, never `./money.js`. ESLint enforces this.
   Type-only imports use `import type`.
 - Workspace packages export their `src/index.ts` directly (`"exports": { ".": "./src/index.ts" }`)
-  and are consumed as `@listora/<name>`.
+  and are consumed as `@listora/<name>`. A package may also export a `./testing` subpath with
+  integration-test helpers for other workspaces (`@listora/db/testing`); runtime code never
+  imports one.
 - TypeScript is pinned to 6.0.x because typescript-eslint does not support TypeScript 7 yet.
 - Configuration comes only from environment variables. Each process parses them once at
   startup and fails fast (the API with a zod schema in `apps/api/src/config.ts`). Error
@@ -107,6 +109,8 @@ packages/
                 (@listora/storage)
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
                 the photo processing job, an item's photo-set hash (@listora/photos)
+  marketplaces/ Marketplace adapter interface; fake marketplace with fault injection (@listora/marketplaces)
+  operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
@@ -251,9 +255,16 @@ interface MarketplaceAdapter {
 | Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms | DKIM-verified forwarded emails, scheduled browser check, manual |
 | Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark                                                                                                                           | Forwarded emails, scheduled browser check, manual               |
 
-Assisted adapters implement `execute` by creating a `user_task` (deep link plus copy-assist
-payload) and returning `pendingUser`. An assisted operation can finish only through a user
-confirmation event.
+`@listora/marketplaces` implements the part of this interface the operation engine needs (T-06):
+`id`, `capabilities`, `execute`, `readListing`, and the `Outcome` union. T-10 adds the rest
+without changing those members. `execute` never throws for a marketplace error; it returns an
+outcome. `readListing` throws when the marketplace cannot be read, and must find the effect of
+an earlier attempt even when that attempt's outcome was unknown (by external id or SKU).
+
+Assisted adapters implement `execute` by returning `pendingUser` with the user task (deep link
+plus copy-assist payload); the engine records the `user_task` in the same transaction as the
+`needs_user_action` status. An assisted operation can finish only through a user confirmation
+event.
 
 **Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
 only". The marketplaces granted the product owner permission to automate where no API exists,
@@ -318,29 +329,62 @@ appear only next to real sold data, and a test enforces this (T-14).
 
 ## 6. Operation engine: never false success
 
-Every marketplace write is a `marketplace_operation` row whose state machine is driven by the
-worker.
+Every marketplace write is a `marketplace_operation` row whose state machine the worker drives
+(`@listora/operations`; the state diagram is in `state-machine.ts`).
 
-1. **Write path.** The API, or the auto-delist orchestrator, inserts the operation (`queued`,
-   `idempotency_key`, desired-state snapshot) and enqueues its job **in the same
-   transaction**.
-2. **Execution.** Operations are serialized per listing (`queue_name = listing:<id>`). The
-   adapter outcome determines the next state:
+1. **Write path.** The API, or the auto-delist orchestrator, calls `enqueueOperation`. It
+   inserts the operation (`queued`, `idempotency_key`, desired-state snapshot) and enqueues its
+   Graphile Worker job **in the same transaction**. Enqueueing the same key again returns the
+   existing operation. The desired state names the fields a read-back must show, so an empty
+   one is refused.
+2. **Execution.** One job runs one step. A step commits `running` before it can send anything,
+   so a step cut short is detectable afterwards. No transaction stays open during a
+   marketplace call, and a step records its result only if the operation is still exactly as
+   the step found it. Jobs run one at a time per listing (`queue_name = listing:<id>`,
+   `job_key = operation:<id>`), and a newer operation waits until every older one on its
+   listing is finished, so changes apply in order even while an older one waits to retry. A
+   daily job deletes listing queues that have no jobs left. The adapter outcome determines the
+   next state:
    - `confirmed`: the API succeeded **and** `readListing` shows the desired state → `succeeded`.
+     A read-back that disagrees or fails → `verifying`.
    - `rejected` (validation or permanent error) → `failed`, with a user-readable reason and fix.
    - `transient` (429, 5xx, network failure before send) → `retrying` with backoff and jitter
-     (30 s, 2 m, 10 m, 30 m, 2 h, 6 h), then `failed` with a Retry action.
-   - `unknown` (timeout after the request may have been sent) → `verifying`. `readListing`
-     decides the result. The request is never re-sent blindly.
-   - `pendingUser` (assisted) → `needs_user_action` until the user confirms.
-3. **History.** Every transition appends an `operation_event` with a redacted
-   request/response excerpt, error code, and attempt number.
-4. **Invariant, enforced in code and tests:** no code path sets `succeeded` without a verified
-   read-back or a user confirmation event. Chaos tests inject 429s, 5xx errors,
-   timeouts after send, and crashes.
-5. **Concurrency.** Token refresh is single-flight per connection; Depop rotates refresh
-   tokens, so a lost write disconnects the seller. Rate limits use per-seller and app-wide
-   token buckets.
+     (30 s, 2 m, 10 m, 30 m, 2 h, 6 h, ±20%, at least the marketplace's `Retry-After`), then
+     `failed` with a Retry action.
+   - `unknown` (timeout after the request may have been sent, a lost connection, an adapter that
+     throws or misses its deadline) → `verifying`. `readListing` decides: the desired state
+     holds → `succeeded`; it does not → `retrying`. The request is never re-sent blindly.
+   - `pendingUser` (assisted) → `needs_user_action` until the user confirms
+     (`confirmOperationByUser`).
+3. **Attempts.** Every step, a send or a read-back, uses one attempt, and an operation gets
+   seven. A step whose result is unknown is always followed by a read-back, even after the
+   last attempt. Retry (`retryOperation`) gives a failed operation a fresh set of attempts; it
+   is refused once a newer operation exists on the listing, since it would undo that one.
+4. **Idempotent re-execution.** An operation that was sent before is read back before every
+   later send, and succeeds without sending again when the change already took effect (a 5xx
+   can hide an applied write). Adapters also pass the operation's idempotency key to the
+   marketplace's own duplicate protection where it has one.
+5. **Crash recovery.** Each worker holds a Postgres session named `listora-worker:<pool id>`,
+   which the operating system closes when the process dies, even on SIGKILL. Live workers
+   release the job locks of pools that have no session within about 10 seconds (Graphile
+   Worker alone waits 4 hours). The job runs again, finds its step `running`, and reads the
+   listing back. A worker that loses its own session exits at once. So every Graphile Worker
+   runner must be started through `startOperationWorker`, with the same database role, on a
+   direct connection (not a transaction pooler).
+6. **Listing truth.** A verified success records what the marketplace showed on the
+   `marketplace_listing`: status, external id and URL, `remote_snapshot`, `last_verified_at`.
+   A user confirmation changes only the status.
+7. **History.** Every transition appends an `operation_event` with a redacted request/response
+   excerpt (`redactForStorage` in `@listora/shared`), error code, and attempt number.
+8. **Invariant, enforced in code and tests:** no code path sets `succeeded` without a verified
+   read-back or a user confirmation event. `transitionOperation` is the only code that writes
+   operation rows, and it sets `succeeded` only with a `SuccessProof`, which only `evidence.ts`
+   can create; a test scans the code for any other writer. Chaos tests inject 429s, 5xx errors
+   (also after the change was applied), timeouts after send, stale reads, and a worker killed
+   mid-operation.
+9. **Concurrency (T-16, T-24).** Token refresh is single-flight per connection; Depop rotates
+   refresh tokens, so a lost write disconnects the seller. Rate limits use per-seller and
+   app-wide token buckets.
 
 **Auto-delist.** A sale event (webhook, poll, email, or manual entry) is deduplicated by
 its order (see `sale` in section 9). Then, in one transaction, Listora records the sale, sets
@@ -359,19 +403,20 @@ Nothing requires a real credential to build or test. Every external service sits
 interface with a fake or dev driver, selected by an environment variable. Each switch below
 lands with the task that introduces that dependency, and its keys are added to `.env.example`.
 
-| Dependency       | Dev/test                                                                                                     | Production               | Switch                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------ |
-| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                   | RDS                      | `DATABASE_URL`, `TEST_DATABASE_URL`  |
-| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                             | S3 + CloudFront          | `STORAGE_DRIVER=local\|s3`           |
-| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                          | Anthropic API            | `AI_PROVIDER=fake\|anthropic`        |
-| eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection) | Sandbox, then production | `EBAY_ENV=fake\|sandbox\|production` |
-| Depop            | `fake-depop` generated from Depop's OpenAPI spec                                                             | Sandbox, then production | `DEPOP_ENV`                          |
-| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                         | SES inbound              | `EMAIL_INGEST=folder\|ses`           |
-| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                           | Cognito (T-31)           | `AUTH_DRIVER=dev\|cognito`           |
-| Payments         | Fake Stripe client + StoreKit configuration file                                                             | Stripe, App Store        | `BILLING_DRIVER=fake\|stripe`        |
-| Push             | Recording fake                                                                                               | APNs                     | `PUSH_DRIVER`                        |
-| Token encryption | Local AES-GCM key from `.env`                                                                                | KMS envelope encryption  | `TOKEN_KMS_KEY_ID`                   |
-| iOS              | iPhone 17 simulator, photo-library fixtures                                                                  | Device / TestFlight      | xcconfig `API_BASE_URL`              |
+| Dependency       | Dev/test                                                                                                     | Production                 | Switch                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------- | ------------------------------------ |
+| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                   | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`  |
+| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)              | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`               |
+| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                             | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`           |
+| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                          | Anthropic API              | `AI_PROVIDER=fake\|anthropic`        |
+| eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production` |
+| Depop            | `fake-depop` generated from Depop's OpenAPI spec                                                             | Sandbox, then production   | `DEPOP_ENV`                          |
+| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                         | SES inbound                | `EMAIL_INGEST=folder\|ses`           |
+| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                           | Cognito (T-31)             | `AUTH_DRIVER=dev\|cognito`           |
+| Payments         | Fake Stripe client + StoreKit configuration file                                                             | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`        |
+| Push             | Recording fake                                                                                               | APNs                       | `PUSH_DRIVER`                        |
+| Token encryption | Local AES-GCM key from `.env`                                                                                | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                   |
+| iOS              | iPhone 17 simulator, photo-library fixtures                                                                  | Device / TestFlight        | xcconfig `API_BASE_URL`              |
 
 Live smoke tests for real providers skip automatically when their credential is absent. Fakes
 must stay true to the real contract: shapes, error codes, and failure modes.

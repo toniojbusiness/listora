@@ -1,11 +1,13 @@
 /**
  * Schema migration command: `npm run db:migrate -- [latest | up | status | down <name>]`.
- * Reads DATABASE_URL (see `.env.example`) and logs one JSON line per result.
+ * Reads DATABASE_URL (see `.env.example`) and logs one JSON line per result. `latest` and `up`
+ * also install or upgrade the job queue schema (see job-queue.ts), which has no `down`.
  */
 import { assertNever, createLogger } from '@listora/shared';
 
 import { loadMigrateConfig } from './config.ts';
 import { createDatabase } from './database.ts';
+import { JOB_QUEUE_SCHEMA, migrateJobQueue } from './job-queue.ts';
 import { SchemaMigrator } from './migrations.ts';
 
 const config = loadMigrateConfig(process.argv.slice(2));
@@ -20,6 +22,8 @@ async function run(): Promise<void> {
       const applied =
         config.command === 'latest' ? await migrator.migrateToLatest() : await migrator.migrateUp();
       logger.info({ applied }, applied.length > 0 ? 'migrations applied' : 'schema is up to date');
+      await migrateJobQueue({ connectionString: config.databaseUrl, logger });
+      logger.info({ schema: JOB_QUEUE_SCHEMA }, 'job queue schema is up to date');
       return;
     }
     case 'down': {

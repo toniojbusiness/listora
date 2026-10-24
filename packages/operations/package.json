@@ -1,0 +1,22 @@
+{
+  "name": "@listora/operations",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Marketplace operation engine: transactional enqueue, state machine, verified execution on Graphile Worker.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/shared": "*",
+    "graphile-worker": "^0.18.0",
+    "kysely": "^0.29.7",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@listora/testing": "*",
+    "@types/pg": "^8.23.1"
+  }
+}

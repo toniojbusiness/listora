@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
+import pg from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createScratchDatabase, startNodeProcess, type ScratchDatabase } from '@listora/testing';
@@ -22,6 +23,20 @@ async function migrate(env: NodeJS.ProcessEnv, ...args: string[]) {
   return { code, logs: process_.logs, stderr: process_.stderr };
 }
 
+async function functionExists(url: string, name: string): Promise<boolean> {
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    const { rows } = await client.query<{ found: boolean }>(
+      "select exists (select 1 from pg_proc where oid::regprocedure::text like $1 || '(%') as found",
+      [name],
+    );
+    return rows[0]?.found === true;
+  } finally {
+    await client.end();
+  }
+}
+
 describe('migrate command (real Postgres)', () => {
   let scratch: ScratchDatabase;
 
@@ -41,6 +56,11 @@ describe('migrate command (real Postgres)', () => {
     expect(applied.logs).toContainEqual(
       expect.objectContaining({ msg: 'migrations applied', applied: SHIPPED }),
     );
+
+    expect(applied.logs).toContainEqual(
+      expect.objectContaining({ msg: 'job queue schema is up to date', schema: 'graphile_worker' }),
+    );
+    expect(await functionExists(scratch.url, 'graphile_worker.add_job')).toBe(true);
 
     const again = await migrate(env);
     expect(again.code).toBe(0);
