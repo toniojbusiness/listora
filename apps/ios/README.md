@@ -180,11 +180,11 @@ add that folder's JPEGs, and `LISTORA_RESET_LOCAL_DATA=1` starts with no drafts,
 
 ### Signing in (Dev)
 
-Uploads need a session. Until production sign-in (Cognito, T-31), Dev builds have a developer
-sign-in in Settings: enter an email, tap "Send code", and enter the code the API prints to its
-log (`AUTH_DRIVER=dev`). The session is kept in the Keychain. These `/dev/auth` endpoints are
-outside the OpenAPI contract, so `DevSignInClient` is the one place the app calls the API without
-the generated client.
+Uploads need a session. Until the app signs in with Cognito (the API side is in
+[docs/auth.md](../../docs/auth.md)), Dev builds have a developer sign-in in Settings: enter an
+email, tap "Send code", and enter the code the API prints to its log (`AUTH_DRIVER=dev`). The
+session is kept in the Keychain. These `/dev/auth` endpoints are outside the OpenAPI contract,
+so `DevSignInClient` is the one place the app calls the API without the generated client.
 
 ## Environments
 
@@ -288,7 +288,8 @@ the new one everywhere below.
    enable the App Groups capability with its environment's group on both the app id and the
    Share Extension id. The app and the Share Extension share data through it; the entitlement
    arrives with the Share Extension work (T-22). Later tasks enable more capabilities on the app
-   ids the same way (Sign in with Apple in T-31, In-App Purchase in T-28, Push Notifications).
+   ids the same way (Sign in with Apple with the app's Cognito sign-in, In-App Purchase in T-28,
+   Push Notifications).
 4. **App records.** In App Store Connect > Apps > New App, create two iOS apps: **Listora** with
    bundle id `com.listora.app`, and **Listora Staging** with `com.listora.app.staging`. Staging
    is only ever distributed through TestFlight.

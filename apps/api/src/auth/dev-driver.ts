@@ -41,7 +41,8 @@ interface PendingCode {
  * Local sign-in for development (`AUTH_DRIVER=dev`, see docs/architecture.md section 7): a
  * one-time code is printed to the API log instead of being emailed, and exchanging it returns
  * a signed session token (an HS256 JWT). It needs no external service or credential. Pending
- * codes live in memory, so they are lost when the API restarts. Production uses Cognito (T-31).
+ * codes live in memory, so they are lost when the API restarts. Production uses Cognito
+ * (cognito-driver.ts).
  */
 export class DevAuthDriver implements AuthDriver {
   readonly provider = 'dev' as const;
