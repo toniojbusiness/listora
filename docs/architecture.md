@@ -80,7 +80,10 @@ The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
   OpenAPI contract, with the session's bearer token and the error model), and `Features` (one
   library per feature). A feature never imports another
   feature; `AppFeature` composes them into the tab shell. The app target only starts
-  `AppFeature`.
+  `AppFeature`; the Share Extension target only starts `ShareLinkFeature`.
+- The app and the Share Extension share the signed-in session through an App Group
+  (`APP_GROUP_IDENTIFIER` in `Base.xcconfig`): the session is a keychain item in the group's
+  access group (`KeychainAccessGrantStorage.session(appGroup:)`).
 - Configuration comes only from the build configuration's xcconfig file (`Dev-Debug`,
   `Staging-Release`, `Prod-Release`) through Info.plist. `AppConfiguration` validates it at
   launch and stops the app with an error that names the bad key. Only Dev may use plain HTTP.
@@ -169,6 +172,7 @@ src/
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
+  listings/      Listing views (honest statusDisplay) and shared-listing links
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -212,6 +216,19 @@ src/
 - **Item status.** Archiving records the item's earlier status in `pre_archive_status`, so
   unarchiving never overwrites a status the server owns (listed, sold, shipped). Which
   transitions the user may make is part of the contract: see `ItemStatus` in `openapi.yaml`.
+- **Listings.** An item's `listings` (and `ItemSummary.listings`) are its newest listing per
+  marketplace, each with a server-rendered `statusDisplay` (`listings/views.ts`). A listing is
+  `api` only while it is on an API connection, otherwise `assisted`. Only an API listing can be
+  verified by a read-back (`last_verified_at`, "confirmed by eBay") and only an assisted one by
+  the user (`user_confirmed_at`, "you confirmed"), so an assisted listing can never claim the
+  marketplace confirmed it.
+- **Shared-listing links.** `linkItemListing` and `importSharedListing` record a listing the
+  user created on a marketplace and shared from Safari or the marketplace app to the Share
+  Extension. The server reads the marketplace and listing id from the URL with
+  `parseListingUrl` (`@listora/shared`; the iOS `ListingURL` parser is tested against the same
+  fixtures in `packages/shared/fixtures/listing-urls.json`) and never fetches it. The listing is
+  assisted, `active`, and user-confirmed; a short link (`posh.mk/...`) has no listing id and is
+  identified by its URL.
 - **Shutdown.** On SIGTERM the server stops accepting connections, finishes in-flight
   requests (asking their keep-alive clients to close), then closes the database pool.
 
@@ -394,6 +411,11 @@ sessions the user logs into from the iPhone app.
 
 The runner, its adapter mode, and session storage are later tasks; until they land, these
 marketplaces run assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
+Assisted adapters implement `execute` by creating a `user_task` (deep link plus copy-assist
+payload) and returning `pendingUser`. An assisted operation can finish only through a user
+confirmation event. A listing the user posted themselves is linked to its item by sharing it to
+the Listora Share Extension (`importListings: 'share_sheet'`), which records it as confirmed by
+the user, never by the marketplace.
 
 ## 5. Pricing data rules
 
@@ -778,8 +800,10 @@ Tables by area:
   `ai_kill_switch`, `ai_account_block`, and the append-only `ai_control_audit`.
 - **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
   `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot and
-  newest seen revision, desired/applied version), `marketplace_operation` (with the listing
-  `content` a create, revise, or relist publishes), and the append-only `operation_event`.
+  newest seen revision, desired/applied version, `last_verified_at` for a read-back and
+  `user_confirmed_at` for the user's confirmation; a listing known only by a share short link
+  is unique by its URL), `marketplace_operation` (with the listing `content` a create, revise,
+  or relist publishes), and the append-only `operation_event`.
 - **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
   provider event id, so an id that repeats in another account or on another marketplace is
   never dropped as a duplicate). `sale` is one marketplace order (unique per account,

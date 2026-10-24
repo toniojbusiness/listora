@@ -48,12 +48,12 @@ the Info.plist files in `Generated/`; both are gitignored. Never edit the genera
 change `project.yml` and run `make ios-generate`. New Swift files in an existing folder need no
 project change, because targets include their whole folder.
 
-| Target           | Type          | Contents                                                    |
-| ---------------- | ------------- | ----------------------------------------------------------- |
-| `Listora`        | App           | `Listora/`: the `@main` entry point; links `AppFeature`     |
-| `ShareExtension` | App extension | `ShareExtension/`: placeholder share sheet (T-22 builds it) |
-| `ListoraTests`   | Unit tests    | `ListoraTests/`: run inside the app against its real bundle |
-| `ListoraUITests` | UI tests      | `ListoraUITests/`: drive the app on the simulator           |
+| Target           | Type          | Contents                                                                           |
+| ---------------- | ------------- | ---------------------------------------------------------------------------------- |
+| `Listora`        | App           | `Listora/`: the `@main` entry point; links `AppFeature`                            |
+| `ShareExtension` | App extension | `ShareExtension/`: links a shared listing URL to an item; links `ShareLinkFeature` |
+| `ListoraTests`   | Unit tests    | `ListoraTests/`: run inside the app against its real bundle                        |
+| `ListoraUITests` | UI tests      | `ListoraUITests/`: drive the app, and Safari's share sheet, on the simulator       |
 
 The `Listora` scheme runs every test target, including each package's tests.
 
@@ -64,7 +64,8 @@ Code lives in local Swift packages under `Packages/`. The app target only compos
 ```text
 Packages/
   Core/          Models and utilities with no UI: AppConfiguration, AppEnvironment, AppVersion,
-                 and the TagReader protocol with its TagReading model
+                 the TagReader protocol with its TagReading model, the listing URL parser
+                 (ListingURL, SharedContent), and the session's AccessTokenStore
   DesignSystem/  Palette (light and dark colors), Typography, Spacing, Radius, components
   APIClient/     The generated ListoraAPI client over URLSession, the signed-in session (Keychain),
                  APIFailure (the contract's error model), and the dev sign-in client
@@ -75,13 +76,15 @@ Packages/
     TasksFeature      Tasks tab
     SettingsFeature   Settings tab, with the developer sign-in in Dev builds
     TagReadingFeature On-device tag reading with Vision (VisionTagReader); no UI
+    ShareLinkFeature  The Share Extension's screen (ShareLinkView, ShareLinkModel)
 ```
 
 Dependency rules:
 
 - `Core`, `DesignSystem`, and `APIClient` do not depend on each other or on any feature.
-- A feature depends on `Core`, `DesignSystem`, and (when it talks to the API) `APIClient`,
-  never on another feature. `AppFeature` is the only module that imports features.
+- A feature depends on `Core`, `DesignSystem`, and (when it talks to the API) `APIClient` and
+  the generated `ListoraAPI` types, never on another feature. `AppFeature` is the only module
+  that imports features; the Share Extension target imports only `ShareLinkFeature`.
 - Add a feature as a new target and library product in `Packages/Features/Package.swift`, and
   its tests as a test target there. List new test targets in the scheme in `project.yml`.
 - Views use `Palette`, `Typography`, and `Spacing`, not raw colors, fonts, or numbers.
@@ -119,6 +122,36 @@ Core Image's Code 128 and QR generators); nothing is downloaded. To change a fix
 generator and run `make ios-tag-fixtures` on a Mac, then commit the images and manifest. A test
 fails if the whole-photo pass starts reading a size-tab fixture on its own, so the fixtures keep
 exercising the size-tab pass.
+
+## Share Extension
+
+Sharing a marketplace listing (from Safari, or from the eBay, Depop, Poshmark, or Mercari app)
+to **Listora** links it to an inventory item. The extension:
+
+- reads only what the share carries: its URLs, text, and title (`SharedItems`). It never loads
+  the page. `ListingURL` recognizes the marketplace and listing id, including share short links
+  such as `posh.mk/...` (kept as given; only the marketplace knows their listing id). The server
+  parses the URL again (`linkItemListing`) and has the last word; both parsers are tested
+  against `packages/shared/fixtures/listing-urls.json`.
+- lets the user search their items by title, brand, or SKU (the system's Scan Text button reads
+  a SKU from a label), or create an import placeholder item with the next SKU
+  (`importSharedListing`), then asks them to confirm.
+- records the link as confirmed by the user and shows the server's status label as given
+  ("Active (you confirmed)"), never "confirmed by <marketplace>". A failed link shows the
+  server's message; a retryable one offers Try again with the same Idempotency-Key.
+- is signed in when the app is: the session (`AccessGrant`) is a keychain item in the App
+  Group's access group (`KeychainAccessGrantStorage.session(appGroup:)`), which both the app
+  and the extension use. The App Group (`APP_GROUP_IDENTIFIER` in `Config/Base.xcconfig`,
+  `group.com.listora.app.dev` in Dev) is in both targets' entitlements. It is a placeholder
+  until the Apple Developer account registers it (gate G-Apple); simulator builds need no team.
+
+`ShareExtensionUITests` drives the real flow: it opens a page in Safari that shares a Poshmark
+link with the Web Share API (so no marketplace page is loaded), picks Listora in the share
+sheet, and links the listing against `StubAPIServer`, an HTTP server inside the test runner. The
+app hands the extension a session and the stub's URL through Dev-only launch variables
+(`DebugLaunchOptions`): `LISTORA_DEV_ACCESS_TOKEN` signs the app in, and
+`LISTORA_DEV_API_BASE_URL` is stored in the App Group (`DevOverrides`) for the extension to
+read; a launch without it removes it. Both are read only by Debug builds and only in Dev.
 
 ## App icon
 
@@ -203,8 +236,8 @@ error that names the key.
   contains "Debug".
 - Dev uses plain HTTP so the simulator can reach `npm run dev:api` on this Mac. Staging and
   Prod must use HTTPS; `AppConfiguration` rejects anything else.
-- Only the Dev Info.plist carries the ATS local-networking exception
-  (`NSAllowsLocalNetworking`). XcodeGen derives it from the shared plist, and
+- Only the Dev Info.plists (the app's and the Share Extension's) carry the ATS local-networking
+  exception (`NSAllowsLocalNetworking`). XcodeGen derives them from the shared plists, and
   `make ios-check-ats` (part of `make ios-test`) fails if Staging or Prod would ship it.
 - The Staging and Prod hosts end in `.invalid` and never resolve until they are set. Prod
   points at the personal environment, which is production for now (there is no separate

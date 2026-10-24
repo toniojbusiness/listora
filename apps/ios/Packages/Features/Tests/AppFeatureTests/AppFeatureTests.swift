@@ -32,6 +32,7 @@ struct AppDependenciesTests {
         let bundle = try InfoBundle([
             AppConfiguration.InfoKey.environment: environment,
             AppConfiguration.InfoKey.apiBaseURL: url,
+            AppConfiguration.InfoKey.appGroup: "group.com.listora.app.staging",
             "CFBundleShortVersionString": "1.0",
             "CFBundleVersion": "3",
         ])
@@ -48,6 +49,7 @@ struct AppDependenciesTests {
         let dependencies = try dependencies()
         #expect(dependencies.configuration.environment == .staging)
         #expect(dependencies.apiClient.baseURL.absoluteString == "https://api.staging.example.com")
+        #expect(dependencies.configuration.appGroupIdentifier == "group.com.listora.app.staging")
         #expect(dependencies.version.description == "1.0 (3)")
     }
 

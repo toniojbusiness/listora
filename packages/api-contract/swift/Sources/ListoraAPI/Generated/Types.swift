@@ -228,6 +228,40 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/items/{itemId}/listings`.
     /// - Remark: Generated from `#/paths//v1/items/{itemId}/listings/post(createListing)`.
     func createListing(_ input: Operations.CreateListing.Input) async throws -> Operations.CreateListing.Output
+    /// Link a listing the user already has on a marketplace
+    ///
+    /// Records a listing the user created on a marketplace themselves, from the URL they
+    /// shared from Safari or the marketplace app. The server reads the marketplace and the
+    /// listing id from the URL (see `ListingLinkCreate`) and never fetches it. The listing is
+    /// `assisted` and `active`, and its `verification` is `user_confirmation`: it is the
+    /// user's word, never shown as confirmed by the marketplace. A `draft` or `ready` item
+    /// becomes `listed`.
+    ///
+    /// `409 already_exists` when this listing is already linked to an item (the message
+    /// names that item's SKU) or the item already has a live listing on that marketplace.
+    /// `409 invalid_state_transition` when the item is sold, shipped, archived, or being
+    /// delisted after a sale. `422 validation_failed` (field `url`) when the URL is not a
+    /// listing on a supported marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/items/{itemId}/listing-links`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/listing-links/post(linkItemListing)`.
+    func linkItemListing(_ input: Operations.LinkItemListing.Input) async throws -> Operations.LinkItemListing.Output
+    /// Create an item for a shared listing and link the listing to it
+    ///
+    /// For a listing the user shared that has no item in Listora yet. Creates an import
+    /// placeholder item, with the account's next SKU and the given title as its only detail
+    /// (the user adds the rest later), and links the listing to it exactly as
+    /// `linkItemListing` does, in one transaction. The item is `listed`.
+    ///
+    /// `409 already_exists` when this listing is already linked to an item (the message
+    /// names that item's SKU). `422 validation_failed` (field `url`) when the URL is not a
+    /// listing on a supported marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/listing-imports`.
+    /// - Remark: Generated from `#/paths//v1/listing-imports/post(importSharedListing)`.
+    func importSharedListing(_ input: Operations.ImportSharedListing.Input) async throws -> Operations.ImportSharedListing.Output
     /// List listings across items
     ///
     /// For views such as "everything that failed" or "everything on Depop". Newest first.
@@ -844,6 +878,58 @@ extension APIProtocol {
     ) async throws -> Operations.CreateListing.Output {
         try await createListing(Operations.CreateListing.Input(
             path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Link a listing the user already has on a marketplace
+    ///
+    /// Records a listing the user created on a marketplace themselves, from the URL they
+    /// shared from Safari or the marketplace app. The server reads the marketplace and the
+    /// listing id from the URL (see `ListingLinkCreate`) and never fetches it. The listing is
+    /// `assisted` and `active`, and its `verification` is `user_confirmation`: it is the
+    /// user's word, never shown as confirmed by the marketplace. A `draft` or `ready` item
+    /// becomes `listed`.
+    ///
+    /// `409 already_exists` when this listing is already linked to an item (the message
+    /// names that item's SKU) or the item already has a live listing on that marketplace.
+    /// `409 invalid_state_transition` when the item is sold, shipped, archived, or being
+    /// delisted after a sale. `422 validation_failed` (field `url`) when the URL is not a
+    /// listing on a supported marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/items/{itemId}/listing-links`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/listing-links/post(linkItemListing)`.
+    public func linkItemListing(
+        path: Operations.LinkItemListing.Input.Path,
+        headers: Operations.LinkItemListing.Input.Headers,
+        body: Operations.LinkItemListing.Input.Body
+    ) async throws -> Operations.LinkItemListing.Output {
+        try await linkItemListing(Operations.LinkItemListing.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Create an item for a shared listing and link the listing to it
+    ///
+    /// For a listing the user shared that has no item in Listora yet. Creates an import
+    /// placeholder item, with the account's next SKU and the given title as its only detail
+    /// (the user adds the rest later), and links the listing to it exactly as
+    /// `linkItemListing` does, in one transaction. The item is `listed`.
+    ///
+    /// `409 already_exists` when this listing is already linked to an item (the message
+    /// names that item's SKU). `422 validation_failed` (field `url`) when the URL is not a
+    /// listing on a supported marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/listing-imports`.
+    /// - Remark: Generated from `#/paths//v1/listing-imports/post(importSharedListing)`.
+    public func importSharedListing(
+        headers: Operations.ImportSharedListing.Input.Headers,
+        body: Operations.ImportSharedListing.Input.Body
+    ) async throws -> Operations.ImportSharedListing.Output {
+        try await importSharedListing(Operations.ImportSharedListing.Input(
             headers: headers,
             body: body
         ))

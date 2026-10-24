@@ -106,10 +106,21 @@ public final class AccessTokenStore: AccessTokenProvider {
 /// working while the phone is locked, and never synced off this device.
 public struct KeychainAccessGrantStorage: AccessGrantStorage {
     private let service: String
+    private let accessGroup: String?
     private let account = "access-grant"
 
-    public init(service: String) {
+    /// - Parameter accessGroup: The keychain access group to keep the item in; nil for the app's
+    ///   own default group.
+    public init(service: String, accessGroup: String? = nil) {
         self.service = service
+        self.accessGroup = accessGroup
+    }
+
+    /// The signed-in session the app and its Share Extension share. An App Group identifier works
+    /// as a keychain access group for every target with the group's entitlement, without a
+    /// team-prefixed keychain-access-groups entry, so signing in to the app signs the extension in.
+    public static func session(appGroup: String) -> Self {
+        Self(service: "com.listora.app.session", accessGroup: appGroup)
     }
 
     public func load() -> AccessGrant? {
@@ -133,11 +144,16 @@ public struct KeychainAccessGrantStorage: AccessGrantStorage {
     }
 
     private var baseQuery: [String: Any] {
-        [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
+        if let accessGroup {
+            query[kSecAttrAccessGroup as String] = accessGroup
+            query[kSecUseDataProtectionKeychain as String] = true
+        }
+        return query
     }
 }
 

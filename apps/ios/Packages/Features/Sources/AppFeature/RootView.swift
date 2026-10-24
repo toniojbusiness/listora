@@ -49,7 +49,11 @@ public struct RootView: View {
 
 #Preview {
     // swiftlint:disable:next force_try
-    let configuration = try! AppConfiguration(environment: .dev, apiBaseURL: URL(string: "http://127.0.0.1:3000")!)
+    let configuration = try! AppConfiguration(
+        environment: .dev,
+        apiBaseURL: URL(string: "http://127.0.0.1:3000")!,
+        appGroupIdentifier: "group.com.listora.app.dev",
+    )
     RootView(dependencies: AppDependencies(
         configuration: configuration,
         version: AppVersion(marketing: "1.0", build: "1"),

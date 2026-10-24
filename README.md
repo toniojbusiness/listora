@@ -157,7 +157,8 @@ incremental build relies on.
 **Cost rule.** macOS runner minutes bill at 10 times Linux minutes, so the iOS job builds
 only when the pull request (or the pushed `main` commit) changes a file the iOS build reads:
 `apps/ios/**`, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI`
-Swift package), `Makefile`, or `.github/workflows/ci.yml`. Otherwise it runs on Linux and
+Swift package), `packages/shared/fixtures/listing-urls.json` (the listing URL fixtures the iOS
+parser is tested against), `Makefile`, or `.github/workflows/ci.yml`. Otherwise it runs on Linux and
 succeeds in seconds without building, so it still reports a result and can be a required
 check. It fails, rather than passing, when change detection fails. When the iOS build starts
 reading a new file outside these paths, add it to the `ios` filter in the `changes` job.

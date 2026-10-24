@@ -441,6 +441,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/items/{itemId}/listing-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link a listing the user already has on a marketplace
+         * @description Records a listing the user created on a marketplace themselves, from the URL they
+         *     shared from Safari or the marketplace app. The server reads the marketplace and the
+         *     listing id from the URL (see `ListingLinkCreate`) and never fetches it. The listing is
+         *     `assisted` and `active`, and its `verification` is `user_confirmation`: it is the
+         *     user's word, never shown as confirmed by the marketplace. A `draft` or `ready` item
+         *     becomes `listed`.
+         *
+         *     `409 already_exists` when this listing is already linked to an item (the message
+         *     names that item's SKU) or the item already has a live listing on that marketplace.
+         *     `409 invalid_state_transition` when the item is sold, shipped, archived, or being
+         *     delisted after a sale. `422 validation_failed` (field `url`) when the URL is not a
+         *     listing on a supported marketplace.
+         */
+        post: operations["linkItemListing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/listing-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an item for a shared listing and link the listing to it
+         * @description For a listing the user shared that has no item in Listora yet. Creates an import
+         *     placeholder item, with the account's next SKU and the given title as its only detail
+         *     (the user adds the rest later), and links the listing to it exactly as
+         *     `linkItemListing` does, in one transaction. The item is `listed`.
+         *
+         *     `409 already_exists` when this listing is already linked to an item (the message
+         *     names that item's SKU). `422 validation_failed` (field `url`) when the URL is not a
+         *     listing on a supported marketplace.
+         */
+        post: operations["importSharedListing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/listings": {
         parameters: {
             query?: never;
@@ -1737,6 +1797,28 @@ export interface components {
             marketplace: components["schemas"]["KnownMarketplace"];
             variant: components["schemas"]["ListingVariant"];
         };
+        /**
+         * @description A marketplace listing URL as the user shared it. Accepted: listing pages on
+         *     `ebay.com` (`/itm/<item id>`), `poshmark.com` (`/listing/<title>-<id>`),
+         *     `mercari.com` (`/us/item/<id>/`), and `depop.com` (`/products/<slug>/`), and the
+         *     marketplaces' share short links (`ebay.us`, `posh.mk`, `merc.li`, `depop.app.link`).
+         *     The server keeps the canonical form (https, no query or fragment) as the listing's
+         *     `externalUrl`, and the listing id as `externalListingId`; a short link has no
+         *     listing id, because only the marketplace can resolve it and Listora never fetches it.
+         */
+        SharedListingUrl: string;
+        ListingLinkCreate: {
+            url: components["schemas"]["SharedListingUrl"];
+        };
+        SharedListingImport: {
+            url: components["schemas"]["SharedListingUrl"];
+            /** @description The new item's title, entered or confirmed by the user. */
+            title: string;
+        };
+        SharedListingImportResult: {
+            item: components["schemas"]["Item"];
+            listing: components["schemas"]["Listing"];
+        };
         ListingVariantReplace: {
             variant: components["schemas"]["ListingVariant"];
         };
@@ -1748,6 +1830,11 @@ export interface components {
         ListingEnd: {
             reason: components["schemas"]["ListingEndReason"];
         };
+        /**
+         * @description One item's listing on one marketplace. `variant` is Listora's version of the listing;
+         *     it is absent for a listing the user linked from a share (`linkItemListing`), because
+         *     Listora never read that listing's title or price.
+         */
         Listing: {
             id: components["schemas"]["Id"];
             itemId: components["schemas"]["Id"];
@@ -1760,7 +1847,7 @@ export interface components {
             externalSku?: string;
             /** Format: uri */
             externalUrl?: string;
-            variant: components["schemas"]["ListingVariant"];
+            variant?: components["schemas"]["ListingVariant"];
             latestOperation?: components["schemas"]["Operation"];
             availableActions: components["schemas"]["ListingActionAvailability"][];
             listedAt?: components["schemas"]["Timestamp"];
@@ -2433,6 +2520,10 @@ export type ListingActionAvailability = components['schemas']['ListingActionAvai
 export type ListingAspect = components['schemas']['ListingAspect'];
 export type ListingVariant = components['schemas']['ListingVariant'];
 export type ListingCreate = components['schemas']['ListingCreate'];
+export type SharedListingUrl = components['schemas']['SharedListingUrl'];
+export type ListingLinkCreate = components['schemas']['ListingLinkCreate'];
+export type SharedListingImport = components['schemas']['SharedListingImport'];
+export type SharedListingImportResult = components['schemas']['SharedListingImportResult'];
 export type ListingVariantReplace = components['schemas']['ListingVariantReplace'];
 export type ListingPriceChange = components['schemas']['ListingPriceChange'];
 export type ListingEndReason = components['schemas']['ListingEndReason'];
@@ -3201,6 +3292,85 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    linkItemListing: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListingLinkCreate"];
+            };
+        };
+        responses: {
+            /** @description Linked. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Listing"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    importSharedListing: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharedListingImport"];
+            };
+        };
+        responses: {
+            /** @description Created and linked. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedListingImportResult"];
+                };
+            };
             409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];

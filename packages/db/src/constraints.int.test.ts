@@ -404,6 +404,51 @@ describe('schema constraints (real Postgres)', () => {
         .values({ account_id: seed.accountId, item_id: seed.itemId, marketplace: 'ebay' })
         .execute();
     });
+
+    it('links a short-link-only listing URL once per account and marketplace', async () => {
+      const url = 'https://posh.mk/aBc12XyZ';
+      const first = await createInventoryItem(db, a.accountId);
+      const second = await createInventoryItem(db, a.accountId);
+      const link = (accountId: string, itemId: string, externalUrl: string) =>
+        db
+          .insertInto('marketplace_listing')
+          .values({
+            account_id: accountId,
+            item_id: itemId,
+            marketplace: 'poshmark',
+            status: 'active',
+            external_url: externalUrl,
+            user_confirmed_at: new Date(),
+          })
+          .execute();
+      await link(a.accountId, first.id, url);
+      await expectPgError(
+        link(a.accountId, second.id, url),
+        PG_ERROR.uniqueViolation,
+        'marketplace_listing_url_only_idx',
+      );
+      // Short link codes are case-sensitive, and another account may link the same URL.
+      await link(a.accountId, second.id, 'https://posh.mk/ABC12XYZ');
+      await link(b.accountId, b.itemId, url);
+      // A URL with a listing id is identified by the id, so its URL is not a key.
+      const third = await createInventoryItem(db, a.accountId);
+      const fourth = await createInventoryItem(db, a.accountId);
+      for (const [itemId, id] of [
+        [third.id, 'm12345678901'],
+        [fourth.id, 'm12345678902'],
+      ] as const) {
+        await db
+          .insertInto('marketplace_listing')
+          .values({
+            account_id: a.accountId,
+            item_id: itemId,
+            marketplace: 'mercari',
+            external_listing_id: id,
+            external_url: 'https://www.mercari.com/us/item/shared/',
+          })
+          .execute();
+      }
+    });
   });
 
   describe('bundle sales', () => {
