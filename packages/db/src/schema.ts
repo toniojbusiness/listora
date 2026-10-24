@@ -19,6 +19,7 @@ import type { CurrencyCode } from '@listora/shared';
 import type { JsonArray, JsonObject, JsonValue } from './json.ts';
 import type {
   AiProvider,
+  AiUsageOutcome,
   AnalysisStatus,
   AnalysisTier,
   AuditActorKind,
@@ -220,7 +221,11 @@ export interface AiUsageEventTable {
   price_table_version: string;
   latency_ms: Nullable<number>;
   created_at: CreatedAt;
-  updated_at: UpdatedAt;
+  tier: AnalysisTier;
+  outcome: AiUsageOutcome;
+  /** Set exactly when `outcome` is `failed`. */
+  error_code: Nullable<string>;
+  batch: Generated<boolean>;
 }
 
 export interface AiUsageDailyTable {
@@ -236,6 +241,7 @@ export interface AiUsageDailyTable {
   cost_micros: Generated<number>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  failed_calls: Generated<number>;
 }
 
 // Marketplaces --------------------------------------------------------------------------------

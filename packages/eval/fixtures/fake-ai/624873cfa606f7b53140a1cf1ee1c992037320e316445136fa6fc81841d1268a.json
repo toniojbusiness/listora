@@ -1,0 +1,45 @@
+{
+  "description": "hang-tag-140: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [
+        {
+          "format": "upc_a",
+          "digits": "811656986378"
+        }
+      ],
+      "size": [
+        {
+          "system": "us",
+          "value": "8"
+        },
+        {
+          "system": "uk",
+          "value": "12"
+        },
+        {
+          "system": "eu",
+          "value": "40"
+        }
+      ],
+      "fiber": [
+        {
+          "part": null,
+          "material": "polyester",
+          "percent": 88
+        },
+        {
+          "part": null,
+          "material": "spandex",
+          "percent": 12
+        }
+      ],
+      "origin": [],
+      "style": [
+        "7794-84"
+      ]
+    }
+  }
+}

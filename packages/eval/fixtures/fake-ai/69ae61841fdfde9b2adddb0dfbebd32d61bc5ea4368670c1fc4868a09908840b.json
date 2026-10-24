@@ -1,0 +1,29 @@
+{
+  "description": "denim-label-135: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [
+        "109123"
+      ],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "waist_inseam",
+          "value": "38x28"
+        }
+      ],
+      "fiber": [
+        {
+          "part": null,
+          "material": "cotton",
+          "percent": 100
+        }
+      ],
+      "origin": [
+        "US"
+      ],
+      "style": []
+    }
+  }
+}

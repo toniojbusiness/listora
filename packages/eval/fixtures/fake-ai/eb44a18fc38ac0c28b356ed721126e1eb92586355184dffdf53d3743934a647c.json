@@ -1,0 +1,23 @@
+{
+  "description": "neck-label-205: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [
+        "159811"
+      ],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "letter",
+          "value": "XXL"
+        }
+      ],
+      "fiber": [],
+      "origin": [
+        "JP"
+      ],
+      "style": []
+    }
+  }
+}

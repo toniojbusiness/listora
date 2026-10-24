@@ -1,0 +1,29 @@
+{
+  "description": "shoe-label-031: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "us",
+          "value": "7"
+        },
+        {
+          "system": "uk",
+          "value": "6"
+        },
+        {
+          "system": "eu",
+          "value": "40"
+        }
+      ],
+      "fiber": [],
+      "origin": [
+        "EG"
+      ],
+      "style": []
+    }
+  }
+}

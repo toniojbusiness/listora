@@ -31,12 +31,18 @@ them up (the FTC RN database must not be scraped or called).
 
 ## Providers
 
-`npm run eval` runs the `stub` provider by default. It echoes the parser facts, makes no AI
-call, and reports $0. It stands in until plan task T-08 (the AI provider package) lands. T-08
-owns the fake provider and the real Anthropic provider, and wires both into the eval CLI
-(`src/cli.ts`) behind the `EvalProvider` interface in `src/provider.ts`. A provider reports
-the cost of every call, including a billed call that then fails (`EvalProviderError` with
-`usage`), so cost per item counts failures too.
+`npm run eval` runs the `fake` AI provider by default. It goes through `AiClient` from
+`@listora/ai`, so the AI settings in `.env.example` apply (tier models, daily budget, kill
+switch), and each call is metered at the configured model's prices. Its answers are fixtures in
+`../fixtures/fake-ai/`, one `<photo-set hash>.json` per tag, generated from the ground truth by
+`npm run corpus:render`; a unit test fails when they drift from the corpus. The fake therefore
+measures the pipeline and its cost, not a model.
+
+`--provider anthropic` sends every tag to the Anthropic API (it needs `ANTHROPIC_API_KEY` and
+spends real money, capped by `AI_DAILY_BUDGET_USD`). `--tier premium` uses the premium model.
+`--provider stub` echoes the parser facts at no cost, and `--provider none` scores only the
+parsers. A provider reports the cost of every call, including a billed call that then fails
+(`EvalProviderError` with `usage`), so cost per item counts failures too.
 
 ## Cases
 
@@ -47,5 +53,6 @@ trap such as a California ZIP code that looks like a CA number, a bad check digi
 ## Changing the corpus
 
 Never edit the generated files by hand. Change the generator, then bump `GENERATOR_VERSION` in
-`src/corpus/generate.ts`, run `npm run corpus:render`, and commit the result. A unit test
-regenerates the corpus in memory and fails if any committed file differs.
+`src/corpus/generate.ts`, run `npm run corpus:render` (it also rewrites the fake AI fixtures),
+and commit the result. A unit test regenerates the corpus in memory and fails if any committed
+file differs.

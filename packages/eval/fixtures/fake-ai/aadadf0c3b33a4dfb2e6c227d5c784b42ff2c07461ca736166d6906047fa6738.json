@@ -1,0 +1,24 @@
+{
+  "description": "care-label-204: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [
+        "84048"
+      ],
+      "gtin": [],
+      "size": [],
+      "fiber": [
+        {
+          "part": null,
+          "material": "lyocell",
+          "percent": 100
+        }
+      ],
+      "origin": [
+        "PK"
+      ],
+      "style": []
+    }
+  }
+}

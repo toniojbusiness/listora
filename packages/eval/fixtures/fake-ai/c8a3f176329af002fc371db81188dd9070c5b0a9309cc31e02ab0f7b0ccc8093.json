@@ -1,0 +1,22 @@
+{
+  "description": "edge-case-008: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [],
+      "size": [],
+      "fiber": [
+        {
+          "part": null,
+          "material": "cotton",
+          "percent": 100
+        }
+      ],
+      "origin": [
+        "IN"
+      ],
+      "style": []
+    }
+  }
+}

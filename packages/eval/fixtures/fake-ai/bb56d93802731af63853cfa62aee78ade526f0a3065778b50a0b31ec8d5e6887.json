@@ -1,0 +1,42 @@
+{
+  "description": "care-label-002: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [
+        "91459"
+      ],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "us",
+          "value": "4"
+        },
+        {
+          "system": "uk",
+          "value": "8"
+        },
+        {
+          "system": "eu",
+          "value": "36"
+        }
+      ],
+      "fiber": [
+        {
+          "part": "shell",
+          "material": "cotton",
+          "percent": 100
+        },
+        {
+          "part": "lining",
+          "material": "polyester",
+          "percent": 100
+        }
+      ],
+      "origin": [
+        "PK"
+      ],
+      "style": []
+    }
+  }
+}

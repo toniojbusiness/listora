@@ -1,0 +1,47 @@
+{
+  "description": "care-label-200: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [
+        "26702"
+      ],
+      "gtin": [],
+      "size": [
+        {
+          "system": "us",
+          "value": "6"
+        },
+        {
+          "system": "uk",
+          "value": "10"
+        },
+        {
+          "system": "eu",
+          "value": "38"
+        }
+      ],
+      "fiber": [
+        {
+          "part": null,
+          "material": "polyester",
+          "percent": 65
+        },
+        {
+          "part": null,
+          "material": "rayon",
+          "percent": 30
+        },
+        {
+          "part": null,
+          "material": "spandex",
+          "percent": 5
+        }
+      ],
+      "origin": [
+        "CN"
+      ],
+      "style": []
+    }
+  }
+}

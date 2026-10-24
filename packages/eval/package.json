@@ -12,6 +12,8 @@
     "corpus:render": "node src/corpus/render-corpus.ts"
   },
   "dependencies": {
-    "@listora/tag-parse": "*"
+    "@listora/ai": "*",
+    "@listora/tag-parse": "*",
+    "zod": "^4.6.7"
   }
 }

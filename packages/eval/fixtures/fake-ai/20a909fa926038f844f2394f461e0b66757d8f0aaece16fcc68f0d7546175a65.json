@@ -1,0 +1,26 @@
+{
+  "description": "hang-tag-120: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [
+        {
+          "format": "ean_13",
+          "digits": "4071362148408"
+        }
+      ],
+      "size": [
+        {
+          "system": "letter",
+          "value": "L"
+        }
+      ],
+      "fiber": [],
+      "origin": [],
+      "style": [
+        "8158-28"
+      ]
+    }
+  }
+}

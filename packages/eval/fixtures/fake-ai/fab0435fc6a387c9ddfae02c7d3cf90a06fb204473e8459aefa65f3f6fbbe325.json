@@ -1,0 +1,34 @@
+{
+  "description": "denim-label-101: the corpus ground truth",
+  "outputs": {
+    "tag_values": {
+      "rn": [],
+      "ca": [],
+      "gtin": [],
+      "size": [
+        {
+          "system": "waist_inseam",
+          "value": "36x32"
+        }
+      ],
+      "fiber": [
+        {
+          "part": null,
+          "material": "cotton",
+          "percent": 60
+        },
+        {
+          "part": null,
+          "material": "polyester",
+          "percent": 40
+        }
+      ],
+      "origin": [
+        "VN"
+      ],
+      "style": [
+        "YL7370"
+      ]
+    }
+  }
+}

@@ -40,6 +40,9 @@ async function tablesAndViews(db: Db): Promise<string[]> {
   return rows.map((row) => row.name).filter((name) => !KYSELY_TABLES.includes(name));
 }
 
+/** Every migration in packages/db/migrations, in order. */
+const MIGRATIONS = ['0001_schema_v1', '0002_ai_metering'];
+
 describe('schema migrations (real Postgres)', () => {
   let scratch: ScratchDatabase;
   let db: Db;
@@ -58,7 +61,7 @@ describe('schema migrations (real Postgres)', () => {
     const migrator = new SchemaMigrator(db);
     expect(await publicObjects(db)).toEqual([]);
 
-    expect(await migrator.migrateToLatest()).toEqual(['0001_schema_v1']);
+    expect(await migrator.migrateToLatest()).toEqual(MIGRATIONS);
     expect(await tablesAndViews(db)).toContain('inventory_item');
     expect(await tablesAndViews(db)).toContain('delist_run_listing');
     expect((await migrator.status()).every((migration) => migration.executedAt !== null)).toBe(
@@ -68,15 +71,18 @@ describe('schema migrations (real Postgres)', () => {
     // Running again is a no-op.
     expect(await migrator.migrateToLatest()).toEqual([]);
 
-    expect(await migrator.migrateToEmpty()).toEqual(['0001_schema_v1']);
+    expect(await migrator.migrateToEmpty()).toEqual([...MIGRATIONS].reverse());
     expect(await publicObjects(db)).toEqual([]);
     expect((await migrator.status()).every((migration) => migration.executedAt === null)).toBe(
       true,
     );
 
-    // The down migration removed everything, so the up migration applies cleanly again.
-    expect(await migrator.migrateUp()).toEqual(['0001_schema_v1']);
-    expect(await migrator.migrateDown()).toEqual(['0001_schema_v1']);
+    // The down migrations removed everything, so each up migration applies cleanly again, and
+    // reverting one step at a time also ends with an empty schema.
+    for (const migration of MIGRATIONS) expect(await migrator.migrateUp()).toEqual([migration]);
+    for (const migration of [...MIGRATIONS].reverse()) {
+      expect(await migrator.migrateDown()).toEqual([migration]);
+    }
     expect(await publicObjects(db)).toEqual([]);
   });
 
@@ -87,7 +93,7 @@ describe('schema migrations (real Postgres)', () => {
         new SchemaMigrator(db).migrateToLatest(),
         new SchemaMigrator(other).migrateToLatest(),
       ]);
-      expect(results.flat()).toEqual(['0001_schema_v1']);
+      expect(results.flat()).toEqual(MIGRATIONS);
     } finally {
       await other.destroy();
     }

@@ -6,6 +6,7 @@
     { "path": "packages/api-contract" },
     { "path": "packages/testing" },
     { "path": "packages/db" },
+    { "path": "packages/ai" },
     { "path": "packages/tag-parse" },
     { "path": "packages/eval" },
     { "path": "apps/api" },
