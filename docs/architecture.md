@@ -245,10 +245,9 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
 6. **Evaluation.** `npm run eval` scores the parsers, and a provider behind the `EvalProvider`
    interface, on the synthetic tag corpus in `packages/eval/corpus`. It prints per-field
    accuracy, precision, recall, and cost per item, including the billed cost of failed calls.
-   The parsers must stay at or above 95% on every field (a unit test enforces this). Until
-   T-08 lands, the provider is a stub that echoes the parser facts at $0; T-08 owns the fake
-   provider and wires it into the eval CLI. Corpus files carry a license manifest
-   (`LICENSES.json`); only generated files and openly licensed photos are allowed.
+   The parsers must stay at or above 95% on every field (a unit test enforces this). Providers,
+   the corpus license manifest, and how to change the corpus are described in
+   [packages/eval/corpus/README.md](../packages/eval/corpus/README.md).
 7. **Metering from day one.** Every call writes an `ai_usage_event` (tokens, images, searches,
    `cost_micros` from a versioned price table). The system also keeps daily and monthly
    rollups and per-plan quotas in reseller units. There is a per-account daily dollar circuit
