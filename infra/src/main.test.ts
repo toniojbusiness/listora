@@ -5,11 +5,15 @@ import { describe, expect, it } from 'vitest';
 
 const main = fileURLToPath(new URL('main.ts', import.meta.url));
 
-describe('CDK app entry point', () => {
+/** The entry point is a cold Node process loading aws-cdk-lib, which takes seconds on a loaded machine. */
+const CLI_TIMEOUT_MS = 60_000;
+
+describe('CDK app entry point', { timeout: CLI_TIMEOUT_MS }, () => {
   it('exits 1 and names each missing setting, without a stack trace', () => {
     const result = spawnSync(process.execPath, [main], {
       env: { PATH: process.env['PATH'], LISTORA_AWS_ACCOUNT_ID: 'not-an-account' },
       encoding: 'utf8',
+      timeout: CLI_TIMEOUT_MS,
     });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('Invalid deploy configuration');
