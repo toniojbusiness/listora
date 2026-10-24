@@ -7,7 +7,7 @@ import { createDatabase } from '@listora/db';
 import { fastify } from 'fastify';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { offlinePhotoDependencies } from './test-support.ts';
+import { offlineDependencies } from './test-support.ts';
 import { buildApp } from './app.ts';
 import { DevAuthDriver } from './auth/dev-driver.ts';
 import { responseContractErrors } from './contract/contract.ts';
@@ -41,7 +41,7 @@ describe('error responses', () => {
   const app = buildApp({
     db,
     auth,
-    ...offlinePhotoDependencies(),
+    ...offlineDependencies(),
     pingDatabase: () => Promise.resolve(),
   });
 

@@ -9,6 +9,8 @@
     "dev": "node --watch --env-file-if-exists=../../.env src/main.ts"
   },
   "dependencies": {
+    "@listora/ai": "*",
+    "@listora/analysis": "*",
     "@listora/api-contract": "*",
     "@listora/db": "*",
     "@listora/photos": "*",

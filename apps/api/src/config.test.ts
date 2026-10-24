@@ -1,3 +1,4 @@
+import { loadAiConfig } from '@listora/ai';
 import { DEFAULT_LOCAL_STORAGE_BASE_URL, DEFAULT_LOCAL_STORAGE_DIR } from '@listora/storage';
 import { describe, expect, it } from 'vitest';
 
@@ -20,6 +21,7 @@ describe('loadApiConfig', () => {
         baseUrl: DEFAULT_LOCAL_STORAGE_BASE_URL,
         signingSecret: undefined,
       },
+      ai: loadAiConfig({}),
     });
   });
 
@@ -60,6 +62,27 @@ describe('loadApiConfig', () => {
       'STORAGE_S3_REGION must be an AWS region such as us-east-1',
       'STORAGE_PUBLIC_BASE_URL must be an http(s) URL when STORAGE_DRIVER is s3',
     ]);
+  });
+
+  it('reports AI problems together with the API ones, without echoing the API key', () => {
+    const error = captureConfigError({
+      API_PORT: 'x',
+      AI_PROVIDER: 'anthropic',
+      AI_KILL_SWITCH: 'maybe',
+    });
+    expect(error.issues).toEqual([
+      'API_PORT must be an integer from 0 to 65535',
+      'AUTH_DRIVER is required',
+      'DATABASE_URL is required',
+      'ANTHROPIC_API_KEY is required when AI_PROVIDER is anthropic',
+      'AI_KILL_SWITCH must be on or off',
+    ]);
+    const keyed = captureConfigError({
+      ...REQUIRED,
+      ANTHROPIC_API_KEY: 'sk-secret',
+      AI_PROVIDER: 'x',
+    });
+    expect(keyed.message).not.toContain('sk-secret');
   });
 
   it.each(['3000abc', '-1', '1.5', ''])('rejects API_PORT=%j', (API_PORT) => {

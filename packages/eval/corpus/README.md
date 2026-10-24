@@ -38,6 +38,20 @@ switch), and each call is metered at the configured model's prices. Its answers 
 `npm run corpus:render`; a unit test fails when they drift from the corpus. The fake therefore
 measures the pipeline and its cost, not a model.
 
+Each provider runs two tasks (`--task tags`, `--task analysis`, or `all`, the default):
+
+- `tags` (`provider:<id>`): reads the tag facts with their own small schema (`tag_values`).
+- `analysis` (`analysis:<id>`): the production item analysis (`analyzeItem` from
+  `@listora/analysis`) with the tag as the item's one `tag` photo: the same prompt, strict
+  schema, one retry of a schema-violating answer, provenance rules, and metering as in the
+  app. It is scored on the tag facts an item records (RN, UPC, size, style), and an item has
+  one value per detail, so a field counts as right when its one value is among the printed
+  ones (`one_of` scoring). Fields it does not report show `-`.
+
+Each task has its own client, so each run gets the whole daily budget. The full premium
+analysis of every tag costs more than the default $1, so raise `AI_DAILY_BUDGET_USD` for
+`--tier premium --task analysis`.
+
 `--provider anthropic` sends every tag to the Anthropic API (it needs `ANTHROPIC_API_KEY` and
 spends real money, capped by `AI_DAILY_BUDGET_USD`). `--tier premium` uses the premium model.
 `--provider stub` echoes the parser facts at no cost, and `--provider none` scores only the

@@ -121,10 +121,15 @@ public protocol APIProtocol: Sendable {
     /// Analyze the item's current photos
     ///
     /// Starts the default ("fast") analysis of the item's current photo set. Analysis runs
-    /// once per photo set: when an analysis for the same photo-set hash exists, it is
-    /// returned instead of running (and paying for) a new one. Poll `getAnalysis` until
-    /// `status` is `completed` or `failed`. `409 invalid_state_transition` when the item has no
-    /// ready photo; `429 ai_budget_exceeded` when the account's daily AI budget is used up.
+    /// once per item and photo set: when an analysis of the same photo-set hash exists, it is
+    /// returned instead of running (and paying for) a new one; a `failed` one is queued again,
+    /// since asking again is how a failure is retried. Poll `getAnalysis` until `status` is
+    /// `completed` or `failed`. The photo set is every photo of the item, so all of them must
+    /// be `ready`: `409 invalid_state_transition` when the item has no photos or one is still
+    /// `processing` or `failed` (remove or replace it first). Refused before anything is
+    /// queued: `402 quota_exceeded` when the plan's AI items for the month are used up,
+    /// `429 ai_budget_exceeded` when the account's daily AI budget is used up, and
+    /// `503 service_unavailable` while AI is switched off.
     ///
     ///
     /// - Remark: HTTP `POST /v1/items/{itemId}/analyses`.
@@ -139,13 +144,31 @@ public protocol APIProtocol: Sendable {
     ///
     /// Runs the premium identification on the same photos plus the first result. Counts
     /// against the plan's premium quota (`402 quota_exceeded` when used up). Repeating the
-    /// request for the same analysis returns the existing premium analysis.
-    /// `409 invalid_state_transition` until the analysis has `completed`.
+    /// request for the same analysis returns the existing premium analysis, or queues it
+    /// again when it `failed`. The server also starts it on its own when a fast analysis
+    /// needs it (`needsEscalation`) and the quota allows; the fast analysis then names it in
+    /// `escalationAnalysisId`. `409 invalid_state_transition` until the analysis has
+    /// `completed`, and for an analysis that is already `premium`. `429 ai_budget_exceeded`
+    /// and `503 service_unavailable` as for `startItemAnalysis`.
     ///
     ///
     /// - Remark: HTTP `POST /v1/analyses/{analysisId}/escalate`.
     /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/escalate/post(escalateAnalysis)`.
     func escalateAnalysis(_ input: Operations.EscalateAnalysis.Input) async throws -> Operations.EscalateAnalysis.Output
+    /// Fill the item's details from an analysis
+    ///
+    /// Copies the completed analysis's proposed details into its item and records it as the
+    /// item's `acceptedAnalysisId`. Each copied detail takes the analysis's provenance (`ai`,
+    /// `ocr`, or `barcode`) in `fieldProvenance`. Details the user entered or edited
+    /// (provenance `user`) are never overwritten, and a detail the analysis did not find is
+    /// left as it is. `expectedVersion` must equal the item's current `version`
+    /// (`409 version_conflict` otherwise); `409 invalid_state_transition` until the analysis
+    /// has `completed`. Never calls AI.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/analyses/{analysisId}/apply`.
+    /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)`.
+    func applyAnalysis(_ input: Operations.ApplyAnalysis.Input) async throws -> Operations.ApplyAnalysis.Output
     /// Get price suggestions for an item
     ///
     /// Every number carries its source. Without real sold data the response has no
@@ -619,10 +642,15 @@ extension APIProtocol {
     /// Analyze the item's current photos
     ///
     /// Starts the default ("fast") analysis of the item's current photo set. Analysis runs
-    /// once per photo set: when an analysis for the same photo-set hash exists, it is
-    /// returned instead of running (and paying for) a new one. Poll `getAnalysis` until
-    /// `status` is `completed` or `failed`. `409 invalid_state_transition` when the item has no
-    /// ready photo; `429 ai_budget_exceeded` when the account's daily AI budget is used up.
+    /// once per item and photo set: when an analysis of the same photo-set hash exists, it is
+    /// returned instead of running (and paying for) a new one; a `failed` one is queued again,
+    /// since asking again is how a failure is retried. Poll `getAnalysis` until `status` is
+    /// `completed` or `failed`. The photo set is every photo of the item, so all of them must
+    /// be `ready`: `409 invalid_state_transition` when the item has no photos or one is still
+    /// `processing` or `failed` (remove or replace it first). Refused before anything is
+    /// queued: `402 quota_exceeded` when the plan's AI items for the month are used up,
+    /// `429 ai_budget_exceeded` when the account's daily AI budget is used up, and
+    /// `503 service_unavailable` while AI is switched off.
     ///
     ///
     /// - Remark: HTTP `POST /v1/items/{itemId}/analyses`.
@@ -653,8 +681,12 @@ extension APIProtocol {
     ///
     /// Runs the premium identification on the same photos plus the first result. Counts
     /// against the plan's premium quota (`402 quota_exceeded` when used up). Repeating the
-    /// request for the same analysis returns the existing premium analysis.
-    /// `409 invalid_state_transition` until the analysis has `completed`.
+    /// request for the same analysis returns the existing premium analysis, or queues it
+    /// again when it `failed`. The server also starts it on its own when a fast analysis
+    /// needs it (`needsEscalation`) and the quota allows; the fast analysis then names it in
+    /// `escalationAnalysisId`. `409 invalid_state_transition` until the analysis has
+    /// `completed`, and for an analysis that is already `premium`. `429 ai_budget_exceeded`
+    /// and `503 service_unavailable` as for `startItemAnalysis`.
     ///
     ///
     /// - Remark: HTTP `POST /v1/analyses/{analysisId}/escalate`.
@@ -666,6 +698,30 @@ extension APIProtocol {
         try await escalateAnalysis(Operations.EscalateAnalysis.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Fill the item's details from an analysis
+    ///
+    /// Copies the completed analysis's proposed details into its item and records it as the
+    /// item's `acceptedAnalysisId`. Each copied detail takes the analysis's provenance (`ai`,
+    /// `ocr`, or `barcode`) in `fieldProvenance`. Details the user entered or edited
+    /// (provenance `user`) are never overwritten, and a detail the analysis did not find is
+    /// left as it is. `expectedVersion` must equal the item's current `version`
+    /// (`409 version_conflict` otherwise); `409 invalid_state_transition` until the analysis
+    /// has `completed`. Never calls AI.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/analyses/{analysisId}/apply`.
+    /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)`.
+    public func applyAnalysis(
+        path: Operations.ApplyAnalysis.Input.Path,
+        headers: Operations.ApplyAnalysis.Input.Headers,
+        body: Operations.ApplyAnalysis.Input.Body
+    ) async throws -> Operations.ApplyAnalysis.Output {
+        try await applyAnalysis(Operations.ApplyAnalysis.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// Get price suggestions for an item

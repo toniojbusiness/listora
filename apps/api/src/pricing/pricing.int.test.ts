@@ -81,7 +81,10 @@ describe('pricing (real Postgres)', () => {
         model: 'claude-haiku-5-5',
         status: status as 'succeeded',
         output: output === null ? null : jsonb(output),
-        ...(status === 'failed' ? { error_message: 'failed' } : {}),
+        ...(status === 'succeeded' || status === 'failed' ? { completed_at: new Date() } : {}),
+        ...(status === 'failed'
+          ? { error_code: 'invalid_output', error_message: 'failed', error_retryable: true }
+          : {}),
       })
       .returning('id')
       .executeTakeFirstOrThrow();

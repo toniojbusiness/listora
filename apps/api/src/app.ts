@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
+import type { AiClient } from '@listora/ai';
+import type { AnalysisJobQueue } from '@listora/analysis';
 import type { Db } from '@listora/db';
 import type { PhotoJobQueue } from '@listora/photos';
 import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
 import { fastify, LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 
+import { registerAnalysisRoutes } from './analyses/routes.ts';
 import type { AuthDriver } from './auth/driver.ts';
 import { registerErrorHandling } from './errors.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
@@ -23,6 +26,10 @@ export interface AppDependencies extends HealthDependencies {
   storage: ObjectStorage;
   /** Where `addItemPhoto` adds each new photo's processing job. */
   photoJobs: PhotoJobQueue;
+  /** The AI client whose guards analysis requests are checked against (it is never called). */
+  ai: AiClient;
+  /** Where starting or escalating an analysis adds its job. */
+  analysisJobs: AnalysisJobQueue;
   /** Where attached photo files come from; defaults to upload sessions in `storage`. */
   uploads?: PhotoUploads;
   /** The clock upload sessions expire by. */
@@ -71,6 +78,12 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     photoJobs: deps.photoJobs,
   });
   registerPricingRoutes(app, routeDeps);
+  registerAnalysisRoutes(app, {
+    ...routeDeps,
+    ai: deps.ai,
+    analysisJobs: deps.analysisJobs,
+    now,
+  });
   return app;
 }
 

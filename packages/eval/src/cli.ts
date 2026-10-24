@@ -1,6 +1,7 @@
-// Tag eval harness CLI. Scores the deterministic parsers, and an attribute provider, on the
-// synthetic tag corpus and prints per-field accuracy and cost per item.
-//   npm run eval                        parsers + fake AI provider (fixtures, no network)
+// Tag eval harness CLI. Scores the deterministic parsers, an attribute provider, and the full
+// item analysis on the synthetic tag corpus, and prints per-field accuracy and cost per item.
+//   npm run eval                        parsers + fake AI provider: tag reading and analysis
+//   npm run eval -- --task analysis     parsers + the full item analysis only
 //   npm run eval -- --provider none     parsers only
 //   npm run eval -- --provider anthropic --tier premium   real API; needs ANTHROPIC_API_KEY
 //   npm run eval -- --min-accuracy 0.95 --mismatches
@@ -17,53 +18,75 @@ import {
 } from '@listora/ai';
 
 import { AiEvalProvider } from './ai-provider.ts';
+import { AnalysisEvalProvider } from './analysis-provider.ts';
 import { DEFAULT_CORPUS_DIR, loadCorpus } from './corpus/store.ts';
 import { DEFAULT_FAKE_FIXTURES_DIR } from './fake-fixtures.ts';
 import { runEval } from './harness.ts';
-import { StubProvider, type EvalProvider } from './provider.ts';
+import { EVAL_TASKS, StubProvider, type EvalProvider, type EvalTask } from './provider.ts';
 import { formatReport } from './report.ts';
 
-type ProviderFactory = (tier: AiTier, env: NodeJS.ProcessEnv) => EvalProvider;
+/** The providers of one CLI run per task; a provider without the task cannot run it. */
+type ProviderFactory = (
+  tier: AiTier,
+  env: NodeJS.ProcessEnv,
+) => Partial<Record<EvalTask, EvalProvider>>;
 
 /**
  * Providers the CLI can construct. `fake` and `anthropic` go through `AiClient` from
  * `@listora/ai`, so the AI settings in `.env.example` apply (models, daily budget, kill
- * switch); usage is metered in memory and reported as cost per item.
+ * switch); usage is metered in memory and reported as cost per item. Both run the tag reading
+ * (`tags`) and the production item analysis (`analysis`), each on its own client, so each
+ * task's run has the whole daily budget, as one eval run of it would.
  */
 const PROVIDERS: Readonly<Record<string, ProviderFactory | null>> = {
   fake: (tier, env) => {
     const config = loadAiConfig({ ...env, AI_PROVIDER: 'fake' });
-    return new AiEvalProvider({
-      id: 'fake',
-      description:
-        `fake AI provider: fixture answers from the corpus ground truth, metered at ` +
-        `${config.models[tier]} prices; no network`,
-      client: createAiClient(config, {
+    const client = () =>
+      createAiClient(config, {
         usageStore: new InMemoryUsageStore(),
         provider: new FakeAiProvider({ fixtures: directoryFixtures(DEFAULT_FAKE_FIXTURES_DIR) }),
+      });
+    const description =
+      `fake AI provider: fixture answers from the corpus ground truth, metered at ` +
+      `${config.models[tier]} prices; no network`;
+    return {
+      tags: new AiEvalProvider({ id: 'fake', description, client: client(), tier }),
+      analysis: new AnalysisEvalProvider({
+        id: 'fake',
+        description: `item analysis on the ${description}`,
+        client: client(),
+        tier,
       }),
-      tier,
-    });
+    };
   },
   anthropic: (tier, env) => {
     const config = loadAiConfig({ ...env, AI_PROVIDER: 'anthropic' });
-    return new AiEvalProvider({
-      id: 'anthropic',
-      description: `Anthropic API: ${config.models[tier]} (${tier} tier)`,
-      client: createAiClient(config, { usageStore: new InMemoryUsageStore() }),
-      tier,
-    });
+    const client = () => createAiClient(config, { usageStore: new InMemoryUsageStore() });
+    const description = `Anthropic API: ${config.models[tier]} (${tier} tier)`;
+    return {
+      tags: new AiEvalProvider({ id: 'anthropic', description, client: client(), tier }),
+      analysis: new AnalysisEvalProvider({
+        id: 'anthropic',
+        description: `item analysis on the ${description}`,
+        client: client(),
+        tier,
+      }),
+    };
   },
-  stub: () => new StubProvider(),
+  stub: () => ({ tags: new StubProvider() }),
   none: null,
 };
+
+const TASK_CHOICES = [...EVAL_TASKS, 'all'] as const;
 
 const USAGE = `Usage: npm run eval -- [options]
 
 Options:
   --provider <name>     ${Object.keys(PROVIDERS).join(' | ')} (default: fake)
   --tier <tier>         ${AI_TIERS.join(' | ')} (default: standard); the AI tier for fake and anthropic
+  --task <task>         ${TASK_CHOICES.join(' | ')} (default: all): tag reading, the full item analysis, or both
   --corpus <dir>        corpus directory (default: packages/eval/corpus)
+  --limit <n>           score only the first n corpus items (caps the cost of a live run)
   --min-accuracy <n>    exit 1 if any field of any system scores below n (0 to 1)
   --mismatches          list every item and field that was scored wrong
   --json                print the full report as JSON
@@ -78,7 +101,9 @@ async function main(argv: readonly string[]): Promise<number> {
     options: {
       provider: { type: 'string', default: 'fake' },
       tier: { type: 'string', default: 'standard' },
+      task: { type: 'string', default: 'all' },
       corpus: { type: 'string', default: DEFAULT_CORPUS_DIR },
+      limit: { type: 'string' },
       'min-accuracy': { type: 'string' },
       mismatches: { type: 'boolean', default: false },
       json: { type: 'boolean', default: false },
@@ -96,12 +121,21 @@ async function main(argv: readonly string[]): Promise<number> {
   }
   const tier = AI_TIERS.find((known) => known === values.tier);
   if (tier === undefined) throw new UsageError(`unknown tier "${values.tier}"`);
+  const task = TASK_CHOICES.find((known) => known === values.task);
+  if (task === undefined) throw new UsageError(`unknown task "${values.task}"`);
   const minAccuracy = parseThreshold(values['min-accuracy']);
-  const createProvider = PROVIDERS[values.provider] ?? null;
-  const provider = createProvider?.(tier, process.env);
+  const createProviders = PROVIDERS[values.provider] ?? null;
+  const available = createProviders?.(tier, process.env) ?? {};
+  const tasks: readonly EvalTask[] = task === 'all' ? EVAL_TASKS : [task];
+  if (createProviders !== null && task !== 'all' && available[task] === undefined) {
+    throw new UsageError(`provider "${values.provider}" cannot run the ${task} task`);
+  }
+  const providers = tasks.flatMap((name) => available[name] ?? []);
 
-  const corpus = await loadCorpus(values.corpus, { verifyImages: true });
-  const report = await runEval(corpus, provider ? { provider } : {});
+  const limit = parseLimit(values.limit);
+  const loaded = await loadCorpus(values.corpus, { verifyImages: true });
+  const corpus = limit === undefined ? loaded : { ...loaded, cases: loaded.cases.slice(0, limit) };
+  const report = await runEval(corpus, { providers });
   process.stdout.write(
     values.json
       ? `${JSON.stringify(report, null, 2)}\n`
@@ -123,6 +157,12 @@ async function main(argv: readonly string[]): Promise<number> {
     }
   }
   return status;
+}
+
+function parseLimit(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  if (!/^[1-9]\d{0,5}$/.test(raw)) throw new UsageError('--limit must be a whole number from 1');
+  return Number(raw);
 }
 
 function parseThreshold(raw: string | undefined): number | undefined {

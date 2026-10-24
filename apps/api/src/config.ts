@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { AiConfigError, loadAiConfig, type AiConfig } from '@listora/ai';
 import { LOG_LEVELS, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -22,6 +23,8 @@ export interface ApiConfig {
   };
   /** STORAGE_* keys, read by @listora/storage. */
   storage: StorageConfig;
+  /** AI_* keys, read by @listora/ai: the guards analysis requests are checked against. */
+  ai: AiConfig;
 }
 
 export class ConfigError extends Error {
@@ -80,7 +83,16 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     if (!(error instanceof StorageConfigError)) throw error;
     issues.push(...error.issues);
   }
-  if (!parsed.success || storage === undefined) throw new ConfigError(issues);
+  let ai: AiConfig | undefined;
+  try {
+    ai = loadAiConfig(env);
+  } catch (error) {
+    if (!(error instanceof AiConfigError)) throw error;
+    issues.push(...error.issues);
+  }
+  if (!parsed.success || storage === undefined || ai === undefined) {
+    throw new ConfigError(issues);
+  }
   const values = parsed.data;
   return {
     host: values.API_HOST,
@@ -89,5 +101,6 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     logLevel: values.LOG_LEVEL,
     auth: { driver: values.AUTH_DRIVER, devSecret: values.AUTH_DEV_SECRET },
     storage,
+    ai,
   };
 }

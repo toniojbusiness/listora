@@ -1,7 +1,7 @@
 import { createDatabase } from '@listora/db';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
-import { offlinePhotoDependencies } from './test-support.ts';
+import { offlineDependencies } from './test-support.ts';
 import { buildApp, type AppDependencies } from './app.ts';
 
 describe('health routes', () => {
@@ -25,7 +25,7 @@ describe('health routes', () => {
     app = buildApp({
       db,
       auth,
-      ...offlinePhotoDependencies(),
+      ...offlineDependencies(),
       pingDatabase: () => Promise.reject(new Error('must not be called')),
     });
     const response = await app.inject({ method: 'GET', url: '/health/live' });
@@ -37,7 +37,7 @@ describe('health routes', () => {
     app = buildApp({
       db,
       auth,
-      ...offlinePhotoDependencies(),
+      ...offlineDependencies(),
       pingDatabase: () => Promise.resolve(),
     });
     const response = await app.inject({ method: 'GET', url: '/health/ready' });
@@ -49,7 +49,7 @@ describe('health routes', () => {
     app = buildApp({
       db,
       auth,
-      ...offlinePhotoDependencies(),
+      ...offlineDependencies(),
       pingDatabase: () => Promise.reject(new Error('password authentication failed for hunter2')),
     });
     const response = await app.inject({ method: 'GET', url: '/health/ready' });

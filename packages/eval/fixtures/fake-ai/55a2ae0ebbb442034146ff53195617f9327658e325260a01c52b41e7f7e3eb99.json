@@ -32,6 +32,82 @@
       "style": [
         "SJ1573-737"
       ]
+    },
+    "item_analysis": {
+      "attributes": {
+        "brand": "",
+        "productName": "",
+        "styleNumber": "SJ1573-737",
+        "rnNumber": "",
+        "upc": "148027462941",
+        "department": "",
+        "category": "",
+        "subcategory": "",
+        "sizeLabel": "M",
+        "sizeSystem": "letter",
+        "colors": [],
+        "pattern": "",
+        "materials": [
+          "nylon",
+          "spandex"
+        ],
+        "condition": "",
+        "conditionNotes": "",
+        "flaws": [],
+        "keywords": []
+      },
+      "confidence": {
+        "title": 0.5,
+        "description": 0.5,
+        "brand": 0,
+        "productName": 0,
+        "styleNumber": 0.9,
+        "rnNumber": 0,
+        "upc": 0.9,
+        "department": 0,
+        "category": 0,
+        "subcategory": 0,
+        "sizeLabel": 0.9,
+        "sizeSystem": 0.9,
+        "colors": 0,
+        "pattern": 0,
+        "materials": 0.9,
+        "condition": 0,
+        "conditionNotes": 0,
+        "flaws": 0,
+        "keywords": 0
+      },
+      "title": "Synthetic tag hang-tag-054",
+      "description": "Synthetic tag hang-tag-054, read from its care label.",
+      "variants": {
+        "ebay": {
+          "title": "Synthetic tag hang-tag-054",
+          "description": "Synthetic tag hang-tag-054"
+        },
+        "depop": {
+          "title": "Synthetic tag hang-tag-054",
+          "description": "Synthetic tag hang-tag-054",
+          "hashtags": []
+        },
+        "poshmark": {
+          "title": "Synthetic tag hang-tag-054",
+          "description": "Synthetic tag hang-tag-054"
+        },
+        "mercari": {
+          "title": "Synthetic tag hang-tag-054",
+          "description": "Synthetic tag hang-tag-054"
+        }
+      },
+      "priceEstimate": {
+        "lowCents": 0,
+        "midCents": 0,
+        "highCents": 0,
+        "confidence": 0
+      },
+      "looksVintage": false,
+      "looksDesigner": false,
+      "needsEscalation": false,
+      "escalationReason": ""
     }
   }
 }

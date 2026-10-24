@@ -1,4 +1,12 @@
-import { valuesOf, type TagFacts, type TagTextInput, type TagValues } from '@listora/tag-parse';
+import {
+  valuesOf,
+  type TagFacts,
+  type TagField,
+  type TagTextInput,
+  type TagValues,
+} from '@listora/tag-parse';
+
+import type { ScoringMode } from './scoring.ts';
 
 /**
  * What the eval harness hands an attribute provider for one corpus item. It mirrors the
@@ -52,8 +60,20 @@ export class EvalProviderError extends Error {
 export interface EvalProvider {
   readonly id: string;
   readonly description: string;
+  /**
+   * What the provider runs: `tags` (the default) reads the tag facts only; `analysis` runs the
+   * full item analysis and is scored on the tag facts its result reports.
+   */
+  readonly task?: EvalTask;
+  /** The fields the provider answers and is scored on; every tag field by default. */
+  readonly fields?: readonly TagField[];
+  /** How a field is scored (see `ScoringMode`); `exact` by default. */
+  readonly scoring?: ScoringMode;
   extract(input: EvalProviderInput): Promise<EvalProviderResult>;
 }
+
+export const EVAL_TASKS = ['tags', 'analysis'] as const;
+export type EvalTask = (typeof EVAL_TASKS)[number];
 
 export interface StubProviderOptions {
   /** Cost to report per call; defaults to 0 because the stub makes no paid call. */

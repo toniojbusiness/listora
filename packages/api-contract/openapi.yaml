@@ -408,10 +408,15 @@ paths:
       summary: Analyze the item's current photos
       description: |
         Starts the default ("fast") analysis of the item's current photo set. Analysis runs
-        once per photo set: when an analysis for the same photo-set hash exists, it is
-        returned instead of running (and paying for) a new one. Poll `getAnalysis` until
-        `status` is `completed` or `failed`. `409 invalid_state_transition` when the item has no
-        ready photo; `429 ai_budget_exceeded` when the account's daily AI budget is used up.
+        once per item and photo set: when an analysis of the same photo-set hash exists, it is
+        returned instead of running (and paying for) a new one; a `failed` one is queued again,
+        since asking again is how a failure is retried. Poll `getAnalysis` until `status` is
+        `completed` or `failed`. The photo set is every photo of the item, so all of them must
+        be `ready`: `409 invalid_state_transition` when the item has no photos or one is still
+        `processing` or `failed` (remove or replace it first). Refused before anything is
+        queued: `402 quota_exceeded` when the plan's AI items for the month are used up,
+        `429 ai_budget_exceeded` when the account's daily AI budget is used up, and
+        `503 service_unavailable` while AI is switched off.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -421,12 +426,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Analysis'
+        '402':
+          $ref: '#/components/responses/QuotaExceeded'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         default:
           $ref: '#/components/responses/DefaultError'
 
@@ -459,8 +468,12 @@ paths:
       description: |
         Runs the premium identification on the same photos plus the first result. Counts
         against the plan's premium quota (`402 quota_exceeded` when used up). Repeating the
-        request for the same analysis returns the existing premium analysis.
-        `409 invalid_state_transition` until the analysis has `completed`.
+        request for the same analysis returns the existing premium analysis, or queues it
+        again when it `failed`. The server also starts it on its own when a fast analysis
+        needs it (`needsEscalation`) and the quota allows; the fast analysis then names it in
+        `escalationAnalysisId`. `409 invalid_state_transition` until the analysis has
+        `completed`, and for an analysis that is already `premium`. `429 ai_budget_exceeded`
+        and `503 service_unavailable` as for `startItemAnalysis`.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -478,6 +491,47 @@ paths:
           $ref: '#/components/responses/Conflict'
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/analyses/{analysisId}/apply:
+    parameters:
+      - $ref: '#/components/parameters/AnalysisId'
+    post:
+      tags: [analysis]
+      operationId: applyAnalysis
+      summary: Fill the item's details from an analysis
+      description: |
+        Copies the completed analysis's proposed details into its item and records it as the
+        item's `acceptedAnalysisId`. Each copied detail takes the analysis's provenance (`ai`,
+        `ocr`, or `barcode`) in `fieldProvenance`. Details the user entered or edited
+        (provenance `user`) are never overwritten, and a detail the analysis did not find is
+        left as it is. `expectedVersion` must equal the item's current `version`
+        (`409 version_conflict` otherwise); `409 invalid_state_transition` until the analysis
+        has `completed`. Never calls AI.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisApply'
+      responses:
+        '200':
+          description: The updated item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
 
@@ -1458,6 +1512,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    ServiceUnavailable:
+      description: A service the request needs is switched off or down (`service_unavailable`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     ListingOperationAccepted:
       description: The operation was queued. Watch `operation.status` or the listing's `statusDisplay`.
       content:
@@ -1785,7 +1845,9 @@ components:
         category:
           type: string
           maxLength: 200
-          description: Canonical taxonomy path, for example `clothing/tops/t_shirts`.
+          description: |
+            Canonical taxonomy path `<category>/<subcategory>`, for example
+            `clothing/tops/t_shirts` (`CATEGORY_TREE` in @listora/analysis).
         sizeLabel:
           type: string
           maxLength: 32
@@ -1793,7 +1855,9 @@ components:
         sizeSystem:
           type: string
           maxLength: 16
-          description: For example `us`, `uk`, `eu`, `intl`.
+          description: |
+            How to read `sizeLabel`: `letter` (XS to XXXL), `numeric`, `waist_inseam`
+            (`32x30`), `us`, `uk`, or `eu` (labeled on the tag), or `one_size`.
         colors:
           type: array
           maxItems: 10
@@ -2346,7 +2410,12 @@ components:
           $ref: '#/components/schemas/AnalyzedTextList'
     VariantSuggestion:
       type: object
-      description: Marketplace-specific copy written by the analysis.
+      description: |
+        Marketplace-specific copy written by the analysis, within that marketplace's limits:
+        eBay and Poshmark titles up to 80 characters, a Poshmark description up to 1,500, and
+        a Mercari title and description up to 80 and 1,000. Depop has no title (this one is a
+        short headline); its `description` and `hashtags` (up to 5, without the `#`) together
+        fit Depop's 1,000 characters once the hashtags are appended on their own line.
       required: [marketplace, title, description]
       properties:
         marketplace:
@@ -2377,20 +2446,31 @@ components:
           $ref: '#/components/schemas/AiPriceEstimate'
         needsEscalation:
           type: boolean
-          description: True when the analysis suggests "Identify harder".
+          description: |
+            True when a fast analysis suggests "Identify harder": its brand or product is
+            uncertain, the item looks designer or vintage, or the model asked for it. Always
+            false for a premium analysis.
         escalationReason:
           type: string
           maxLength: 500
     AnalysisFailure:
       type: object
+      description: |
+        Why the analysis failed. Starting or escalating it again queues it again; `retryable`
+        says whether that may succeed without changing anything (for example after a
+        provider outage), as opposed to needing other photos or a plan change.
       required: [code, message, retryable]
       properties:
         code:
           type: string
           maxLength: 64
+          description: |
+            Stable snake_case, for example `invalid_output` (the AI's answer broke the schema
+            twice), `rate_limited`, `ai_budget_exceeded`, `quota_exceeded`, `photo_set_changed`.
         message:
           type: string
           maxLength: 1000
+          description: Safe to show to the user.
         retryable:
           type: boolean
     Analysis:
@@ -2413,10 +2493,24 @@ components:
           $ref: '#/components/schemas/AnalysisFailure'
         escalatedFromAnalysisId:
           $ref: '#/components/schemas/Id'
+          description: For a `premium` analysis, the fast analysis it escalates.
+        escalationAnalysisId:
+          $ref: '#/components/schemas/Id'
+          description: For a fast analysis, the premium analysis that escalates it, once started.
         createdAt:
           $ref: '#/components/schemas/Timestamp'
         completedAt:
           $ref: '#/components/schemas/Timestamp'
+          description: When the analysis completed or failed.
+    AnalysisApply:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The item `version` the client last read (optimistic lock).
 
     # ---------------------------------------------------------------- pricing
     AiPriceEstimate:

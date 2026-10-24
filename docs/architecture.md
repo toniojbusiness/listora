@@ -105,7 +105,11 @@ apps/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
   ai/           AI provider layer: provider interface, model registry, price table, usage
-                metering, budget guards, fake and Anthropic providers (@listora/ai)
+                metering, budget guards, plan quota counter, fake and Anthropic providers
+                (@listora/ai)
+  analysis/     Item analysis: canonical vocabulary, marketplace copy limits, prompt assembly,
+                the strict output schema, provenance, escalation, the analysis job
+                (@listora/analysis)
   pricing/      Pricing v1: versioned fee tables, cost floor, AI-estimate tiers, research
                 links, sold-data label guard; pure, no I/O (@listora/pricing)
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
@@ -149,6 +153,7 @@ src/
   tenancy.ts     Tenant resolution: the tenancy guard
   idempotency.ts Idempotency-Key handling for POSTs
   items/ photos/ One folder per resource: routes.ts, repository.ts, mapping and views
+  analyses/      Start, get, escalate, and apply analyses; the guard pre-check
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
@@ -207,10 +212,11 @@ src/
   sRGB JPEGs: `original` (full size) and `ai` (1024 px) privately, and `thumbnail` (400 px)
   and `listing` (1600 px) under an unguessable public key. It stores their keys, sizes, and
   hashes in `photo.derivatives`, the upright size, and a 64-bit DCT pHash, then deletes the
-  upload, which may carry GPS. Every step is safe to rerun. Until the job queue (T-06) is
-  merged, the API's `PhotoJobQueue` only logs, so photos stay `processing` in development;
-  wiring it means adding the job with Graphile's `add_job` (job key `photoJobKey`) and
-  registering `processPhoto` in the worker.
+  upload, which may carry GPS. Every step is safe to rerun. The job queue (Graphile Worker,
+  T-06) runs only operation jobs so far: the API's `PhotoJobQueue` only logs, so photos stay
+  `processing` in development. Wiring it means adding the job with Graphile's `add_job` (job
+  key `photoJobKey`) and registering `processPhoto` in the worker. Analyses wait the same way
+  (`unscheduledAnalysisJobs`; `analysisJobKey`, `runItemAnalysis`).
 - **Photo-set hash.** `itemPhotoSet` returns an item's photos in order and `photoSetHash`
   (from `@listora/shared`) over their upload sha256s, the key analysis is idempotent by.
 - Deleting a photo, or its item, deletes its stored objects after the transaction commits.
@@ -480,12 +486,14 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
    variant and a labeled price estimate. Typical cost is about $0.0015-0.003 per item.
 4. **Escalation** (Sonnet 5.5) only for low confidence, designer or vintage items, or when the
    user taps "Identify harder". It counts against the plan's premium quota.
-5. **Analyze once.** There is one `ai_analysis` per photo-set hash and tier (`standard`, plus
-   `premium` only after escalation). Edits, repricing, delist, sync, and profit tracking never
-   call AI. Bulk work uses the Batch API.
-6. **Evaluation.** `npm run eval` scores the parsers, and a provider behind the `EvalProvider`
-   interface, on the synthetic tag corpus in `packages/eval/corpus`. It prints per-field
-   accuracy, precision, recall, and cost per item, including the billed cost of failed calls.
+5. **Analyze once.** There is one `ai_analysis` per item, photo-set hash, and tier
+   (`standard`, plus `premium` only after escalation). Edits, repricing, delist, sync, and
+   profit tracking never call AI. Bulk work uses the Batch API.
+6. **Evaluation.** `npm run eval` scores the parsers, and providers behind the `EvalProvider`
+   interface, on the synthetic tag corpus in `packages/eval/corpus`: AI tag reading, and the
+   full production analysis (`analyzeItem`), scored on the tag facts it reports. It prints
+   per-field accuracy, precision, recall, and cost per item, including the billed cost of
+   failed calls.
    The `fake` (default) and `anthropic` providers go through `AiClient`, so the guards, the
    tier's model (`--tier`), and metering are the production ones.
    The parsers must stay at or above 95% on every field (a unit test enforces this). Providers,
@@ -495,6 +503,48 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
    `cost_micros` from a versioned price table). The system also keeps daily and monthly
    rollups and per-plan quotas in reseller units. There is a per-account daily dollar circuit
    breaker (default $1/day), a global kill switch, and budget alarms.
+
+`@listora/analysis` implements steps 3 to 5 on top of `@listora/ai`:
+
+- **Request.** `startItemAnalysis` needs every photo of the item `ready` (the photo set is all
+  of them) and returns the existing analysis of the photo set when there is one; a `failed`
+  one is queued again, since asking again is the retry. Before anything is queued, the API
+  runs the AI guards (`AiClient.checkGuards`) with the tier's plan unit, so a request that
+  would be refused gets `503` (kill switch), `429` (daily budget), or `402` (quota) instead.
+  The row and its job commit together (`requestAnalysis`).
+- **The call.** `analyzeItem` sends up to 8 photos' `ai` derivatives (tag photos first), a
+  784 px centered crop of each of the first two tag photos when it is sharper than the `ai`
+  image (`tagCrop` in `@listora/photos`), and a JSON prompt with the phone's OCR lines and
+  barcodes and the `@listora/tag-parse` facts. The system prompt holds every rule and the
+  canonical vocabulary (`vocabulary.ts`: category tree, departments, colors, patterns,
+  materials, size systems, conditions) and nothing per item, so it caches. The answer's
+  schema (`itemAnalysisSchema`) also enforces each marketplace's copy limits
+  (`marketplace-copy.ts`, with their sources) and cross-field rules; an answer that breaks it
+  is `invalid_output`, retried once, then the analysis fails with a reason the user sees.
+  The answer is flat (details as plain values, empty when not found, with their confidences
+  in a parallel object; decoded before use), and its schema travels in the system prompt
+  (`enforcement: 'prompt'`): Anthropic refused it as a strict structured-output grammar
+  ("compiled grammar is too large") even flat, so validation and the one retry hold the
+  model to it instead.
+- **Provenance** is the server's: a value is `ocr` or `barcode` only when the phone's reads
+  contain it, otherwise `ai`. A confident parsed fact the model agrees with gives its source;
+  one the model left out fills the value in; one it contradicts caps the value's confidence
+  at 0.5 so the review screen highlights it.
+- **Escalation.** A standard result asks for the premium identification when its brand or
+  product is uncertain (confidence below 0.6), the item looks designer or vintage, or the
+  model says so. With `AI_AUTO_ESCALATE=on` the job then queues the premium analysis (same
+  photos plus the first result) in the transaction that stores the result, when the premium
+  quota allows; otherwise the user starts it (`escalateAnalysis`).
+- **Quotas.** A standard call uses one `ai_items` unit and a premium call one
+  `premium_identifications` unit when it succeeds. `PostgresQuotaPolicy` counts them in
+  `usage_counter` per UTC month and enforces the row's `quota` (null means unlimited until
+  billing, T-28, sets plan limits).
+- **Applying.** `applyAnalysis` copies the proposals into the item with their provenance and
+  sets `acceptedAnalysisId`, never overwriting a detail whose provenance is `user`. A later
+  `replaceItem` value equal to the accepted analysis's proposal keeps the analysis's source.
+- **The job** (`runItemAnalysis`, task `item_analysis`) records every outcome on the row,
+  unexpected errors included (`internal_error`, retryable), so an analysis never stays
+  `running` or claims a result it does not have.
 
 `@listora/ai` is the provider layer behind steps 3, 4, and 6, and implements step 7's metering
 and guards (budget alarms are T-29):
@@ -530,7 +580,8 @@ and guards (budget alarms are T-29):
   output schema name (`packages/ai/fixtures/README.md`), validates it against the schema, and
   estimates usage the way the API counts it. Fake calls are metered at the configured model's
   real prices so budgets behave the same in development. `AnthropicProvider` uses the official
-  SDK with strict structured output (`output_config.format` from the Zod schema), base64
+  SDK with strict structured output (`output_config.format` from the Zod schema; an output
+  with `enforcement: 'prompt'` sends the JSON schema as system instructions instead), base64
   images, the tier's effort, and a prompt-cache breakpoint on the system prompt. Its live smoke
   test runs only when `ANTHROPIC_API_KEY` is set.
 
@@ -574,7 +625,9 @@ Tables by area:
   sha256.
 - **Uploads:** `upload_session` (expiry) and its `upload_file` rows (declared type, size,
   sha256, storage key, and status `pending`, `uploaded`, or `attached`).
-- **AI:** `ai_analysis` (unique per photo-set hash and tier), `ai_usage_event` (one
+- **AI:** `ai_analysis` (unique per item, photo-set hash, and tier; a `premium` one names the
+  standard analysis it escalates; a failed one records whether retrying may help),
+  `ai_usage_event` (one
   append-only row per provider call, with its tier, outcome, and error code), and
   `ai_usage_daily`, which a trigger on `ai_usage_event` keeps in step per account and UTC day.
   Monthly totals come from `UsageStore.monthlyUsage` (section 8).

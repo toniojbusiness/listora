@@ -26,3 +26,9 @@ derivatives. Point `AI_FAKE_FIXTURES_DIR` at another directory to use a differen
   budgets and the eval harness's cost report behave as they would in production.
 - `error` is optional. It makes every call on this photo set fail with that code, still billing
   `usage`, to test failure paths.
+
+The item analysis (`@listora/analysis`) asks for the `item_analysis` schema
+(`itemAnalysisSchema`). With `AI_PROVIDER=fake`, an item's analysis fails visibly with
+`fixture_missing` until this directory has a `<photo-set hash>.json` for its photos with an
+`item_analysis` answer; the analysis tests build theirs in memory, and the eval corpus has one
+per tag in `packages/eval/fixtures/fake-ai/`.

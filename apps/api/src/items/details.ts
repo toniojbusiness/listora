@@ -4,6 +4,7 @@
  * not above the list price, and server-owned field provenance.
  */
 import type {
+  AnalyzedDetails,
   FieldError,
   ItemDetails,
   KnownProvenance,
@@ -11,6 +12,7 @@ import type {
   MeasurementUnit,
   Money,
 } from '@listora/api-contract';
+import { knownAnalysisProvenanceValues } from '@listora/api-contract';
 import type { InventoryItem, JsonObject } from '@listora/db';
 
 import { canonicalJson } from '../canonical-json.ts';
@@ -256,12 +258,14 @@ export type FieldProvenance = Partial<Record<DetailKey, KnownProvenance>>;
 /**
  * Server-owned provenance after a write through the API. A detail the request leaves unchanged
  * keeps its source (for example `ocr` or `ai` from an accepted analysis); a detail it sets or
- * changes becomes `user`; a cleared detail has none. A quantity the server fills in by default
- * is not user input, so it has no source.
+ * changes becomes `user`, unless its new value is exactly what the item's accepted analysis
+ * proposed, which keeps that analysis's source; a cleared detail has none. A quantity the
+ * server fills in by default is not user input, so it has no source.
  */
 export function provenanceAfterWrite(
   next: ItemDetailsInput,
   previous: { details: ItemDetails; provenance: FieldProvenance } | undefined,
+  accepted?: AnalyzedDetails,
 ): FieldProvenance {
   const provenance: FieldProvenance = {};
   for (const key of DETAIL_KEYS) {
@@ -274,11 +278,55 @@ export function provenanceAfterWrite(
     if (previous && sameValue(value, before)) {
       const source = previous.provenance[key];
       if (source !== undefined) provenance[key] = source;
-    } else {
-      provenance[key] = 'user';
+      continue;
     }
+    const proposed = accepted === undefined ? undefined : analyzedValue(accepted, key);
+    provenance[key] =
+      proposed !== undefined && sameValue(value, proposed.value) ? proposed.provenance : 'user';
   }
   return provenance;
+}
+
+/** The value an analysis proposed for a detail, with its provenance as an item provenance. */
+function analyzedValue(
+  analyzed: AnalyzedDetails,
+  key: DetailKey,
+): { value: unknown; provenance: KnownProvenance } | undefined {
+  if (!Object.hasOwn(analyzed, key)) return undefined;
+  const entry = analyzed[key as keyof AnalyzedDetails];
+  if (entry === undefined) return undefined;
+  const source = entry.provenance;
+  // A source added after this server was built counts as `ai`, as the contract tells clients.
+  const provenance = knownAnalysisProvenanceValues.find((known) => known === source);
+  return {
+    value: 'values' in entry ? entry.values : entry.value,
+    provenance: provenance ?? 'ai',
+  };
+}
+
+/**
+ * An analysis applied to an item: every detail the analysis proposed is copied with the
+ * analysis's provenance, except details the user entered or edited (`user`), which are never
+ * overwritten. Details the analysis did not find stay as they are.
+ */
+export function applyAnalyzedDetails(
+  current: ItemDetails,
+  provenance: FieldProvenance,
+  analyzed: AnalyzedDetails,
+  analysisId: string,
+): { details: ItemDetailsInput; provenance: FieldProvenance } {
+  const details: Record<string, unknown> = { ...current };
+  const nextProvenance: FieldProvenance = { ...provenance };
+  for (const key of DETAIL_KEYS) {
+    if (provenance[key] === 'user') continue;
+    const proposed = analyzedValue(analyzed, key);
+    if (proposed === undefined) continue;
+    details[key] = proposed.value;
+    nextProvenance[key] = proposed.provenance;
+  }
+  details['acceptedAnalysisId'] = analysisId;
+  delete nextProvenance.acceptedAnalysisId;
+  return { details: normalizeDetails(details), provenance: nextProvenance };
 }
 
 /** Details that differ between two versions, as `{ from, to }` (an absent side is omitted). */

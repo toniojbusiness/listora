@@ -56,29 +56,29 @@ Send the token as `Authorization: Bearer <accessToken>` on every `/v1` request, 
 
 ## Commands
 
-| Command                        | What it does                                                                                                                         |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm run check`                | Format check, lint, type check, API contract check, infra synth, unit and integration tests                                          |
-| `npm run format`               | Rewrite files with Prettier                                                                                                          |
-| `npm run lint`                 | ESLint (type-aware, zero warnings) and shellcheck                                                                                    |
-| `npm run typecheck`            | `tsc --build` over every workspace (type check only; no JS output)                                                                   |
-| `npm run contract:generate`    | Regenerate the TypeScript types and Swift client from `packages/api-contract/openapi.yaml`                                           |
-| `npm run contract:check`       | Lint the API spec, fail if generated code is stale, and test the Swift client package                                                |
-| `npm run infra:synth`          | `cdk synth` of the AWS stacks for every environment, offline with placeholder settings (see `infra/README.md`)                       |
-| `npm run test:unit`            | Unit tests (`*.test.ts`, no external services)                                                                                       |
-| `npm run test:integration`     | Integration tests (`*.int.test.ts`) against the local Postgres                                                                       |
-| `npm run dev:api`              | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                                             |
-| `npm run dev:worker`           | Run the worker with reload on change                                                                                                 |
-| `npm run dev:fake-marketplace` | Run the fake marketplace at `FAKE_MARKETPLACE_URL`, for the worker in development                                                    |
-| `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one |
-| `npm run eval`                 | Score the tag parsers and the fake AI provider on the synthetic corpus; `-- --provider anthropic` uses the real API                  |
-| `npm run corpus:render`        | Regenerate the synthetic tag corpus and its fake AI fixtures after changing the corpus generator                                     |
-| `scripts/dev-db.sh start`      | Initialize if needed and start the cluster; create the `listora` and `listora_test` databases (the default command)                  |
-| `scripts/dev-db.sh stop`       | Stop the cluster                                                                                                                     |
-| `scripts/dev-db.sh reset`      | Delete all local data and start a fresh cluster                                                                                      |
-| `scripts/dev-db.sh status`     | Show whether the cluster is running and on which port                                                                                |
-| `scripts/dev-db.sh url test`   | Print a connection URL (`dev` or `test`)                                                                                             |
-| `scripts/dev-db.sh psql`       | Open psql on the dev database                                                                                                        |
+| Command                        | What it does                                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run check`                | Format check, lint, type check, API contract check, infra synth, unit and integration tests                                                      |
+| `npm run format`               | Rewrite files with Prettier                                                                                                                      |
+| `npm run lint`                 | ESLint (type-aware, zero warnings) and shellcheck                                                                                                |
+| `npm run typecheck`            | `tsc --build` over every workspace (type check only; no JS output)                                                                               |
+| `npm run contract:generate`    | Regenerate the TypeScript types and Swift client from `packages/api-contract/openapi.yaml`                                                       |
+| `npm run contract:check`       | Lint the API spec, fail if generated code is stale, and test the Swift client package                                                            |
+| `npm run infra:synth`          | `cdk synth` of the AWS stacks for every environment, offline with placeholder settings (see `infra/README.md`)                                   |
+| `npm run test:unit`            | Unit tests (`*.test.ts`, no external services)                                                                                                   |
+| `npm run test:integration`     | Integration tests (`*.int.test.ts`) against the local Postgres                                                                                   |
+| `npm run dev:api`              | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                                                         |
+| `npm run dev:worker`           | Run the worker with reload on change                                                                                                             |
+| `npm run dev:fake-marketplace` | Run the fake marketplace at `FAKE_MARKETPLACE_URL`, for the worker in development                                                                |
+| `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
+| `npm run eval`                 | Score the tag parsers, AI tag reading, and the full item analysis on the synthetic corpus (fake AI); `-- --provider anthropic` uses the real API |
+| `npm run corpus:render`        | Regenerate the synthetic tag corpus and its fake AI fixtures after changing the corpus generator                                                 |
+| `scripts/dev-db.sh start`      | Initialize if needed and start the cluster; create the `listora` and `listora_test` databases (the default command)                              |
+| `scripts/dev-db.sh stop`       | Stop the cluster                                                                                                                                 |
+| `scripts/dev-db.sh reset`      | Delete all local data and start a fresh cluster                                                                                                  |
+| `scripts/dev-db.sh status`     | Show whether the cluster is running and on which port                                                                                            |
+| `scripts/dev-db.sh url test`   | Print a connection URL (`dev` or `test`)                                                                                                         |
+| `scripts/dev-db.sh psql`       | Open psql on the dev database                                                                                                                    |
 
 The iOS app has its own `make` targets, run from the repository root. The full list is in
 [apps/ios/README.md](apps/ios/README.md#commands).
@@ -99,7 +99,8 @@ one runs at the same time.
 apps/api/               Fastify HTTP API (@listora/api)
 apps/worker/            Background worker (@listora/worker)
 apps/ios/               iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift packages
-packages/ai/            AI provider layer: providers, price table, metering, budget guards (@listora/ai)
+packages/ai/            AI provider layer: providers, price table, metering, budget guards, quota counter (@listora/ai)
+packages/analysis/      Item analysis: prompt, output schema, provenance, marketplace copy, the job (@listora/analysis)
 packages/pricing/       Fee tables, cost floor, price tiers, research links, label guard (@listora/pricing)
 packages/api-contract/  OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
 packages/db/            SQL migrations, migration runner, Kysely types (@listora/db)

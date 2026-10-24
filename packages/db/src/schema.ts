@@ -234,6 +234,14 @@ export interface AiAnalysisTable {
   error_message: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  requested_by_user_id: Nullable<string>;
+  /** Set exactly for `premium` analyses: the standard analysis this one escalates. */
+  escalated_from_analysis_id: Nullable<string>;
+  attempts: Generated<number>;
+  /** Set exactly for `failed` analyses. */
+  error_retryable: Nullable<boolean>;
+  /** When the analysis succeeded or failed. */
+  completed_at: NullableTimestamp;
 }
 
 export interface AiUsageEventTable {

@@ -1,0 +1,25 @@
+{
+  "name": "@listora/analysis",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Item analysis: prompt assembly, the strict output schema, provenance, marketplace copy, escalation, and the analysis job.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/ai": "*",
+    "@listora/api-contract": "*",
+    "@listora/db": "*",
+    "@listora/photos": "*",
+    "@listora/shared": "*",
+    "@listora/storage": "*",
+    "@listora/tag-parse": "*",
+    "kysely": "^0.29.7",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*",
+    "sharp": "^0.35.5"
+  }
+}

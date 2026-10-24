@@ -69,7 +69,7 @@ describe('committed fake AI fixtures', () => {
 describe('AiEvalProvider', () => {
   it('scores the corpus through AiClient and reports the metered cost per item', async () => {
     const { provider, store } = evalProvider(directoryFixtures(DEFAULT_FAKE_FIXTURES_DIR));
-    const report = await runEval(corpus, { provider });
+    const report = await runEval(corpus, { providers: [provider] });
     const system = report.systems[1];
     expect(system?.id).toBe('provider:fake');
     expect(system?.errors).toEqual([]);
@@ -101,7 +101,7 @@ describe('AiEvalProvider', () => {
     });
     const { provider, store } = evalProvider(fixtures);
     const small = { ...corpus, cases: corpus.cases.slice(0, 2) };
-    const report = await runEval(small, { provider });
+    const report = await runEval(small, { providers: [provider] });
     const system = report.systems[1];
 
     expect(system?.errors).toEqual([
@@ -117,7 +117,10 @@ describe('AiEvalProvider', () => {
     const { provider, store } = evalProvider(directoryFixtures(DEFAULT_FAKE_FIXTURES_DIR), {
       killSwitch: true,
     });
-    const report = await runEval({ ...corpus, cases: corpus.cases.slice(0, 1) }, { provider });
+    const report = await runEval(
+      { ...corpus, cases: corpus.cases.slice(0, 1) },
+      { providers: [provider] },
+    );
     expect(report.systems[1]?.errors[0]?.message).toContain('kill switch');
     expect(report.systems[1]?.costMicrosTotal).toBe(0);
     expect(store.events).toEqual([]);

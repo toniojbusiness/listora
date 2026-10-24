@@ -31,7 +31,18 @@ export interface OutputSchema<T> {
   /** Stable snake_case name, for example `tag_facts`; the fake provider's fixtures use it. */
   readonly name: string;
   readonly schema: z.ZodType<T>;
+  /**
+   * How the provider holds the model to the schema. `grammar` (the default): constrained
+   * decoding (strict structured outputs), so the answer always parses. `prompt`: the JSON
+   * schema goes in the system prompt instead, for schemas whose compiled grammar the provider
+   * refuses as too large. Either way every answer is validated against `schema`, and one that
+   * fails is an `invalid_output` call.
+   */
+  readonly enforcement?: SchemaEnforcement;
 }
+
+export const SCHEMA_ENFORCEMENTS = ['grammar', 'prompt'] as const;
+export type SchemaEnforcement = (typeof SCHEMA_ENFORCEMENTS)[number];
 
 /** Token and tool usage of one call, as billed by the provider. */
 export interface TokenUsage {

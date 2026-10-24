@@ -21,6 +21,79 @@
       "style": [
         "CM0462"
       ]
+    },
+    "item_analysis": {
+      "attributes": {
+        "brand": "",
+        "productName": "",
+        "styleNumber": "CM0462",
+        "rnNumber": "",
+        "upc": "4061399565675",
+        "department": "",
+        "category": "",
+        "subcategory": "",
+        "sizeLabel": "S",
+        "sizeSystem": "letter",
+        "colors": [],
+        "pattern": "",
+        "materials": [],
+        "condition": "",
+        "conditionNotes": "",
+        "flaws": [],
+        "keywords": []
+      },
+      "confidence": {
+        "title": 0.5,
+        "description": 0.5,
+        "brand": 0,
+        "productName": 0,
+        "styleNumber": 0.9,
+        "rnNumber": 0,
+        "upc": 0.9,
+        "department": 0,
+        "category": 0,
+        "subcategory": 0,
+        "sizeLabel": 0.9,
+        "sizeSystem": 0.9,
+        "colors": 0,
+        "pattern": 0,
+        "materials": 0,
+        "condition": 0,
+        "conditionNotes": 0,
+        "flaws": 0,
+        "keywords": 0
+      },
+      "title": "Synthetic tag hang-tag-067",
+      "description": "Synthetic tag hang-tag-067, read from its care label.",
+      "variants": {
+        "ebay": {
+          "title": "Synthetic tag hang-tag-067",
+          "description": "Synthetic tag hang-tag-067"
+        },
+        "depop": {
+          "title": "Synthetic tag hang-tag-067",
+          "description": "Synthetic tag hang-tag-067",
+          "hashtags": []
+        },
+        "poshmark": {
+          "title": "Synthetic tag hang-tag-067",
+          "description": "Synthetic tag hang-tag-067"
+        },
+        "mercari": {
+          "title": "Synthetic tag hang-tag-067",
+          "description": "Synthetic tag hang-tag-067"
+        }
+      },
+      "priceEstimate": {
+        "lowCents": 0,
+        "midCents": 0,
+        "highCents": 0,
+        "confidence": 0
+      },
+      "looksVintage": false,
+      "looksDesigner": false,
+      "needsEscalation": false,
+      "escalationReason": ""
     }
   }
 }

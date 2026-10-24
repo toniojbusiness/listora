@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Db } from './database.ts';
 import { createInventoryItem } from './items.ts';
 import { jsonb } from './json.ts';
-import type { PhotoTable } from './schema.ts';
+import type { AiAnalysisTable, PhotoTable } from './schema.ts';
 import {
   createMigratedDatabase,
   expectPgError,
@@ -253,25 +253,103 @@ describe('schema constraints (real Postgres)', () => {
       );
     });
 
-    it('analyzes a photo set once per tier', async () => {
-      const analysis = (tier: 'standard' | 'premium') =>
+    it("analyzes an item's photo set once per tier, premium only as an escalation", async () => {
+      const analysis = (values: {
+        itemId?: string;
+        tier?: 'standard' | 'premium';
+        escalatedFrom?: string;
+      }) =>
         db
           .insertInto('ai_analysis')
           .values({
             account_id: a.accountId,
-            item_id: a.itemId,
+            item_id: values.itemId ?? a.itemId,
             photo_set_hash: HASH,
-            tier,
+            tier: values.tier ?? 'standard',
             model: 'claude-haiku-5-5',
+            escalated_from_analysis_id: values.escalatedFrom ?? null,
           })
-          .execute();
-      await analysis('standard');
-      await analysis('premium');
+          .returning('id')
+          .executeTakeFirstOrThrow();
+      const standard = await analysis({});
       await expectPgError(
-        analysis('standard'),
-        PG_ERROR.uniqueViolation,
-        'ai_analysis_account_id_photo_set_hash_tier_key',
+        analysis({ tier: 'premium' }),
+        PG_ERROR.checkViolation,
+        'ai_analysis_premium_iff_escalated',
       );
+      await expectPgError(
+        analysis({ escalatedFrom: standard.id }),
+        PG_ERROR.checkViolation,
+        'ai_analysis_premium_iff_escalated',
+      );
+      await analysis({ tier: 'premium', escalatedFrom: standard.id });
+      await expectPgError(
+        analysis({}),
+        PG_ERROR.uniqueViolation,
+        'ai_analysis_account_id_item_id_photo_set_hash_tier_key',
+      );
+      // Another item with the same photos is analyzed on its own.
+      const twin = await createInventoryItem(db, a.accountId);
+      const twinAnalysis = await analysis({ itemId: twin.id });
+      // A premium analysis escalates an analysis of its own item.
+      const third = await createInventoryItem(db, a.accountId);
+      await expectPgError(
+        analysis({ itemId: third.id, tier: 'premium', escalatedFrom: twinAnalysis.id }),
+        PG_ERROR.foreignKeyViolation,
+        'ai_analysis_account_id_item_id_escalated_from_analysis_id_fkey',
+      );
+    });
+
+    it('records why and when an analysis finished', async () => {
+      const item = await createInventoryItem(db, a.accountId);
+      const { id } = await db
+        .insertInto('ai_analysis')
+        .values({
+          account_id: a.accountId,
+          item_id: item.id,
+          photo_set_hash: HASH,
+          tier: 'standard',
+          model: 'claude-haiku-5-5',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const update = (values: Updateable<AiAnalysisTable>) =>
+        db.updateTable('ai_analysis').set(values).where('id', '=', id).execute();
+      const failed = {
+        status: 'failed',
+        error_code: 'invalid_output',
+        error_message: 'The answer did not match the schema.',
+        error_retryable: true,
+        completed_at: new Date(),
+      } as const;
+      await expectPgError(
+        update({ ...failed, error_retryable: null }),
+        PG_ERROR.checkViolation,
+        'ai_analysis_failed_has_retryable',
+      );
+      await expectPgError(
+        update({ ...failed, completed_at: null }),
+        PG_ERROR.checkViolation,
+        'ai_analysis_completed_at_iff_finished',
+      );
+      await expectPgError(
+        update({ ...failed, error_code: 'Not A Code' }),
+        PG_ERROR.checkViolation,
+        'ai_analysis_error_code_format',
+      );
+      await update(failed);
+      await expectPgError(
+        update({ status: 'pending', error_code: null, completed_at: null }),
+        PG_ERROR.checkViolation,
+        'ai_analysis_failed_has_retryable',
+      );
+      await update({
+        status: 'pending',
+        error_code: null,
+        error_message: null,
+        error_retryable: null,
+        completed_at: null,
+      });
     });
 
     it('allows one owner per account', async () => {

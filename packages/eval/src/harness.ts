@@ -16,6 +16,7 @@ import {
   scoreItem,
   type FieldMismatch,
   type FieldTally,
+  type ScoringMode,
 } from './scoring.ts';
 
 export interface FieldReport {
@@ -28,13 +29,19 @@ export interface FieldReport {
 }
 
 export interface SystemReport {
-  /** `parsers` for the deterministic parsers, otherwise `provider:<id>`. */
+  /**
+   * `parsers` for the deterministic parsers, `provider:<id>` for a tag provider, and
+   * `analysis:<id>` for the full item analysis.
+   */
   readonly id: string;
   readonly description: string;
-  readonly fields: Readonly<Record<TagField, FieldReport>>;
-  /** Correct (item, field) pairs over all pairs. */
+  /** Present for each scored field (`scoredFields`). */
+  readonly fields: Readonly<Partial<Record<TagField, FieldReport>>>;
+  readonly scoredFields: readonly TagField[];
+  readonly scoring: ScoringMode;
+  /** Correct (item, field) pairs over all scored pairs. */
   readonly overallAccuracy: number;
-  /** The lowest per-field accuracy, which the CLI's --min-accuracy gate checks. */
+  /** The lowest scored per-field accuracy, which the CLI's --min-accuracy gate checks. */
   readonly minFieldAccuracy: number;
   readonly costMicrosTotal: number;
   readonly costMicrosPerItem: number;
@@ -57,41 +64,51 @@ export interface EvalReport {
 }
 
 /**
- * Runs the deterministic parsers, and the provider when one is given, over every corpus item
- * and scores each against the ground truth. Items run one at a time so a provider sees a
- * steady, predictable call rate.
+ * Runs the deterministic parsers, and each given provider, over every corpus item and scores
+ * each against the ground truth. Items run one at a time, and a provider's calls one at a
+ * time, so a provider sees a steady, predictable call rate.
  */
 export async function runEval(
   corpus: LoadedCorpus,
-  options: { provider?: EvalProvider } = {},
+  options: { providers?: readonly EvalProvider[] } = {},
 ): Promise<EvalReport> {
-  const parsers = new SystemAccumulator('parsers', 'deterministic tag-text parsers (no AI)');
-  const provider = options.provider;
-  const providerSystem =
-    provider === undefined
-      ? undefined
-      : new SystemAccumulator(`provider:${provider.id}`, provider.description);
+  const parsers = new SystemAccumulator(
+    'parsers',
+    'deterministic tag-text parsers (no AI)',
+    TAG_FIELDS,
+    'exact',
+  );
+  const providers = (options.providers ?? []).map((provider) => ({
+    provider,
+    system: new SystemAccumulator(
+      `${provider.task === 'analysis' ? 'analysis' : 'provider'}:${provider.id}`,
+      provider.description,
+      provider.fields ?? TAG_FIELDS,
+      provider.scoring ?? 'exact',
+    ),
+  }));
 
   for (const corpusCase of corpus.cases) {
     const facts = parseTagText(corpusCase.ocr);
     parsers.add(corpusCase.id, corpusCase.truth, valuesOf(facts), 0);
-    if (provider === undefined || providerSystem === undefined) continue;
-    try {
-      const result = await provider.extract({
-        caseId: corpusCase.id,
-        image: {
-          path: imagePath(corpus, corpusCase),
-          mediaType: corpusCase.image.mediaType,
-          width: corpusCase.image.width,
-          height: corpusCase.image.height,
-        },
-        ocr: corpusCase.ocr,
-        parsed: facts,
-      });
-      assertCostMicros(result.usage.costMicros);
-      providerSystem.add(corpusCase.id, corpusCase.truth, result.values, result.usage.costMicros);
-    } catch (error) {
-      providerSystem.fail(corpusCase.id, corpusCase.truth, failedCall(error));
+    for (const { provider, system } of providers) {
+      try {
+        const result = await provider.extract({
+          caseId: corpusCase.id,
+          image: {
+            path: imagePath(corpus, corpusCase),
+            mediaType: corpusCase.image.mediaType,
+            width: corpusCase.image.width,
+            height: corpusCase.image.height,
+          },
+          ocr: corpusCase.ocr,
+          parsed: facts,
+        });
+        assertCostMicros(result.usage.costMicros);
+        system.add(corpusCase.id, corpusCase.truth, result.values, result.usage.costMicros);
+      } catch (error) {
+        system.fail(corpusCase.id, corpusCase.truth, failedCall(error));
+      }
     }
   }
 
@@ -102,7 +119,7 @@ export async function runEval(
       seed: corpus.manifest.seed,
       items: corpus.cases.length,
     },
-    systems: [parsers.report(), ...(providerSystem ? [providerSystem.report()] : [])],
+    systems: [parsers.report(), ...providers.map(({ system }) => system.report())],
   };
 }
 
@@ -132,23 +149,26 @@ function errorMessage(error: unknown): string {
 class SystemAccumulator {
   readonly #id: string;
   readonly #description: string;
-  readonly #tallies = Object.fromEntries(
-    TAG_FIELDS.map((field) => [field, emptyTally()]),
-  ) as Record<TagField, FieldTally>;
+  readonly #fields: readonly TagField[];
+  readonly #scoring: ScoringMode;
+  readonly #tallies: Partial<Record<TagField, FieldTally>>;
   readonly #errors: { caseId: string; message: string }[] = [];
   readonly #mismatches: (FieldMismatch & { caseId: string })[] = [];
   #items = 0;
   #costMicros = 0;
 
-  constructor(id: string, description: string) {
+  constructor(id: string, description: string, fields: readonly TagField[], scoring: ScoringMode) {
     this.#id = id;
     this.#description = description;
+    this.#scoring = scoring;
+    this.#fields = TAG_FIELDS.filter((field) => fields.includes(field));
+    this.#tallies = Object.fromEntries(this.#fields.map((field) => [field, emptyTally()]));
   }
 
   add(caseId: string, truth: TagValues, predicted: Partial<TagValues>, costMicros: number): void {
     this.#items += 1;
     this.#costMicros += costMicros;
-    for (const mismatch of scoreItem(this.#tallies, truth, predicted)) {
+    for (const mismatch of scoreItem(this.#tallies, truth, predicted, this.#scoring)) {
       this.#mismatches.push({ caseId, ...mismatch });
     }
   }
@@ -164,8 +184,8 @@ class SystemAccumulator {
 
   report(): SystemReport {
     const fields = Object.fromEntries(
-      TAG_FIELDS.map((field) => {
-        const tally = this.#tallies[field];
+      this.#fields.map((field) => {
+        const tally = this.#tallies[field] ?? emptyTally();
         const report: FieldReport = {
           items: tally.items,
           correct: tally.correct,
@@ -176,7 +196,7 @@ class SystemAccumulator {
         };
         return [field, report];
       }),
-    ) as Record<TagField, FieldReport>;
+    ) as Partial<Record<TagField, FieldReport>>;
     const all = Object.values(fields);
     const correct = all.reduce((sum, field) => sum + field.correct, 0);
     const pairs = all.reduce((sum, field) => sum + field.items, 0);
@@ -184,6 +204,8 @@ class SystemAccumulator {
       id: this.#id,
       description: this.#description,
       fields,
+      scoredFields: this.#fields,
+      scoring: this.#scoring,
       overallAccuracy: pairs === 0 ? 0 : correct / pairs,
       minFieldAccuracy: Math.min(...all.map((field) => field.accuracy)),
       costMicrosTotal: this.#costMicros,

@@ -1,7 +1,9 @@
+import { createAiClient, PostgresQuotaPolicy, PostgresUsageStore } from '@listora/ai';
 import { createDatabase, createPool } from '@listora/db';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
 
+import { unscheduledAnalysisJobs } from './analyses/jobs.ts';
 import { buildApp } from './app.ts';
 import { createAuthDriver } from './auth/create-driver.ts';
 import { loadApiConfig } from './config.ts';
@@ -19,6 +21,12 @@ const app = buildApp({
   auth: createAuthDriver(config.auth, logger),
   storage: createStorage(config.storage),
   photoJobs: unscheduledPhotoJobs(logger),
+  ai: createAiClient(config.ai, {
+    usageStore: new PostgresUsageStore(db),
+    quota: new PostgresQuotaPolicy(db),
+    logger,
+  }),
+  analysisJobs: unscheduledAnalysisJobs(logger),
   pingDatabase: () => pingDatabase(pool),
 });
 

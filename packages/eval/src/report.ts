@@ -19,6 +19,8 @@ export function formatReport(report: EvalReport, options: { mismatches?: boolean
     field,
     ...systems.flatMap((system) => {
       const metrics = system.fields[field];
+      // A field the system does not report (the analysis has no CA number, for example).
+      if (metrics === undefined) return ['-', '', ''];
       return [
         `${percent(metrics.accuracy)} (${String(metrics.correct)}/${String(metrics.items)})`,
         optionalPercent(metrics.precision),

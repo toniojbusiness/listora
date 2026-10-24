@@ -6,6 +6,8 @@ export {
   storageKeys,
 } from './derivatives.ts';
 export type { DerivativeKind, PhotoDerivatives, StoredDerivative } from './derivatives.ts';
+export { TAG_CROP_EDGE, TAG_CROP_SHARE, tagCrop } from './crop.ts';
+export type { TagCrop } from './crop.ts';
 export { MAX_INPUT_PIXELS, processImage, UnusableImageError } from './image.ts';
 export type { DerivedImage, ProcessedImage, ProcessImageOptions } from './image.ts';
 export { isPhotoJobPayload, PHOTO_PROCESSING_TASK, photoJobKey, processPhoto } from './job.ts';

@@ -9,11 +9,16 @@ import {
 /**
  * Scoring rules:
  *
- * - An item's field is correct when the predicted set of values equals the ground-truth set
- *   exactly (order ignored). A tag with no RN is correct only when nothing is predicted, so
- *   false positives cost accuracy.
+ * - `exact` (the default): an item's field is correct when the predicted set of values equals
+ *   the ground-truth set exactly (order ignored). A tag with no RN is correct only when
+ *   nothing is predicted, so false positives cost accuracy.
+ * - `one_of`, for systems that report one value per field (an item has one size even when its
+ *   tag prints US, UK, and EU sizes): correct when the one predicted value is among the
+ *   ground-truth values, or when both are empty.
  * - Precision and recall count individual values, so a partly right fiber list gets credit.
  */
+export const SCORING_MODES = ['exact', 'one_of'] as const;
+export type ScoringMode = (typeof SCORING_MODES)[number];
 export interface FieldTally {
   items: number;
   correct: number;
@@ -39,24 +44,32 @@ export function keysOf<F extends TagField>(
   return [...new Set((values ?? []).map((value) => valueKey(field, value)))].sort();
 }
 
-/** Adds one item to the tallies and returns the fields it got wrong. */
+/** Adds one item to the tallies of the fields they hold and returns the fields it got wrong. */
 export function scoreItem(
-  tallies: Record<TagField, FieldTally>,
+  tallies: Partial<Record<TagField, FieldTally>>,
   truth: TagValues,
   predicted: Partial<TagValues>,
+  mode: ScoringMode = 'exact',
 ): FieldMismatch[] {
   const mismatches: FieldMismatch[] = [];
   for (const field of TAG_FIELDS) {
+    const tally = tallies[field];
+    if (tally === undefined) continue;
     const expected = keysOf(field, truth[field]);
     const actual = keysOf(field, predicted[field]);
     const expectedSet = new Set(expected);
     const truePositives = actual.filter((key) => expectedSet.has(key)).length;
-    const tally = tallies[field];
     tally.items += 1;
     tally.truePositives += truePositives;
     tally.falsePositives += actual.length - truePositives;
     tally.falseNegatives += expected.length - truePositives;
-    if (truePositives === expected.length && actual.length === expected.length) {
+    const correct =
+      mode === 'exact'
+        ? truePositives === expected.length && actual.length === expected.length
+        : expected.length === 0
+          ? actual.length === 0
+          : actual.length === 1 && truePositives === 1;
+    if (correct) {
       tally.correct += 1;
     } else {
       mismatches.push({ field, expected, actual });
