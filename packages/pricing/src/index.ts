@@ -1,4 +1,4 @@
-export { feeTableByVersion, feeTableFor, FEE_TABLES } from './fee-tables.ts';
+export { feeTableByVersion, feeTableFor, feeTableForSale, FEE_TABLES } from './fee-tables.ts';
 export { estimateFeesCents } from './fees.ts';
 export type { EstimatedFeeKind, FeeBand, FeeRule, FeeTable } from './fees.ts';
 export {
@@ -6,9 +6,10 @@ export {
   computeFloor,
   feeEstimator,
   MAX_FEE_CALIBRATION_RATIO,
+  MIN_FEE_CALIBRATION_RATIO,
   MIN_SALES_FOR_FEE_CALIBRATION,
 } from './floor.ts';
-export type { FeeCalibration, Floor, FloorInput, ObservedSale } from './floor.ts';
+export type { FeeCalibration, Floor, FloorInput, ObservedFee, ObservedSale } from './floor.ts';
 export {
   AI_ESTIMATE_LABEL,
   claimsSoldData,
@@ -24,7 +25,11 @@ export {
   TERAPEAK_LABEL,
 } from './research-links.ts';
 export type { ResearchItem } from './research-links.ts';
-export { aiEstimatePayloadSchema, soldDataPayloadSchema } from './snapshots.ts';
+export {
+  aiEstimatePayloadSchema,
+  soldDataPayloadSchema,
+  soldDataPayloadSchemaFor,
+} from './snapshots.ts';
 export type {
   AiEstimatePayload,
   AiEstimateSnapshot,
@@ -36,6 +41,7 @@ export {
   ORDER_DATA_MAY_ADJUST_FEES,
   PRICING_SNAPSHOT_SOURCES,
   REAL_SOLD_DATA_SOURCES,
+  SOLD_DATA_LISTING_CONTEXT,
 } from './sources.ts';
 export type { PricingSnapshotSource, RealSoldDataSource } from './sources.ts';
 export { buildPricingSuggestion, LabelGuardError } from './suggestion.ts';

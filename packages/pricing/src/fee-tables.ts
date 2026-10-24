@@ -143,16 +143,46 @@ export const FEE_TABLES: readonly FeeTable[] = [
 /** The table in effect for `marketplace` on `at` (UTC): the latest whose day has come. */
 export function feeTableFor(marketplace: KnownMarketplace, at: Date): FeeTable {
   const day = at.toISOString().slice(0, 10);
-  const table = FEE_TABLES.filter(
-    (candidate) => candidate.marketplace === marketplace && candidate.effectiveFrom <= day,
-  ).reduce<FeeTable | undefined>(
-    (latest, candidate) =>
-      latest === undefined || candidate.effectiveFrom > latest.effectiveFrom ? candidate : latest,
-    undefined,
+  const table = latestTable(
+    FEE_TABLES.filter(
+      (candidate) => candidate.marketplace === marketplace && candidate.effectiveFrom <= day,
+    ),
   );
   // The first table of every marketplace starts no later than the day this code shipped.
   if (!table) throw new Error(`no ${marketplace} fee table is in effect on ${day}`);
   return table;
+}
+
+/**
+ * The table that applied to a sale made on `at`: the one in effect that day, or, for a sale
+ * before the marketplace's first table, that first table (the oldest schedule Listora knows).
+ */
+export function feeTableForSale(
+  marketplace: KnownMarketplace,
+  at: Date,
+  allTables: readonly FeeTable[] = FEE_TABLES,
+): FeeTable {
+  const day = at.toISOString().slice(0, 10);
+  const tables = allTables.filter((candidate) => candidate.marketplace === marketplace);
+  const table =
+    latestTable(tables.filter((candidate) => candidate.effectiveFrom <= day)) ??
+    tables.reduce<FeeTable | undefined>(
+      (earliest, candidate) =>
+        earliest === undefined || candidate.effectiveFrom < earliest.effectiveFrom
+          ? candidate
+          : earliest,
+      undefined,
+    );
+  if (!table) throw new Error(`no ${marketplace} fee table exists`);
+  return table;
+}
+
+function latestTable(tables: readonly FeeTable[]): FeeTable | undefined {
+  return tables.reduce<FeeTable | undefined>(
+    (latest, candidate) =>
+      latest === undefined || candidate.effectiveFrom > latest.effectiveFrom ? candidate : latest,
+    undefined,
+  );
 }
 
 export function feeTableByVersion(version: string): FeeTable | undefined {

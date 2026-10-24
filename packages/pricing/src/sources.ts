@@ -22,11 +22,25 @@ export function isRealSoldDataSource(source: string): source is RealSoldDataSour
 }
 
 /**
+ * The marketplace whose listing context a source's data is bound to: its snapshots must name
+ * that marketplace, so clients show them only on that marketplace's listing. Depop's
+ * acceptable use policy allows Pricing Inspiration only in the context of that Depop listing.
+ */
+export const SOLD_DATA_LISTING_CONTEXT: Readonly<
+  Partial<Record<RealSoldDataSource, KnownMarketplace>>
+> = {
+  depop_inspiration: 'depop',
+  ebay_mi: 'ebay',
+};
+
+/**
  * Whether a marketplace's order data (its actual fees) may adjust the fee estimate behind a
- * floor. The eBay API License Agreement forbids using eBay content "to suggest or model prices
- * for items listed on eBay Site" without eBay's written consent, so eBay order data never
- * feeds a computed price; eBay floors use the published fee table only. Flip this only with
- * that written consent in hand.
+ * floor. eBay-sourced fee data (including the account's own fees from the eBay Finances API)
+ * stays out of eBay floor computation until a legal review of the eBay API License Agreement
+ * (red flag RF3) says otherwise: the licence forbids using eBay content "to suggest or model
+ * prices for items listed on eBay Site" without eBay's written consent. Until then eBay floors
+ * use the published fee table only. When that review clears it, set `ebay` to true; nothing
+ * else needs to change.
  */
 export const ORDER_DATA_MAY_ADJUST_FEES: Readonly<Record<KnownMarketplace, boolean>> = {
   ebay: false,

@@ -14,9 +14,10 @@ import {
 import {
   aiEstimatePayloadSchema,
   isRealSoldDataSource,
-  soldDataPayloadSchema,
+  soldDataPayloadSchemaFor,
   type AiEstimatePayload,
   type AiEstimateSnapshot,
+  type ObservedFee,
   type ObservedSale,
   type SoldDataPayload,
   type SoldDataSnapshot,
@@ -48,7 +49,8 @@ export type NewPricingSnapshot =
 /**
  * Writes one snapshot for an item of the tenant's account, after checking its payload against
  * its source's schema: the source is the label, so a payload can never be stored under a
- * source it does not belong to. Throws a ZodError for an invalid payload.
+ * source it does not belong to, and a source bound to one listing context must name it.
+ * Throws a ZodError for an invalid payload.
  */
 export async function insertPricingSnapshot(
   db: DbExecutor,
@@ -59,7 +61,7 @@ export async function insertPricingSnapshot(
   const payload =
     snapshot.source === 'ai_estimate'
       ? aiEstimatePayloadSchema.parse(snapshot.payload)
-      : soldDataPayloadSchema.parse(snapshot.payload);
+      : soldDataPayloadSchemaFor(snapshot.source).parse(snapshot.payload);
   const row = await db
     .insertInto('pricing_snapshot')
     .values({
@@ -183,7 +185,7 @@ export async function currentSnapshots(
       continue;
     }
     if (!isRealSoldDataSource(row.source)) continue;
-    const parsed = soldDataPayloadSchema.safeParse(row.payload);
+    const parsed = soldDataPayloadSchemaFor(row.source).safeParse(row.payload);
     if (!parsed.success) {
       result.invalidIds.push(row.id);
       continue;
@@ -198,8 +200,10 @@ export async function currentSnapshots(
 
 /**
  * The account's recent single-item sales per marketplace that have actual marketplace or
- * payment fees, newest first. Canceled and returned sales are left out, and so are bundles,
- * whose order-level fees cannot be compared with one item's estimate.
+ * payment fees, newest first, each with its sale day and every such fee line (refunds and
+ * zero-amount lines included, so `calibrateFees` can leave incomplete sales out). Canceled and
+ * returned sales are left out, and so are bundles, whose order-level fees cannot be compared
+ * with one item's estimate.
  */
 export async function recentObservedSales(
   db: DbExecutor,
@@ -234,14 +238,18 @@ export async function recentObservedSales(
           'sale.sold_at',
           sql<number>`max(sale_item.sale_price_cents)`.as('sale_price_cents'),
           // Joined once per fee line and once per item: one item, so each fee counts once.
-          sql<number>`sum(fee_line.amount_cents)::bigint`.as('actual_fees_cents'),
+          sql<
+            ObservedFee[]
+          >`jsonb_agg(jsonb_build_object('kind', fee_line.kind, 'amountCents', fee_line.amount_cents) order by fee_line.id)`.as(
+            'fees',
+          ),
           sql<number>`row_number() over (partition by sale.marketplace order by sale.sold_at desc, sale.id desc)`.as(
             'recency',
           ),
         ]),
     )
     .selectFrom('sale_total')
-    .select(['marketplace', 'sale_price_cents', 'actual_fees_cents'])
+    .select(['marketplace', 'sold_at', 'sale_price_cents', 'fees'])
     .where('recency', '<=', FEE_CALIBRATION_SALES)
     .orderBy('marketplace')
     .orderBy('recency')
@@ -250,10 +258,7 @@ export async function recentObservedSales(
   const sales = new Map<Marketplace, ObservedSale[]>();
   for (const row of rows) {
     const list = sales.get(row.marketplace) ?? [];
-    list.push({
-      salePriceCents: row.sale_price_cents,
-      actualFeesCents: row.actual_fees_cents,
-    });
+    list.push({ soldAt: row.sold_at, salePriceCents: row.sale_price_cents, fees: row.fees });
     sales.set(row.marketplace, list);
   }
   return sales;

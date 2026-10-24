@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { feeTableByVersion, feeTableFor, FEE_TABLES } from './fee-tables.ts';
+import { feeTableByVersion, feeTableFor, feeTableForSale, FEE_TABLES } from './fee-tables.ts';
 import { estimateFeesCents, type FeeTable } from './fees.ts';
 
 const ON = new Date('2026-10-24T12:00:00Z');
@@ -109,6 +109,26 @@ describe('fee tables', () => {
     );
     expect(() => feeTableFor('mercari', new Date('2025-01-05T23:59:59Z'))).toThrow(
       /no mercari fee table/,
+    );
+  });
+
+  it('pick the table a sale was charged under, else the marketplace’s first table', () => {
+    const later = {
+      ...feeTableFor('mercari', ON),
+      version: 'mercari-later',
+      effectiveFrom: '2026-11-01',
+    };
+    const tables = [...FEE_TABLES, later];
+    expect(feeTableForSale('mercari', new Date('2026-11-01T00:00:00Z'), tables)).toBe(later);
+    expect(feeTableForSale('mercari', new Date('2026-10-31T23:59:59Z'), tables).version).toBe(
+      'mercari-us-2025-01-06',
+    );
+    // Before every table: the oldest schedule, not an error.
+    expect(feeTableForSale('mercari', new Date('2024-06-01T00:00:00Z'), tables).version).toBe(
+      'mercari-us-2025-01-06',
+    );
+    expect(feeTableForSale('ebay', new Date('2025-06-01T00:00:00Z')).version).toBe(
+      'ebay-us-2026-10-24',
     );
   });
 

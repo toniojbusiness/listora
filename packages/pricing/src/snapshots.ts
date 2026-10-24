@@ -5,7 +5,7 @@
 import { knownMarketplaceValues, type KnownMarketplace } from '@listora/api-contract';
 import { z } from 'zod';
 
-import type { RealSoldDataSource } from './sources.ts';
+import { SOLD_DATA_LISTING_CONTEXT, type RealSoldDataSource } from './sources.ts';
 
 const cents = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const money = z.object({ amountCents: cents, currency: z.literal('USD') }).strict();
@@ -32,6 +32,19 @@ export const soldDataPayloadSchema = z
     message: 'low, median, and high must be in order',
   });
 export type SoldDataPayload = z.infer<typeof soldDataPayloadSchema>;
+
+/**
+ * The payload schema of one real sold data source: `soldDataPayloadSchema`, plus the
+ * marketplace a source bound to one listing context must name (`SOLD_DATA_LISTING_CONTEXT`).
+ */
+export function soldDataPayloadSchemaFor(source: RealSoldDataSource) {
+  const context = SOLD_DATA_LISTING_CONTEXT[source];
+  if (context === undefined) return soldDataPayloadSchema;
+  return soldDataPayloadSchema.refine((data) => data.marketplace === context, {
+    message: `${source} data must have marketplace ${context}`,
+    path: ['marketplace'],
+  });
+}
 
 /** The price estimate of one AI analysis. Never sold data. */
 export const aiEstimatePayloadSchema = z

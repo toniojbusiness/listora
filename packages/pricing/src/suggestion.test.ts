@@ -10,12 +10,14 @@ import {
 import {
   aiEstimatePayloadSchema,
   soldDataPayloadSchema,
+  soldDataPayloadSchemaFor,
   type SoldDataSnapshot,
 } from './snapshots.ts';
 import {
   isRealSoldDataSource,
   PRICING_SNAPSHOT_SOURCES,
   REAL_SOLD_DATA_SOURCES,
+  SOLD_DATA_LISTING_CONTEXT,
 } from './sources.ts';
 import { buildPricingSuggestion, LabelGuardError, type PricingInput } from './suggestion.ts';
 
@@ -235,6 +237,52 @@ describe('label guard', () => {
     },
   );
 
+  it('keeps Depop Pricing Inspiration and eBay Marketplace Insights in their listing context', () => {
+    const unbound = clone(withSold);
+    const first = unbound.soldComparables?.[0];
+    if (first) delete first.marketplace;
+    expect(labelGuardViolations(unbound)).toContain(
+      'soldComparables[0] (depop_inspiration) has marketplace undefined instead of depop',
+    );
+    const elsewhere = clone(withSold);
+    const second = elsewhere.soldComparables?.[0];
+    if (second) second.marketplace = 'poshmark';
+    expect(labelGuardViolations(elsewhere)).toContain(
+      'soldComparables[0] (depop_inspiration) has marketplace poshmark instead of depop',
+    );
+    const ebay = buildPricingSuggestion({
+      ...base,
+      soldData: [
+        { ...depopSold, source: 'ebay_mi', payload: { ...depopSold.payload, marketplace: 'ebay' } },
+      ],
+    });
+    expect(labelGuardViolations(ebay)).toEqual([]);
+    const ebayElsewhere = clone(ebay);
+    const third = ebayElsewhere.soldComparables?.[0];
+    if (third) third.marketplace = 'depop';
+    expect(labelGuardViolations(ebayElsewhere)).toContain(
+      'soldComparables[0] (ebay_mi) has marketplace depop instead of ebay',
+    );
+    expect(() =>
+      buildPricingSuggestion({
+        ...base,
+        soldData: [{ ...depopSold, payload: { ...depopSold.payload, marketplace: undefined } }],
+      }),
+    ).toThrow(LabelGuardError);
+  });
+
+  it('lets own sales history name any marketplace, or none', () => {
+    const own = (marketplace: 'ebay' | undefined) =>
+      buildPricingSuggestion({
+        ...base,
+        soldData: [
+          { ...depopSold, source: 'own_history', payload: { ...depopSold.payload, marketplace } },
+        ],
+      });
+    expect(labelGuardViolations(own(undefined))).toEqual([]);
+    expect(labelGuardViolations(own('ebay'))).toEqual([]);
+  });
+
   it('requires the no-data message exactly when there is no sold data', () => {
     const missing = clone(honest);
     delete missing.noSoldDataMessage;
@@ -299,6 +347,24 @@ describe('sources and snapshot payloads', () => {
     expect(PRICING_SNAPSHOT_SOURCES.filter(isRealSoldDataSource)).toEqual(REAL_SOLD_DATA_SOURCES);
     expect(isRealSoldDataSource('ai_estimate')).toBe(false);
     expect(isRealSoldDataSource('cost_floor')).toBe(false);
+  });
+
+  it('bind Depop Pricing Inspiration to Depop and Marketplace Insights to eBay', () => {
+    expect(SOLD_DATA_LISTING_CONTEXT).toEqual({ depop_inspiration: 'depop', ebay_mi: 'ebay' });
+    const unbound = { ...depopSold.payload, marketplace: undefined };
+    const depop = soldDataPayloadSchemaFor('depop_inspiration');
+    expect(depop.safeParse(depopSold.payload).success).toBe(true);
+    expect(depop.safeParse(unbound).success).toBe(false);
+    expect(depop.safeParse({ ...unbound, marketplace: 'mercari' }).success).toBe(false);
+    const ebay = soldDataPayloadSchemaFor('ebay_mi');
+    expect(ebay.safeParse({ ...unbound, marketplace: 'ebay' }).success).toBe(true);
+    expect(ebay.safeParse(unbound).success).toBe(false);
+    expect(ebay.safeParse(depopSold.payload).success).toBe(false);
+    const own = soldDataPayloadSchemaFor('own_history');
+    expect(own.safeParse(unbound).success).toBe(true);
+    expect(own.safeParse({ ...unbound, marketplace: 'poshmark' }).success).toBe(true);
+    // The shared rules still apply.
+    expect(depop.safeParse({ ...depopSold.payload, low: usd(5000) }).success).toBe(false);
   });
 
   it('validate sold data and estimate payloads, including their order', () => {

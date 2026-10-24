@@ -3,7 +3,6 @@ import { inTransaction } from '@listora/db';
 import {
   buildPricingSuggestion,
   calibrateFees,
-  feeTableFor,
   researchQuery,
   type FeeCalibration,
 } from '@listora/pricing';
@@ -58,10 +57,7 @@ export function registerPricingRoutes(app: FastifyInstance, deps: RouteDependenc
       const observed = await recentObservedSales(trx, tenant, now);
       const feeCalibrations: Partial<Record<KnownMarketplace, FeeCalibration>> = {};
       for (const marketplace of marketplaces) {
-        const calibration = calibrateFees(
-          feeTableFor(marketplace, now),
-          observed.get(marketplace) ?? [],
-        );
+        const calibration = calibrateFees(marketplace, observed.get(marketplace) ?? []);
         if (calibration) feeCalibrations[marketplace] = calibration;
       }
 

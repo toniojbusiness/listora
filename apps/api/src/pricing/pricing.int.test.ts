@@ -3,7 +3,9 @@ import { randomBytes } from 'node:crypto';
 import { jsonb, type JsonObject, type Marketplace } from '@listora/db';
 import {
   claimsSoldData,
+  computeFloor,
   estimateFeesCents,
+  feeEstimator,
   feeTableFor,
   NO_SOLD_DATA_MESSAGE,
   type SoldDataPayload,
@@ -94,13 +96,21 @@ describe('pricing (real Postgres)', () => {
       .where('source', '=', 'ai_estimate')
       .execute();
 
-  /** A one-item sale with actual fees, `daysAgo` days back. */
+  /**
+   * A one-item sale with actual fees, `daysAgo` days back: one marketplace fee line of
+   * `feesCents`, or else the given `lines`.
+   */
   const addSale = async (
     marketplace: Marketplace,
     itemId: string,
     salePriceCents: number,
     feesCents: number,
-    options: { status?: 'canceled'; daysAgo?: number; source?: 'estimated' } = {},
+    options: {
+      status?: 'canceled';
+      daysAgo?: number;
+      source?: 'estimated';
+      lines?: { kind: 'marketplace' | 'payment'; amountCents: number }[];
+    } = {},
   ) => {
     const sale = await api.db
       .insertInto('sale')
@@ -123,15 +133,18 @@ describe('pricing (real Postgres)', () => {
         sale_price_cents: salePriceCents,
       })
       .execute();
+    const lines = options.lines ?? [{ kind: 'marketplace', amountCents: feesCents }];
     await api.db
       .insertInto('fee_line')
-      .values({
-        account_id: tenant.accountId,
-        sale_id: sale.id,
-        kind: 'marketplace',
-        amount_cents: feesCents,
-        source: options.source ?? 'actual',
-      })
+      .values(
+        lines.map((line) => ({
+          account_id: tenant.accountId,
+          sale_id: sale.id,
+          kind: line.kind,
+          amount_cents: line.amountCents,
+          source: options.source ?? 'actual',
+        })),
+      )
       .execute();
   };
 
@@ -351,6 +364,44 @@ describe('pricing (real Postgres)', () => {
       expect(body.aiEstimate).toBeUndefined();
     });
 
+    it('keep Depop Pricing Inspiration on Depop and Marketplace Insights on eBay', async () => {
+      const item = await createItem({ cost: usd(1000) });
+      const unbound = { ...DEPOP_SOLD, marketplace: undefined };
+      await expect(
+        insertPricingSnapshot(api.db, tenant, item.id, {
+          source: 'depop_inspiration',
+          payload: unbound,
+        }),
+      ).rejects.toThrow(/marketplace depop/);
+      await expect(
+        insertPricingSnapshot(api.db, tenant, item.id, {
+          source: 'ebay_mi',
+          payload: DEPOP_SOLD,
+        }),
+      ).rejects.toThrow(/marketplace ebay/);
+      // Written behind the repository's back: never shown outside its listing context.
+      await api.db
+        .insertInto('pricing_snapshot')
+        .values([
+          {
+            account_id: tenant.accountId,
+            item_id: item.id,
+            source: 'depop_inspiration',
+            payload: jsonb(unbound as unknown as JsonObject),
+          },
+          {
+            account_id: tenant.accountId,
+            item_id: item.id,
+            source: 'depop_inspiration',
+            payload: jsonb({ ...DEPOP_SOLD, marketplace: 'poshmark' }),
+          },
+        ])
+        .execute();
+      const body = (await pricing(item.id)).body;
+      expect(body.soldComparables).toBeUndefined();
+      expect(body.noSoldDataMessage).toBe(NO_SOLD_DATA_MESSAGE);
+    });
+
     it('refuses to store a payload under a source it does not match', async () => {
       const item = await createItem();
       await expect(
@@ -392,6 +443,64 @@ describe('pricing (real Postgres)', () => {
       // 1000 + 15% fees: 1177 keeps 1000 (fees 177 = ceil(118 * 1.5)).
       expect(mercari?.floorPrice).toEqual(usd(1177));
       expect(mercari?.breakdown.estimatedFees).toEqual(usd(177));
+    });
+
+    it('calibrate only from sales with complete fee data, compared on their sale day', async () => {
+      const sold = await createItem();
+      // Before Depop's first table took effect: compared with that first table.
+      const prices = [2000, 4000, 6000];
+      const table = feeTableFor('depop', new Date());
+      for (const price of prices) {
+        await addSale('depop', sold.id, price, 0, {
+          daysAgo: 30,
+          lines: [{ kind: 'payment', amountCents: 2 * estimateFeesCents(table, price) }],
+        });
+      }
+      // Left out: no payment fee line, a zero-amount placeholder, and a refunded fee.
+      await addSale('depop', sold.id, 2000, 0, {
+        lines: [{ kind: 'marketplace', amountCents: 5 }],
+      });
+      await addSale('depop', sold.id, 2000, 0, {
+        lines: [
+          { kind: 'payment', amountCents: 1000 },
+          { kind: 'marketplace', amountCents: 0 },
+        ],
+      });
+      await addSale('depop', sold.id, 2000, 0, {
+        lines: [
+          { kind: 'payment', amountCents: 1000 },
+          { kind: 'payment', amountCents: -1000 },
+        ],
+      });
+
+      const item = await createItem({ cost: usd(1000) });
+      const depop = (await pricing(item.id)).body.floors.find(
+        (floor) => floor.marketplace === 'depop',
+      );
+      expect(depop?.feeSource).toBe('actual_fees');
+      const estimated = prices.reduce((sum, price) => sum + estimateFeesCents(table, price), 0);
+      const expected = computeFloor(
+        { costCents: 1000, shippingCents: 0, minimumProfitCents: 0 },
+        feeEstimator(table, {
+          sales: 3,
+          actualFeesCents: 2 * estimated,
+          estimatedFeesCents: estimated,
+        }),
+      );
+      expect(depop?.floorPrice).toEqual(usd(expected.floorPriceCents));
+      expect(depop?.breakdown.estimatedFees).toEqual(usd(expected.estimatedFeesCents));
+    });
+
+    it('ignore actual fees implausibly far below the table', async () => {
+      const sold = await createItem();
+      // Poshmark's $2.95 under $15 recorded as $0.20: missing or netted-down fee lines.
+      for (const price of [1000, 1200, 1400]) await addSale('poshmark', sold.id, price, 20);
+      const item = await createItem({ cost: usd(1000) });
+      const poshmark = (await pricing(item.id)).body.floors.find(
+        (floor) => floor.marketplace === 'poshmark',
+      );
+      expect(poshmark?.feeSource).toBe('fee_table');
+      expect(poshmark?.floorPrice).toEqual(usd(1295));
     });
 
     it('never let eBay order data change an eBay floor (eBay API License)', async () => {

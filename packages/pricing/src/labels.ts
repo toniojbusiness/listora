@@ -7,7 +7,7 @@
 import type { PricingSuggestion } from '@listora/api-contract';
 
 import { RESEARCH_LINK_LABELS } from './research-links.ts';
-import { isRealSoldDataSource } from './sources.ts';
+import { isRealSoldDataSource, SOLD_DATA_LISTING_CONTEXT } from './sources.ts';
 
 export const AI_ESTIMATE_LABEL = 'AI estimate - not based on sold listings';
 export const NO_SOLD_DATA_MESSAGE = 'No sold data available for this item';
@@ -23,7 +23,8 @@ export function claimsSoldData(text: string): boolean {
 /**
  * Every way `suggestion` breaks the label rules, as readable messages (empty when it is
  * honest):
- * - sold comparables come only from real sold data sources;
+ * - sold comparables come only from real sold data sources, and a source bound to one
+ *   listing context (`SOLD_DATA_LISTING_CONTEXT`) names that marketplace;
  * - without them, the suggestion carries `NO_SOLD_DATA_MESSAGE`, and with them it does not;
  * - the AI estimate is always labeled `AI_ESTIMATE_LABEL`;
  * - a tier is based on sold data only when there is sold data, and only such a tier's label
@@ -38,6 +39,14 @@ export function labelGuardViolations(suggestion: PricingSuggestion): string[] {
   for (const [index, comparable] of comparables.entries()) {
     if (!isRealSoldDataSource(comparable.source)) {
       violations.push(`soldComparables[${String(index)}] has source ${String(comparable.source)}`);
+      continue;
+    }
+    const context = SOLD_DATA_LISTING_CONTEXT[comparable.source];
+    if (context !== undefined && comparable.marketplace !== context) {
+      violations.push(
+        `soldComparables[${String(index)}] (${comparable.source}) has marketplace ` +
+          `${String(comparable.marketplace)} instead of ${context}`,
+      );
     }
   }
 
