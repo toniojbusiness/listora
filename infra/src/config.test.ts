@@ -253,17 +253,46 @@ describe('docs/costs.md', () => {
     );
   });
 
-  it('has line items that add up to its total', () => {
-    const table = costs.slice(costs.indexOf('## Line items'), costs.indexOf('## What the design'));
-    const amounts = [...table.matchAll(/^\|.*\|\s+\$(\d+\.\d{2}) \|$/gm)].map((match) =>
+  /** The text of one `## ` section, up to the next one. */
+  const section = (heading: string): string => {
+    const start = costs.indexOf(`\n## ${heading}\n`);
+    expect(start, heading).toBeGreaterThanOrEqual(0);
+    const end = costs.indexOf('\n## ', start + 1);
+    return costs.slice(start, end === -1 ? undefined : end);
+  };
+  /** Amounts in cents: plain line items, and bold rows (subtotals and totals) by label. */
+  const amounts = (text: string) => ({
+    items: [...text.matchAll(/^\|.*\|\s+\$(\d+\.\d{2}) \|$/gm)].map((match) =>
       Math.round(Number(match[1]) * 100),
-    );
-    const total = /\*\*\$(\d+\.\d{2})\*\* \|$/m.exec(table);
-    expect(amounts.length).toBeGreaterThan(10);
-    expect(amounts.reduce((sum, cents) => sum + cents, 0)).toBe(
-      Math.round(Number(total?.[1]) * 100),
-    );
-    expect(costs).toContain(`about $${String(Math.round(Number(total?.[1])))} a month`);
+    ),
+    bold: new Map(
+      [...text.matchAll(/^\| \*\*(.+?)\*\* .*\*\*\$(\d+\.\d{2})\*\* \|$/gm)].map((match) => [
+        match[1],
+        Math.round(Number(match[2]) * 100),
+      ]),
+    ),
+  });
+  const sum = (cents: readonly number[]) => cents.reduce((total, value) => total + value, 0);
+  const dollars = (cents: number | undefined) => String(Math.round((cents ?? NaN) / 100));
+
+  it('has line items that add up to its totals, with and without browser automation', () => {
+    const base = amounts(section('Line items'));
+    const baseTotal = base.bold.get('Total');
+    expect(base.items.length).toBeGreaterThan(10);
+    expect(sum(base.items)).toBe(baseTotal);
+
+    const automation = amounts(section('Browser automation'));
+    const subtotal = automation.bold.get('Automation subtotal');
+    expect(automation.items.length).toBeGreaterThanOrEqual(5);
+    expect(sum(automation.items)).toBe(subtotal);
+    const withAutomation = automation.bold.get('Total with browser automation');
+    expect(withAutomation).toBe((baseTotal ?? NaN) + (subtotal ?? NaN));
+
+    // The headline figures, here and in infra/README.md, are the rounded totals.
+    const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+    const headline = `about $${dollars(baseTotal)} a month, or about $${dollars(withAutomation)} a month with browser automation`;
+    expect(costs.replace(/\s+/g, ' ')).toContain(headline);
+    expect(readme.replace(/\s+/g, ' ')).toContain(headline);
   });
 });
 

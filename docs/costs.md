@@ -6,8 +6,9 @@ page estimates its monthly AWS bill, explains the choices that keep it low, and 
 levers that would cut it further. The design is described in
 [infra/README.md](../infra/README.md#the-personal-environment).
 
-**Estimate: about $32 a month**, before any Free Tier credit. A copy of the staging layout
-(NAT gateway, load balancer, two services) would cost about $100.
+**Estimate: about $32 a month, or about $34 a month with browser automation**, before any
+Free Tier credit. A copy of the staging layout (NAT gateway, load balancer, two services) would
+cost about $100.
 
 Prices were read on 2026-10-24 for US East (N. Virginia), on demand, from the AWS pricing
 pages linked below (the price data behind their tables). A month is 730 hours. Taxes, the
@@ -21,7 +22,8 @@ domain registration, and the Anthropic API bill are not included.
   derivatives), so photos take about 7 GB, about 8 GB with replaced versions kept for 30 days.
 - Marketplaces fetch listing photos well within CloudFront's always-free tier.
 - The database stays within 20 GB and within its burst baseline (no CPU credit charges).
-- The browser-automation runner is not counted; its cost is per hour of use (below).
+- The browser-automation runner is priced separately, by hour of use
+  ([Browser automation](#browser-automation)).
 
 ## Line items
 
@@ -46,6 +48,40 @@ domain registration, and the Anthropic API bill are not included.
 | ECR image storage                    | About 1 GB at $0.10 per GB                                       |      $0.10 |
 | ACM certificate, SNS email, data out | Free (public certificates; SNS and data transfer free tiers)     |      $0.00 |
 | **Total**                            |                                                                  | **$32.20** |
+
+## Browser automation
+
+Poshmark, Mercari, and Depop (until its partner API is granted) are automated in the cloud by
+the headless-Chromium runner (decision D1 in [architecture.md](architecture.md)). The runner
+is reserved at 1 vCPU and 4 GB, with no task while idle (`browserRunner` in
+`infra/src/config.ts`), and runs as an on-demand Fargate task: one per batch of listing
+actions, and one for each scheduled sale check, about every 12 hours by default (the
+automation tasks will later adapt the interval to the seller's sales history). Between checks,
+forwarded sale emails detect sales almost immediately.
+
+On demand the runner costs $0.0583 an hour (1 vCPU at $0.04048 and 4 GB at $0.004446, x86),
+plus $0.005 an hour for its public address while it runs. Assumptions:
+
+- About 60 scheduled checks a month at about 6 billed minutes each (task startup, then all
+  three marketplaces checked at human pace): 6 hours.
+- About 300 listing actions a month (creates, edits, delists), batched into jobs that total
+  about 15 hours.
+- One EventBridge Scheduler schedule starts the checks, within its free tier.
+- The Chromium image adds about 1.5 GB to ECR.
+
+| Item                               | Usage                                              |    Monthly |
+| ---------------------------------- | -------------------------------------------------- | ---------: |
+| Fargate runner, scheduled checks   | 6 hours at $0.0583 an hour                         |      $0.35 |
+| Fargate runner, listing jobs       | 15 hours at $0.0583 an hour                        |      $0.87 |
+| Public IPv4 address while running  | 21 hours at $0.005 an hour                         |      $0.11 |
+| EventBridge Scheduler              | 60 invocations, within the free 14 million a month |      $0.00 |
+| ECR storage for the Chromium image | About 1.5 GB more at $0.10 per GB                  |      $0.15 |
+| **Automation subtotal**            |                                                    |  **$1.48** |
+| **Total with browser automation**  | $32.20 plus the automation subtotal                | **$33.68** |
+
+An always-on runner (one 1 vCPU / 4 GB task 24/7) is the alternative if per-job startup ever
+gets in the way: about $42.56 a month, plus $3.65 for its address. Listing jobs scale with
+listing volume, at about $0.06 an hour of browser work.
 
 ## What the design avoids
 
@@ -78,12 +114,6 @@ What the savings give up, and why that is acceptable for one person:
 - **One database zone.** A zone outage stops Listora until the zone recovers or the database
   is restored from a backup in another zone. Daily backups are kept 7 days, and deletion
   protection and a final snapshot guard the data.
-
-## The browser-automation runner (later)
-
-The runner is reserved at 1 vCPU and 4 GB, with no task while idle (`browserRunner` in
-`infra/src/config.ts`). On demand it costs $0.0583 an hour (1 vCPU at $0.04048 and 4 GB at
-$0.004446), plus $0.005 an hour for its public address: about $1.27 for 20 hours a month.
 
 ## Levers to cut it further
 
@@ -127,5 +157,6 @@ environment has eight).
 - [AWS Secrets Manager pricing](https://aws.amazon.com/secrets-manager/pricing/)
 - [AWS KMS pricing](https://aws.amazon.com/kms/pricing/)
 - [Amazon CloudWatch pricing](https://aws.amazon.com/cloudwatch/pricing/)
-- [Amazon EventBridge pricing](https://aws.amazon.com/eventbridge/pricing/)
+- [Amazon EventBridge pricing](https://aws.amazon.com/eventbridge/pricing/) (including
+  EventBridge Scheduler)
 - [Amazon ECR pricing](https://aws.amazon.com/ecr/pricing/)

@@ -91,9 +91,11 @@ export interface EnvironmentSettings {
   };
   readonly services: ServiceLayout;
   /**
-   * Reserved size of the on-demand headless-Chromium runner, a later task: started per job,
-   * zero tasks while idle. Nothing is provisioned from it yet; it fixes the size that
-   * docs/costs.md prices, and the runner task builds on it.
+   * Reserved size of the on-demand headless-Chromium runner, a later task, that automates
+   * Poshmark, Mercari, and Depop (decision D1 in docs/architecture.md): started per batch of
+   * listing actions and per scheduled sale check, zero tasks while idle. Nothing is
+   * provisioned from it yet; it fixes the size that docs/costs.md prices, and the runner task
+   * builds on it.
    */
   readonly browserRunner: ServiceSize;
   /** CloudWatch Logs retention for service, database, and VPC logs. */

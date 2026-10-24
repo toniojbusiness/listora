@@ -511,6 +511,8 @@ describe.each(ENVIRONMENT_NAMES)('%s', (environment) => {
         Name: `api.${target.domain}.`,
         Type: 'A',
       });
+      // The iOS Prod configuration's API_BASE_URL is personal's ApiUrl (infra/README.md), and
+      // the HTTP API's execute-api URL is disabled, so this output is the only endpoint.
       t.hasOutput('ApiUrl', { Value: `https://api.${target.domain}` });
     });
 

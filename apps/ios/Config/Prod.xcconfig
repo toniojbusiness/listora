@@ -1,5 +1,6 @@
-// Prod: the App Store build. The ".invalid" host is a deliberate placeholder that never
-// resolves; the real domain arrives with the AWS accounts (gate G-AWS, task T-30).
+// Prod: the App Store build, served by the personal environment for now. The ".invalid" host is
+// a deliberate placeholder that never resolves; at the personal environment's first deploy it
+// becomes the compute stack's ApiUrl output (apps/ios/README.md, Environments).
 
 #include "Base.xcconfig"
 

@@ -35,8 +35,9 @@ snapshot diff.
 ### The personal environment
 
 The same stacks, image, and deploy workflow, with every hourly charge that one user does not
-need removed. It costs about $32 a month; [docs/costs.md](../docs/costs.md) has the line
-items, the alternatives each choice beat, and the levers left.
+need removed. It costs about $32 a month, or about $34 a month with browser automation;
+[docs/costs.md](../docs/costs.md) has the line items, the alternatives each choice beat, and
+the levers left.
 
 | Piece       | staging and prod                                              | personal                                                                                                                                                                                                            |
 | ----------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -52,9 +53,18 @@ request comes near them. If no request passes through the VPC link for 60 days, 
 removes its network interfaces, and the first request afterwards fails for a few minutes.
 
 `browserRunner` reserves the size of the later headless-Chromium runner (1 vCPU, 4 GiB,
-started per job, zero tasks while idle). Nothing is provisioned from it yet. Whatever it runs
-must follow the product invariants in [docs/architecture.md](../docs/architecture.md): no
-marketplace passwords or sessions, no CAPTCHA solving, no anti-bot workarounds.
+started per batch of listing actions and per scheduled sale check, zero tasks while idle).
+Nothing is provisioned from it yet. It runs the browser automation of decision D1 in
+[docs/architecture.md](../docs/architecture.md#4-marketplace-adapter-model) and follows its
+rules: session cookies encrypted with the token key, never a password, human-paced actions,
+and never a CAPTCHA or bot check solved (it falls back to an assisted task).
+
+**The iPhone app.** The personal environment is the production environment for now, so the
+iOS `Prod-Release` configuration's `API_BASE_URL` points at it (there is no separate Personal
+build configuration). Like every environment, personal needs a domain and a Route 53 hosted
+zone, because the API certificate, SES inbound mail, and DKIM depend on them, and its HTTP
+API's default execute-api URL is disabled. The app's endpoint is therefore the compute stack's
+`ApiUrl` output, `https://api.<domain>`, set at the first deploy (step 8 below).
 
 ### How the pieces connect
 
@@ -158,6 +168,11 @@ account. The examples use staging.
    Set real values with `aws secretsmanager put-secret-value --secret-id
 listora/staging/<name> --secret-string ...`, then redeploy or force a new ECS deployment so
    tasks read them.
+8. **Point the iPhone app at it (personal only).** Read the compute stack's `ApiUrl` output:
+   `aws cloudformation describe-stacks --stack-name listora-personal-compute --query
+"Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text`. Set it as
+   `API_BASE_URL` in `apps/ios/Config/Prod.xcconfig` (see
+   [apps/ios/README.md](../apps/ios/README.md#environments)) before the next TestFlight build.
 
 Later deploys are step 5 only.
 

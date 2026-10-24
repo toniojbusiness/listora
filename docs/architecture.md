@@ -9,14 +9,17 @@ here wrong, fix this file in the same PR. The task list is in [roadmap.md](roadm
 
 These two rules from the product owner override every other design choice.
 
-1. **Authorized integrations only.** Listora uses official marketplace APIs or authorized
-   partner channels. It never stores marketplace passwords or sessions, never solves CAPTCHAs,
+1. **Authorized integrations only.** Listora uses official marketplace APIs, authorized
+   partner channels, or browser automation the marketplace has permitted (decision D1, section
+   4). It never stores marketplace passwords, never solves or bypasses CAPTCHAs or bot checks,
    never works around anti-bot protection, and never automates a marketplace in ways that put a
-   seller's account at risk. If a marketplace has no authorized channel, Listora uses
-   **assisted mode**: it prepares the work and the user does the final step.
+   seller's account at risk. Where none of these channels is available, or automation meets a
+   check it must not pass, Listora uses **assisted mode**: it prepares the work and the user
+   does the final step.
 2. **Never report false success.** A marketplace action is shown as done only after one of two
-   things: an API read-back confirms the desired state, or the user explicitly confirms an
-   assisted task. Every failure is visible and can be retried. See section 6.
+   things: a read-back from the marketplace (its API, or the automated browser session)
+   confirms the desired state, or the user explicitly confirms an assisted task. Every failure
+   is visible and can be retried. See section 6.
 
 ## 2. Stack
 
@@ -207,8 +210,8 @@ src/
 
 All marketplace logic lives behind one `MarketplaceAdapter` interface. The engine and the UI
 never branch on the marketplace name. They branch on **capability flags**, which can change
-for a single connection; for example, Depop switches from assisted to API once partner access
-is granted.
+for a single connection; for example, Depop switches from browser automation to API once
+partner access is granted.
 
 ```ts
 type Mode = 'api' | 'assisted' | 'bulk_file' | 'none';
@@ -241,16 +244,33 @@ interface MarketplaceAdapter {
 }
 ```
 
-| Marketplace | Mode                                            | Listing lifecycle                                                                                                 | Sale detection                               |
-| ----------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| eBay        | API                                             | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs | `ORDER_CONFIRMATION` webhook + 5-minute poll |
-| Depop       | API after partner approval; assisted until then | `PUT` by per-attempt external SKU, `PATCH`, `DELETE`/mark-as-sold; verify with `GET`                              | `v1:order.*` webhooks + poll                 |
-| Poshmark    | Assisted only (the guidelines ban automation)   | Copy-assist, photos saved in order, deep link, user confirms                                                      | DKIM-verified forwarded emails, manual       |
-| Mercari     | Assisted only (no public API)                   | Same as Poshmark                                                                                                  | Forwarded emails, manual                     |
+| Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
+| ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| eBay        | API                                                                          | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs                          | `ORDER_CONFIRMATION` webhook + 5-minute poll                    |
+| Depop       | API after partner approval; browser automation until then, assisted fallback | `PUT` by per-attempt external SKU, `PATCH`, `DELETE`/mark-as-sold; verify with `GET`                                                       | `v1:order.*` webhooks + poll                                    |
+| Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms | DKIM-verified forwarded emails, scheduled browser check, manual |
+| Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark                                                                                                                           | Forwarded emails, scheduled browser check, manual               |
 
 Assisted adapters implement `execute` by creating a `user_task` (deep link plus copy-assist
 payload) and returning `pendingUser`. An assisted operation can finish only through a user
 confirmation event.
+
+**Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
+only". The marketplaces granted the product owner permission to automate where no API exists,
+Listora is for the product owner's personal use, and everything runs in the cloud. So
+Poshmark, Mercari, and Depop (until its partner API is granted) use cloud browser automation:
+the headless-Chromium browser runner (`browserRunner` in `infra/src/config.ts`) acts on
+sessions the user logs into from the iPhone app.
+
+- Session cookies are stored encrypted with the token key, by the same KMS envelope
+  encryption as OAuth tokens. Passwords never are.
+- Actions are human-paced.
+- The runner never solves or bypasses a CAPTCHA or bot check: it pauses and falls back to an
+  assisted task.
+- Every action is still confirmed by read-back (section 6), never reported as a false success.
+
+The runner, its adapter mode, and session storage are later tasks; until they land, these
+marketplaces run assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
 
 ## 5. Pricing data rules
 
