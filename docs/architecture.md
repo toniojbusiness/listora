@@ -167,7 +167,7 @@ worker.
    token buckets.
 
 **Auto-delist.** A sale event (webhook, poll, email, or manual entry) is deduplicated by
-`(marketplace, external_order_id)`. Then, in one transaction, Listora records the sale, sets
+its order (see `sale` in section 9). Then, in one transaction, Listora records the sale, sets
 the item to `sold_pending_delist`, and creates a high-priority delist operation or urgent
 assisted task for every other listing. A `delist_run` gathers the per-marketplace results. If
 anything is still unconfirmed after 10 minutes, Listora alerts the user again, and after 30
