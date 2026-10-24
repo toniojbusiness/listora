@@ -1,0 +1,708 @@
+import { sql } from 'kysely';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import type { Db } from './database.ts';
+import { createInventoryItem } from './items.ts';
+import { jsonb } from './json.ts';
+import {
+  createMigratedDatabase,
+  expectPgError,
+  insertAccount,
+  PG_ERROR,
+  type MigratedDatabase,
+} from './test-support.ts';
+
+const HASH = 'a'.repeat(64);
+
+/** An account with one item, an eBay API connection, and a live listing. */
+async function seedAccount(db: Db, prefix: string) {
+  const accountId = await insertAccount(db, prefix);
+  const item = await createInventoryItem(db, accountId, { title: 'Levi 501' });
+  const connection = await db
+    .insertInto('marketplace_connection')
+    .values({
+      account_id: accountId,
+      marketplace: 'ebay',
+      mode: 'api',
+      external_user_id: `ebay-${prefix}`,
+      token_ciphertext: Buffer.from('ciphertext'),
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  const listing = await db
+    .insertInto('marketplace_listing')
+    .values({
+      account_id: accountId,
+      item_id: item.id,
+      marketplace: 'ebay',
+      connection_id: connection.id,
+      price_cents: 4_500,
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  return { accountId, itemId: item.id, connectionId: connection.id, listingId: listing.id };
+}
+
+type Seed = Awaited<ReturnType<typeof seedAccount>>;
+
+function insertOperation(
+  db: Db,
+  seed: Seed,
+  overrides: { idempotency_key?: string; account_id?: string } = {},
+) {
+  return db
+    .insertInto('marketplace_operation')
+    .values({
+      account_id: seed.accountId,
+      listing_id: seed.listingId,
+      kind: 'create',
+      idempotency_key: 'create-1',
+      desired: jsonb({ price_cents: 4_500 }),
+      origin: 'user',
+      ...overrides,
+    })
+    .returning(['id', 'status'])
+    .executeTakeFirstOrThrow();
+}
+
+describe('schema constraints (real Postgres)', () => {
+  let database: MigratedDatabase;
+  let db: Db;
+  let a: Seed;
+  let b: Seed;
+
+  beforeAll(async () => {
+    database = await createMigratedDatabase('constraints');
+    db = database.db;
+    a = await seedAccount(db, 'AA');
+    b = await seedAccount(db, 'BB');
+  });
+
+  afterAll(async () => {
+    await database.close();
+  });
+
+  describe('unique keys', () => {
+    it('keeps SKUs unique per account but lets accounts share a SKU', async () => {
+      const prefixA = await insertAccount(db, 'SAM');
+      const prefixB = await insertAccount(db, 'SAM');
+      await db
+        .insertInto('inventory_item')
+        .values({ account_id: prefixA, sku: 'SAM-000500' })
+        .execute();
+      await db
+        .insertInto('inventory_item')
+        .values({ account_id: prefixB, sku: 'SAM-000500' })
+        .execute();
+      await expectPgError(
+        db
+          .insertInto('inventory_item')
+          .values({ account_id: prefixA, sku: 'SAM-000500' })
+          .execute(),
+        PG_ERROR.uniqueViolation,
+        'inventory_item_account_id_sku_key',
+      );
+    });
+
+    it('rejects a SKU that does not follow the PREFIX-000000 format', async () => {
+      await expectPgError(
+        db
+          .insertInto('inventory_item')
+          .values({ account_id: a.accountId, sku: 'AA-184' })
+          .execute(),
+        PG_ERROR.checkViolation,
+        'inventory_item_sku_check',
+      );
+    });
+
+    it('records an operation idempotency key once per account', async () => {
+      await insertOperation(db, a, { idempotency_key: 'idem-shared' });
+      await insertOperation(db, b, { idempotency_key: 'idem-shared' });
+      await expectPgError(
+        insertOperation(db, a, { idempotency_key: 'idem-shared' }),
+        PG_ERROR.uniqueViolation,
+        'marketplace_operation_account_id_idempotency_key_key',
+      );
+    });
+
+    it('deduplicates inbound events by provider event id per source', async () => {
+      const event = (source: 'ebay_webhook' | 'poll') =>
+        db
+          .insertInto('inbound_event')
+          .values({
+            account_id: a.accountId,
+            source,
+            provider_event_id: 'evt-1',
+            signature_ok: source === 'poll' ? null : true,
+            payload: jsonb({ orderId: 'o-1' }),
+          })
+          .execute();
+      await event('ebay_webhook');
+      await event('poll');
+      await expectPgError(
+        event('ebay_webhook'),
+        PG_ERROR.uniqueViolation,
+        'inbound_event_source_provider_event_id_key',
+      );
+    });
+
+    it('requires a signature verdict for webhook and email events', async () => {
+      await expectPgError(
+        db
+          .insertInto('inbound_event')
+          .values({
+            account_id: a.accountId,
+            source: 'depop_webhook',
+            provider_event_id: 'evt-unsigned',
+            payload: jsonb({}),
+          })
+          .execute(),
+        PG_ERROR.checkViolation,
+        'inbound_event_signed_source_has_signature',
+      );
+    });
+
+    it('records a marketplace order once per marketplace', async () => {
+      const sale = (marketplace: 'ebay' | 'depop', listingId: string | null) =>
+        db
+          .insertInto('sale')
+          .values({
+            account_id: a.accountId,
+            item_id: a.itemId,
+            listing_id: listingId,
+            marketplace,
+            external_order_id: 'order-77',
+            sold_at: new Date(),
+            sale_price_cents: 4_500,
+            detection_source: 'webhook',
+          })
+          .execute();
+      await sale('ebay', a.listingId);
+      await sale('depop', null);
+      await expectPgError(
+        sale('ebay', a.listingId),
+        PG_ERROR.uniqueViolation,
+        'sale_account_id_marketplace_external_order_id_key',
+      );
+    });
+
+    it('analyzes a photo set once per tier', async () => {
+      const analysis = (tier: 'standard' | 'premium') =>
+        db
+          .insertInto('ai_analysis')
+          .values({
+            account_id: a.accountId,
+            item_id: a.itemId,
+            photo_set_hash: HASH,
+            tier,
+            model: 'claude-haiku-5-5',
+          })
+          .execute();
+      await analysis('standard');
+      await analysis('premium');
+      await expectPgError(
+        analysis('standard'),
+        PG_ERROR.uniqueViolation,
+        'ai_analysis_account_id_photo_set_hash_tier_key',
+      );
+    });
+
+    it('allows one owner per account', async () => {
+      const account = await insertAccount(db, 'OWN');
+      const user = async (subject: string) =>
+        (
+          await db
+            .insertInto('app_user')
+            .values({ auth_provider: 'dev', auth_subject: subject })
+            .returning('id')
+            .executeTakeFirstOrThrow()
+        ).id;
+      const first = await user('owner-1');
+      const second = await user('owner-2');
+      await db
+        .insertInto('membership')
+        .values({ account_id: account, user_id: first, role: 'owner' })
+        .execute();
+      await expectPgError(
+        db
+          .insertInto('membership')
+          .values({ account_id: account, user_id: second, role: 'owner' })
+          .execute(),
+        PG_ERROR.uniqueViolation,
+        'membership_one_owner_idx',
+      );
+      await db
+        .insertInto('membership')
+        .values({ account_id: account, user_id: second, role: 'admin' })
+        .execute();
+    });
+
+    it('allows one live listing per item and marketplace, keeping ended ones as history', async () => {
+      await expectPgError(
+        db
+          .insertInto('marketplace_listing')
+          .values({ account_id: a.accountId, item_id: a.itemId, marketplace: 'ebay' })
+          .execute(),
+        PG_ERROR.uniqueViolation,
+        'marketplace_listing_one_live_idx',
+      );
+
+      const seed = await seedAccount(db, 'REL');
+      await db
+        .updateTable('marketplace_listing')
+        .set({ status: 'ended', ended_at: new Date() })
+        .where('id', '=', seed.listingId)
+        .execute();
+      await db
+        .insertInto('marketplace_listing')
+        .values({ account_id: seed.accountId, item_id: seed.itemId, marketplace: 'ebay' })
+        .execute();
+    });
+  });
+
+  describe('status values', () => {
+    it.each([
+      ['inventory_item', 'status', 'published'],
+      ['marketplace_listing', 'status', 'live'],
+      ['marketplace_operation', 'status', 'done'],
+    ] as const)('rejects %s.%s = %s', async (table, column, value) => {
+      await expectPgError(
+        sql`update ${sql.table(table)} set ${sql.ref(column)} = ${value}`.execute(db),
+        PG_ERROR.checkViolation,
+        `${table}_${column}_check`,
+      );
+    });
+
+    it('rejects an unknown marketplace through the marketplace_id domain', async () => {
+      await expectPgError(
+        sql`insert into marketplace_connection (account_id, marketplace, mode)
+            values (${a.accountId}, 'etsy', 'assisted')`.execute(db),
+        PG_ERROR.checkViolation,
+        'marketplace_id_known',
+      );
+    });
+  });
+
+  describe('money', () => {
+    it('stores integer cents with a currency and reads them back as numbers', async () => {
+      const item = await createInventoryItem(db, a.accountId, {
+        list_price_cents: 12_345,
+        floor_price_cents: 9_000,
+        cost_cents: 400,
+      });
+      expect(item).toMatchObject({
+        currency: 'USD',
+        list_price_cents: 12_345,
+        floor_price_cents: 9_000,
+        cost_cents: 400,
+      });
+    });
+
+    it('rejects negative amounts, fractional cents, and unknown currencies', async () => {
+      await expectPgError(
+        createInventoryItem(db, a.accountId, { list_price_cents: -1 }),
+        PG_ERROR.checkViolation,
+        'inventory_item_list_price_cents_check',
+      );
+      // Bound parameters reach bigint columns as text, so fractional cents never round.
+      await expectPgError(
+        createInventoryItem(db, a.accountId, { list_price_cents: 10.5 }),
+        PG_ERROR.invalidTextRepresentation,
+      );
+      await expectPgError(
+        sql`update inventory_item set currency = 'usd' where id = ${a.itemId}`.execute(db),
+        PG_ERROR.checkViolation,
+        'currency_code_known',
+      );
+    });
+
+    it('keeps the floor price at or below the list price', async () => {
+      await expectPgError(
+        createInventoryItem(db, a.accountId, { list_price_cents: 1_000, floor_price_cents: 1_001 }),
+        PG_ERROR.checkViolation,
+        'inventory_item_floor_within_list_price',
+      );
+    });
+  });
+
+  describe('optimistic locking and timestamps', () => {
+    it('bumps version on every update so stale writers match no row', async () => {
+      const item = await createInventoryItem(db, a.accountId, { title: 'v1' });
+      expect(item.version).toBe(1);
+
+      const updated = await db
+        .updateTable('inventory_item')
+        .set({ title: 'v2' })
+        .where('id', '=', item.id)
+        .where('version', '=', 1)
+        .returning(['version', 'updated_at'])
+        .executeTakeFirstOrThrow();
+      expect(updated.version).toBe(2);
+
+      const stale = await db
+        .updateTable('inventory_item')
+        .set({ title: 'lost update' })
+        .where('id', '=', item.id)
+        .where('version', '=', 1)
+        .executeTakeFirst();
+      expect(stale.numUpdatedRows).toBe(0n);
+
+      // A caller cannot reset the version: the trigger always increments it.
+      await sql`update inventory_item set version = 1 where id = ${item.id}`.execute(db);
+      const current = await db
+        .selectFrom('inventory_item')
+        .select(['version', 'title'])
+        .where('id', '=', item.id)
+        .executeTakeFirstOrThrow();
+      expect(current).toEqual({ version: 3, title: 'v2' });
+    });
+
+    it('sets updated_at on update', async () => {
+      const item = await createInventoryItem(db, a.accountId);
+      // now() is the transaction start time, so the update must run in a later transaction.
+      await sql`select pg_sleep(0.01)`.execute(db);
+      const updated = await db
+        .updateTable('inventory_item')
+        .set({ title: 'touched' })
+        .where('id', '=', item.id)
+        .returning(['created_at', 'updated_at'])
+        .executeTakeFirstOrThrow();
+      expect(updated.created_at).toEqual(item.created_at);
+      expect(updated.updated_at.getTime()).toBeGreaterThan(item.updated_at.getTime());
+    });
+
+    it('reads date columns as calendar dates, independent of the timezone', async () => {
+      const item = await createInventoryItem(db, a.accountId, { purchase_date: '2026-01-31' });
+      expect(item.purchase_date).toBe('2026-01-31');
+    });
+  });
+
+  describe('tenant isolation', () => {
+    it("rejects a row that points at another account's data", async () => {
+      await expectPgError(
+        db
+          .insertInto('photo')
+          .values({
+            account_id: b.accountId,
+            item_id: a.itemId,
+            position: 0,
+            role: 'front',
+            storage_key: 'b/cross-tenant.jpg',
+          })
+          .execute(),
+        PG_ERROR.foreignKeyViolation,
+        'photo_account_id_item_id_fkey',
+      );
+      await expectPgError(
+        insertOperation(db, { ...a, accountId: b.accountId }, { idempotency_key: 'cross-tenant' }),
+        PG_ERROR.foreignKeyViolation,
+        'marketplace_operation_account_id_listing_id_fkey',
+      );
+      await expectPgError(
+        db
+          .insertInto('marketplace_listing')
+          .values({
+            account_id: b.accountId,
+            item_id: b.itemId,
+            marketplace: 'depop',
+            connection_id: a.connectionId,
+          })
+          .execute(),
+        PG_ERROR.foreignKeyViolation,
+      );
+    });
+
+    it('rejects a listing on a connection for a different marketplace', async () => {
+      const item = await createInventoryItem(db, a.accountId);
+      await expectPgError(
+        db
+          .insertInto('marketplace_listing')
+          .values({
+            account_id: a.accountId,
+            item_id: item.id,
+            marketplace: 'depop',
+            connection_id: a.connectionId,
+          })
+          .execute(),
+        PG_ERROR.foreignKeyViolation,
+        'marketplace_listing_account_id_connection_id_marketplace_fkey',
+      );
+    });
+
+    it('accepts only an analysis of the same item as the accepted analysis', async () => {
+      const other = await createInventoryItem(db, a.accountId);
+      const analysis = await db
+        .insertInto('ai_analysis')
+        .values({
+          account_id: a.accountId,
+          item_id: other.id,
+          photo_set_hash: 'b'.repeat(64),
+          tier: 'standard',
+          model: 'claude-haiku-5-5',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await expectPgError(
+        db
+          .updateTable('inventory_item')
+          .set({ accepted_analysis_id: analysis.id })
+          .where('id', '=', a.itemId)
+          .execute(),
+        PG_ERROR.foreignKeyViolation,
+      );
+      await db
+        .updateTable('inventory_item')
+        .set({ accepted_analysis_id: analysis.id })
+        .where('id', '=', other.id)
+        .execute();
+    });
+  });
+
+  describe('never false success', () => {
+    it('requires read-back or user confirmation evidence for succeeded', async () => {
+      const operation = await insertOperation(db, a, { idempotency_key: 'evidence-1' });
+      expect(operation.status).toBe('queued');
+      await expectPgError(
+        db
+          .updateTable('marketplace_operation')
+          .set({ status: 'succeeded' })
+          .where('id', '=', operation.id)
+          .execute(),
+        PG_ERROR.checkViolation,
+        'marketplace_operation_succeeded_has_evidence',
+      );
+      await db
+        .updateTable('marketplace_operation')
+        .set({ status: 'succeeded', success_evidence: 'read_back' })
+        .where('id', '=', operation.id)
+        .execute();
+    });
+
+    it('requires a user-readable reason for failed and a next attempt for retrying', async () => {
+      const operation = await insertOperation(db, a, { idempotency_key: 'failure-1' });
+      await expectPgError(
+        db
+          .updateTable('marketplace_operation')
+          .set({ status: 'failed', error_code: 'E_INVALID' })
+          .where('id', '=', operation.id)
+          .execute(),
+        PG_ERROR.checkViolation,
+        'marketplace_operation_failed_has_error',
+      );
+      await expectPgError(
+        db
+          .updateTable('marketplace_operation')
+          .set({ status: 'retrying' })
+          .where('id', '=', operation.id)
+          .execute(),
+        PG_ERROR.checkViolation,
+        'marketplace_operation_retrying_has_next_attempt',
+      );
+    });
+
+    it('never stores credentials on an assisted connection', async () => {
+      await expectPgError(
+        db
+          .insertInto('marketplace_connection')
+          .values({
+            account_id: a.accountId,
+            marketplace: 'poshmark',
+            mode: 'assisted',
+            token_ciphertext: Buffer.from('session-cookie'),
+          })
+          .execute(),
+        PG_ERROR.checkViolation,
+        'marketplace_connection_assisted_holds_no_token',
+      );
+    });
+
+    it('links auto-delist operations to their delist run', async () => {
+      await expectPgError(
+        db
+          .insertInto('marketplace_operation')
+          .values({
+            account_id: a.accountId,
+            listing_id: a.listingId,
+            kind: 'end',
+            idempotency_key: 'auto-without-run',
+            desired: jsonb({ status: 'ended' }),
+            origin: 'auto_delist',
+          })
+          .execute(),
+        PG_ERROR.checkViolation,
+        'marketplace_operation_auto_delist_has_run',
+      );
+    });
+  });
+
+  describe('append-only operation history', () => {
+    it('accepts inserts but rejects updates and deletes', async () => {
+      const operation = await insertOperation(db, a, { idempotency_key: 'history-1' });
+      const event = await db
+        .insertInto('operation_event')
+        .values({
+          account_id: a.accountId,
+          operation_id: operation.id,
+          to_status: 'queued',
+          detail: jsonb({ note: 'created' }),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      await expectPgError(
+        sql`update operation_event set to_status = 'succeeded' where id = ${event.id}`.execute(db),
+        PG_ERROR.restrictViolation,
+      );
+      await expectPgError(
+        db.deleteFrom('operation_event').where('id', '=', event.id).execute(),
+        PG_ERROR.restrictViolation,
+      );
+      const rows = await db
+        .selectFrom('operation_event')
+        .select('to_status')
+        .where('id', '=', event.id)
+        .execute();
+      expect(rows).toEqual([{ to_status: 'queued' }]);
+    });
+
+    it('rejects updates to the audit log', async () => {
+      const entry = await db
+        .insertInto('audit_log')
+        .values({
+          account_id: a.accountId,
+          item_id: a.itemId,
+          actor_kind: 'system',
+          action: 'item.created',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await expectPgError(
+        sql`update audit_log set action = 'item.deleted' where id = ${entry.id}`.execute(db),
+        PG_ERROR.restrictViolation,
+      );
+    });
+  });
+
+  describe('account deletion', () => {
+    it("deletes all of the account's data, including append-only history, and nothing else", async () => {
+      const doomed = await seedAccount(db, 'DEL');
+      const kept = await seedAccount(db, 'KEP');
+      for (const seed of [doomed, kept]) {
+        const sale = await db
+          .insertInto('sale')
+          .values({
+            account_id: seed.accountId,
+            item_id: seed.itemId,
+            listing_id: seed.listingId,
+            marketplace: 'ebay',
+            external_order_id: `order-${seed.accountId}`,
+            sold_at: new Date(),
+            sale_price_cents: 4_500,
+            detection_source: 'webhook',
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        await db
+          .insertInto('fee_line')
+          .values({
+            account_id: seed.accountId,
+            sale_id: sale.id,
+            kind: 'marketplace',
+            amount_cents: 600,
+            source: 'actual',
+          })
+          .execute();
+        const run = await db
+          .insertInto('delist_run')
+          .values({ account_id: seed.accountId, sale_id: sale.id, item_id: seed.itemId })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        const operation = await db
+          .insertInto('marketplace_operation')
+          .values({
+            account_id: seed.accountId,
+            listing_id: seed.listingId,
+            kind: 'end',
+            idempotency_key: `delist-${run.id}`,
+            desired: jsonb({ status: 'ended' }),
+            origin: 'auto_delist',
+            delist_run_id: run.id,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        await db
+          .insertInto('operation_event')
+          .values({ account_id: seed.accountId, operation_id: operation.id, to_status: 'queued' })
+          .execute();
+        await db
+          .insertInto('user_task')
+          .values({
+            account_id: seed.accountId,
+            kind: 'delist_manually',
+            item_id: seed.itemId,
+            listing_id: seed.listingId,
+            delist_run_id: run.id,
+            urgency: 'urgent',
+          })
+          .execute();
+        await db
+          .insertInto('audit_log')
+          .values({
+            account_id: seed.accountId,
+            item_id: seed.itemId,
+            actor_kind: 'user',
+            action: 'item.sold',
+          })
+          .execute();
+
+        const results = await db
+          .selectFrom('delist_run_listing')
+          .select(['source', 'status'])
+          .where('delist_run_id', '=', run.id)
+          .orderBy('source')
+          .execute();
+        expect(results).toEqual([
+          { source: 'operation', status: 'queued' },
+          { source: 'user_task', status: 'open' },
+        ]);
+      }
+
+      await db.deleteFrom('account').where('id', '=', doomed.accountId).execute();
+
+      const tables = await sql<{ table_name: string }>`
+        select table_name from information_schema.columns
+        where table_schema = 'public' and column_name = 'account_id'
+        order by table_name
+      `.execute(db);
+      const rows = [];
+      for (const { table_name } of tables.rows) {
+        const count = async (accountId: string) =>
+          (
+            await sql<{ count: number }>`
+              select count(*) as count from ${sql.table(table_name)} where account_id = ${accountId}
+            `.execute(db)
+          ).rows[0]?.count;
+        rows.push({
+          table_name,
+          doomed: await count(doomed.accountId),
+          kept: await count(kept.accountId),
+        });
+      }
+      expect(rows.filter((row) => row.doomed !== 0)).toEqual([]);
+      expect(rows.filter((row) => (row.kept ?? 0) > 0).map((row) => row.table_name)).toEqual(
+        expect.arrayContaining([
+          'audit_log',
+          'delist_run',
+          'fee_line',
+          'inventory_item',
+          'marketplace_listing',
+          'marketplace_operation',
+          'operation_event',
+          'sale',
+          'sku_sequence',
+          'user_task',
+        ]),
+      );
+    });
+  });
+});

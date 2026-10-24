@@ -45,11 +45,15 @@ export interface LoggerOptions {
   /** Process name, for example `api` or `worker`; added to every line as `service`. */
   service: string;
   level: LogLevel;
-  /** Defaults to stdout. Tests pass an in-memory stream. */
+  /** Defaults to synchronous stdout. Tests pass an in-memory stream. */
   destination?: DestinationStream;
 }
 
-/** Structured JSON logger used by every backend process. */
+/**
+ * Structured JSON logger used by every backend process. Stdout is written synchronously: with
+ * pino's default asynchronous writer, `process.exit()` flushes buffered lines while an earlier
+ * write is still in flight, so the last lines before an exit can land out of order or be lost.
+ */
 export function createLogger(options: LoggerOptions): Logger {
   return pino(
     {
@@ -57,6 +61,6 @@ export function createLogger(options: LoggerOptions): Logger {
       base: { service: options.service },
       redact: { paths: REDACTED_LOG_PATHS, censor: '[redacted]' },
     },
-    options.destination,
+    options.destination ?? pino.destination({ dest: 1, sync: true }),
   );
 }
