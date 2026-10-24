@@ -11,18 +11,18 @@ Gates: **G-eBay** (developer keys), **G-AI** (Anthropic key), **G-Apple** (devel
 
 ## Phase 0 - Foundations (no credentials)
 
-| ID   | Task                                                                                                       | Deps       | Group |
-| ---- | ---------------------------------------------------------------------------------------------------------- | ---------- | ----- |
-| T-01 | Monorepo and backend toolchain, `scripts/dev-db.sh`, CI (Linux), `.env.example`, docs                      | -          | A     |
-| T-02 | iOS scaffold: XcodeGen, SwiftUI app + Share Extension placeholder, SPM modules, `make ios-test`, macOS CI  | T-01       | B     |
-| T-03 | OpenAPI v1 contract + codegen (TS types, Swift client) + drift check                                       | T-01       | B     |
-| T-04 | DB schema v1 + migrations + gapless per-account SKU allocator                                              | T-01       | B     |
-| T-05 | API skeleton: zod env config, request-id logging, error model, dev auth, tenancy guard, items/photos CRUD  | T-03, T-04 | C     |
-| T-06 | Operation engine: Graphile Worker, transactional enqueue, state machine, fake adapter with fault injection | T-04       | C     |
-| T-07 | Storage + image pipeline: local/S3 drivers, upload sessions, derivatives, GPS strip, hashes                | T-05       | C     |
-| T-08 | AI provider abstraction, model registry, price table, usage metering, budget guards, fake provider         | T-04       | C     |
-| T-09 | Tag-text parsers (RN, CA, UPC/EAN, size, fiber, origin) + synthetic corpus + eval harness                  | T-01       | B     |
-| T-10 | Adapter framework: interfaces, capability flags, registry, conformance suite, assisted adapter base        | T-06       | D     |
+| ID   | Task                                                                                                                                                        | Deps       | Group |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----- |
+| T-01 | Monorepo and backend toolchain, `scripts/dev-db.sh`, CI (Linux), `.env.example`, docs                                                                       | -          | A     |
+| T-02 | iOS scaffold: XcodeGen, SwiftUI app + Share Extension placeholder, SPM modules, `make ios-test`, macOS CI                                                   | T-01       | B     |
+| T-03 | OpenAPI v1 contract + codegen (TS types, Swift client) + drift check                                                                                        | T-01       | B     |
+| T-04 | DB schema v1 + migrations + gapless per-account SKU allocator                                                                                               | T-01       | B     |
+| T-05 | API skeleton: zod env config, request-id logging, error model, dev auth, tenancy guard, items/photos CRUD                                                   | T-03, T-04 | C     |
+| T-06 | Operation engine: Graphile Worker, transactional enqueue, state machine, fake adapter with fault injection                                                  | T-04       | C     |
+| T-07 | Storage + image pipeline: local/S3 drivers, upload sessions, derivatives, GPS strip, hashes                                                                 | T-05       | C     |
+| T-08 | AI provider abstraction, model registry, price table, usage metering, budget guards, fake provider; wire the fake and Anthropic providers into the eval CLI | T-04       | C     |
+| T-09 | Tag-text parsers (RN, CA, UPC/EAN, size, fiber, origin) + synthetic corpus + eval harness                                                                   | T-01       | B     |
+| T-10 | Adapter framework: interfaces, capability flags, registry, conformance suite, assisted adapter base                                                         | T-06       | D     |
 
 ## Phase 1 - M1 vertical slice: photo → AI draft → review → price → item → eBay (fakes; sandbox at G-eBay)
 
