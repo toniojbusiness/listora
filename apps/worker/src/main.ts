@@ -4,13 +4,19 @@ import {
   AwsCognitoUserAdmin,
   noMarketplaceAccessRevocation,
 } from '@listora/accounts';
-import { createAiClient, PostgresQuotaPolicy, PostgresUsageStore } from '@listora/ai';
+import {
+  createAiClient,
+  PostgresAiControls,
+  PostgresQuotaPolicy,
+  PostgresUsageStore,
+} from '@listora/ai';
 import { createDatabase } from '@listora/db';
 import { startOperationWorker } from '@listora/operations';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
 
 import { createAdapters } from './adapters.ts';
+import { aiSpendCheckTask } from './ai-spend-check.ts';
 import { loadWorkerConfig } from './config.ts';
 import { createWorkerTasks } from './tasks.ts';
 
@@ -32,6 +38,7 @@ try {
         storage: createStorage(config.storage),
         ai: createAiClient(config.ai, {
           usageStore: new PostgresUsageStore(db),
+          controls: new PostgresAiControls(db),
           quota: new PostgresQuotaPolicy(db),
           logger,
         }),
@@ -49,6 +56,7 @@ try {
     logger,
     concurrency: config.concurrency,
     taskConcurrency: config.taskConcurrency,
+    scheduledTasks: [aiSpendCheckTask(db, config.aiAlerts, logger)],
     onFatalError: (error) => {
       // Other workers recover this worker's jobs once its process is gone; exiting at once
       // is what keeps two workers from running the same step.

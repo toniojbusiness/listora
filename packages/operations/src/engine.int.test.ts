@@ -1,5 +1,5 @@
 import { sql } from 'kysely';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { addJob } from '@listora/db';
 import { FakeMarketplaceAdapter, type FakeAction } from '@listora/marketplaces';
@@ -25,6 +25,8 @@ import {
   type EngineHarness,
   type ListingRow,
 } from './test-support.ts';
+import { OPERATION_TASK } from './jobs.ts';
+import { MAINTENANCE_TASK } from './maintenance.ts';
 import { maxAttempts } from './policy.ts';
 import type { OperationWorker } from './worker.ts';
 
@@ -951,6 +953,52 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
         harness.db,
       ),
     ).rejects.toMatchObject({ code: '23001' });
+  });
+
+  it("registers the host's scheduled tasks on the cron and runs them", async () => {
+    await worker?.stop();
+    let ran: () => void = () => undefined;
+    const done = new Promise<void>((resolve) => {
+      ran = resolve;
+    });
+    worker = await harness.startWorker({
+      scheduledTasks: [
+        {
+          name: 'host_check',
+          schedule: '7 * * * *',
+          run: async () => {
+            ran();
+          },
+        },
+      ],
+    });
+
+    await vi.waitFor(
+      async () => {
+        const crontabs = await sql<{ identifier: string }>`
+          select identifier from graphile_worker._private_known_crontabs
+        `.execute(harness.db);
+        expect(crontabs.rows.map((row) => row.identifier)).toEqual(
+          expect.arrayContaining(['host_check', MAINTENANCE_TASK]),
+        );
+      },
+      { timeout: 10_000, interval: 50 },
+    );
+    // Scheduled tasks run on the background runner, apart from the operation steps.
+    expect(worker.taskPoolId).toBeDefined();
+    await sql`select graphile_worker.add_job('host_check')`.execute(harness.db);
+    await done;
+  });
+
+  it.each([
+    [{ name: OPERATION_TASK, schedule: '7 * * * *' }, 'already taken'],
+    [{ name: 'Host-Check', schedule: '7 * * * *' }, 'is not valid'],
+    [{ name: 'host_check', schedule: '@hourly' }, 'five crontab time fields'],
+    [{ name: 'host_check', schedule: '7 * * * *', maxAttempts: 0 }, 'positive maxAttempts'],
+  ])('refuses the scheduled task %j', async (task, message) => {
+    await expect(
+      harness.startWorker({ scheduledTasks: [{ ...task, run: async () => undefined }] }),
+    ).rejects.toThrow(message);
   });
 });
 

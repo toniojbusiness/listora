@@ -7,8 +7,9 @@ import type { Tenant } from '../tenancy.ts';
 
 /**
  * Refuses an analysis request up front when its call would be refused anyway, so nothing is
- * queued that cannot run: the kill switch (`503`), the account's daily AI budget (`429`, with
- * the seconds until it resets), or the plan quota of the tier (`402`).
+ * queued that cannot run: the kill switch (`503`), an operator's block on the account (`403`),
+ * the account's daily AI budget (`429`, with the seconds until it resets), or the plan quota of
+ * the tier (`402`).
  */
 export async function assertAnalysisAllowed(
   ai: AiClient,
@@ -30,6 +31,8 @@ export async function assertAnalysisAllowed(
     switch (reason.kind) {
       case 'kill_switch':
         throw new ApiError('service_unavailable', message, { cause: error });
+      case 'account_blocked':
+        throw new ApiError('forbidden', message, { cause: error });
       case 'daily_budget':
         throw new ApiError('ai_budget_exceeded', message, {
           retryAfterSeconds: Math.max(

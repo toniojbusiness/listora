@@ -57,13 +57,18 @@ Gates: **G-eBay** (developer keys), **G-AI** (Anthropic key), **G-Apple** (devel
 | ID   | Task                                                                                     | Deps       | Group | Gate              |
 | ---- | ---------------------------------------------------------------------------------------- | ---------- | ----- | ----------------- |
 | T-28 | Billing + entitlements: Stripe (fake), StoreKit 2, App Store notifications, plan quotas  | T-05, T-11 | K     | G-Stripe, G-Apple |
-| T-29 | AI cost reports, spend alerts, kill switch and account blocks (admin CLI)                | T-08       | K     | -                 |
+| T-29 | AI cost dashboards, alerts, kill switch                                                  | T-08       | K     | -                 |
 | T-30 | Infra as code: CDK stacks + GitHub OIDC deploy workflow (`cdk synth` offline)            | T-01       | K     | G-AWS             |
 | T-31 | Production auth: Cognito driver (Sign in with Apple, email OTP), in-app account deletion | T-05       | K     | G-AWS, G-Apple    |
 | T-32 | Observability/SLO metrics and alarms (delist latency, verified-success rate, AI cost)    | T-06       | K     | -                 |
 | T-33 | Security and privacy hardening: threat model, deletion jobs, privacy policy/ToS drafts   | T-17, T-24 | K     | Legal review      |
 | T-34 | Release pipeline: signing, TestFlight upload workflow                                    | T-02       | K     | G-Apple           |
 | T-35 | eBay production readiness: Growth Check packet, deletion endpoint live on staging        | T-17, T-30 | L     | G-eBay, G-AWS     |
+
+T-29 ships the AI cost reports, the kill switch, and account blocks as the admin CLI
+(`npm run admin`), and the spend alerts as the worker's hourly spend check. Admin HTTP
+endpoints are deferred: Listora is for personal use for now, and the CLI is enough. The
+CloudWatch alarm that notifies on AI daily cost comes with T-32.
 
 ## Phase 4 - Import, matching, profit, organization
 

@@ -1,9 +1,10 @@
 /**
  * Runs the operation engine on Graphile Worker: the job runner, the liveness session, and the
  * periodic recovery of stopped workers' jobs (recovery.ts). The other background jobs the
- * worker is given (`tasks`) run on a second runner with its own, smaller pool and its own
- * liveness session, so slow AI calls and image work never hold the slots an urgent delist
- * needs. `apps/worker` starts it; tests start it in process with a short retry schedule.
+ * worker is given (`tasks`) and the host's scheduled tasks run on a second runner with its own,
+ * smaller pool and its own liveness session, so slow AI calls and image work never hold the
+ * slots an urgent delist needs. `apps/worker` starts it; tests start it in process with a short
+ * retry schedule.
  */
 import { EventEmitter } from 'node:events';
 
@@ -24,6 +25,20 @@ import { reapStoppedWorkers, WorkerLiveness } from './recovery.ts';
  * when the job should run again later (an outage); outcomes the user sees go on its own row.
  */
 export type WorkerTask = (payload: unknown, signal: AbortSignal) => Promise<void>;
+
+/**
+ * A recurring job on Graphile Worker's cron, which runs it once per due time across all
+ * workers. The host process supplies these (`apps/worker` schedules the AI spend check).
+ */
+export interface ScheduledTask {
+  /** The Graphile Worker task name (lowercase letters, digits, underscores). */
+  readonly name: string;
+  /** The five crontab time fields, in UTC, such as `7 * * * *` for minute 7 of every hour. */
+  readonly schedule: string;
+  /** Attempts per due time before Graphile gives up on it (default 1: the next run retries). */
+  readonly maxAttempts?: number;
+  readonly run: (signal: AbortSignal) => Promise<void>;
+}
 
 export interface OperationWorkerOptions {
   /** The database for the job queue's own connections and the liveness session. */
@@ -49,6 +64,8 @@ export interface OperationWorkerOptions {
   recoveryGraceMs?: number;
   /** Recheck interval for an operation waiting behind an older one (default 5 min). */
   blockedRecheckMs?: number;
+  /** Recurring jobs, run on the same runner as `tasks`. */
+  scheduledTasks?: readonly ScheduledTask[];
   /**
    * The worker can no longer run safely (its liveness session or the job runner failed). The
    * process must exit at once; other workers then recover its jobs.
@@ -59,7 +76,7 @@ export interface OperationWorkerOptions {
 export interface OperationWorker {
   /** The Graphile Worker pool id that this worker's operation job locks carry. */
   readonly poolId: string;
-  /** The pool id of the runner that runs `tasks`, when there are any. */
+  /** The pool id of the runner that runs `tasks` and `scheduledTasks`, when there are any. */
   readonly taskPoolId: string | undefined;
   /** Stops taking jobs, lets running steps finish (or aborts them), and closes the session. */
   stop(): Promise<void>;
@@ -73,6 +90,8 @@ export async function startOperationWorker(
   for (const name of [OPERATION_TASK, MAINTENANCE_TASK]) {
     if (Object.hasOwn(tasks, name)) throw new Error(`task ${name} is the worker's own`);
   }
+  const scheduledTasks = options.scheduledTasks ?? [];
+  validScheduledTasks(scheduledTasks, tasks);
   const deps: StepDependencies = {
     db: options.db,
     adapters: options.adapters,
@@ -109,16 +128,32 @@ export async function startOperationWorker(
     },
   );
   let background: StartedRunner | undefined;
-  if (Object.keys(tasks).length > 0) {
+  if (Object.keys(tasks).length > 0 || scheduledTasks.length > 0) {
     try {
       background = await startRunner(
-        { ...runnerOptions, concurrency: options.taskConcurrency ?? 2 },
-        Object.fromEntries(
-          Object.entries(tasks).map(([name, task]): [string, JobHandler] => [
+        {
+          ...runnerOptions,
+          concurrency: options.taskConcurrency ?? 2,
+          ...(scheduledTasks.length === 0
+            ? {}
+            : {
+                crontab: scheduledTasks
+                  .map(
+                    (task) => `${task.schedule} ${task.name} ?max=${String(task.maxAttempts ?? 1)}`,
+                  )
+                  .join('\n'),
+              }),
+        },
+        Object.fromEntries([
+          ...Object.entries(tasks).map(([name, task]): [string, JobHandler] => [
             name,
             (payload, helpers) => task(payload, helpers.abortSignal),
           ]),
-        ),
+          ...scheduledTasks.map((task): [string, JobHandler] => [
+            task.name,
+            (_payload, helpers) => task.run(helpers.abortSignal),
+          ]),
+        ]),
       );
     } catch (error) {
       stopping = true;
@@ -264,4 +299,29 @@ async function startRunner(
       }
     },
   };
+}
+
+const RESERVED_TASKS: ReadonlySet<string> = new Set([OPERATION_TASK, MAINTENANCE_TASK]);
+
+function validScheduledTasks(
+  tasks: readonly ScheduledTask[],
+  others: Readonly<Record<string, WorkerTask>>,
+): void {
+  const names = new Set<string>();
+  for (const task of tasks) {
+    if (!/^[a-z][a-z0-9_]*$/.test(task.name)) {
+      throw new RangeError(`scheduled task name ${JSON.stringify(task.name)} is not valid`);
+    }
+    if (RESERVED_TASKS.has(task.name) || Object.hasOwn(others, task.name) || names.has(task.name)) {
+      throw new RangeError(`scheduled task name ${task.name} is already taken`);
+    }
+    names.add(task.name);
+    if (!/^\S+( \S+){4}$/.test(task.schedule)) {
+      throw new RangeError(`scheduled task ${task.name} needs five crontab time fields`);
+    }
+    const attempts = task.maxAttempts ?? 1;
+    if (!Number.isInteger(attempts) || attempts < 1) {
+      throw new RangeError(`scheduled task ${task.name} needs a positive maxAttempts`);
+    }
+  }
 }

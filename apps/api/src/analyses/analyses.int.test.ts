@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { PostgresUsageStore } from '@listora/ai';
+import { PostgresAiControls, PostgresUsageStore } from '@listora/ai';
 import {
   encodeAnalysisAnswer,
   ITEM_ANALYSIS_OUTPUT_NAME,
@@ -355,6 +355,31 @@ describe('item analysis (real Postgres)', () => {
       expect(off.status).toBe(503);
       expect(off.error).toMatchObject({ code: 'service_unavailable', retryable: true });
       api.aiControls.killed = false;
+
+      const blocked = await api.signIn('analysis.blocked@example.com');
+      const blockedTenant = await api.tenantOf('analysis.blocked@example.com');
+      const controls = new PostgresAiControls(api.db);
+      const change = { actor: 'test', reason: 'abuse review' };
+      await controls.blockAccount(blockedTenant.accountId, change);
+      const blockedItem = (await api.call('createItem', { token: blocked, body: {} })).body.id;
+      await api.call('addItemPhoto', {
+        token: blocked,
+        params: { itemId: blockedItem },
+        body: {
+          uploadFileId: await api.uploads.add(blockedTenant, { bytes: await jpeg(998) }),
+          role: 'front',
+          width: 640,
+          height: 480,
+        },
+      });
+      await api.photoJobs.runAll();
+      const refusedBlocked = await api.call('startItemAnalysis', {
+        token: blocked,
+        params: { itemId: blockedItem },
+      });
+      expect(refusedBlocked.status).toBe(403);
+      expect(refusedBlocked.error).toMatchObject({ code: 'forbidden', retryable: false });
+      await controls.unblockAccount(blockedTenant.accountId, change);
 
       const budget = await api.signIn('analysis.spender@example.com');
       const spender = await api.tenantOf('analysis.spender@example.com');

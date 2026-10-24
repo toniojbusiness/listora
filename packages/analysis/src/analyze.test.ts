@@ -154,5 +154,10 @@ describe('analysisFailure', () => {
       retryable: true,
     });
     expect(analysisFailure(new AiGuardError({ kind: 'kill_switch' })).code).toBe('ai_unavailable');
+    expect(analysisFailure(new AiGuardError({ kind: 'account_blocked' }))).toEqual({
+      code: 'ai_account_blocked',
+      message: 'AI analysis is turned off for this account. Contact support.',
+      retryable: false,
+    });
   });
 });

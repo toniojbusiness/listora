@@ -702,14 +702,17 @@ guards, cost reports, and spend check:
   accounts by spend and one account's usage (from `ai_usage_daily`, and for one account's month
   from `UsageStore.monthlyUsage`), AI cost per item worked on, and spend by purpose, tier, and
   model (from `ai_usage_event`). An item's cost includes its failed calls and escalations.
-- **Spend check.** `checkAiSpend` (run once with `npm run admin -- ai-alerts check`; the worker
-  will schedule it) flags accounts approaching (`AI_ALERT_WARN_PERCENT`, default 80%) or over
+- **Spend check.** `checkAiSpend` runs every hour (minute 7, UTC) as the worker's
+  `ai_spend_check` Graphile Worker cron task, once per hour across all workers, in the
+  worker's task pool (not the operation steps' pool), with the thresholds from the worker's
+  own environment; `npm run admin -- ai-alerts check` runs it once
+  on demand. It flags accounts approaching (`AI_ALERT_WARN_PERCENT`, default 80%) or over
   the daily circuit breaker or an AI plan quota in `usage_counter`, and all accounts together
   approaching or over `AI_GLOBAL_DAILY_ALERT_USD` per UTC day. It only reads. It logs one
   `event: "ai_spend_alert"` line per alert (warn when approaching, error when over) and one
-  `event: "ai_spend_check"` summary with numeric counts. CloudWatch metric filters and alarms
-  (T-30, T-32) key on these field names, so they change only together with the alarms. Alerts
-  name accounts by id only.
+  `event: "ai_spend_check"` summary with numeric counts, through the worker's logger when
+  scheduled. CloudWatch metric filters and alarms (T-30, T-32) key on these field names, so
+  they change only together with the alarms. Alerts name accounts by id only.
 - **Timeouts.** `AI_REQUEST_TIMEOUT_MS` defaults to 600000 (the SDK's own default), so long
   Premium calls are not cut off. A timed-out call may still be billed but is metered at zero.
 - **Providers.** `FakeAiProvider` answers from fixture JSON keyed by the request's

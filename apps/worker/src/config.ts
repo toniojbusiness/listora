@@ -1,5 +1,11 @@
 import { USER_POOL_ID_PATTERN, userPoolRegion } from '@listora/accounts';
-import { AiConfigError, loadAiConfig, type AiConfig } from '@listora/ai';
+import {
+  AiConfigError,
+  loadAiAlertConfig,
+  loadAiConfig,
+  type AiAlertThresholds,
+  type AiConfig,
+} from '@listora/ai';
 import { AnalysisConfigError, loadAnalysisConfig, type AnalysisConfig } from '@listora/analysis';
 import { isLogLevel, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
@@ -24,6 +30,8 @@ export interface WorkerConfig {
    * region comes from the id). Undefined without one: Cognito account deletions then wait.
    */
   cognitoUserPool: { region: string; userPoolId: string } | undefined;
+  /** Thresholds of the hourly AI spend check; the daily budget is the guard's own. */
+  aiAlerts: AiAlertThresholds;
 }
 
 export class ConfigError extends Error {
@@ -74,13 +82,15 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const storage = collect(issues, StorageConfigError, () => loadStorageConfig(env));
   const ai = collect(issues, AiConfigError, () => loadAiConfig(env));
   const analysis = collect(issues, AnalysisConfigError, () => loadAnalysisConfig(env));
+  const aiAlerts = collect(issues, AiConfigError, () => loadAiAlertConfig(env));
 
   if (
     issues.length > 0 ||
     !isLogLevel(logLevel) ||
     storage === undefined ||
     ai === undefined ||
-    analysis === undefined
+    analysis === undefined ||
+    aiAlerts === undefined
   ) {
     throw new ConfigError(issues);
   }
@@ -95,6 +105,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     analysis,
     cognitoUserPool:
       userPoolId === undefined ? undefined : { region: userPoolRegion(userPoolId), userPoolId },
+    aiAlerts,
   };
 }
 

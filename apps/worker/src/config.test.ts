@@ -18,6 +18,11 @@ describe('loadWorkerConfig', () => {
       storage: { driver: 'local' },
       ai: { provider: 'fake', fakeFixturesDir: DEFAULT_FAKE_FIXTURES_DIR },
       analysis: { autoEscalate: true },
+      aiAlerts: {
+        dailyBudgetMicros: 1_000_000,
+        globalDailyAlertMicros: 25_000_000,
+        warnPercent: 80,
+      },
     });
   });
 
@@ -53,6 +58,36 @@ describe('loadWorkerConfig', () => {
       fakeMarketplaceUrl: 'http://127.0.0.1:4100',
       cognitoUserPool: { region: 'eu-west-2', userPoolId: 'eu-west-2_AbC123xyZ' },
     });
+  });
+
+  it('reads the AI spend check thresholds', () => {
+    expect(
+      loadWorkerConfig({
+        DATABASE_URL,
+        AI_DAILY_BUDGET_USD: '2.50',
+        AI_GLOBAL_DAILY_ALERT_USD: '40',
+        AI_ALERT_WARN_PERCENT: '90',
+      }).aiAlerts,
+    ).toEqual({
+      dailyBudgetMicros: 2_500_000,
+      globalDailyAlertMicros: 40_000_000,
+      warnPercent: 90,
+    });
+  });
+
+  it('reports invalid AI alert keys with the others', () => {
+    expect(
+      captureConfigError({
+        LOG_LEVEL: 'loud',
+        AI_GLOBAL_DAILY_ALERT_USD: '0',
+        AI_ALERT_WARN_PERCENT: '101',
+      }).issues,
+    ).toEqual([
+      'DATABASE_URL is required',
+      'LOG_LEVEL must be one of fatal, error, warn, info, debug, trace, silent',
+      'AI_GLOBAL_DAILY_ALERT_USD must be a dollar amount above zero such as 25.00',
+      'AI_ALERT_WARN_PERCENT must be an integer from 1 to 100',
+    ]);
   });
 
   it('treats an empty FAKE_MARKETPLACE_URL or COGNITO_USER_POOL_ID as unset', () => {
