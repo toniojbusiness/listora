@@ -24,5 +24,7 @@ export function synthesize(
 
 /** The stacks of one environment, in definition order. */
 export function stackList(stacks: ListoraStacks): Stack[] {
-  return Object.values(stacks as unknown as Record<string, Stack>);
+  return Object.values(stacks as unknown as Record<string, Stack | undefined>).filter(
+    (stack): stack is Stack => stack !== undefined,
+  );
 }

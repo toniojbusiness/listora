@@ -7,12 +7,24 @@
 // process's environment, or the word `placeholder` when unset. The photo storage, the runner
 // service, and the token key are placeholders: the smoke test starts the processes but stores
 // no photo or credential, and starts no runner through ECS.
+//
+// Sign-in follows LISTORA_ENV (the Deploy workflow sets it): that environment's driver, with a
+// placeholder user pool where it has one (the API fetches the pool's keys only on a sign-in).
+// Without LISTORA_ENV it is the dev driver.
+import { ENVIRONMENT_SETTINGS, isEnvironmentName } from './config.ts';
 import {
   CONTAINER_NAMES,
   containerEnvironment,
   containerSecretNames,
+  signInResources,
   type ServiceResources,
 } from './containers.ts';
+
+const environment = process.env['LISTORA_ENV'];
+const signIn =
+  environment !== undefined && isEnvironmentName(environment)
+    ? ENVIRONMENT_SETTINGS[environment].signIn
+    : ({ via: 'dev' } as const);
 
 const SMOKE_RESOURCES: ServiceResources = {
   photoStorage: {
@@ -20,6 +32,12 @@ const SMOKE_RESOURCES: ServiceResources = {
     region: 'us-east-1',
     publicBaseUrl: 'https://photos.smoke.invalid',
   },
+  signIn: signInResources(
+    signIn,
+    signIn.via === 'dev'
+      ? undefined
+      : { userPoolId: 'us-east-1_SmokeTest0', clientIds: ['smoketestclient0000000000'] },
+  ),
   runner: { cluster: 'listora-smoke', service: 'runner', region: 'us-east-1' },
   tokenKeyArn: 'alias/listora-smoke-tokens',
 };

@@ -1,6 +1,6 @@
 import { assertNever } from '@listora/shared';
 
-import { APP_SECRETS, SERVICE_NAMES, type ServiceName } from './config.ts';
+import { APP_SECRETS, SERVICE_NAMES, type ServiceName, type SignIn } from './config.ts';
 
 /** The port the API container listens on behind the load balancer. */
 export const API_PORT = 3000;
@@ -34,9 +34,45 @@ export interface PhotoStorage {
   readonly publicBaseUrl: string;
 }
 
+/** The Cognito user pool the API verifies tokens of, and the app clients it accepts. */
+export interface UserPoolResources {
+  readonly userPoolId: string;
+  readonly clientIds: readonly string[];
+}
+
+/**
+ * How the API verifies sign-ins (`AUTH_DRIVER`, docs/features/auth.md): with the environment's
+ * user pool, or, only in an environment that has none yet, with the dev driver.
+ */
+export type SignInResources =
+  { readonly driver: 'dev' } | ({ readonly driver: 'cognito' } & UserPoolResources);
+
+/**
+ * The sign-in an environment's containers get: an owner pool environment runs the `cognito`
+ * driver against its pool and never the dev driver, and only a `dev` environment runs the dev
+ * driver. Either without the other is a wiring mistake, so it throws instead of picking one.
+ */
+export function signInResources(
+  signIn: SignIn,
+  userPool: UserPoolResources | undefined,
+): SignInResources {
+  switch (signIn.via) {
+    case 'owner-pool':
+      if (userPool === undefined) throw new Error('an owner-pool environment needs its user pool');
+      if (userPool.clientIds.length === 0) throw new Error('the user pool needs an app client');
+      return { driver: 'cognito', ...userPool };
+    case 'dev':
+      if (userPool !== undefined) throw new Error('a dev sign-in environment has no user pool');
+      return { driver: 'dev' };
+    default:
+      return assertNever(signIn);
+  }
+}
+
 /** The AWS resources the long-running containers share, which their environment names. */
 export interface ServiceResources {
   readonly photoStorage: PhotoStorage;
+  readonly signIn: SignInResources;
   /** The browser runner's ECS service: the worker starts it, and it scales itself to zero. */
   readonly runner: { readonly cluster: string; readonly service: string; readonly region: string };
   /**
@@ -106,14 +142,16 @@ export function containerEnvironment(
   });
   switch (container) {
     case 'api':
-      // Deployed APIs switch to `cognito` (with COGNITO_USER_POOL_ID and COGNITO_CLIENT_IDS) once
-      // the user pool exists; docs/features/auth.md lists what it needs. Until then only the
-      // personal environment deploys: the Deploy workflow refuses `dev` for staging and prod.
-      return { API_HOST: '0.0.0.0', API_PORT: String(API_PORT), AUTH_DRIVER: 'dev', ...services() };
-    // The worker gets COGNITO_USER_POOL_ID (and its task role cognito-idp:AdminGetUser and AdminDeleteUser) with
-    // the user pool, so account deletions can delete Cognito users.
+      return {
+        API_HOST: '0.0.0.0',
+        API_PORT: String(API_PORT),
+        ...apiAuth(deployed().signIn),
+        ...services(),
+      };
+    // With a user pool, the worker deletes the Cognito users of deleted accounts (its task role
+    // may cognito-idp:AdminGetUser and AdminDeleteUser on the pool).
     case 'worker':
-      return { ...services(), ...runnerService(deployed()) };
+      return { ...services(), ...workerAuth(deployed().signIn), ...runnerService(deployed()) };
     case 'runner':
       return {
         ...common,
@@ -126,6 +164,26 @@ export function containerEnvironment(
     default:
       return assertNever(container);
   }
+}
+
+/** The API's `AUTH_DRIVER` and the keys of that driver. */
+function apiAuth(signIn: SignInResources): Record<string, string> {
+  switch (signIn.driver) {
+    case 'dev':
+      return { AUTH_DRIVER: 'dev' };
+    case 'cognito':
+      return {
+        AUTH_DRIVER: 'cognito',
+        COGNITO_USER_POOL_ID: signIn.userPoolId,
+        COGNITO_CLIENT_IDS: signIn.clientIds.join(','),
+      };
+    default:
+      return assertNever(signIn);
+  }
+}
+
+function workerAuth(signIn: SignInResources): Record<string, string> {
+  return signIn.driver === 'cognito' ? { COGNITO_USER_POOL_ID: signIn.userPoolId } : {};
 }
 
 /** Environment variables ECS fills from Secrets Manager for a container. */

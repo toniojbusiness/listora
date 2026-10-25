@@ -49,7 +49,7 @@ struct DevSignInClientTests {
     }
 }
 
-/// Answers dev-auth requests per host, so tests can run in parallel.
+/// Answers requests per host (the dev auth API's, and Cognito's), so tests can run in parallel.
 final class DevAuthStub: URLProtocol, @unchecked Sendable {
     typealias Handler = @Sendable (URLRequest) -> (Int, String)
     private static let handlers = Mutex<[String: Handler]>([:])
@@ -68,13 +68,15 @@ final class DevAuthStub: URLProtocol, @unchecked Sendable {
     }
 
     override func startLoading() {
-        guard let url = request.url, let host = url.host(), let handler = Self.handlers.withLock({ $0[host] }),
-              let response = HTTPURLResponse(url: url, statusCode: handler(request).0, httpVersion: nil, headerFields: [
-                  "Content-Type": "application/json",
-              ])
+        guard let url = request.url, let host = url.host(), let handler = Self.handlers.withLock({ $0[host] })
         else { return }
+        // Once per request: handlers may record what they were sent.
+        let (status, body) = handler(request)
+        guard let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: [
+            "Content-Type": "application/json",
+        ]) else { return }
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data(handler(request).1.utf8))
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 

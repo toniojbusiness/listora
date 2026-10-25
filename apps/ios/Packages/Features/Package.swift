@@ -115,7 +115,7 @@ let package = Package(
                 .product(name: "ListoraAPI", package: "swift"),
             ],
         ),
-        .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient"]),
+        .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient", "SettingsFeature"]),
         .testTarget(
             name: "TodayFeatureTests",
             dependencies: ["TodayFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],

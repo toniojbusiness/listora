@@ -53,6 +53,51 @@ struct AppConfigurationTests {
     }
 
     @Test
+    func `reads the Cognito app client the build signs in with`() throws {
+        var dictionary = info(environment: "prod", url: "https://api.example.com")
+        dictionary[AppConfiguration.InfoKey.cognitoRegion] = "us-east-1"
+        dictionary[AppConfiguration.InfoKey.cognitoClientID] = "4example5client6id7abcdefgh"
+        let config = try AppConfiguration(infoDictionary: dictionary)
+        #expect(try config.cognito == CognitoConfiguration(
+            region: "us-east-1",
+            clientID: "4example5client6id7abcdefgh",
+        ))
+    }
+
+    @Test(arguments: [nil as String?, "", "$(COGNITO_CLIENT_ID)"])
+    func `has no sign-in without a Cognito app client, whatever the region`(clientID: String?) throws {
+        var dictionary = info(environment: "prod", url: "https://api.example.com")
+        dictionary[AppConfiguration.InfoKey.cognitoRegion] = "us-east-1"
+        dictionary[AppConfiguration.InfoKey.cognitoClientID] = clientID
+        #expect(try AppConfiguration(infoDictionary: dictionary).cognito == nil)
+        #expect(try AppConfiguration(infoDictionary: info()).cognito == nil)
+    }
+
+    @Test
+    func `needs the region of a Cognito app client, and rejects malformed values`() {
+        var dictionary = info(environment: "prod", url: "https://api.example.com")
+        dictionary[AppConfiguration.InfoKey.cognitoClientID] = "4example5client6id7abcdefgh"
+        #expect(throws: ConfigurationError.missing(key: AppConfiguration.InfoKey.cognitoRegion)) {
+            try AppConfiguration(infoDictionary: dictionary)
+        }
+        dictionary[AppConfiguration.InfoKey.cognitoRegion] = "Virginia"
+        #expect(throws: ConfigurationError.invalid(
+            key: AppConfiguration.InfoKey.cognitoRegion,
+            reason: "must be an AWS region such as us-east-1",
+        )) {
+            try AppConfiguration(infoDictionary: dictionary)
+        }
+        dictionary[AppConfiguration.InfoKey.cognitoRegion] = "us-east-1"
+        dictionary[AppConfiguration.InfoKey.cognitoClientID] = "not a client/id"
+        #expect(throws: ConfigurationError.invalid(
+            key: AppConfiguration.InfoKey.cognitoClientID,
+            reason: "must be a Cognito app client id",
+        )) {
+            try AppConfiguration(infoDictionary: dictionary)
+        }
+    }
+
+    @Test
     func `trims surrounding whitespace`() throws {
         let config = try AppConfiguration(infoDictionary: info(environment: " dev\n", url: " http://localhost:3000 "))
         #expect(config.apiBaseURL.absoluteString == "http://localhost:3000")

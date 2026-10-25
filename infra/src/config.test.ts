@@ -29,6 +29,9 @@ const VALID = {
 /** `VALID` with no domain and no hosted zone. */
 const NO_DOMAIN = { ...VALID, domain: undefined, hostedZoneId: undefined };
 
+/** Personal signs in with an owner pool, so it needs the owner's email. */
+const PERSONAL = { env: 'personal', ownerEmail: 'owner@example.com' };
+
 const fromRecord =
   (record: Record<string, unknown>) =>
   (key: string): unknown =>
@@ -54,6 +57,7 @@ describe('loadDeployTarget', () => {
       imageTag: '3f1c2a9',
       githubRepository: 'acme/listora',
       alarmEmail: undefined,
+      ownerEmail: undefined,
       availabilityZones: undefined,
     });
   });
@@ -157,16 +161,16 @@ describe('loadDeployTarget', () => {
   });
 
   it('lets personal deploy without a domain, since its HTTP API has its own URL', () => {
-    expect(loadDeployTarget(fromRecord({ ...NO_DOMAIN, env: 'personal' }), {}).dns).toBeUndefined();
+    expect(loadDeployTarget(fromRecord({ ...NO_DOMAIN, ...PERSONAL }), {}).dns).toBeUndefined();
     expect(
-      loadDeployTarget(fromRecord({ ...VALID, env: 'personal' }), {
+      loadDeployTarget(fromRecord({ ...VALID, ...PERSONAL }), {
         LISTORA_DOMAIN: '',
         LISTORA_HOSTED_ZONE_ID: '',
       }).dns,
     ).toEqual({ domain: 'staging.example.com', hostedZoneId: 'Z0123456789ABCDEFGHIJ' });
     // The deploy workflow passes unset GitHub variables as empty strings.
     expect(
-      loadDeployTarget(fromRecord({ ...NO_DOMAIN, env: 'personal' }), {
+      loadDeployTarget(fromRecord({ ...NO_DOMAIN, ...PERSONAL }), {
         LISTORA_DOMAIN: '',
         LISTORA_HOSTED_ZONE_ID: '',
       }).dns,
@@ -182,7 +186,7 @@ describe('loadDeployTarget', () => {
       },
     } as const;
     const load = (context: Record<string, unknown>) =>
-      loadDeployTarget(fromRecord({ ...context, env: 'personal' }), {}, settings);
+      loadDeployTarget(fromRecord({ ...context, ...PERSONAL }), {}, settings);
     expect(() => load(NO_DOMAIN)).toThrow(
       new DeployConfigError([
         'domain (context) or LISTORA_DOMAIN (environment) is required',
@@ -206,17 +210,44 @@ describe('loadDeployTarget', () => {
 
   it('takes a domain and its hosted zone together, never one alone', () => {
     for (const env of ['staging', 'personal']) {
-      expect(issuesOf({ ...NO_DOMAIN, env, domain: 'example.com' }), env).toEqual([
+      const owner = env === 'personal' ? PERSONAL : {};
+      expect(issuesOf({ ...NO_DOMAIN, env, ...owner, domain: 'example.com' }), env).toEqual([
         'hostedZoneId (context) or LISTORA_HOSTED_ZONE_ID (environment) is required',
       ]);
-      expect(issuesOf({ ...NO_DOMAIN, env }, { LISTORA_HOSTED_ZONE_ID: 'Z9' }), env).toEqual([
-        'domain (context) or LISTORA_DOMAIN (environment) is required',
-      ]);
+      expect(
+        issuesOf({ ...NO_DOMAIN, env, ...owner }, { LISTORA_HOSTED_ZONE_ID: 'Z9' }),
+        env,
+      ).toEqual(['domain (context) or LISTORA_DOMAIN (environment) is required']);
     }
-    expect(issuesOf({ ...NO_DOMAIN, env: 'personal', domain: 'Not A Domain' })).toEqual([
+    expect(issuesOf({ ...NO_DOMAIN, ...PERSONAL, domain: 'Not A Domain' })).toEqual([
       'domain (context) or LISTORA_DOMAIN (environment) must be a lowercase DNS name such as example.com',
       'hostedZoneId (context) or LISTORA_HOSTED_ZONE_ID (environment) is required',
     ]);
+  });
+
+  it('requires the owner email where the environment signs in with an owner pool', () => {
+    expect(issuesOf({ ...NO_DOMAIN, env: 'personal' })).toEqual([
+      'ownerEmail (context) or LISTORA_OWNER_EMAIL (environment) is required',
+    ]);
+    expect(issuesOf({ ...NO_DOMAIN, env: 'personal', ownerEmail: 'not an email' })).toEqual([
+      'ownerEmail (context) or LISTORA_OWNER_EMAIL (environment) must be an email address',
+    ]);
+    // Cognito usernames here are case-insensitive emails; the pool's user is the lowercase one.
+    expect(
+      loadDeployTarget(fromRecord({ ...NO_DOMAIN, env: 'personal' }), {
+        LISTORA_OWNER_EMAIL: 'Owner@Example.com',
+      }).ownerEmail,
+    ).toBe('owner@example.com');
+  });
+
+  it('refuses an owner email where the environment has no owner pool, since nothing would read it', () => {
+    expect(issuesOf({ ...VALID, ownerEmail: 'owner@example.com' })).toEqual([
+      'ownerEmail (context) or LISTORA_OWNER_EMAIL (environment) is only for an environment with an owner pool',
+    ]);
+    // The deploy workflow passes the unset GitHub variable as an empty string.
+    expect(loadDeployTarget(fromRecord(VALID), { LISTORA_OWNER_EMAIL: '' }).ownerEmail).toBe(
+      undefined,
+    );
   });
 
   it('refuses the mutable latest tag, so a deploy always names the image it runs', () => {
@@ -269,6 +300,12 @@ describe('ENVIRONMENT_SETTINGS', () => {
     });
     expect(personal.logRetention).toBe(RetentionDays.ONE_WEEK);
     expect(personal.containerInsights).toBe(false);
+  });
+
+  it('signs in to personal only with its owner pool; staging and prod keep dev until they get a pool', () => {
+    expect(ENVIRONMENT_SETTINGS.personal.signIn).toEqual({ via: 'owner-pool' });
+    expect(ENVIRONMENT_SETTINGS.staging.signIn).toEqual({ via: 'dev' });
+    expect(ENVIRONMENT_SETTINGS.prod.signIn).toEqual({ via: 'dev' });
   });
 
   it('keeps every service size a valid Fargate combination with a sane scaling range', () => {

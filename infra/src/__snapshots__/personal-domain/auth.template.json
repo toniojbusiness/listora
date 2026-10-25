@@ -1,0 +1,171 @@
+{
+  "Description": "Listora personal: Cognito user pool for sign-in",
+  "Resources": {
+    "UserPool6BA7E5F2": {
+      "Type": "AWS::Cognito::UserPool",
+      "Properties": {
+        "AccountRecoverySetting": {
+          "RecoveryMechanisms": [
+            {
+              "Name": "admin_only",
+              "Priority": 1
+            }
+          ]
+        },
+        "AdminCreateUserConfig": {
+          "AllowAdminCreateUserOnly": true
+        },
+        "AutoVerifiedAttributes": [
+          "email"
+        ],
+        "DeletionProtection": "ACTIVE",
+        "EmailConfiguration": {
+          "EmailSendingAccount": "DEVELOPER",
+          "From": "Listora <no-reply@personal.example.com>",
+          "SourceArn": "arn:aws:ses:us-east-1:333333333333:identity/personal.example.com"
+        },
+        "EmailVerificationMessage": "The verification code to your new account is {####}",
+        "EmailVerificationSubject": "Verify your new account",
+        "MfaConfiguration": "OFF",
+        "Policies": {
+          "SignInPolicy": {
+            "AllowedFirstAuthFactors": [
+              "PASSWORD",
+              "EMAIL_OTP"
+            ]
+          }
+        },
+        "SmsVerificationMessage": "The verification code to your new account is {####}",
+        "UserPoolName": "listora-personal",
+        "UserPoolTier": "ESSENTIALS",
+        "UsernameAttributes": [
+          "email"
+        ],
+        "UsernameConfiguration": {
+          "CaseSensitive": false
+        },
+        "VerificationMessageTemplate": {
+          "DefaultEmailOption": "CONFIRM_WITH_CODE",
+          "EmailMessage": "The verification code to your new account is {####}",
+          "EmailSubject": "Verify your new account",
+          "SmsMessage": "The verification code to your new account is {####}"
+        }
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
+    },
+    "UserPoolIPhoneApp88BB6ABF": {
+      "Type": "AWS::Cognito::UserPoolClient",
+      "Properties": {
+        "AccessTokenValidity": 60,
+        "AllowedOAuthFlowsUserPoolClient": false,
+        "AuthSessionValidity": 10,
+        "ClientName": "iphone-app",
+        "EnableTokenRevocation": true,
+        "ExplicitAuthFlows": [
+          "ALLOW_USER_AUTH",
+          "ALLOW_REFRESH_TOKEN_AUTH"
+        ],
+        "GenerateSecret": false,
+        "IdTokenValidity": 60,
+        "PreventUserExistenceErrors": "ENABLED",
+        "RefreshTokenValidity": 43200,
+        "SupportedIdentityProviders": [
+          "COGNITO"
+        ],
+        "TokenValidityUnits": {
+          "AccessToken": "minutes",
+          "IdToken": "minutes",
+          "RefreshToken": "minutes"
+        },
+        "UserPoolId": {
+          "Ref": "UserPool6BA7E5F2"
+        }
+      }
+    },
+    "Owner": {
+      "Type": "AWS::Cognito::UserPoolUser",
+      "Properties": {
+        "MessageAction": "SUPPRESS",
+        "UserAttributes": [
+          {
+            "Name": "email",
+            "Value": "owner@example.com"
+          },
+          {
+            "Name": "email_verified",
+            "Value": "true"
+          }
+        ],
+        "UserPoolId": {
+          "Ref": "UserPool6BA7E5F2"
+        },
+        "Username": "owner@example.com"
+      }
+    }
+  },
+  "Outputs": {
+    "UserPoolId": {
+      "Value": {
+        "Ref": "UserPool6BA7E5F2"
+      }
+    },
+    "AppClientId": {
+      "Value": {
+        "Ref": "UserPoolIPhoneApp88BB6ABF"
+      }
+    },
+    "PublishOutputFnGetAttUserPool6BA7E5F2Arn6E09B627": {
+      "Value": {
+        "Fn::GetAtt": [
+          "UserPool6BA7E5F2",
+          "Arn"
+        ]
+      }
+    },
+    "PublishOutputRefUserPool6BA7E5F24B752AC8": {
+      "Value": {
+        "Ref": "UserPool6BA7E5F2"
+      }
+    },
+    "PublishOutputRefUserPoolIPhoneApp88BB6ABF22F930E1": {
+      "Value": {
+        "Ref": "UserPoolIPhoneApp88BB6ABF"
+      }
+    }
+  },
+  "Parameters": {
+    "BootstrapVersion": {
+      "Type": "AWS::SSM::Parameter::Value<String>",
+      "Default": "/cdk-bootstrap/listora/version",
+      "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+    }
+  },
+  "Rules": {
+    "CheckBootstrapVersion": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Not": [
+              {
+                "Fn::Contains": [
+                  [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5"
+                  ],
+                  {
+                    "Ref": "BootstrapVersion"
+                  }
+                ]
+              }
+            ]
+          },
+          "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+        }
+      ]
+    }
+  }
+}
