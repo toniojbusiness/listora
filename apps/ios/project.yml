@@ -199,6 +199,7 @@ schemes:
         - package: DesignSystem/DesignSystemTests
         - package: APIClient/APIClientTests
         - package: Features/AppFeatureTests
+        - package: Features/TodayFeatureTests
         - package: Features/InventoryFeatureTests
         - package: Features/SalesFeatureTests
         - package: Features/AddItemFeatureTests

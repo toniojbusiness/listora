@@ -6,6 +6,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 
+import type { Db } from '@listora/db';
 import type { FakeEbay } from '@listora/marketplaces';
 import sharp from 'sharp';
 
@@ -216,4 +217,61 @@ async function jpeg(red: number): Promise<Uint8Array> {
       .jpeg({ quality: 80 })
       .toBuffer(),
   );
+}
+
+/**
+ * Records a sale of `item` on eBay an hour ago, shipping by tomorrow, with the item kept in bin
+ * `B-12`: what a Today "ship" card shows. Written to the database directly, standing in for an
+ * eBay order notification (a seller's own "Mark as sold" has no ship-by date or bin); the item
+ * is `sold`, as it is once a sale's delist run (here: nothing else to delist) completes.
+ */
+export async function recordSoldItem(
+  db: Db,
+  item: SeededItem,
+): Promise<SeededItem & { saleId: string; saleItemId: string }> {
+  return db.transaction().execute(async (trx) => {
+    const row = await trx
+      .selectFrom('inventory_item')
+      .select(['account_id', 'list_price_cents'])
+      .where('id', '=', item.id)
+      .executeTakeFirstOrThrow();
+    const location = await trx
+      .insertInto('storage_location')
+      .values({ account_id: row.account_id, code: 'B-12', label: 'Garage shelf 3' })
+      .onConflict((conflict) =>
+        conflict.columns(['account_id', 'code']).doUpdateSet({ label: 'Garage shelf 3' }),
+      )
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await trx
+      .updateTable('inventory_item')
+      .set({ status: 'sold', storage_location_id: location.id })
+      .where('id', '=', item.id)
+      .execute();
+    const now = Date.now();
+    const sale = await trx
+      .insertInto('sale')
+      .values({
+        account_id: row.account_id,
+        marketplace: 'ebay',
+        external_order_id: `e2e-${randomUUID()}`,
+        sold_at: new Date(now - 60 * 60_000),
+        ship_by: new Date(now + 24 * 60 * 60_000),
+        detection_source: 'webhook',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const line = await trx
+      .insertInto('sale_item')
+      .values({
+        account_id: row.account_id,
+        sale_id: sale.id,
+        marketplace: 'ebay',
+        item_id: item.id,
+        sale_price_cents: row.list_price_cents ?? 4500,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return { ...item, saleId: sale.id, saleItemId: line.id };
+  });
 }

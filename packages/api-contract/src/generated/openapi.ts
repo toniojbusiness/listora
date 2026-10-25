@@ -1292,6 +1292,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get what needs the seller today
+         * @description The Today screen: one card per thing that needs the seller (items to ship, delists that
+         *     are not done, connections to reconnect, drafts to review, and old listings that could use
+         *     a price drop or a relist), most urgent first, and the money summary. Computed from the
+         *     account's own data on every request, with no AI and no marketplace call, so the app asks
+         *     for it each time it opens. A card is gone once its work is done.
+         */
+        get: operations["getToday"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/today/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the morning summary setting
+         * @description The account's morning summary notification setting (defaults until saved).
+         */
+        get: operations["getTodaySettings"];
+        /**
+         * Replace the morning summary setting
+         * @description Turns the morning summary on or off and sets its time, in the device's time zone. A time
+         *     zone the server does not know is `422 validation_failed`.
+         */
+        put: operations["replaceTodaySettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3045,6 +3094,196 @@ export interface components {
             /** @description Present when there are more results. */
             nextCursor?: string;
         };
+        /**
+         * @description A `KnownTodayCardKind`, or a card added after this client was built. Clients show an
+         *     unknown card's `title`, `detail`, and action generically.
+         */
+        TodayCardKind: components["schemas"]["KnownTodayCardKind"];
+        /**
+         * @description `delist`: an item sold and is not delisted (or confirmed) everywhere else yet.
+         *     `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
+         *     seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
+         *     `stale_listing`: a listing live a long time with no changes, with a price drop (never below
+         *     the item's floor) or a relist suggested.
+         * @enum {string}
+         */
+        KnownTodayCardKind: "delist" | "ship" | "reconnect" | "review_drafts" | "stale_listing";
+        /**
+         * @description A `KnownTodayUrgency`, or a level added after this client was built, which clients show
+         *     like `normal`.
+         */
+        TodayUrgency: components["schemas"]["KnownTodayUrgency"];
+        /**
+         * @description `urgent`: needs the seller now (a delist that is stuck or waiting for them, a ship-by date
+         *     within a day or past). `high`: soon. `normal`: when the seller has a moment.
+         * @enum {string}
+         */
+        KnownTodayUrgency: "urgent" | "high" | "normal";
+        /**
+         * @description A `KnownTodayDestination`, or a screen added after this client was built. Clients that do
+         *     not know it open the item when the action names one, and otherwise offer no action.
+         */
+        TodayDestination: components["schemas"]["KnownTodayDestination"];
+        /**
+         * @description `item`: the item screen (`itemId`). `sale`: the sale's screen (`saleId`; `itemId` names the
+         *     item too). `marketplaces`: the marketplace connections screen (`connectionId` names the
+         *     connection). `drafts`: the drafts waiting for review.
+         * @enum {string}
+         */
+        KnownTodayDestination: "item" | "sale" | "marketplaces" | "drafts";
+        /** @description The card's one primary action and the screen it opens. */
+        TodayAction: {
+            /** @description The button's title, for example `Open sale` or `Lower to $40`. */
+            label: string;
+            destination: components["schemas"]["TodayDestination"];
+            itemId?: components["schemas"]["Id"];
+            saleId?: components["schemas"]["Id"];
+            connectionId?: components["schemas"]["Id"];
+        };
+        /** @description The item a card is about. */
+        TodayItem: {
+            id: components["schemas"]["Id"];
+            sku: components["schemas"]["Sku"];
+            title?: string;
+            /**
+             * Format: uri
+             * @description The item's cover photo, small; absent until a photo is processed.
+             */
+            thumbnailUrl?: string;
+        };
+        /** @description A `ship` card's sale and where the item is kept. */
+        TodayShipment: {
+            saleId: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            soldAt: components["schemas"]["Timestamp"];
+            /** @description The marketplace's ship-by date, when it gives one. */
+            shipBy?: components["schemas"]["Timestamp"];
+            location?: components["schemas"]["TodayLocation"];
+        };
+        /** @description Where the item is kept, for example bin `B-12`. */
+        TodayLocation: {
+            code: string;
+            label?: string;
+        };
+        /** @description A `delist` card's delist run, with its honest summary. */
+        TodayDelist: {
+            saleId: components["schemas"]["Id"];
+            delistRunId: components["schemas"]["Id"];
+            soldOn: components["schemas"]["Marketplace"];
+            statusDisplay: components["schemas"]["StatusDisplay"];
+            /** @description The marketplaces where it is not delisted or confirmed yet. */
+            remaining: components["schemas"]["Marketplace"][];
+        };
+        /** @description A `reconnect` card's connection. */
+        TodayConnection: {
+            connectionId: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            displayName?: string;
+            status: components["schemas"]["ConnectionStatus"];
+        };
+        /**
+         * @description A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
+         *     clients show through the card's `detail` and action.
+         */
+        TodayStaleSuggestion: components["schemas"]["KnownTodayStaleSuggestion"];
+        /**
+         * @description `price_drop`: lower the price to `suggestedPrice`, which is never below the item's floor.
+         *     `relist`: no price drop is possible (the price is at its floor, or no floor is known).
+         * @enum {string}
+         */
+        KnownTodayStaleSuggestion: "price_drop" | "relist";
+        /** @description A `stale_listing` card's listing facts and suggestion. */
+        TodayStaleListing: {
+            /** @description When its oldest live listing went live. */
+            listedAt: components["schemas"]["Timestamp"];
+            /** Format: int32 */
+            daysListed: number;
+            price: components["schemas"]["Money"];
+            floor?: components["schemas"]["Money"];
+            suggestion: components["schemas"]["TodayStaleSuggestion"];
+            /** @description Present with `price_drop`. */
+            suggestedPrice?: components["schemas"]["Money"];
+            /** @description Where it is live. */
+            marketplaces: components["schemas"]["Marketplace"][];
+        };
+        /** @description A `review_drafts` card's drafts. */
+        TodayDrafts: {
+            /** Format: int32 */
+            count: number;
+            oldestCreatedAt: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description One thing that needs the seller. A card exists only while its work is not done, so it is
+         *     gone from the next summary once the work is finished. The kind's own property (`shipment`,
+         *     `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+         */
+        TodayCard: {
+            /** @description Stable while the card's work is the same, for example `ship:<saleItemId>`. */
+            id: string;
+            kind: components["schemas"]["TodayCardKind"];
+            urgency: components["schemas"]["TodayUrgency"];
+            title: string;
+            detail?: string;
+            action: components["schemas"]["TodayAction"];
+            item?: components["schemas"]["TodayItem"];
+            shipment?: components["schemas"]["TodayShipment"];
+            delist?: components["schemas"]["TodayDelist"];
+            connection?: components["schemas"]["TodayConnection"];
+            staleListing?: components["schemas"]["TodayStaleListing"];
+            drafts?: components["schemas"]["TodayDrafts"];
+        };
+        /**
+         * @description Sales in a 7-day period. Canceled and returned sales count for nothing. `profit` is the sum
+         *     over the sales whose profit is known (price plus shipping charged, minus fees and the items'
+         *     costs); a sale without recorded fees or with an item without a cost is counted in
+         *     `profitPendingSales` instead. `profit` is absent when no sale's profit is known.
+         */
+        TodayMoneyPeriod: {
+            start: components["schemas"]["Timestamp"];
+            end: components["schemas"]["Timestamp"];
+            /**
+             * Format: int32
+             * @description Orders.
+             */
+            sales: number;
+            /** Format: int32 */
+            itemsSold: number;
+            /** @description What the items sold for, before shipping, fees, and costs. */
+            salesTotal: components["schemas"]["Money"];
+            profit?: components["schemas"]["Money"];
+            /** Format: int32 */
+            profitPendingSales: number;
+        };
+        /** @description The last 7 days (`thisWeek`, ending now) next to the 7 days before (`lastWeek`). */
+        TodayMoney: {
+            thisWeek: components["schemas"]["TodayMoneyPeriod"];
+            lastWeek: components["schemas"]["TodayMoneyPeriod"];
+        };
+        Today: {
+            generatedAt: components["schemas"]["Timestamp"];
+            /** @description Most urgent first. Empty when the seller is all caught up. */
+            cards: components["schemas"]["TodayCard"][];
+            money: components["schemas"]["TodayMoney"];
+        };
+        /**
+         * @description The morning summary notification: once a day at `time` in `timeZone`, a push that sums up
+         *     the Today screen (nothing is sent on a day with nothing to do). Until the app saves a time
+         *     zone, `timeZone` is absent and no summary is sent.
+         */
+        TodaySummarySettings: {
+            enabled: boolean;
+            /** @description Wall-clock `HH:MM`, 24-hour. */
+            time: string;
+            /** @description An IANA time zone name, for example `America/New_York`. */
+            timeZone?: string;
+        };
+        TodaySummarySettingsReplace: {
+            enabled: boolean;
+            /** @description Wall-clock `HH:MM`, 24-hour. */
+            time: string;
+            /** @description An IANA time zone name, for example `America/New_York` (the device's own). */
+            timeZone: string;
+        };
     };
     responses: {
         /** @description Any error. See `KnownErrorCode` for the codes and their HTTP statuses. */
@@ -3376,6 +3615,28 @@ export type UserTaskItem = components['schemas']['UserTaskItem'];
 export type UserTaskCompletion = components['schemas']['UserTaskCompletion'];
 export type SaleCorrection = components['schemas']['SaleCorrection'];
 export type UserTaskPage = components['schemas']['UserTaskPage'];
+export type TodayCardKind = components['schemas']['TodayCardKind'];
+export type KnownTodayCardKind = components['schemas']['KnownTodayCardKind'];
+export type TodayUrgency = components['schemas']['TodayUrgency'];
+export type KnownTodayUrgency = components['schemas']['KnownTodayUrgency'];
+export type TodayDestination = components['schemas']['TodayDestination'];
+export type KnownTodayDestination = components['schemas']['KnownTodayDestination'];
+export type TodayAction = components['schemas']['TodayAction'];
+export type TodayItem = components['schemas']['TodayItem'];
+export type TodayShipment = components['schemas']['TodayShipment'];
+export type TodayLocation = components['schemas']['TodayLocation'];
+export type TodayDelist = components['schemas']['TodayDelist'];
+export type TodayConnection = components['schemas']['TodayConnection'];
+export type TodayStaleSuggestion = components['schemas']['TodayStaleSuggestion'];
+export type KnownTodayStaleSuggestion = components['schemas']['KnownTodayStaleSuggestion'];
+export type TodayStaleListing = components['schemas']['TodayStaleListing'];
+export type TodayDrafts = components['schemas']['TodayDrafts'];
+export type TodayCard = components['schemas']['TodayCard'];
+export type TodayMoneyPeriod = components['schemas']['TodayMoneyPeriod'];
+export type TodayMoney = components['schemas']['TodayMoney'];
+export type Today = components['schemas']['Today'];
+export type TodaySummarySettings = components['schemas']['TodaySummarySettings'];
+export type TodaySummarySettingsReplace = components['schemas']['TodaySummarySettingsReplace'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -5278,6 +5539,74 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    getToday: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The summary as of `generatedAt`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Today"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getTodaySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodaySummarySettings"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceTodaySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TodaySummarySettingsReplace"];
+            };
+        };
+        responses: {
+            /** @description The saved setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodaySummarySettings"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -5341,3 +5670,7 @@ export const knownProfitGranularityValues: ReadonlyArray<FlattenedDeepRequired<c
 export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "edit_manually", "confirm_sale", "reconnect", "review_match", "resolve_double_sale"];
 export const userTaskStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskStatus"]> = ["open", "completed", "dismissed"];
 export const userTaskUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskUrgency"]> = ["normal", "urgent"];
+export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayCardKind"]> = ["delist", "ship", "reconnect", "review_drafts", "stale_listing"];
+export const knownTodayUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayUrgency"]> = ["urgent", "high", "normal"];
+export const knownTodayDestinationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayDestination"]> = ["item", "sale", "marketplaces", "drafts"];
+export const knownTodayStaleSuggestionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayStaleSuggestion"]> = ["price_drop", "relist"];

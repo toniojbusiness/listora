@@ -57,6 +57,8 @@ tags:
     description: Assisted-mode tasks the user completes in a marketplace app.
   - name: usage
     description: How much of the plan's quotas the account has used this period.
+  - name: today
+    description: The Today screen (what needs the seller, and the money summary) and its morning summary.
 
 paths:
   /health/live:
@@ -165,6 +167,10 @@ paths:
     $ref: './paths/tasks.yaml#/~1v1~1tasks~1{taskId}~1complete'
   /v1/tasks/{taskId}/dismiss:
     $ref: './paths/tasks.yaml#/~1v1~1tasks~1{taskId}~1dismiss'
+  /v1/today:
+    $ref: './paths/today.yaml#/~1v1~1today'
+  /v1/today/settings:
+    $ref: './paths/today.yaml#/~1v1~1today~1settings'
 
 components:
   securitySchemes:
@@ -653,3 +659,48 @@ components:
       $ref: './components/schemas/tasks.yaml#/SaleCorrection'
     UserTaskPage:
       $ref: './components/schemas/tasks.yaml#/UserTaskPage'
+    # ---------------------------------------------------------------- today
+    TodayCardKind:
+      $ref: './components/schemas/today.yaml#/TodayCardKind'
+    KnownTodayCardKind:
+      $ref: './components/schemas/today.yaml#/KnownTodayCardKind'
+    TodayUrgency:
+      $ref: './components/schemas/today.yaml#/TodayUrgency'
+    KnownTodayUrgency:
+      $ref: './components/schemas/today.yaml#/KnownTodayUrgency'
+    TodayDestination:
+      $ref: './components/schemas/today.yaml#/TodayDestination'
+    KnownTodayDestination:
+      $ref: './components/schemas/today.yaml#/KnownTodayDestination'
+    TodayAction:
+      $ref: './components/schemas/today.yaml#/TodayAction'
+    TodayItem:
+      $ref: './components/schemas/today.yaml#/TodayItem'
+    TodayShipment:
+      $ref: './components/schemas/today.yaml#/TodayShipment'
+    TodayLocation:
+      $ref: './components/schemas/today.yaml#/TodayLocation'
+    TodayDelist:
+      $ref: './components/schemas/today.yaml#/TodayDelist'
+    TodayConnection:
+      $ref: './components/schemas/today.yaml#/TodayConnection'
+    TodayStaleSuggestion:
+      $ref: './components/schemas/today.yaml#/TodayStaleSuggestion'
+    KnownTodayStaleSuggestion:
+      $ref: './components/schemas/today.yaml#/KnownTodayStaleSuggestion'
+    TodayStaleListing:
+      $ref: './components/schemas/today.yaml#/TodayStaleListing'
+    TodayDrafts:
+      $ref: './components/schemas/today.yaml#/TodayDrafts'
+    TodayCard:
+      $ref: './components/schemas/today.yaml#/TodayCard'
+    TodayMoneyPeriod:
+      $ref: './components/schemas/today.yaml#/TodayMoneyPeriod'
+    TodayMoney:
+      $ref: './components/schemas/today.yaml#/TodayMoney'
+    Today:
+      $ref: './components/schemas/today.yaml#/Today'
+    TodaySummarySettings:
+      $ref: './components/schemas/today.yaml#/TodaySummarySettings'
+    TodaySummarySettingsReplace:
+      $ref: './components/schemas/today.yaml#/TodaySummarySettingsReplace'

@@ -52,13 +52,17 @@ final class AccessibilityAuditUITests: XCTestCase {
         ]
         app.launch()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["today.signedOut"].waitForExistence(timeout: 5))
+        try audit("Today")
+
+        app.tabBars.buttons["Inventory"].tap()
         try audit("Inventory")
 
         app.tabBars.buttons["Sales"].tap()
         XCTAssertTrue(app.staticTexts["Sign in to see your sales"].waitForExistence(timeout: 5))
         try audit("Sales")
 
-        app.tabBars.buttons["Add Item"].tap()
+        app.tabBars.buttons["Add"].tap()
         XCTAssertTrue(app.buttons["addItem.importPhotos"].waitForExistence(timeout: 5))
         try audit("Add Item")
 
@@ -74,7 +78,8 @@ final class AccessibilityAuditUITests: XCTestCase {
         app.tabBars.buttons["Tasks"].tap()
         try audit("Tasks")
 
-        app.tabBars.buttons["Settings"].tap()
+        app.tabBars.buttons["Today"].tap()
+        app.buttons["settings.open"].tap()
         XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
         try audit("Settings")
     }

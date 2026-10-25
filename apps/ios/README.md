@@ -76,11 +76,14 @@ Packages/
                  APIFailure (the contract's error model), and the dev sign-in client
   Features/      One library per feature:
     AppFeature        Root tab shell and AppDependencies (composes the features)
+    TodayFeature      Today tab (the home): what needs the seller, the money summary, and the
+                      morning summary setting
     InventoryFeature  Inventory tab
     AddItemFeature    Add Item tab: guided capture, library import, drafts (GRDB), upload queue
     ReviewFeature     Analysis progress, confidence-first review, cost, price, and the saved item
     TasksFeature      Tasks tab
-    SettingsFeature   Settings tab, with the developer sign-in in Dev builds
+    SettingsFeature   Settings (opened from the gear in the Today and Sales headers), with the
+                      developer sign-in in Dev builds
     MarketplacesFeature  Marketplaces screen (from Settings): each marketplace's connection
                       health, connecting eBay through ASWebAuthenticationSession, Retry
                       check, and the connection banner Inventory shows

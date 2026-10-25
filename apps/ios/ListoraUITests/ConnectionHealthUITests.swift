@@ -19,7 +19,7 @@ final class ConnectionHealthUITests: XCTestCase {
         try await stack.setEbayConnection("reauth_required")
         launch(signedInTo: stack)
 
-        // Inventory shows the banner in the server's words, and Settings has a badge.
+        // Inventory shows the banner in the server's words.
         let banner = app.descendants(matching: .any)["connectionAttention.banner"]
         XCTAssertTrue(banner.waitForExistence(timeout: 15), "no connection banner")
         XCTAssertTrue(banner.label.contains("Reconnect eBay"), banner.label)
@@ -57,7 +57,9 @@ final class ConnectionHealthUITests: XCTestCase {
         keepScreenshot("Marketplaces, eBay connected")
 
         // Back on Inventory the banner is gone.
-        app.tabBars.buttons["Inventory"].tap()
+        app.navigationBars["Marketplaces"].buttons.element(boundBy: 0).tap()
+        app.buttons["settings.done"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Inventory"].isSelected)
         XCTAssertTrue(waitForAbsence(of: banner), "the banner stayed after eBay was fixed")
     }
 
@@ -69,7 +71,9 @@ final class ConnectionHealthUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["Inventory"].waitForExistence(timeout: 10))
+        let inventory = app.tabBars.buttons["Inventory"]
+        XCTAssertTrue(inventory.waitForExistence(timeout: 10))
+        inventory.tap()
     }
 
     /// Keeps a screenshot in the result bundle, passing or not, for reviewing the screens.

@@ -1,10 +1,11 @@
-/// The tabs of the root tab bar, in display order.
+/// The tabs of the root tab bar, in display order: five, so none goes to a More overflow, with Add
+/// in the center. Settings is not a tab; the gear in the Today and Sales headers opens it.
 public enum AppTab: String, CaseIterable, Identifiable, Sendable {
+    case today
     case inventory
-    case sales
     case addItem
     case tasks
-    case settings
+    case sales
 
     public var id: Self {
         self
@@ -12,21 +13,22 @@ public enum AppTab: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
+        case .today: "Today"
         case .inventory: "Inventory"
-        case .sales: "Sales"
-        case .addItem: "Add Item"
+        case .addItem: "Add"
         case .tasks: "Tasks"
-        case .settings: "Settings"
+        case .sales: "Sales"
         }
     }
 
+    /// Add's filled camera stands out among the outlined icons.
     public var systemImage: String {
         switch self {
+        case .today: "sun.max"
         case .inventory: "shippingbox"
-        case .sales: "dollarsign.circle"
-        case .addItem: "camera"
+        case .addItem: "camera.circle.fill"
         case .tasks: "checklist"
-        case .settings: "gearshape"
+        case .sales: "dollarsign.circle"
         }
     }
 }

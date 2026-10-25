@@ -10,6 +10,7 @@ import SettingsFeature
 import SwiftUI
 import TagReadingFeature
 import TasksFeature
+import TodayFeature
 
 /// Everything the app's features need, built once at launch.
 @MainActor
@@ -35,6 +36,8 @@ public struct AppDependencies {
     public let sales: SalesEnvironment
     /// The task inbox, its badge, and the urgent tasks' reminders.
     public let tasks: TasksEnvironment
+    /// The Today screen, whose cards open the item and marketplace screens.
+    public let today: TodayEnvironment
     /// Dev builds only: sign in against the local API's dev auth driver.
     public let devSignIn: DevSignInModel?
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
@@ -74,11 +77,12 @@ public struct AppDependencies {
         let review = ReviewEnvironment(apiClient: apiClient, meter: meter, listingCopy: listingCopy, defaults: defaults)
         sales = SalesEnvironment(apiClient: apiClient, accessTokens: accessTokens)
         tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens)
-        inventory = InventoryEnvironment(
+        let inventory = InventoryEnvironment(
             apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy,
             saleScreens: Self.saleScreens(sales),
             taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
         )
+        self.inventory = inventory
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,
@@ -88,7 +92,9 @@ public struct AppDependencies {
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
         let connections = APIConnectionsService(client: apiClient.client)
-        marketplaces = MarketplacesModel(service: connections, isSignedIn: { accessTokens.grant != nil })
+        let marketplaces = MarketplacesModel(service: connections, isSignedIn: { accessTokens.grant != nil })
+        self.marketplaces = marketplaces
+        today = Self.makeToday(apiClient, accessTokens, inventory, sales, marketplaces)
         devSignIn = configuration.environment == .dev
             ? DevSignInModel(client: DevSignInClient(baseURL: configuration.apiBaseURL), tokens: accessTokens)
             : nil
@@ -115,6 +121,23 @@ public struct AppDependencies {
         interactionStorage.reset()
         ReviewEnvironment.resetLocalData(defaults: defaults)
         accessGrantStorage.save(nil)
+    }
+
+    /// The Today screen, whose cards open the item, sale, and marketplace connection screens.
+    private static func makeToday(
+        _ apiClient: APIClient,
+        _ accessTokens: AccessTokenStore,
+        _ inventory: InventoryEnvironment,
+        _ sales: SalesEnvironment,
+        _ marketplaces: MarketplacesModel,
+    ) -> TodayEnvironment {
+        TodayEnvironment(
+            apiClient: apiClient,
+            accessTokens: accessTokens,
+            itemDestination: { itemID in AnyView(inventory.itemDetail(itemID: itemID)) },
+            saleDestination: { saleID in AnyView(sales.saleScreen(saleID: saleID)) },
+            marketplacesDestination: { AnyView(MarketplacesView(model: marketplaces)) },
+        )
     }
 
     /// The background URLSession that photo uploads use; the app scene handles its events.

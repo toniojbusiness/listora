@@ -21,7 +21,8 @@ public enum SettingsDestination: Hashable, Sendable {
     case marketplaces
 }
 
-/// Account, marketplace connections, and app information. Dev builds also have a developer
+/// Account, marketplace connections, and app information, opened over the app from the gear in
+/// the Today and Sales headers. Dev builds also have a developer
 /// sign-in; the real account section (T-28, T-31) comes later. The Marketplaces screen comes from
 /// the caller (AppFeature), since a feature never imports another; so does `path`, so the caller
 /// can open it.
@@ -32,18 +33,22 @@ public struct SettingsView<Marketplaces: View>: View {
     /// The server's words for a connection that needs attention, shown on the Marketplaces row.
     private let marketplacesAttention: String?
     @Binding private var path: [SettingsDestination]
+    /// Closes Settings, which opens over the app; nil shows no Done button.
+    private let onDone: (@MainActor () -> Void)?
 
     public init(
         content: SettingsContent,
         devSignIn: DevSignInModel? = nil,
         path: Binding<[SettingsDestination]>,
         marketplacesAttention: String? = nil,
+        onDone: (@MainActor () -> Void)? = nil,
         @ViewBuilder marketplaces: () -> Marketplaces,
     ) {
         self.content = content
         self.devSignIn = devSignIn
         _path = path
         self.marketplacesAttention = marketplacesAttention
+        self.onDone = onDone
         self.marketplaces = marketplaces()
     }
 
@@ -91,6 +96,14 @@ public struct SettingsView<Marketplaces: View>: View {
             .background(Palette.background)
             .foregroundStyle(Palette.textPrimary)
             .navigationTitle("Settings")
+            .toolbar {
+                if let onDone {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done", action: onDone)
+                            .accessibilityIdentifier("settings.done")
+                    }
+                }
+            }
             .navigationDestination(for: SettingsDestination.self) { destination in
                 switch destination {
                 case .marketplaces:
@@ -132,6 +145,7 @@ extension SettingsView where Marketplaces == EmptyView {
         self.devSignIn = devSignIn
         marketplaces = nil
         marketplacesAttention = nil
+        onDone = nil
         _path = .constant([])
     }
 }

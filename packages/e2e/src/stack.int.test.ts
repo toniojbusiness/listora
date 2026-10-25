@@ -99,6 +99,35 @@ describe('local e2e stack (real Postgres)', () => {
     expect(label).toBe('Connected');
     expect((await setEbay('broken')).status).toBe(422);
     expect((await setEbay('connected')).status).toBe(204);
+    // A sold item to ship is a Today card until the seller marks the sale shipped.
+    const sold = await fetch(`${stack.controlUrl}/today/sold-item`, { method: 'POST' });
+    expect(sold.status).toBe(201);
+    const soldItem = (await sold.json()) as { id: string; saleId: string; saleItemId: string };
+    const today = async () =>
+      (
+        (await (await fetch(`${stack.apiUrl}/v1/today`, { headers: auth })).json()) as {
+          cards: { id: string; shipment?: { location?: { code: string } } }[];
+        }
+      ).cards;
+    expect(await today()).toContainEqual(
+      expect.objectContaining({
+        id: `ship:${soldItem.saleItemId}`,
+        shipment: expect.objectContaining({
+          location: { code: 'B-12', label: 'Garage shelf 3' },
+        }) as unknown,
+      }),
+    );
+    const shipped = await fetch(`${stack.apiUrl}/v1/sales/${soldItem.saleId}/ship`, {
+      method: 'POST',
+      headers: {
+        ...auth,
+        'content-type': 'application/json',
+        'idempotency-key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({}),
+    });
+    expect(shipped.status).toBe(200);
+    expect((await today()).map((card) => card.id)).not.toContain(`ship:${soldItem.saleItemId}`);
 
     await stack.stop();
     await expect(fetch(`${stack.apiUrl}/health/live`)).rejects.toThrow();

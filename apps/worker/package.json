@@ -24,7 +24,8 @@
     "@listora/push": "*",
     "@listora/sales": "*",
     "@listora/shared": "*",
-    "@listora/storage": "*"
+    "@listora/storage": "*",
+    "@listora/today": "*"
   },
   "devDependencies": {
     "@listora/testing": "*",
