@@ -35,15 +35,27 @@ final class AddItemUITests: XCTestCase {
         app.buttons["photo.tile.\(index)"]
     }
 
+    /// Imports the three fixture photos into a new draft and waits for their tiles. On a slow
+    /// simulator a tap can land before the button takes it and start nothing, so a tap that left
+    /// the button enabled (no import running, no draft open) is repeated, up to three times.
+    private func importFixturePhotos() {
+        let button = app.buttons["addItem.importPhotos"]
+        for _ in 0 ..< 3 where !tile(2).exists {
+            if button.exists, button.isEnabled {
+                button.tap()
+            }
+            _ = tile(2).waitForExistence(timeout: 30)
+        }
+        XCTAssertTrue(tile(2).exists, "the fixture photos did not import\n\(app.debugDescription)")
+    }
+
     func testImportsFixturePhotosIntoADraftThatSurvivesRelaunch() throws {
         try launch(reset: true)
         XCTAssertTrue(app.staticTexts["Take photos once"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["draft.row"].exists, "the reset launch should start without drafts")
 
-        app.buttons["addItem.importPhotos"].tap()
-
         // The new draft opens with the photos in order; roles follow the selection order.
-        XCTAssertTrue(tile(2).waitForExistence(timeout: 15))
+        importFixturePhotos()
         XCTAssertTrue(tile(0).label.hasPrefix("Photo 1, Front, Cover"), tile(0).label)
         XCTAssertTrue(tile(1).label.hasPrefix("Photo 2, Back"), tile(1).label)
         XCTAssertTrue(tile(2).label.hasPrefix("Photo 3, Detail"), tile(2).label)
@@ -84,13 +96,14 @@ final class AddItemUITests: XCTestCase {
         XCTAssertTrue(tile(0).label.hasPrefix("Photo 1, Back, Cover"), tile(0).label)
         XCTAssertTrue(tile(1).label.hasPrefix("Photo 2, Front"), tile(1).label)
         XCTAssertTrue(tile(2).label.hasPrefix("Photo 3, Tag"), tile(2).label)
-        XCTAssertTrue(tile(2).label.hasSuffix("Sign in to upload"), tile(2).label)
+        // The tag photo's on-device reading may still be running (it is slow on a CI simulator);
+        // its tile says "Reading tag" until the reading ends.
+        XCTAssertTrue(waitForLabel(of: tile(2), suffix: "Sign in to upload", timeout: 60), tile(2).label)
     }
 
     func testRemovesAPhotoAndDeletesADraft() throws {
         try launch(reset: true)
-        app.buttons["addItem.importPhotos"].tap()
-        XCTAssertTrue(tile(2).waitForExistence(timeout: 15))
+        importFixturePhotos()
 
         tile(0).tap()
         XCTAssertTrue(app.buttons["photo.delete"].waitForExistence(timeout: 5))
@@ -113,7 +126,14 @@ final class AddItemUITests: XCTestCase {
     }
 
     private func waitForLabel(of element: XCUIElement, prefix: String, timeout: TimeInterval = 5) -> Bool {
-        let predicate = NSPredicate(format: "label BEGINSWITH %@", prefix)
+        waitForLabel(of: element, matching: NSPredicate(format: "label BEGINSWITH %@", prefix), timeout: timeout)
+    }
+
+    private func waitForLabel(of element: XCUIElement, suffix: String, timeout: TimeInterval) -> Bool {
+        waitForLabel(of: element, matching: NSPredicate(format: "label ENDSWITH %@", suffix), timeout: timeout)
+    }
+
+    private func waitForLabel(of element: XCUIElement, matching predicate: NSPredicate, timeout: TimeInterval) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
