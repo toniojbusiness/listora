@@ -17,6 +17,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ConnectionsDependencies } from './connections/routes.ts';
 import type { RouteDependencies } from './contract/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
+import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
 /** Everything a feature's routes may use, built once by `buildApp`. */
 export interface ApiRouteContext extends RouteDependencies {
@@ -32,6 +33,8 @@ export interface ApiRouteContext extends RouteDependencies {
   analysisJobs: AnalysisJobQueue;
   /** Marketplace adapters, OAuth clients, and the token sealer of connections. */
   connections: ConnectionsDependencies;
+  /** eBay's notification endpoint settings; the endpoint is not served without them. */
+  ebayWebhook?: EbayWebhookDependencies;
   /** The clock upload sessions expire by. */
   now: () => Date;
 }

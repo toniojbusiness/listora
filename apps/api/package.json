@@ -19,6 +19,7 @@
     "@listora/marketplaces": "*",
     "@listora/photos": "*",
     "@listora/pricing": "*",
+    "@listora/sales": "*",
     "@listora/shared": "*",
     "@listora/storage": "*",
     "ajv": "^8.20.0",

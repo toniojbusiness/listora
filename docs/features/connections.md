@@ -43,15 +43,17 @@ official OAuth 2.0 authorization code grant; Listora never sees a marketplace pa
   about 18 months), and a reconnect action whenever only the seller can fix it.
 - **Revocation.** `recordAuthorizationRevocation` (eBay `AUTHORIZATION_REVOCATION`, parsed by
   `parseAuthorizationRevocation`) flips every connection of that seller to `revoked` at once and
-  deletes the tokens; a notice older than the current grant changes nothing. The notifications
-  task (T-17) verifies and delivers the notices. Account deletion revokes grants through the
+  deletes the tokens; a notice older than the current grant changes nothing. eBay's notice
+  arrives at `/webhooks/ebay`, which verifies it and records it at once
+  ([ebay-notifications.md](ebay-notifications.md)). Account deletion revokes grants through the
   marketplace's revocation endpoint (`OAuthGrantRevoker`).
 
 ## Data
 
 - `marketplace_connection` (mode, the seller's immutable id, encrypted tokens, expiries, scopes,
   status, when the grant was issued, `last_ok_at`, and the latest problem's code, message, and
-  time; a revoked connection holds no tokens; at most one per account and marketplace, which
+  time; `orders_polled_through`, the eBay order poll's mark
+  ([ebay-notifications.md](ebay-notifications.md)); a revoked connection holds no tokens; at most one per account and marketplace, which
   connecting keeps under the account's row lock) and `connection_authorization` (one connect
   attempt: the state's SHA-256, its expiry, and the result). The marketplace tables they serve
   are in [marketplaces.md](marketplaces.md#data).

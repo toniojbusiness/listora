@@ -18,6 +18,7 @@
     "@listora/observability": "*",
     "@listora/operations": "*",
     "@listora/photos": "*",
+    "@listora/sales": "*",
     "@listora/shared": "*",
     "@listora/storage": "*"
   },
