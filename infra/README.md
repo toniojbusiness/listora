@@ -223,15 +223,19 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
 4. **Synthesizes offline** with the real settings into `infra/cdk.out/deploy-personal` and
    deploys exactly that assembly. It checks the templates first: the database has deletion
    protection, the API's `AUTH_DRIVER` is `dev` or `cognito`, and `AI_PROVIDER` is not `fake`.
-5. **Makes sure the CDK bootstrap is the restricted one** ([Trust boundary](#trust-boundary)).
-   It first checks `CDKToolkit`: a bootstrap with any other execution policy (the default
-   `AdministratorAccess` included) stops the script before it changes anything, since
-   re-bootstrapping changes every CDK app in the account. Then it creates the managed policy
-   `listora-personal-cdk-execution` from `src/deploy/execution-policy.ts` (or makes the
-   committed document its default version), and bootstraps an account that has none with:
+5. **Makes sure Listora's own CDK bootstrap is the restricted one**
+   ([Trust boundary](#trust-boundary)). Listora bootstraps separately from any other CDK app
+   in the account: qualifier `listora` and toolkit stack `CDKToolkit-listora`
+   (`src/bootstrap.ts`; `cdk.json` makes every `cdk` command use them), so the account's
+   default `CDKToolkit` and the apps deploying through it are never touched. The script first
+   checks `CDKToolkit-listora`: one with any other execution policy stops it before it changes
+   anything. Then it creates the managed policy `listora-personal-cdk-execution` from
+   `src/deploy/execution-policy.ts` (or makes the committed document its default version), and
+   bootstraps when `CDKToolkit-listora` does not exist yet with:
 
    ```sh
    npx cdk bootstrap aws://976033325938/us-east-1 --profile prequal-main \
+     --qualifier listora --toolkit-stack-name CDKToolkit-listora \
      --cloudformation-execution-policies arn:aws:iam::976033325938:policy/listora-personal-cdk-execution \
      --termination-protection
    ```
@@ -295,8 +299,9 @@ first. Before the data stack:
   secrets, and the KMS token key (schedule its deletion; every stored marketplace token becomes
   unreadable).
 
-The bootstrap (`CDKToolkit`, termination-protected) and the `listora-personal-cdk-execution`
-policy can stay; remove them last if the account will run no CDK app.
+Listora's bootstrap (`CDKToolkit-listora`, termination-protected) and the
+`listora-personal-cdk-execution` policy go last. Leave the account's default `CDKToolkit` alone:
+other apps deploy through it.
 
 ## First deploy of an environment
 
@@ -319,8 +324,10 @@ account. The examples use staging.
    `listora-<env>-cdk-execution` from `node src/deploy/execution-policy.ts <env> <account>`
    (`aws iam create-policy --policy-name listora-<env>-cdk-execution --policy-document
 file://policy.json`), then from `infra/`:
-   `npx cdk bootstrap aws://<account>/us-east-1 --cloudformation-execution-policies
-arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protection`. The
+   `npx cdk bootstrap aws://<account>/us-east-1 --qualifier listora --toolkit-stack-name
+CDKToolkit-listora --cloudformation-execution-policies
+arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protection`
+   (Listora's own bootstrap, beside any other app's; `src/bootstrap.ts`). The
    bootstrap's CloudFormation execution policy is the ceiling on what any deploy can change;
    see [Trust boundary](#trust-boundary). It allows no OIDC provider, so `deploy-access`
    (step 3) cannot deploy through this bootstrap, by design: the administrator deploys its
@@ -384,7 +391,9 @@ users, groups, OIDC providers, Organizations, or account settings, so a deploy c
 rewrite the deploy role's own permissions. Every environment bootstraps with it (step 2).
 
 **Follow-up (T-33, security hardening):** a permissions boundary on every role the stacks
-create, since a stack's own role can still be given any inline permission.
+create, since a stack's own role can still be given any inline permission, and scoping the
+service grants to Listora's tagged resources: they are service-wide, and the personal account
+also holds another app's stacks.
 
 ## Conventions
 

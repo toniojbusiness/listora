@@ -2,17 +2,43 @@ import DesignSystem
 import SwiftUI
 
 /// One detail in the review: its value, where it came from, and, when it needs a look, why. Tap
-/// to edit it in place; choices open a menu of the canonical values.
+/// to edit it in place; choices open a menu of the canonical values. Touch and hold for common
+/// values (``QuickValues``), and swipe left to move on to the next detail that needs a look.
 struct FieldRow: View {
     let field: ReviewField
     /// The text typed so far, while this row's editor is open.
     let draftText: Binding<String>?
+    /// "Next to check" moved here: the row is outlined until the seller moves on.
+    var isFocused = false
     let onEdit: () -> Void
     let onSelect: (FieldValue) -> Void
     let onCommit: () -> Void
+    var onQuickPick: (QuickValues.Option) -> Void = { _ in }
+    var onNext: () -> Void = {}
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        row
+            .overlay {
+                if isFocused {
+                    RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
+                        .strokeBorder(Palette.brand, lineWidth: 2)
+                        .allowsHitTesting(false)
+                }
+            }
+            // Swiping left, mostly sideways, moves on; vertical drags stay the scroll view's.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 24).onEnded { drag in
+                    if drag.translation.width < -60, abs(drag.translation.height) < abs(drag.translation.width) / 2 {
+                        onNext()
+                    }
+                },
+            )
+            .accessibilityAction(named: "Next to check", onNext)
+    }
+
+    @ViewBuilder
+    private var row: some View {
         // The row's identifier goes on the row only: on a container it would also replace the
         // editor's own.
         if field.key.kind == .choice {
@@ -20,10 +46,33 @@ struct FieldRow: View {
                 .accessibilityIdentifier("review.field.\(field.key.rawValue)")
         } else if let draftText {
             FieldEditor(field: field, text: draftText, onCommit: onCommit)
+        } else if case let options = QuickValues.options(for: field), !options.isEmpty {
+            Button(action: onEdit) { summary }
+                .buttonStyle(.plain)
+                .contextMenu { quickValues(options) }
+                .accessibilityIdentifier("review.field.\(field.key.rawValue)")
         } else {
             Button(action: onEdit) { summary }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("review.field.\(field.key.rawValue)")
+        }
+    }
+
+    /// The touch-and-hold menu: the detail's common values, the current ones checked.
+    private func quickValues(_ options: [QuickValues.Option]) -> some View {
+        Section("Common values") {
+            ForEach(options) { option in
+                Button {
+                    onQuickPick(option)
+                } label: {
+                    if option.isCurrent {
+                        Label(option.title, systemImage: "checkmark")
+                    } else {
+                        Text(option.title)
+                    }
+                }
+                .accessibilityIdentifier("review.quick.\(option.title)")
+            }
         }
     }
 

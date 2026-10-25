@@ -207,22 +207,27 @@ node infra/src/deploy/execution-policy.ts "$ENVIRONMENT" "$EXPECTED_ACCOUNT" >"$
 info "restricted CDK execution policy $policy_name: $(jq '.Statement | length' "$workdir/policy.json") statements, $(jq -c '[.Statement[0].Action[] | sub(":\\*$"; "")]' "$workdir/policy.json")"
 
 # --- 5. Restricted CDK bootstrap -------------------------------------------------------------
-step "Make sure the CDK bootstrap uses the restricted execution policy"
-bootstrap=(cdk_ bootstrap "aws://$EXPECTED_ACCOUNT/$region" --app "$ASSEMBLY"
-  --cloudformation-execution-policies "$policy_arn" --termination-protection)
+# Listora's own bootstrap (infra/src/bootstrap.ts; infra/cdk.json makes every cdk command use
+# it), so the account's default CDKToolkit and the apps that use it are never touched.
+readonly qualifier=listora
+readonly toolkit=CDKToolkit-listora
+step "Make sure Listora's CDK bootstrap ($toolkit) uses the restricted execution policy"
+bootstrap_flags="--qualifier $qualifier --toolkit-stack-name $toolkit --cloudformation-execution-policies $policy_arn --termination-protection"
+# shellcheck disable=SC2206 # the flags above have no spaces inside a value
+bootstrap=(cdk_ bootstrap "aws://$EXPECTED_ACCOUNT/$region" --app "$ASSEMBLY" $bootstrap_flags)
 if [[ "$dry_run" == true ]]; then
   would "aws iam create-policy --policy-name $policy_name --policy-document file://<the policy above>  (or a new default version when it differs)"
-  would "npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile <profile> --cloudformation-execution-policies $policy_arn --termination-protection  (only when the account has no bootstrap; refuse one with another policy)"
+  would "npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile <profile> $bootstrap_flags  (only when $toolkit does not exist; refuse one with another policy)"
 else
   # First, before changing anything: an existing bootstrap must be this restricted one.
   bootstrapped=false
-  if toolkit=$(aws_ cloudformation describe-stacks --stack-name CDKToolkit --output json 2>"$workdir/err"); then
-    policies=$(jq -r '.Stacks[0].Parameters[]? | select(.ParameterKey == "CloudFormationExecutionPolicies") | .ParameterValue' <<<"$toolkit")
+  if toolkit_stack=$(aws_ cloudformation describe-stacks --stack-name "$toolkit" --output json 2>"$workdir/err"); then
+    policies=$(jq -r '.Stacks[0].Parameters[]? | select(.ParameterKey == "CloudFormationExecutionPolicies") | .ParameterValue' <<<"$toolkit_stack")
     [[ "$policies" == "$policy_arn" ]] ||
-      fail "the account's CDK bootstrap runs CloudFormation with '${policies:-AdministratorAccess (the default)}', not $policy_arn; re-bootstrap on purpose (it changes every CDK app in the account): npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile $profile --cloudformation-execution-policies $policy_arn --termination-protection"
+      fail "$toolkit runs CloudFormation with '${policies:-AdministratorAccess (the default)}', not $policy_arn; re-bootstrap it on purpose: npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile $profile $bootstrap_flags"
     bootstrapped=true
   else
-    grep -q 'does not exist' "$workdir/err" || fail "cannot describe CDKToolkit: $(cat "$workdir/err")"
+    grep -q 'does not exist' "$workdir/err" || fail "cannot describe $toolkit: $(cat "$workdir/err")"
   fi
   if aws_ iam get-policy --policy-arn "$policy_arn" --output json >"$workdir/existing-policy.json" 2>"$workdir/err"; then
     version=$(jq -r '.Policy.DefaultVersionId' "$workdir/existing-policy.json")
@@ -247,7 +252,7 @@ else
   fi
 
   if [[ "$bootstrapped" == true ]]; then
-    info "CDKToolkit uses $policy_arn"
+    info "$toolkit uses $policy_arn"
   else
     "${bootstrap[@]}" || fail "cdk bootstrap failed"
     info "bootstrapped with $policy_arn"

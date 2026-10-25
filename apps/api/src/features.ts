@@ -28,7 +28,10 @@ export interface ApiRouteContext extends RouteDependencies {
   uploads: PhotoUploads;
   /** Where `addItemPhoto` adds each new photo's processing job. */
   photoJobs: PhotoJobQueue;
-  /** The AI client whose guards analysis requests are checked against (it is never called). */
+  /**
+   * The AI client: analysis requests are checked against its guards (the worker makes those
+   * calls), and voice corrections call it.
+   */
   ai: AiClient;
   /** Where starting or escalating an analysis adds its job. */
   analysisJobs: AnalysisJobQueue;
