@@ -47,6 +47,15 @@ describe('local e2e stack (real Postgres)', () => {
       status: 'ready',
       photos: [{ status: 'ready' }, { status: 'ready' }],
     });
+    // ...and an item already live on eBay, confirmed by the fake.
+    const listed = await fetch(`${stack.controlUrl}/items/listed`, { method: 'POST' });
+    expect(listed.status).toBe(201);
+    const { listingId } = (await listed.json()) as { listingId: string };
+    const listing = await fetch(`${stack.apiUrl}/v1/listings/${listingId}`, { headers: auth });
+    expect(await listing.json()).toMatchObject({
+      status: 'active',
+      statusDisplay: { label: 'Active (confirmed by eBay)' },
+    });
     const fault = await fetch(`${stack.controlUrl}/ebay/faults`, {
       method: 'POST',
       body: JSON.stringify({ action: 'end', fault: { type: 'reject' } }),

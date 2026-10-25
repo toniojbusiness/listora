@@ -165,6 +165,48 @@ export async function createReadyItem(
   return { id: item.id, sku: item.sku };
 }
 
+export interface SeededListedItem extends SeededItem {
+  /** The item's eBay listing, confirmed active by the fake eBay. */
+  listingId: string;
+}
+
+/**
+ * A ready item (`createReadyItem`) published on eBay through the API and the worker, as the
+ * listing flow publishes it; waits until the fake eBay confirmed it active.
+ */
+export async function createListedItem(
+  api: StackApi,
+  details: Record<string, unknown> = {},
+  timeoutMs = 30_000,
+): Promise<SeededListedItem> {
+  const item = await createReadyItem(api, details, timeoutMs);
+  const merged = { ...READY_ITEM_DETAILS, ...details };
+  const listing = await call<{ id: string }>(api, 'POST', `/v1/items/${item.id}/listings`, {
+    marketplace: 'ebay',
+    variant: {
+      title: merged.title,
+      description: merged.description,
+      price: merged.listPrice,
+    },
+  });
+  await call(api, 'POST', `/v1/listings/${listing.id}/publish`);
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const current = await call<{ latestOperation?: { status: string } }>(
+      api,
+      'GET',
+      `/v1/listings/${listing.id}`,
+    );
+    const status = current.latestOperation?.status;
+    if (status === 'succeeded') return { ...item, listingId: listing.id };
+    if (status === 'failed' || status === 'needs_user_action') {
+      throw new Error(`publishing the seeded item ended ${status}`);
+    }
+    if (Date.now() > deadline) throw new Error('the seeded item was not published in time');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
 /** An 800 x 600 JPEG of one color. */
 async function jpeg(red: number): Promise<Uint8Array> {
   return new Uint8Array(

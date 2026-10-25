@@ -36,6 +36,7 @@ describe('loadEbayConfig', () => {
       trading: 'http://127.0.0.1:4555/ws/api.dll',
       api: 'http://127.0.0.1:4555',
       media: 'http://127.0.0.1:4555',
+      finances: 'http://127.0.0.1:4555',
       oauthToken: 'http://127.0.0.1:4555/identity/v1/oauth2/token',
       authorize: 'http://127.0.0.1:4555/oauth2/authorize',
       oauthRevoke: 'http://127.0.0.1:4555/identity/v1/oauth2/token/revoke',

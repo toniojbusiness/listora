@@ -295,6 +295,46 @@ export async function cancelMootOperations(
   });
 }
 
+/**
+ * After the sale behind a delist run is canceled or returned, the seller may keep the item
+ * listed, so the run's delists that can still be stopped without losing track of the
+ * marketplace are canceled: those waiting to run or retry that were never sent through the
+ * API, and assisted ones waiting for the user (their tasks are dismissed). A delist that may
+ * have reached the marketplace finishes, and its read-back records what is true. Each canceled
+ * operation records `reason` in its history. Returns the canceled operations' ids, oldest first.
+ */
+export async function cancelUnsentDelists(
+  executor: DbExecutor,
+  target: { accountId: string; delistRunId: string; reason: string; detail?: JsonObject },
+): Promise<string[]> {
+  return inTransaction(executor, async (trx) => {
+    const waiting = await trx
+      .selectFrom('marketplace_operation')
+      .selectAll()
+      .where('account_id', '=', target.accountId)
+      .where('delist_run_id', '=', target.delistRunId)
+      .where('status', 'in', ['queued', 'retrying', 'needs_user_action'])
+      .orderBy('created_at')
+      .orderBy('id')
+      .forUpdate()
+      .execute();
+    const canceled: string[] = [];
+    for (const op of waiting) {
+      if (op.status !== 'needs_user_action' && (await wasSentThroughApi(trx, op))) continue;
+      await transitionOperation(
+        trx,
+        op,
+        { to: 'canceled' },
+        { ...target.detail, action: 'cancel', reason: target.reason },
+      );
+      await removeOperationJob(trx, op.id);
+      await dismissOpenTasks(trx, op);
+      canceled.push(op.id);
+    }
+    return canceled;
+  });
+}
+
 /** Dismisses an operation's open user tasks, which no longer finish it. */
 export async function dismissOpenTasks(
   trx: DbTransaction,

@@ -1490,6 +1490,159 @@ paths:
           $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/sales/{saleId}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    post:
+      tags:
+        - sales
+      operationId: confirmSale
+      summary: Confirm a sale
+      description: |
+        The seller confirms a `detected` sale. `409 invalid_state_transition` for any other
+        status; `availableActions` lists what a sale allows.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The sale, now `confirmed`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/sales/{saleId}/ship:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    post:
+      tags:
+        - sales
+      operationId: markSaleShipped
+      summary: Mark a sale shipped
+      description: |
+        A `detected` or `confirmed` sale is `shipped`, and its items too. `shippingCost`
+        records what the label cost outside the payout, for the profit; send `{}` without one.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleShipment'
+      responses:
+        '200':
+          description: The sale, now `shipped`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/sales/{saleId}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    post:
+      tags:
+        - sales
+      operationId: cancelSale
+      summary: Record that a sale was canceled
+      description: |
+        For a `detected` or `confirmed` sale whose order was canceled. Delists of the sale that
+        reached no marketplace yet are stopped; the rest finish and show what is true. Each
+        item with no other sale that stands goes back to inventory, and Listora asks whether
+        to relist it (`items[].relist`, decided with `decideSaleRelist`). Nothing is relisted
+        until the seller chooses.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The sale, now `canceled`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/sales/{saleId}/return:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    post:
+      tags:
+        - sales
+      operationId: recordSaleReturn
+      summary: Record that a sale was returned
+      description: |
+        For a `confirmed` or `shipped` sale the buyer returned. As with `cancelSale`, the
+        items go back to inventory and Listora asks whether to relist them.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The sale, now `returned`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/sales/{saleId}/relist:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    post:
+      tags:
+        - sales
+      operationId: decideSaleRelist
+      summary: Answer "Relist it?" after a cancel or return
+      description: |
+        For each item whose `relist.decision` is `pending`: relist it on the chosen listings
+        (each one a `relist` operation on the engine, shown on the item's listings until the
+        marketplace confirms it or the user does an assisted step), or, with no listings, don't
+        relist it. `409 invalid_state_transition` when an item's decision is not pending;
+        `422 validation_failed` when a listing is not one of the item's options that can be
+        relisted now.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleRelistChoice'
+      responses:
+        '200':
+          description: The sale with the decisions recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sale'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/tasks:
     get:
       tags:
@@ -2321,6 +2474,8 @@ components:
         doubleSale:
           $ref: '#/components/schemas/DoubleSale'
           description: The item's newest double sale that is still open; absent when there is none.
+        relistPrompt:
+          $ref: '#/components/schemas/ItemRelistPrompt'
         createdAt:
           $ref: '#/components/schemas/Timestamp'
         updatedAt:
@@ -2343,6 +2498,23 @@ components:
           type: string
           maxLength: 120
           description: For example "Garage shelf 3, bin 12".
+    ItemRelistPrompt:
+      type: object
+      description: |
+        The item's sale was canceled or returned and the seller has not decided whether to
+        relist it. The app asks, with the options in the sale's `items[].relist`.
+      required:
+        - saleId
+        - saleStatus
+        - soldOn
+      properties:
+        saleId:
+          $ref: '#/components/schemas/Id'
+        saleStatus:
+          $ref: '#/components/schemas/SaleStatus'
+          description: '`canceled` or `returned`.'
+        soldOn:
+          $ref: '#/components/schemas/Marketplace'
     ItemSaleSummary:
       type: object
       description: |
@@ -2357,6 +2529,13 @@ components:
       properties:
         saleId:
           $ref: '#/components/schemas/Id'
+        soldOn:
+          $ref: '#/components/schemas/Marketplace'
+        saleStatus:
+          $ref: '#/components/schemas/SaleStatus'
+        feesEstimated:
+          type: boolean
+          description: True while any of the sale's fees is an estimate; `netProceeds` and `profit` are estimates then.
         soldAt:
           $ref: '#/components/schemas/Timestamp'
         salePrice:
@@ -4128,9 +4307,14 @@ components:
           maxLength: 64
     KnownSaleStatus:
       type: string
+      description: |
+        `detected`: Listora recorded the sale (from the marketplace, or "Mark sold").
+        `confirmed`: the seller confirmed it. `shipped`: the seller shipped it. `canceled` and
+        `returned`: the sale no longer stands; Listora asks whether to relist (`SaleItem.relist`).
       enum:
         - detected
         - confirmed
+        - shipped
         - canceled
         - returned
     SaleDetectionSource:
@@ -4329,7 +4513,49 @@ components:
           $ref: '#/components/schemas/Timestamp'
     SaleItem:
       type: object
-      description: One item of an order.
+      description: |
+        One item of an order. For a bundle, the order's shipping, order-level fees, and
+        shipping cost are split across its items in proportion to each item's `salePrice`.
+      required:
+        - itemId
+        - sku
+        - salePrice
+      properties:
+        itemId:
+          $ref: '#/components/schemas/Id'
+        sku:
+          type: string
+          maxLength: 32
+        title:
+          type: string
+          maxLength: 200
+        listingId:
+          $ref: '#/components/schemas/Id'
+          description: The listing the item sold through, when known. Absent for a sale recorded without one.
+        salePrice:
+          $ref: '#/components/schemas/Money'
+          description: This item's part of the order's sale price (for a bundle, its share of the bundle price).
+        cost:
+          $ref: '#/components/schemas/Money'
+          description: What the item cost the seller. Absent when they never entered it.
+        fees:
+          $ref: '#/components/schemas/Money'
+          description: This item's share of the sale's fees. Absent until the sale has fee lines.
+        netProceeds:
+          $ref: '#/components/schemas/Money'
+          description: This item's share of the payout.
+        profit:
+          $ref: '#/components/schemas/Money'
+          description: This item's share of the payout minus its share of `shippingCost` minus its `cost`.
+        roiBasisPoints:
+          type: integer
+          format: int64
+          description: '`profit` over `cost` in basis points (12550 is 125.5%). Absent without a profit or for a zero cost.'
+        relist:
+          $ref: '#/components/schemas/SaleRelist'
+    SaleCreateItem:
+      type: object
+      description: One item of a sale recorded by hand.
       required:
         - itemId
         - salePrice
@@ -4338,10 +4564,122 @@ components:
           $ref: '#/components/schemas/Id'
         listingId:
           $ref: '#/components/schemas/Id'
-          description: The listing the item sold through, when known. Absent for a sale recorded without one.
+          description: The item's listing on the sale's marketplace; defaults to its newest one there.
         salePrice:
           $ref: '#/components/schemas/Money'
-          description: This item's part of the order's sale price (for a bundle, its share of the bundle price).
+          description: What this item sold for, before shipping.
+    SaleAction:
+      description: |
+        A `KnownSaleAction`, or an action added after this client was built. Clients hide
+        actions they do not know.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSaleAction'
+        - type: string
+          maxLength: 64
+    KnownSaleAction:
+      type: string
+      description: |
+        `confirm` (`confirmSale`), `mark_shipped` (`markSaleShipped`), `cancel` (`cancelSale`),
+        `record_return` (`recordSaleReturn`).
+      enum:
+        - confirm
+        - mark_shipped
+        - cancel
+        - record_return
+    RelistDecision:
+      description: |
+        A `KnownRelistDecision`, or a decision added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownRelistDecision'
+        - type: string
+          maxLength: 64
+    KnownRelistDecision:
+      type: string
+      description: |
+        `pending`: the sale was canceled or returned and the seller has not decided yet whether
+        to relist the item. `relisted`: the seller chose marketplaces to relist on (each relist
+        is an operation; see the item's listings). `declined`: the seller chose not to relist.
+      enum:
+        - pending
+        - relisted
+        - declined
+    RelistOption:
+      type: object
+      description: One of the item's listings, and whether Listora can relist it now.
+      required:
+        - listingId
+        - marketplace
+        - mode
+        - statusDisplay
+        - canRelist
+      properties:
+        listingId:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        mode:
+          $ref: '#/components/schemas/IntegrationMode'
+          description: '`api`: Listora relists it. `assisted`: the user relists it in the marketplace''s app.'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+          description: The listing's status now, for example `Delisted (confirmed by eBay)` or `Active (confirmed by Depop)`.
+        canRelist:
+          type: boolean
+          description: |
+            False while the listing is still live or a change on it is still running; the
+            seller can relist it from the item later.
+    SaleRelist:
+      type: object
+      description: |
+        Present once the sale was canceled or returned and the item has no other sale that
+        stands. Listora never relists by itself: it asks, and relists only where the user
+        chooses (`decideSaleRelist`).
+      required:
+        - decision
+        - options
+      properties:
+        decision:
+          $ref: '#/components/schemas/RelistDecision'
+        options:
+          type: array
+          description: The item's newest listing on each marketplace.
+          items:
+            $ref: '#/components/schemas/RelistOption'
+        decidedAt:
+          $ref: '#/components/schemas/Timestamp'
+    SaleShipment:
+      type: object
+      properties:
+        shippingCost:
+          $ref: '#/components/schemas/Money'
+          description: What the seller paid for the label outside the payout, when known.
+    SaleRelistChoice:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          description: One entry per item to decide for.
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/SaleRelistItemChoice'
+    SaleRelistItemChoice:
+      type: object
+      description: One item's answer; an empty `listingIds` means "don't relist".
+      required:
+        - itemId
+        - listingIds
+      properties:
+        itemId:
+          $ref: '#/components/schemas/Id'
+        listingIds:
+          type: array
+          description: The listings to relist, from the item's `relist.options` with `canRelist`.
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/Id'
     KnownFeeType:
       type: string
       enum:
@@ -4380,6 +4718,14 @@ components:
           description: A positive amount the seller pays.
         source:
           $ref: '#/components/schemas/FeeSource'
+        description:
+          type: string
+          maxLength: 200
+          description: What the marketplace or Listora's fee table calls it, for example "Final value fee".
+        feeTableVersion:
+          type: string
+          maxLength: 100
+          description: For an estimated fee, the fee table it was computed with (for example `ebay-us-2026-10-24`).
     SaleCreate:
       type: object
       required:
@@ -4394,7 +4740,7 @@ components:
           minItems: 1
           maxItems: 100
           items:
-            $ref: '#/components/schemas/SaleItem'
+            $ref: '#/components/schemas/SaleCreateItem'
         shippingCharged:
           $ref: '#/components/schemas/Money'
         soldAt:
@@ -4416,6 +4762,7 @@ components:
         - salePrice
         - detectionSource
         - status
+        - availableActions
         - isDoubleSale
         - delistRuns
         - doubleSales
@@ -4444,9 +4791,15 @@ components:
           description: What the buyer paid for shipping.
         fees:
           type: array
-          description: Every fee deducted from the payout. Absent until known.
+          description: |
+            Every fee deducted from the payout. Estimated from Listora's fee table when the sale
+            is recorded, and replaced by the marketplace's actual fees once it reports them.
+            Absent for a sale without fee lines.
           items:
             $ref: '#/components/schemas/FeeLine'
+        feesEstimated:
+          type: boolean
+          description: True while any fee is an estimate; `netProceeds` and `profit` are estimates then too.
         shippingCost:
           $ref: '#/components/schemas/Money'
           description: |
@@ -4460,11 +4813,31 @@ components:
           description: |
             `netProceeds` minus `shippingCost` minus the items' `cost`. Absent until
             `netProceeds` is known and every item has a cost.
+        cost:
+          $ref: '#/components/schemas/Money'
+          description: The items' total cost. Absent when an item has none.
+        roiBasisPoints:
+          type: integer
+          format: int64
+          description: '`profit` over `cost` in basis points. Absent without a profit or for a zero cost.'
         detectionSource:
           $ref: '#/components/schemas/SaleDetectionSource'
         status:
           $ref: '#/components/schemas/SaleStatus'
         shipBy:
+          $ref: '#/components/schemas/Timestamp'
+        availableActions:
+          type: array
+          description: What the seller can do with the sale now, in display order.
+          items:
+            $ref: '#/components/schemas/SaleAction'
+        confirmedAt:
+          $ref: '#/components/schemas/Timestamp'
+        shippedAt:
+          $ref: '#/components/schemas/Timestamp'
+        canceledAt:
+          $ref: '#/components/schemas/Timestamp'
+        returnedAt:
           $ref: '#/components/schemas/Timestamp'
         isDoubleSale:
           type: boolean

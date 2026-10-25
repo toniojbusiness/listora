@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .library(name: "AppFeature", targets: ["AppFeature"]),
         .library(name: "InventoryFeature", targets: ["InventoryFeature"]),
+        .library(name: "SalesFeature", targets: ["SalesFeature"]),
         .library(name: "AddItemFeature", targets: ["AddItemFeature"]),
         .library(name: "ReviewFeature", targets: ["ReviewFeature"]),
         .library(name: "TasksFeature", targets: ["TasksFeature"]),
@@ -34,6 +35,7 @@ let package = Package(
                 "DesignSystem",
                 "APIClient",
                 "InventoryFeature",
+                "SalesFeature",
                 "AddItemFeature",
                 "ReviewFeature",
                 "TasksFeature",
@@ -44,6 +46,10 @@ let package = Package(
         ),
         .target(
             name: "InventoryFeature",
+            dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
+        .target(
+            name: "SalesFeature",
             dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .target(
@@ -87,6 +93,10 @@ let package = Package(
         .testTarget(
             name: "InventoryFeatureTests",
             dependencies: ["InventoryFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
+        .testTarget(
+            name: "SalesFeatureTests",
+            dependencies: ["SalesFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .testTarget(
             name: "AddItemFeatureTests",

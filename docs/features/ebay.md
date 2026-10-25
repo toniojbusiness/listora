@@ -57,12 +57,16 @@ eBay Picture Services by the Media API. Its rules:
   check, preparing). Token refreshes are single-flight, and the shared refresh runs under the OAuth
   client's own timeout, so one caller's deadline never fails the others. The health check is one
   Fulfillment `getOrders` call.
+- **Order fees** (`finances.ts`, `readOrderFees`): an order's actual fees from the Finances API
+  (`apiz.ebay.com`, `getTransactions` filtered by order id), which needs the `sell.finances`
+  scope. A connection granted before Listora asked for it gets 403, and its sales keep the fee
+  table's estimate until the seller connects again ([sales.md](sales.md#fee-lines)).
 
 ## The fake eBay
 
 The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth (with the consent
-page and token revocation), Commerce Identity, Media, Taxonomy, Fulfillment, Developer
-Analytics, and Notification endpoints (subscriptions with eBay's endpoint challenge) the
+page and token revocation), Commerce Identity, Media, Taxonomy, Fulfillment, Finances (an order's
+fees), Developer Analytics, and Notification endpoints (subscriptions with eBay's endpoint challenge) the
 adapter, eBay connect, and the notifications use, signs notifications the way eBay does and
 delivers its own events to subscribed endpoints ([ebay-notifications.md](ebay-notifications.md)), and injects eBay's failure modes; its README cites the eBay
 documentation it follows and lists what eBay leaves undocumented. `npm run ebay:sandbox-check`

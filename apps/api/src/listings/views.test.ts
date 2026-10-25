@@ -28,6 +28,7 @@ function row(overrides: Partial<ListingRow> = {}): ListingRow {
     connection_id: null,
     connection_mode: null,
     connection_status: null,
+    item_status: 'listed',
     status: 'active',
     external_listing_id: null,
     external_sku: null,

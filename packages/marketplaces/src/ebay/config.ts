@@ -28,6 +28,8 @@ export interface EbayEndpoints {
   api: string;
   /** The Media API's host (`apim.ebay.com`). */
   media: string;
+  /** The Finances API's host (`apiz.ebay.com`): an order's actual fees. */
+  finances: string;
   /** The OAuth token endpoint. */
   oauthToken: string;
   /** Where a seller grants consent (eBay connect). */
@@ -50,6 +52,7 @@ export function ebayEndpoints(
         trading: 'https://api.ebay.com/ws/api.dll',
         api: 'https://api.ebay.com',
         media: 'https://apim.ebay.com',
+        finances: 'https://apiz.ebay.com',
         oauthToken: 'https://api.ebay.com/identity/v1/oauth2/token',
         authorize: 'https://auth.ebay.com/oauth2/authorize',
         oauthRevoke: 'https://api.ebay.com/identity/v1/oauth2/token/revoke',
@@ -60,6 +63,7 @@ export function ebayEndpoints(
         trading: 'https://api.sandbox.ebay.com/ws/api.dll',
         api: 'https://api.sandbox.ebay.com',
         media: 'https://apim.sandbox.ebay.com',
+        finances: 'https://apiz.sandbox.ebay.com',
         oauthToken: 'https://api.sandbox.ebay.com/identity/v1/oauth2/token',
         authorize: 'https://auth.sandbox.ebay.com/oauth2/authorize',
         // eBay documents the production revocation URL; the Sandbox follows its token endpoint.
@@ -72,6 +76,7 @@ export function ebayEndpoints(
         trading: `${base}/ws/api.dll`,
         api: base,
         media: base,
+        finances: base,
         oauthToken: `${base}/identity/v1/oauth2/token`,
         authorize: `${base}/oauth2/authorize`,
         oauthRevoke: `${base}/identity/v1/oauth2/token/revoke`,

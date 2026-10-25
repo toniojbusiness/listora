@@ -11,6 +11,8 @@
  *   seller SKU; a line a person or a parser tied to an item names it directly. An order with no
  *   line Listora knows is not a sale of a Listora item and is not recorded. A bundle line for an
  *   item sold twice in one order adds up on its one sale item.
+ * - **Fees.** The sale gets its estimated fee lines at once, and a check for the actual fees
+ *   when the marketplace reports them (fees.ts).
  * - **Auto-delist in the same transaction.** Recording the sale starts its delist fan-out
  *   (`startAutoDelist` in `@listora/auto-delist`): each sold item is marked
  *   `sold_pending_delist` and every other listing gets its delist, or the item gets a
@@ -30,6 +32,8 @@ import {
   type SaleDetectionSource,
 } from '@listora/db';
 import type { CurrencyCode } from '@listora/shared';
+
+import { recordEstimatedFees, scheduleFeeCheck } from './fees.ts';
 
 /** An order line as the marketplace reports it: matched by listing id, else seller SKU. */
 export interface MarketplaceSaleLine {
@@ -136,6 +140,24 @@ export async function recordSale(
         })),
       )
       .execute();
+    await recordEstimatedFees(trx, {
+      accountId: sale.accountId,
+      saleId: inserted.id,
+      marketplace: sale.marketplace,
+      soldAt: sale.soldAt,
+      currency: sale.currency,
+      salePriceCents: [...items.values()].reduce((sum, item) => sum + item.priceCents, 0),
+    });
+    await scheduleFeeCheck(
+      trx,
+      {
+        accountId: sale.accountId,
+        saleId: inserted.id,
+        marketplace: sale.marketplace,
+        externalOrderId: sale.externalOrderId,
+      },
+      deps.adapters,
+    );
     const delists = await startAutoDelist(
       trx,
       {

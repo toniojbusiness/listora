@@ -1057,6 +1057,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sales/{saleId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a sale
+         * @description The seller confirms a `detected` sale. `409 invalid_state_transition` for any other
+         *     status; `availableActions` lists what a sale allows.
+         */
+        post: operations["confirmSale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sales/{saleId}/ship": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark a sale shipped
+         * @description A `detected` or `confirmed` sale is `shipped`, and its items too. `shippingCost`
+         *     records what the label cost outside the payout, for the profit; send `{}` without one.
+         */
+        post: operations["markSaleShipped"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sales/{saleId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record that a sale was canceled
+         * @description For a `detected` or `confirmed` sale whose order was canceled. Delists of the sale that
+         *     reached no marketplace yet are stopped; the rest finish and show what is true. Each
+         *     item with no other sale that stands goes back to inventory, and Listora asks whether
+         *     to relist it (`items[].relist`, decided with `decideSaleRelist`). Nothing is relisted
+         *     until the seller chooses.
+         */
+        post: operations["cancelSale"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sales/{saleId}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record that a sale was returned
+         * @description For a `confirmed` or `shipped` sale the buyer returned. As with `cancelSale`, the
+         *     items go back to inventory and Listora asks whether to relist them.
+         */
+        post: operations["recordSaleReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sales/{saleId}/relist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer "Relist it?" after a cancel or return
+         * @description For each item whose `relist.decision` is `pending`: relist it on the chosen listings
+         *     (each one a `relist` operation on the engine, shown on the item's listings until the
+         *     marketplace confirms it or the user does an assisted step), or, with no listings, don't
+         *     relist it. `409 invalid_state_transition` when an item's decision is not pending;
+         *     `422 validation_failed` when a listing is not one of the item's options that can be
+         *     relisted now.
+         */
+        post: operations["decideSaleRelist"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tasks": {
         parameters: {
             query?: never;
@@ -1437,6 +1559,7 @@ export interface components {
             delistRun?: components["schemas"]["DelistRun"];
             /** @description The item's newest double sale that is still open; absent when there is none. */
             doubleSale?: components["schemas"]["DoubleSale"];
+            relistPrompt?: components["schemas"]["ItemRelistPrompt"];
             createdAt: components["schemas"]["Timestamp"];
             updatedAt: components["schemas"]["Timestamp"];
         };
@@ -1449,6 +1572,16 @@ export interface components {
             label: string;
         };
         /**
+         * @description The item's sale was canceled or returned and the seller has not decided whether to
+         *     relist it. The app asks, with the options in the sale's `items[].relist`.
+         */
+        ItemRelistPrompt: {
+            saleId: components["schemas"]["Id"];
+            /** @description `canceled` or `returned`. */
+            saleStatus: components["schemas"]["SaleStatus"];
+            soldOn: components["schemas"]["Marketplace"];
+        };
+        /**
          * @description Read-only result of the item's sale. Present only when the item has sold (status
          *     `sold_pending_delist`, `sold`, or `shipped`). For an item sold in a bundle, the
          *     order's fees and shipping cost are split across its items in proportion to each
@@ -1456,6 +1589,10 @@ export interface components {
          */
         ItemSaleSummary: {
             saleId: components["schemas"]["Id"];
+            soldOn?: components["schemas"]["Marketplace"];
+            saleStatus?: components["schemas"]["SaleStatus"];
+            /** @description True while any of the sale's fees is an estimate; `netProceeds` and `profit` are estimates then. */
+            feesEstimated?: boolean;
             soldAt: components["schemas"]["Timestamp"];
             salePrice: components["schemas"]["Money"];
             /** @description This item's share of the sale's `netProceeds`. */
@@ -2304,8 +2441,13 @@ export interface components {
          *     unknown status generically.
          */
         SaleStatus: components["schemas"]["KnownSaleStatus"];
-        /** @enum {string} */
-        KnownSaleStatus: "detected" | "confirmed" | "canceled" | "returned";
+        /**
+         * @description `detected`: Listora recorded the sale (from the marketplace, or "Mark sold").
+         *     `confirmed`: the seller confirmed it. `shipped`: the seller shipped it. `canceled` and
+         *     `returned`: the sale no longer stands; Listora asks whether to relist (`SaleItem.relist`).
+         * @enum {string}
+         */
+        KnownSaleStatus: "detected" | "confirmed" | "shipped" | "canceled" | "returned";
         /**
          * @description A `KnownSaleDetectionSource`, or a source added after this client was built. Clients
          *     show an unknown source generically.
@@ -2409,13 +2551,99 @@ export interface components {
             createdAt: components["schemas"]["Timestamp"];
             resolvedAt?: components["schemas"]["Timestamp"];
         };
-        /** @description One item of an order. */
+        /**
+         * @description One item of an order. For a bundle, the order's shipping, order-level fees, and
+         *     shipping cost are split across its items in proportion to each item's `salePrice`.
+         */
         SaleItem: {
             itemId: components["schemas"]["Id"];
+            sku: string;
+            title?: string;
             /** @description The listing the item sold through, when known. Absent for a sale recorded without one. */
             listingId?: components["schemas"]["Id"];
             /** @description This item's part of the order's sale price (for a bundle, its share of the bundle price). */
             salePrice: components["schemas"]["Money"];
+            /** @description What the item cost the seller. Absent when they never entered it. */
+            cost?: components["schemas"]["Money"];
+            /** @description This item's share of the sale's fees. Absent until the sale has fee lines. */
+            fees?: components["schemas"]["Money"];
+            /** @description This item's share of the payout. */
+            netProceeds?: components["schemas"]["Money"];
+            /** @description This item's share of the payout minus its share of `shippingCost` minus its `cost`. */
+            profit?: components["schemas"]["Money"];
+            /**
+             * Format: int64
+             * @description `profit` over `cost` in basis points (12550 is 125.5%). Absent without a profit or for a zero cost.
+             */
+            roiBasisPoints?: number;
+            relist?: components["schemas"]["SaleRelist"];
+        };
+        /** @description One item of a sale recorded by hand. */
+        SaleCreateItem: {
+            itemId: components["schemas"]["Id"];
+            /** @description The item's listing on the sale's marketplace; defaults to its newest one there. */
+            listingId?: components["schemas"]["Id"];
+            /** @description What this item sold for, before shipping. */
+            salePrice: components["schemas"]["Money"];
+        };
+        /**
+         * @description A `KnownSaleAction`, or an action added after this client was built. Clients hide
+         *     actions they do not know.
+         */
+        SaleAction: components["schemas"]["KnownSaleAction"];
+        /**
+         * @description `confirm` (`confirmSale`), `mark_shipped` (`markSaleShipped`), `cancel` (`cancelSale`),
+         *     `record_return` (`recordSaleReturn`).
+         * @enum {string}
+         */
+        KnownSaleAction: "confirm" | "mark_shipped" | "cancel" | "record_return";
+        /** @description A `KnownRelistDecision`, or a decision added after this client was built. */
+        RelistDecision: components["schemas"]["KnownRelistDecision"];
+        /**
+         * @description `pending`: the sale was canceled or returned and the seller has not decided yet whether
+         *     to relist the item. `relisted`: the seller chose marketplaces to relist on (each relist
+         *     is an operation; see the item's listings). `declined`: the seller chose not to relist.
+         * @enum {string}
+         */
+        KnownRelistDecision: "pending" | "relisted" | "declined";
+        /** @description One of the item's listings, and whether Listora can relist it now. */
+        RelistOption: {
+            listingId: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            /** @description `api`: Listora relists it. `assisted`: the user relists it in the marketplace's app. */
+            mode: components["schemas"]["IntegrationMode"];
+            /** @description The listing's status now, for example `Delisted (confirmed by eBay)` or `Active (confirmed by Depop)`. */
+            statusDisplay: components["schemas"]["StatusDisplay"];
+            /**
+             * @description False while the listing is still live or a change on it is still running; the
+             *     seller can relist it from the item later.
+             */
+            canRelist: boolean;
+        };
+        /**
+         * @description Present once the sale was canceled or returned and the item has no other sale that
+         *     stands. Listora never relists by itself: it asks, and relists only where the user
+         *     chooses (`decideSaleRelist`).
+         */
+        SaleRelist: {
+            decision: components["schemas"]["RelistDecision"];
+            /** @description The item's newest listing on each marketplace. */
+            options: components["schemas"]["RelistOption"][];
+            decidedAt?: components["schemas"]["Timestamp"];
+        };
+        SaleShipment: {
+            /** @description What the seller paid for the label outside the payout, when known. */
+            shippingCost?: components["schemas"]["Money"];
+        };
+        SaleRelistChoice: {
+            /** @description One entry per item to decide for. */
+            items: components["schemas"]["SaleRelistItemChoice"][];
+        };
+        /** @description One item's answer; an empty `listingIds` means "don't relist". */
+        SaleRelistItemChoice: {
+            itemId: components["schemas"]["Id"];
+            /** @description The listings to relist, from the item's `relist.options` with `canRelist`. */
+            listingIds: components["schemas"]["Id"][];
         };
         /** @enum {string} */
         KnownFeeType: "marketplace" | "payment" | "shipping_label" | "promotion" | "tax" | "other";
@@ -2435,11 +2663,15 @@ export interface components {
             /** @description A positive amount the seller pays. */
             amount: components["schemas"]["Money"];
             source: components["schemas"]["FeeSource"];
+            /** @description What the marketplace or Listora's fee table calls it, for example "Final value fee". */
+            description?: string;
+            /** @description For an estimated fee, the fee table it was computed with (for example `ebay-us-2026-10-24`). */
+            feeTableVersion?: string;
         };
         SaleCreate: {
             marketplace: components["schemas"]["KnownMarketplace"];
             /** @description The items of the order, each at most once; more than one for a bundle. */
-            items: components["schemas"]["SaleItem"][];
+            items: components["schemas"]["SaleCreateItem"][];
             shippingCharged?: components["schemas"]["Money"];
             /** @description Defaults to now. */
             soldAt?: components["schemas"]["Timestamp"];
@@ -2459,8 +2691,14 @@ export interface components {
             salePrice: components["schemas"]["Money"];
             /** @description What the buyer paid for shipping. */
             shippingCharged?: components["schemas"]["Money"];
-            /** @description Every fee deducted from the payout. Absent until known. */
+            /**
+             * @description Every fee deducted from the payout. Estimated from Listora's fee table when the sale
+             *     is recorded, and replaced by the marketplace's actual fees once it reports them.
+             *     Absent for a sale without fee lines.
+             */
             fees?: components["schemas"]["FeeLine"][];
+            /** @description True while any fee is an estimate; `netProceeds` and `profit` are estimates then too. */
+            feesEstimated?: boolean;
             /**
              * @description What the seller paid to ship outside the payout, for example a label bought
              *     separately. A label the marketplace deducts is a `shipping_label` fee instead.
@@ -2473,9 +2711,22 @@ export interface components {
              *     `netProceeds` is known and every item has a cost.
              */
             profit?: components["schemas"]["Money"];
+            /** @description The items' total cost. Absent when an item has none. */
+            cost?: components["schemas"]["Money"];
+            /**
+             * Format: int64
+             * @description `profit` over `cost` in basis points. Absent without a profit or for a zero cost.
+             */
+            roiBasisPoints?: number;
             detectionSource: components["schemas"]["SaleDetectionSource"];
             status: components["schemas"]["SaleStatus"];
             shipBy?: components["schemas"]["Timestamp"];
+            /** @description What the seller can do with the sale now, in display order. */
+            availableActions: components["schemas"]["SaleAction"][];
+            confirmedAt?: components["schemas"]["Timestamp"];
+            shippedAt?: components["schemas"]["Timestamp"];
+            canceledAt?: components["schemas"]["Timestamp"];
+            returnedAt?: components["schemas"]["Timestamp"];
             /** @description True when an item of the order had already sold; the user must cancel one sale (`doubleSales`). */
             isDoubleSale: boolean;
             /** @description One per item of the order that this sale started a delist for; none for an item that had already sold. */
@@ -2741,6 +2992,7 @@ export type ItemCreate = components['schemas']['ItemCreate'];
 export type ItemReplace = components['schemas']['ItemReplace'];
 export type Item = components['schemas']['Item'];
 export type StorageLocationSummary = components['schemas']['StorageLocationSummary'];
+export type ItemRelistPrompt = components['schemas']['ItemRelistPrompt'];
 export type ItemSaleSummary = components['schemas']['ItemSaleSummary'];
 export type ItemSummary = components['schemas']['ItemSummary'];
 export type ItemPage = components['schemas']['ItemPage'];
@@ -2868,6 +3120,16 @@ export type DelistResult = components['schemas']['DelistResult'];
 export type DelistRun = components['schemas']['DelistRun'];
 export type DoubleSale = components['schemas']['DoubleSale'];
 export type SaleItem = components['schemas']['SaleItem'];
+export type SaleCreateItem = components['schemas']['SaleCreateItem'];
+export type SaleAction = components['schemas']['SaleAction'];
+export type KnownSaleAction = components['schemas']['KnownSaleAction'];
+export type RelistDecision = components['schemas']['RelistDecision'];
+export type KnownRelistDecision = components['schemas']['KnownRelistDecision'];
+export type RelistOption = components['schemas']['RelistOption'];
+export type SaleRelist = components['schemas']['SaleRelist'];
+export type SaleShipment = components['schemas']['SaleShipment'];
+export type SaleRelistChoice = components['schemas']['SaleRelistChoice'];
+export type SaleRelistItemChoice = components['schemas']['SaleRelistItemChoice'];
 export type KnownFeeType = components['schemas']['KnownFeeType'];
 export type FeeType = components['schemas']['FeeType'];
 export type FeeSource = components['schemas']['FeeSource'];
@@ -4438,6 +4700,196 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    confirmSale: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sale, now `confirmed`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sale"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    markSaleShipped: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaleShipment"];
+            };
+        };
+        responses: {
+            /** @description The sale, now `shipped`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sale"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    cancelSale: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sale, now `canceled`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sale"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    recordSaleReturn: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sale, now `returned`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sale"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    decideSaleRelist: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                saleId: components["parameters"]["SaleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaleRelistChoice"];
+            };
+        };
+        responses: {
+            /** @description The sale with the decisions recorded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sale"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     listTasks: {
         parameters: {
             query?: {
@@ -4619,10 +5071,12 @@ export const knownConnectionActionValues: ReadonlyArray<FlattenedDeepRequired<co
 export const connectionAuthorizationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ConnectionAuthorizationStatus"]> = ["pending", "completed", "failed", "expired"];
 export const knownConnectionAttentionReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAttentionReason"]> = ["reconnect", "access_removed", "connection_problem", "expiring"];
 export const knownSaleForwardingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleForwardingStatus"]> = ["needs_domain"];
-export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "canceled", "returned"];
+export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];
 export const knownDelistResultStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownDelistResultState"]> = ["pending", "verifying", "delisted", "user_confirmed", "needs_user_action", "failed", "canceled"];
+export const knownSaleActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleAction"]> = ["confirm", "mark_shipped", "cancel", "record_return"];
+export const knownRelistDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownRelistDecision"]> = ["pending", "relisted", "declined"];
 export const knownFeeTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeType"]> = ["marketplace", "payment", "shipping_label", "promotion", "tax", "other"];
 export const feeSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FeeSource"]> = ["actual", "estimated"];
 export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "edit_manually", "confirm_sale", "reconnect", "review_match", "resolve_double_sale"];

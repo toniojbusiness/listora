@@ -54,6 +54,7 @@ import type {
   SaleCheckOutcome,
   SaleCheckReason,
   SaleDetectionSource,
+  RelistDecision,
   SaleStatus,
   SubscriptionSource,
   SubscriptionStatus,
@@ -487,6 +488,12 @@ export interface SaleTable {
   inbound_event_id: Nullable<string>;
   status: Generated<SaleStatus>;
   ship_by: NullableTimestamp;
+  confirmed_at: NullableTimestamp;
+  shipped_at: NullableTimestamp;
+  canceled_at: NullableTimestamp;
+  returned_at: NullableTimestamp;
+  /** What the seller paid to ship outside the payout; null until known. */
+  shipping_cost_cents: Nullable<number>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -501,6 +508,9 @@ export interface SaleItemTable {
   listing_id: Nullable<string>;
   currency: Generated<CurrencyCode>;
   sale_price_cents: number;
+  /** Set once the sale is canceled or returned: `pending` until the seller decides. */
+  relist_decision: Nullable<RelistDecision>;
+  relist_decided_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -557,6 +567,9 @@ export interface FeeLineTable {
   currency: Generated<CurrencyCode>;
   amount_cents: number;
   source: FeeSource;
+  description: Nullable<string>;
+  /** The fee table an estimated line was computed with. */
+  fee_table_version: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }

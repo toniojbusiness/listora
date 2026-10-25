@@ -38,6 +38,12 @@ struct E2EStack {
         return try JSONDecoder().decode(SeededItem.self, from: data)
     }
 
+    /// A ready item already live on eBay, confirmed by the fake eBay (`POST /items/listed`).
+    func seedListedItem() async throws -> SeededItem {
+        let data = try await control("items/listed", method: "POST", body: [:])
+        return try JSONDecoder().decode(SeededItem.self, from: data)
+    }
+
     /// Makes the fake eBay fail the next matching request (`POST /ebay/faults`).
     func injectEbayFault(action: String, type: String, message: String? = nil) async throws {
         var fault: [String: Any] = ["type": type]

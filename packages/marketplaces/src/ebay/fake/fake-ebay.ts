@@ -22,6 +22,7 @@
  *   GET  /commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category?category_id=...
  *   GET  /sell/fulfillment/v1/order                         Fulfillment: getOrders
  *   GET  /sell/fulfillment/v1/order/:id                     Fulfillment: getOrder
+ *   GET  /sell/finances/v1/transaction?filter=orderId:{id}  Finances: an order's transactions
  *   GET  /developer/analytics/v1_beta/rate_limit/           Developer Analytics: Trading usage
  *   GET  /commerce/notification/v1/public_key/:id           Notification: the signing key
  *   ...  /commerce/notification/v1/{config,topic,destination,subscription}
@@ -83,6 +84,7 @@ export type FakeEbayAction =
   | 'media'
   | 'taxonomy'
   | 'orders'
+  | 'finances'
   | 'rate_limits'
   | 'public_key'
   /** Notification API config, topic, destination, and subscription calls. */
@@ -1256,6 +1258,13 @@ export class FakeEbay {
         },
       };
     }
+    if (method === 'GET' && path === '/sell/finances/v1/transaction') {
+      return {
+        meta: { action: 'finances' },
+        needsSeller: true,
+        handle: (grant) => this.#getTransactions(grant, url),
+      };
+    }
     if (method === 'GET' && path === '/developer/analytics/v1_beta/rate_limit') {
       return {
         meta: { action: 'rate_limits' },
@@ -1367,6 +1376,55 @@ export class FakeEbay {
         ? { next: `${this.#url}/sell/fulfillment/v1/order?${next.toString()}` }
         : {}),
       orders: page.map((order) => this.#orderView(order)),
+    });
+  }
+
+  /**
+   * Finances `getTransactions` for `filter=orderId:{id}`: the order's `SALE` transaction with
+   * the fees eBay charges most categories (13.6% of the item price and shipping, and the $0.30
+   * or $0.40 per-order fee). An unknown order has no transactions.
+   */
+  #getTransactions(grant: FakeAccessToken, url: URL): Reply {
+    const filter = url.searchParams.get('filter') ?? '';
+    const orderId = /^orderId:\{([^}]+)\}$/.exec(filter)?.[1];
+    if (orderId === undefined) throw new RestFailure(400, 135000, 'Invalid filter.');
+    const order = this.#orders.find(
+      (candidate) => candidate.orderId === orderId && candidate.sellerUserId === grant.sellerUserId,
+    );
+    if (order === undefined) return json(200, { total: 0, limit: 200, offset: 0 });
+    const totalCents = Math.round((Number(order.priceValue) + Number(order.shippingValue)) * 100);
+    const finalValue = Math.round(totalCents * 0.136);
+    const perOrder = totalCents > 1000 ? 40 : 30;
+    const money = (cents: number) => ({
+      value: (cents / 100).toFixed(2),
+      currency: order.currency,
+    });
+    return json(200, {
+      total: 1,
+      limit: 200,
+      offset: 0,
+      transactions: [
+        {
+          transactionId: `SALE-${order.orderId}`,
+          orderId: order.orderId,
+          transactionType: 'SALE',
+          transactionStatus: 'FUNDS_PROCESSING',
+          transactionDate: order.creationDate,
+          bookingEntry: 'CREDIT',
+          amount: money(totalCents - finalValue - perOrder),
+          totalFeeAmount: money(finalValue + perOrder),
+          orderLineItems: [
+            {
+              lineItemId: `${order.orderId}-1`,
+              feeBasisAmount: money(totalCents),
+              marketplaceFees: [
+                { feeType: 'FINAL_VALUE_FEE', amount: money(finalValue) },
+                { feeType: 'FINAL_VALUE_FEE_FIXED_PER_ORDER', amount: money(perOrder) },
+              ],
+            },
+          ],
+        },
+      ],
     });
   }
 

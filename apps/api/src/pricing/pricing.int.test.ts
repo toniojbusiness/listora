@@ -122,7 +122,7 @@ describe('pricing (real Postgres)', () => {
         marketplace,
         sold_at: new Date(Date.now() - (options.daysAgo ?? 1) * 24 * 60 * 60 * 1000),
         detection_source: 'manual',
-        ...(options.status ? { status: options.status } : {}),
+        ...(options.status ? { status: options.status, canceled_at: new Date() } : {}),
       })
       .returning('id')
       .executeTakeFirstOrThrow();

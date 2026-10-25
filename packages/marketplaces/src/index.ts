@@ -12,6 +12,8 @@ export type {
   MarketplaceCapabilities,
   Mode,
   OperationRequest,
+  OrderFee,
+  OrderFeesResult,
   Outcome,
   RemoteListingState,
   RemoteListingStatus,

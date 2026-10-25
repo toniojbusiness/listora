@@ -7,7 +7,7 @@ import Testing
 struct AppTabTests {
     @Test
     func `the tab bar shows Inventory, Add Item, Tasks, Settings in that order`() {
-        #expect(AppTab.allCases.map(\.title) == ["Inventory", "Add Item", "Tasks", "Settings"])
+        #expect(AppTab.allCases.map(\.title) == ["Inventory", "Sales", "Add Item", "Tasks", "Settings"])
     }
 
     @Test
