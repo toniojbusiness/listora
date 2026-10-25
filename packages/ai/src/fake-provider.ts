@@ -45,26 +45,38 @@ export interface FixtureSource {
   load(photoSetHash: string): Promise<FakeFixture | undefined>;
 }
 
-/** Fixtures as `<dir>/<photo-set hash>.json` files. A malformed file fails loudly. */
+/** The file in a fixture directory that answers every photo set without a file of its own. */
+export const DEFAULT_FIXTURE_FILE = 'default.json';
+
+/**
+ * Fixtures as `<dir>/<photo-set hash>.json` files, falling back to `<dir>/default.json` when it
+ * exists (a directory for end-to-end runs, whose photo sets are not known in advance). A
+ * malformed file fails loudly.
+ */
 export function directoryFixtures(dir: string): FixtureSource {
   return {
     async load(photoSetHash) {
-      let text: string;
-      try {
-        text = await readFile(join(dir, `${photoSetHash}.json`), 'utf8');
-      } catch (error) {
-        if ((error as { code?: unknown }).code === 'ENOENT') return undefined;
-        throw error;
-      }
-      const parsed = fakeFixtureSchema.safeParse(JSON.parse(text));
-      if (!parsed.success) {
-        throw new TypeError(
-          `fake AI fixture ${photoSetHash}.json is malformed: ${parsed.error.message}`,
-        );
-      }
-      return parsed.data;
+      return (
+        (await readFixture(dir, `${photoSetHash}.json`)) ??
+        (await readFixture(dir, DEFAULT_FIXTURE_FILE))
+      );
     },
   };
+}
+
+async function readFixture(dir: string, file: string): Promise<FakeFixture | undefined> {
+  let text: string;
+  try {
+    text = await readFile(join(dir, file), 'utf8');
+  } catch (error) {
+    if ((error as { code?: unknown }).code === 'ENOENT') return undefined;
+    throw error;
+  }
+  const parsed = fakeFixtureSchema.safeParse(JSON.parse(text));
+  if (!parsed.success) {
+    throw new TypeError(`fake AI fixture ${file} is malformed: ${parsed.error.message}`);
+  }
+  return parsed.data;
 }
 
 /** Fixtures held in memory, keyed by photo-set hash; for tests. */

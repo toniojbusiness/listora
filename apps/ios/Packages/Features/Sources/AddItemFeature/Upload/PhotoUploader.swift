@@ -74,13 +74,18 @@ actor PhotoUploader {
         }
     }
 
-    /// Stops the queue. Transfers in flight continue in the transport.
-    func stop() {
-        runTask?.cancel()
-        eventsTask?.cancel()
+    /// Stops the queue and returns once its loop has ended, so no step of it runs afterwards (a
+    /// relaunch in the tests builds a new queue over the same database). Transfers in flight
+    /// continue in the transport.
+    func stop() async {
+        let (run, events) = (runTask, eventsTask)
         runTask = nil
         eventsTask = nil
+        run?.cancel()
+        events?.cancel()
         wake()
+        await run?.value
+        await events?.value
     }
 
     /// Looks for work now: something changed (a new draft, an edit, a sign-in, a Retry).

@@ -115,6 +115,8 @@ packages/
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
   eval/         Synthetic tag corpus (corpus/) and the eval harness CLI (@listora/eval)
+  e2e/          Local end-to-end stack: the API and worker with fakes on a scratch database and
+                a signed-in user, which the iOS UI tests run against (@listora/e2e)
 infra/          AWS CDK v2 app: one environment per synth, stacks per lifecycle (@listora/infra)
 scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
@@ -172,6 +174,7 @@ src/
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
+  usage/         getUsage: the plan's quota use, from the counters the AI guards enforce
   listings/      Listing views (honest statusDisplay) and shared-listing links
   connections/   Marketplace connections, connect attempts, and the public OAuth callback
 ```
@@ -222,7 +225,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                                         | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                |
 | Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                                                                | The same                   | none                                  |
 | Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                                        | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`            |
-| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                                                     | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
+| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash, `default.json` for any other photo set)                                                                             | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
 | eBay             | `fake-ebay` server (OAuth consent, Commerce Identity, Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`  |
 | Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`)              | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production` |
 | Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                                                    | SES inbound                | `EMAIL_INGEST=folder\|ses`            |
@@ -313,7 +316,10 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
   tests. It must pass before merge. When iOS code
   is touched, `make ios-lint` and `make ios-test` must pass too. `make ios-test` runs the
   package, unit, and UI tests on an existing iPhone 17 simulator and keeps DerivedData in
-  `.build/ios`.
+  `.build/ios`. It runs them inside the local stack (`packages/e2e`, `npm run e2e:stack`): the
+  API and worker from this checkout with the fake drivers, on a scratch database of the
+  `scripts/dev-db.sh` cluster, with a signed-in test user. UI tests that go through the
+  backend use it; the fake AI answers them from `apps/ios/ListoraUITests/FakeAI`.
 - Integration tests use a real Postgres: the local `listora_test` database from
   `scripts/dev-db.sh` (locally and in CI), or `TEST_DATABASE_URL` when set. They fail, and
   never skip, when the database is unreachable. Tests that need their own schema create a
@@ -355,6 +361,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/costs.md](features/costs.md)                 | The personal environment's monthly cost                                       |
 | [features/observability.md](features/observability.md) | Logs, request ids, the signals alarms key on                                  |
 | [features/ios.md](features/ios.md)                     | iOS app conventions                                                           |
+| [features/review.md](features/review.md)               | The iPhone review, cost, and price screens and the interaction-time metric    |
 
 ### Former section numbers
 

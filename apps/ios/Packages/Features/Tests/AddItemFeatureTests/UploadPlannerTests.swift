@@ -98,14 +98,14 @@ struct UploadPlannerTests {
         #expect(next(snapshot) == .createSession(photoID: "p2"))
         let withoutSession = UploadSnapshot(drafts: snapshot.drafts, photos: [snapshot.photos[0]], deletions: [])
         #expect(next(withoutSession) == .createItem(draftID: "d1"))
-        let withItem = try UploadSnapshot(drafts: [draft()], photos: [snapshot.photos[0]], deletions: [])
+        let withItem = UploadSnapshot(drafts: [draft()], photos: [snapshot.photos[0]], deletions: [])
         #expect(next(withItem) == .attach(photoID: "p1"))
     }
 
     @Test
     func `a tag photo is read on the device before it is attached`() throws {
         let tag = try photo("p1", role: .tag, step: .attach)
-        let snapshot = try UploadSnapshot(drafts: [draft()], photos: [tag], deletions: [])
+        let snapshot = UploadSnapshot(drafts: [draft()], photos: [tag], deletions: [])
 
         #expect(next(snapshot) == .readTag(photoID: "p1"))
         var read = tag
@@ -133,7 +133,7 @@ struct UploadPlannerTests {
         waiting.retry = RetryState(attempt: 1, retryAt: now.addingTimeInterval(5))
         var stopped = try photo("p2", position: 1)
         stopped.retry = RetryState(attempt: 8, failure: "Listora is busy.")
-        let snapshot = try UploadSnapshot(drafts: [draft()], photos: [waiting, stopped], deletions: [])
+        let snapshot = UploadSnapshot(drafts: [draft()], photos: [waiting, stopped], deletions: [])
 
         #expect(next(snapshot) == nil)
         #expect(UploadPlanner.nextRetry(in: snapshot, now: now) == now.addingTimeInterval(5))
@@ -191,9 +191,9 @@ struct UploadPlannerTests {
             serverPhotoID: "server-old",
         )
 
-        #expect(try next(UploadSnapshot(drafts: [draft()], photos: photos, deletions: [deletion])) ==
+        #expect(next(UploadSnapshot(drafts: [draft()], photos: photos, deletions: [deletion])) ==
             .deleteOnServer(deletionID: "x1"))
-        #expect(try next(UploadSnapshot(drafts: [draft()], photos: photos, deletions: [])) == .syncOrder(draftID: "d1"))
+        #expect(next(UploadSnapshot(drafts: [draft()], photos: photos, deletions: [])) == .syncOrder(draftID: "d1"))
         let synced = draft(order: ["server-p1", "server-p2"])
         #expect(next(UploadSnapshot(drafts: [synced], photos: photos, deletions: [])) == nil)
         let reordered = draft(order: ["server-p2", "server-p1"])

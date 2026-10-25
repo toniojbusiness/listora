@@ -18,6 +18,7 @@
     { "path": "packages/tag-parse" },
     { "path": "packages/analysis" },
     { "path": "packages/eval" },
+    { "path": "packages/e2e" },
     { "path": "apps/api" },
     { "path": "apps/worker" },
     { "path": "infra" },

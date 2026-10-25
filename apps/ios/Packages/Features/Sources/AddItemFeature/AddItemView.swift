@@ -1,3 +1,4 @@
+import Core
 import DesignSystem
 import PhotosUI
 import SwiftUI
@@ -11,7 +12,12 @@ public struct AddItemView: View {
     public init(environment: AddItemEnvironment) {
         self.environment = environment
         if case let .ready(store, uploader) = environment.state {
-            _model = State(initialValue: AddItemModel(store: store, uploader: uploader, activity: environment.activity))
+            _model = State(initialValue: AddItemModel(
+                store: store,
+                uploader: uploader,
+                activity: environment.activity,
+                meter: environment.meter,
+            ))
         }
     }
 
@@ -27,11 +33,18 @@ public struct AddItemView: View {
     }
 }
 
+/// A screen of the Add Item tab's navigation stack.
+enum AddItemRoute: Hashable {
+    case draft(String)
+    /// The review of a draft's server item (the review feature's flow).
+    case review(ItemReviewRequest)
+}
+
 /// New-item actions above the list of drafts.
 struct DraftListView: View {
     let model: AddItemModel
     let environment: AddItemEnvironment
-    @State private var path: [String] = []
+    @State private var path: [AddItemRoute] = []
     @State private var isCapturing = false
     @State private var unloadedPhotos: PickedPhotos<PhotosPickerItem>?
 
@@ -51,7 +64,7 @@ struct DraftListView: View {
                 if !model.drafts.isEmpty {
                     Section("Drafts") {
                         ForEach(model.drafts) { draft in
-                            NavigationLink(value: draft.id) {
+                            NavigationLink(value: AddItemRoute.draft(draft.id)) {
                                 DraftRow(draft: draft, activity: model.activity, fileURL: model.store.fileURL(for:))
                             }
                             .accessibilityIdentifier("draft.row")
@@ -68,15 +81,24 @@ struct DraftListView: View {
             .scrollContentBackground(.hidden)
             .background(Palette.background)
             .navigationTitle("Add Item")
-            .navigationDestination(for: String.self) { draftID in
-                DraftEditorView(draftID: draftID, model: model, environment: environment)
+            .navigationDestination(for: AddItemRoute.self) { route in
+                switch route {
+                case let .draft(draftID):
+                    DraftEditorView(draftID: draftID, model: model, environment: environment) { request in
+                        path.append(.review(request))
+                    }
+                case let .review(request):
+                    environment.reviewDestination?(request) { outcome in
+                        finishReview(request, outcome)
+                    }
+                }
             }
             .task { await model.observeDrafts() }
             .fullScreenCover(isPresented: $isCapturing) {
                 CameraCaptureView { shots in
                     isCapturing = false
                     if let id = await model.save(shots) {
-                        path.append(id)
+                        path.append(.draft(id))
                     }
                 }
             }
@@ -101,6 +123,7 @@ struct DraftListView: View {
             }
             if environment.isCameraAvailable {
                 Button {
+                    model.beginNewItem()
                     isCapturing = true
                 } label: {
                     Label("Take photos", systemImage: "camera.fill")
@@ -140,7 +163,21 @@ struct DraftListView: View {
 
     private func importPhotos(_ images: [Data]) async {
         if let id = await model.addPhotos(images) {
-            path.append(id)
+            path.append(.draft(id))
+        }
+    }
+
+    /// A saved item's draft is done: back to the list, without it. Changing the photos, or leaving
+    /// the review, goes back to the draft.
+    private func finishReview(_ request: ItemReviewRequest, _ outcome: ItemReviewOutcome) {
+        switch outcome {
+        case .saved:
+            path = []
+            model.completeDraft(request.sessionID)
+        case .editPhotos, .back:
+            if case .review = path.last {
+                path.removeLast()
+            }
         }
     }
 
