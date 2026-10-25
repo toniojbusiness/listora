@@ -22,7 +22,10 @@ KnownSaleDetectionSource:
   enum: [webhook, poll, email, manual]
 DelistRunStatus:
   type: string
-  description: '`completed`: every other listing is verified ended or confirmed by the user. `needs_attention`: something failed or waits for the user.'
+  description: |
+    `completed`: every other listing is delisted (confirmed by the marketplace's read-back)
+    or done (the user confirmed). `needs_attention`: a delist failed, waits for the user, or
+    was canceled. `in_progress`: Listora is still delisting or checking.
   enum: [in_progress, completed, needs_attention]
 DelistResultState:
   description: |
@@ -34,16 +37,32 @@ DelistResultState:
       maxLength: 64
 KnownDelistResultState:
   type: string
-  enum: [pending, verifying, delisted, user_confirmed, needs_user_action, failed]
+  description: |
+    `delisted`: a read-back of the marketplace confirmed it. `user_confirmed`: the user
+    confirmed an assisted delist. Only these two count as done. `pending`: delisting or
+    waiting to retry. `verifying`: the outcome is unknown and is being read back.
+    `needs_user_action`: the user has to delist it in the marketplace's app. `failed`: shows
+    the reason and a Retry. `canceled`: Listora stopped delisting it (the listing may still
+    be live).
+  enum: [pending, verifying, delisted, user_confirmed, needs_user_action, failed, canceled]
 DelistResult:
   type: object
-  required: [listingId, itemId, marketplace, mode, state, statusDisplay]
+  description: One listing of the sold item on another marketplace, and its delist.
+  required:
+    [
+      listingId,
+      marketplace,
+      mode,
+      state,
+      statusDisplay,
+      operationId,
+      attempt,
+      maxAttempts,
+      updatedAt,
+    ]
   properties:
     listingId:
       $ref: './common.yaml#/Id'
-    itemId:
-      $ref: './common.yaml#/Id'
-      description: The sold item this listing belongs to (a bundle has several).
     marketplace:
       $ref: './common.yaml#/Marketplace'
     mode:
@@ -52,28 +71,118 @@ DelistResult:
       $ref: '#/DelistResultState'
     statusDisplay:
       $ref: './common.yaml#/StatusDisplay'
+      description: For example `Delisted (confirmed by eBay)`, `Delisting... retry 2 of 6`, or `Done (you confirmed)`.
     operationId:
       $ref: './common.yaml#/Id'
+      description: The delist operation; Retry a `failed` one with `retryOperation`.
+    attempt:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Attempts made so far (shown as "retry 2 of 6").
+    maxAttempts:
+      type: integer
+      format: int32
+      minimum: 1
     userTaskId:
       $ref: './common.yaml#/Id'
+      description: The assisted delist's task, which the user completes once they delisted it.
+    updatedAt:
+      $ref: './common.yaml#/Timestamp'
 DelistRun:
   type: object
-  description: The automatic delist of every other listing of the sold items after a sale.
-  required: [id, status, statusDisplay, results, startedAt]
+  description: |
+    The automatic delist of one sold item's other listings after a sale (a bundle starts one
+    run per item). `results` has one entry per listing on another marketplace that may have
+    been live; a listing that was already ended, sold, or never published needs none.
+  required: [id, saleId, itemId, soldOn, status, statusDisplay, results, escalated, startedAt]
   properties:
     id:
       $ref: './common.yaml#/Id'
+    saleId:
+      $ref: './common.yaml#/Id'
+    itemId:
+      $ref: './common.yaml#/Id'
+    soldOn:
+      $ref: './common.yaml#/Marketplace'
+      description: The marketplace the item sold on.
     status:
       $ref: '#/DelistRunStatus'
     statusDisplay:
       $ref: './common.yaml#/StatusDisplay'
+      description: The run in one line, for example `Delisted everywhere` or `Action needed - delist on Poshmark`.
     results:
       type: array
       items:
         $ref: '#/DelistResult'
+    escalated:
+      type: boolean
+      description: |
+        True while the run is not completed 30 minutes after the sale. The app shows a
+        banner on the home screen until it completes.
     startedAt:
       $ref: './common.yaml#/Timestamp'
+    realertedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When the user was alerted again because a listing was still not delisted or confirmed 10 minutes after the sale.
+    escalatedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When the alert escalated, 30 minutes after the sale.
     completedAt:
+      $ref: './common.yaml#/Timestamp'
+DoubleSale:
+  type: object
+  description: |
+    A double sale: an item that had already sold sold again in this order. Listora cannot
+    cancel an order, so the user cancels one of them on its marketplace (`steps`, starting at
+    `cancelUrl`) and then completes the task (`taskId`).
+  required:
+    [
+      taskId,
+      saleId,
+      itemId,
+      marketplace,
+      earlierSaleId,
+      earlierMarketplace,
+      title,
+      steps,
+      cancelUrl,
+      status,
+      createdAt,
+    ]
+  properties:
+    taskId:
+      $ref: './common.yaml#/Id'
+    saleId:
+      $ref: './common.yaml#/Id'
+      description: The later sale, whose order the steps cancel.
+    itemId:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+      description: The later sale's marketplace.
+    earlierSaleId:
+      $ref: './common.yaml#/Id'
+    earlierMarketplace:
+      $ref: './common.yaml#/Marketplace'
+    title:
+      type: string
+      maxLength: 200
+      description: For example "Cancel the order on Depop".
+    steps:
+      type: array
+      items:
+        type: string
+        maxLength: 500
+    cancelUrl:
+      type: string
+      format: uri
+      description: Where the marketplace shows the seller's orders.
+    status:
+      $ref: './tasks.yaml#/UserTaskStatus'
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    resolvedAt:
       $ref: './common.yaml#/Timestamp'
 SaleItem:
   type: object
@@ -151,6 +260,8 @@ Sale:
       detectionSource,
       status,
       isDoubleSale,
+      delistRuns,
+      doubleSales,
       createdAt,
       updatedAt,
     ]
@@ -201,9 +312,17 @@ Sale:
       $ref: './common.yaml#/Timestamp'
     isDoubleSale:
       type: boolean
-      description: True when an item of the order had already sold elsewhere; the user must cancel one sale.
-    delistRun:
-      $ref: '#/DelistRun'
+      description: True when an item of the order had already sold; the user must cancel one sale (`doubleSales`).
+    delistRuns:
+      type: array
+      description: One per item of the order that this sale started a delist for; none for an item that had already sold.
+      items:
+        $ref: '#/DelistRun'
+    doubleSales:
+      type: array
+      description: One per item of the order that had already sold.
+      items:
+        $ref: '#/DoubleSale'
     createdAt:
       $ref: './common.yaml#/Timestamp'
     updatedAt:

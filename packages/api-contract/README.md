@@ -153,7 +153,9 @@ These are checked by `src/contract-rules.test.ts` where a test can check them.
   cost floor can never be presented as sold comparables.
 - **Sales are orders.** A `Sale` is one marketplace order with one or more `items` (a bundle
   has several). Fees (`FeeLine`, `actual` or `estimated`), `netProceeds`, and `profit` are
-  absent until known. An item's own share is in `Item.saleSummary`.
+  absent until known. An item's own share is in `Item.saleSummary`. Each sold item's delist run
+  (`DelistRun`, with one `DelistResult` per other listing) is in `Sale.delistRuns` and
+  `Item.delistRun`; an item that sold twice has a `DoubleSale` instead.
 
 ### Open enums
 

@@ -8978,7 +8978,7 @@ public enum Operations {
     }
     /// List sales
     ///
-    /// Newest first (by `soldAt`).
+    /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -8993,6 +8993,12 @@ public enum Operations {
                 public var itemId: Components.Schemas.Id?
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/status`.
                 public var status: [Components.Schemas.KnownSaleStatus]?
+                /// Only sales with a delist run in one of these statuses; for example
+                /// `in_progress` and `needs_attention` for the home screen's banner.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/sales/GET/query/delistStatus`.
+                public var delistStatus: [Components.Schemas.DelistRunStatus]?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/cursor`.
@@ -9006,16 +9012,19 @@ public enum Operations {
                 /// - Parameters:
                 ///   - itemId: Only sales whose order contains this item.
                 ///   - status:
+                ///   - delistStatus: Only sales with a delist run in one of these statuses; for example
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
                     itemId: Components.Schemas.Id? = nil,
                     status: [Components.Schemas.KnownSaleStatus]? = nil,
+                    delistStatus: [Components.Schemas.DelistRunStatus]? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
                     self.itemId = itemId
                     self.status = status
+                    self.delistStatus = delistStatus
                     self.cursor = cursor
                     self.limit = limit
                 }
@@ -9176,7 +9185,8 @@ public enum Operations {
     /// For sales Listora did not detect itself. One sale is one order; a bundle lists several
     /// items. Starts the same automatic delist run as a detected sale: every other listing
     /// of every item in the order gets a delist operation or an urgent assisted task. A
-    /// sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+    /// sale that contains an already-sold item is recorded with `isDoubleSale: true` and a
+    /// double-sale incident for that item instead of a second delist run.
     /// `422 validation_failed` when an item appears twice or a `listingId` does not belong
     /// to its item on `marketplace`.
     ///

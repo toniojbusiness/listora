@@ -446,7 +446,7 @@ public protocol APIProtocol: Sendable {
     func handleConnectionCallback(_ input: Operations.HandleConnectionCallback.Input) async throws -> Operations.HandleConnectionCallback.Output
     /// List sales
     ///
-    /// Newest first (by `soldAt`).
+    /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -456,7 +456,8 @@ public protocol APIProtocol: Sendable {
     /// For sales Listora did not detect itself. One sale is one order; a bundle lists several
     /// items. Starts the same automatic delist run as a detected sale: every other listing
     /// of every item in the order gets a delist operation or an urgent assisted task. A
-    /// sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+    /// sale that contains an already-sold item is recorded with `isDoubleSale: true` and a
+    /// double-sale incident for that item instead of a second delist run.
     /// `422 validation_failed` when an item appears twice or a `listingId` does not belong
     /// to its item on `marketplace`.
     ///
@@ -1301,7 +1302,7 @@ extension APIProtocol {
     }
     /// List sales
     ///
-    /// Newest first (by `soldAt`).
+    /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -1319,7 +1320,8 @@ extension APIProtocol {
     /// For sales Listora did not detect itself. One sale is one order; a bundle lists several
     /// items. Starts the same automatic delist run as a detected sale: every other listing
     /// of every item in the order gets a delist operation or an urgent assisted task. A
-    /// sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+    /// sale that contains an already-sold item is recorded with `isDoubleSale: true` and a
+    /// double-sale incident for that item instead of a second delist run.
     /// `422 validation_failed` when an item appears twice or a `listingId` does not belong
     /// to its item on `marketplace`.
     ///

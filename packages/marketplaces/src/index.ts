@@ -39,6 +39,8 @@ export {
 } from './capabilities.ts';
 export type { OperationMode } from './capabilities.ts';
 export { ConnectionAwareAdapter } from './connection-aware.ts';
+export { orderCancelGuide, orderCancelTitle } from './order-cancel.ts';
+export type { OrderCancelGuide } from './order-cancel.ts';
 export { createMarketplaceAdapters } from './default-adapters.ts';
 export type { MarketplaceAdaptersConfig } from './default-adapters.ts';
 export type { ConnectionAwareAdapterOptions } from './connection-aware.ts';

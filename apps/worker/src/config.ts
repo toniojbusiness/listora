@@ -12,6 +12,7 @@ import {
   MarketplaceConfigError,
   type MarketplaceConfig,
 } from '@listora/connections';
+import { loadPushConfig, PushConfigError, type PushConfig } from '@listora/push';
 import { isLogLevel, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -40,6 +41,8 @@ export interface WorkerConfig {
   cognitoUserPool: { region: string; userPoolId: string } | undefined;
   /** Thresholds of the hourly AI spend check; the daily budget is the guard's own. */
   aiAlerts: AiAlertThresholds;
+  /** PUSH_DRIVER, read by @listora/push: how sale and delist alerts reach the seller's phone. */
+  push: PushConfig;
 }
 
 export class ConfigError extends Error {
@@ -87,6 +90,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const ai = collect(issues, AiConfigError, () => loadAiConfig(env));
   const analysis = collect(issues, AnalysisConfigError, () => loadAnalysisConfig(env));
   const aiAlerts = collect(issues, AiConfigError, () => loadAiAlertConfig(env));
+  const push = collect(issues, PushConfigError, () => loadPushConfig(env));
 
   if (
     issues.length > 0 ||
@@ -95,6 +99,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     ai === undefined ||
     analysis === undefined ||
     aiAlerts === undefined ||
+    push === undefined ||
     marketplaces === undefined
   ) {
     throw new ConfigError(issues);
@@ -111,6 +116,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     cognitoUserPool:
       userPoolId === undefined ? undefined : { region: userPoolRegion(userPoolId), userPoolId },
     aiAlerts,
+    push,
   };
 }
 

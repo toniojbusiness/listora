@@ -2,7 +2,8 @@
  * The worker's side of a stored eBay notification (`ebay_notification` jobs from receive.ts):
  *
  * - `ORDER_CONFIRMATION` carries no prices, so the order is read with the seller's token
- *   (Fulfillment `getOrder`) and recorded as a sale (orders.ts), which hands it to auto-delist.
+ *   (Fulfillment `getOrder`) and recorded as a sale (orders.ts), which starts its auto-delist in
+ *   the same transaction.
  *   The sold listings are also read back (`listing_resync`), so their status comes from eBay.
  * - `LISTING` (created, updated, ended) reads the listing back the same way, so a change the
  *   seller made on eBay itself (Seller Hub, the eBay app) reaches Listora: the drift resync.
@@ -17,6 +18,7 @@ import type { AccessTokenResult } from '@listora/connections';
 import {
   getOrder,
   parseEbayNotification,
+  type AdapterLookup,
   type EbayOrder,
   type RestEndpoints,
 } from '@listora/marketplaces';
@@ -35,6 +37,8 @@ export interface SellerTokens {
 
 export interface EbaySyncDependencies {
   db: Db;
+  /** The adapters the worker runs with, for the auto-delist of each recorded sale. */
+  adapters: AdapterLookup;
   endpoints: Pick<RestEndpoints, 'api'>;
   tokens: SellerTokens;
   logger: Logger;
@@ -103,12 +107,16 @@ export async function processEbayNotification(
         );
       }
       return inTransaction(deps.db, async (trx) => {
-        const result = await recordEbayOrder(trx, {
-          accountId: job.accountId,
-          sellerUserId: event.external_user_id ?? '',
-          order,
-          detection: { source: 'webhook', inboundEventId: event.id },
-        });
+        const result = await recordEbayOrder(
+          trx,
+          {
+            accountId: job.accountId,
+            sellerUserId: event.external_user_id ?? '',
+            order,
+            detection: { source: 'webhook', inboundEventId: event.id },
+          },
+          { adapters: deps.adapters },
+        );
         let outcome: NotificationProcessing;
         switch (result.type) {
           case 'recorded':

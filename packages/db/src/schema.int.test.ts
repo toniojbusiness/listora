@@ -335,6 +335,7 @@ const COLUMNS = {
     'completed_at',
     'created_at',
     'updated_at',
+    'sale_id',
   ],
   fee_line: [
     'id',

@@ -1,4 +1,5 @@
 export {
+  cancelMootOperations,
   cancelOperation,
   confirmOperationByUser,
   enqueueOperation,
