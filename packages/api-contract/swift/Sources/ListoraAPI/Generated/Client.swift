@@ -7179,6 +7179,136 @@ public struct Client: APIProtocol {
             }
         )
     }
+    /// Get the profit dashboard for a period
+    ///
+    /// The seller's results for the days `from` to `to` (inclusive) in `timeZone`: revenue,
+    /// fees, shipping, cost of goods, net profit, ROI, the averages, sell-through, a series by
+    /// day, week, or month, the seller's own totals per marketplace (in a fixed order, never
+    /// ranked), the best and worst brands and categories, and dead stock today. Every amount is
+    /// computed from the sales' fee lines and the items' costs exactly as each sale's own money
+    /// is (`Sale`), so the dashboard and the sale screens agree to the cent. No AI is involved.
+    /// `422 validation_failed` when `to` is before `from`, the period is longer than 3660 days,
+    /// or `timeZone` is not an IANA time zone.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/profit`.
+    /// - Remark: Generated from `#/paths//v1/profit/get(getProfit)`.
+    public func getProfit(_ input: Operations.GetProfit.Input) async throws -> Operations.GetProfit.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetProfit.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/profit",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "from",
+                    value: input.query.from
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "to",
+                    value: input.query.to
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "timeZone",
+                    value: input.query.timeZone
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetProfit.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ProfitReport.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 422:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.ValidationFailed.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .unprocessableContent(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
     /// List assisted-mode tasks
     ///
     /// Urgent first, then oldest first.

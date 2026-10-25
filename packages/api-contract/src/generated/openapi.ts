@@ -1179,6 +1179,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/profit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the profit dashboard for a period
+         * @description The seller's results for the days `from` to `to` (inclusive) in `timeZone`: revenue,
+         *     fees, shipping, cost of goods, net profit, ROI, the averages, sell-through, a series by
+         *     day, week, or month, the seller's own totals per marketplace (in a fixed order, never
+         *     ranked), the best and worst brands and categories, and dead stock today. Every amount is
+         *     computed from the sales' fee lines and the items' costs exactly as each sale's own money
+         *     is (`Sale`), so the dashboard and the sale screens agree to the cent. No AI is involved.
+         *     `422 validation_failed` when `to` is before `from`, the period is longer than 3660 days,
+         *     or `timeZone` is not an IANA time zone.
+         */
+        get: operations["getProfit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tasks": {
         parameters: {
             query?: never;
@@ -2742,6 +2769,184 @@ export interface components {
             nextCursor?: string;
         };
         /**
+         * @description A `KnownProfitGranularity`, or a bucket size added after this client was built. Clients
+         *     label an unknown granularity's buckets by their `start` date.
+         */
+        ProfitGranularity: components["schemas"]["KnownProfitGranularity"];
+        /**
+         * @description The size of each `series` bucket, chosen by the server from the period's length: `day` up
+         *     to 31 days, `week` (Monday to Sunday) up to 184 days, `month` beyond.
+         * @enum {string}
+         */
+        KnownProfitGranularity: "day" | "week" | "month";
+        /** @description The period the report covers, in the seller's time zone. */
+        ProfitPeriod: {
+            /**
+             * Format: date
+             * @description The period's first day.
+             */
+            from: string;
+            /**
+             * Format: date
+             * @description The period's last day (inclusive).
+             */
+            to: string;
+            /** @description The IANA time zone the days are counted in, for example `America/New_York`. */
+            timeZone: string;
+            granularity: components["schemas"]["ProfitGranularity"];
+        };
+        /**
+         * @description The period's totals over its sales that stand (detected, confirmed, or shipped; a canceled
+         *     or returned sale counts nowhere). `netProfit` is `revenue` minus `fees`, `shipping`, and
+         *     `costOfGoods`, so the lines always add up. An item sold without a cost counts as zero cost
+         *     (`missingCostCount` says how many, and the profit is overstated by their cost).
+         */
+        ProfitSummary: {
+            /** @description What buyers paid: the sale prices plus the shipping they paid. */
+            revenue: components["schemas"]["Money"];
+            /** @description Every fee line except shipping labels (marketplace, payment, promotion, tax, other). */
+            fees: components["schemas"]["Money"];
+            /**
+             * @description What the seller paid to ship: labels the marketplace deducted (`shipping_label` fee
+             *     lines) plus labels bought outside the payout (`Sale.shippingCost`).
+             */
+            shipping: components["schemas"]["Money"];
+            /** @description The sold items' costs (an item without a cost adds nothing). */
+            costOfGoods: components["schemas"]["Money"];
+            netProfit: components["schemas"]["Money"];
+            /**
+             * Format: int64
+             * @description `netProfit` over `costOfGoods` in basis points (12550 is 125.5%). Absent for a zero cost of goods.
+             */
+            roiBasisPoints?: number;
+            /**
+             * Format: int32
+             * @description Orders (a bundle is one).
+             */
+            salesCount: number;
+            /** Format: int32 */
+            itemsSold: number;
+            /**
+             * Format: int32
+             * @description Sold items with no cost entered; their cost counts as zero.
+             */
+            missingCostCount: number;
+            /** @description The sale prices over `itemsSold`. Absent when nothing sold. */
+            averageSalePrice?: components["schemas"]["Money"];
+            /** @description `netProfit` over `itemsSold`. Absent when nothing sold. */
+            averageProfitPerItem?: components["schemas"]["Money"];
+            /**
+             * Format: int32
+             * @description Whole days from an item's first listing (or, never listed through Listora, from when it
+             *     was added) to its sale, averaged over the items sold. Absent when nothing sold.
+             */
+            averageDaysToSell?: number;
+            /**
+             * Format: int32
+             * @description `itemsSold` over `itemsSold` plus the items listed now that were added by the period's
+             *     end, in basis points. Absent when both are zero.
+             */
+            sellThroughBasisPoints?: number;
+            /** @description True while any of the period's fee lines is an estimate; the profit is then an estimate too. */
+            feesEstimated: boolean;
+        };
+        /** @description One bucket of the period's series (see `ProfitPeriod.granularity`). */
+        ProfitBucket: {
+            /**
+             * Format: date
+             * @description The bucket's first day (the period's first day for a partial first bucket).
+             */
+            start: string;
+            revenue: components["schemas"]["Money"];
+            netProfit: components["schemas"]["Money"];
+            /** Format: int32 */
+            itemsSold: number;
+        };
+        /**
+         * @description The seller's own totals on one marketplace. Only totals: no ranking, share, or speed, so
+         *     no marketplace's performance is presented relative to another's (eBay's API License
+         *     Agreement restricts that without eBay's consent).
+         */
+        MarketplaceProfit: {
+            marketplace: components["schemas"]["Marketplace"];
+            /** Format: int32 */
+            salesCount: number;
+            /** Format: int32 */
+            itemsSold: number;
+            revenue: components["schemas"]["Money"];
+            fees: components["schemas"]["Money"];
+            shipping: components["schemas"]["Money"];
+            costOfGoods: components["schemas"]["Money"];
+            netProfit: components["schemas"]["Money"];
+        };
+        /** @description The period's sold items of one brand or one category. */
+        ProfitGroup: {
+            /** @description The brand as entered, or the category path (`ItemDetails.category`). */
+            key: string;
+            /** Format: int32 */
+            itemsSold: number;
+            revenue: components["schemas"]["Money"];
+            netProfit: components["schemas"]["Money"];
+            /**
+             * Format: int64
+             * @description `netProfit` over the items' cost in basis points. Absent for a zero cost.
+             */
+            roiBasisPoints?: number;
+            /** Format: int32 */
+            averageDaysToSell?: number;
+        };
+        /**
+         * @description Groups ranked by net profit: up to five `best` (highest first) and up to five `worst`
+         *     (lowest first), never the same group in both. Items without a brand or category are left
+         *     out.
+         */
+        ProfitRanking: {
+            best: components["schemas"]["ProfitGroup"][];
+            worst: components["schemas"]["ProfitGroup"][];
+        };
+        /** @description Unsold items in inventory longer than the bucket's age, and the money tied up in them. */
+        DeadStockBucket: {
+            /** Format: int32 */
+            itemCount: number;
+            /** @description The items' total cost (an item without a cost adds nothing). */
+            cost: components["schemas"]["Money"];
+            /** Format: int32 */
+            missingCostCount: number;
+        };
+        DeadStockItem: {
+            itemId: components["schemas"]["Id"];
+            sku: components["schemas"]["Sku"];
+            title?: string;
+            /**
+             * Format: int32
+             * @description Whole days since the item was bought (its purchase date) or, without one, added.
+             */
+            ageDays: number;
+            cost?: components["schemas"]["Money"];
+            status: components["schemas"]["ItemStatus"];
+        };
+        /**
+         * @description Active inventory (draft, ready, or listed) that has not sold, by age today, whatever the
+         *     report's period.
+         */
+        DeadStock: {
+            over60Days: components["schemas"]["DeadStockBucket"];
+            over90Days: components["schemas"]["DeadStockBucket"];
+            /** @description The oldest items over 60 days, oldest first. */
+            oldest: components["schemas"]["DeadStockItem"][];
+        };
+        ProfitReport: {
+            period: components["schemas"]["ProfitPeriod"];
+            summary: components["schemas"]["ProfitSummary"];
+            /** @description One bucket per day, week, or month of the period, in order, including empty ones. */
+            series: components["schemas"]["ProfitBucket"][];
+            /** @description The marketplaces with a sale in the period, in the fixed `KnownMarketplace` order (never ranked). */
+            marketplaces: components["schemas"]["MarketplaceProfit"][];
+            brands: components["schemas"]["ProfitRanking"];
+            categories: components["schemas"]["ProfitRanking"];
+            deadStock: components["schemas"]["DeadStock"];
+        };
+        /**
          * @description A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
          *     unknown task's `title`, `instructions`, and `deepLink`, and ask the user to update
          *     the app to complete it.
@@ -3148,6 +3353,18 @@ export type FeeLine = components['schemas']['FeeLine'];
 export type SaleCreate = components['schemas']['SaleCreate'];
 export type Sale = components['schemas']['Sale'];
 export type SalePage = components['schemas']['SalePage'];
+export type ProfitGranularity = components['schemas']['ProfitGranularity'];
+export type KnownProfitGranularity = components['schemas']['KnownProfitGranularity'];
+export type ProfitPeriod = components['schemas']['ProfitPeriod'];
+export type ProfitSummary = components['schemas']['ProfitSummary'];
+export type ProfitBucket = components['schemas']['ProfitBucket'];
+export type MarketplaceProfit = components['schemas']['MarketplaceProfit'];
+export type ProfitGroup = components['schemas']['ProfitGroup'];
+export type ProfitRanking = components['schemas']['ProfitRanking'];
+export type DeadStockBucket = components['schemas']['DeadStockBucket'];
+export type DeadStockItem = components['schemas']['DeadStockItem'];
+export type DeadStock = components['schemas']['DeadStock'];
+export type ProfitReport = components['schemas']['ProfitReport'];
 export type UserTaskKind = components['schemas']['UserTaskKind'];
 export type KnownUserTaskKind = components['schemas']['KnownUserTaskKind'];
 export type UserTaskStatus = components['schemas']['UserTaskStatus'];
@@ -4902,6 +5119,35 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    getProfit: {
+        parameters: {
+            query: {
+                /** @description The period's first day in `timeZone`. */
+                from: string;
+                /** @description The period's last day in `timeZone` (inclusive). */
+                to: string;
+                /** @description The seller's IANA time zone, for example `America/New_York`. */
+                timeZone: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The period's report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfitReport"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     listTasks: {
         parameters: {
             query?: {
@@ -5091,6 +5337,7 @@ export const knownSaleActionValues: ReadonlyArray<FlattenedDeepRequired<componen
 export const knownRelistDecisionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownRelistDecision"]> = ["pending", "relisted", "declined"];
 export const knownFeeTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeType"]> = ["marketplace", "payment", "shipping_label", "promotion", "tax", "other"];
 export const feeSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FeeSource"]> = ["actual", "estimated"];
+export const knownProfitGranularityValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownProfitGranularity"]> = ["day", "week", "month"];
 export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "edit_manually", "confirm_sale", "reconnect", "review_match", "resolve_double_sale"];
 export const userTaskStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskStatus"]> = ["open", "completed", "dismissed"];
 export const userTaskUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskUrgency"]> = ["normal", "urgent"];

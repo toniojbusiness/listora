@@ -8,20 +8,27 @@ import SwiftUI
 @MainActor
 public final class SalesEnvironment {
     let service: any SalesService
+    let profitService: any ProfitService
     let timing: SalesTiming
     /// Whether a session exists; signed out, the sales list never calls the API.
     let isSignedIn: @MainActor () -> Bool
 
     public convenience init(apiClient: APIClient, accessTokens: AccessTokenStore) {
-        self.init(service: APISalesService(client: apiClient.client), isSignedIn: { accessTokens.grant != nil })
+        self.init(
+            service: APISalesService(client: apiClient.client),
+            profitService: APIProfitService(client: apiClient.client),
+            isSignedIn: { accessTokens.grant != nil },
+        )
     }
 
     init(
         service: any SalesService,
+        profitService: any ProfitService,
         timing: SalesTiming = .standard,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
     ) {
         self.service = service
+        self.profitService = profitService
         self.timing = timing
         self.isSignedIn = isSignedIn
     }
@@ -41,6 +48,10 @@ public final class SalesEnvironment {
 
     func makeListModel() -> SalesListModel {
         SalesListModel(service: service, isSignedIn: isSignedIn)
+    }
+
+    func makeProfitModel() -> ProfitModel {
+        ProfitModel(service: profitService, isSignedIn: isSignedIn)
     }
 
     func makeDetailModel(saleID: String) -> SaleDetailModel {

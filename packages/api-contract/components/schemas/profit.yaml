@@ -1,0 +1,278 @@
+ProfitGranularity:
+  description: |
+    A `KnownProfitGranularity`, or a bucket size added after this client was built. Clients
+    label an unknown granularity's buckets by their `start` date.
+  anyOf:
+    - $ref: '#/KnownProfitGranularity'
+    - type: string
+      maxLength: 64
+KnownProfitGranularity:
+  type: string
+  description: |
+    The size of each `series` bucket, chosen by the server from the period's length: `day` up
+    to 31 days, `week` (Monday to Sunday) up to 184 days, `month` beyond.
+  enum: [day, week, month]
+ProfitPeriod:
+  type: object
+  description: The period the report covers, in the seller's time zone.
+  required: [from, to, timeZone, granularity]
+  properties:
+    from:
+      type: string
+      format: date
+      description: The period's first day.
+    to:
+      type: string
+      format: date
+      description: The period's last day (inclusive).
+    timeZone:
+      type: string
+      maxLength: 64
+      description: The IANA time zone the days are counted in, for example `America/New_York`.
+    granularity:
+      $ref: '#/ProfitGranularity'
+ProfitSummary:
+  type: object
+  description: |
+    The period's totals over its sales that stand (detected, confirmed, or shipped; a canceled
+    or returned sale counts nowhere). `netProfit` is `revenue` minus `fees`, `shipping`, and
+    `costOfGoods`, so the lines always add up. An item sold without a cost counts as zero cost
+    (`missingCostCount` says how many, and the profit is overstated by their cost).
+  required:
+    [
+      revenue,
+      fees,
+      shipping,
+      costOfGoods,
+      netProfit,
+      salesCount,
+      itemsSold,
+      missingCostCount,
+      feesEstimated,
+    ]
+  properties:
+    revenue:
+      $ref: './common.yaml#/Money'
+      description: 'What buyers paid: the sale prices plus the shipping they paid.'
+    fees:
+      $ref: './common.yaml#/Money'
+      description: Every fee line except shipping labels (marketplace, payment, promotion, tax, other).
+    shipping:
+      $ref: './common.yaml#/Money'
+      description: |
+        What the seller paid to ship: labels the marketplace deducted (`shipping_label` fee
+        lines) plus labels bought outside the payout (`Sale.shippingCost`).
+    costOfGoods:
+      $ref: './common.yaml#/Money'
+      description: The sold items' costs (an item without a cost adds nothing).
+    netProfit:
+      $ref: './common.yaml#/Money'
+    roiBasisPoints:
+      type: integer
+      format: int64
+      description: '`netProfit` over `costOfGoods` in basis points (12550 is 125.5%). Absent for a zero cost of goods.'
+    salesCount:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Orders (a bundle is one).
+    itemsSold:
+      type: integer
+      format: int32
+      minimum: 0
+    missingCostCount:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Sold items with no cost entered; their cost counts as zero.
+    averageSalePrice:
+      $ref: './common.yaml#/Money'
+      description: The sale prices over `itemsSold`. Absent when nothing sold.
+    averageProfitPerItem:
+      $ref: './common.yaml#/Money'
+      description: '`netProfit` over `itemsSold`. Absent when nothing sold.'
+    averageDaysToSell:
+      type: integer
+      format: int32
+      minimum: 0
+      description: |
+        Whole days from an item's first listing (or, never listed through Listora, from when it
+        was added) to its sale, averaged over the items sold. Absent when nothing sold.
+    sellThroughBasisPoints:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 10000
+      description: |
+        `itemsSold` over `itemsSold` plus the items listed now that were added by the period's
+        end, in basis points. Absent when both are zero.
+    feesEstimated:
+      type: boolean
+      description: True while any of the period's fee lines is an estimate; the profit is then an estimate too.
+ProfitBucket:
+  type: object
+  description: One bucket of the period's series (see `ProfitPeriod.granularity`).
+  required: [start, revenue, netProfit, itemsSold]
+  properties:
+    start:
+      type: string
+      format: date
+      description: The bucket's first day (the period's first day for a partial first bucket).
+    revenue:
+      $ref: './common.yaml#/Money'
+    netProfit:
+      $ref: './common.yaml#/Money'
+    itemsSold:
+      type: integer
+      format: int32
+      minimum: 0
+MarketplaceProfit:
+  type: object
+  description: |
+    The seller's own totals on one marketplace. Only totals: no ranking, share, or speed, so
+    no marketplace's performance is presented relative to another's (eBay's API License
+    Agreement restricts that without eBay's consent).
+  required: [marketplace, salesCount, itemsSold, revenue, fees, shipping, costOfGoods, netProfit]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    salesCount:
+      type: integer
+      format: int32
+      minimum: 0
+    itemsSold:
+      type: integer
+      format: int32
+      minimum: 0
+    revenue:
+      $ref: './common.yaml#/Money'
+    fees:
+      $ref: './common.yaml#/Money'
+    shipping:
+      $ref: './common.yaml#/Money'
+    costOfGoods:
+      $ref: './common.yaml#/Money'
+    netProfit:
+      $ref: './common.yaml#/Money'
+ProfitGroup:
+  type: object
+  description: The period's sold items of one brand or one category.
+  required: [key, itemsSold, revenue, netProfit]
+  properties:
+    key:
+      type: string
+      maxLength: 200
+      description: The brand as entered, or the category path (`ItemDetails.category`).
+    itemsSold:
+      type: integer
+      format: int32
+      minimum: 1
+    revenue:
+      $ref: './common.yaml#/Money'
+    netProfit:
+      $ref: './common.yaml#/Money'
+    roiBasisPoints:
+      type: integer
+      format: int64
+      description: "`netProfit` over the items' cost in basis points. Absent for a zero cost."
+    averageDaysToSell:
+      type: integer
+      format: int32
+      minimum: 0
+ProfitRanking:
+  type: object
+  description: |
+    Groups ranked by net profit: up to five `best` (highest first) and up to five `worst`
+    (lowest first), never the same group in both. Items without a brand or category are left
+    out.
+  required: [best, worst]
+  properties:
+    best:
+      type: array
+      maxItems: 5
+      items:
+        $ref: '#/ProfitGroup'
+    worst:
+      type: array
+      maxItems: 5
+      items:
+        $ref: '#/ProfitGroup'
+DeadStockBucket:
+  type: object
+  description: Unsold items in inventory longer than the bucket's age, and the money tied up in them.
+  required: [itemCount, cost, missingCostCount]
+  properties:
+    itemCount:
+      type: integer
+      format: int32
+      minimum: 0
+    cost:
+      $ref: './common.yaml#/Money'
+      description: The items' total cost (an item without a cost adds nothing).
+    missingCostCount:
+      type: integer
+      format: int32
+      minimum: 0
+DeadStockItem:
+  type: object
+  required: [itemId, sku, ageDays, status]
+  properties:
+    itemId:
+      $ref: './common.yaml#/Id'
+    sku:
+      $ref: './common.yaml#/Sku'
+    title:
+      type: string
+      maxLength: 500
+    ageDays:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Whole days since the item was bought (its purchase date) or, without one, added.
+    cost:
+      $ref: './common.yaml#/Money'
+    status:
+      $ref: './items.yaml#/ItemStatus'
+DeadStock:
+  type: object
+  description: |
+    Active inventory (draft, ready, or listed) that has not sold, by age today, whatever the
+    report's period.
+  required: [over60Days, over90Days, oldest]
+  properties:
+    over60Days:
+      $ref: '#/DeadStockBucket'
+    over90Days:
+      $ref: '#/DeadStockBucket'
+    oldest:
+      type: array
+      maxItems: 5
+      description: The oldest items over 60 days, oldest first.
+      items:
+        $ref: '#/DeadStockItem'
+ProfitReport:
+  type: object
+  required: [period, summary, series, marketplaces, brands, categories, deadStock]
+  properties:
+    period:
+      $ref: '#/ProfitPeriod'
+    summary:
+      $ref: '#/ProfitSummary'
+    series:
+      type: array
+      description: One bucket per day, week, or month of the period, in order, including empty ones.
+      maxItems: 400
+      items:
+        $ref: '#/ProfitBucket'
+    marketplaces:
+      type: array
+      description: The marketplaces with a sale in the period, in the fixed `KnownMarketplace` order (never ranked).
+      maxItems: 64
+      items:
+        $ref: '#/MarketplaceProfit'
+    brands:
+      $ref: '#/ProfitRanking'
+    categories:
+      $ref: '#/ProfitRanking'
+    deadStock:
+      $ref: '#/DeadStock'
