@@ -166,8 +166,6 @@ targets:
       - path: ListoraUITests
         excludes:
           - Fixtures
-          # The fake AI answers of the local stack `make ios-test` starts; read by the stack.
-          - FakeAI
       # Photos the UI tests import through the app's debug fixture import, kept as one folder.
       - path: ListoraUITests/Fixtures
         type: folder
@@ -197,7 +195,6 @@ schemes:
         - package: APIClient/APIClientTests
         - package: Features/AppFeatureTests
         - package: Features/AddItemFeatureTests
-        - package: Features/ReviewFeatureTests
         - package: Features/SettingsFeatureTests
         - package: Features/MarketplacesFeatureTests
         - package: Features/TagReadingFeatureTests

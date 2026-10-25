@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_FAKE_FIXTURES_DIR } from './config.ts';
 import { AiProviderError } from './errors.ts';
 import {
-  DEFAULT_FIXTURE_FILE,
   directoryFixtures,
   estimateImageTokens,
   FakeAiProvider,
@@ -177,29 +176,6 @@ describe('directoryFixtures', () => {
         outputs: { dominant_color: { color: 'red', confidence: 1 } },
       });
       expect(await source.load('b'.repeat(64))).toBeUndefined();
-    } finally {
-      await rm(dir, { recursive: true });
-    }
-  });
-
-  it('answers photo sets without a file of their own from default.json when it exists', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'listora-ai-fixtures-'));
-    try {
-      await writeFile(
-        join(dir, `${'a'.repeat(64)}.json`),
-        JSON.stringify({ outputs: { dominant_color: { color: 'red', confidence: 1 } } }),
-      );
-      await writeFile(
-        join(dir, DEFAULT_FIXTURE_FILE),
-        JSON.stringify({ outputs: { dominant_color: { color: 'blue', confidence: 0.5 } } }),
-      );
-      const source = directoryFixtures(dir);
-      expect(await source.load('a'.repeat(64))).toEqual({
-        outputs: { dominant_color: { color: 'red', confidence: 1 } },
-      });
-      expect(await source.load('b'.repeat(64))).toEqual({
-        outputs: { dominant_color: { color: 'blue', confidence: 0.5 } },
-      });
     } finally {
       await rm(dir, { recursive: true });
     }

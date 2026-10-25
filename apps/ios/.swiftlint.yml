@@ -52,8 +52,6 @@ line_length:
 
 identifier_name:
   excluded:
-    # The contract's provenance of AI-proposed values.
-    - ai
     # GRDB's name for the database connection in every closure it passes one to.
     - db
     # Drag translations in geometry code.

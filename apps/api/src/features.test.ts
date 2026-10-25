@@ -37,8 +37,6 @@ describe('API feature discovery', () => {
       'photos',
       'pricing',
       'uploads',
-      'usage',
-      'webhooks',
     ]);
   });
 
@@ -81,7 +79,6 @@ describe('buildApp', () => {
     ['photos', 'addItemPhoto'],
     ['pricing', 'getItemPricing'],
     ['uploads', 'createUploadSession'],
-    ['usage', 'getUsage'],
   ])('serves the %s feature (%s)', async (_feature, operationId) => {
     const app = buildApp({
       db,

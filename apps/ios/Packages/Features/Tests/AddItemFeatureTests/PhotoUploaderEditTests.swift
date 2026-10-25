@@ -122,14 +122,7 @@ struct PhotoUploaderEditTests {
 
     @Test
     func `a draft deleted before its item's answer arrived still has its item deleted`() async throws {
-        // A long retry delay keeps the failed create waiting, so the test sees it before the
-        // queue retries (with the 20 ms test policy the retry could succeed between two polls).
-        let harness = try UploadHarness(policy: RetryPolicy(
-            maxAttempts: 4,
-            baseDelay: .seconds(30),
-            maxDelay: .seconds(30),
-            jitter: 1 ... 1,
-        ))
+        let harness = try UploadHarness()
         // The item is created, but the answer is lost: the queue retries later.
         harness.server.fail({ $0.path == "/v1/items" }, with: .error(503, code: "service_unavailable", retryable: true))
         let draft = try harness.createDraft(roles: [.front])

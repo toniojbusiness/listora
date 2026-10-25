@@ -16,7 +16,6 @@
     { "path": "../../packages/marketplaces" },
     { "path": "../../packages/photos" },
     { "path": "../../packages/pricing" },
-    { "path": "../../packages/sales" },
     { "path": "../../packages/shared" },
     { "path": "../../packages/storage" },
     { "path": "../../packages/testing" }

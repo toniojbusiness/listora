@@ -32,7 +32,6 @@
     "dev:fake-depop": "npm run fake:depop --workspace @listora/marketplaces",
     "ebay:sandbox-token": "node --env-file-if-exists=.env packages/marketplaces/src/ebay/sandbox-token.ts",
     "ebay:sandbox-check": "EBAY_SANDBOX_CHECK=required node --env-file-if-exists=.env node_modules/vitest/vitest.mjs run --project unit packages/marketplaces/src/ebay/sandbox.live.test.ts",
-    "e2e:stack": "npm run stack --workspace @listora/e2e --",
     "db:migrate": "npm run migrate --workspace @listora/db --",
     "admin": "npm run admin --workspace @listora/admin --",
     "eval": "npm run eval --workspace @listora/eval --",

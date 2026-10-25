@@ -3,15 +3,7 @@ import AVFoundation
 import Core
 import Foundation
 import os
-import SwiftUI
 import Synchronization
-
-/// Builds the review flow for a draft whose photos are on the server. The review feature
-/// implements it; `AppDependencies` hands it over, so the two features never import each other.
-public typealias ItemReviewDestination = @MainActor (
-    ItemReviewRequest,
-    _ onFinished: @escaping @MainActor (ItemReviewOutcome) -> Void,
-) -> AnyView
 
 /// Everything the Add Item tab needs, built once at launch by `AppDependencies`: the on-device
 /// draft store, the upload queue, and the background upload session.
@@ -35,13 +27,12 @@ public final class AddItemEnvironment {
     let activity: UploadActivity
     /// False in the simulator and on devices without a camera: the tab offers library import only.
     let isCameraAvailable: Bool
+    /// Debug builds only: a folder of photos that stands in for the camera
+    /// (`LISTORA_FAKE_CAMERA`), so the simulator can show and test the guided capture.
+    let fakeCameraDirectory: URL?
     /// Debug builds only: a folder whose JPEGs "Import photos" adds instead of opening the photo
     /// picker, so UI tests import fixture photos (`LISTORA_FIXTURE_PHOTOS`).
     let fixturePhotosDirectory: URL?
-    /// Measures each new item's interaction time, from its first photo to its saved item.
-    let meter: InteractionMeter
-    /// Opens the review of a draft's item; nil offers no review (previews).
-    let reviewDestination: ItemReviewDestination?
     private let tokenChanges: AsyncStream<AccessGrant?>?
     private var tokenObservation: Task<Void, Never>?
 
@@ -51,9 +42,8 @@ public final class AddItemEnvironment {
         apiClient: APIClient,
         accessTokens: AccessTokenStore,
         tagReader: any TagReader,
-        meter: InteractionMeter,
-        reviewDestination: ItemReviewDestination?,
         fixturePhotosDirectory: URL? = nil,
+        fakeCameraDirectory: URL? = nil,
     ) {
         self.init(
             dataDirectory: dataDirectory,
@@ -64,8 +54,7 @@ public final class AddItemEnvironment {
             transport: Self.backgroundTransport,
             isCameraAvailable: AVCaptureDevice.default(for: .video) != nil,
             fixturePhotosDirectory: fixturePhotosDirectory,
-            meter: meter,
-            reviewDestination: reviewDestination,
+            fakeCameraDirectory: fakeCameraDirectory,
         )
     }
 
@@ -78,16 +67,14 @@ public final class AddItemEnvironment {
         transport: any UploadTransport,
         isCameraAvailable: Bool,
         fixturePhotosDirectory: URL?,
-        meter: InteractionMeter,
-        reviewDestination: ItemReviewDestination?,
+        fakeCameraDirectory: URL? = nil,
         policy: RetryPolicy = .standard,
     ) {
         let activity = UploadActivity()
         self.activity = activity
-        self.meter = meter
-        self.reviewDestination = reviewDestination
-        self.isCameraAvailable = isCameraAvailable
+        self.isCameraAvailable = isCameraAvailable || fakeCameraDirectory != nil
         self.fixturePhotosDirectory = fixturePhotosDirectory
+        self.fakeCameraDirectory = fakeCameraDirectory
         self.tokenChanges = tokenChanges
         do {
             let store = try DraftStore(database: DraftDatabase(directory: dataDirectory))
@@ -107,6 +94,16 @@ public final class AddItemEnvironment {
             state =
                 .unavailable("Drafts can't be saved on this iPhone right now. Free up some storage and reopen Listora.")
         }
+    }
+
+    /// A camera for one capture session.
+    func makeCamera() -> any CameraSource {
+        #if DEBUG
+            if let fakeCameraDirectory {
+                return FixtureCamera(directory: fakeCameraDirectory)
+            }
+        #endif
+        return DeviceCamera()
     }
 
     /// Where the app keeps drafts: Application Support, which is backed up and never purged.

@@ -21,8 +21,7 @@ the conventions, and the product invariants, and links to each feature's own doc
 - For the iOS app only: **Xcode 26.3 or 27.1** (CI uses 26.3; the app builds without warnings on
   both) with the iPhone 17 simulator, plus XcodeGen, SwiftLint, and SwiftFormat
   (`brew install xcodegen swiftlint swiftformat`). See
-  [apps/ios/README.md](apps/ios/README.md). `make ios-test` also runs the backend (the setup
-  below).
+  [apps/ios/README.md](apps/ios/README.md).
 
 ## Setup
 
@@ -77,7 +76,6 @@ has the steps.
 | `npm run dev:fake-depop`       | Run the fake Depop at `DEPOP_FAKE_URL`, which api-connected Depop listings use with `DEPOP_ENV=fake`                                             |
 | `npm run ebay:sandbox-token`   | Sign a sandbox test seller in on eBay and save their refresh token in `.env` (see [the sandbox check](docs/features/ebay.md#sandbox-check))      |
 | `npm run ebay:sandbox-check`   | Run the eBay adapter end to end against eBay's sandbox; fails with what to set when keys are missing                                             |
-| `npm run e2e:stack`            | Start the local end-to-end stack (API, worker, fakes, scratch database, signed-in user); `make ios-test` runs the iOS tests inside it            |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
 | `npm run admin -- --help`      | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail)                                   |
 | `npm run eval`                 | Score the tag parsers, AI tag reading, and the full item analysis on the synthetic corpus (fake AI); `-- --provider anthropic` uses the real API |
@@ -92,11 +90,11 @@ has the steps.
 The iOS app has its own `make` targets, run from the repository root. The full list is in
 [apps/ios/README.md](apps/ios/README.md#commands).
 
-| Command         | What it does                                                                          |
-| --------------- | ------------------------------------------------------------------------------------- |
-| `make ios-test` | Run every iOS test on the simulator, the backend UI tests against `npm run e2e:stack` |
-| `make ios-lint` | SwiftLint (strict) and the SwiftFormat check                                          |
-| `make ios-open` | Generate the Xcode project and open it in Xcode                                       |
+| Command         | What it does                                                         |
+| --------------- | -------------------------------------------------------------------- |
+| `make ios-test` | Generate the Xcode project, then run every iOS test on the simulator |
+| `make ios-lint` | SwiftLint (strict) and the SwiftFormat check                         |
+| `make ios-open` | Generate the Xcode project and open it in Xcode                      |
 
 The cluster listens only on `127.0.0.1`, on port `LISTORA_PG_PORT` (default 55432). Each
 worktree has its own cluster. Give each worktree a different port in its `.env` if more than
@@ -120,12 +118,10 @@ packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eB
 packages/connections/   Marketplace connections: OAuth connect, token vault, credentials, health (@listora/connections)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker metrics job (@listora/observability)
-packages/sales/         Sale intake, eBay notifications, the order poll, eBay account deletion (@listora/sales)
 packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)
 packages/tag-parse/     Deterministic tag-text parsers (@listora/tag-parse)
 packages/eval/          Synthetic tag corpus and eval harness CLI (@listora/eval)
-packages/e2e/           Local end-to-end stack for the iOS UI tests: API and worker with fakes (@listora/e2e)
 infra/                  AWS CDK stacks and deploy setup (@listora/infra; see infra/README.md)
 scripts/                dev-db.sh (local PostgreSQL 18 cluster), container-smoke.sh (image smoke test),
                         ios-release.sh (iOS archive and TestFlight upload)
@@ -163,19 +159,14 @@ startup (the feature discovery indexes `apps/api/src/features.ts` and
 `infra/**`, `scripts/container-smoke.sh`, or `.github/workflows/ci.yml` (the `image` filter in
 the `changes` job).
 
-The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, SwiftFormat,
-and PostgreSQL 18 from Homebrew and Node with `npm ci`, then runs `make ios-lint` and
-`make ios-test`, whose UI tests that go through the backend run against the local stack
-(`packages/e2e`). It caches the app's SwiftPM checkouts but not DerivedData, because a fresh
-checkout resets the file timestamps Xcode's incremental build relies on. Every run, passed or
-failed, uploads the test results (including the UI tests' screenshots) and the stack's API and
-worker logs. It builds only when the change touches a file the iOS build reads:
-`apps/ios/**`, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI`
-Swift package), `packages/shared/fixtures/listing-urls.json` (the listing URL fixtures the iOS
-parser is tested against), `packages/e2e/**` (the local stack), `Makefile`, or
-`.github/workflows/ci.yml` (the `ios` filter). Other backend changes do not build it, though
-the UI tests run the backend: the backend job covers them, and the contract keeps the API and
-the app in step.
+The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, and SwiftFormat
+from Homebrew, then runs `make ios-lint` and `make ios-test`. It caches the app's SwiftPM
+checkouts but not DerivedData, because a fresh checkout resets the file timestamps Xcode's
+incremental build relies on. It builds only when the change touches a file the iOS build
+reads: `apps/ios/**`, `packages/api-contract/**` (the OpenAPI spec and the generated
+`ListoraAPI` Swift package), `packages/shared/fixtures/listing-urls.json` (the listing URL
+fixtures the iOS parser is tested against), `Makefile`, or `.github/workflows/ci.yml` (the
+`ios` filter).
 
 **Cost rule.** macOS runner minutes are the expensive ones, so the iOS and image jobs build
 only when one of their inputs changed. Otherwise they succeed in seconds without building, so

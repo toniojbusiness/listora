@@ -44,7 +44,6 @@ struct CaptureGuideTests {
     }
 }
 
-@MainActor
 struct CropGeometryTests {
     @Test
     func `dragging a corner resizes the frame inside the photo`() {

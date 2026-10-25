@@ -16,7 +16,6 @@ import { registerHealthRoutes, type HealthDependencies } from './health.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
 import { registerLocalStorageRoutes } from './storage/local-routes.ts';
 import { SessionPhotoUploads } from './uploads/uploads.ts';
-import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
 export interface AppDependencies extends HealthDependencies {
   db: Db;
@@ -34,8 +33,6 @@ export interface AppDependencies extends HealthDependencies {
    * marketplaces only, with nothing that can be connected.
    */
   connections?: ConnectionsDependencies;
-  /** eBay's notification endpoint (`/webhooks/ebay`); not served without it. */
-  ebayWebhook?: EbayWebhookDependencies;
   /** Where attached photo files come from; defaults to upload sessions in `storage`. */
   uploads?: PhotoUploads;
   /** The clock upload sessions expire by. */
@@ -93,7 +90,6 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
       oauth: {},
       sealer: undefined,
     },
-    ...(deps.ebayWebhook === undefined ? {} : { ebayWebhook: deps.ebayWebhook }),
     now,
   };
   // Each feature folder's routes (features.ts), so a new feature never edits this file.

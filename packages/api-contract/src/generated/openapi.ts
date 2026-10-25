@@ -388,29 +388,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/usage": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get the plan's quota use
-         * @description The account's use of each plan quota in the current period (the UTC calendar month
-         *     until billing periods exist): AI items analyzed and premium identifications ("Identify
-         *     harder"). A quota without `limit` is unlimited. Units are counted when a call succeeds,
-         *     so a request that is still running is not counted yet.
-         */
-        get: operations["getUsage"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/items/{itemId}/pricing": {
         parameters: {
             query?: never;
@@ -1781,44 +1758,6 @@ export interface components {
             generatedAt: components["schemas"]["Timestamp"];
         };
         /**
-         * @description A `KnownUsageMetric`, or a quota added after this client was built. Clients show an
-         *     unknown metric generically or not at all.
-         */
-        UsageMetric: components["schemas"]["KnownUsageMetric"];
-        /**
-         * @description Plan quotas in reseller units. `ai_items`: items analyzed (one per fast analysis).
-         *     `premium_identifications`: premium analyses ("Identify harder").
-         * @enum {string}
-         */
-        KnownUsageMetric: "ai_items" | "premium_identifications";
-        QuotaUsage: {
-            metric: components["schemas"]["UsageMetric"];
-            /**
-             * Format: int32
-             * @description Units used in the period.
-             */
-            used: number;
-            /**
-             * Format: int32
-             * @description The plan's limit for the period. Absent means unlimited.
-             */
-            limit?: number;
-        };
-        Usage: {
-            /**
-             * Format: date
-             * @description First day of the period (UTC).
-             */
-            periodStart: string;
-            /**
-             * Format: date
-             * @description The day after the period's last day (UTC); quotas reset then.
-             */
-            periodEnd: string;
-            /** @description One per `KnownUsageMetric`, in that order. */
-            quotas: components["schemas"]["QuotaUsage"][];
-        };
-        /**
          * @description A `KnownListingStatus`, or a status added after this client was built. Clients show
          *     the listing's `statusDisplay` for an unknown status and never treat it as success.
          */
@@ -2593,10 +2532,6 @@ export type FeeEstimateSource = components['schemas']['FeeEstimateSource'];
 export type KnownFeeEstimateSource = components['schemas']['KnownFeeEstimateSource'];
 export type ResearchLink = components['schemas']['ResearchLink'];
 export type PricingSuggestion = components['schemas']['PricingSuggestion'];
-export type UsageMetric = components['schemas']['UsageMetric'];
-export type KnownUsageMetric = components['schemas']['KnownUsageMetric'];
-export type QuotaUsage = components['schemas']['QuotaUsage'];
-export type Usage = components['schemas']['Usage'];
 export type ListingStatus = components['schemas']['ListingStatus'];
 export type KnownListingStatus = components['schemas']['KnownListingStatus'];
 export type ListingAction = components['schemas']['ListingAction'];
@@ -3281,27 +3216,6 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationFailed"];
-            default: components["responses"]["DefaultError"];
-        };
-    };
-    getUsage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Quota use for the current period. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Usage"];
-                };
-            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -4326,7 +4240,6 @@ export const knownSoldDataSourceValues: ReadonlyArray<FlattenedDeepRequired<comp
 export const priceTierNameValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PriceTierName"]> = ["quick_sale", "recommended", "higher_profit"];
 export const knownPriceBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPriceBasis"]> = ["sold_data", "ai_estimate", "cost_floor"];
 export const knownFeeEstimateSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeEstimateSource"]> = ["fee_table", "actual_fees"];
-export const knownUsageMetricValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUsageMetric"]> = ["ai_items", "premium_identifications"];
 export const knownListingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingStatus"]> = ["draft", "queued", "publishing", "active", "ending", "ended", "sold", "error", "unknown", "needs_user_action"];
 export const knownListingActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingAction"]> = ["publish", "revise", "change_price", "end", "relist", "verify"];
 export const listingEndReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ListingEndReason"]> = ["sold_elsewhere", "not_available", "other"];

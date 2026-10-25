@@ -78,8 +78,7 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
 - **Quotas.** A standard call uses one `ai_items` unit and a premium call one
   `premium_identifications` unit when it succeeds. `PostgresQuotaPolicy` counts them in
   `usage_counter` per UTC month and enforces the row's `quota` (null means unlimited until
-  billing, T-28, sets plan limits). `GET /v1/usage` reports the same counters, so the app shows
-  what "Identify harder" uses and what is left.
+  billing, T-28, sets plan limits).
 - **Applying.** `applyAnalysis` copies the proposals into the item with their provenance and
   sets `acceptedAnalysisId`, never overwriting a detail whose provenance is `user`. A later
   `replaceItem` value equal to the accepted analysis's proposal keeps the analysis's source.
@@ -150,8 +149,7 @@ guards, cost reports, and spend check (the AI cost alarm is in
   Premium calls are not cut off. A timed-out call may still be billed but is metered at zero.
 - **Providers.** `FakeAiProvider` answers from fixture JSON keyed by the request's
   `photoSetHash` (the item's `ai_analysis.photo_set_hash`, not a hash of the images sent) and
-  output schema name (`packages/ai/fixtures/README.md`; a `default.json` in the directory answers
-  every other photo set, for end-to-end runs), validates it against the schema, and
+  output schema name (`packages/ai/fixtures/README.md`), validates it against the schema, and
   estimates usage the way the API counts it. Fake calls are metered at the configured model's
   real prices so budgets behave the same in development. `AnthropicProvider` uses the official
   SDK with strict structured output (`output_config.format` from the Zod schema; an output

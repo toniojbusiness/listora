@@ -1,4 +1,3 @@
-import Core
 import Foundation
 import Testing
 @testable import AddItemFeature
@@ -30,12 +29,7 @@ struct PhotoImportTests {
     @Test
     func `default roles go to the photos that loaded, in the order picked`() async throws {
         let harness = try UploadHarness()
-        let model = AddItemModel(
-            store: harness.store,
-            uploader: harness.uploader,
-            activity: harness.activity,
-            meter: InteractionMeter(storage: InMemoryInteractionStorage()),
-        )
+        let model = AddItemModel(store: harness.store, uploader: harness.uploader, activity: harness.activity)
         var picked = PickedPhotos([1, 2, 3, 4])
         await picked.load { $0 == 2 ? nil : TestImages.jpeg(width: 64, height: 48, seed: UInt64($0)) }
 
@@ -43,27 +37,6 @@ struct PhotoImportTests {
 
         #expect(try harness.draft(id)?.photos.map(\.role) == [.front, .back, .detail])
         #expect(picked.problem == "1 photo could not be loaded from iCloud.")
-        await harness.stop()
-    }
-
-    @Test
-    func `a new item's interaction measurement starts with its photos and becomes its draft's`() async throws {
-        let harness = try UploadHarness()
-        let meter = InteractionMeter(storage: InMemoryInteractionStorage())
-        let model = AddItemModel(
-            store: harness.store,
-            uploader: harness.uploader,
-            activity: harness.activity,
-            meter: meter,
-        )
-
-        let id = try #require(await model.addPhotos([TestImages.jpeg(width: 64, height: 48, seed: 1)]))
-
-        let session = try #require(meter.session(id))
-        #expect(session.waiting > 0, "preparing the photos is waiting, not the seller's time")
-        #expect(session.active < 0.1)
-        model.deleteDraft(id)
-        #expect(meter.session(id) == nil, "a deleted draft's measurement is dropped")
         await harness.stop()
     }
 }

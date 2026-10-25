@@ -6,15 +6,9 @@ import {
 } from '@listora/ai';
 import { graphileAnalysisJobs } from '@listora/analysis';
 import { createOAuthClients, createTokenVault, sealOnly } from '@listora/connections';
-import { addJob, createDatabase, createPool } from '@listora/db';
-import {
-  ApplicationToken,
-  createMarketplaceAdapters,
-  EbayNotificationVerifier,
-  EbayOAuthClient,
-} from '@listora/marketplaces';
+import { createDatabase, createPool } from '@listora/db';
+import { createMarketplaceAdapters } from '@listora/marketplaces';
 import { graphilePhotoJobs } from '@listora/photos';
-import { ebaySellerSubscriptionsJob } from '@listora/sales';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
 
@@ -27,9 +21,6 @@ const config = loadApiConfig();
 const logger = createLogger({ service: 'api', level: config.logLevel });
 const pool = createPool({ connectionString: config.databaseUrl });
 const db = createDatabase(pool);
-
-const ebay = config.marketplaces.ebay;
-const ebayNotifications = ebay?.notifications;
 
 const app = buildApp({
   logger,
@@ -52,35 +43,7 @@ const app = buildApp({
       config.marketplaces.tokenVault === undefined
         ? undefined
         : sealOnly(createTokenVault(config.marketplaces.tokenVault)),
-    // A new eBay grant subscribes its seller's notifications (the worker runs the job).
-    ...(ebayNotifications === undefined
-      ? {}
-      : {
-          onConnected: async (trx, connection) => {
-            if (connection.marketplace === 'ebay') {
-              await addJob(trx, ebaySellerSubscriptionsJob(connection.id));
-            }
-          },
-        }),
   },
-  ...(ebay === undefined || ebayNotifications === undefined
-    ? {}
-    : {
-        ebayWebhook: {
-          verifier: new EbayNotificationVerifier({
-            endpoints: ebay.endpoints,
-            token: new ApplicationToken(
-              new EbayOAuthClient({
-                tokenUrl: ebay.endpoints.oauthToken,
-                clientId: ebay.clientId,
-                clientSecret: ebay.clientSecret,
-              }),
-            ),
-          }),
-          endpoint: ebayNotifications.endpoint,
-          verificationToken: ebayNotifications.verificationToken,
-        },
-      }),
   pingDatabase: () => pingDatabase(pool),
 });
 

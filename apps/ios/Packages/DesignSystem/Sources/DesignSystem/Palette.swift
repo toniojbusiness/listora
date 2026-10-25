@@ -60,30 +60,50 @@ public struct ColorToken: Equatable, Sendable, ShapeStyle {
 }
 
 /// Listora's semantic colors. Views use these names, never raw values, so light and dark mode
-/// stay consistent. `PaletteTests` checks every text and background pair for WCAG AA contrast.
+/// stay consistent. `PaletteTests` checks every text and background pair for WCAG AA contrast
+/// (4.5:1), in both modes.
+///
+/// The brand is a deep teal. Each status tone has a strong color for text and icons and a soft
+/// color for the background of badges and banners; the strong color is readable on the soft one.
 public enum Palette {
-    // Backgrounds
-    public static let background = ColorToken(light: 0xF7F7F5, dark: 0x0E0F11)
-    public static let surface = ColorToken(light: 0xFFFFFF, dark: 0x1A1C1F)
-    public static let surfaceSecondary = ColorToken(light: 0xEFEFEC, dark: 0x24272B)
-    public static let separator = ColorToken(light: 0xE2E2DE, dark: 0x2E3236)
+    // Backgrounds, from the screen up: `background` behind everything, `surface` for cards and
+    // rows, `surfaceSecondary` for wells inside a card (text fields, placeholders, chips).
+    public static let background = ColorToken(light: 0xF4F5F7, dark: 0x0B0D10)
+    public static let surface = ColorToken(light: 0xFFFFFF, dark: 0x16191D)
+    public static let surfaceSecondary = ColorToken(light: 0xEBEDF0, dark: 0x22262C)
+    public static let separator = ColorToken(light: 0xDCDFE4, dark: 0x2C3138)
 
     // Text
-    public static let textPrimary = ColorToken(light: 0x16181B, dark: 0xF2F3F5)
-    public static let textSecondary = ColorToken(light: 0x5B6068, dark: 0xA3A8B0)
+    public static let textPrimary = ColorToken(light: 0x111418, dark: 0xF3F5F7)
+    public static let textSecondary = ColorToken(light: 0x4B5361, dark: 0xA3ABB7)
 
-    // Brand
-    public static let brand = ColorToken(light: 0x0F766E, dark: 0x2DD4BF)
-    public static let onBrand = ColorToken(light: 0xFFFFFF, dark: 0x042F2E)
+    /// Brand
+    public static let brand = ColorToken(light: 0x0B7268, dark: 0x2DD4BF)
+    /// A brand-tinted background: selected chips, icon tiles, highlights.
+    public static let brandSoft = ColorToken(light: 0xDDF3EF, dark: 0x0D3532)
+    public static let onBrand = ColorToken(light: 0xFFFFFF, dark: 0x032B28)
 
-    // Status, matching the operation states users see (confirmed, needs action, failed)
-    public static let success = ColorToken(light: 0x15753A, dark: 0x4ADE80)
-    public static let warning = ColorToken(light: 0xA84D08, dark: 0xFBBF24)
-    public static let danger = ColorToken(light: 0xB91C1C, dark: 0xF87171)
+    // Status, matching the states users see. Only `success` means done, and it is used only for
+    // what an API read-back or the user confirmed (see `StatusBadge`).
+    public static let success = ColorToken(light: 0x157A3E, dark: 0x4ADE80)
+    public static let successSoft = ColorToken(light: 0xE2F5E9, dark: 0x0E3220)
+    public static let warning = ColorToken(light: 0x9A4806, dark: 0xFBBF24)
+    public static let warningSoft = ColorToken(light: 0xFDF0DF, dark: 0x372807)
+    public static let danger = ColorToken(light: 0xB42318, dark: 0xFF8A80)
+    public static let dangerSoft = ColorToken(light: 0xFDE9E7, dark: 0x3D1513)
+    /// Labels on a `danger` fill (destructive buttons).
+    public static let onDanger = ColorToken(light: 0xFFFFFF, dark: 0x2B0806)
+    public static let info = ColorToken(light: 0x1D5FC2, dark: 0x7CB4FF)
+    public static let infoSoft = ColorToken(light: 0xE6EFFC, dark: 0x12294A)
 
     // Media: the camera and the crop screen show photos edge to edge on black in both modes, with
-    // white controls on top. `scrim` (used translucent) dims the parts of a photo being cut away.
+    // white controls on top. `scrim` (used translucent) dims the parts of a photo being cut away
+    // and backs controls laid over a photo.
     public static let mediaBackground = ColorToken(light: 0x000000, dark: 0x000000)
     public static let onMedia = ColorToken(light: 0xFFFFFF, dark: 0xFFFFFF)
     public static let scrim = ColorToken(light: 0x000000, dark: 0x000000)
+
+    /// Shadows under raised elements. Shadows barely show on dark backgrounds, so dark mode relies
+    /// on the surfaces' lighter tone and hairline borders instead.
+    public static let shadow = ColorToken(light: 0x0B1F33, dark: 0x000000)
 }

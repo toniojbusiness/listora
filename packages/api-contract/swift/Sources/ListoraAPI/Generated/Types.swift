@@ -200,17 +200,6 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/analyses/{analysisId}/apply`.
     /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)`.
     func applyAnalysis(_ input: Operations.ApplyAnalysis.Input) async throws -> Operations.ApplyAnalysis.Output
-    /// Get the plan's quota use
-    ///
-    /// The account's use of each plan quota in the current period (the UTC calendar month
-    /// until billing periods exist): AI items analyzed and premium identifications ("Identify
-    /// harder"). A quota without `limit` is unlimited. Units are counted when a call succeeds,
-    /// so a request that is still running is not counted yet.
-    ///
-    ///
-    /// - Remark: HTTP `GET /v1/usage`.
-    /// - Remark: Generated from `#/paths//v1/usage/get(getUsage)`.
-    func getUsage(_ input: Operations.GetUsage.Input) async throws -> Operations.GetUsage.Output
     /// Get price suggestions for an item
     ///
     /// Every number carries its source. Without real sold data the response has no
@@ -840,19 +829,6 @@ extension APIProtocol {
             headers: headers,
             body: body
         ))
-    }
-    /// Get the plan's quota use
-    ///
-    /// The account's use of each plan quota in the current period (the UTC calendar month
-    /// until billing periods exist): AI items analyzed and premium identifications ("Identify
-    /// harder"). A quota without `limit` is unlimited. Units are counted when a call succeeds,
-    /// so a request that is still running is not counted yet.
-    ///
-    ///
-    /// - Remark: HTTP `GET /v1/usage`.
-    /// - Remark: Generated from `#/paths//v1/usage/get(getUsage)`.
-    public func getUsage(headers: Operations.GetUsage.Input.Headers = .init()) async throws -> Operations.GetUsage.Output {
-        try await getUsage(Operations.GetUsage.Input(headers: headers))
     }
     /// Get price suggestions for an item
     ///

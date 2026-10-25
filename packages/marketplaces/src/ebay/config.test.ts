@@ -143,48 +143,4 @@ describe('loadEbayConfig', () => {
     ]);
     expect(issues.join(' ')).not.toContain('secret-value');
   });
-
-  it('reads the notification endpoint, its verification token, and the alert email', () => {
-    const token = 'listora-verification-token-0123456789abcdef';
-    expect(loadEbayConfig({ EBAY_ENV: 'fake' })?.notifications).toBeUndefined();
-    expect(
-      loadEbayConfig({
-        EBAY_ENV: 'fake',
-        EBAY_NOTIFICATION_ENDPOINT: 'http://127.0.0.1:3000/webhooks/ebay',
-        EBAY_NOTIFICATION_VERIFICATION_TOKEN: token,
-      })?.notifications,
-    ).toEqual({
-      endpoint: 'http://127.0.0.1:3000/webhooks/ebay',
-      verificationToken: token,
-      alertEmail: null,
-    });
-    const production = {
-      EBAY_ENV: 'production',
-      EBAY_CLIENT_ID: 'id',
-      EBAY_CLIENT_SECRET: 'secret',
-      EBAY_NOTIFICATION_VERIFICATION_TOKEN: token,
-    };
-    expect(
-      loadEbayConfig({
-        ...production,
-        EBAY_NOTIFICATION_ENDPOINT: 'https://api.listora.app/webhooks/ebay',
-        EBAY_NOTIFICATION_ALERT_EMAIL: 'ops@listora.app',
-      })?.notifications,
-    ).toMatchObject({ alertEmail: 'ops@listora.app' });
-    expect(
-      issuesOf({
-        ...production,
-        EBAY_NOTIFICATION_ENDPOINT: 'http://localhost:3000/webhooks/ebay',
-        EBAY_NOTIFICATION_VERIFICATION_TOKEN: 'short-secret-value',
-        EBAY_NOTIFICATION_ALERT_EMAIL: 'nope',
-      }),
-    ).toEqual([
-      'EBAY_NOTIFICATION_ENDPOINT must be a public https URL without a query',
-      'EBAY_NOTIFICATION_VERIFICATION_TOKEN must be 32 to 80 letters, digits, underscores, or hyphens',
-      'EBAY_NOTIFICATION_ALERT_EMAIL must be an email address',
-    ]);
-    expect(issuesOf({ EBAY_ENV: 'fake', EBAY_NOTIFICATION_VERIFICATION_TOKEN: token })).toEqual([
-      'EBAY_NOTIFICATION_VERIFICATION_TOKEN needs EBAY_NOTIFICATION_ENDPOINT',
-    ]);
-  });
 });

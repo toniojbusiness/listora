@@ -3,7 +3,6 @@ import {
   completeAuthorization,
   findAuthorization,
   startAuthorization,
-  type CompleteAuthorizationDependencies,
   type TokenSealer,
 } from '@listora/connections';
 import { MARKETPLACES, type Marketplace } from '@listora/db';
@@ -30,8 +29,6 @@ export interface ConnectionsDependencies {
    * at use time. Undefined without a token vault; then nothing can be connected.
    */
   sealer: TokenSealer | undefined;
-  /** Work that starts with a stored grant, in its transaction (`completeAuthorization`). */
-  onConnected?: CompleteAuthorizationDependencies['onConnected'];
 }
 
 export interface ConnectionRouteDependencies extends RouteDependencies, ConnectionsDependencies {
@@ -192,7 +189,6 @@ function registerCallback(app: FastifyInstance, deps: ConnectionRouteDependencie
               sealer: deps.sealer,
               logger: request.log,
               now: deps.now,
-              ...(deps.onConnected === undefined ? {} : { onConnected: deps.onConnected }),
             },
             { marketplace: known, state: values.state, code: values.code, error: values.error },
           );

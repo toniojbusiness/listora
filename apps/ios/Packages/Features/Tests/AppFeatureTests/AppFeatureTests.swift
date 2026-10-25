@@ -22,9 +22,6 @@ struct AppTabTests {
 struct AppDependenciesTests {
     private let data = FileManager.default.temporaryDirectory
         .appending(path: "AppDependenciesTests-\(UUID().uuidString)")
-    private let listingCopy = FileManager.default.temporaryDirectory
-        .appending(path: "AppDependenciesTests-copy-\(UUID().uuidString)")
-    private let defaults = UserDefaults(suiteName: "AppDependenciesTests-\(UUID().uuidString)") ?? .standard
 
     private func dependencies(
         environment: String = "staging",
@@ -42,8 +39,6 @@ struct AppDependenciesTests {
         return try AppDependencies(
             bundle: bundle.bundle,
             dataDirectory: data,
-            listingCopyDirectory: listingCopy,
-            defaults: defaults,
             accessGrantStorage: storage,
             launchOptions: launchOptions,
         )
@@ -88,49 +83,6 @@ struct AppDependenciesTests {
         #expect(dependencies.accessTokens.grant == nil)
         #expect(!FileManager.default.fileExists(atPath: data.appending(path: "leftover").path(percentEncoded: false)))
         try? FileManager.default.removeItem(at: data)
-    }
-
-    @Test
-    func `debug launch options point Dev at the UI tests' API and start signed in`() throws {
-        let now = Date(timeIntervalSince1970: 1_800_000_000)
-        let options = DebugLaunchOptions.from(
-            environment: [
-                "LISTORA_DEV_API_BASE_URL": "http://127.0.0.1:53111",
-                "LISTORA_DEV_ACCESS_TOKEN": "token-1",
-                "LISTORA_DEV_ACCESS_EMAIL": "e2e@listora.test",
-            ],
-            now: now,
-        )
-        #expect(options.apiBaseURL?.absoluteString == "http://127.0.0.1:53111")
-        #expect(options.accessGrant == AccessGrant(
-            accessToken: "token-1",
-            expiresAt: now.addingTimeInterval(86400),
-            email: "e2e@listora.test",
-        ))
-        #expect(DebugLaunchOptions.from(environment: [:]) == .none)
-
-        let storage = InMemoryAccessGrantStorage()
-        let dependencies = try dependencies(
-            environment: "dev",
-            url: "http://127.0.0.1:3000",
-            storage: storage,
-            launchOptions: DebugLaunchOptions(
-                resetLocalData: true,
-                apiBaseURL: options.apiBaseURL,
-                accessGrant: AccessGrant(accessToken: "token-1", expiresAt: .distantFuture, email: "e2e@listora.test"),
-            ),
-        )
-        #expect(dependencies.apiClient.baseURL.absoluteString == "http://127.0.0.1:53111")
-        #expect(dependencies.configuration.apiBaseURL.absoluteString == "http://127.0.0.1:53111")
-        #expect(dependencies.accessTokens.grant?.accessToken == "token-1", "signed in after the reset")
-    }
-
-    @Test
-    func `an API override is held to the environment's rules`() throws {
-        let dependencies = try dependencies(launchOptions: DebugLaunchOptions(
-            apiBaseURL: URL(string: "http://127.0.0.1:53111"),
-        ))
-        #expect(dependencies.apiClient.baseURL.absoluteString == "https://api.staging.example.com")
     }
 }
 

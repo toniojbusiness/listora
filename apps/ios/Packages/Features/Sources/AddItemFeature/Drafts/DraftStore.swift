@@ -320,20 +320,3 @@ final class DraftStore: Sendable {
         }
     }
 }
-
-extension DraftStore {
-    /// Removes a draft whose server item the seller saved: the item lives on in Listora, so only
-    /// this iPhone's copy goes (its photo files too). Server deletions it queued earlier still run.
-    /// Returns the removed photos so the caller can stop their transfers.
-    @discardableResult
-    func completeDraft(_ draftID: String) throws -> [DraftPhotoRecord] {
-        let photos = try writer.write { db -> [DraftPhotoRecord] in
-            guard let draft = try DraftRecord.fetchOne(db, key: draftID) else { return [] }
-            let photos = try Self.photos(of: draftID, in: db)
-            try draft.delete(db)
-            return photos
-        }
-        removeFiles(of: photos)
-        return photos
-    }
-}

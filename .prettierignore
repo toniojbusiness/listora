@@ -21,5 +21,3 @@ infra/src/__snapshots__/
 **/__golden__/
 # Depop's published OpenAPI spec, vendored byte for byte (packages/marketplaces/src/depop/fake/README.md)
 packages/marketplaces/src/depop/fake/openapi.yaml
-# Written by packages/analysis/src/ios-vocabulary.test.ts, which keeps it equal to the vocabulary
-apps/ios/Packages/Features/Sources/ReviewFeature/Resources/vocabulary.json

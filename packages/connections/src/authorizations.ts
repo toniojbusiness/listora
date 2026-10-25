@@ -27,7 +27,6 @@ import {
   type ConnectionAuthorizationTable,
   type Db,
   type DbExecutor,
-  type DbTransaction,
   type Marketplace,
 } from '@listora/db';
 import {
@@ -138,11 +137,6 @@ export interface CompleteAuthorizationDependencies {
   sealer: TokenSealer | undefined;
   logger: AuthorizationLogger;
   now?: () => Date;
-  /**
-   * Work that starts with a new or renewed grant, in the transaction that stores it, so it
-   * cannot be lost (the API adds eBay's notification subscriptions job).
-   */
-  onConnected?: (trx: DbTransaction, connection: ConnectionRow) => Promise<void>;
 }
 
 /**
@@ -307,7 +301,6 @@ export async function completeAuthorization(
       .where('id', '=', row.id)
       .returningAll()
       .executeTakeFirstOrThrow();
-    await deps.onConnected?.(trx, connection);
     return { completed, connection } as const;
   });
   if ('vaultFailure' in stored || 'mismatch' in stored) {

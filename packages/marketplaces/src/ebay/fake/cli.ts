@@ -4,9 +4,8 @@
  * with `EBAY_ENV=fake`. Its consent page sends the browser to EBAY_FAKE_CALLBACK_URL, the API's
  * eBay callback. Its state lives in memory and is lost when it stops.
  *
- * Local photo storage serves listing photos over http, and the local API receives notifications
- * over http, neither of which eBay accepts, so this development server accepts http photo URLs
- * and notification endpoints; tests use the fake with eBay's https rules unless they opt out.
+ * Local photo storage serves listing photos over http, which eBay never accepts, so this
+ * development server accepts http photo URLs; tests use the fake with eBay's https rule.
  */
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 
@@ -34,7 +33,6 @@ const fake = await FakeEbay.start({
   port: url.port === '' ? 80 : Number(url.port),
   allowHttpPictures: true,
   consentRedirect: { acceptUrl },
-  allowHttpNotificationEndpoints: true,
 });
 handleShutdownSignals({ logger, shutdown: () => fake.close() });
 logger.info({ url: fake.url, callbackUrl: acceptUrl }, 'fake eBay ready');

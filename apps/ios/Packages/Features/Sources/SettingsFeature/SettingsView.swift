@@ -41,11 +41,13 @@ public struct SettingsView<Marketplaces: View>: View {
                         NavigationLink {
                             marketplaces
                         } label: {
-                            Label("Marketplaces", systemImage: "link")
+                            ListRow(
+                                "Marketplaces",
+                                subtitle: "Connect eBay, and see how Listora works with each marketplace.",
+                                systemImage: "link",
+                            )
                         }
                         .accessibilityIdentifier("settings.marketplaces")
-                    } footer: {
-                        Text("Connect eBay, and see how Listora works with each marketplace.")
                     }
                     .listRowBackground(Palette.surface.color)
                 }
@@ -53,10 +55,18 @@ public struct SettingsView<Marketplaces: View>: View {
                     DevSignInSection(model: devSignIn)
                         .listRowBackground(Palette.surface.color)
                 }
-                Section("About") {
-                    row("Version", content.version, id: "settings.version")
-                    row("Environment", content.environment, id: "settings.environment")
-                    row("API", content.apiBaseURL, id: "settings.apiBaseURL")
+                Section {
+                    row("Version", content.version, systemImage: "info.circle", id: "settings.version")
+                    row("Environment", content.environment, systemImage: "server.rack", id: "settings.environment")
+                    row(
+                        "API",
+                        content.apiBaseURL,
+                        systemImage: "network",
+                        id: "settings.apiBaseURL",
+                        spokenAs: "API address",
+                    )
+                } header: {
+                    SectionHeader("About")
                 }
                 .listRowBackground(Palette.surface.color)
             }
@@ -67,15 +77,28 @@ public struct SettingsView<Marketplaces: View>: View {
         }
     }
 
-    private func row(_ title: String, _ value: String, id: String) -> some View {
-        LabeledContent {
+    /// `spokenAs`: what VoiceOver calls a value that does not read well aloud (an address); the
+    /// value itself follows.
+    private func row(
+        _ title: String,
+        _ value: String,
+        systemImage: String,
+        id: String,
+        spokenAs spokenLabel: String? = nil,
+    ) -> some View {
+        ListRow(title) {
+            IconTile(systemImage: systemImage, tone: .neutral)
+        } trailing: {
             Text(value)
+                .font(Typography.body)
                 .foregroundStyle(Palette.textSecondary)
-                .textSelection(.enabled)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(spokenLabel ?? value)
+                .accessibilityValue(spokenLabel == nil ? "" : value)
                 .accessibilityIdentifier(id)
-        } label: {
-            Text(title)
         }
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -107,45 +130,65 @@ struct DevSignInSection: View {
 
     var body: some View {
         Section {
-            switch model.stage {
-            case .enterEmail:
-                TextField("Email", text: $model.email)
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("devSignIn.email")
-                Button("Send code") { Task { await model.requestCode() } }
-                    .disabled(!model.canRequestCode)
-                    .accessibilityIdentifier("devSignIn.sendCode")
-            case .enterCode:
-                Text("Enter the code from the API's log for \(model.email).")
-                    .foregroundStyle(Palette.textSecondary)
-                TextField("6-digit code", text: $model.code)
-                    .textContentType(.oneTimeCode)
-                    .keyboardType(.numberPad)
-                    .accessibilityIdentifier("devSignIn.code")
-                Button("Sign in") { Task { await model.signIn() } }
-                    .disabled(!model.canSignIn)
-                    .accessibilityIdentifier("devSignIn.signIn")
-                Button("Use a different email") { model.signOut() }
-            case let .signedIn(email):
-                LabeledContent("Signed in as") {
-                    Text(email)
-                        .foregroundStyle(Palette.textSecondary)
-                        .accessibilityIdentifier("devSignIn.signedInEmail")
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                switch model.stage {
+                case .enterEmail:
+                    ListoraTextField("Email", hint: "Dev builds only. Start the API with AUTH_DRIVER=dev.") {
+                        TextField(
+                            "Email",
+                            text: $model.email,
+                            prompt: Text("you@example.com").foregroundStyle(Palette.textSecondary),
+                        )
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("devSignIn.email")
+                    }
+                    Button("Send code") { Task { await model.requestCode() } }
+                        .buttonStyle(.listoraPrimary)
+                        .disabled(!model.canRequestCode)
+                        .loading(model.isWorking)
+                        .accessibilityIdentifier("devSignIn.sendCode")
+                case .enterCode:
+                    ListoraTextField(
+                        "6-digit code",
+                        hint: "Enter the code from the API's log for \(model.email).",
+                    ) {
+                        TextField(
+                            "6-digit code",
+                            text: $model.code,
+                            prompt: Text("123456").foregroundStyle(Palette.textSecondary),
+                        )
+                        .textContentType(.oneTimeCode)
+                        .keyboardType(.numberPad)
+                        .accessibilityIdentifier("devSignIn.code")
+                    }
+                    Button("Sign in") { Task { await model.signIn() } }
+                        .buttonStyle(.listoraPrimary)
+                        .disabled(!model.canSignIn)
+                        .loading(model.isWorking)
+                        .accessibilityIdentifier("devSignIn.signIn")
+                    Button("Use a different email") { model.signOut() }
+                        .buttonStyle(.listoraTertiary)
+                case let .signedIn(email):
+                    ListRow("Signed in as") {
+                        IconTile(systemImage: "person.crop.circle.badge.checkmark", tone: .success)
+                    } trailing: {
+                        Text(email)
+                            .foregroundStyle(Palette.textSecondary)
+                            .accessibilityIdentifier("devSignIn.signedInEmail")
+                    }
+                    Button("Sign out", role: .destructive) { model.signOut() }
+                        .buttonStyle(.listora(.destructiveText, size: .large))
                 }
-                Button("Sign out", role: .destructive) { model.signOut() }
+                if let message = model.message {
+                    Banner(message, tone: .failed)
+                }
             }
-            if let message = model.message {
-                Text(message)
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.danger)
-            }
+            .padding(.vertical, Spacing.xs)
         } header: {
-            Text("Developer sign-in")
-        } footer: {
-            Text("Dev builds only. Start the API with AUTH_DRIVER=dev.")
+            SectionHeader("Developer sign-in")
         }
         .onAppear { model.refresh() }
     }

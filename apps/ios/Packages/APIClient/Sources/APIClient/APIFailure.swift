@@ -133,27 +133,3 @@ extension Components.Responses.PayloadTooLarge: ErrorResponseCarrying {
         }
     }
 }
-
-extension Components.Responses.QuotaExceeded: ErrorResponseCarrying {
-    public var errorResponse: Components.Schemas.ErrorResponse {
-        switch body {
-        case let .json(response): response
-        }
-    }
-}
-
-extension Components.Responses.RateLimited: ErrorResponseCarrying {
-    public var errorResponse: Components.Schemas.ErrorResponse {
-        switch body {
-        case let .json(response): response
-        }
-    }
-}
-
-extension Components.Responses.ServiceUnavailable: ErrorResponseCarrying {
-    public var errorResponse: Components.Schemas.ErrorResponse {
-        switch body {
-        case let .json(response): response
-        }
-    }
-}

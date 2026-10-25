@@ -75,10 +75,7 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
 7. **Listing truth.** A verified success records what the marketplace showed on the
    `marketplace_listing`: status, external id and URL (a confirmed pending id becomes the
    external id), `remote_snapshot` (with its revision), `remote_revision`, `last_verified_at`.
-   A user confirmation changes only the status. Between operations, a **drift resync**
-   (`runListingResync`, when the marketplace reports a change or a sale) records what a read
-   shows the same way, in the listing's queue and never under an unfinished operation; without
-   read revisions it records a change only after two matching reads a delay apart.
+   A user confirmation changes only the status.
 8. **History.** Every transition appends an `operation_event` with a redacted request/response
    excerpt (`redactForStorage` in `@listora/shared`), error code, and attempt number.
 9. **Invariant, enforced in code and tests:** no code path sets `succeeded` without a verified
@@ -99,11 +96,7 @@ its order (see `sale` under [Data](#data)). Then, in one transaction, Listora re
 the item to `sold_pending_delist`, and creates a high-priority delist operation or urgent
 assisted task for every other listing. A `delist_run` gathers the per-marketplace results. If
 anything is still unconfirmed after 10 minutes, Listora alerts the user again, and after 30
-minutes it escalates the alert. A second sale opens a double-sale incident. Today
-`recordSale` (`@listora/sales`) records the sale and, in the same transaction, adds its
-`sale_recorded` job, the event the orchestrator (T-20) will consume; eBay sales arrive by the
-`ORDER_CONFIRMATION` webhook and the 5-minute order poll
-([ebay-notifications.md](ebay-notifications.md)).
+minutes it escalates the alert. A second sale opens a double-sale incident.
 
 **Status vocabulary** shown to users: `Active (confirmed by eBay)`, `Delisting... retry 2 of 6`,
 `Delist failed - Retry`, `Checking...`, `Action needed - delist on Poshmark`,
@@ -117,8 +110,7 @@ confirmed. The API serves them as `statusDisplay` (T-19).
 
 - **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
   provider event id, so an id that repeats in another account or on another marketplace is
-  never dropped as a duplicate; `external_user_id` names the marketplace user it is about, so
-  that user's data can be deleted). `sale` is one marketplace order (unique per account,
+  never dropped as a duplicate). `sale` is one marketplace order (unique per account,
   marketplace, and external order id) with the order-level fields: sold time, currency,
   shipping charged, detection source, status, and ship-by. Its `sale_item` rows are the items
   it sold, one per item (an order can be a bundle), each with its price and, when known, the

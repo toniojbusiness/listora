@@ -8,8 +8,6 @@
 import type { EbayListingSettings } from './oauth.ts';
 import { DEFAULT_LISTING_SETTINGS } from './oauth.ts';
 import { DEFAULT_TRADING_DAILY_LIMIT } from './budget.ts';
-import { EBAY_VERIFICATION_TOKEN_PATTERN } from './notification-events.ts';
-import type { EbayNotificationSettings } from './notification-subscriptions.ts';
 import {
   FAKE_EBAY_CLIENT_ID,
   FAKE_EBAY_CLIENT_SECRET,
@@ -106,12 +104,6 @@ export interface EbayConfig {
   listingSettings: EbayListingSettings;
   /** The application's daily Trading API call limit, until eBay reports it (budget.ts). */
   tradingDailyLimit: number;
-  /**
-   * Where eBay delivers notifications (`EBAY_NOTIFICATION_ENDPOINT`, the API's
-   * `/webhooks/ebay`), its verification token, and the alert email. Unset: no notifications,
-   * and the order poll alone finds sales.
-   */
-  notifications: EbayNotificationSettings | undefined;
 }
 
 export class EbayConfigError extends Error {
@@ -185,8 +177,6 @@ export function loadEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfig
     issues.push('EBAY_TRADING_DAILY_CALL_LIMIT must be an integer from 100 to 10000000');
   }
 
-  const notifications = notificationSettings(environment, value, issues);
-
   if (issues.length > 0 || clientId === undefined || clientSecret === undefined) {
     throw new EbayConfigError(issues);
   }
@@ -208,51 +198,7 @@ export function loadEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfig
           : { fulfillmentPolicyId, paymentPolicyId, returnPolicyId },
     },
     tradingDailyLimit,
-    notifications,
   };
-}
-
-/** eBay notification settings (`EbayConfig.notifications`), recording problems in `issues`. */
-function notificationSettings(
-  environment: EbayEnvironment,
-  value: (key: string) => string | undefined,
-  issues: string[],
-): EbayNotificationSettings | undefined {
-  const endpoint = value('EBAY_NOTIFICATION_ENDPOINT');
-  const verificationToken = value('EBAY_NOTIFICATION_VERIFICATION_TOKEN');
-  const alertEmail = value('EBAY_NOTIFICATION_ALERT_EMAIL') ?? null;
-  if (endpoint === undefined) {
-    if (verificationToken !== undefined) {
-      issues.push('EBAY_NOTIFICATION_VERIFICATION_TOKEN needs EBAY_NOTIFICATION_ENDPOINT');
-    }
-    return undefined;
-  }
-  const url = URL.parse(endpoint);
-  const local = url !== null && /^(127\.0\.0\.1|localhost)$/.test(url.hostname);
-  // eBay delivers only to https URLs that are not localhost; the fake also to the local API.
-  const allowed =
-    url?.search === '' &&
-    url.hash === '' &&
-    (environment === 'fake'
-      ? url.protocol === 'http:' || url.protocol === 'https:'
-      : url.protocol === 'https:' && !local);
-  if (!allowed) {
-    issues.push(
-      environment === 'fake'
-        ? 'EBAY_NOTIFICATION_ENDPOINT must be an http(s) URL without a query'
-        : 'EBAY_NOTIFICATION_ENDPOINT must be a public https URL without a query',
-    );
-  }
-  if (verificationToken === undefined || !EBAY_VERIFICATION_TOKEN_PATTERN.test(verificationToken)) {
-    issues.push(
-      'EBAY_NOTIFICATION_VERIFICATION_TOKEN must be 32 to 80 letters, digits, underscores, or hyphens',
-    );
-  }
-  if (alertEmail !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alertEmail)) {
-    issues.push('EBAY_NOTIFICATION_ALERT_EMAIL must be an email address');
-  }
-  if (!allowed || verificationToken === undefined) return undefined;
-  return { endpoint, verificationToken, alertEmail };
 }
 
 /** The single configured seller (`EbayConfig.seller`), recording what is wrong in `issues`. */

@@ -15,7 +15,6 @@
     { "path": "../../packages/observability" },
     { "path": "../../packages/connections" },
     { "path": "../../packages/operations" },
-    { "path": "../../packages/sales" },
     { "path": "../../packages/storage" },
     { "path": "../../packages/ai" },
     { "path": "../../packages/photos" },

@@ -24,25 +24,24 @@ The app talks to the backend only through the generated `ListoraAPI` Swift packa
 
 Run these from the repository root.
 
-| Command                 | What it does                                                         |
-| ----------------------- | -------------------------------------------------------------------- |
-| `make ios-generate`     | Generate `apps/ios/Listora.xcodeproj` from `project.yml`             |
-| `make ios-open`         | Generate the project and open it in Xcode                            |
-| `make ios-build`        | Build the app, Share Extension, and packages for the simulator       |
-| `make ios-test`         | Run package, unit, and UI tests on the simulator, in the local stack |
-| `make ios-lint`         | SwiftLint (strict) and the SwiftFormat check                         |
-| `make ios-format`       | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes       |
-| `make ios-clean`        | Delete the generated project and `.build/ios`                        |
-| `make ios-tag-fixtures` | Re-render the tag-reading test photos (see Tag reading)              |
-| `make ios-app-icon`     | Re-render the placeholder app icon (see App icon)                    |
-| `make ios-archive`      | Unsigned release archive; needs no Apple account (Releases)          |
-| `make ios-testflight`   | Signed release archive uploaded to TestFlight (Releases)             |
+| Command                 | What it does                                                   |
+| ----------------------- | -------------------------------------------------------------- |
+| `make ios-generate`     | Generate `apps/ios/Listora.xcodeproj` from `project.yml`       |
+| `make ios-open`         | Generate the project and open it in Xcode                      |
+| `make ios-build`        | Build the app, Share Extension, and packages for the simulator |
+| `make ios-test`         | Run package, unit, and UI tests on the iPhone 17 simulator     |
+| `make ios-lint`         | SwiftLint (strict) and the SwiftFormat check                   |
+| `make ios-format`       | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes |
+| `make ios-clean`        | Delete the generated project and `.build/ios`                  |
+| `make ios-tag-fixtures` | Re-render the tag-reading test photos (see Tag reading)        |
+| `make ios-app-icon`     | Re-render the placeholder app icon (see App icon)              |
+| `make ios-screenshots`  | Screenshot every screen in four variants (see Design)          |
+| `make ios-archive`      | Unsigned release archive; needs no Apple account (Releases)    |
+| `make ios-testflight`   | Signed release archive uploaded to TestFlight (Releases)       |
 
 `make ios-test` writes DerivedData, SwiftPM caches, and the result bundle
 (`.build/ios/Test.xcresult`) to `.build/ios` in this checkout, never to `~/Library`. To use a
-different simulator, pass its name: `make ios-test IOS_SIMULATOR='iPhone 17 Pro'`. It also needs
-the backend's dependencies (`npm ci` at the repository root); see
-[Testing against the API](#testing-against-the-api).
+different simulator, pass its name: `make ios-test IOS_SIMULATOR='iPhone 17 Pro'`.
 
 ## The Xcode project
 
@@ -69,14 +68,14 @@ Packages/
   Core/          Models and utilities with no UI: AppConfiguration, AppEnvironment, AppVersion,
                  the TagReader protocol with its TagReading model, the listing URL parser
                  (ListingURL, SharedContent)
-  DesignSystem/  Palette (light and dark colors), Typography, Spacing, Radius, components
+  DesignSystem/  Palette (light and dark colors), Typography, Spacing, Radius, Elevation, Motion,
+                 Haptics, and the shared components (docs/features/design.md)
   APIClient/     The generated ListoraAPI client over URLSession, the signed-in session (Keychain),
                  APIFailure (the contract's error model), and the dev sign-in client
   Features/      One library per feature:
     AppFeature        Root tab shell and AppDependencies (composes the features)
     InventoryFeature  Inventory tab
     AddItemFeature    Add Item tab: guided capture, library import, drafts (GRDB), upload queue
-    ReviewFeature     Analysis progress, confidence-first review, cost, price, and the saved item
     TasksFeature      Tasks tab
     SettingsFeature   Settings tab, with the developer sign-in in Dev builds
     MarketplacesFeature  Marketplaces screen (from Settings): each marketplace's connection
@@ -93,16 +92,15 @@ Dependency rules:
   that imports features; the Share Extension target imports only `ShareLinkFeature`.
 - Add a feature as a new target and library product in `Packages/Features/Package.swift`, and
   its tests as a test target there. List new test targets in the scheme in `project.yml`.
-- Views use `Palette`, `Typography`, and `Spacing`, not raw colors, fonts, or numbers.
-  `PaletteTests` checks that every text color meets WCAG AA contrast on every background in
-  both light and dark mode.
+- Views use `Palette`, `Typography`, and `Spacing`, not raw colors, fonts, or numbers, and the
+  DesignSystem components (buttons, cards, badges, banners, the bottom action bar) instead of
+  styling their own. `PaletteTests` checks that every text color meets WCAG AA contrast on every
+  background in both light and dark mode; `ComponentLayoutTests` checks tap targets and wrapping
+  at the largest text size.
 - Tests use Swift Testing (`import Testing`); UI tests use XCTest.
 - A feature that other features use without UI (such as `TagReadingFeature`) implements a
   protocol from `Core`. `AppDependencies` builds the implementation and the features that need
   it receive the protocol, so no feature imports another.
-- A feature whose screens another feature opens (`ReviewFeature`, opened from Add Item) is
-  handed over as a view builder (`ItemReviewDestination`), with the request and outcome as value
-  types in `Core` (`ItemReviewRequest`, `ItemReviewOutcome`).
 
 ## Tag reading
 
@@ -183,6 +181,18 @@ ship a real design, export the three PNGs above from the design file, replace th
 the names, or update `Contents.json`), delete the tool and the `ios-app-icon` target, and run
 `make ios-test` and `make ios-archive`. Both check that the built app names the `AppIcon` asset.
 
+## Design
+
+The visual language (palette, type scale, spacing, motion, haptics, components) and the UI audit
+are in [docs/features/design.md](../../docs/features/design.md). `make ios-screenshots
+IOS_SIMULATOR='<name>'` runs `ScreenshotTourUITests`, which visits every screen against
+`StubAPIServer` and the fake camera, once each in light and dark mode at the default and the
+largest accessibility text size, and writes PNGs to `.build/ios/screenshots/<variant>/` (set
+`IOS_SCREENSHOT_DIR` to write elsewhere). It switches the simulator's appearance and text size
+and puts them back afterwards. `make ios-test` skips the tour, which runs only when the test
+runner has `LISTORA_SCREENSHOT_DIR`. `AccessibilityAuditUITests` runs Xcode's accessibility
+audit on the main screens as part of `make ios-test`.
+
 ## Add Item: capture, drafts, and uploads
 
 `AddItemFeature` turns photos into a draft on the phone and uploads it in the background.
@@ -191,7 +201,9 @@ the names, or update `Contents.json`), delete the tool and the `ios-app-icon` ta
 - **Capture.** On a device, "Take photos" opens a guided camera (AVFoundation): front, back,
   tag, then any number of flaws and details, each shot getting its step's role. The simulator
   has no camera, so it offers "Import photos" (PhotosPicker) only; imported photos get roles from
-  their order (front, back, then detail).
+  their order (front, back, then detail). The camera is a `CameraSource`; in debug builds
+  `LISTORA_FAKE_CAMERA=<folder>` swaps in `FixtureCamera`, which "takes" the folder's JPEGs, so
+  the guided capture runs in the simulator (`CameraCaptureUITests`, the screenshot tour).
 - **Preparation** (`PhotoPreparation`): every photo is decoded upright, resized to at most 2048
   px on the long edge, and re-encoded as JPEG without any metadata, so no GPS location leaves
   the phone. `BlurDetector` scores sharpness (variance of the Laplacian at 1024 px) and capture
@@ -214,39 +226,17 @@ the names, or update `Contents.json`), delete the tool and the `ios-app-icon` ta
 - **Status.** Each photo shows Waiting to upload, Reading tag, Uploading, Retrying (n of 8), Sign
   in to upload, Upload failed, or Uploaded; "Uploaded" means the server attached the photo with
   its current role. The draft says "Saved to Listora" only when every photo is attached in order.
-- **Review item** opens the review once the draft is saved to Listora. Tapped earlier, it waits
-  for the upload, then opens it. When the item is saved, the draft leaves this iPhone (its server
-  item stays: `DraftStore.completeDraft`).
+
+- **Tag reading results.** A tag photo's screen shows what on-device reading found, as read:
+  the text lines and barcodes, or that nothing was found or reading failed. The device never
+  interprets them; the server does.
 
 The queue's tests (`AddItemFeatureTests`) run the real generated client and URLSession transport
 against `FakeListoraServer` through a `URLProtocol` stub, including resume after a relaunch,
 retries, and failures that stop. The UI tests import the photos in `ListoraUITests/Fixtures`
 through debug-only launch variables: `LISTORA_FIXTURE_PHOTOS=<folder>` makes "Import photos"
-add that folder's JPEGs, and `LISTORA_RESET_LOCAL_DATA=1` starts with no drafts, signed out.
-
-### Testing against the API
-
-`make ios-test` runs every test inside the local stack (`packages/e2e`): the API and the worker
-from this checkout with the fake drivers (dev sign-in, local photo storage, the fake AI
-provider answering from `ListoraUITests/FakeAI/default.json`), on a scratch database of this
-checkout's `scripts/dev-db.sh` cluster and a port of its own, with a signed-in test user. It
-hands the API's URL and the session to the UI tests through xcodebuild's `TEST_RUNNER_`
-variables, and the tests pass them to the app with the Dev-only launch variables above:
-`LISTORA_DEV_API_BASE_URL=<url>` and `LISTORA_DEV_ACCESS_TOKEN=<token>` (with
-`LISTORA_DEV_ACCESS_EMAIL`).
-`ReviewFlowUITests` takes a fixture item from a draft through review and price to a saved item
-with a SKU, then reads it back from the API. The stack's logs are in `.build/ios/e2e-logs`.
-
-To run those UI tests from Xcode, start the stack with
-`npm run e2e:stack -- --fake-ai-fixtures apps/ios/ListoraUITests/FakeAI`, which prints the
-`LISTORA_E2E_*` values, and set them in the test action's environment. Without them the tests
-skip.
-
-## Review and price
-
-`ReviewFeature` takes a draft's server item from analysis through review, cost, and price to a
-saved inventory item, and `InteractionMeter` (in `Core`) measures each item's active time and
-taps. How they work is in [docs/features/review.md](../../docs/features/review.md).
+add that folder's JPEGs, `LISTORA_FAKE_CAMERA=<folder>` makes the camera take them, and
+`LISTORA_RESET_LOCAL_DATA=1` starts with no drafts, signed out.
 
 ### Signing in (Dev)
 

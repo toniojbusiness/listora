@@ -70,7 +70,4 @@ export interface FakeOrder {
   creationDate: string;
   lastModifiedDate: string;
   cancelState: 'NONE_REQUESTED' | 'CANCELED';
-  /** What the buyer paid for shipping, as eBay echoes amounts (`4.99`). */
-  shippingValue: string;
-  shipByDate: string;
 }

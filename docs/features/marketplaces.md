@@ -51,9 +51,8 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
 }
 ```
 
-Imports and emails join the interface as optional members with the tasks that first use them
-(T-23, T-36). eBay's notifications and order sync follow eBay's own contracts and live in
-`@listora/sales`, outside the interface ([ebay-notifications.md](ebay-notifications.md)). Credentials are not part of the interface: an adapter
+Imports, orders, webhooks, and emails join the interface as optional members with the tasks
+that first use them (T-17, T-23, T-36). Credentials are not part of the interface: an adapter
 gets a connection's tokens at use time from its own token source (eBay's `EbaySellerSource`,
 which `@listora/connections` implements over the token vault, [connections.md](connections.md)).
 

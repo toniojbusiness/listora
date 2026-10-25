@@ -122,31 +122,4 @@ describe('PostgresQuotaPolicy (real Postgres)', () => {
     await Promise.all(Array.from({ length: 20 }, () => policy().consume(premium())));
     expect(await policy().used(accountId, 'premium_identifications')).toBe(20);
   });
-
-  it('reports every quota of the current period, unused and unlimited ones included', async () => {
-    const period = { start: '2026-10-01', end: '2026-11-01' };
-    expect(await policy().usage(accountId)).toEqual({
-      period,
-      quotas: [
-        { metric: 'ai_items', used: 0, limit: null },
-        { metric: 'premium_identifications', used: 0, limit: null },
-      ],
-    });
-
-    await policy().consume(premium(2));
-    await setQuota(5);
-    // Another period's counts do not show.
-    await policy().consume({ ...premium(), charge: { metric: 'ai_items', units: 1 } });
-    now = new Date('2026-09-15T00:00:00Z');
-    await policy().consume({ ...premium(), charge: { metric: 'ai_items', units: 7 } });
-    now = new Date('2026-10-24T12:00:00Z');
-
-    expect(await policy().usage(accountId)).toEqual({
-      period,
-      quotas: [
-        { metric: 'ai_items', used: 1, limit: null },
-        { metric: 'premium_identifications', used: 2, limit: 5 },
-      ],
-    });
-  });
 });
