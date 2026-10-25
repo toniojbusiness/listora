@@ -171,12 +171,8 @@ struct TaskThumbnail: View {
 
     var body: some View {
         if let url = (task.item?.coverPhoto?.urls?.thumbnail).flatMap(URL.init(string:)) {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                } else {
-                    Palette.surfaceSecondary.color
-                }
+            RemoteImage(url: url) {
+                Palette.surfaceSecondary.color
             }
             .frame(width: side, height: side)
             .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))

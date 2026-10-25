@@ -133,7 +133,11 @@ export async function listItemRows(
     .execute();
 }
 
-/** Each listed item's cover photo (its first), keyed by item id. */
+/**
+ * Each listed item's cover photo (its first), keyed by item id. Positions are gapless from 0
+ * (photos/repository.ts), so the cover is the row at position 0: one index lookup per item
+ * instead of reading and sorting all of its photos.
+ */
 export async function coverPhotoRows(
   db: DbExecutor,
   tenant: Tenant,
@@ -143,11 +147,9 @@ export async function coverPhotoRows(
   const rows = await db
     .selectFrom('photo')
     .selectAll()
-    .distinctOn('item_id')
     .where('account_id', '=', tenant.accountId)
     .where('item_id', 'in', itemIds)
-    .orderBy('item_id')
-    .orderBy('position')
+    .where('position', '=', 0)
     .execute();
   return new Map(rows.map((row) => [row.item_id, row]));
 }

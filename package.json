@@ -40,6 +40,7 @@
     "dev:fake-depop-site": "npm run fake-depop-site --workspace @listora/automation",
     "db:migrate": "npm run migrate --workspace @listora/db --",
     "admin": "npm run admin --workspace @listora/admin --",
+    "perf:api": "npm run perf --workspace @listora/api --",
     "eval": "npm run eval --workspace @listora/eval --",
     "corpus:render": "npm run corpus:render --workspace @listora/eval"
   },

@@ -86,6 +86,7 @@ use is in `Typography.swift`.
 | `SkeletonBlock`, `SkeletonRow`             | Loading placeholders with a shimmer (a pulse with Reduce Motion)                                                                                  |
 | `Banner`, `toast(_:)`                      | Inline status message with Retry or dismiss; a passing confirmation                                                                               |
 | `BottomActionBar`, `bottomActionBar(_:)`   | The pinned bar for a screen's main actions                                                                                                        |
+| `RemoteImage`, `RemoteImageLoader`         | A server photo filling its frame: disk and memory caches, decoded at display size ([performance.md](performance.md#ios)); never `AsyncImage`      |
 
 `PriceField`, `ChoiceChip`, `ListoraTextField`, and `SectionHeader` are ready for the review and
 price screens (T-18), which adopt them after they merge.

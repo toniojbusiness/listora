@@ -209,9 +209,7 @@ struct ReviewHeader: View {
         HStack(spacing: Spacing.sm) {
             Group {
                 if let url = model.item?.photos.first?.urls.flatMap({ URL(string: $0.thumbnail) }) {
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
+                    RemoteImage(url: url) {
                         Palette.surfaceSecondary.color
                     }
                 } else {

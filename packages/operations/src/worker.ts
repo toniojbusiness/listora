@@ -27,7 +27,7 @@ import {
   type OperationTask,
 } from './jobs.ts';
 import { MAINTENANCE_CRONTAB, MAINTENANCE_TASK, runJobQueueMaintenance } from './maintenance.ts';
-import { DEFAULT_RETRY_POLICY, type RetryPolicy } from './policy.ts';
+import { DEFAULT_RETRY_POLICY, queuePollIntervalMs, type RetryPolicy } from './policy.ts';
 import { reapStoppedWorkers, WorkerLiveness } from './recovery.ts';
 
 /**
@@ -71,7 +71,7 @@ export interface OperationWorkerOptions {
   policy?: RetryPolicy;
   /** Deadline for one marketplace call (default 60 s). */
   callTimeoutMs?: number;
-  /** How often the queue looks for scheduled jobs that became due (default 2 s). */
+  /** How often the queue looks for scheduled jobs that became due (`queuePollIntervalMs`). */
   pollIntervalMs?: number;
   /** How often to release stopped workers' jobs (default 5 s). */
   recoveryIntervalMs?: number;
@@ -143,7 +143,7 @@ export async function startOperationWorker(
   const runnerOptions = {
     connectionString: options.connectionString,
     logger,
-    pollIntervalMs: options.pollIntervalMs ?? 2_000,
+    pollIntervalMs: options.pollIntervalMs ?? queuePollIntervalMs(deps.policy),
     fatal,
     isStopping: () => stopping,
   };
