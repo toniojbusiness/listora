@@ -16,6 +16,7 @@
     "@listora/api-contract": "*",
     "@listora/auto-delist": "*",
     "@listora/automation": "*",
+    "@listora/batches": "*",
     "@listora/connections": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",

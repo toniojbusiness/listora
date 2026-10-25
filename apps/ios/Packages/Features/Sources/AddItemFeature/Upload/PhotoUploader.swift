@@ -216,9 +216,9 @@ actor PhotoUploader {
         case let .syncRole(photoID):
             try await syncRole(of: photos[photoID], in: photos[photoID].flatMap { drafts[$0.draftID] })
         case let .syncOrder(draftID):
-            if let draft = drafts[draftID] {
-                try await syncOrder(of: draft, photos: snapshot.photos.filter { $0.draftID == draftID })
-            }
+            try await syncOrder(of: drafts[draftID], photos: snapshot.photos.filter { $0.draftID == draftID })
+        case let .batch(work):
+            try await perform(work, in: snapshot)
         }
     }
 
@@ -293,7 +293,7 @@ actor PhotoUploader {
         try? store.updateDeletion(deletionID) { $0.retry = next($0.retry) }
     }
 
-    private func retryUpdate(
+    func retryUpdate(
         for failure: APIFailure,
         stops: Bool,
         setsBack: Bool = false,

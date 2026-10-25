@@ -25,7 +25,7 @@ struct ReviewFlowView: View {
             .background(Palette.background)
             .navigationTitle(model.item?.sku ?? model.request.sku ?? "Review")
             .navigationBarTitleDisplayMode(.inline)
-            .task { await model.start() }
+            .task { await model.appeared() }
             .measuresInteraction(model)
             .actionErrorAlert(model)
             .navigationDestination(isPresented: $model.showsCost) {

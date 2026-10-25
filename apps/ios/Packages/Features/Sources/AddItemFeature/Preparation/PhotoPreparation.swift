@@ -41,6 +41,27 @@ enum PhotoPreparation {
         return try encode(image)
     }
 
+    /// When a library photo was taken, from its EXIF data (read before preparing strips it), in
+    /// its own time zone when it records one. Nil when it has no capture date.
+    static func captureDate(of imageData: Data) -> Date? {
+        guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any],
+              let original = exif[kCGImagePropertyExifDateTimeOriginal] as? String
+        else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        if let offset = exif[kCGImagePropertyExifOffsetTimeOriginal] as? String {
+            formatter.dateFormat = "yyyy:MM:dd HH:mm:ssxxx"
+            if let date = formatter.date(from: original + offset) {
+                return date
+            }
+        }
+        formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+        formatter.timeZone = .current
+        return formatter.date(from: original)
+    }
+
     /// Crops a prepared photo to `rect`, given in normalized coordinates of the upright image
     /// (origin top left, 1 is the full width or height).
     static func crop(_ imageData: Data, to rect: CGRect) throws(PhotoPreparationError) -> PreparedPhoto {

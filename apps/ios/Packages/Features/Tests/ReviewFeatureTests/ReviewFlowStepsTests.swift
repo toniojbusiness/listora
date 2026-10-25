@@ -52,6 +52,29 @@ struct ReviewFlowStepsTests {
     }
 
     @Test
+    func `the review appearing again under the saved screen keeps the saved item and its measurement`(
+    ) async {
+        await harness.scriptHappyPath()
+        let model = harness.model()
+        harness.meter.begin(harness.request.sessionID)
+        harness.meter.enter(harness.request.sessionID)
+        await model.appeared()
+        await model.continueToCost()
+        model.cost.amount = AmountEntry(cents: 1200)
+        await model.continueToPrice()
+        await model.save()
+        let calls = await harness.service.calls.count
+
+        // SwiftUI can show the review again while later screens are pushed, restarting its task.
+        await model.appeared()
+
+        #expect(model.phase == .reviewing)
+        #expect(model.showsSaved)
+        #expect(model.saved?.summary?.sku == "AJ-000184", "the measurement the save ended")
+        #expect(await harness.service.calls.count == calls, "nothing is loaded again")
+    }
+
+    @Test
     func `tapping Continue keeps the text still open in a detail's editor`() async {
         await harness.scriptHappyPath()
         let model = harness.model()

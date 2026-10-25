@@ -45,6 +45,9 @@ reopened item whose photos changed since its analysis was applied is analyzed ag
 - **Voice and fast corrections.** Hold the mic and say what to change, touch and hold a detail
   for common values, or swipe to the next detail to check: [voice.md](voice.md).
 
+A batch's rapid review ([batch.md](batch.md#rapid-review)) shows each item on one page with the
+same model, and saves its details, cost, and price in one tap.
+
 ## Interaction time
 
 `InteractionMeter` (in `Core`) measures each new item from its first photo (the camera opening,

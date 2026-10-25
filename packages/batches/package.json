@@ -1,0 +1,21 @@
+{
+  "name": "@listora/batches",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Batch listing: batches of items photographed in one session, each item's state, and the job that starts each item's analysis once its photos are processed.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/ai": "*",
+    "@listora/analysis": "*",
+    "@listora/db": "*",
+    "@listora/photos": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

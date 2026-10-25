@@ -5,6 +5,7 @@ import Foundation
 import InventoryFeature
 import MarketplaceLinkingFeature
 import MarketplacesFeature
+import PhotoSignalsFeature
 import ReviewFeature
 import SalesFeature
 import SettingsFeature
@@ -84,17 +85,17 @@ public struct AppDependencies {
         )
         sales = SalesEnvironment(apiClient: apiClient, accessTokens: accessTokens)
         tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens)
-        let inventory = InventoryEnvironment(
+        inventory = InventoryEnvironment(
             apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy,
             saleScreens: Self.saleScreens(sales),
             taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
         )
-        self.inventory = inventory
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,
-            meter: meter,
+            signalReader: VisionPhotoSignalReader(), meter: meter,
             reviewDestination: { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) },
+            batchReviewDestination: { request, onEvent in AnyView(review.batchFlow(for: request, onEvent: onEvent)) },
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
@@ -128,6 +129,7 @@ public struct AppDependencies {
         }
         interactionStorage.reset()
         ReviewEnvironment.resetLocalData(defaults: defaults)
+        AddItemEnvironment.resetLocalData(defaults: defaults)
         accessGrantStorage.save(nil)
     }
 
