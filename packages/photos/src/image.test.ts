@@ -3,7 +3,12 @@ import sharp from 'sharp';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { DERIVATIVE_KINDS } from './derivatives.ts';
-import { processImage, UnusableImageError, type ProcessedImage } from './image.ts';
+import {
+  MAX_INPUT_PIXELS,
+  processImage,
+  UnusableImageError,
+  type ProcessedImage,
+} from './image.ts';
 import { hammingDistance, type perceptualHash } from './phash.ts';
 import { fixtureJpeg, readMetadata } from './test-support.ts';
 
@@ -128,8 +133,9 @@ describe('processImage', () => {
     expect(error.message).toBe('This file is not a JPEG image. Upload a JPEG photo.');
   });
 
-  it('rejects bytes that are not an image, and a truncated JPEG', async () => {
-    expect((await unusable(new TextEncoder().encode('not an image'))).code).toBe('unreadable');
+  it('rejects bytes that are not an image before decoding them, and a truncated JPEG', async () => {
+    expect((await unusable(new TextEncoder().encode('not an image'))).code).toBe('not_jpeg');
+    expect((await unusable(new Uint8Array([0xff, 0xd8, 0xff]))).code).toBe('unreadable');
     const truncated = landscape.slice(0, Math.floor(landscape.length / 2));
     expect((await unusable(truncated)).code).toBe('unreadable');
   });
@@ -137,6 +143,18 @@ describe('processImage', () => {
   it('rejects an image with more pixels than allowed', async () => {
     const error = await unusable(landscape, { maxInputPixels: 1_000_000 });
     expect(error.code).toBe('too_large');
+  });
+
+  it('refuses by default a small file that would decode to more than 4096 x 4096 pixels', async () => {
+    // A flat colour compresses to a few kilobytes at any size: a decompression bomb's shape.
+    const bomb = await sharp({
+      create: { width: 4097, height: 4096, channels: 3, background: '#808080' },
+    })
+      .jpeg()
+      .toBuffer();
+    expect(bomb.length).toBeLessThan(1_000_000);
+    expect((await unusable(new Uint8Array(bomb))).code).toBe('too_large');
+    expect(MAX_INPUT_PIXELS).toBe(4096 * 4096);
   });
 
   describe('an error that is not about the file', () => {

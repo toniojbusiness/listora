@@ -24,7 +24,12 @@ import {
   type PageSignals,
 } from '../safety/challenges.ts';
 import type { Pacing } from '../safety/pacing.ts';
-import { originForLog, sanitizeMessage, SCREENSHOT_MASK_SELECTORS } from '../safety/redaction.ts';
+import {
+  originForLog,
+  sanitizedError,
+  sanitizeMessage,
+  SCREENSHOT_MASK_SELECTORS,
+} from '../safety/redaction.ts';
 import { PageChangedError } from './errors.ts';
 import type { ScreenshotStore } from './screenshots.ts';
 import type {
@@ -296,9 +301,14 @@ export class PlaywrightSession implements AutomationSession {
     };
   }
 
-  /** A redacted viewport screenshot in private storage; `null` when there is no page left. */
+  /**
+   * A redacted viewport screenshot in private storage; `null` when there is no page left, or
+   * when the page is not the marketplace's (whatever it shows is not kept).
+   */
   async #screenshot(): Promise<string | null> {
     if (this.#page.isClosed()) return null;
+    const url = URL.canParse(this.#page.url()) ? new URL(this.#page.url()) : null;
+    if (url === null || !this.#deps.profile.origins.includes(url.origin)) return null;
     try {
       const page = this.#page;
       // A page load still under way (the step that timed out) holds every screenshot back.
@@ -703,17 +713,6 @@ function error(
   message: string,
 ): Extract<ScriptFailure, { kind: 'error' }> {
   return { kind: 'error', step, code, message, retryAfterMs: null, screenshotKey: null };
-}
-
-function sanitizedError(
-  thrown: unknown,
-  typed: Iterable<string>,
-): { name: string; message: string } {
-  const name = thrown instanceof Error ? thrown.name : 'Error';
-  return {
-    name,
-    message: sanitizeMessage(thrown instanceof Error ? thrown.message : String(thrown), typed),
-  };
 }
 
 function toSessionCookie(cookie: Cookie): SessionCookie {

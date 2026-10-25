@@ -161,7 +161,7 @@ describe('processPhoto (real Postgres and local storage)', () => {
     expect(await processPhoto(deps(), { accountId, photoId })).toBe('failed');
     expect(await photoRow(photoId)).toMatchObject({
       status: 'failed',
-      failure_reason: 'This file could not be read as an image. Take or choose the photo again.',
+      failure_reason: 'This file is not a JPEG image. Upload a JPEG photo.',
       phash: null,
       derivatives: {},
     });

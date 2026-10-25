@@ -7,11 +7,13 @@
  * agent, no stealth plugins, no fingerprint or `navigator.webdriver` changes, no proxies. A
  * marketplace that wants to stop automation can, and the runner then stops (challenges.ts).
  */
-import type { Browser, BrowserType } from 'playwright-core';
+import type { Browser, BrowserContext, BrowserType, Route } from 'playwright-core';
 
 import type { Logger } from '@listora/shared';
 import { cookieOnDomains } from '@listora/connections';
 
+import type { AutomationProfile } from '../profiles.ts';
+import { requestAllowed } from '../safety/network.ts';
 import { Pacing, type PacingOptions } from '../safety/pacing.ts';
 import { loadChromium } from './playwright.ts';
 import type { ScreenshotStore } from './screenshots.ts';
@@ -64,10 +66,12 @@ export class PlaywrightBrowserRunner implements BrowserRunner {
           origins: [],
         },
       });
-      const page = await context.newPage().catch(async (error: unknown) => {
-        await context.close().catch(() => undefined);
-        throw error;
-      });
+      const page = await guardNetwork(context, spec.profile)
+        .then(() => context.newPage())
+        .catch(async (error: unknown) => {
+          await context.close().catch(() => undefined);
+          throw error;
+        });
       return new PlaywrightSession(context, page, {
         profile: spec.profile,
         pacing: new Pacing(spec.profile.pacing, this.#options.pacing),
@@ -150,4 +154,33 @@ export class PlaywrightBrowserRunner implements BrowserRunner {
       throw error;
     }
   }
+}
+
+/**
+ * Checks every request of the session before Chromium sends it (safety/network.ts): the main
+ * frame stays on the marketplace, and nothing reaches a private address. A refused request
+ * fails in the page as if blocked by the client.
+ */
+async function guardNetwork(context: BrowserContext, profile: AutomationProfile): Promise<void> {
+  await context.route('**/*', async (route: Route) => {
+    const request = route.request();
+    let mainFrame = false;
+    if (request.isNavigationRequest()) {
+      try {
+        mainFrame = request.frame().parentFrame() === null;
+      } catch {
+        // A request without a frame (a service worker's; they are blocked) is no navigation.
+      }
+    }
+    await (requestAllowed(request.url(), mainFrame, profile)
+      ? route.fallback()
+      : route.abort('blockedbyclient'));
+  });
+  await context.routeWebSocket(/.*/, async (socket) => {
+    if (requestAllowed(socket.url(), false, profile)) {
+      socket.connectToServer();
+    } else {
+      await socket.close({ code: 1008, reason: 'blocked' });
+    }
+  });
 }

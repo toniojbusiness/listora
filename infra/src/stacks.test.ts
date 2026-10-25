@@ -245,6 +245,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
             Rules: [
               Match.objectLike({ AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 } }),
               Match.objectLike({ NoncurrentVersionExpiration: { NoncurrentDays: 30 } }),
+              // Uploads never attached (the worker deletes each one it processes).
+              Match.objectLike({ Prefix: 'uploads/', ExpirationInDays: 7 }),
               // The browser runner's screenshots, which the worker deletes after 14 days.
               Match.objectLike({ Prefix: 'automation/', ExpirationInDays: 30 }),
             ],
@@ -298,6 +300,10 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         ).Statement.filter((statement) => statement['Effect'] === 'Allow'),
       );
       expect(allowed.flatMap((statement) => asList(statement['Action']))).toEqual(['s3:GetObject']);
+      // CloudFront may read public/ objects only, whatever its origins and behaviors say.
+      expect(allowed.map((statement) => JSON.stringify(statement['Resource']))).toEqual([
+        expect.stringMatching(/"\/public\/\*"/),
+      ]);
     });
   });
 

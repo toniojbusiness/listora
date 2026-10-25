@@ -13,11 +13,13 @@
   production); every other key is private and never served.
 - **Processing** (`processPhoto`, a job function under the task name `photo_processing`)
   verifies the upload's sha256, decodes it with `sharp` (a non-JPEG or broken file makes the
-  photo `failed` with a reason the user can read), turns it upright, and writes metadata-free
+  photo `failed` with a reason the user can read). Only a file that starts like a JPEG reaches
+  the decoder, and one larger than 4096 x 4096 pixels is refused, so a small file cannot decode
+  into hundreds of megabytes. Then it turns the photo upright and writes, one at a time, metadata-free
   sRGB JPEGs: `original` (full size) and `ai` (1024 px) privately, and `thumbnail` (400 px)
   and `listing` (1600 px) under an unguessable public key. It stores their keys, sizes, and
   hashes in `photo.derivatives`, the upright size, and a 64-bit DCT pHash, then deletes the
-  upload, which may carry GPS. Every step is safe to rerun. The API adds the job to the job
+  upload, which may carry GPS. In S3, an upload left more than 7 days (never attached) expires. Every step is safe to rerun. The API adds the job to the job
   queue (Graphile Worker, `graphilePhotoJobs`, job key `photoJobKey`) in the transaction that
   attaches the photo, and the worker runs it (`processPhoto`, task `photo_processing`) next to
   the operation steps. Analyses go the same way (`graphileAnalysisJobs`, `analysisJobKey`,

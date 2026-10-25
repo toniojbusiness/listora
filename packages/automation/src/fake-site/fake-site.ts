@@ -61,7 +61,12 @@ export type FakeSiteFault =
   /** A read serves the listing as it was before its latest change. */
   | { type: 'stale_read' }
   /** A redirect to another origin (the same server under `localhost`). */
-  | { type: 'offsite' };
+  | { type: 'offsite' }
+  /**
+   * The page loads an image, a frame, and a script request from another origin (the same server
+   * under `localhost`), and links there (`#offsite-link`).
+   */
+  | { type: 'offsite_content' };
 
 export interface FakeSiteFaultRule {
   action: FakeSiteAction;
@@ -93,6 +98,8 @@ export interface FakeSiteOrder {
 
 export interface FakeSiteRequest {
   method: string;
+  /** The `Host` the request was sent to. */
+  host: string;
   path: string;
   action: FakeSiteAction | null;
   userAgent: string;
@@ -270,6 +277,7 @@ export class FakeAutomationSite {
     const method = request.method ?? 'GET';
     const record: FakeSiteRequest = {
       method,
+      host: request.headers.host ?? '',
       path: url.pathname,
       action: null,
       userAgent: request.headers['user-agent'] ?? '',
@@ -389,6 +397,19 @@ export class FakeAutomationSite {
         };
       case 'offsite':
         return redirect(`${this.#url.replace('127.0.0.1', 'localhost')}/elsewhere`);
+      case 'offsite_content': {
+        const elsewhere = `${this.#url.replace('127.0.0.1', 'localhost')}/elsewhere`;
+        return {
+          status: 200,
+          body: page(
+            'Your closet',
+            `<p data-account="${escape(session.seller)}">Closet</p>` +
+              `<img src="${elsewhere}?image" alt=""><iframe src="${elsewhere}?frame"></iframe>` +
+              `<script>fetch(${JSON.stringify(`${elsewhere}?fetch`)}).catch(() => {});</script>` +
+              `<a id="offsite-link" href="${elsewhere}?link">Elsewhere</a>`,
+          ),
+        };
+      }
       case 'server_error':
       case 'reject':
       case 'slow':

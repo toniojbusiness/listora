@@ -31,6 +31,12 @@
               "Status": "Enabled"
             },
             {
+              "ExpirationInDays": 7,
+              "Id": "expire-unattached-uploads",
+              "Prefix": "uploads/",
+              "Status": "Enabled"
+            },
+            {
               "ExpirationInDays": 30,
               "Id": "expire-automation-screenshots",
               "Prefix": "automation/",
@@ -142,15 +148,7 @@
                     "Fn::Join": [
                       "",
                       [
-                        "arn:",
-                        {
-                          "Ref": "AWS::Partition"
-                        },
-                        ":cloudfront::",
-                        {
-                          "Ref": "AWS::AccountId"
-                        },
-                        ":distribution/",
+                        "arn:aws:cloudfront::222222222222:distribution/",
                         {
                           "Ref": "PhotoCdn9B72B83D"
                         }
@@ -173,7 +171,7 @@
                         "Arn"
                       ]
                     },
-                    "/*"
+                    "/public/*"
                   ]
                 ]
               }
@@ -183,11 +181,11 @@
         }
       }
     },
-    "PhotoCdnOrigin1S3OriginAccessControl53E315DE": {
+    "PhotoCdnAccess98A00726": {
       "Type": "AWS::CloudFront::OriginAccessControl",
       "Properties": {
         "OriginAccessControlConfig": {
-          "Name": "listoraprodstoragePhotoCdnOrigin1S3OriginAccessControlA32009A3",
+          "Name": "listoraprodstoragePhotoCdnAccess27D26AB1",
           "OriginAccessControlOriginType": "s3",
           "SigningBehavior": "always",
           "SigningProtocol": "sigv4"
@@ -227,7 +225,7 @@
               "Id": "listoraprodstoragePhotoCdnOrigin1E538F766",
               "OriginAccessControlId": {
                 "Fn::GetAtt": [
-                  "PhotoCdnOrigin1S3OriginAccessControl53E315DE",
+                  "PhotoCdnAccess98A00726",
                   "Id"
                 ]
               },

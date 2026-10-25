@@ -1,11 +1,18 @@
 import { sha256Hex } from '@listora/shared';
-import sharp, { type SharpOptions } from 'sharp';
+import sharp, { type Sharp, type SharpOptions } from 'sharp';
 
 import { DERIVATIVE_KINDS, DERIVATIVES, type DerivativeKind } from './derivatives.ts';
 import { perceptualHash, PHASH_SAMPLE_SIZE } from './phash.ts';
 
-/** Largest accepted upload: 50 megapixels (clients send at most 2048 px on the long edge). */
-export const MAX_INPUT_PIXELS = 50_000_000;
+/**
+ * Largest accepted upload: 4096 x 4096 pixels, four times what a client sends (at most 2048 px
+ * on the long edge). The bound keeps a small, highly compressed file from decoding into
+ * hundreds of megabytes in the worker.
+ */
+export const MAX_INPUT_PIXELS = 4096 * 4096;
+
+/** Every JPEG starts with a start-of-image marker followed by another marker. */
+const JPEG_MAGIC = [0xff, 0xd8, 0xff] as const;
 
 /** Why a file cannot become a photo; `message` is shown to the user. */
 export class UnusableImageError extends Error {
@@ -55,6 +62,10 @@ export async function processImage(
     failOn: 'error',
     limitInputPixels: options.maxInputPixels ?? MAX_INPUT_PIXELS,
   };
+  // Only JPEG ever reaches a decoder: other formats are refused before libvips parses them.
+  if (!JPEG_MAGIC.every((byte, index) => bytes[index] === byte)) {
+    throw new UnusableImageError('not_jpeg', 'This file is not a JPEG image. Upload a JPEG photo.');
+  }
   let format: string | undefined;
   try {
     ({ format } = await sharp(bytes, input).metadata());
@@ -69,40 +80,15 @@ export async function processImage(
   let grey: Buffer;
   try {
     const upright = sharp(bytes, input).autoOrient();
-    [derived, grey] = await Promise.all([
-      Promise.all(
-        DERIVATIVE_KINDS.map(async (kind): Promise<DerivedImage> => {
-          const { maxEdge, quality } = DERIVATIVES[kind];
-          let pipeline = upright.clone();
-          if (maxEdge !== undefined) {
-            pipeline = pipeline.resize({
-              width: maxEdge,
-              height: maxEdge,
-              fit: 'inside',
-              withoutEnlargement: true,
-            });
-          }
-          const { data, info } = await pipeline
-            .toColourspace('srgb')
-            .jpeg({ quality })
-            .toBuffer({ resolveWithObject: true });
-          const output = new Uint8Array(data);
-          return {
-            kind,
-            bytes: output,
-            width: info.width,
-            height: info.height,
-            sha256: sha256Hex(output),
-          };
-        }),
-      ),
-      upright
-        .clone()
-        .greyscale()
-        .resize(PHASH_SAMPLE_SIZE, PHASH_SAMPLE_SIZE, { fit: 'fill' })
-        .raw()
-        .toBuffer(),
-    ]);
+    // One image at a time, so a job holds at most one decoded copy of the photo.
+    derived = [];
+    for (const kind of DERIVATIVE_KINDS) derived.push(await derive(upright, kind));
+    grey = await upright
+      .clone()
+      .greyscale()
+      .resize(PHASH_SAMPLE_SIZE, PHASH_SAMPLE_SIZE, { fit: 'fill' })
+      .raw()
+      .toBuffer();
   } catch (error) {
     throw asUnusable(error);
   }
@@ -116,6 +102,26 @@ export async function processImage(
     phash: perceptualHash(new Uint8Array(grey)),
     derivatives,
   };
+}
+
+/** One derivative of the upright image: resized to its kind's edge, sRGB, no metadata. */
+async function derive(upright: Sharp, kind: DerivativeKind): Promise<DerivedImage> {
+  const { maxEdge, quality } = DERIVATIVES[kind];
+  let pipeline = upright.clone();
+  if (maxEdge !== undefined) {
+    pipeline = pipeline.resize({
+      width: maxEdge,
+      height: maxEdge,
+      fit: 'inside',
+      withoutEnlargement: true,
+    });
+  }
+  const { data, info } = await pipeline
+    .toColourspace('srgb')
+    .jpeg({ quality })
+    .toBuffer({ resolveWithObject: true });
+  const output = new Uint8Array(data);
+  return { kind, bytes: output, width: info.width, height: info.height, sha256: sha256Hex(output) };
 }
 
 /**

@@ -16,7 +16,11 @@
  * Keys are cached for an hour, as eBay asks ("one-hour is recommended"; fetching the key for
  * every notification can exceed the Notification API's call limit). An unknown key id is
  * remembered for ten minutes, so a stream of forged headers with random ids costs at most one
- * `getPublicKey` call per id and the cache stays bounded. Fetches are single-flight per key id.
+ * `getPublicKey` call per id. Unknown ids are kept apart from eBay's real keys, so they can never
+ * push a real key out of the cache, and key ids never seen before are fetched at most
+ * `maxNewKeyFetchesPerMinute` times a minute (beyond that the answer is `unavailable`, and eBay
+ * delivers again), so forged headers cannot spend the application's call limit. Fetches are
+ * single-flight per key id.
  *
  * `verify` never throws: it answers `valid`, `invalid` (reject the notification), or
  * `unavailable` (eBay's key could not be read now; answer with an error so eBay sends it again).
@@ -43,8 +47,13 @@ export interface NotificationVerifierOptions {
   keyTtlMs?: number;
   /** How long an unknown key id is remembered (default ten minutes). */
   unknownKeyTtlMs?: number;
-  /** At most this many key ids are cached (default 256); the oldest entries go first. */
+  /**
+   * At most this many keys, and separately this many unknown key ids, are cached (default 256
+   * each); the oldest entries go first.
+   */
   maxCachedKeys?: number;
+  /** Fetches of key ids that were never a real key, per minute (default 30). */
+  maxNewKeyFetchesPerMinute?: number;
   timeoutMs?: number;
   now?: () => number;
 }
@@ -59,6 +68,8 @@ interface CachedKey {
   expiresAt: number;
 }
 
+const FETCH_BUDGET_WINDOW_MS = 60_000;
+
 type KeyLookup =
   | { type: 'key'; object: KeyObject; digest: string }
   | { type: 'unknown' }
@@ -71,9 +82,15 @@ export class EbayNotificationVerifier {
   readonly #keyTtlMs: number;
   readonly #unknownKeyTtlMs: number;
   readonly #maxCachedKeys: number;
+  readonly #maxNewKeyFetchesPerMinute: number;
   readonly #timeoutMs: number;
   readonly #now: () => number;
-  readonly #cache = new Map<string, CachedKey>();
+  /** eBay's real keys, kept after they expire so a refetch is never limited. */
+  readonly #keys = new Map<string, CachedKey>();
+  /** Key ids eBay does not know. */
+  readonly #unknownKeys = new Map<string, CachedKey>();
+  /** When each recent fetch of a new key id started, oldest first. */
+  #newKeyFetches: number[] = [];
   readonly #fetching = new Map<string, Promise<KeyLookup>>();
 
   constructor(options: NotificationVerifierOptions) {
@@ -82,6 +99,7 @@ export class EbayNotificationVerifier {
     this.#keyTtlMs = options.keyTtlMs ?? 60 * 60_000;
     this.#unknownKeyTtlMs = options.unknownKeyTtlMs ?? 10 * 60_000;
     this.#maxCachedKeys = options.maxCachedKeys ?? 256;
+    this.#maxNewKeyFetchesPerMinute = options.maxNewKeyFetchesPerMinute ?? 30;
     this.#timeoutMs = options.timeoutMs ?? 10_000;
     this.#now = options.now ?? Date.now;
   }
@@ -120,12 +138,22 @@ export class EbayNotificationVerifier {
   }
 
   async #key(kid: string, signal: AbortSignal): Promise<KeyLookup> {
-    const cached = this.#cache.get(kid);
-    if (cached !== undefined && cached.expiresAt > this.#now()) {
-      return cached.key === null ? { type: 'unknown' } : { type: 'key', ...cached.key };
+    const now = this.#now();
+    const known = this.#keys.get(kid);
+    if (known !== undefined && known.key !== null && known.expiresAt > now) {
+      return { type: 'key', ...known.key };
     }
+    const unknown = this.#unknownKeys.get(kid);
+    if (unknown !== undefined && unknown.expiresAt > now) return { type: 'unknown' };
     let fetching = this.#fetching.get(kid);
     if (fetching === undefined) {
+      if (known === undefined) {
+        this.#newKeyFetches = this.#newKeyFetches.filter((at) => at > now - FETCH_BUDGET_WINDOW_MS);
+        if (this.#newKeyFetches.length >= this.#maxNewKeyFetchesPerMinute) {
+          return { type: 'unavailable', code: 'key_fetches_limited' };
+        }
+        this.#newKeyFetches.push(now);
+      }
       // The shared fetch belongs to no caller: it runs under its own timeout.
       fetching = this.#fetchKey(kid).finally(() => this.#fetching.delete(kid));
       this.#fetching.set(kid, fetching);
@@ -158,14 +186,14 @@ export class EbayNotificationVerifier {
         if (object === undefined || !DIGESTS.has(digest.toUpperCase())) {
           return { type: 'unsupported' };
         }
-        this.#remember(kid, { object, digest: digest.toUpperCase() }, this.#keyTtlMs);
+        this.#remember(this.#keys, kid, { object, digest: digest.toUpperCase() }, this.#keyTtlMs);
         return { type: 'key', object, digest: digest.toUpperCase() };
       }
       case 'error':
         if (result.status === 401) this.#token.forget(token);
         // eBay answers 404 for a key id it does not know; 400 for one it cannot read.
         if (result.status === 404 || result.status === 400) {
-          this.#remember(kid, null, this.#unknownKeyTtlMs);
+          this.#remember(this.#unknownKeys, kid, null, this.#unknownKeyTtlMs);
           return { type: 'unknown' };
         }
         return { type: 'unavailable', code: `http_${String(result.status)}` };
@@ -175,13 +203,18 @@ export class EbayNotificationVerifier {
     }
   }
 
-  #remember(kid: string, key: CachedKey['key'], ttlMs: number): void {
-    this.#cache.delete(kid);
-    this.#cache.set(kid, { key, expiresAt: this.#now() + ttlMs });
-    while (this.#cache.size > this.#maxCachedKeys) {
-      const oldest = this.#cache.keys().next().value;
+  #remember(
+    cache: Map<string, CachedKey>,
+    kid: string,
+    key: CachedKey['key'],
+    ttlMs: number,
+  ): void {
+    cache.delete(kid);
+    cache.set(kid, { key, expiresAt: this.#now() + ttlMs });
+    while (cache.size > this.#maxCachedKeys) {
+      const oldest = cache.keys().next().value;
       if (oldest === undefined) break;
-      this.#cache.delete(oldest);
+      cache.delete(oldest);
     }
   }
 }
