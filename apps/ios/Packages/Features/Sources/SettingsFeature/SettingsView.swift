@@ -20,17 +20,20 @@ public struct SettingsContent: Equatable, Sendable {
 public enum SettingsDestination: Hashable, Sendable {
     case marketplaces
     case linkAccounts
+    case deleteAccount
 }
 
 /// Account, marketplace connections, and app information, opened over the app from the gear in
 /// the Today and Sales headers. The account section signs in: with an emailed code from the
-/// environment's user pool, or in Dev builds with the developer sign-in against the local API.
+/// environment's user pool, or in Dev builds with the developer sign-in against the local API;
+/// while someone is signed in, it offers account deletion (App Store Review Guideline 5.1.1(v)).
 /// The Marketplaces and Link accounts screens come from the caller
 /// (AppFeature), since a feature never imports another; so does `path`, so the caller can open
 /// them.
 public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
     private let content: SettingsContent
     private let signIn: SignInModel?
+    private let accountDeletion: AccountDeletionModel?
     private let marketplaces: Marketplaces?
     private let linkAccounts: LinkAccounts?
     /// The server's words for a connection that needs attention, shown on the Marketplaces row.
@@ -42,6 +45,7 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
     public init(
         content: SettingsContent,
         signIn: SignInModel? = nil,
+        accountDeletion: AccountDeletionModel? = nil,
         path: Binding<[SettingsDestination]>,
         marketplacesAttention: String? = nil,
         onDone: (@MainActor () -> Void)? = nil,
@@ -50,6 +54,7 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
     ) {
         self.content = content
         self.signIn = signIn
+        self.accountDeletion = accountDeletion
         _path = path
         self.marketplacesAttention = marketplacesAttention
         self.onDone = onDone
@@ -95,6 +100,21 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
                     SignInSection(model: signIn)
                         .listRowBackground(Palette.surface.color)
                 }
+                if let accountDeletion, accountDeletion.isSignedIn {
+                    Section {
+                        NavigationLink(value: SettingsDestination.deleteAccount) {
+                            ListRow(
+                                "Delete account",
+                                subtitle: "Remove your items, sales, and history from Listora.",
+                                systemImage: "person.crop.circle.badge.xmark",
+                            )
+                        }
+                        .accessibilityIdentifier("settings.deleteAccount")
+                    } header: {
+                        SectionHeader("Account")
+                    }
+                    .listRowBackground(Palette.surface.color)
+                }
                 Section {
                     row("Version", content.version, systemImage: "info.circle", id: "settings.version")
                     row("Environment", content.environment, systemImage: "server.rack", id: "settings.environment")
@@ -128,8 +148,14 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
                     marketplaces
                 case .linkAccounts:
                     linkAccounts
+                case .deleteAccount:
+                    if let accountDeletion {
+                        DeleteAccountView(model: accountDeletion)
+                    }
                 }
             }
+            .onAppear { accountDeletion?.refresh() }
+            .onChange(of: signIn?.stage) { accountDeletion?.refresh() }
         }
     }
 
@@ -163,6 +189,7 @@ extension SettingsView where Marketplaces == EmptyView, LinkAccounts == EmptyVie
     public init(content: SettingsContent, signIn: SignInModel? = nil) {
         self.content = content
         self.signIn = signIn
+        accountDeletion = nil
         marketplaces = nil
         linkAccounts = nil
         marketplacesAttention = nil

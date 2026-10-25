@@ -150,3 +150,11 @@ struct UploadStatusTests {
         #expect(!summary.canRetry)
     }
 }
+
+struct NewItemGuideTests {
+    @Test
+    func `says photos wait on this iPhone only while signed out`() {
+        #expect(NewItemGuide.privacyNote(isSignedIn: false).contains("until you sign in"))
+        #expect(NewItemGuide.privacyNote(isSignedIn: true) == "Each photo's location is removed before it's uploaded.")
+    }
+}

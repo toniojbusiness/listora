@@ -55,7 +55,12 @@ export {
   UNFINISHED_STATUSES,
 } from './state-machine.ts';
 export type { OperationChange, OperationError, OperationRow } from './transitions.ts';
-export { describeListingStatus, describeOperation } from './status-display.ts';
+export {
+  describeListingStatus,
+  describeOperation,
+  isRetryableFailure,
+  REFUSED_CONTENT_ERROR,
+} from './status-display.ts';
 export type { ListingStatusInput, StatusDisplay, StatusTone } from './status-display.ts';
 export { startOperationWorker } from './worker.ts';
 export type {

@@ -18,11 +18,18 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
 - **Item screen**: photos, title, SKU, status, list price; one row per marketplace (eBay, Depop,
   Poshmark, Mercari) with the listing's `statusDisplay`, how Listora works with that marketplace
   ("Through eBay's API" or "Assisted"), the listing's own price, the actions the server allows
-  (`availableActions`) plus Retry when the newest operation failed, and the listing's history
+  (`availableActions`) plus Retry when the newest operation failed and can be retried, and the
+  listing's history
   (every operation, newest first; opening one shows its steps from `listOperationEvents`). Then
   cost and profit (the sale's profit once sold, "with estimated fees" until the marketplace
   reports them; before that "Profit at list price", labeled as before fees and shipping), Mark as
-  sold, and the details with the storage location. A sold item shows its sale (profit, ROI, the
+  sold, and the details with the storage location. A marketplace with no usable connection (only
+  eBay needs one) says how to list there ("Connect your eBay account in Settings > Marketplaces to
+  list it here."). The size row edits the item's size (`replaceItem`, read again and applied once
+  more after a `409`): every marketplace refuses clothing and shoes without one, so a listing
+  refused for its size can be fixed and listed again. A `draft` item (from another device, or an
+  earlier install, so not a draft on this iPhone) offers Review item, which opens the review
+  flow. A sold item shows its sale (profit, ROI, the
   delist run), and after a canceled or returned sale, "Relist it?" ([sales.md](sales.md)). Relist
   is offered only while the item is not sold or archived.
 - **List flow**: List opens the marketplace choice, with the row's marketplace selected. eBay is
@@ -41,7 +48,9 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   "Open task", which opens its task; Retry after a dismissed task makes a new one.
 - **Changes**: Change price, End listing (sold elsewhere, or no longer available), Relist, and
   Check status each queue one operation. Retry re-queues the failed operation
-  (`retryOperation`).
+  (`retryOperation`). Change price warns, without refusing, when the new price is below the
+  item's floor on that marketplace (`getItemPricing`), as the price screen does. End listing
+  asks for the reason on its own card, so the confirmation opens at the button.
 
 ## Never show success the server has not confirmed
 
@@ -69,7 +78,9 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   with the desired state. Each answers `202` with the listing and the operation.
 - **One change at a time.** A listing allows an action only when no operation on it is
   unfinished, and only in the state it needs: `publish` for a draft never queued (a failed
-  publish is retried, never published twice, since it may have been applied), price, revise,
+  publish is retried, never published twice, since it may have been applied), or whose publish
+  was refused before sending (nothing reached the marketplace, so the seller fixes it and
+  publishes again; `replaceListingDraft` allows that draft too), price, revise,
   end, and check for an active listing, relist and check for an ended one. A failed operation
   never blocks the others (a failed price change still lets the seller delist). The same rule
   computes `availableActions`, each in the mode the marketplace's capabilities give it: `api`,

@@ -459,10 +459,15 @@ describe('mark sold and the sale lifecycle (real Postgres, fake eBay, operation 
     });
     expect(returned.status).toBe(200);
     expect(returned.body.status).toBe('returned');
-    expect(returned.body.delistRuns[0]?.results[0]).toMatchObject({
-      listingId: mercari.id,
-      state: 'canceled',
-    });
+    // Canceled at once, or, when the worker was running the delist's step at that moment, by
+    // that step as it finds the sale no longer stands.
+    let delist = returned.body.delistRuns[0]?.results[0];
+    for (let tries = 0; delist?.state !== 'canceled' && tries < 200; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      const sale = await api.call('getSale', { token, params: { saleId: sold.body.id } });
+      delist = sale.body.delistRuns[0]?.results[0];
+    }
+    expect(delist).toMatchObject({ listingId: mercari.id, state: 'canceled' });
     const task = await api.db
       .selectFrom('user_task')
       .select('status')

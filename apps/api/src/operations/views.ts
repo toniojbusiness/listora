@@ -9,6 +9,7 @@ import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import {
   DEFAULT_RETRY_POLICY,
   describeOperation,
+  isRetryableFailure,
   maxAttempts,
   SETTLED_STATUSES,
 } from '@listora/operations';
@@ -25,7 +26,10 @@ export interface OperationListing {
   marketplace: Marketplace;
 }
 
-/** An operation's error as the contract shows it; only a failed operation can be retried. */
+/**
+ * An operation's error as the contract shows it. Only a failed operation can be retried, and not
+ * one whose content Listora refused before sending it: the same content would fail again.
+ */
 function operationError(
   status: OperationStatus,
   code: string | null,
@@ -35,7 +39,7 @@ function operationError(
   return {
     code,
     message: message ?? 'Something went wrong.',
-    retryable: status === 'failed',
+    retryable: status === 'failed' && isRetryableFailure(code),
   };
 }
 
@@ -67,6 +71,7 @@ export function operationView(op: OperationRow, listing: OperationListing): Oper
         status: op.status,
         attempts: op.attempts,
         errorMessage: op.error_message,
+        errorCode: op.error_code,
         successEvidence: op.success_evidence,
       },
       maxAttempts: MAX_ATTEMPTS,

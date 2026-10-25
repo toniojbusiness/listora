@@ -115,13 +115,19 @@ struct MarketplacesHealthModelTests {
             lists: [.success(connected())],
             banners: [BannerSpec(tone: "action_needed", label: "Reconnect eBay", detail: nil)],
         )
-        var signedIn = false
-        let model = MarketplacesModel(service: service, isSignedIn: { signedIn })
+        let session = Session()
+        let model = MarketplacesModel(service: service, isSignedIn: { session.isSignedIn })
         await model.refreshAttention()
         #expect(service.listCalls == 0)
         #expect(model.attention == nil)
-        signedIn = true
+        session.isSignedIn = true
         await model.refreshAttention()
         #expect(model.attention?.title == "Reconnect eBay")
     }
+}
+
+/// Whether someone is signed in, changed by a test after the model captured it.
+@MainActor
+private final class Session {
+    var isSignedIn = false
 }

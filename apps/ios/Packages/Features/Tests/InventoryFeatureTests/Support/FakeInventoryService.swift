@@ -18,6 +18,8 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
     private var _variantsSent: [Schemas.ListingVariant] = []
     private var _requests: [(ListingRequest, String)] = []
     private var _createdOn: [String] = []
+    private var _replaced: [Schemas.ItemReplace] = []
+    private var _floors: [Schemas.MarketplaceFloor] = []
 
     private func locked<T>(_ body: () -> T) -> T {
         lock.lock()
@@ -101,6 +103,32 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
     func item(id _: String) async throws(APIFailure) -> Schemas.Item {
         locked { _calls.append("item") }
         return item
+    }
+
+    /// The details of every replace, in order.
+    var replaced: [Schemas.ItemReplace] {
+        locked { _replaced }
+    }
+
+    func replaceItem(id _: String, with replace: Schemas.ItemReplace) async throws(APIFailure) -> Schemas.Item {
+        locked { _replaced.append(replace) }
+        try record("replaceItem")
+        return locked {
+            _item.details = replace.details
+            _item.version = replace.expectedVersion + 1
+            return _item
+        }
+    }
+
+    /// The item's floors, as `getItemPricing` gives them.
+    var floorList: [Schemas.MarketplaceFloor] {
+        get { locked { _floors } }
+        set { locked { _floors = newValue } }
+    }
+
+    func floors(itemID _: String) async throws(APIFailure) -> [Schemas.MarketplaceFloor] {
+        try record("floors")
+        return floorList
     }
 
     func connections() async throws(APIFailure) -> [Schemas.Connection] {

@@ -157,9 +157,17 @@ private struct SaleRow: View {
                     .font(Typography.headline)
                     .foregroundStyle(Palette.textPrimary)
                     .lineLimit(2)
-                Text("\(sale.marketplace.name) · \(SaleFormatting.day(sale.soldAt))")
-                    .font(Typography.subheadline)
-                    .foregroundStyle(Palette.textSecondary)
+                // Where and when on one line when it fits, else on two, never breaking the date.
+                ViewThatFits(in: .horizontal) {
+                    Text("\(sale.marketplace.name) · \(SaleFormatting.day(sale.soldAt))")
+                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(sale.marketplace.name)
+                        Text(SaleFormatting.day(sale.soldAt))
+                    }
+                }
+                .font(Typography.subheadline)
+                .foregroundStyle(Palette.textSecondary)
                 if sale.status.value1 != .detected {
                     StatusBadge(sale.status.label, tone: sale.status.tone, showsIcon: false)
                 }

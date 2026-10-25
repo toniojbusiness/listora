@@ -43,7 +43,13 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    seven. The delays are the worker's `OPERATION_RETRY_DELAY_SCALE` times the schedule above (1
    in production; the local stack for UI tests uses 0.1). A step whose result is unknown is always followed by a read-back, even after the
    last attempt. Retry (`retryOperation`) gives a failed operation a fresh set of attempts; it
-   is refused once a newer operation exists on the listing, since it would undo that one.
+   is refused once a newer operation exists on the listing, since it would undo that one. A
+   create, revise, or relist whose content the adapter's own validation refuses fails before
+   anything is sent (`validation_failed`, `REFUSED_CONTENT_ERROR`, "Poshmark needs a size for
+   Men's Shirts. Fix it, then try again."). Retrying the same content can only fail again, so
+   that failure is not retryable (`error.retryable: false`, the label has no "- Retry"): the
+   seller fixes the item or the listing and sends it again, which a draft that never reached the
+   marketplace allows ([inventory.md](inventory.md#the-api-behind-it)).
 4. **Idempotent re-execution.** An operation that was sent before is read back before every
    later send, and succeeds without sending again when the change already took effect (a 5xx
    can hide an applied write). Adapters also pass the operation's idempotency key to the

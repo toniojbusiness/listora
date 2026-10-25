@@ -182,6 +182,8 @@ private struct ChoiceRow: View {
         .tint(Palette.brand.color)
         .disabled(!choice.isAvailable)
         .cardStyle(.outlined)
+        // A toggle reads every text in its label, the tile's letter too; name what matters.
+        .accessibilityLabel("\(choice.name), \(choice.detail)")
         .accessibilityIdentifier("listing.choose.\(choice.id)")
     }
 }

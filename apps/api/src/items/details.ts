@@ -157,6 +157,10 @@ export function detailErrors(details: ItemDetailsInput): FieldError[] {
     errors.push({ field: 'details', message: 'every amount must use the same currency' });
   }
   const { listPrice, floorPrice } = details;
+  // No marketplace lists an item for nothing (listings refuse a price of $0 too).
+  if (listPrice?.amountCents === 0) {
+    errors.push({ field: 'details.listPrice.amountCents', message: 'must be more than zero' });
+  }
   if (listPrice && floorPrice && floorPrice.amountCents > listPrice.amountCents) {
     errors.push({ field: 'details.floorPrice', message: 'must not be above the list price' });
   }

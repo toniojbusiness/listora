@@ -38,6 +38,17 @@ struct VoiceCorrectionModelTests {
     // MARK: Proposing
 
     @Test
+    func `the keyboard button shows the typing field on a review with nothing said yet`() async {
+        let (_, voice) = await review()
+        #expect(!voice.showsTray)
+        voice.showsTyping = true
+        #expect(voice.showsTray, "the typing field lives in the tray")
+        #expect(!voice.hasContent)
+        voice.showsTyping = false
+        #expect(!voice.showsTray)
+    }
+
+    @Test
     func `proposes what was said, changes nothing until accepted, and costs no AI call`() async throws {
         let (model, voice) = await review()
         voice.pressBegan()

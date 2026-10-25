@@ -33,7 +33,11 @@ struct InventoryQuery: Equatable, Sendable {
 protocol InventoryService: Sendable {
     func items(_ query: InventoryQuery, cursor: String?) async throws(APIFailure) -> ItemPage
     func item(id: String) async throws(APIFailure) -> Item
+    /// Replaces the item's details (`expectedVersion` is the version last read; a newer one is `409`).
+    func replaceItem(id: String, with replace: Components.Schemas.ItemReplace) async throws(APIFailure) -> Item
     func connections() async throws(APIFailure) -> [Connection]
+    /// The item's "Don't sell below" price on each marketplace (none without a cost).
+    func floors(itemID: String) async throws(APIFailure) -> [Components.Schemas.MarketplaceFloor]
     /// The marketplace copy the item's accepted analysis wrote.
     func analysisVariants(analysisID: String) async throws(APIFailure) -> [Components.Schemas.VariantSuggestion]
     /// Every operation on the listing, newest first.
@@ -89,6 +93,28 @@ struct APIInventoryService: InventoryService {
     func item(id: String) async throws(APIFailure) -> Item {
         switch try await call({ try await client.getItem(path: .init(itemId: id)) }) {
         case let .ok(response): try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func replaceItem(id: String, with replace: Components.Schemas.ItemReplace) async throws(APIFailure) -> Item {
+        let output = try await call {
+            try await client.replaceItem(path: .init(itemId: id), body: .json(replace))
+        }
+        switch output {
+        case let .ok(response): return try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .conflict(response): throw APIFailure(statusCode: 409, response: response)
+        case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func floors(itemID: String) async throws(APIFailure) -> [Components.Schemas.MarketplaceFloor] {
+        let output = try await call { try await client.getItemPricing(path: .init(itemId: itemID)) }
+        switch output {
+        case let .ok(response): return try body { try response.body.json }.floors
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }

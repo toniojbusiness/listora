@@ -88,7 +88,10 @@ let package = Package(
             name: "TasksFeature",
             dependencies: ["DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
-        .target(name: "SettingsFeature", dependencies: ["Core", "DesignSystem", "APIClient"]),
+        .target(
+            name: "SettingsFeature",
+            dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
         .target(
             name: "MarketplacesFeature",
             dependencies: ["DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
@@ -152,7 +155,10 @@ let package = Package(
             name: "TasksFeatureTests",
             dependencies: ["TasksFeature", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
-        .testTarget(name: "SettingsFeatureTests", dependencies: ["SettingsFeature", "Core", "APIClient"]),
+        .testTarget(
+            name: "SettingsFeatureTests",
+            dependencies: ["SettingsFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
         .testTarget(
             name: "MarketplacesFeatureTests",
             dependencies: ["MarketplacesFeature", "APIClient", .product(name: "ListoraAPI", package: "swift")],
