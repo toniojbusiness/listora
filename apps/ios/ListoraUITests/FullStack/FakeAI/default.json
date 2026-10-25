@@ -1,0 +1,82 @@
+{
+  "description": "The full-stack suite's item (FullStackUITests, `make e2e-full`): the fixture photos in ListoraUITests/Fixtures as a men's Levi's graphic tee in size M, a category every marketplace maps (Depop names t-shirts), so it can be listed on eBay, Depop, Poshmark, and Mercari at once. Every detail is confident, so the review needs no fixes.",
+  "outputs": {
+    "item_analysis": {
+      "attributes": {
+        "brand": "Levi's",
+        "productName": "",
+        "styleNumber": "",
+        "rnNumber": "",
+        "upc": "",
+        "department": "men",
+        "category": "clothing/tops",
+        "subcategory": "t_shirts",
+        "sizeLabel": "M",
+        "sizeSystem": "letter",
+        "colors": ["blue"],
+        "pattern": "solid",
+        "materials": ["cotton"],
+        "condition": "pre_owned_excellent",
+        "conditionNotes": "Light fading on the print.",
+        "flaws": [],
+        "keywords": ["graphic tee", "levis"]
+      },
+      "confidence": {
+        "title": 0.95,
+        "description": 0.95,
+        "brand": 0.95,
+        "productName": 0,
+        "styleNumber": 0,
+        "rnNumber": 0,
+        "upc": 0,
+        "department": 0.95,
+        "category": 0.95,
+        "subcategory": 0.95,
+        "sizeLabel": 0.95,
+        "sizeSystem": 0.95,
+        "colors": 0.95,
+        "pattern": 0.95,
+        "materials": 0.95,
+        "condition": 0.95,
+        "conditionNotes": 0.95,
+        "flaws": 0,
+        "keywords": 0.95
+      },
+      "title": "Levi's graphic tee, blue, size M",
+      "description": "Blue Levi's graphic tee in soft cotton, men's size M. Light fading on the print.",
+      "variants": {
+        "ebay": {
+          "title": "Levi's Mens Graphic Tee Blue Cotton Size M",
+          "description": "Blue Levi's graphic tee, 100% cotton, men's size M. Light fading on the print."
+        },
+        "depop": {
+          "title": "Levi's graphic tee",
+          "description": "Blue Levi's graphic tee, soft cotton, size M. Light fading on the print.",
+          "hashtags": ["levis", "graphictee"]
+        },
+        "poshmark": {
+          "title": "Levi's Graphic Tee",
+          "description": "Blue Levi's graphic tee in soft cotton, size M. Light fading on the print."
+        },
+        "mercari": {
+          "title": "Levi's Blue Graphic Tee Size M",
+          "description": "Levi's graphic tee, blue, cotton, men's M. Light fading on the print."
+        }
+      },
+      "priceEstimate": {
+        "lowCents": 2200,
+        "midCents": 3000,
+        "highCents": 4200,
+        "confidence": 0.6
+      },
+      "looksVintage": false,
+      "looksDesigner": false,
+      "needsEscalation": false,
+      "escalationReason": ""
+    }
+  },
+  "usage": {
+    "inputTokens": 1900,
+    "outputTokens": 650
+  }
+}

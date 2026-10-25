@@ -7,6 +7,11 @@ struct E2EStack {
     let email: String
     /// The stack's control endpoint (packages/e2e/src/control.ts).
     let controlURL: URL?
+    /// `ebay`, or `all` for the full stack (`make e2e-full`): Depop through its API, Poshmark and
+    /// Mercari automated in linked sessions, and a second seller whose Depop is automated.
+    let marketplaces: String
+    /// The full stack's second seller (its token and email).
+    let secondSeller: (token: String, email: String)?
 
     static func fromEnvironment() throws -> E2EStack {
         let environment = ProcessInfo.processInfo.environment
@@ -20,7 +25,20 @@ struct E2EStack {
             token: token,
             email: environment["LISTORA_E2E_EMAIL"] ?? "e2e@listora.test",
             controlURL: environment["LISTORA_E2E_CONTROL_URL"].flatMap(URL.init(string:)),
+            marketplaces: environment["LISTORA_E2E_MARKETPLACES"] ?? "ebay",
+            secondSeller: environment["LISTORA_E2E_SECOND_ACCESS_TOKEN"].map { token in
+                (token, environment["LISTORA_E2E_SECOND_EMAIL"] ?? "e2e-second@listora.test")
+            },
         )
+    }
+
+    /// The full stack, or a skip: the full-stack suite runs only under `make e2e-full`.
+    static func fullFromEnvironment() throws -> E2EStack {
+        let stack = try fromEnvironment()
+        guard stack.marketplaces == "all", stack.secondSeller != nil else {
+            throw XCTSkip("Needs the full local stack. Run `make e2e-full`, which starts it.")
+        }
+        return stack
     }
 
     /// The item as the API has it (`getItemBySku`).
@@ -90,6 +108,57 @@ struct E2EStack {
     /// Removes every fault a test injected (`DELETE /ebay/faults`), so a test never inherits one.
     func clearEbayFaults() async throws {
         _ = try await control("ebay/faults", method: "DELETE", body: nil)
+    }
+
+    // MARK: The full stack (`make e2e-full`)
+
+    /// A ready item for a seller (`primary` or `second`), with details replaced key by key.
+    func seedReadyItem(seller: String, details: [String: String]) async throws -> SeededItem {
+        let data = try await control("items", method: "POST", body: ["seller": seller, "details": details])
+        return try JSONDecoder().decode(SeededItem.self, from: data)
+    }
+
+    /// An item live on each marketplace, every listing confirmed by its read-back.
+    func seedListedItem(on marketplaces: [String], details: [String: String]) async throws -> SeededItem {
+        let data = try await control(
+            "items/listed",
+            method: "POST",
+            body: ["marketplaces": marketplaces, "details": details],
+        )
+        return try JSONDecoder().decode(SeededItem.self, from: data)
+    }
+
+    /// A buyer buys the item's eBay listing; the fake eBay sends the API its notification.
+    func sellOnEbay(sku: String) async throws {
+        _ = try await control("ebay/sales", method: "POST", body: ["sku": sku])
+    }
+
+    /// The fake Poshmark, Mercari, or Depop site fails the next matching page
+    /// (`POST /automation/faults`): a `captcha`, a `reject` with a message, a `server_error`.
+    func injectAutomationFault(
+        marketplace: String,
+        action: String,
+        type: String,
+        message: String? = nil,
+        times: Int = 1,
+    ) async throws {
+        var fault: [String: Any] = ["type": type]
+        fault["message"] = message
+        _ = try await control(
+            "automation/faults",
+            method: "POST",
+            body: ["marketplace": marketplace, "action": action, "fault": fault, "times": times],
+        )
+    }
+
+    /// Removes every fault of every fake (`DELETE /faults`).
+    func clearAllFaults() async throws {
+        _ = try await control("faults", method: "DELETE", body: nil)
+    }
+
+    /// Links a fresh browser session (`POST /sessions/<marketplace>`), as relinking does.
+    func linkSession(_ marketplace: String) async throws {
+        _ = try await control("sessions/\(marketplace)", method: "POST", body: [:])
     }
 
     private func control(_ path: String, method: String, body: [String: Any]?) async throws -> Data {

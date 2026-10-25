@@ -1,0 +1,76 @@
+name: Full-stack E2E
+
+# The full-stack end-to-end suite (docs/features/e2e.md, `make e2e-full`): the iPhone app on the
+# simulator against the API, the worker, and the browser runner with every marketplace on fakes.
+# It takes long and runs on a macOS runner, so it runs nightly and when started by hand, never on
+# a pull request (the cost rule in the CI section of README.md).
+on:
+  workflow_dispatch:
+  schedule:
+    # 06:17 UTC every night, after the day's merges.
+    - cron: '17 6 * * *'
+
+permissions:
+  contents: read
+
+# One run at a time; a second one waits instead of sharing the runner's simulator.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  e2e-full:
+    name: Full-stack E2E (macOS)
+    runs-on: macos-26
+    # A cold build, the suite, and up to two retries of a failing test.
+    timeout-minutes: 90
+    env:
+      # Pinned to the Xcode used for local development (README prerequisites).
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install XcodeGen and PostgreSQL 18
+        run: brew install xcodegen postgresql@18
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Cache SwiftPM checkouts for the iOS app
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/ios/SourcePackages
+            .build/ios/PackageCache
+          key: ios-swiftpm-${{ runner.os }}-xcode-26.3-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/*/Package.swift', 'apps/ios/**/Package.resolved') }}
+      # The browser runner's headless Chromium (make e2e-full installs it when it is missing).
+      - name: Cache the browser runner's Chromium
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .local/playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      # One clean boot of the test simulator, as in the iOS job of ci.yml.
+      - name: Boot a clean iPhone 17 simulator
+        run: |
+          xcrun simctl shutdown all
+          xcrun simctl erase 'iPhone 17'
+          xcrun simctl boot 'iPhone 17'
+          xcrun simctl bootstatus 'iPhone 17' -b
+      - run: make e2e-full IOS_TEST_SUMMARY_FILE=.build/ios/e2e-full-summary.txt
+      - name: Show the failing-test summary
+        if: ${{ always() && hashFiles('.build/ios/e2e-full-summary.txt') != '' }}
+        run: |
+          { echo '### Full-stack E2E'; echo '```'; cat .build/ios/e2e-full-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      # Uploads on success too: the suite's kept screenshots are the run's evidence.
+      - name: Upload test results, screenshots, and the stack's logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-full-results
+          path: |
+            .build/ios/E2EFull.xcresult
+            .build/ios/e2e-full-logs
+            .build/ios/e2e-full-summary.txt
+          retention-days: 14

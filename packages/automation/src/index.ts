@@ -14,6 +14,13 @@ export type { AutomationSessions, SessionRequest, SessionRun } from './adapter/s
 export { createAutomationAdapters } from './adapters.ts';
 export { createDepopAutomationAdapter } from './depop/adapter.ts';
 export type { DepopAutomationAdapterOptions } from './depop/adapter.ts';
+export { FakeDepopSite } from './depop/fake/fake-depop-site.ts';
+export type {
+  FakeDepopSiteAction,
+  FakeDepopSiteFault,
+  FakeDepopSiteFaultRule,
+  FakeDepopSiteOptions,
+} from './depop/fake/fake-depop-site.ts';
 export type { DepopAutomationPayload } from './depop/payload.ts';
 export type { AutomationAdapterDependencies } from './adapters.ts';
 export {
@@ -51,6 +58,13 @@ export {
 } from './launcher.ts';
 export type { LauncherDependencies, RunnerLauncher, RunnerLaunchConfig } from './launcher.ts';
 export { linkAutomationSession } from './link.ts';
+export { FakeMercariSite } from './mercari/fake/fake-mercari.ts';
+export type {
+  FakeMercariAction,
+  FakeMercariFault,
+  FakeMercariFaultRule,
+  FakeMercariOptions,
+} from './mercari/fake/fake-mercari.ts';
 export type { LinkAutomationInput } from './link.ts';
 export {
   AUTOMATED_MARKETPLACES,

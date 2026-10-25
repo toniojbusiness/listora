@@ -30,6 +30,7 @@ Run these from the repository root.
 | `make ios-open`         | Generate the project and open it in Xcode                            |
 | `make ios-build`        | Build the app, Share Extension, and packages for the simulator       |
 | `make ios-test`         | Run package, unit, and UI tests on the simulator, in the local stack |
+| `make e2e-full`         | The full-stack suite (`FullStackUITests`; docs/features/e2e.md)      |
 | `make ios-lint`         | SwiftLint (strict) and the SwiftFormat check                         |
 | `make ios-format`       | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes       |
 | `make ios-clean`        | Delete the generated project and `.build/ios`                        |

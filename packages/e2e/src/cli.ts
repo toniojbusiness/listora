@@ -5,9 +5,11 @@ import { parseArgs } from 'node:util';
 
 import { stackEnvironment, startLocalStack } from './stack.ts';
 
-const USAGE = `Usage: npm run e2e:stack -- --fake-ai-fixtures <dir> [--log-dir <dir>] [-- <command> [args...]]
+const USAGE = `Usage: npm run e2e:stack -- --fake-ai-fixtures <dir> [--log-dir <dir>] [--marketplaces ebay|all] [-- <command> [args...]]
 
 Starts the local stack (API and worker with fakes, a scratch database, a signed-in user).
+--marketplaces all also starts the fake Depop and the fake Poshmark, Mercari, and Depop sites,
+with the seller's Depop API connection and linked browser sessions (default: ebay only).
 With a command, runs it with the stack's settings in its environment and stops the stack when
 it exits, exiting with its code. Without one, prints the settings and runs until interrupted.`;
 
@@ -15,13 +17,19 @@ async function main(argv: readonly string[]): Promise<number> {
   const separator = argv.indexOf('--');
   const own = separator === -1 ? argv : argv.slice(0, separator);
   const command = separator === -1 ? [] : argv.slice(separator + 1);
-  let values: { 'fake-ai-fixtures'?: string; 'log-dir'?: string; help?: boolean };
+  let values: {
+    'fake-ai-fixtures'?: string;
+    'log-dir'?: string;
+    marketplaces?: string;
+    help?: boolean;
+  };
   try {
     ({ values } = parseArgs({
       args: [...own],
       options: {
         'fake-ai-fixtures': { type: 'string' },
         'log-dir': { type: 'string' },
+        marketplaces: { type: 'string' },
         help: { type: 'boolean' },
       },
       strict: true,
@@ -40,11 +48,18 @@ async function main(argv: readonly string[]): Promise<number> {
     return 2;
   }
 
+  const marketplaces = values.marketplaces ?? 'ebay';
+  if (marketplaces !== 'ebay' && marketplaces !== 'all') {
+    process.stderr.write(`--marketplaces must be ebay or all\n\n${USAGE}\n`);
+    return 2;
+  }
+
   // `npm run` starts this in the workspace's directory; paths are the caller's.
   const base = process.env['INIT_CWD'] ?? process.cwd();
   const logDir = values['log-dir'];
   const stack = await startLocalStack({
     fakeAiFixturesDir: resolve(base, fixtures),
+    marketplaces,
     ...(logDir === undefined ? {} : { logDir: resolve(base, logDir) }),
   });
   process.stdout.write(`e2e stack: API at ${stack.apiUrl}, signed in as ${stack.email}\n`);

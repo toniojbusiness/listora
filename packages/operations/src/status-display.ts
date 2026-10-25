@@ -111,8 +111,13 @@ export function describeListingStatus(input: ListingStatusInput): StatusDisplay 
   }
   const name = MARKETPLACE_NAMES[input.marketplace];
   if (operation.status === 'succeeded') {
+    // A listing Listora marked sold after a sale elsewhere did not sell there: "Marked sold".
+    const state =
+      operation.kind === 'mark_sold' && input.listingStatus === 'sold'
+        ? RESULT.mark_sold
+        : confirmedState(input.listingStatus);
     return describeSuccess(
-      confirmedState(input.listingStatus),
+      state,
       operation.successEvidence,
       operation.kind,
       name,

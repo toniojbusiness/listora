@@ -40,6 +40,20 @@ describe('describeListingStatus', () => {
       { tone: 'success', label: 'Delisted (confirmed by eBay)' },
     ],
     [
+      'a listing marked sold after a sale elsewhere',
+      {
+        marketplace: 'depop',
+        listingStatus: 'sold',
+        operation: operation({ kind: 'mark_sold' }),
+      },
+      { tone: 'success', label: 'Marked sold (confirmed by Depop)' },
+    ],
+    [
+      'a listing that sold there',
+      { marketplace: 'ebay', listingStatus: 'sold', operation: operation({ kind: 'create' }) },
+      { tone: 'success', label: 'Sold (confirmed by eBay)' },
+    ],
+    [
       'a delist waiting to retry',
       {
         marketplace: 'depop',

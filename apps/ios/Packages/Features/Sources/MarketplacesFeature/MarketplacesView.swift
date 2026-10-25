@@ -123,6 +123,11 @@ private struct HowItWorksCard: View {
                 systemImage: "link",
             )
             point(
+                "Automation",
+                "Listora makes each change on the marketplace's website in your linked session and checks it there.",
+                systemImage: "safari",
+            )
+            point(
                 "Assisted",
                 "Listora prepares each step, and you finish it in the marketplace's app.",
                 systemImage: "hand.tap",
