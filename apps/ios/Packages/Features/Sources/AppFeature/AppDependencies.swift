@@ -83,6 +83,7 @@ public struct AppDependencies {
                 AnyView(review.flow(for: request, onFinished: onFinished))
             },
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
+            fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
         marketplaces = MarketplacesModel(service: APIConnectionsService(client: apiClient.client))
         devSignIn = configuration.environment == .dev
@@ -133,6 +134,9 @@ public struct DebugLaunchOptions: Equatable, Sendable {
     public var resetLocalData = false
     /// `LISTORA_FIXTURE_PHOTOS=<folder>`: "Import photos" adds that folder's JPEGs.
     public var fixturePhotosDirectory: URL?
+    /// `LISTORA_FAKE_CAMERA=<folder>`: the guided capture "takes" that folder's JPEGs, so the
+    /// simulator shows the camera flow.
+    public var fakeCameraDirectory: URL?
     /// `LISTORA_DEV_API_BASE_URL=<url>`: talk to this API instead of the xcconfig one (the UI
     /// tests' local stack or stub), and hand it to the Share Extension (`DevOverrides`, Dev only).
     public var apiBaseURL: URL?
@@ -145,11 +149,13 @@ public struct DebugLaunchOptions: Equatable, Sendable {
     public init(
         resetLocalData: Bool = false,
         fixturePhotosDirectory: URL? = nil,
+        fakeCameraDirectory: URL? = nil,
         apiBaseURL: URL? = nil,
         accessGrant: AccessGrant? = nil,
     ) {
         self.resetLocalData = resetLocalData
         self.fixturePhotosDirectory = fixturePhotosDirectory
+        self.fakeCameraDirectory = fakeCameraDirectory
         self.apiBaseURL = apiBaseURL
         self.accessGrant = accessGrant
     }
@@ -169,6 +175,9 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         return DebugLaunchOptions(
             resetLocalData: environment["LISTORA_RESET_LOCAL_DATA"] == "1",
             fixturePhotosDirectory: environment["LISTORA_FIXTURE_PHOTOS"].map {
+                URL(filePath: $0, directoryHint: .isDirectory)
+            },
+            fakeCameraDirectory: environment["LISTORA_FAKE_CAMERA"].map {
                 URL(filePath: $0, directoryHint: .isDirectory)
             },
             apiBaseURL: environment["LISTORA_DEV_API_BASE_URL"].flatMap(URL.init(string:)),

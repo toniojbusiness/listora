@@ -7,6 +7,8 @@ final class TabShellUITests: XCTestCase {
 
     override func setUp() async throws {
         continueAfterFailure = false
+        // Without drafts, Add Item shows its guide.
+        app.launchEnvironment["LISTORA_RESET_LOCAL_DATA"] = "1"
         app.launch()
     }
 
@@ -54,7 +56,8 @@ final class TabShellUITests: XCTestCase {
         // Local.xcconfig may change the host or port, but Dev always targets a plain-HTTP local API.
         let apiBaseURL = app.staticTexts["settings.apiBaseURL"]
         XCTAssertTrue(apiBaseURL.exists)
-        XCTAssertTrue(apiBaseURL.label.hasPrefix("http://"), "API base URL is \(apiBaseURL.label)")
+        let address = apiBaseURL.value as? String ?? ""
+        XCTAssertTrue(address.hasPrefix("http://"), "API base URL is \(address)")
     }
 
     func testSettingsOpensTheMarketplacesScreen() {

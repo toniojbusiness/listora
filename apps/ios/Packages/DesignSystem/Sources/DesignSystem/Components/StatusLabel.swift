@@ -1,38 +1,10 @@
 import SwiftUI
 
-/// A server-rendered status (`Active (you confirmed)`, `Delist failed - Retry`) with an icon and
-/// color for its tone. The label is shown exactly as given; the tone only styles it.
+/// A server-rendered status (`Active (you confirmed)`, `Delist failed - Retry`) as an icon and
+/// text in its tone's color, for places where a pill would be too heavy. The label is shown
+/// exactly as given; the tone only styles it. ``StatusBadge`` is the pill form.
 public struct StatusLabel: View {
-    /// How to style a status. Only `success` looks done, and it is used only for states an API
-    /// read-back or the user confirmed.
-    public enum Tone: Equatable, Sendable {
-        case success
-        case inProgress
-        case checking
-        case failed
-        case actionNeeded
-        case neutral
-
-        var systemImage: String {
-            switch self {
-            case .success: "checkmark.circle.fill"
-            case .inProgress: "arrow.triangle.2.circlepath"
-            case .checking: "magnifyingglass"
-            case .failed: "exclamationmark.octagon.fill"
-            case .actionNeeded: "hand.point.right.fill"
-            case .neutral: "circle"
-            }
-        }
-
-        var color: ColorToken {
-            switch self {
-            case .success: Palette.success
-            case .failed: Palette.danger
-            case .actionNeeded: Palette.warning
-            case .inProgress, .checking, .neutral: Palette.textSecondary
-            }
-        }
-    }
+    public typealias Tone = StatusTone
 
     private let label: String
     private let tone: Tone
@@ -45,13 +17,44 @@ public struct StatusLabel: View {
     public var body: some View {
         Label {
             Text(label)
-                .foregroundStyle(tone.color)
         } icon: {
             Image(systemName: tone.systemImage)
-                .foregroundStyle(tone.color)
         }
-        .font(Typography.callout)
+        .font(Typography.callout.weight(.semibold))
+        .foregroundStyle(tone.color)
         // VoiceOver reads the status once, as given; the icon only repeats the tone.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+}
+
+/// A status as a pill: the tone's icon and the server's label on the tone's soft color. Use it for
+/// marketplace, listing, and upload states. The label is shown exactly as given.
+public struct StatusBadge: View {
+    private let label: String
+    private let tone: StatusTone
+    private let showsIcon: Bool
+
+    public init(_ label: String, tone: StatusTone, showsIcon: Bool = true) {
+        self.label = label
+        self.tone = tone
+        self.showsIcon = showsIcon
+    }
+
+    public var body: some View {
+        HStack(spacing: Spacing.xxs) {
+            if showsIcon {
+                Image(systemName: tone.systemImage)
+                    .imageScale(.small)
+            }
+            Text(label)
+                .lineLimit(2)
+        }
+        .font(Typography.label)
+        .foregroundStyle(tone.color)
+        .padding(.horizontal, Spacing.xs)
+        .padding(.vertical, Spacing.xxs + 1)
+        .background(tone.softColor, in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
     }
@@ -60,12 +63,13 @@ public struct StatusLabel: View {
 #Preview {
     VStack(alignment: .leading, spacing: Spacing.sm) {
         StatusLabel("Active (confirmed by eBay)", tone: .success)
-        StatusLabel("Active (you confirmed)", tone: .success)
-        StatusLabel("Delisting... retry 2 of 6", tone: .inProgress)
-        StatusLabel("Checking...", tone: .checking)
         StatusLabel("Delist failed - Retry", tone: .failed)
-        StatusLabel("Action needed - delist on Poshmark", tone: .actionNeeded)
-        StatusLabel("Draft", tone: .neutral)
+        StatusBadge("Connected", tone: .success)
+        StatusBadge("Uploading", tone: .inProgress)
+        StatusBadge("Checking...", tone: .checking)
+        StatusBadge("Upload failed", tone: .failed)
+        StatusBadge("Reconnect needed", tone: .actionNeeded)
+        StatusBadge("Assisted", tone: .neutral)
     }
     .padding()
     .background(Palette.background)

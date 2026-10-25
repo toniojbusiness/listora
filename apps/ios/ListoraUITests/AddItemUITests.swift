@@ -48,16 +48,17 @@ final class AddItemUITests: XCTestCase {
         XCTAssertTrue(tile(1).label.hasPrefix("Photo 2, Back"), tile(1).label)
         XCTAssertTrue(tile(2).label.hasPrefix("Photo 3, Detail"), tile(2).label)
         XCTAssertFalse(tile(0).label.contains("Looks blurry"), tile(0).label)
-        let summary = app.staticTexts["draft.uploadSummary"]
+        let summary = app.descendants(matching: .any)["draft.uploadSummary"]
         XCTAssertEqual(summary.label, "Saved on this phone. Sign in to upload.")
 
         // The third photo is the tag.
         tile(2).tap()
-        let role = app.segmentedControls["photo.role"]
-        XCTAssertTrue(role.waitForExistence(timeout: 5))
-        role.buttons["Tag"].tap()
-        XCTAssertTrue(app.staticTexts["Listora reads the brand, size, and materials from tag photos on this iPhone."]
-            .waitForExistence(timeout: 5))
+        let tag = app.buttons["photo.role.tag"]
+        XCTAssertTrue(tag.waitForExistence(timeout: 5))
+        tag.tap()
+        XCTAssertTrue(tag.isSelected)
+        // A tag photo shows what on-device tag reading found.
+        XCTAssertTrue(app.descendants(matching: .any)["tagReading.card"].waitForExistence(timeout: 5))
         app.buttons["photo.done"].tap()
         XCTAssertTrue(waitForLabel(of: tile(2), prefix: "Photo 3, Tag"), tile(2).label)
 
