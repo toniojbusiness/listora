@@ -9,6 +9,7 @@
 import type { Marketplace } from '@listora/db';
 import type { AutomatedMarketplace } from '@listora/marketplaces';
 
+import { DEPOP_CHALLENGE_SIGNS, DEPOP_PRIVATE_SELECTORS } from './depop/site.ts';
 import { MERCARI_CHALLENGE_SIGNS, MERCARI_PRIVATE_SELECTORS } from './mercari/site.ts';
 
 /** A closed range of milliseconds; each wait picks uniformly inside it. */
@@ -107,8 +108,8 @@ const PROFILES: Readonly<Record<Exclude<Marketplace, 'ebay'>, AutomationProfile>
     cookieDomains: ['depop.com'],
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
-    challenges: COMMON_SIGNS,
-    privateSelectors: [],
+    challenges: DEPOP_CHALLENGE_SIGNS,
+    privateSelectors: DEPOP_PRIVATE_SELECTORS,
   },
 };
 

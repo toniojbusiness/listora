@@ -14,15 +14,17 @@ import {
   photosInOrder,
   type AssistedListingPayload,
   type ItemSnapshot,
-  type ListingRef,
   type ListingVariant,
   type ValidationIssue,
 } from '@listora/marketplaces';
 
+import { SKU_LINE_RESERVE } from '../adapter/sku-line.ts';
 import { categoryTraits, mapMercariCategory, parseCategoryRef } from './categories.ts';
 import { mercariCondition } from './conditions.ts';
 import type { MercariShipping } from './shipping.ts';
 import { mercariSize } from './sizes.ts';
+
+export { listingSku, skuLine, splitSkuLine, withSkuLine } from '../adapter/sku-line.ts';
 
 export interface MercariListingPayload extends AssistedListingPayload {
   /** The names to pick in the form's category levels, top first; `null` when unmapped. */
@@ -50,34 +52,6 @@ export const MERCARI_LIMITS = {
   maxPriceCents: 200_000,
   maxPhotos: 12,
 } as const;
-
-/** The line the scripts end every description with: how a listing is found by its SKU. */
-export function skuLine(sku: string): string {
-  return `SKU: ${sku}`;
-}
-
-/** The SKU the scripts write and look for: the listing's external SKU, else its Listora id. */
-export function listingSku(ref: ListingRef): string {
-  return ref.externalSku ?? ref.listingId;
-}
-
-/** Room the SKU line takes at the end of a description (a blank line, `SKU: `, 64 characters). */
-const SKU_LINE_RESERVE = '\n\n'.length + skuLine('').length + 64;
-
-/** The description with its SKU line, as the scripts type it. */
-export function withSkuLine(description: string, sku: string): string {
-  return `${description}\n\n${skuLine(sku)}`;
-}
-
-/**
- * A description as a listing page shows it, split into the seller's text and the SKU its last
- * line names (`null` when it has none).
- */
-export function splitSkuLine(shown: string): { description: string; sku: string | null } {
-  const match = /\r?\n(?:\r?\n)?SKU: (\S{1,64})\s*$/.exec(shown);
-  if (match?.[1] === undefined) return { description: shown.trim(), sku: null };
-  return { description: shown.slice(0, match.index).trim(), sku: match[1] };
-}
 
 export function buildMercariPayload(
   item: ItemSnapshot,

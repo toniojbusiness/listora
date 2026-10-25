@@ -130,6 +130,8 @@ export type { DepopRateGroup, DepopRateLimiterOptions } from './depop/rate-limit
 export type { DepopListingSettings, DepopSellerSource } from './depop/seller.ts';
 export { depopSku, nextDepopSku } from './depop/sku.ts';
 export { DepopSellerTokens, MemoryDepopTokenStore } from './depop/tokens.ts';
+export { DEPOP_CONDITIONS, depopCondition, depopProductType } from './depop/taxonomy.ts';
+export type { DepopCondition } from './depop/taxonomy.ts';
 export type { DepopSellerTokensOptions, DepopTokenStore } from './depop/tokens.ts';
 export {
   DEPOP_SIGNATURE_HEADER,

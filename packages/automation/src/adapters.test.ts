@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createMarketplaceAdapters } from '@listora/marketplaces';
+import { createMarketplaceAdapters, loadDepopConfig } from '@listora/marketplaces';
 import { createLogger } from '@listora/shared';
 
 import { HttpPhotoSource } from './adapter/photos.ts';
@@ -56,7 +56,7 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
           logger,
         }),
       });
-    // Production: Poshmark's and Mercari's own adapters; Depop waits for its own.
+    // Production: each marketplace's own adapter.
     const production = build({});
     expect(production.capabilities('poshmark', automated)).toMatchObject({
       create: 'automation',
@@ -81,12 +81,59 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
       saleDetection: ['poll', 'email', 'manual'],
     });
     expect(production.capabilities('mercari', null)?.create).toBe('assisted');
-    expect(production.capabilities('depop', automated)?.create).toBe('assisted');
+    expect(production.capabilities('depop', automated)).toMatchObject({
+      connect: 'session',
+      create: 'automation',
+      updatePrice: 'automation',
+      updateDetails: 'automation',
+      delist: 'automation',
+      relist: 'automation',
+      verifyRead: 'automation',
+      readFreshness: 'revision',
+      title: 'none',
+      externalSkuReusable: false,
+      saleDetection: ['poll', 'email', 'manual'],
+    });
+    expect(production.capabilities('depop', null)?.create).toBe('assisted');
     // The fake Poshmark serves the same adapter in development.
     const development = build({ FAKE_POSHMARK_URL: 'http://127.0.0.1:4500' });
     expect(development.capabilities('poshmark', automated)?.readFreshness).toBe('revision');
-    // And the fake Mercari site serves Mercari's.
+    // And the fake Mercari site serves Mercari's, and the fake Depop site Depop's.
     const mercari = build({ FAKE_MERCARI_SITE_URL: 'http://127.0.0.1:4600' });
     expect(mercari.capabilities('mercari', automated)?.readFreshness).toBe('revision');
+    const depop = build({ FAKE_DEPOP_SITE_URL: 'http://127.0.0.1:4700' });
+    expect(depop.capabilities('depop', automated)?.readFreshness).toBe('revision');
+  });
+
+  it("serves a seller's Depop API connection through the API, ahead of automation", () => {
+    const adapters = createMarketplaceAdapters({
+      fakeMarketplaceUrl: undefined,
+      ebay: undefined,
+      depop: loadDepopConfig({ DEPOP_ENV: 'fake' }),
+      automation: createAutomationAdapters({
+        settings: loadAutomationSettings({}),
+        sessions: NoBrowserSessions,
+        photos: new HttpPhotoSource(),
+        logger: createLogger({ service: 'test', level: 'silent' }),
+      }),
+    });
+    // The API adapter, never the browser, for a connection that uses Depop's API.
+    expect(adapters.capabilities('depop', api)).toMatchObject({
+      connect: 'oauth',
+      create: 'api',
+      delist: 'api',
+      markSold: 'api',
+      verifyRead: 'api',
+    });
+    // A Depop API connection that needs reconnecting is never automated either.
+    expect(adapters.capabilities('depop', { ...api, status: 'reauth_required' })?.create).toBe(
+      'api',
+    );
+    // Automation serves only connections that are browser sessions.
+    expect(adapters.capabilities('depop', automated)).toMatchObject({
+      connect: 'session',
+      create: 'automation',
+    });
+    expect(adapters.capabilities('depop', null)?.create).toBe('assisted');
   });
 });

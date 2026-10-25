@@ -1,0 +1,35 @@
+{
+  "title": "Levi's Trucker Denim Jacket Men's M Blue",
+  "description": "Classic trucker jacket in medium wash. Light fading at the cuffs.",
+  "hashtags": [],
+  "price": {
+    "amountCents": 4500,
+    "currency": "USD"
+  },
+  "photos": [
+    {
+      "photoId": "photo-front",
+      "url": "https://media.listora.test/p/front.jpg"
+    },
+    {
+      "photoId": "photo-back",
+      "url": "https://media.listora.test/p/back.jpg"
+    },
+    {
+      "photoId": "photo-tag",
+      "url": "https://media.listora.test/p/tag.jpg"
+    }
+  ],
+  "category": [
+    "Menswear",
+    "Coats & jackets",
+    "Jackets"
+  ],
+  "size": "M",
+  "sized": true,
+  "brand": "Levi's",
+  "condition": {
+    "value": "used_excellent",
+    "label": "Used - Excellent"
+  }
+}

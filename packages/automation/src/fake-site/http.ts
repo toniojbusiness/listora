@@ -14,11 +14,13 @@ export function redirect(location: string): Reply {
   return { status: 303, headers: { location } };
 }
 
-/** A submitted form: its text fields, and how many bytes each file field brought. */
+/** A submitted form: its text fields, and the files each file field brought. */
 export interface SubmittedForm {
   text(name: string): string;
   /** The sizes of the non-empty files sent in `name`. */
   files(name: string): number[];
+  /** The names of the non-empty files sent in `name`, in the order they were sent. */
+  fileNames(name: string): string[];
 }
 
 export async function readForm(request: IncomingMessage): Promise<SubmittedForm> {
@@ -28,7 +30,7 @@ export async function readForm(request: IncomingMessage): Promise<SubmittedForm>
   const type = request.headers['content-type'] ?? '';
   const boundary = /^multipart\/form-data;.*boundary=("?)([^";]+)\1/i.exec(type)?.[2];
   const fields = new Map<string, string>();
-  const files = new Map<string, number[]>();
+  const files = new Map<string, { size: number; filename: string }[]>();
   if (boundary === undefined) {
     for (const [name, value] of new URLSearchParams(body.toString('utf8'))) fields.set(name, value);
   } else {
@@ -44,9 +46,12 @@ export async function readForm(request: IncomingMessage): Promise<SubmittedForm>
         const headers = part.subarray(0, split).toString('utf8');
         const content = part.subarray(split + 4);
         const name = /name="([^"]*)"/.exec(headers)?.[1];
+        const filename = /filename="([^"]*)"/.exec(headers)?.[1];
         if (name !== undefined) {
-          if (headers.includes('filename="')) {
-            if (content.length > 0) files.set(name, [...(files.get(name) ?? []), content.length]);
+          if (filename !== undefined) {
+            if (content.length > 0) {
+              files.set(name, [...(files.get(name) ?? []), { size: content.length, filename }]);
+            }
           } else {
             fields.set(name, content.toString('utf8'));
           }
@@ -57,7 +62,8 @@ export async function readForm(request: IncomingMessage): Promise<SubmittedForm>
   }
   return {
     text: (name) => fields.get(name)?.trim() ?? '',
-    files: (name) => files.get(name) ?? [],
+    files: (name) => (files.get(name) ?? []).map((file) => file.size),
+    fileNames: (name) => (files.get(name) ?? []).map((file) => file.filename),
   };
 }
 

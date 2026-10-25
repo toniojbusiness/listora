@@ -12,6 +12,9 @@ export type { RunnerSessionsOptions } from './adapter/runner-sessions.ts';
 export { NoBrowserSessions } from './adapter/sessions.ts';
 export type { AutomationSessions, SessionRequest, SessionRun } from './adapter/sessions.ts';
 export { createAutomationAdapters } from './adapters.ts';
+export { createDepopAutomationAdapter } from './depop/adapter.ts';
+export type { DepopAutomationAdapterOptions } from './depop/adapter.ts';
+export type { DepopAutomationPayload } from './depop/payload.ts';
 export type { AutomationAdapterDependencies } from './adapters.ts';
 export {
   AUTOMATION_DISPATCH_SCHEDULE,

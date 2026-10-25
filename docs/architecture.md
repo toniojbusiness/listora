@@ -111,8 +111,8 @@ packages/
                 with single-flight refresh, health checks, revocation (@listora/connections)
   automation/   Browser automation (decision D1): the Playwright runner, its safety rules, the
                 automation adapter base, sale-check scheduling, the runner launcher, the
-                fake marketplace site, and the Mercari adapter with its fake Mercari site
-                (mercari/) (@listora/automation)
+                fake marketplace site, and the Poshmark, Mercari, and Depop adapters with their
+                fake sites (poshmark/, mercari/, depop/) (@listora/automation)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
                 drift resync (@listora/operations)
   sales/        Sale intake: inbound events, recording sales (which starts their auto-delist);
@@ -385,7 +385,8 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/marketplaces.md](features/marketplaces.md)             | The adapter interface, capabilities, assisted adapters, conformance, listings |
 | [features/ebay.md](features/ebay.md)                             | The eBay adapter, the fake eBay, the sandbox check                            |
 | [features/ebay-notifications.md](features/ebay-notifications.md) | eBay notifications, the order poll, eBay account deletion                     |
-| [features/depop.md](features/depop.md)                           | Depop: assisted today, the partner API adapter to come                        |
+| [features/depop.md](features/depop.md)                           | Depop: the partner API adapter, dormant until access is granted               |
+| [features/depop-automation.md](features/depop-automation.md)     | The Depop automation adapter until then, its mappings, the fake Depop site    |
 | [features/automation.md](features/automation.md)                 | Browser automation for marketplaces without an API (decision D1)              |
 | [features/poshmark.md](features/poshmark.md)                     | The Poshmark automation adapter, its mapping tables, and the fake Poshmark    |
 | [features/mercari.md](features/mercari.md)                       | The Mercari automation adapter, its mappings, the fake Mercari site           |

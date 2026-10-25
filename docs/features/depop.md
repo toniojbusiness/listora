@@ -1,8 +1,9 @@
 # Depop
 
 Depop's partner API is granted per application (gate G-Depop). Until then, and for every
-seller without an API connection, Depop runs assisted, and browser automation joins it when
-the runner lands ([automation.md](automation.md)). The adapter framework it implements is in
+seller without an API connection, Depop is automated in the seller's own browser session
+([depop-automation.md](depop-automation.md), decision D1), and runs assisted without one. An API
+connection always takes precedence over automation. The adapter framework it implements is in
 [marketplaces.md](marketplaces.md). Depop's Pricing Inspiration may be shown only inside that
 Depop listing ([pricing.md](pricing.md)).
 
@@ -11,7 +12,8 @@ Depop listing ([pricing.md](pricing.md)).
 **The Depop adapter** (`depop/`, `createDepopAdapter` from `DEPOP_ENV` and the other `DEPOP_*`
 keys) lists through Depop's Selling API. It stays dormant until Listora's partner access is
 granted: `ConnectionAwareAdapter` serves it only to connections whose mode is `api`, and every
-other Depop listing runs assisted. Its rules:
+other Depop listing is automated or runs assisted ([depop-automation.md](depop-automation.md)).
+Its rules:
 
 - **SKUs are listing ids.** Depop creates and addresses a product by the SKU sent (`PUT
 /api/v1/products/by-sku/{sku}/` creates or updates) and never reuses a SKU, so each Depop listing
