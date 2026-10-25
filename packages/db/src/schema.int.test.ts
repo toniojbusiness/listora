@@ -289,6 +289,11 @@ const COLUMNS = {
     'ship_by',
     'created_at',
     'updated_at',
+    'confirmed_at',
+    'shipped_at',
+    'canceled_at',
+    'returned_at',
+    'shipping_cost_cents',
   ],
   sale_item: [
     'id',
@@ -301,6 +306,8 @@ const COLUMNS = {
     'sale_price_cents',
     'created_at',
     'updated_at',
+    'relist_decision',
+    'relist_decided_at',
   ],
   delist_run: [
     'id',
@@ -351,6 +358,8 @@ const COLUMNS = {
     'source',
     'created_at',
     'updated_at',
+    'description',
+    'fee_table_version',
   ],
   expense: [
     'id',
@@ -524,6 +533,7 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['inbound_event', 'result', values.INBOUND_EVENT_RESULTS],
   ['sale', 'detection_source', values.SALE_DETECTION_SOURCES],
   ['sale', 'status', values.SALE_STATUSES],
+  ['sale_item', 'relist_decision', values.RELIST_DECISIONS],
   ['delist_run', 'status', values.DELIST_RUN_STATUSES],
   ['fee_line', 'kind', values.FEE_KINDS],
   ['fee_line', 'source', values.FEE_SOURCES],

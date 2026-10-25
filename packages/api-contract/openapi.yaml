@@ -139,6 +139,16 @@ paths:
     $ref: './paths/sales.yaml#/~1v1~1sales'
   /v1/sales/{saleId}:
     $ref: './paths/sales.yaml#/~1v1~1sales~1{saleId}'
+  /v1/sales/{saleId}/confirm:
+    $ref: './paths/sales.yaml#/~1v1~1sales~1{saleId}~1confirm'
+  /v1/sales/{saleId}/ship:
+    $ref: './paths/sales.yaml#/~1v1~1sales~1{saleId}~1ship'
+  /v1/sales/{saleId}/cancel:
+    $ref: './paths/sales.yaml#/~1v1~1sales~1{saleId}~1cancel'
+  /v1/sales/{saleId}/return:
+    $ref: './paths/sales.yaml#/~1v1~1sales~1{saleId}~1return'
+  /v1/sales/{saleId}/relist:
+    $ref: './paths/sales.yaml#/~1v1~1sales~1{saleId}~1relist'
   /v1/tasks:
     $ref: './paths/tasks.yaml#/~1v1~1tasks'
   /v1/tasks/{taskId}:
@@ -289,6 +299,8 @@ components:
       $ref: './components/schemas/items.yaml#/Item'
     StorageLocationSummary:
       $ref: './components/schemas/items.yaml#/StorageLocationSummary'
+    ItemRelistPrompt:
+      $ref: './components/schemas/items.yaml#/ItemRelistPrompt'
     ItemSaleSummary:
       $ref: './components/schemas/items.yaml#/ItemSaleSummary'
     ItemSummary:
@@ -537,6 +549,26 @@ components:
       $ref: './components/schemas/sales.yaml#/DoubleSale'
     SaleItem:
       $ref: './components/schemas/sales.yaml#/SaleItem'
+    SaleCreateItem:
+      $ref: './components/schemas/sales.yaml#/SaleCreateItem'
+    SaleAction:
+      $ref: './components/schemas/sales.yaml#/SaleAction'
+    KnownSaleAction:
+      $ref: './components/schemas/sales.yaml#/KnownSaleAction'
+    RelistDecision:
+      $ref: './components/schemas/sales.yaml#/RelistDecision'
+    KnownRelistDecision:
+      $ref: './components/schemas/sales.yaml#/KnownRelistDecision'
+    RelistOption:
+      $ref: './components/schemas/sales.yaml#/RelistOption'
+    SaleRelist:
+      $ref: './components/schemas/sales.yaml#/SaleRelist'
+    SaleShipment:
+      $ref: './components/schemas/sales.yaml#/SaleShipment'
+    SaleRelistChoice:
+      $ref: './components/schemas/sales.yaml#/SaleRelistChoice'
+    SaleRelistItemChoice:
+      $ref: './components/schemas/sales.yaml#/SaleRelistItemChoice'
     KnownFeeType:
       $ref: './components/schemas/sales.yaml#/KnownFeeType'
     FeeType:

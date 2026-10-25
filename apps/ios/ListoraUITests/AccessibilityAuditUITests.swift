@@ -54,6 +54,10 @@ final class AccessibilityAuditUITests: XCTestCase {
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
         try audit("Inventory")
 
+        app.tabBars.buttons["Sales"].tap()
+        XCTAssertTrue(app.staticTexts["Sign in to see your sales"].waitForExistence(timeout: 5))
+        try audit("Sales")
+
         app.tabBars.buttons["Add Item"].tap()
         XCTAssertTrue(app.buttons["addItem.importPhotos"].waitForExistence(timeout: 5))
         try audit("Add Item")

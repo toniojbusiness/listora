@@ -46,6 +46,7 @@ import {
 } from './repository.ts';
 import {
   actionsForState,
+  LISTABLE_ITEM_STATUSES,
   listingStates,
   listingView,
   listingViews,
@@ -60,9 +61,6 @@ export interface ListingActionDependencies extends RouteDependencies {
   /** Each marketplace's adapter: its capabilities, and the validation a publish runs first. */
   connections: Pick<ConnectionsDependencies, 'adapters'>;
 }
-
-/** Items that can get a new listing, or be published or relisted: not sold and not archived. */
-const LISTABLE_ITEM_STATUSES = new Set(['draft', 'ready', 'listed']);
 
 export function registerListingActionRoutes(
   app: FastifyInstance,
@@ -171,7 +169,7 @@ export function registerListingActionRoutes(
   // operation to follow.
 
   contractRoute(app, deps, 'publishListing', async ({ tenant, db, params, request }) => {
-    const { trx, row, item } = await prepareAction(db, tenant, params.listingId, 'publish');
+    const { trx, row, item } = await prepareAction(db, tenant, params.listingId, 'publish', views);
     assertListable(item, 'published');
     const variant = variantView(row);
     if (variant === undefined)
@@ -182,7 +180,7 @@ export function registerListingActionRoutes(
       trx,
       tenant,
       row,
-      request,
+      requestKey(request),
       views,
       { kind: 'create', content },
       'listing.publish_requested',
@@ -190,7 +188,7 @@ export function registerListingActionRoutes(
   });
 
   contractRoute(app, deps, 'reviseListing', async ({ tenant, db, params, body, request }) => {
-    const { trx, row, item } = await prepareAction(db, tenant, params.listingId, 'revise');
+    const { trx, row, item } = await prepareAction(db, tenant, params.listingId, 'revise', views);
     const variant = checkedVariant(body.variant);
     const content = await listingContent(trx, tenant, item, variant, deps.storage);
     assertValidContent(row, content, deps);
@@ -199,7 +197,7 @@ export function registerListingActionRoutes(
       trx,
       tenant,
       updated,
-      request,
+      requestKey(request),
       views,
       { kind: 'revise', content },
       'listing.revise_requested',
@@ -207,7 +205,7 @@ export function registerListingActionRoutes(
   });
 
   contractRoute(app, deps, 'changeListingPrice', async ({ tenant, db, params, body, request }) => {
-    const { trx, row } = await prepareAction(db, tenant, params.listingId, 'change_price');
+    const { trx, row } = await prepareAction(db, tenant, params.listingId, 'change_price', views);
     const { amountCents, currency } = body.price;
     if (amountCents <= 0) {
       throw validationFailed(
@@ -222,7 +220,7 @@ export function registerListingActionRoutes(
       trx,
       tenant,
       updated,
-      request,
+      requestKey(request),
       views,
       { kind: 'price', desired },
       'listing.price_change_requested',
@@ -233,12 +231,12 @@ export function registerListingActionRoutes(
   });
 
   contractRoute(app, deps, 'endListing', async ({ tenant, db, params, body, request }) => {
-    const { trx, row } = await prepareAction(db, tenant, params.listingId, 'end');
+    const { trx, row } = await prepareAction(db, tenant, params.listingId, 'end', views);
     return queue(
       trx,
       tenant,
       row,
-      request,
+      requestKey(request),
       views,
       { kind: 'end', desired: { status: 'ended' } },
       'listing.end_requested',
@@ -249,68 +247,91 @@ export function registerListingActionRoutes(
   });
 
   contractRoute(app, deps, 'relistListing', async ({ tenant, db, params, request }) => {
-    const { trx, row, item } = await prepareAction(db, tenant, params.listingId, 'relist');
-    assertListable(item, 'relisted');
-    const variant = variantView(row);
-    if (variant === undefined) {
-      throw new ApiError(
-        'marketplace_action_unavailable',
-        `Listora didn't write this ${marketplaceName(row.marketplace)} listing, so it can't relist it.`,
-      );
-    }
-    const content = await listingContent(trx, tenant, item, variant, deps.storage);
-    assertValidContent(row, content, deps);
-    return queue(
-      trx,
-      tenant,
-      row,
-      request,
-      views,
-      { kind: 'relist', content },
-      'listing.relist_requested',
-    );
+    if (!db.isTransaction) throw new Error("relist must run in the request's transaction");
+    return relistListing(db as DbTransaction, tenant, params.listingId, requestKey(request), deps);
   });
 
   contractRoute(app, deps, 'verifyListing', async ({ tenant, db, params, request }) => {
-    const { trx, row } = await prepareAction(db, tenant, params.listingId, 'verify');
+    const { trx, row } = await prepareAction(db, tenant, params.listingId, 'verify', views);
     // A check reads back the state Listora recorded; nothing is sent to the marketplace.
     const status = row.status === 'ended' ? 'ended' : 'active';
     return queue(
       trx,
       tenant,
       row,
-      request,
+      requestKey(request),
       views,
       { kind: 'verify', desired: { status } },
       'listing.check_requested',
     );
   });
+}
 
-  /**
-   * Locks the listing, then its item, and refuses the action unless the listing's state and
-   * the marketplace's capabilities allow it now (the same rule as `availableActions`).
-   */
-  async function prepareAction(
-    db: DbExecutor,
-    tenant: Tenant,
-    listingId: string,
-    action: KnownListingAction,
-  ): Promise<{ trx: DbTransaction; row: ListingRow; item: InventoryItem }> {
-    // Every action is an idempotent POST, which runs in the request's transaction.
-    if (!db.isTransaction) throw new Error(`${action} must run in the request's transaction`);
-    const trx = db as DbTransaction;
-    const row = await lockListing(trx, tenant, listingId);
-    if (!row) throw notFound('Listing');
-    const [state] = await listingStates(trx, tenant, [row]);
-    if (state === undefined) throw notFound('Listing');
-    const view = listingView(state, views);
-    if (!view.availableActions.some((available) => available.action === action)) {
-      throw unavailable(row, action, actionsForState(state).includes(action));
-    }
-    const item = await lockItem(trx, tenant, row.item_id);
-    if (!item) throw notFound('Item');
-    return { trx, row, item };
+/**
+ * Locks the listing, then its item, and refuses the action unless the listing's state and
+ * the marketplace's capabilities allow it now (the same rule as `availableActions`).
+ */
+async function prepareAction(
+  db: DbExecutor,
+  tenant: Tenant,
+  listingId: string,
+  action: KnownListingAction,
+  views: ListingViewContext,
+): Promise<{ trx: DbTransaction; row: ListingRow; item: InventoryItem }> {
+  // Every action is an idempotent POST, which runs in the request's transaction.
+  if (!db.isTransaction) throw new Error(`${action} must run in the request's transaction`);
+  const trx = db as DbTransaction;
+  const row = await lockListing(trx, tenant, listingId);
+  if (!row) throw notFound('Listing');
+  const [state] = await listingStates(trx, tenant, [row]);
+  if (state === undefined) throw notFound('Listing');
+  const view = listingView(state, views);
+  if (!view.availableActions.some((available) => available.action === action)) {
+    throw unavailable(row, action, actionsForState(state).includes(action));
   }
+  const item = await lockItem(trx, tenant, row.item_id);
+  if (!item) throw notFound('Item');
+  return { trx, row, item };
+}
+
+/**
+ * Relists an ended or sold listing (the item's screen, and the seller's answer to "Relist it?"
+ * after a canceled or returned sale): the same checks as every action, then a `relist`
+ * operation with the listing's content, keyed by `key`.
+ */
+export async function relistListing(
+  trx: DbTransaction,
+  tenant: Tenant,
+  listingId: string,
+  key: string,
+  deps: ListingActionDependencies,
+) {
+  const views: ListingViewContext = { adapters: deps.connections.adapters };
+  const { row, item } = await prepareAction(trx, tenant, listingId, 'relist', views);
+  assertListable(item, 'relisted');
+  const variant = variantView(row);
+  if (variant === undefined) {
+    throw new ApiError(
+      'marketplace_action_unavailable',
+      `Listora didn't write this ${marketplaceName(row.marketplace)} listing, so it can't relist it.`,
+    );
+  }
+  const content = await listingContent(trx, tenant, item, variant, deps.storage);
+  assertValidContent(row, content, deps);
+  return queue(
+    trx,
+    tenant,
+    row,
+    key,
+    views,
+    { kind: 'relist', content },
+    'listing.relist_requested',
+  );
+}
+
+/** The request's Idempotency-Key, which `contractRoute` requires on every POST. */
+function requestKey(request: FastifyRequest): string {
+  return String(request.headers['idempotency-key']);
 }
 
 /** Why an action cannot run now: the listing's state, or the marketplace (assisted). */
@@ -444,20 +465,19 @@ async function queue(
   trx: DbTransaction,
   tenant: Tenant,
   row: ListingRow,
-  request: FastifyRequest,
+  requestKey: string,
   views: ListingViewContext,
   operation: Pick<NewOperation, 'kind'> &
     ({ content: ListingContent } | { desired: DesiredListingState }),
   auditAction: string,
   auditChanges: Record<string, string | number> = {},
 ) {
-  const key = request.headers['idempotency-key'];
   const { operation: queued } = await engineCommand(() =>
     enqueueOperation(trx, {
       ...(operation as NewOperation),
       accountId: tenant.accountId,
       listingId: row.id,
-      idempotencyKey: `${ACTION_PREFIX[operation.kind]}:${String(key)}`,
+      idempotencyKey: `${ACTION_PREFIX[operation.kind]}:${requestKey}`,
       origin: 'user',
     }),
   );

@@ -128,6 +128,15 @@ import Testing
         #expect(sale.netProceeds?.amountCents == 5100)
         #expect(sale.profit?.amountCents == 3100)
         #expect(sale.shippingCost == nil)
+        #expect(sale.feesEstimated == true)
+        #expect(sale.status.value1 == .shipped)
+        // An action or relist decision added later decodes, and the app hides what it doesn't know.
+        #expect(sale.availableActions.map(\.value1) == [.recordReturn, nil])
+        #expect(sale.items.first?.sku == "AJ-000184")
+        #expect(sale.items.first?.roiBasisPoints == 17570)
+        let relist = try #require(sale.items.last?.relist)
+        #expect(relist.decision.value2 == "asking_later")
+        #expect(relist.options.first?.canRelist == true)
         let run = try #require(sale.delistRuns.first)
         #expect(run.status == .needsAttention)
         #expect(run.escalated == false)
@@ -283,12 +292,28 @@ private let bundleSaleJSON = """
       "items": [
         {
           "itemId": "0b9d4e8a-1c2f-4a5b-8c7d-6e5f4a3b2c1d",
+          "sku": "AJ-000184",
           "listingId": "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d",
-          "salePrice": { "amountCents": 3400, "currency": "USD" }
+          "salePrice": { "amountCents": 3400, "currency": "USD" },
+          "profit": { "amountCents": 1757, "currency": "USD" },
+          "roiBasisPoints": 17570
         },
         {
           "itemId": "1c0e5f9b-2d3a-4b6c-9d8e-7f6a5b4c3d2e",
-          "salePrice": { "amountCents": 2600, "currency": "USD" }
+          "sku": "AJ-000185",
+          "salePrice": { "amountCents": 2600, "currency": "USD" },
+          "relist": {
+            "decision": "asking_later",
+            "options": [
+              {
+                "listingId": "6b5d0e4a-7c8f-4a1b-8c3d-4e5f6a7b8c9d",
+                "marketplace": "ebay",
+                "mode": "api",
+                "statusDisplay": { "tone": "success", "label": "Delisted (confirmed by eBay)" },
+                "canRelist": true
+              }
+            ]
+          }
         }
       ],
       "soldAt": "2026-10-24T13:00:00Z",
@@ -297,10 +322,12 @@ private let bundleSaleJSON = """
         { "type": "marketplace", "amount": { "amountCents": 600, "currency": "USD" }, "source": "actual" },
         { "type": "boost", "amount": { "amountCents": 300, "currency": "USD" }, "source": "estimated" }
       ],
+      "feesEstimated": true,
       "netProceeds": { "amountCents": 5100, "currency": "USD" },
       "profit": { "amountCents": 3100, "currency": "USD" },
       "detectionSource": "webhook",
-      "status": "detected",
+      "status": "shipped",
+      "availableActions": ["record_return", "dispute"],
       "isDoubleSale": false,
       "delistRuns": [
         {

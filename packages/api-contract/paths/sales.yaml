@@ -95,3 +95,151 @@
         $ref: '../components/responses.yaml#/NotFound'
       default:
         $ref: '../components/responses.yaml#/DefaultError'
+/v1/sales/{saleId}/confirm:
+  parameters:
+    - $ref: '../components/parameters.yaml#/SaleId'
+  post:
+    tags: [sales]
+    operationId: confirmSale
+    summary: Confirm a sale
+    description: |
+      The seller confirms a `detected` sale. `409 invalid_state_transition` for any other
+      status; `availableActions` lists what a sale allows.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The sale, now `confirmed`.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sales.yaml#/Sale'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/sales/{saleId}/ship:
+  parameters:
+    - $ref: '../components/parameters.yaml#/SaleId'
+  post:
+    tags: [sales]
+    operationId: markSaleShipped
+    summary: Mark a sale shipped
+    description: |
+      A `detected` or `confirmed` sale is `shipped`, and its items too. `shippingCost`
+      records what the label cost outside the payout, for the profit; send `{}` without one.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/sales.yaml#/SaleShipment'
+    responses:
+      '200':
+        description: The sale, now `shipped`.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sales.yaml#/Sale'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/sales/{saleId}/cancel:
+  parameters:
+    - $ref: '../components/parameters.yaml#/SaleId'
+  post:
+    tags: [sales]
+    operationId: cancelSale
+    summary: Record that a sale was canceled
+    description: |
+      For a `detected` or `confirmed` sale whose order was canceled. Delists of the sale that
+      reached no marketplace yet are stopped; the rest finish and show what is true. Each
+      item with no other sale that stands goes back to inventory, and Listora asks whether
+      to relist it (`items[].relist`, decided with `decideSaleRelist`). Nothing is relisted
+      until the seller chooses.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The sale, now `canceled`.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sales.yaml#/Sale'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/sales/{saleId}/return:
+  parameters:
+    - $ref: '../components/parameters.yaml#/SaleId'
+  post:
+    tags: [sales]
+    operationId: recordSaleReturn
+    summary: Record that a sale was returned
+    description: |
+      For a `confirmed` or `shipped` sale the buyer returned. As with `cancelSale`, the
+      items go back to inventory and Listora asks whether to relist them.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The sale, now `returned`.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sales.yaml#/Sale'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/sales/{saleId}/relist:
+  parameters:
+    - $ref: '../components/parameters.yaml#/SaleId'
+  post:
+    tags: [sales]
+    operationId: decideSaleRelist
+    summary: Answer "Relist it?" after a cancel or return
+    description: |
+      For each item whose `relist.decision` is `pending`: relist it on the chosen listings
+      (each one a `relist` operation on the engine, shown on the item's listings until the
+      marketplace confirms it or the user does an assisted step), or, with no listings, don't
+      relist it. `409 invalid_state_transition` when an item's decision is not pending;
+      `422 validation_failed` when a listing is not one of the item's options that can be
+      relisted now.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/sales.yaml#/SaleRelistChoice'
+    responses:
+      '200':
+        description: The sale with the decisions recorded.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sales.yaml#/Sale'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

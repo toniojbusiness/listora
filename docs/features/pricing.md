@@ -13,11 +13,12 @@ appear only next to real sold data, and a test enforces this (T-14).
   query parameters (default 0). No cost means no floors.
 - **Fee tables** live in `packages/pricing/src/fee-tables.ts`, one versioned table per
   marketplace schedule with its official source URL and the day it was checked. A fee change
-  adds a table; every floor names its `feeTableVersion`. Estimates use the item price only and
+  adds a table; every floor names its `feeTableVersion`, and so does every estimated fee line of
+  a sale ([sales.md](sales.md#fee-lines)). Estimates use the item price only and
   round each fee up. A test checks that every table's fees never fall as the price rises.
 - **Actual fees.** With at least three recent single-item sales that have `actual` marketplace
   or payment `fee_line`s, a marketplace's table is scaled to what it really charged
-  (`feeSource: actual_fees`). Each sale is compared with the fee table in effect on its
+  (`feeSource: actual_fees`). Only sales that stand count (not canceled or returned). Each sale is compared with the fee table in effect on its
   `sold_at` (the marketplace's first table for older sales), so a fee change is never masked
   by sales at the old rate. A sale counts only when its fee data is complete: an `actual`
   line for every fee kind the table charges, and no zero-amount or refunded (negative) line.

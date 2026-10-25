@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Sale intake: inbound events, recording sales (which starts their auto-delist), and eBay notifications, the order poll backstop, and eBay account deletion.",
+  "description": "Sale intake and the sale lifecycle: inbound events, recording sales (which starts their auto-delist), fee lines and profit, confirm, ship, cancel, and return, and eBay notifications, the order poll backstop, and eBay account deletion.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -13,6 +13,7 @@
     "@listora/db": "*",
     "@listora/marketplaces": "*",
     "@listora/operations": "*",
+    "@listora/pricing": "*",
     "@listora/shared": "*",
     "kysely": "^0.29.7"
   },

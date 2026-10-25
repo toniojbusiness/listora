@@ -472,6 +472,58 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/sales/{saleId}`.
     /// - Remark: Generated from `#/paths//v1/sales/{saleId}/get(getSale)`.
     func getSale(_ input: Operations.GetSale.Input) async throws -> Operations.GetSale.Output
+    /// Confirm a sale
+    ///
+    /// The seller confirms a `detected` sale. `409 invalid_state_transition` for any other
+    /// status; `availableActions` lists what a sale allows.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sales/{saleId}/confirm`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/confirm/post(confirmSale)`.
+    func confirmSale(_ input: Operations.ConfirmSale.Input) async throws -> Operations.ConfirmSale.Output
+    /// Mark a sale shipped
+    ///
+    /// A `detected` or `confirmed` sale is `shipped`, and its items too. `shippingCost`
+    /// records what the label cost outside the payout, for the profit; send `{}` without one.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sales/{saleId}/ship`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/ship/post(markSaleShipped)`.
+    func markSaleShipped(_ input: Operations.MarkSaleShipped.Input) async throws -> Operations.MarkSaleShipped.Output
+    /// Record that a sale was canceled
+    ///
+    /// For a `detected` or `confirmed` sale whose order was canceled. Delists of the sale that
+    /// reached no marketplace yet are stopped; the rest finish and show what is true. Each
+    /// item with no other sale that stands goes back to inventory, and Listora asks whether
+    /// to relist it (`items[].relist`, decided with `decideSaleRelist`). Nothing is relisted
+    /// until the seller chooses.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sales/{saleId}/cancel`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/cancel/post(cancelSale)`.
+    func cancelSale(_ input: Operations.CancelSale.Input) async throws -> Operations.CancelSale.Output
+    /// Record that a sale was returned
+    ///
+    /// For a `confirmed` or `shipped` sale the buyer returned. As with `cancelSale`, the
+    /// items go back to inventory and Listora asks whether to relist them.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sales/{saleId}/return`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/return/post(recordSaleReturn)`.
+    func recordSaleReturn(_ input: Operations.RecordSaleReturn.Input) async throws -> Operations.RecordSaleReturn.Output
+    /// Answer "Relist it?" after a cancel or return
+    ///
+    /// For each item whose `relist.decision` is `pending`: relist it on the chosen listings
+    /// (each one a `relist` operation on the engine, shown on the item's listings until the
+    /// marketplace confirms it or the user does an assisted step), or, with no listings, don't
+    /// relist it. `409 invalid_state_transition` when an item's decision is not pending;
+    /// `422 validation_failed` when a listing is not one of the item's options that can be
+    /// relisted now.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sales/{saleId}/relist`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/relist/post(decideSaleRelist)`.
+    func decideSaleRelist(_ input: Operations.DecideSaleRelist.Input) async throws -> Operations.DecideSaleRelist.Output
     /// List assisted-mode tasks
     ///
     /// Urgent first, then oldest first.
@@ -1352,6 +1404,102 @@ extension APIProtocol {
         try await getSale(Operations.GetSale.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Confirm a sale
+    ///
+    /// The seller confirms a `detected` sale. `409 invalid_state_transition` for any other
+    /// status; `availableActions` lists what a sale allows.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sales/{saleId}/confirm`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/confirm/post(confirmSale)`.
+    public func confirmSale(
+        path: Operations.ConfirmSale.Input.Path,
+        headers: Operations.ConfirmSale.Input.Headers
+    ) async throws -> Operations.ConfirmSale.Output {
+        try await confirmSale(Operations.ConfirmSale.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Mark a sale shipped
+    ///
+    /// A `detected` or `confirmed` sale is `shipped`, and its items too. `shippingCost`
+    /// records what the label cost outside the payout, for the profit; send `{}` without one.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sales/{saleId}/ship`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/ship/post(markSaleShipped)`.
+    public func markSaleShipped(
+        path: Operations.MarkSaleShipped.Input.Path,
+        headers: Operations.MarkSaleShipped.Input.Headers,
+        body: Operations.MarkSaleShipped.Input.Body
+    ) async throws -> Operations.MarkSaleShipped.Output {
+        try await markSaleShipped(Operations.MarkSaleShipped.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Record that a sale was canceled
+    ///
+    /// For a `detected` or `confirmed` sale whose order was canceled. Delists of the sale that
+    /// reached no marketplace yet are stopped; the rest finish and show what is true. Each
+    /// item with no other sale that stands goes back to inventory, and Listora asks whether
+    /// to relist it (`items[].relist`, decided with `decideSaleRelist`). Nothing is relisted
+    /// until the seller chooses.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sales/{saleId}/cancel`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/cancel/post(cancelSale)`.
+    public func cancelSale(
+        path: Operations.CancelSale.Input.Path,
+        headers: Operations.CancelSale.Input.Headers
+    ) async throws -> Operations.CancelSale.Output {
+        try await cancelSale(Operations.CancelSale.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Record that a sale was returned
+    ///
+    /// For a `confirmed` or `shipped` sale the buyer returned. As with `cancelSale`, the
+    /// items go back to inventory and Listora asks whether to relist them.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sales/{saleId}/return`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/return/post(recordSaleReturn)`.
+    public func recordSaleReturn(
+        path: Operations.RecordSaleReturn.Input.Path,
+        headers: Operations.RecordSaleReturn.Input.Headers
+    ) async throws -> Operations.RecordSaleReturn.Output {
+        try await recordSaleReturn(Operations.RecordSaleReturn.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Answer "Relist it?" after a cancel or return
+    ///
+    /// For each item whose `relist.decision` is `pending`: relist it on the chosen listings
+    /// (each one a `relist` operation on the engine, shown on the item's listings until the
+    /// marketplace confirms it or the user does an assisted step), or, with no listings, don't
+    /// relist it. `409 invalid_state_transition` when an item's decision is not pending;
+    /// `422 validation_failed` when a listing is not one of the item's options that can be
+    /// relisted now.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/sales/{saleId}/relist`.
+    /// - Remark: Generated from `#/paths//v1/sales/{saleId}/relist/post(decideSaleRelist)`.
+    public func decideSaleRelist(
+        path: Operations.DecideSaleRelist.Input.Path,
+        headers: Operations.DecideSaleRelist.Input.Headers,
+        body: Operations.DecideSaleRelist.Input.Body
+    ) async throws -> Operations.DecideSaleRelist.Output {
+        try await decideSaleRelist(Operations.DecideSaleRelist.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// List assisted-mode tasks

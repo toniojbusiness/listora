@@ -6,12 +6,19 @@ import type { DelistRunStatus as ContractDelistRunStatus } from '@listora/api-co
 import type { DbExecutor, DelistRunStatus, SaleStatus } from '@listora/db';
 import type { Selectable } from 'kysely';
 
-import type { SaleItemTable, SaleTable, UserTaskTable } from '@listora/db';
+import type { FeeLineTable, SaleItemTable, SaleTable, UserTaskTable } from '@listora/db';
 
 import type { Tenant } from '../tenancy.ts';
 
 export type SaleRow = Selectable<SaleTable>;
 export type SaleItemRow = Selectable<SaleItemTable>;
+/** A sale item with what the sale's views show of its inventory item. */
+export type SaleItemDetailRow = SaleItemRow & {
+  sku: string;
+  title: string | null;
+  cost_cents: number | null;
+};
+export type FeeLineRow = Selectable<FeeLineTable>;
 export type DoubleSaleTaskRow = Selectable<UserTaskTable>;
 
 /** The contract's run status for the stored one. */
@@ -96,20 +103,26 @@ export async function findSale(
     .executeTakeFirst();
 }
 
-/** The sales' items, in the order they were recorded, keyed by sale id. */
+/** The sales' items with their SKU, title, and cost, in the order they were recorded, by sale id. */
 export async function saleItemRows(
   db: DbExecutor,
   tenant: Tenant,
   saleIds: readonly string[],
-): Promise<Map<string, SaleItemRow[]>> {
-  const bySale = new Map<string, SaleItemRow[]>();
+): Promise<Map<string, SaleItemDetailRow[]>> {
+  const bySale = new Map<string, SaleItemDetailRow[]>();
   if (saleIds.length === 0) return bySale;
   const rows = await db
     .selectFrom('sale_item')
-    .selectAll()
-    .where('account_id', '=', tenant.accountId)
-    .where('sale_id', 'in', saleIds)
-    .orderBy('id')
+    .innerJoin('inventory_item as item', (join) =>
+      join
+        .onRef('item.account_id', '=', 'sale_item.account_id')
+        .onRef('item.id', '=', 'sale_item.item_id'),
+    )
+    .selectAll('sale_item')
+    .select(['item.sku', 'item.title', 'item.cost_cents'])
+    .where('sale_item.account_id', '=', tenant.accountId)
+    .where('sale_item.sale_id', 'in', saleIds)
+    .orderBy('sale_item.id')
     .execute();
   for (const row of rows) bySale.set(row.sale_id, [...(bySale.get(row.sale_id) ?? []), row]);
   return bySale;
@@ -135,18 +148,43 @@ export async function doubleSaleRows(
   return query.orderBy('created_at').orderBy('id').execute();
 }
 
-/** The item's line in a sale. */
-export async function findSaleItem(
+/** The sales' fee lines, oldest first, keyed by sale id. */
+export async function feeLineRows(
   db: DbExecutor,
   tenant: Tenant,
-  saleId: string,
-  itemId: string,
-): Promise<SaleItemRow | undefined> {
-  return db
-    .selectFrom('sale_item')
+  saleIds: readonly string[],
+): Promise<Map<string, FeeLineRow[]>> {
+  const bySale = new Map<string, FeeLineRow[]>();
+  if (saleIds.length === 0) return bySale;
+  const rows = await db
+    .selectFrom('fee_line')
     .selectAll()
     .where('account_id', '=', tenant.accountId)
-    .where('sale_id', '=', saleId)
-    .where('item_id', '=', itemId)
+    .where('sale_id', 'in', saleIds)
+    .orderBy('id')
+    .execute();
+  for (const row of rows) bySale.set(row.sale_id, [...(bySale.get(row.sale_id) ?? []), row]);
+  return bySale;
+}
+
+/** The item's newest sale that was canceled or returned and still waits for a relist decision. */
+export async function pendingRelistSale(
+  db: DbExecutor,
+  tenant: Tenant,
+  itemId: string,
+): Promise<SaleRow | undefined> {
+  return db
+    .selectFrom('sale')
+    .innerJoin('sale_item', (join) =>
+      join
+        .onRef('sale_item.account_id', '=', 'sale.account_id')
+        .onRef('sale_item.sale_id', '=', 'sale.id'),
+    )
+    .selectAll('sale')
+    .where('sale.account_id', '=', tenant.accountId)
+    .where('sale_item.item_id', '=', itemId)
+    .where('sale_item.relist_decision', '=', 'pending')
+    .orderBy('sale.id', 'desc')
+    .limit(1)
     .executeTakeFirst();
 }

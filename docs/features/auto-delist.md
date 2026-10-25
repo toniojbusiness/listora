@@ -13,8 +13,8 @@ not confirm ([operations.md](operations.md)). Code: `packages/auto-delist` (the 
 
 Every sale source ends in `recordSale` (`@listora/sales`): eBay's `ORDER_CONFIRMATION` webhook
 and the 5-minute order poll today ([ebay-notifications.md](ebay-notifications.md)), and Depop
-webhooks, automation sale checks, forwarded emails (T-23), and the manual "Mark sold" (T-26)
-as they arrive. A sale is one marketplace order, recorded once per account, marketplace, and
+webhooks, automation sale checks, and forwarded emails (T-23) as they arrive, and the manual
+"Mark as sold" ([sales.md](sales.md)). A sale is one marketplace order, recorded once per account, marketplace, and
 order id, whichever source reports it first. Each order line is matched to the item by the
 marketplace's listing id, else the seller SKU; a manual or parsed line can name the item (and
 its listing) directly. A bundle records one `sale_item` per item, and each item gets its own
@@ -113,8 +113,10 @@ assisted deep links, plan red flag RF15).
   `delistRuns` (one per item it started a run for) and `doubleSales`, and `isDoubleSale`.
 - `getItem` adds the item's `saleSummary` (sale, time, and price), the `delistRun` of its latest
   sale (the "Sold" banner and the delist results screen), and its newest open `doubleSale`.
-- `createSale` (manual "Mark sold") is T-26; the tasks API that lets the seller confirm an
-  assisted delist (`completeTask`) is T-21. Both end in the functions above.
+- `createSale` (manual "Mark as sold") and the sale lifecycle are in [sales.md](sales.md); the
+  tasks API that lets the seller confirm an assisted delist (`completeTask`) is T-21. Both end in
+  the functions above. A canceled or returned sale stops its delists that reached no marketplace
+  yet ([sales.md](sales.md#the-lifecycle)).
 
 ## Local development
 

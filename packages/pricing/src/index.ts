@@ -1,6 +1,6 @@
 export { feeTableByVersion, feeTableFor, feeTableForSale, FEE_TABLES } from './fee-tables.ts';
-export { estimateFeesCents } from './fees.ts';
-export type { EstimatedFeeKind, FeeBand, FeeRule, FeeTable } from './fees.ts';
+export { estimateFeeLines, estimateFeesCents } from './fees.ts';
+export type { EstimatedFee, EstimatedFeeKind, FeeBand, FeeRule, FeeTable } from './fees.ts';
 export {
   calibrateFees,
   computeFloor,

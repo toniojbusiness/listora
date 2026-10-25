@@ -50,6 +50,8 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
   ): string | null;
   listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>; // sale checks
   listListings?(ctx: AdapterContext): Promise<RemoteListings>; // imports and drift checks
+  // An order's fees: fees | not_yet | transient | unavailable (docs/features/sales.md)
+  readOrderFees?(externalOrderId: string, ctx: AdapterContext): Promise<OrderFeesResult>;
 }
 ```
 

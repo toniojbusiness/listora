@@ -22,6 +22,7 @@ import type {
   MarketplaceAdapter,
   MarketplaceCapabilities,
   OperationRequest,
+  OrderFeesResult,
   Outcome,
   RemoteListingState,
   RemoteListings,
@@ -145,5 +146,18 @@ export class ConnectionAwareAdapter implements MarketplaceAdapter {
       );
     }
     return adapter.listListings(ctx);
+  }
+
+  /** The serving adapter's order fees; `unavailable` when it reports none (assisted). */
+  async readOrderFees(externalOrderId: string, ctx: AdapterContext): Promise<OrderFeesResult> {
+    const adapter = this.adapterFor(ctx.connection);
+    if (adapter.readOrderFees === undefined) {
+      return {
+        type: 'unavailable',
+        code: 'not_reported',
+        message: 'This marketplace does not report order fees to Listora.',
+      };
+    }
+    return adapter.readOrderFees(externalOrderId, ctx);
   }
 }

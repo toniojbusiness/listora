@@ -8,12 +8,14 @@
  * - `DELETE /ebay/faults`: removes every fault.
  * - `POST /items` `{ details? }`: a ready-to-list item with processed photos (`createReadyItem`),
  *   answering `{ id, sku }`.
+ * - `POST /items/listed` `{ details? }`: such an item published on eBay and confirmed active
+ *   (`createListedItem`), answering `{ id, sku, listingId }`.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
 import type { FakeEbay, FakeEbayAction, FakeEbayFault } from '@listora/marketplaces';
 
-import { createReadyItem, type StackApi } from './seed.ts';
+import { createListedItem, createReadyItem, type StackApi } from './seed.ts';
 
 const ACTIONS: readonly FakeEbayAction[] = ['add', 'revise', 'end', 'relist', 'get_item', 'media'];
 const FAULTS = ['reject', 'server_error', 'system_error', 'rate_limited'] as const;
@@ -73,17 +75,25 @@ async function handle(
     case 'DELETE /ebay/faults':
       deps.fakeEbay.clearFaults();
       return { status: 204 };
-    case 'POST /items': {
-      const body = await readJson(request);
-      const details =
-        typeof body === 'object' && body !== null && 'details' in body
-          ? (body.details as Record<string, unknown>)
-          : {};
-      return { status: 201, body: await createReadyItem(deps.api, details) };
-    }
+    case 'POST /items':
+      return {
+        status: 201,
+        body: await createReadyItem(deps.api, detailsIn(await readJson(request))),
+      };
+    case 'POST /items/listed':
+      return {
+        status: 201,
+        body: await createListedItem(deps.api, detailsIn(await readJson(request))),
+      };
     default:
       return { status: 404, body: { error: `no control route ${route}` } };
   }
+}
+
+function detailsIn(body: unknown): Record<string, unknown> {
+  return typeof body === 'object' && body !== null && 'details' in body
+    ? (body.details as Record<string, unknown>)
+    : {};
 }
 
 /** The fault rule a request asks for, or why it is refused. */

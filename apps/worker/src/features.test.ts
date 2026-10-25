@@ -10,6 +10,7 @@ import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observabilit
 import { LISTING_RESYNC_TASK } from '@listora/operations';
 import { PHOTO_PROCESSING_TASK } from '@listora/photos';
 import { PUSH_TASK } from '@listora/push';
+import { SALE_FEES_TASK } from '@listora/sales';
 import { createLogger } from '@listora/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -64,6 +65,7 @@ describe('worker feature discovery', () => {
       'ebay-sync',
       'photos',
       'push',
+      'sale-fees',
       'trust-metrics',
     ]);
   });
@@ -78,6 +80,7 @@ describe('worker feature discovery', () => {
         PHOTO_PROCESSING_TASK,
         PUSH_TASK,
         SALE_ORDER_TASK,
+        SALE_FEES_TASK,
         TRUST_METRICS_TASK,
       ].sort(),
     );
