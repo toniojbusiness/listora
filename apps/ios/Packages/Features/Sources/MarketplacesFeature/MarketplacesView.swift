@@ -2,9 +2,10 @@ import AuthenticationServices
 import DesignSystem
 import SwiftUI
 
-/// Every marketplace and how Listora works with it: eBay through its API once connected, the
-/// others in assisted mode for now. "Connect eBay" opens eBay's own sign-in in the system's web
-/// authentication sheet; Listora never asks for a marketplace password.
+/// Every marketplace and how Listora works with it (API, automation, or assisted), with each
+/// connection's health: its status in the server's words, when it last checked out, and what to
+/// do next (Connect, Reconnect, Retry check). "Connect eBay" opens eBay's own sign-in in the
+/// system's web authentication sheet; Listora never asks for a marketplace password.
 public struct MarketplacesView: View {
     @State private var model: MarketplacesModel
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
@@ -77,12 +78,22 @@ public struct MarketplacesView: View {
                 ForEach(model.rows) { row in
                     MarketplaceRowView(
                         row: row,
-                        isConnecting: model.connecting == row.id,
-                        isEnabled: model.connecting == nil,
-                    ) {
-                        let authenticate = webAuthenticationSession.authenticator()
-                        Task { await model.connect(row, authenticate: authenticate) }
+                        busyAction: busyAction(for: row),
+                        isEnabled: model.connecting == nil && model.requestingCheck == nil,
+                    ) { action in
+                        switch action {
+                        case .connect, .reconnect:
+                            let authenticate = webAuthenticationSession.authenticator()
+                            Task { await model.connect(row, authenticate: authenticate) }
+                        case .check:
+                            Task { await model.check(row) }
+                        }
                     }
+                }
+                if let forwarding = model.saleForwarding {
+                    SectionHeader("Sale emails")
+                        .padding(.top, Spacing.xs)
+                    SaleForwardingCard(row: forwarding)
                 }
             }
             .padding(Spacing.md)
@@ -93,14 +104,21 @@ public struct MarketplacesView: View {
         }
         .refreshable { await model.load() }
     }
+
+    private func busyAction(for row: MarketplaceRow) -> MarketplaceRow.Action? {
+        if model.connecting == row.id {
+            return row.actions.first { $0 == .connect || $0 == .reconnect }
+        }
+        return model.requestingCheck == row.id ? .check : nil
+    }
 }
 
-/// The two ways Listora works with a marketplace, in plain words.
+/// The ways Listora works with a marketplace, in plain words.
 private struct HowItWorksCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             point(
-                "Connected",
+                "API",
                 "Listora makes each change through the marketplace's API and checks it there.",
                 systemImage: "link",
             )
@@ -130,12 +148,14 @@ private struct HowItWorksCard: View {
     }
 }
 
-/// One marketplace: its name, the server's status, and its connect or reconnect button.
+/// One marketplace's card: its name and mode, the server's status, when it last checked out,
+/// and its actions (the main one filled, a second one plain).
 struct MarketplaceRowView: View {
     let row: MarketplaceRow
-    let isConnecting: Bool
+    /// The action running for this row right now.
+    let busyAction: MarketplaceRow.Action?
     let isEnabled: Bool
-    let connect: () -> Void
+    let perform: (MarketplaceRow.Action) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -146,12 +166,101 @@ struct MarketplaceRowView: View {
                     size: .card,
                 )
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Text(row.name)
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                        Text(row.name)
+                            .font(Typography.title3)
+                            .foregroundStyle(Palette.textPrimary)
+                            .accessibilityAddTraits(.isHeader)
+                        Spacer(minLength: 0)
+                        if let mode = row.modeLabel {
+                            Chip(mode, emphasis: .muted)
+                                .accessibilityLabel("\(mode) mode")
+                                .accessibilityIdentifier("marketplaces.\(row.id).mode")
+                        }
+                    }
+                    StatusBadge(row.statusLabel, tone: row.tone.statusTone)
+                        .accessibilityIdentifier("marketplaces.\(row.id).status")
+                }
+            }
+            if let detail = row.statusDetail {
+                Text(detail)
+                    .font(Typography.subheadline)
+                    .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("marketplaces.\(row.id).detail")
+            }
+            if let lastOkAt = row.lastOkAt {
+                Label {
+                    Text("Last checked OK \(lastOkAt, format: .relative(presentation: .named))")
+                } icon: {
+                    Image(systemName: "clock")
+                }
+                .font(Typography.footnote)
+                .foregroundStyle(Palette.textSecondary)
+                .accessibilityIdentifier("marketplaces.\(row.id).lastOk")
+            }
+            if !row.actions.isEmpty {
+                VStack(spacing: Spacing.xs) {
+                    ForEach(Array(row.actions.enumerated()), id: \.offset) { index, action in
+                        button(for: action, primary: index == 0)
+                    }
+                }
+                .padding(.top, Spacing.xxs)
+            }
+        }
+        .cardStyle()
+        .accessibilityElement(children: .contain)
+    }
+
+    private func button(for action: MarketplaceRow.Action, primary: Bool) -> some View {
+        let busy = busyAction == action
+        return Button(busy ? busyTitle(for: action) : row.title(for: action), systemImage: systemImage(for: action)) {
+            perform(action)
+        }
+        .buttonStyle(primary ? .listoraPrimary : .listoraSecondary)
+        .loading(busy)
+        .disabled(!isEnabled)
+        .accessibilityIdentifier("marketplaces.\(row.id).\(identifier(for: action))")
+    }
+
+    private func busyTitle(for action: MarketplaceRow.Action) -> String {
+        switch action {
+        case .connect, .reconnect: "Connecting..."
+        case .check: "Checking..."
+        }
+    }
+
+    private func systemImage(for action: MarketplaceRow.Action) -> String {
+        switch action {
+        case .connect, .reconnect: "arrow.up.forward.app"
+        case .check: "arrow.clockwise"
+        }
+    }
+
+    /// `connect` for both connecting and reconnecting, as the UI tests have always found it.
+    private func identifier(for action: MarketplaceRow.Action) -> String {
+        switch action {
+        case .connect, .reconnect: "connect"
+        case .check: "check"
+        }
+    }
+}
+
+/// Sale email forwarding: the server's status, in its words.
+struct SaleForwardingCard: View {
+    let row: SaleForwardingRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .center, spacing: Spacing.sm) {
+                IconTile(systemImage: "envelope", size: .card)
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("Email sale forwarding")
                         .font(Typography.title3)
                         .foregroundStyle(Palette.textPrimary)
                         .accessibilityAddTraits(.isHeader)
-                    StatusBadge(row.statusLabel, tone: row.tone.statusTone)
-                        .accessibilityIdentifier("marketplaces.\(row.id).status")
+                    StatusBadge(row.statusLabel, tone: .neutral)
+                        .accessibilityIdentifier("marketplaces.saleForwarding.status")
                 }
                 Spacer(minLength: 0)
             }
@@ -161,17 +270,46 @@ struct MarketplaceRowView: View {
                     .foregroundStyle(Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let title = row.actionTitle {
-                Button(isConnecting ? "Connecting..." : title, systemImage: "arrow.up.forward.app", action: connect)
-                    .buttonStyle(.listoraPrimary)
-                    .loading(isConnecting)
-                    .disabled(!isEnabled)
-                    .padding(.top, Spacing.xxs)
-                    .accessibilityIdentifier("marketplaces.\(row.id).connect")
-            }
         }
         .cardStyle()
         .accessibilityElement(children: .contain)
+    }
+}
+
+/// The app's banner while a marketplace connection needs attention; tapping "Open
+/// Marketplaces" shows them. It reads the summary again each time it appears.
+public struct ConnectionAttentionBanner: View {
+    private let model: MarketplacesModel
+    private let open: @MainActor () -> Void
+
+    public init(model: MarketplacesModel, open: @escaping @MainActor () -> Void) {
+        self.model = model
+        self.open = open
+    }
+
+    public var body: some View {
+        // Always laid out (zero height without a banner), so it reloads each time it appears.
+        VStack(spacing: 0) {
+            Color.clear.frame(height: 0)
+            if let attention = model.attention {
+                Banner(
+                    attention.title,
+                    message: attention.message,
+                    tone: attention.needsAction ? .actionNeeded : .checking,
+                    systemImage: "link.badge.plus",
+                    action: .init("Open Marketplaces", identifier: "connectionAttention.open", handler: open),
+                    identifier: "connectionAttention.banner",
+                )
+                .padding(.horizontal, Spacing.md)
+                .padding(.top, Spacing.xs)
+                .padding(.bottom, Spacing.xxs)
+                .frame(maxWidth: Layout.readableWidth)
+                .frame(maxWidth: .infinity)
+                .transition(.rise)
+            }
+        }
+        .motion(value: model.attention)
+        .task { await model.refreshAttention() }
     }
 }
 

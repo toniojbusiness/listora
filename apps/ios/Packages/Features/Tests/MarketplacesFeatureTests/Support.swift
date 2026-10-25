@@ -14,6 +14,7 @@ func connection(
     connect: String = "oauth",
     actions: [String] = [],
     displayName: String? = nil,
+    lastOkAt: String? = nil,
 ) throws -> Components.Schemas.Connection {
     var object: [String: Any] = [
         "marketplace": marketplace,
@@ -30,8 +31,59 @@ func connection(
     if let displayName {
         object["displayName"] = displayName
     }
-    return try JSONDecoder().decode(
+    if let lastOkAt {
+        object["lastOkAt"] = lastOkAt
+    }
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    return try decoder.decode(
         Components.Schemas.Connection.self,
+        from: JSONSerialization.data(withJSONObject: object),
+    )
+}
+
+/// The banner a test's health summary carries.
+struct BannerSpec {
+    let tone: String
+    let label: String
+    let detail: String?
+}
+
+/// The health summary the server sends for `connections`, with the banner a test gives it.
+func healthSummary(
+    _ connections: [Components.Schemas.Connection],
+    banner: BannerSpec? = nil,
+    attention: Int = 1,
+) throws -> Components.Schemas.ConnectionHealthSummary {
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    var object: [String: Any] = try [
+        "needsAttention": banner != nil,
+        "attention": banner == nil ? [] : (0 ..< attention).map { _ in
+            [
+                "marketplace": "ebay",
+                "reason": "reconnect",
+                "statusDisplay": ["tone": "action_needed", "label": "Reconnect needed"],
+            ]
+        },
+        "connections": JSONSerialization.jsonObject(with: encoder.encode(connections)),
+        "saleForwarding": [
+            "status": "needs_domain",
+            "statusDisplay": [
+                "tone": "neutral",
+                "label": "Set up when you add a domain",
+                "detail": "It needs Listora's email domain.",
+            ],
+        ],
+    ]
+    if let banner {
+        object["banner"] = ["tone": banner.tone, "label": banner.label]
+            .merging(banner.detail.map { ["detail": $0] } ?? [:]) { $1 }
+    }
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    return try decoder.decode(
+        Components.Schemas.ConnectionHealthSummary.self,
         from: JSONSerialization.data(withJSONObject: object),
     )
 }
@@ -75,32 +127,67 @@ func authorization(
     )
 }
 
-/// A scripted ``ConnectionsService`` that records what it was asked.
+/// A scripted ``ConnectionsService`` that records what it was asked. `lists` are the
+/// connections each read of the list or the health summary answers in turn (the last one
+/// repeats); `banners` the summary's banner for the same reads.
 final class FakeConnectionsService: ConnectionsService, @unchecked Sendable {
     private let lock = NSLock()
     private var _lists: [Result<[Components.Schemas.Connection], APIFailure>]
+    private var _banners: [BannerSpec?]
     private var _start: Result<Components.Schemas.ConnectionAuthorization, APIFailure>
+    private var _check: Result<Components.Schemas.Connection, APIFailure>
     private var _results: [String: Components.Schemas.ConnectionAuthorization]
     private(set) var startedKeys: [String] = []
+    private(set) var checkKeys: [String] = []
     private(set) var readIDs: [String] = []
     private(set) var listCalls = 0
 
     init(
         lists: [Result<[Components.Schemas.Connection], APIFailure>],
+        banners: [BannerSpec?] = [nil],
         start: Result<Components.Schemas.ConnectionAuthorization, APIFailure> = .failure(.networkUnavailable),
+        check: Result<Components.Schemas.Connection, APIFailure> = .failure(.networkUnavailable),
         results: [String: Components.Schemas.ConnectionAuthorization] = [:],
     ) {
         _lists = lists
+        _banners = banners
         _start = start
+        _check = check
         _results = results
     }
 
     func connections() async throws(APIFailure) -> [Components.Schemas.Connection] {
+        try next().list.get()
+    }
+
+    func health() async throws(APIFailure) -> Components.Schemas.ConnectionHealthSummary {
+        let (list, banner) = next()
+        let connections = try list.get()
+        do {
+            return try healthSummary(connections, banner: banner)
+        } catch {
+            throw APIFailure(error)
+        }
+    }
+
+    func requestCheck(
+        marketplace _: Components.Schemas.KnownMarketplace,
+        idempotencyKey: String,
+    ) async throws(APIFailure) -> Components.Schemas.Connection {
         let result = lock.withLock {
-            listCalls += 1
-            return _lists.count > 1 ? _lists.removeFirst() : _lists[0]
+            checkKeys.append(idempotencyKey)
+            return _check
         }
         return try result.get()
+    }
+
+    private func next() -> (list: Result<[Components.Schemas.Connection], APIFailure>, banner: BannerSpec?) {
+        lock.withLock {
+            listCalls += 1
+            let list = _lists.count > 1 ? _lists.removeFirst() : _lists[0]
+            let banner = _banners.count > 1 ? _banners.removeFirst() : _banners[0]
+            return (list, banner)
+        }
     }
 
     func startAuthorization(

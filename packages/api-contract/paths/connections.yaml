@@ -154,3 +154,50 @@
               format: uri
       default:
         $ref: '../components/responses.yaml#/DefaultError'
+/v1/connections/{marketplace}/checks:
+  parameters:
+    - $ref: '../components/parameters.yaml#/MarketplacePath'
+  post:
+    tags: [connections]
+    operationId: requestConnectionCheck
+    summary: Check a marketplace connection now (Retry check)
+    description: |
+      Queues the same cheap read the daily health check makes, for this connection only. The
+      answer is the connection with a `Checking` status; read it again (or
+      `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
+      connection with a problem. `409 invalid_state_transition` for a connection a check
+      cannot change (not connected, or waiting for the seller to reconnect);
+      `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '202':
+        description: The check is queued.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/connections.yaml#/Connection'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/connection-health:
+  get:
+    tags: [connections]
+    operationId: getConnectionHealth
+    summary: The account's connection health summary
+    description: |
+      Every marketplace's connection (as `listConnections`), what needs the seller's
+      attention (broken or failing connections and grants that end within 30 days), the
+      banner the app shows while anything does, and sale email forwarding.
+    responses:
+      '200':
+        description: The summary.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/connections.yaml#/ConnectionHealthSummary'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

@@ -4773,12 +4773,15 @@ extension Components {
         /// `connect`: start `startConnectionAuthorization` for a marketplace not connected yet.
         /// `reconnect`: the same, for a connection that needs the seller's consent again (its grant
         /// was revoked, expires within 30 days, or fails); it renews the existing connection.
+        /// `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
+        /// Listora may have cleared since.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownConnectionAction`.
         @frozen public enum KnownConnectionAction: String, Codable, Hashable, Sendable, CaseIterable {
             case connect = "connect"
             case reconnect = "reconnect"
+            case check = "check"
         }
         /// - Remark: Generated from `#/components/schemas/Connection`.
         public struct Connection: Codable, Hashable, Sendable {
@@ -4806,8 +4809,14 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Connection/grantExpiresAt`.
             public var grantExpiresAt: Components.Schemas.Timestamp?
+            /// When the marketplace last accepted Listora's access (the last successful check).
+            ///
             /// - Remark: Generated from `#/components/schemas/Connection/lastOkAt`.
             public var lastOkAt: Components.Schemas.Timestamp?
+            /// When Listora last checked the connection, whatever it found.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Connection/lastCheckedAt`.
+            public var lastCheckedAt: Components.Schemas.Timestamp?
             /// - Remark: Generated from `#/components/schemas/Connection/lastIssue`.
             public var lastIssue: Components.Schemas.ConnectionIssue?
             /// Creates a new `Connection`.
@@ -4822,7 +4831,8 @@ extension Components {
             ///   - displayName: The seller's name on the marketplace.
             ///   - connectedAt:
             ///   - grantExpiresAt: When the user must reconnect (Depop grants last one year; eBay refresh tokens about 18 months).
-            ///   - lastOkAt:
+            ///   - lastOkAt: When the marketplace last accepted Listora's access (the last successful check).
+            ///   - lastCheckedAt: When Listora last checked the connection, whatever it found.
             ///   - lastIssue:
             public init(
                 marketplace: Components.Schemas.Marketplace,
@@ -4835,6 +4845,7 @@ extension Components {
                 connectedAt: Components.Schemas.Timestamp? = nil,
                 grantExpiresAt: Components.Schemas.Timestamp? = nil,
                 lastOkAt: Components.Schemas.Timestamp? = nil,
+                lastCheckedAt: Components.Schemas.Timestamp? = nil,
                 lastIssue: Components.Schemas.ConnectionIssue? = nil
             ) {
                 self.marketplace = marketplace
@@ -4847,6 +4858,7 @@ extension Components {
                 self.connectedAt = connectedAt
                 self.grantExpiresAt = grantExpiresAt
                 self.lastOkAt = lastOkAt
+                self.lastCheckedAt = lastCheckedAt
                 self.lastIssue = lastIssue
             }
             public enum CodingKeys: String, CodingKey {
@@ -4860,6 +4872,7 @@ extension Components {
                 case connectedAt
                 case grantExpiresAt
                 case lastOkAt
+                case lastCheckedAt
                 case lastIssue
             }
         }
@@ -4965,6 +4978,244 @@ extension Components {
                 case connection
                 case createdAt
                 case completedAt
+            }
+        }
+        /// A `KnownConnectionAttentionReason`, or a reason added after this client was built.
+        /// Clients show the entry's `statusDisplay` for an unknown reason.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ConnectionAttentionReason`.
+        public struct ConnectionAttentionReason: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectionAttentionReason/value1`.
+            public var value1: Components.Schemas.KnownConnectionAttentionReason?
+            /// - Remark: Generated from `#/components/schemas/ConnectionAttentionReason/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ConnectionAttentionReason`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownConnectionAttentionReason? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
+        /// `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
+        /// cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
+        /// ends within 30 days.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownConnectionAttentionReason`.
+        @frozen public enum KnownConnectionAttentionReason: String, Codable, Hashable, Sendable, CaseIterable {
+            case reconnect = "reconnect"
+            case accessRemoved = "access_removed"
+            case connectionProblem = "connection_problem"
+            case expiring = "expiring"
+        }
+        /// One connection that needs the seller's attention.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ConnectionAttention`.
+        public struct ConnectionAttention: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectionAttention/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/ConnectionAttention/reason`.
+            public var reason: Components.Schemas.ConnectionAttentionReason
+            /// The connection's own status, as in `Connection.statusDisplay`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionAttention/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// Creates a new `ConnectionAttention`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - reason:
+            ///   - statusDisplay: The connection's own status, as in `Connection.statusDisplay`.
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                reason: Components.Schemas.ConnectionAttentionReason,
+                statusDisplay: Components.Schemas.StatusDisplay
+            ) {
+                self.marketplace = marketplace
+                self.reason = reason
+                self.statusDisplay = statusDisplay
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case reason
+                case statusDisplay
+            }
+        }
+        /// A `KnownSaleForwardingStatus`, or a status added after this client was built. Clients
+        /// show the `statusDisplay`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleForwardingStatus`.
+        public struct SaleForwardingStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleForwardingStatus/value1`.
+            public var value1: Components.Schemas.KnownSaleForwardingStatus?
+            /// - Remark: Generated from `#/components/schemas/SaleForwardingStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SaleForwardingStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSaleForwardingStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+        /// email domain, which this deployment does not have yet.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownSaleForwardingStatus`.
+        @frozen public enum KnownSaleForwardingStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case needsDomain = "needs_domain"
+        }
+        /// Forwarding marketplace sale emails to Listora, which detects sales sooner.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleForwarding`.
+        public struct SaleForwarding: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleForwarding/status`.
+            public var status: Components.Schemas.SaleForwardingStatus
+            /// - Remark: Generated from `#/components/schemas/SaleForwarding/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// Creates a new `SaleForwarding`.
+            ///
+            /// - Parameters:
+            ///   - status:
+            ///   - statusDisplay:
+            public init(
+                status: Components.Schemas.SaleForwardingStatus,
+                statusDisplay: Components.Schemas.StatusDisplay
+            ) {
+                self.status = status
+                self.statusDisplay = statusDisplay
+            }
+            public enum CodingKeys: String, CodingKey {
+                case status
+                case statusDisplay
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ConnectionHealthSummary`.
+        public struct ConnectionHealthSummary: Codable, Hashable, Sendable {
+            /// True while any connection is in `attention`; the app shows `banner` then.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionHealthSummary/needsAttention`.
+            public var needsAttention: Swift.Bool
+            /// Present exactly when `needsAttention`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionHealthSummary/banner`.
+            public var banner: Components.Schemas.StatusDisplay?
+            /// The connections that need attention, those only the seller can fix first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionHealthSummary/attention`.
+            public var attention: [Components.Schemas.ConnectionAttention]
+            /// Every marketplace and its connection, as `listConnections` returns them.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionHealthSummary/connections`.
+            public var connections: [Components.Schemas.Connection]
+            /// - Remark: Generated from `#/components/schemas/ConnectionHealthSummary/saleForwarding`.
+            public var saleForwarding: Components.Schemas.SaleForwarding
+            /// The latest check of any connection; absent before the first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionHealthSummary/lastCheckedAt`.
+            public var lastCheckedAt: Components.Schemas.Timestamp?
+            /// Creates a new `ConnectionHealthSummary`.
+            ///
+            /// - Parameters:
+            ///   - needsAttention: True while any connection is in `attention`; the app shows `banner` then.
+            ///   - banner: Present exactly when `needsAttention`.
+            ///   - attention: The connections that need attention, those only the seller can fix first.
+            ///   - connections: Every marketplace and its connection, as `listConnections` returns them.
+            ///   - saleForwarding:
+            ///   - lastCheckedAt: The latest check of any connection; absent before the first.
+            public init(
+                needsAttention: Swift.Bool,
+                banner: Components.Schemas.StatusDisplay? = nil,
+                attention: [Components.Schemas.ConnectionAttention],
+                connections: [Components.Schemas.Connection],
+                saleForwarding: Components.Schemas.SaleForwarding,
+                lastCheckedAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.needsAttention = needsAttention
+                self.banner = banner
+                self.attention = attention
+                self.connections = connections
+                self.saleForwarding = saleForwarding
+                self.lastCheckedAt = lastCheckedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case needsAttention
+                case banner
+                case attention
+                case connections
+                case saleForwarding
+                case lastCheckedAt
             }
         }
         /// A `KnownSaleStatus`, or a status added after this client was built. Clients show an

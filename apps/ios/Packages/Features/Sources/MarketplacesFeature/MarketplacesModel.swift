@@ -3,12 +3,14 @@ import Foundation
 import ListoraAPI
 import Observation
 
-/// The Marketplaces screen: every marketplace with its connection status, and connecting an API
-/// marketplace (eBay) through its consent page.
+/// The Marketplaces screen and the app's connection banner: every marketplace with its
+/// connection's health (the server's `getConnectionHealth`), connecting an API marketplace (eBay)
+/// through its consent page, and Retry check.
 ///
 /// Connecting never trusts the consent sheet's return: after it closes, the model reads the
 /// attempt back from the server and reloads the list, so a row says "Connected" only when the
-/// server does.
+/// server does. Retry check shows the server's "Checking" and reloads until the server has an
+/// answer.
 @MainActor
 @Observable
 public final class MarketplacesModel {
@@ -23,24 +25,113 @@ public final class MarketplacesModel {
     public private(set) var phase: Phase = .loading
     /// The marketplace being connected right now.
     public private(set) var connecting: String?
+    /// The marketplace whose check was just asked for, until the server answers the request.
+    public private(set) var requestingCheck: String?
     public private(set) var notice: ConnectionNotice?
+    /// The app's banner while any connection needs attention; nil when none does or the summary
+    /// could not be read (a failure to read it is not a broken connection).
+    public private(set) var attention: AttentionBanner?
+    /// Forwarding marketplace sale emails to Listora.
+    public private(set) var saleForwarding: SaleForwardingRow?
 
     private let service: any ConnectionsService
+    private let pollInterval: Duration
+    private let maxPolls: Int
+    private let sleep: @Sendable (Duration) async throws -> Void
+    private let isSignedIn: @MainActor () -> Bool
 
-    public init(service: any ConnectionsService) {
+    /// `pollInterval` and `maxPolls`: how often and how long a requested check is read again.
+    /// `isSignedIn`: whether there is a session; the banner never asks the API without one.
+    public init(
+        service: any ConnectionsService,
+        isSignedIn: @escaping @MainActor () -> Bool = { true },
+        pollInterval: Duration = .seconds(2),
+        maxPolls: Int = 15,
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+    ) {
         self.service = service
+        self.pollInterval = pollInterval
+        self.maxPolls = maxPolls
+        self.sleep = sleep
+        self.isSignedIn = isSignedIn
     }
 
-    /// Loads (or reloads) every marketplace's connection.
+    /// Reloads for the app's banner (on launch, on return to the app, when Inventory appears):
+    /// like ``load()``, but signed out it asks nothing and shows no banner.
+    public func refreshAttention() async {
+        guard isSignedIn() else {
+            attention = nil
+            return
+        }
+        await load()
+    }
+
+    /// Loads (or reloads) every marketplace's connection and the attention banner.
     public func load() async {
         if rows.isEmpty {
             phase = .loading
         }
         do {
-            rows = try await service.connections().map(MarketplaceRow.init(connection:))
+            try await apply(service.health())
             phase = .loaded
         } catch {
             phase = .failed(message: error.isUnauthenticated ? "Sign in to see your marketplaces." : error.message)
+            if error.isUnauthenticated {
+                attention = nil
+            }
+        }
+    }
+
+    /// Retry check: asks the server to check the row's connection, shows its "Checking" status,
+    /// and reads the summary again until that status changes (or a minute or so has passed).
+    public func check(_ row: MarketplaceRow) async {
+        guard requestingCheck == nil, connecting == nil, let marketplace = row.marketplace,
+              row.actions.contains(.check)
+        else { return }
+        requestingCheck = row.id
+        notice = nil
+        let checking: MarketplaceRow
+        do {
+            checking = try await MarketplaceRow(connection: service.requestCheck(
+                marketplace: marketplace,
+                idempotencyKey: UUID().uuidString,
+            ))
+        } catch {
+            requestingCheck = nil
+            notice = ConnectionNotice(tone: .failure, message: error.message)
+            await load()
+            return
+        }
+        requestingCheck = nil
+        replace(checking)
+        for _ in 0 ..< maxPolls {
+            do {
+                try await sleep(pollInterval)
+            } catch {
+                return
+            }
+            await load()
+            guard let current = rows.first(where: { $0.id == row.id }) else { return }
+            if current.statusLabel != checking.statusLabel {
+                notice = current.tone == .success
+                    ? ConnectionNotice(tone: .success, message: "\(row.name) is connected.")
+                    : nil
+                return
+            }
+        }
+    }
+
+    private func apply(_ summary: Components.Schemas.ConnectionHealthSummary) {
+        rows = summary.connections.map(MarketplaceRow.init(connection:))
+        attention = summary.banner.flatMap { banner in
+            summary.needsAttention ? AttentionBanner(banner: banner, count: summary.attention.count) : nil
+        }
+        saleForwarding = SaleForwardingRow(summary.saleForwarding)
+    }
+
+    private func replace(_ row: MarketplaceRow) {
+        if let index = rows.firstIndex(where: { $0.id == row.id }) {
+            rows[index] = row
         }
     }
 
@@ -51,7 +142,9 @@ public final class MarketplacesModel {
     /// Connects (or reconnects) the row's marketplace: starts an attempt, runs the consent page in
     /// `authenticate`, then reads the result back from the server.
     public func connect(_ row: MarketplaceRow, authenticate: WebAuthenticator) async {
-        guard connecting == nil, let marketplace = row.marketplace, row.action != nil else { return }
+        guard connecting == nil, requestingCheck == nil, let marketplace = row.marketplace,
+              row.actions.contains(where: { $0 == .connect || $0 == .reconnect })
+        else { return }
         connecting = row.id
         notice = nil
         defer { connecting = nil }
@@ -131,4 +224,41 @@ public struct ConnectionNotice: Equatable, Sendable {
 
     public let tone: Tone
     public let message: String
+}
+
+/// The app's banner while a connection needs attention: the server's words, shown as given.
+public struct AttentionBanner: Equatable, Sendable {
+    public let title: String
+    public let message: String?
+    /// True when the seller has to act (reconnect); false for a problem Listora keeps checking.
+    public let needsAction: Bool
+    /// How many connections need attention (the Settings tab's badge).
+    public let count: Int
+
+    public init(title: String, message: String?, needsAction: Bool, count: Int) {
+        self.title = title
+        self.message = message
+        self.needsAction = needsAction
+        self.count = count
+    }
+
+    init(banner: Components.Schemas.StatusDisplay, count: Int) {
+        self.init(
+            title: banner.label,
+            message: banner.detail,
+            needsAction: banner.tone.value1 != .checking,
+            count: max(count, 1),
+        )
+    }
+}
+
+/// Sale email forwarding, as the server describes it.
+public struct SaleForwardingRow: Equatable, Sendable {
+    public let statusLabel: String
+    public let statusDetail: String?
+
+    init(_ forwarding: Components.Schemas.SaleForwarding) {
+        statusLabel = forwarding.statusDisplay.label
+        statusDetail = forwarding.statusDisplay.detail
+    }
 }

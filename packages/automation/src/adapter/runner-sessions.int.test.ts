@@ -32,7 +32,7 @@ describe('RunnerSessions (real Postgres, headless Chromium)', () => {
   const { runner, screenshots } = testRunner({ stepTimeoutMs: 3_000 });
 
   beforeAll(async () => {
-    database = await createMigratedDatabase('runner_sessions', { max: 8 });
+    database = await createMigratedDatabase('runner_sessions', { jobQueue: true, max: 8 });
     site = await FakeAutomationSite.start(0, { rotateSessionEvery: 3 });
     profile = fakeSiteProfile(site);
   });

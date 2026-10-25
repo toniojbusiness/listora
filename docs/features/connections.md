@@ -42,10 +42,12 @@ official OAuth 2.0 authorization code grant; Listora never sees a marketplace pa
   makes it `degraded`.
 - **Health.** The daily `connection_health` job (a worker scheduled task) makes one cheap call per
   connection that still holds its grant (eBay `getUser`, after a refresh if due): it works →
-  `connected` with `last_ok_at`; the grant is refused → `reauth_required`; the marketplace cannot
-  be asked → `degraded` with the problem, until a later check succeeds. `describeConnection`
-  renders the status, a warning 30 days before the grant expires (eBay refresh tokens last
-  about 18 months), and a reconnect action whenever only the seller can fix it.
+  `connected` with `last_ok_at`; the grant is refused or has run out → `reauth_required`; the
+  marketplace cannot be asked → `degraded` with the problem, until a later check succeeds. Every
+  check moves `last_checked_at`. `describeConnection` renders the status, a warning 30 days before
+  the grant expires (eBay refresh tokens last about 18 months, Depop grants one year), a reconnect
+  action whenever only the seller can fix it, and Retry check for a problem Listora keeps checking.
+  The [health dashboard](#health-dashboard) shows it all.
 - **Session vault** (`SessionVault`, session-vault.ts). The browser session of each automation
   connection ([automation.md](automation.md)): the cookies the app captured when the seller
   logged into the marketplace, on its own domains only, never a password. `linkSession` stores a
@@ -65,15 +67,57 @@ official OAuth 2.0 authorization code grant; Listora never sees a marketplace pa
   ([ebay-notifications.md](ebay-notifications.md)). Account deletion revokes grants through the
   marketplace's revocation endpoint (`OAuthGrantRevoker`).
 
+## Health dashboard
+
+The app's Marketplaces screen and its connection banner read one summary, `getConnectionHealth`
+(`GET /v1/connection-health`, built by `summarizeConnectionHealth` in `health-summary.ts` from the
+same `describeConnection` views `listConnections` returns), so every client says the same honest
+thing.
+
+- **The summary.** Every marketplace's connection (eBay, Depop, Poshmark, Mercari), the ones that
+  need attention, and the banner the app shows while any does. A connection needs attention when
+  it waits for the seller (`reauth_required`: "Reconnect needed"; `revoked`: "Access removed"),
+  when its grant ends within 30 days ("Reconnect within N days"), or while Listora cannot reach
+  the marketplace (`degraded`: "Connection problem"). What only the seller can fix comes first,
+  and the banner is `action_needed` unless every entry is a problem Listora keeps checking. Sale
+  email forwarding is "Set up when you add a domain" until Listora has an inbound email domain
+  (email ingest, T-23).
+- **Statuses in plain words.** API connections show Connected, Reconnect needed, Access removed,
+  or Connection problem; an assisted marketplace with no linked account shows Not linked, and its
+  card says it works in assisted mode. The card also shows the mode (API, Automation, Assisted)
+  and when the marketplace last accepted Listora's access (`lastOkAt`).
+- **Retry check.** `requestConnectionCheck` (`POST /v1/connections/{marketplace}/checks`) notes
+  `check_requested_at` and queues `connection_health_check`, the daily check for that one
+  connection, in the request's transaction. Until the worker finishes it (`last_checked_at`
+  catches up) the connection reads "Checking..." with no actions, for at most 10 minutes, so a
+  lost job never leaves it spinning. Only a connected or degraded API connection can be checked
+  (`409 invalid_state_transition` otherwise), and only where this deployment can connect the
+  marketplace (`409 marketplace_action_unavailable`).
+- **The break notification.** The first time a connection leaves a working status (`connected`,
+  `degraded`) for one only the seller can fix (`reauth_required`, `revoked`), `recordHealth` (or
+  `recordAuthorizationRevocation`) queues a push (`connection_needs_attention`, "Reconnect eBay",
+  the problem in the body) in the transaction that records the break
+  ([push.md](push.md)). A connection that is already broken never sends it again; reconnecting
+  and breaking anew does. A grant that ran out is recorded by the daily check without asking the
+  marketplace, so it notifies too.
+- **Automation sessions** (decision D1, [automation.md](automation.md)) join the same model when
+  the session vault lands: a session the marketplace rejects is a connection that needs relinking,
+  shown and notified like `reauth_required`. Until then Poshmark, Mercari, and Depop show Not
+  linked.
+- **In the app** (`MarketplacesFeature`): one card per marketplace with its mode, status, detail,
+  last successful check, and actions (Connect, Reconnect, Retry check; the main one filled); a
+  Sale emails card; and `ConnectionAttentionBanner`, which Inventory shows above the list while
+  anything needs attention and which opens Marketplaces in Settings. The Settings tab gets a badge.
+
 ## Data
 
 - `marketplace_connection` (mode, the seller's immutable id, the encrypted credential (OAuth
   tokens, or the browser session of an `automation` connection, with its `credential_version`;
   [automation.md](automation.md#data)), expiries, scopes, status, when the grant was issued
-  (or the session linked), `last_ok_at`, and the latest problem's code, message, and time;
-  `orders_polled_through`, the eBay order poll's mark
-  ([ebay-notifications.md](ebay-notifications.md)); a revoked connection holds no tokens; at
-  most one per account and marketplace, which
+  (or the session linked), `last_ok_at`, `last_checked_at`, `check_requested_at` (a pending
+  Retry check), and the latest problem's code, message, and time; `orders_polled_through`, the
+  eBay order poll's mark ([ebay-notifications.md](ebay-notifications.md)); a revoked connection
+  holds no tokens; at most one per account and marketplace, which
   connecting keeps under the account's row lock) and `connection_authorization` (one connect
   attempt: the state's SHA-256, its expiry, and the result). The marketplace tables they serve
   are in [marketplaces.md](marketplaces.md#data).

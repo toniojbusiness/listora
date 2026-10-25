@@ -45,6 +45,12 @@ struct E2EStack {
         _ = try await control("ebay/faults", method: "POST", body: ["action": action, "fault": fault])
     }
 
+    /// Puts the user's eBay connection in a health state as the daily check records it
+    /// (`POST /connections/ebay`): `degraded`, `reauth_required`, or back to `connected`.
+    func setEbayConnection(_ status: String) async throws {
+        _ = try await control("connections/ebay", method: "POST", body: ["status": status])
+    }
+
     /// Removes every fault a test injected (`DELETE /ebay/faults`), so a test never inherits one.
     func clearEbayFaults() async throws {
         _ = try await control("ebay/faults", method: "DELETE", body: nil)

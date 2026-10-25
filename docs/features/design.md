@@ -78,7 +78,7 @@ use is in `Typography.swift`.
 | `ListRow`                                  | Icon tile, title, subtitle, trailing accessory; stacks at accessibility sizes                                                                     |
 | `IconTile`                                 | An SF Symbol or monogram on a soft square (rows, cards, empty states)                                                                             |
 | `StatusTone`, `StatusBadge`, `StatusLabel` | The honest status vocabulary as a pill or as inline text                                                                                          |
-| `Chip`, `ChoiceChip`, `FlowLayout`         | Labels over photos; single-choice chips that wrap                                                                                                 |
+| `Chip`, `ChoiceChip`, `FlowLayout`         | Labels over photos (or `muted`, on a card); single-choice chips that wrap                                                                         |
 | `ListoraTextField`                         | Labeled field with focus outline, hint, and error                                                                                                 |
 | `PriceField`, `PriceInput`                 | Price entry in minor units on the decimal keypad; input kept valid as typed                                                                       |
 | `SectionHeader`                            | Small-capitals heading with optional explanation and action                                                                                       |

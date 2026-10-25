@@ -159,7 +159,9 @@ KnownConnectionAction:
     `connect`: start `startConnectionAuthorization` for a marketplace not connected yet.
     `reconnect`: the same, for a connection that needs the seller's consent again (its grant
     was revoked, expires within 30 days, or fails); it renews the existing connection.
-  enum: [connect, reconnect]
+    `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
+    Listora may have cleared since.
+  enum: [connect, reconnect, check]
 Connection:
   type: object
   required: [marketplace, mode, status, statusDisplay, capabilities, availableActions]
@@ -191,6 +193,10 @@ Connection:
       description: When the user must reconnect (Depop grants last one year; eBay refresh tokens about 18 months).
     lastOkAt:
       $ref: './common.yaml#/Timestamp'
+      description: When the marketplace last accepted Listora's access (the last successful check).
+    lastCheckedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When Listora last checked the connection, whatever it found.
     lastIssue:
       $ref: '#/ConnectionIssue'
 ConnectionList:
@@ -237,3 +243,80 @@ ConnectionAuthorization:
       $ref: './common.yaml#/Timestamp'
     completedAt:
       $ref: './common.yaml#/Timestamp'
+ConnectionAttentionReason:
+  description: |
+    A `KnownConnectionAttentionReason`, or a reason added after this client was built.
+    Clients show the entry's `statusDisplay` for an unknown reason.
+  anyOf:
+    - $ref: '#/KnownConnectionAttentionReason'
+    - type: string
+      maxLength: 64
+KnownConnectionAttentionReason:
+  type: string
+  description: |
+    `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
+    `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
+    cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
+    ends within 30 days.
+  enum: [reconnect, access_removed, connection_problem, expiring]
+ConnectionAttention:
+  type: object
+  description: One connection that needs the seller's attention.
+  required: [marketplace, reason, statusDisplay]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    reason:
+      $ref: '#/ConnectionAttentionReason'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+      description: The connection's own status, as in `Connection.statusDisplay`.
+SaleForwardingStatus:
+  description: |
+    A `KnownSaleForwardingStatus`, or a status added after this client was built. Clients
+    show the `statusDisplay`.
+  anyOf:
+    - $ref: '#/KnownSaleForwardingStatus'
+    - type: string
+      maxLength: 64
+KnownSaleForwardingStatus:
+  type: string
+  description: |
+    `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+    email domain, which this deployment does not have yet.
+  enum: [needs_domain]
+SaleForwarding:
+  type: object
+  description: Forwarding marketplace sale emails to Listora, which detects sales sooner.
+  required: [status, statusDisplay]
+  properties:
+    status:
+      $ref: '#/SaleForwardingStatus'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+ConnectionHealthSummary:
+  type: object
+  required: [needsAttention, attention, connections, saleForwarding]
+  properties:
+    needsAttention:
+      type: boolean
+      description: True while any connection is in `attention`; the app shows `banner` then.
+    banner:
+      $ref: './common.yaml#/StatusDisplay'
+      description: Present exactly when `needsAttention`.
+    attention:
+      type: array
+      maxItems: 20
+      description: The connections that need attention, those only the seller can fix first.
+      items:
+        $ref: '#/ConnectionAttention'
+    connections:
+      type: array
+      description: Every marketplace and its connection, as `listConnections` returns them.
+      items:
+        $ref: '#/Connection'
+    saleForwarding:
+      $ref: '#/SaleForwarding'
+    lastCheckedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: The latest check of any connection; absent before the first.

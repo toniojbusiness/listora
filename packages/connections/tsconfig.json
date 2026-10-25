@@ -10,6 +10,7 @@
     { "path": "../shared" },
     { "path": "../testing" },
     { "path": "../db" },
-    { "path": "../marketplaces" }
+    { "path": "../marketplaces" },
+    { "path": "../push" }
   ]
 }

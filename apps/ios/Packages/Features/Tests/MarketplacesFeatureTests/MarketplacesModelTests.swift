@@ -16,7 +16,7 @@ struct MarketplacesModelTests {
                 mode: "assisted",
                 status: "not_connected",
                 tone: "neutral",
-                label: "Assisted",
+                label: "Not linked",
                 connect: "none",
             ),
         ]

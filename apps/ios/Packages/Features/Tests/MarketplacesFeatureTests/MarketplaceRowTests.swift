@@ -1,3 +1,4 @@
+import Foundation
 import ListoraAPI
 import Testing
 @testable import MarketplacesFeature
@@ -18,7 +19,19 @@ struct MarketplaceRowTests {
         #expect(row.statusDetail == "Signed in as listora_seller.")
         #expect(row.tone == .success)
         #expect(row.usesAPI)
+        #expect(row.modeLabel == "API")
         #expect(row.action == nil)
+    }
+
+    @Test
+    func `shows when the connection last checked out`() throws {
+        let row = try MarketplaceRow(connection: connection(
+            status: "connected",
+            tone: "success",
+            label: "Connected",
+            lastOkAt: "2026-10-24T05:41:00Z",
+        ))
+        #expect(row.lastOkAt == Date(timeIntervalSince1970: 1_792_820_460))
     }
 
     @Test
@@ -53,17 +66,46 @@ struct MarketplaceRowTests {
     }
 
     @Test
-    func `a degraded connection is shown as being checked`() throws {
+    func `a degraded connection offers Retry check first, then reconnecting`() throws {
         let row = try MarketplaceRow(connection: connection(
             status: "degraded",
             tone: "checking",
             label: "Connection problem",
             detail: "eBay had a problem. Try again soon. Listora keeps checking.",
-            actions: ["reconnect"],
+            actions: ["check", "reconnect"],
         ))
         #expect(row.tone == .checking)
         #expect(row.statusDetail == "eBay had a problem. Try again soon. Listora keeps checking.")
-        #expect(row.action == .reconnect)
+        #expect(row.actions == [.check, .reconnect])
+        #expect(row.action == .check)
+        #expect(row.actionTitle == "Retry check")
+        #expect(row.title(for: .reconnect) == "Reconnect eBay")
+    }
+
+    @Test
+    func `a check in progress offers nothing`() throws {
+        let row = try MarketplaceRow(connection: connection(
+            status: "degraded",
+            tone: "checking",
+            label: "Checking...",
+        ))
+        #expect(row.statusLabel == "Checking...")
+        #expect(row.actions.isEmpty)
+    }
+
+    @Test
+    func `automation mode shows by name`() throws {
+        let row = try MarketplaceRow(connection: connection(
+            marketplace: "poshmark",
+            mode: "automation",
+            status: "connected",
+            tone: "success",
+            label: "Connected",
+            connect: "none",
+        ))
+        #expect(row.mode == .automation)
+        #expect(row.modeLabel == "Automation")
+        #expect(!row.usesAPI)
     }
 
     @Test(arguments: ["depop", "poshmark", "mercari"])
@@ -73,11 +115,12 @@ struct MarketplaceRowTests {
             mode: "assisted",
             status: "not_connected",
             tone: "neutral",
-            label: "Assisted",
+            label: "Not linked",
             connect: "none",
         ))
         #expect(!row.usesAPI)
-        #expect(row.statusLabel == "Assisted")
+        #expect(row.modeLabel == "Assisted")
+        #expect(row.statusLabel == "Not linked")
         #expect(row.action == nil)
         #expect(["Depop", "Poshmark", "Mercari"].contains(row.name))
     }

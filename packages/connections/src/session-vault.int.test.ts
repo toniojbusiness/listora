@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { sql } from 'kysely';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
 import { createLogger } from '@listora/shared';
 
@@ -38,7 +39,7 @@ describe('SessionVault (real Postgres)', () => {
   });
 
   beforeAll(async () => {
-    database = await createMigratedDatabase('session_vault');
+    database = await createMigratedDatabase('session_vault', { jobQueue: true });
   });
 
   afterAll(async () => {
@@ -123,6 +124,21 @@ describe('SessionVault (real Postgres)', () => {
     expect(await vault.markNeedsRelink(database.db, { ...key, version: 0 }, reason)).toBe(true);
     // A second report about the same session changes nothing.
     expect(await vault.markNeedsRelink(database.db, { ...key, version: 0 }, reason)).toBe(false);
+    // The seller hears of the break once (the push outbox).
+    const pushes = (
+      await sql<{ payload: Record<string, unknown> }>`
+        select job.payload from graphile_worker._private_jobs as job
+        join graphile_worker._private_tasks as t on t.id = job.task_id
+        where t.identifier = 'push_notification' and job.payload ->> 'accountId' = ${accountId}
+      `.execute(database.db)
+    ).rows;
+    expect(pushes.map((row) => row.payload)).toMatchObject([
+      {
+        category: 'connection_needs_attention',
+        title: 'Reconnect Mercari',
+        body: 'Mercari asked for a CAPTCHA.',
+      },
+    ]);
 
     expect(await connectionRow(linked.connectionId)).toMatchObject({
       status: 'reauth_required',

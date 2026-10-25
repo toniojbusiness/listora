@@ -959,6 +959,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{marketplace}/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a marketplace connection now (Retry check)
+         * @description Queues the same cheap read the daily health check makes, for this connection only. The
+         *     answer is the connection with a `Checking` status; read it again (or
+         *     `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
+         *     connection with a problem. `409 invalid_state_transition` for a connection a check
+         *     cannot change (not connected, or waiting for the seller to reconnect);
+         *     `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+         */
+        post: operations["requestConnectionCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connection-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The account's connection health summary
+         * @description Every marketplace's connection (as `listConnections`), what needs the seller's
+         *     attention (broken or failing connections and grants that end within 30 days), the
+         *     banner the app shows while anything does, and sale email forwarding.
+         */
+        get: operations["getConnectionHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sales": {
         parameters: {
             query?: never;
@@ -2151,9 +2200,11 @@ export interface components {
          * @description `connect`: start `startConnectionAuthorization` for a marketplace not connected yet.
          *     `reconnect`: the same, for a connection that needs the seller's consent again (its grant
          *     was revoked, expires within 30 days, or fails); it renews the existing connection.
+         *     `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
+         *     Listora may have cleared since.
          * @enum {string}
          */
-        KnownConnectionAction: "connect" | "reconnect";
+        KnownConnectionAction: "connect" | "reconnect" | "check";
         Connection: {
             marketplace: components["schemas"]["Marketplace"];
             mode: components["schemas"]["IntegrationMode"];
@@ -2167,7 +2218,10 @@ export interface components {
             connectedAt?: components["schemas"]["Timestamp"];
             /** @description When the user must reconnect (Depop grants last one year; eBay refresh tokens about 18 months). */
             grantExpiresAt?: components["schemas"]["Timestamp"];
+            /** @description When the marketplace last accepted Listora's access (the last successful check). */
             lastOkAt?: components["schemas"]["Timestamp"];
+            /** @description When Listora last checked the connection, whatever it found. */
+            lastCheckedAt?: components["schemas"]["Timestamp"];
             lastIssue?: components["schemas"]["ConnectionIssue"];
         };
         ConnectionList: {
@@ -2195,6 +2249,55 @@ export interface components {
             connection?: components["schemas"]["Connection"];
             createdAt: components["schemas"]["Timestamp"];
             completedAt?: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description A `KnownConnectionAttentionReason`, or a reason added after this client was built.
+         *     Clients show the entry's `statusDisplay` for an unknown reason.
+         */
+        ConnectionAttentionReason: components["schemas"]["KnownConnectionAttentionReason"];
+        /**
+         * @description `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
+         *     `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
+         *     cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
+         *     ends within 30 days.
+         * @enum {string}
+         */
+        KnownConnectionAttentionReason: "reconnect" | "access_removed" | "connection_problem" | "expiring";
+        /** @description One connection that needs the seller's attention. */
+        ConnectionAttention: {
+            marketplace: components["schemas"]["Marketplace"];
+            reason: components["schemas"]["ConnectionAttentionReason"];
+            /** @description The connection's own status, as in `Connection.statusDisplay`. */
+            statusDisplay: components["schemas"]["StatusDisplay"];
+        };
+        /**
+         * @description A `KnownSaleForwardingStatus`, or a status added after this client was built. Clients
+         *     show the `statusDisplay`.
+         */
+        SaleForwardingStatus: components["schemas"]["KnownSaleForwardingStatus"];
+        /**
+         * @description `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+         *     email domain, which this deployment does not have yet.
+         * @enum {string}
+         */
+        KnownSaleForwardingStatus: "needs_domain";
+        /** @description Forwarding marketplace sale emails to Listora, which detects sales sooner. */
+        SaleForwarding: {
+            status: components["schemas"]["SaleForwardingStatus"];
+            statusDisplay: components["schemas"]["StatusDisplay"];
+        };
+        ConnectionHealthSummary: {
+            /** @description True while any connection is in `attention`; the app shows `banner` then. */
+            needsAttention: boolean;
+            /** @description Present exactly when `needsAttention`. */
+            banner?: components["schemas"]["StatusDisplay"];
+            /** @description The connections that need attention, those only the seller can fix first. */
+            attention: components["schemas"]["ConnectionAttention"][];
+            /** @description Every marketplace and its connection, as `listConnections` returns them. */
+            connections: components["schemas"]["Connection"][];
+            saleForwarding: components["schemas"]["SaleForwarding"];
+            /** @description The latest check of any connection; absent before the first. */
+            lastCheckedAt?: components["schemas"]["Timestamp"];
         };
         /**
          * @description A `KnownSaleStatus`, or a status added after this client was built. Clients show an
@@ -2747,6 +2850,13 @@ export type Connection = components['schemas']['Connection'];
 export type ConnectionList = components['schemas']['ConnectionList'];
 export type ConnectionAuthorizationStatus = components['schemas']['ConnectionAuthorizationStatus'];
 export type ConnectionAuthorization = components['schemas']['ConnectionAuthorization'];
+export type ConnectionAttentionReason = components['schemas']['ConnectionAttentionReason'];
+export type KnownConnectionAttentionReason = components['schemas']['KnownConnectionAttentionReason'];
+export type ConnectionAttention = components['schemas']['ConnectionAttention'];
+export type SaleForwardingStatus = components['schemas']['SaleForwardingStatus'];
+export type KnownSaleForwardingStatus = components['schemas']['KnownSaleForwardingStatus'];
+export type SaleForwarding = components['schemas']['SaleForwarding'];
+export type ConnectionHealthSummary = components['schemas']['ConnectionHealthSummary'];
 export type SaleStatus = components['schemas']['SaleStatus'];
 export type KnownSaleStatus = components['schemas']['KnownSaleStatus'];
 export type SaleDetectionSource = components['schemas']['SaleDetectionSource'];
@@ -4173,6 +4283,63 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    requestConnectionCheck: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The check is queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getConnectionHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionHealthSummary"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
     listSales: {
         parameters: {
             query?: {
@@ -4448,8 +4615,10 @@ export const knownConnectMethodValues: ReadonlyArray<FlattenedDeepRequired<compo
 export const knownVerifyReadModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownVerifyReadMode"]> = ["api", "automation", "user_confirm"];
 export const knownImportListingsModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImportListingsMode"]> = ["api", "share_sheet", "bulk_file", "none"];
 export const knownImageTransportModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImageTransportMode"]> = ["url_fetch", "upload", "user_saves_photos"];
-export const knownConnectionActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAction"]> = ["connect", "reconnect"];
+export const knownConnectionActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAction"]> = ["connect", "reconnect", "check"];
 export const connectionAuthorizationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ConnectionAuthorizationStatus"]> = ["pending", "completed", "failed", "expired"];
+export const knownConnectionAttentionReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAttentionReason"]> = ["reconnect", "access_removed", "connection_problem", "expiring"];
+export const knownSaleForwardingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleForwardingStatus"]> = ["needs_domain"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];

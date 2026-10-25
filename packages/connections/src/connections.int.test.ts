@@ -11,6 +11,7 @@ import {
   type OAuthClients,
 } from '@listora/marketplaces';
 import { createLogger } from '@listora/shared';
+import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -21,10 +22,15 @@ import {
 } from './authorizations.ts';
 import { ConnectionTokens } from './credentials.ts';
 import { ConnectionSeller } from './ebay-seller.ts';
-import { checkConnectionHealth, runConnectionHealthChecks } from './health.ts';
+import {
+  checkConnectionHealth,
+  runConnectionHealthChecks,
+  runRequestedHealthCheck,
+} from './health.ts';
 import { ebayRevocation, recordAuthorizationRevocation } from './revocation.ts';
 import { OAuthGrantRevoker } from './revoker.ts';
-import { accountConnections } from './store.ts';
+import { describeConnection } from './status-display.ts';
+import { accountConnections, requestHealthCheck } from './store.ts';
 import { testTokenVault } from './testing.ts';
 
 describe('eBay connections (real Postgres, fake eBay)', () => {
@@ -43,7 +49,7 @@ describe('eBay connections (real Postgres, fake eBay)', () => {
   const now = () => new Date(clock.now);
 
   beforeAll(async () => {
-    database = await createMigratedDatabase('connections', { max: 20 });
+    database = await createMigratedDatabase('connections', { max: 20, jobQueue: true });
     fake = await FakeEbay.start({ now: () => new Date(clock.now) });
     devSeller = fake.signedInSeller.userId;
     const config = loadEbayConfig({ EBAY_ENV: 'fake', EBAY_FAKE_URL: fake.url });
@@ -521,6 +527,205 @@ describe('eBay connections (real Postgres, fake eBay)', () => {
         ),
       ).toEqual([]);
       expect((await connectionOf(tenant.accountId)).status).toBe('connected');
+    });
+  });
+
+  describe('health dashboard: status transitions and break notifications', () => {
+    const health = () => ({ db: database.db, tokens: tokens(), oauth, logger, now });
+
+    /** A new account connected to a seller of its own, so revoking it touches no other test. */
+    async function connectedSeller(username: string) {
+      const seller = fake.addSeller({ username }).userId;
+      fake.signInAs(seller);
+      const tenant = await newTenant();
+      await connect(tenant);
+      return { ...tenant, seller, connection: await connectionOf(tenant.accountId) };
+    }
+
+    /** The break notifications queued for the account (the push outbox's jobs). */
+    async function brokenPushes(accountId: string) {
+      const rows = (
+        await sql<{ payload: Record<string, unknown> }>`
+          select job.payload from graphile_worker._private_jobs as job
+          join graphile_worker._private_tasks as t on t.id = job.task_id
+          where t.identifier = 'push_notification'
+            and job.payload ->> 'accountId' = ${accountId}
+            and job.payload ->> 'category' = 'connection_needs_attention'
+        `.execute(database.db)
+      ).rows;
+      return rows.map((row) => row.payload);
+    }
+
+    const view = async (accountId: string) =>
+      describeConnection({
+        marketplace: 'ebay',
+        row: await connectionOf(accountId),
+        defaultMode: 'api',
+        canConnect: true,
+        now: now(),
+      });
+
+    it('connected -> degraded -> connected: shows the problem with Retry check, and sends nothing', async () => {
+      const { accountId, connection } = await connectedSeller('flaky_line');
+      fake.inject({ action: 'identity', fault: { type: 'server_error' } });
+      expect(await checkConnectionHealth(health(), connection.id)).toBe('degraded');
+      expect(await connectionOf(accountId)).toMatchObject({
+        status: 'degraded',
+        last_checked_at: now(),
+      });
+      expect(await view(accountId)).toMatchObject({
+        status: 'degraded',
+        statusDisplay: { tone: 'checking', label: 'Connection problem' },
+        actions: ['check', 'reconnect'],
+        attention: 'connection_problem',
+      });
+
+      clock.now += 60_000;
+      expect(await checkConnectionHealth(health(), connection.id)).toBe('connected');
+      expect(await connectionOf(accountId)).toMatchObject({
+        status: 'connected',
+        last_ok_at: now(),
+        last_checked_at: now(),
+        last_error: null,
+      });
+      expect((await view(accountId)).attention).toBeUndefined();
+      expect(await brokenPushes(accountId)).toEqual([]);
+    });
+
+    it('connected -> reauth_required: notifies the account once, the first time it breaks', async () => {
+      const { accountId, seller, connection } = await connectedSeller('walked_away');
+      fake.revokeSellerAccess(seller);
+      expect(await checkConnectionHealth(health(), connection.id)).toBe('reauth_required');
+      expect(await view(accountId)).toMatchObject({
+        status: 'reauth_required',
+        statusDisplay: { tone: 'action_needed', label: 'Reconnect needed' },
+        actions: ['reconnect'],
+        attention: 'reconnect',
+      });
+      expect(await brokenPushes(accountId)).toEqual([
+        {
+          accountId,
+          category: 'connection_needs_attention',
+          title: 'Reconnect eBay',
+          body: expect.stringContaining('Reconnect eBay') as unknown,
+          urgency: 'normal',
+          threadId: 'connection:ebay',
+          data: { marketplace: 'ebay' },
+        },
+      ]);
+
+      // Later checks, and a revocation notice, find it already broken: no second notification.
+      clock.now += 86_400_000;
+      expect(await checkConnectionHealth(health(), connection.id)).toBe('reauth_required');
+      await recordAuthorizationRevocation(
+        database.db,
+        {
+          marketplace: 'ebay',
+          externalUserId: seller,
+          revokedAt: now(),
+          code: 'revoked_by_seller',
+          message: 'You removed Listora. Reconnect eBay.',
+        },
+        now(),
+      );
+      expect((await connectionOf(accountId)).status).toBe('revoked');
+      expect(await brokenPushes(accountId)).toHaveLength(1);
+    });
+
+    it('degraded -> reauth_required through a refused refresh also notifies', async () => {
+      const { accountId, seller, connection } = await connectedSeller('refused_refresh');
+      fake.inject({ action: 'identity', fault: { type: 'server_error' } });
+      expect(await checkConnectionHealth(health(), connection.id)).toBe('degraded');
+      fake.revokeSellerAccess(seller);
+      await database.db
+        .updateTable('marketplace_connection')
+        .set({ access_expires_at: now() })
+        .where('id', '=', connection.id)
+        .execute();
+      expect((await tokens().accessToken(connection.id)).type).toBe('reauth_required');
+      expect((await connectionOf(accountId)).status).toBe('reauth_required');
+      expect(await brokenPushes(accountId)).toHaveLength(1);
+    });
+
+    it('connected -> revoked by a notice: notifies, and deletes the tokens', async () => {
+      const { accountId, seller } = await connectedSeller('notice_given');
+      await recordAuthorizationRevocation(
+        database.db,
+        {
+          marketplace: 'ebay',
+          externalUserId: seller,
+          revokedAt: new Date(clock.now + 1_000),
+          code: 'revoked_by_seller',
+          message: 'You removed Listora. Reconnect eBay.',
+        },
+        now(),
+      );
+      expect(await view(accountId)).toMatchObject({
+        status: 'revoked',
+        statusDisplay: { label: 'Access removed' },
+        attention: 'access_removed',
+      });
+      expect(await brokenPushes(accountId)).toMatchObject([
+        { title: 'Reconnect eBay', body: 'You removed Listora. Reconnect eBay.' },
+      ]);
+    });
+
+    it('a grant past its end: the daily check flips it to reauth_required and notifies', async () => {
+      const { accountId, connection } = await connectedSeller('expired_grant');
+      await database.db
+        .updateTable('marketplace_connection')
+        .set({ refresh_expires_at: new Date(clock.now - 1_000) })
+        .where('id', '=', connection.id)
+        .execute();
+      const before = fake.tokenGrants('refresh_token');
+      expect(await checkConnectionHealth(health(), connection.id)).toBe('reauth_required');
+      // Nothing was asked of eBay: the grant's end is known.
+      expect(fake.tokenGrants('refresh_token')).toBe(before);
+      expect(await connectionOf(accountId)).toMatchObject({
+        status: 'reauth_required',
+        last_error_code: 'grant_expired',
+      });
+      expect(await brokenPushes(accountId)).toMatchObject([
+        { body: "Listora's eBay access expired. Reconnect eBay." },
+      ]);
+    });
+
+    it('Retry check: shows Checking until the worker has checked, then what it found', async () => {
+      const { accountId, connection } = await connectedSeller('retry_check');
+      fake.inject({ action: 'identity', fault: { type: 'server_error' } });
+      await checkConnectionHealth(health(), connection.id);
+
+      clock.now += 60_000;
+      expect(await requestHealthCheck(database.db, connection.id, now())).toBe(true);
+      expect(await view(accountId)).toMatchObject({
+        status: 'degraded',
+        statusDisplay: { tone: 'checking', label: 'Checking...' },
+        actions: [],
+      });
+
+      clock.now += 1_000;
+      await runRequestedHealthCheck(health(), { connectionId: connection.id });
+      expect(await view(accountId)).toMatchObject({
+        status: 'connected',
+        statusDisplay: { label: 'Connected' },
+        actions: [],
+      });
+    });
+
+    it('Retry check that cannot run (reconnect needed) is refused, and a lost one stops showing', async () => {
+      const { accountId, seller, connection } = await connectedSeller('no_retry');
+      expect(await requestHealthCheck(database.db, connection.id, now())).toBe(true);
+      // The worker never ran it: after 10 minutes the app stops saying Checking.
+      clock.now += 11 * 60_000;
+      expect((await view(accountId)).statusDisplay.label).toBe('Connected');
+
+      fake.revokeSellerAccess(seller);
+      await checkConnectionHealth(health(), connection.id);
+      expect(await requestHealthCheck(database.db, connection.id, now())).toBe(false);
+      // A job for it anyway (queued before the break) marks itself finished.
+      await runRequestedHealthCheck(health(), { connectionId: connection.id });
+      expect((await connectionOf(accountId)).last_checked_at).toEqual(now());
+      await runRequestedHealthCheck(health(), { nope: true });
     });
   });
 

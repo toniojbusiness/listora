@@ -446,6 +446,29 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/connections/{marketplace}/callback`.
     /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/callback/get(handleConnectionCallback)`.
     func handleConnectionCallback(_ input: Operations.HandleConnectionCallback.Input) async throws -> Operations.HandleConnectionCallback.Output
+    /// Check a marketplace connection now (Retry check)
+    ///
+    /// Queues the same cheap read the daily health check makes, for this connection only. The
+    /// answer is the connection with a `Checking` status; read it again (or
+    /// `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
+    /// connection with a problem. `409 invalid_state_transition` for a connection a check
+    /// cannot change (not connected, or waiting for the seller to reconnect);
+    /// `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/connections/{marketplace}/checks`.
+    /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/checks/post(requestConnectionCheck)`.
+    func requestConnectionCheck(_ input: Operations.RequestConnectionCheck.Input) async throws -> Operations.RequestConnectionCheck.Output
+    /// The account's connection health summary
+    ///
+    /// Every marketplace's connection (as `listConnections`), what needs the seller's
+    /// attention (broken or failing connections and grants that end within 30 days), the
+    /// banner the app shows while anything does, and sale email forwarding.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/connection-health`.
+    /// - Remark: Generated from `#/paths//v1/connection-health/get(getConnectionHealth)`.
+    func getConnectionHealth(_ input: Operations.GetConnectionHealth.Input) async throws -> Operations.GetConnectionHealth.Output
     /// List sales
     ///
     /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
@@ -1303,6 +1326,39 @@ extension APIProtocol {
             query: query,
             headers: headers
         ))
+    }
+    /// Check a marketplace connection now (Retry check)
+    ///
+    /// Queues the same cheap read the daily health check makes, for this connection only. The
+    /// answer is the connection with a `Checking` status; read it again (or
+    /// `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
+    /// connection with a problem. `409 invalid_state_transition` for a connection a check
+    /// cannot change (not connected, or waiting for the seller to reconnect);
+    /// `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/connections/{marketplace}/checks`.
+    /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/checks/post(requestConnectionCheck)`.
+    public func requestConnectionCheck(
+        path: Operations.RequestConnectionCheck.Input.Path,
+        headers: Operations.RequestConnectionCheck.Input.Headers
+    ) async throws -> Operations.RequestConnectionCheck.Output {
+        try await requestConnectionCheck(Operations.RequestConnectionCheck.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// The account's connection health summary
+    ///
+    /// Every marketplace's connection (as `listConnections`), what needs the seller's
+    /// attention (broken or failing connections and grants that end within 30 days), the
+    /// banner the app shows while anything does, and sale email forwarding.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/connection-health`.
+    /// - Remark: Generated from `#/paths//v1/connection-health/get(getConnectionHealth)`.
+    public func getConnectionHealth(headers: Operations.GetConnectionHealth.Input.Headers = .init()) async throws -> Operations.GetConnectionHealth.Output {
+        try await getConnectionHealth(Operations.GetConnectionHealth.Input(headers: headers))
     }
     /// List sales
     ///

@@ -8994,6 +8994,359 @@ public enum Operations {
             }
         }
     }
+    /// Check a marketplace connection now (Retry check)
+    ///
+    /// Queues the same cheap read the daily health check makes, for this connection only. The
+    /// answer is the connection with a `Checking` status; read it again (or
+    /// `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
+    /// connection with a problem. `409 invalid_state_transition` for a connection a check
+    /// cannot change (not connected, or waiting for the seller to reconnect);
+    /// `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/connections/{marketplace}/checks`.
+    /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/checks/post(requestConnectionCheck)`.
+    public enum RequestConnectionCheck {
+        public static let id: Swift.String = "requestConnectionCheck"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/checks/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/checks/POST/path/marketplace`.
+                public var marketplace: Components.Parameters.MarketplacePath
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - marketplace:
+                public init(marketplace: Components.Parameters.MarketplacePath) {
+                    self.marketplace = marketplace
+                }
+            }
+            public var path: Operations.RequestConnectionCheck.Input.Path
+            /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/checks/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/checks/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RequestConnectionCheck.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RequestConnectionCheck.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.RequestConnectionCheck.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.RequestConnectionCheck.Input.Path,
+                headers: Operations.RequestConnectionCheck.Input.Headers
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Accepted: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/checks/POST/responses/202/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/checks/POST/responses/202/content/application\/json`.
+                    case json(Components.Schemas.Connection)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Connection {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.RequestConnectionCheck.Output.Accepted.Body
+                /// Creates a new `Accepted`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.RequestConnectionCheck.Output.Accepted.Body) {
+                    self.body = body
+                }
+            }
+            /// The check is queued.
+            ///
+            /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/checks/post(requestConnectionCheck)/responses/202`.
+            ///
+            /// HTTP response code: `202 accepted`.
+            case accepted(Operations.RequestConnectionCheck.Output.Accepted)
+            /// The associated value of the enum case if `self` is `.accepted`.
+            ///
+            /// - Throws: An error if `self` is not `.accepted`.
+            /// - SeeAlso: `.accepted`.
+            public var accepted: Operations.RequestConnectionCheck.Output.Accepted {
+                get throws {
+                    switch self {
+                    case let .accepted(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "accepted",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/checks/post(requestConnectionCheck)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request conflicts with the current state, for example `version_conflict`,
+            /// `invalid_state_transition`, `already_exists`, or a marketplace that is not connected.
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/checks/post(requestConnectionCheck)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/checks/post(requestConnectionCheck)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// The account's connection health summary
+    ///
+    /// Every marketplace's connection (as `listConnections`), what needs the seller's
+    /// attention (broken or failing connections and grants that end within 30 days), the
+    /// banner the app shows while anything does, and sale email forwarding.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/connection-health`.
+    /// - Remark: Generated from `#/paths//v1/connection-health/get(getConnectionHealth)`.
+    public enum GetConnectionHealth {
+        public static let id: Swift.String = "getConnectionHealth"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/connection-health/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetConnectionHealth.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetConnectionHealth.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetConnectionHealth.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.GetConnectionHealth.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/connection-health/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/connection-health/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ConnectionHealthSummary)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ConnectionHealthSummary {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetConnectionHealth.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetConnectionHealth.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The summary.
+            ///
+            /// - Remark: Generated from `#/paths//v1/connection-health/get(getConnectionHealth)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetConnectionHealth.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetConnectionHealth.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/connection-health/get(getConnectionHealth)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// List sales
     ///
     /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.

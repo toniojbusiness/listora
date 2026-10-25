@@ -1,15 +1,17 @@
 import {
+  CONNECTION_CHECK_TASK,
   CONNECTION_HEALTH_SCHEDULE,
   CONNECTION_HEALTH_TASK,
   ConnectionSeller,
   ConnectionTokens,
   OAuthGrantRevoker,
   runConnectionHealthChecks,
+  runRequestedHealthCheck,
   type TokenVault,
 } from '@listora/connections';
 import type { Db } from '@listora/db';
 import type { EbayConfig, EbaySellerSource, OAuthClients } from '@listora/marketplaces';
-import type { ScheduledTask } from '@listora/operations';
+import type { ScheduledTask, WorkerTask } from '@listora/operations';
 import type { Logger } from '@listora/shared';
 
 export interface ConnectionWorkDependencies {
@@ -30,20 +32,29 @@ export interface ConnectionWork {
   ebaySeller: EbaySellerSource | undefined;
   /** The daily health check. */
   scheduledTasks: ScheduledTask[];
+  /** The check one seller asked for ("Retry check", `connection_health_check`). */
+  tasks: Record<string, WorkerTask>;
   /** Revokes a deleted account's grants through the marketplace (account deletion job). */
   revoker: OAuthGrantRevoker | undefined;
 }
 
 /**
- * The worker's side of marketplace connections (docs/features/marketplaces.md): the eBay
- * adapter's per-connection tokens, the daily `connection_health` check, and the revocations
+ * The worker's side of marketplace connections (docs/features/connections.md): the eBay
+ * adapter's per-connection tokens, the daily `connection_health` check and the
+ * `connection_health_check` the seller asks for, and the revocations
  * account deletion asks for. Without a vault none of them can open a token, so none runs, and
  * the eBay adapter keeps its configured development seller (`EBAY_USER_*`), if any.
  */
 export function createConnectionWork(deps: ConnectionWorkDependencies): ConnectionWork {
   const { vault, oauth, db, logger, ebay } = deps;
   if (vault === undefined || Object.keys(oauth).length === 0) {
-    return { tokens: undefined, ebaySeller: undefined, scheduledTasks: [], revoker: undefined };
+    return {
+      tokens: undefined,
+      ebaySeller: undefined,
+      scheduledTasks: [],
+      tasks: {},
+      revoker: undefined,
+    };
   }
   const tokens = new ConnectionTokens({ db, vault, oauth, logger });
   return {
@@ -63,6 +74,11 @@ export function createConnectionWork(deps: ConnectionWorkDependencies): Connecti
         },
       },
     ],
+    tasks: {
+      [CONNECTION_CHECK_TASK]: async (payload) => {
+        await runRequestedHealthCheck({ db, tokens, oauth, logger }, payload);
+      },
+    },
     revoker: new OAuthGrantRevoker({ vault, oauth, logger }),
   };
 }

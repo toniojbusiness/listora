@@ -112,7 +112,11 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
 
     const accessToken = await signIn(api, apiUrl, E2E_EMAIL);
     await connectEbay({ apiUrl, accessToken }, fakeEbay);
-    const control = await startStackControl({ api: { apiUrl, accessToken }, fakeEbay });
+    const control = await startStackControl({
+      api: { apiUrl, accessToken },
+      fakeEbay,
+      db: database.db,
+    });
     closers.push(() => control.close());
     return { apiUrl, email: E2E_EMAIL, accessToken, controlUrl: control.url, stop };
   } catch (error) {

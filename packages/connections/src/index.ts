@@ -28,11 +28,20 @@ export { ConnectionSeller } from './ebay-seller.ts';
 export type { AccessTokenResult, ConnectionTokensDependencies } from './credentials.ts';
 export {
   checkConnectionHealth,
+  CONNECTION_CHECK_TASK,
   CONNECTION_HEALTH_SCHEDULE,
   CONNECTION_HEALTH_TASK,
   runConnectionHealthChecks,
+  runRequestedHealthCheck,
 } from './health.ts';
 export type { ConnectionHealthDependencies, HealthCheckSummary } from './health.ts';
+export { SALE_FORWARDING, summarizeConnectionHealth } from './health-summary.ts';
+export type {
+  ConnectionAttentionView,
+  ConnectionHealthSummaryView,
+  SaleForwardingView,
+  StatusDisplayView,
+} from './health-summary.ts';
 export { KmsTokenVault } from './kms-vault.ts';
 export type { KmsTokenVaultOptions } from './kms-vault.ts';
 export { LocalTokenVault } from './local-vault.ts';
@@ -40,15 +49,29 @@ export { ebayRevocation, recordAuthorizationRevocation } from './revocation.ts';
 export type { AuthorizationRevocation } from './revocation.ts';
 export { OAuthGrantRevoker } from './revoker.ts';
 export type { GrantTokens } from './revoker.ts';
+export {
+  CONNECTION_BROKEN_CATEGORY,
+  connectionBrokenNotification,
+  notifyConnectionBroken,
+} from './notifications.ts';
+export type { BrokenConnection } from './notifications.ts';
 export { describeConnection, EXPIRY_WARNING_MS } from './status-display.ts';
 export type {
   ConnectionAction,
+  ConnectionAttentionReason,
   ConnectionTone,
   ConnectionView,
   ConnectionViewStatus,
   DescribeConnectionInput,
 } from './status-display.ts';
-export { accountConnections, recordHealth } from './store.ts';
+export {
+  accountConnections,
+  CHECK_PENDING_MS,
+  checkPending,
+  finishHealthCheck,
+  recordHealth,
+  requestHealthCheck,
+} from './store.ts';
 export type { ConnectionProblem, ConnectionRow, HealthUpdate } from './store.ts';
 export {
   cookieOnDomains,
