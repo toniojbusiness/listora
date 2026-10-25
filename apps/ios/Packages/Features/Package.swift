@@ -17,6 +17,7 @@ let package = Package(
         .library(name: "MarketplacesFeature", targets: ["MarketplacesFeature"]),
         .library(name: "TagReadingFeature", targets: ["TagReadingFeature"]),
         .library(name: "ShareLinkFeature", targets: ["ShareLinkFeature"]),
+        .library(name: "MarketplaceLinkingFeature", targets: ["MarketplaceLinkingFeature"]),
     ],
     dependencies: [
         .package(path: "../Core"),
@@ -42,6 +43,7 @@ let package = Package(
                 "SettingsFeature",
                 "MarketplacesFeature",
                 "TagReadingFeature",
+                "MarketplaceLinkingFeature",
             ],
         ),
         .target(
@@ -87,6 +89,15 @@ let package = Package(
             name: "ShareLinkFeature",
             dependencies: [
                 "Core",
+                "DesignSystem",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+            ],
+        ),
+        // Link accounts: sign in on a marketplace's own page and hand Listora its session.
+        .target(
+            name: "MarketplaceLinkingFeature",
+            dependencies: [
                 "DesignSystem",
                 "APIClient",
                 .product(name: "ListoraAPI", package: "swift"),
@@ -140,6 +151,14 @@ let package = Package(
             dependencies: [
                 "ShareLinkFeature",
                 "Core",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+            ],
+        ),
+        .testTarget(
+            name: "MarketplaceLinkingFeatureTests",
+            dependencies: [
+                "MarketplaceLinkingFeature",
                 "APIClient",
                 .product(name: "ListoraAPI", package: "swift"),
             ],
