@@ -58,6 +58,7 @@ describe('loadDeployTarget', () => {
       githubRepository: 'acme/listora',
       alarmEmail: undefined,
       ownerEmail: undefined,
+      ownerEmailIdentity: 'create',
       availabilityZones: undefined,
     });
   });
@@ -238,6 +239,25 @@ describe('loadDeployTarget', () => {
         LISTORA_OWNER_EMAIL: 'Owner@Example.com',
       }).ownerEmail,
     ).toBe('owner@example.com');
+  });
+
+  it('creates the owner email identity unless told it already exists, and only with an owner pool', () => {
+    const personal = { ...NO_DOMAIN, ...PERSONAL };
+    expect(loadDeployTarget(fromRecord(personal), {}).ownerEmailIdentity).toBe('create');
+    expect(
+      loadDeployTarget(fromRecord({ ...personal, ownerEmailIdentity: 'existing' }), {})
+        .ownerEmailIdentity,
+    ).toBe('existing');
+    expect(
+      loadDeployTarget(fromRecord(personal), { LISTORA_OWNER_EMAIL_IDENTITY: 'existing' })
+        .ownerEmailIdentity,
+    ).toBe('existing');
+    expect(issuesOf({ ...personal, ownerEmailIdentity: 'adopt' })).toEqual([
+      'ownerEmailIdentity (context) or LISTORA_OWNER_EMAIL_IDENTITY (environment) must be create or existing',
+    ]);
+    expect(issuesOf({ ...VALID, ownerEmailIdentity: 'existing' })).toEqual([
+      'ownerEmailIdentity (context) or LISTORA_OWNER_EMAIL_IDENTITY (environment) is only for an environment with an owner pool',
+    ]);
   });
 
   it('refuses an owner email where the environment has no owner pool, since nothing would read it', () => {

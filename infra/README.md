@@ -257,7 +257,10 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
    AWS emails it "Amazon Web Services - Email Address Verification Request"; click its link
    while the script waits (30 minutes at most; run the script again after that). No email?
    `aws ses verify-email-identity --email-address <owner> --profile <profile>` sends it again.
-   Later deploys find it verified and go straight on.
+   Later deploys find it verified and go straight on. If the account already has the owner's
+   address as an SES identity that no Listora stack owns, the script leaves it alone
+   (`ownerEmailIdentity=existing`, `LISTORA_OWNER_EMAIL_IDENTITY`) and only waits until it is
+   verified, since CloudFormation cannot create an identity that already exists.
 8. **Stores the Anthropic key** in `listora/personal/anthropic-api-key` from a private
    temporary file, only when it differs; if the services were already running, it restarts
    them so they read it.

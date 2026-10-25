@@ -172,6 +172,10 @@ describe('scripts/deploy-personal.sh', () => {
       stderr: 'An error occurred (ValidationError): Stack with id x does not exist',
       status: 254,
     },
+    'sesv2 get-email-identity': {
+      stderr: 'An error occurred (NotFoundException) when calling the GetEmailIdentity operation',
+      status: 254,
+    },
   };
   const toolkit = (policies: string): Answer => ({
     stdout: JSON.stringify({
@@ -184,6 +188,30 @@ describe('scripts/deploy-personal.sh', () => {
         },
       ],
     }),
+  });
+
+  it('creates the owner email identity only when the account does not already have it', () => {
+    const synthOf = (answers: Record<string, Answer>) => {
+      const run = deploy(['--profile', 'p'], { ...freshAccount, ...answers });
+      return { run, synth: run.calls.find((call) => call.startsWith('npx cdk synth')) ?? '' };
+    };
+    // A fresh account: the email stack creates it (and AWS emails the verification link).
+    expect(synthOf({}).synth).toContain('--context ownerEmailIdentity=create');
+
+    // Already in the account, outside Listora's stacks: left alone, never taken over.
+    const outside = synthOf({
+      'sesv2 get-email-identity': { stdout: '{"VerifiedForSendingStatus": true}' },
+      'cloudformation list-stack-resources': { stdout: '' },
+    });
+    expect(outside.synth).toContain('--context ownerEmailIdentity=existing');
+    expect(outside.run.output).toContain('already in the account outside Listora');
+
+    // Made by Listora's email stack on an earlier deploy: the stack keeps managing it.
+    const owned = synthOf({
+      'sesv2 get-email-identity': { stdout: '{"VerifiedForSendingStatus": true}' },
+      'cloudformation list-stack-resources': { stdout: `${OWNER}\n` },
+    });
+    expect(owned.synth).toContain('--context ownerEmailIdentity=create');
   });
 
   it("refuses Listora's bootstrap when it is not the restricted one, changing nothing", () => {
