@@ -15,6 +15,8 @@ import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { Tenant } from '../tenancy.ts';
+import { findListing } from './repository.ts';
+import { listingStates } from './views.ts';
 import { createTestApi, fieldsOf, type SuccessBody, type TestApi } from '../test-support.ts';
 
 const OWNER = 'listing.owner@example.com';
@@ -312,6 +314,19 @@ describe('listing actions through the operation engine and the fake eBay (real P
       'create',
     ]);
     expect(operations.body.data[1]?.statusDisplay.label).toBe('Delisted (confirmed by eBay)');
+  });
+
+  it('reads a listing and its newest operation from one snapshot, never a stale row', async () => {
+    const ready = await readyItem();
+    const draft = await draftListing(ready.id);
+    await api.call('publishListing', { token, params: { listingId: draft.id } });
+    await settled(draft.id);
+    // A row read before the worker recorded the result, as a caller may hold one.
+    const stale = await findListing(api.db, tenant, draft.id);
+    if (!stale) throw new Error('no listing');
+    const [state] = await listingStates(api.db, tenant, [{ ...stale, status: 'draft' }]);
+    expect(state?.row.status).toBe('active');
+    expect(state?.operation?.status).toBe('succeeded');
   });
 
   it('refuses a publish eBay would refuse, before anything is queued', async () => {

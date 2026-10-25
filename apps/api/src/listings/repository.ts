@@ -62,6 +62,16 @@ export async function itemListingRows(
   return byItem;
 }
 
+/** The listings with these ids (of the tenant's account), in no particular order. */
+export async function listingRowsByIds(
+  db: DbExecutor,
+  tenant: Tenant,
+  listingIds: readonly string[],
+): Promise<ListingRow[]> {
+  if (listingIds.length === 0) return [];
+  return listingQuery(db, tenant).where('listing.id', 'in', listingIds).execute();
+}
+
 export async function findListing(
   db: DbExecutor,
   tenant: Tenant,

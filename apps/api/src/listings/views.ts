@@ -16,7 +16,12 @@ import { assertNever } from '@listora/shared';
 
 import { operationView } from '../operations/views.ts';
 import type { Tenant } from '../tenancy.ts';
-import { latestOperations, type ListingRow, type OperationRow } from './repository.ts';
+import {
+  latestOperations,
+  listingRowsByIds,
+  type ListingRow,
+  type OperationRow,
+} from './repository.ts';
 
 const MARKETPLACE_NAMES = {
   ebay: 'eBay',
@@ -249,18 +254,34 @@ export function listingSummaryView(state: ListingState): ListingStatusSummary {
   };
 }
 
-/** Each row with its newest operation that was not canceled. */
+/**
+ * Each row with its newest operation that was not canceled, both read again from one snapshot.
+ * The worker records an operation's result and the listing's state in one transaction, so a
+ * listing and its operation read in separate statements could straddle that commit: an ended
+ * row with the relist that just succeeded would read "Delisted (confirmed by eBay)" for a live
+ * listing. Inside a transaction (a POST) the caller's locks already keep them consistent.
+ */
 export async function listingStates(
   db: DbExecutor,
   tenant: Tenant,
   rows: readonly ListingRow[],
 ): Promise<ListingState[]> {
-  const operations = await latestOperations(
-    db,
-    tenant,
-    rows.map((row) => row.id),
-  );
-  return rows.map((row) => ({ row, operation: operations.get(row.id) }));
+  if (rows.length === 0) return [];
+  const ids = rows.map((row) => row.id);
+  const read = async (snapshot: DbExecutor): Promise<ListingState[]> => {
+    const [fresh, operations] = [
+      await listingRowsByIds(snapshot, tenant, ids),
+      await latestOperations(snapshot, tenant, ids),
+    ];
+    const byId = new Map(fresh.map((row) => [row.id, row]));
+    // A listing deleted meanwhile (with its account) keeps the row the caller read.
+    return rows.map((row) => {
+      const current = byId.get(row.id) ?? row;
+      return { row: current, operation: operations.get(row.id) };
+    });
+  };
+  if (db.isTransaction) return read(db);
+  return db.transaction().setIsolationLevel('repeatable read').execute(read);
 }
 
 /** `listingView` for rows read without their operations. */
