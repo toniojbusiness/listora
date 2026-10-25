@@ -82,7 +82,8 @@ Packages/
     TasksFeature      Tasks tab
     SettingsFeature   Settings tab, with the developer sign-in in Dev builds
     MarketplacesFeature  Marketplaces screen (from Settings): each marketplace's connection
-                      status, and connecting eBay through ASWebAuthenticationSession
+                      health, connecting eBay through ASWebAuthenticationSession, Retry
+                      check, and the connection banner Inventory shows
     TagReadingFeature On-device tag reading with Vision (VisionTagReader); no UI
     ShareLinkFeature  The Share Extension's screen (ShareLinkView, ShareLinkModel)
 ```

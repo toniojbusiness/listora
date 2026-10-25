@@ -135,6 +135,10 @@ paths:
     $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1authorizations~1{authorizationId}'
   /v1/connections/{marketplace}/callback:
     $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1callback'
+  /v1/connections/{marketplace}/checks:
+    $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1checks'
+  /v1/connection-health:
+    $ref: './paths/connections.yaml#/~1v1~1connection-health'
   /v1/sales:
     $ref: './paths/sales.yaml#/~1v1~1sales'
   /v1/sales/{saleId}:
@@ -514,6 +518,20 @@ components:
       $ref: './components/schemas/connections.yaml#/ConnectionAuthorizationStatus'
     ConnectionAuthorization:
       $ref: './components/schemas/connections.yaml#/ConnectionAuthorization'
+    ConnectionAttentionReason:
+      $ref: './components/schemas/connections.yaml#/ConnectionAttentionReason'
+    KnownConnectionAttentionReason:
+      $ref: './components/schemas/connections.yaml#/KnownConnectionAttentionReason'
+    ConnectionAttention:
+      $ref: './components/schemas/connections.yaml#/ConnectionAttention'
+    SaleForwardingStatus:
+      $ref: './components/schemas/connections.yaml#/SaleForwardingStatus'
+    KnownSaleForwardingStatus:
+      $ref: './components/schemas/connections.yaml#/KnownSaleForwardingStatus'
+    SaleForwarding:
+      $ref: './components/schemas/connections.yaml#/SaleForwarding'
+    ConnectionHealthSummary:
+      $ref: './components/schemas/connections.yaml#/ConnectionHealthSummary'
     # ---------------------------------------------------------------- sales
     SaleStatus:
       $ref: './components/schemas/sales.yaml#/SaleStatus'

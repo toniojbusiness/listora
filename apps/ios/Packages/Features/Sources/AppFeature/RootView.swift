@@ -8,10 +8,13 @@ import SettingsFeature
 import SwiftUI
 import TasksFeature
 
-/// The app's root: one tab per top-level area.
+/// The app's root: one tab per top-level area. While a marketplace connection needs attention,
+/// Inventory shows the connection banner, which opens Marketplaces in Settings, and the
+/// Settings tab has a badge.
 public struct RootView: View {
     private let dependencies: AppDependencies
     @State private var selection: AppTab
+    @State private var settingsPath: [SettingsDestination] = []
     @Environment(\.scenePhase) private var scenePhase
 
     public init(dependencies: AppDependencies, initialTab: AppTab = .inventory) {
@@ -25,12 +28,16 @@ public struct RootView: View {
                 Tab(tab.title, systemImage: tab.systemImage, value: tab) {
                     screen(for: tab)
                 }
+                .badge(tab == .settings ? dependencies.marketplaces.attention?.count ?? 0 : 0)
             }
         }
         .tint(Palette.brand.color)
         .background { WindowTapCounter { [meter = dependencies.interactionMeter] in meter.recordTap() } }
         .onChange(of: scenePhase, initial: true) { _, phase in
             dependencies.interactionMeter.setAppActive(phase == .active)
+            if phase == .active {
+                Task { await dependencies.marketplaces.refreshAttention() }
+            }
         }
         .task { dependencies.startBackgroundWork() }
     }
@@ -39,7 +46,16 @@ public struct RootView: View {
     private func screen(for tab: AppTab) -> some View {
         switch tab {
         case .inventory:
-            InventoryView(environment: dependencies.inventory) { selection = .addItem }
+            InventoryView(
+                environment: dependencies.inventory,
+                onAddItem: { selection = .addItem },
+                header: {
+                    ConnectionAttentionBanner(model: dependencies.marketplaces) {
+                        settingsPath = [.marketplaces]
+                        selection = .settings
+                    }
+                },
+            )
         case .addItem:
             AddItemView(environment: dependencies.addItem)
         case .tasks:
@@ -48,6 +64,8 @@ public struct RootView: View {
             SettingsView(
                 content: SettingsContent(configuration: dependencies.configuration, version: dependencies.version),
                 devSignIn: dependencies.devSignIn,
+                path: $settingsPath,
+                marketplacesAttention: dependencies.marketplaces.attention == nil ? nil : "Needs attention",
             ) {
                 MarketplacesView(model: dependencies.marketplaces)
             }

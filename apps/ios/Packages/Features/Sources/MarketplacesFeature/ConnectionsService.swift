@@ -7,6 +7,13 @@ import ListoraAPI
 public protocol ConnectionsService: Sendable {
     /// Every marketplace and its connection, in the server's order.
     func connections() async throws(APIFailure) -> [Components.Schemas.Connection]
+    /// The health summary: every connection, what needs attention, the banner, sale emails.
+    func health() async throws(APIFailure) -> Components.Schemas.ConnectionHealthSummary
+    /// Asks the server to check a connection now (Retry check); answers the connection, checking.
+    func requestCheck(
+        marketplace: Components.Schemas.KnownMarketplace,
+        idempotencyKey: String,
+    ) async throws(APIFailure) -> Components.Schemas.Connection
     /// Starts connecting a marketplace account: the attempt, with the consent URL to open.
     func startAuthorization(
         marketplace: Components.Schemas.KnownMarketplace,
@@ -32,6 +39,38 @@ public struct APIConnectionsService: ConnectionsService {
         switch output {
         case let .ok(response):
             return try body { try response.body.json }.data
+        case let .default(statusCode, response):
+            throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    public func health() async throws(APIFailure) -> Components.Schemas.ConnectionHealthSummary {
+        let output = try await call { try await client.getConnectionHealth() }
+        switch output {
+        case let .ok(response):
+            return try body { try response.body.json }
+        case let .default(statusCode, response):
+            throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    public func requestCheck(
+        marketplace: Components.Schemas.KnownMarketplace,
+        idempotencyKey: String,
+    ) async throws(APIFailure) -> Components.Schemas.Connection {
+        let output = try await call {
+            try await client.requestConnectionCheck(
+                path: .init(marketplace: marketplace),
+                headers: .init(idempotencyKey: idempotencyKey),
+            )
+        }
+        switch output {
+        case let .accepted(accepted):
+            return try body { try accepted.body.json }
+        case let .notFound(response):
+            throw APIFailure(statusCode: 404, response: response)
+        case let .conflict(response):
+            throw APIFailure(statusCode: 409, response: response)
         case let .default(statusCode, response):
             throw APIFailure(statusCode: statusCode, response: response)
         }

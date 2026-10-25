@@ -192,7 +192,8 @@ src/
   listings/      Draft listings, the listing actions (publish, price, revise, end, relist,
                  verify) queued on the operation engine, honest views, shared-listing links
   operations/    Operations, their history, Retry, and Cancel
-  connections/   Marketplace connections, connect attempts, and the public OAuth callback
+  connections/   Marketplace connections, the health summary and Retry check, connect attempts,
+                 and the public OAuth callback
   sales/         The sales feed (listSales, getSale) with each sale's delist runs and double sales
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
 ```
@@ -374,6 +375,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | [features/operations.md](features/operations.md)                 | The operation engine, the honest status vocabulary                            |
 | [features/auto-delist.md](features/auto-delist.md)               | Sale intake, the delist fan-out, delist runs, SLA re-alerts, double sales     |
+| [features/connections.md](features/connections.md)               | Connecting accounts, the token vault, health checks, the health dashboard     |
 | [features/push.md](features/push.md)                             | Push notifications: the outbox job and the drivers                            |
 | [features/marketplaces.md](features/marketplaces.md)             | The adapter interface, capabilities, assisted adapters, conformance, listings |
 | [features/ebay.md](features/ebay.md)                             | The eBay adapter, the fake eBay, the sandbox check                            |

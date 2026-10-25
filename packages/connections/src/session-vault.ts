@@ -32,6 +32,7 @@ import {
 } from '@listora/db';
 import type { Logger } from '@listora/shared';
 
+import { notifyConnectionBroken } from './notifications.ts';
 import {
   cookieOnDomains,
   liveCookies,
@@ -270,7 +271,8 @@ export class SessionVault {
 
   /**
    * Discards the session `version` and asks the seller to log in again: the connection becomes
-   * `reauth_required` with the reason, and one `reconnect` task is open for it. Does nothing
+   * `reauth_required` with the reason, and one `reconnect` task is open for it; opening it
+   * also queues the seller's break notification (notifications.ts). Does nothing
    * (and returns false) when the stored session is no longer that version: the seller already
    * linked a new one, which this check says nothing about.
    */
@@ -289,6 +291,7 @@ export class SessionVault {
           last_error: reason.message,
           last_error_code: reason.kind,
           last_error_at: sql<Date>`now()`,
+          last_checked_at: sql<Date>`now()`,
         })
         .where('account_id', '=', key.accountId)
         .where('id', '=', key.connectionId)
@@ -314,6 +317,17 @@ export class SessionVault {
             }),
           })
           .execute();
+        // The first break since the seller last linked (linking closes the task): tell them.
+        await notifyConnectionBroken(
+          trx,
+          {
+            connectionId: key.connectionId,
+            accountId: key.accountId,
+            marketplace: updated.marketplace,
+            message: reason.message,
+          },
+          new Date(),
+        );
       }
       this.#logger.warn(
         { accountId: key.accountId, connectionId: key.connectionId, reason: reason.kind },

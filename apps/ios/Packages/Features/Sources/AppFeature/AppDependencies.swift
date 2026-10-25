@@ -85,7 +85,10 @@ public struct AppDependencies {
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
-        marketplaces = MarketplacesModel(service: APIConnectionsService(client: apiClient.client))
+        marketplaces = MarketplacesModel(
+            service: APIConnectionsService(client: apiClient.client),
+            isSignedIn: { accessTokens.grant != nil },
+        )
         devSignIn = configuration.environment == .dev
             ? DevSignInModel(client: DevSignInClient(baseURL: configuration.apiBaseURL), tokens: accessTokens)
             : nil

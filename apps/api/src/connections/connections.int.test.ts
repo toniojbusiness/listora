@@ -7,6 +7,7 @@ import {
   FakeEbay,
   loadEbayConfig,
 } from '@listora/marketplaces';
+import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestApi, type TestApi } from '../test-support.ts';
@@ -92,7 +93,7 @@ describe('marketplace connections API (fake eBay)', () => {
       expect(connection).toMatchObject({
         mode: 'assisted',
         status: 'not_connected',
-        statusDisplay: { label: 'Assisted' },
+        statusDisplay: { label: 'Not linked' },
         availableActions: [],
         capabilities: { connect: 'none', create: 'assisted', verifyRead: 'user_confirm' },
       });
@@ -210,6 +211,162 @@ describe('marketplace connections API (fake eBay)', () => {
     expect(read.status).toBe(404);
   });
 
+  /** Signs in and connects eBay end to end; returns the token and the connection's id. */
+  async function connectedAccount(email: string) {
+    const token = await api.signIn(email);
+    const attempt = await start(token);
+    await followRedirect(fake.consent(attempt.authorizationUrl ?? ''));
+    const tenant = await api.tenantOf(email);
+    const row = await api.db
+      .selectFrom('marketplace_connection')
+      .select('id')
+      .where('account_id', '=', tenant.accountId)
+      .executeTakeFirstOrThrow();
+    return { token, connectionId: row.id };
+  }
+
+  async function setConnection(
+    connectionId: string,
+    values: { status: 'degraded' | 'reauth_required'; code: string; message: string },
+  ) {
+    await api.db
+      .updateTable('marketplace_connection')
+      .set({
+        status: values.status,
+        last_error: values.message,
+        last_error_code: values.code,
+        last_error_at: new Date(),
+      })
+      .where('id', '=', connectionId)
+      .execute();
+  }
+
+  describe('connection health', () => {
+    it('summarizes an account with nothing connected: no attention, email forwarding needs a domain', async () => {
+      const token = await api.signIn('health-none@example.com');
+      const health = await api.call('getConnectionHealth', { token });
+      expect(health.status).toBe(200);
+      expect(health.body).toEqual({
+        needsAttention: false,
+        attention: [],
+        connections: (await api.call('listConnections', { token })).body.data,
+        saleForwarding: {
+          status: 'needs_domain',
+          statusDisplay: {
+            tone: 'neutral',
+            label: 'Set up when you add a domain',
+            detail:
+              "Forwarding your marketplaces' sale emails to Listora lets it spot sales sooner. It needs Listora's email domain, which isn't set up yet.",
+          },
+        },
+      });
+      expect(health.body.connections.map((connection) => connection.statusDisplay.label)).toEqual([
+        'Not connected',
+        'Not linked',
+        'Not linked',
+        'Not linked',
+      ]);
+    });
+
+    it('raises the banner while a connection needs the seller, with what to do', async () => {
+      const { token, connectionId } = await connectedAccount('health-broken@example.com');
+      const healthy = await api.call('getConnectionHealth', { token });
+      expect(healthy.body).toMatchObject({ needsAttention: false, attention: [] });
+      expect(healthy.body.connections[0]).toMatchObject({
+        status: 'connected',
+        statusDisplay: { label: 'Connected' },
+      });
+      expect(healthy.body.connections[0]?.lastOkAt).toBeDefined();
+
+      await setConnection(connectionId, {
+        status: 'reauth_required',
+        code: 'grant_revoked',
+        message: 'eBay no longer accepts Listora. Reconnect eBay.',
+      });
+      const broken = await api.call('getConnectionHealth', { token });
+      expect(broken.body).toMatchObject({
+        needsAttention: true,
+        banner: {
+          tone: 'action_needed',
+          label: 'Reconnect eBay',
+          detail: 'eBay no longer accepts Listora. Reconnect eBay.',
+        },
+        attention: [
+          {
+            marketplace: 'ebay',
+            reason: 'reconnect',
+            statusDisplay: { label: 'Reconnect needed' },
+          },
+        ],
+      });
+      expect(broken.body.connections[0]).toMatchObject({
+        status: 'reauth_required',
+        availableActions: ['reconnect'],
+      });
+    });
+
+    it('Retry check: queues the worker check and answers Checking; refuses what a check cannot fix', async () => {
+      const { token, connectionId } = await connectedAccount('health-retry@example.com');
+      await setConnection(connectionId, {
+        status: 'degraded',
+        code: 'marketplace_error',
+        message: 'eBay had a problem.',
+      });
+      const before = await api.call('getConnection', { token, params: { marketplace: 'ebay' } });
+      expect(before.body).toMatchObject({
+        statusDisplay: { label: 'Connection problem' },
+        availableActions: ['check', 'reconnect'],
+      });
+
+      const checked = await api.call('requestConnectionCheck', {
+        token,
+        params: { marketplace: 'ebay' },
+      });
+      expect(checked.status).toBe(202);
+      expect(checked.body).toMatchObject({
+        status: 'degraded',
+        statusDisplay: { tone: 'checking', label: 'Checking...' },
+        availableActions: [],
+      });
+      const jobs = (
+        await sql<{ key: string; payload: unknown }>`
+          select job.key, job.payload from graphile_worker._private_jobs as job
+          join graphile_worker._private_tasks as t on t.id = job.task_id
+          where t.identifier = 'connection_health_check'
+        `.execute(api.db)
+      ).rows;
+      expect(jobs).toContainEqual({
+        key: `connection_check:${connectionId}`,
+        payload: { connectionId },
+      });
+      const summary = await api.call('getConnectionHealth', { token });
+      expect(summary.body.connections[0]?.statusDisplay.label).toBe('Checking...');
+
+      await setConnection(connectionId, {
+        status: 'reauth_required',
+        code: 'grant_revoked',
+        message: 'Reconnect eBay.',
+      });
+      const refused = await api.call('requestConnectionCheck', {
+        token,
+        params: { marketplace: 'ebay' },
+      });
+      expect(refused.status).toBe(409);
+      expect(refused.error).toMatchObject({
+        code: 'invalid_state_transition',
+        message: "Listora can't check this eBay connection. Reconnect eBay.",
+      });
+
+      const other = await api.signIn('health-nothing@example.com');
+      const nothing = await api.call('requestConnectionCheck', {
+        token: other,
+        params: { marketplace: 'ebay' },
+      });
+      expect(nothing.status).toBe(409);
+      expect(nothing.error.message).toBe('Connect eBay first.');
+    });
+  });
+
   it('refuses to start a connection for a marketplace that has no OAuth connection', async () => {
     const token = await api.signIn('poshmark@example.com');
     const started = await api.call('startConnectionAuthorization', {
@@ -253,5 +410,14 @@ describe('marketplace connections API without eBay or a token vault', () => {
     });
     expect(started.status).toBe(409);
     expect(started.error.message).toBe("Listora can't connect eBay accounts yet.");
+    const checked = await api.call('requestConnectionCheck', {
+      token,
+      params: { marketplace: 'ebay' },
+    });
+    expect(checked.status).toBe(409);
+    expect(checked.error).toMatchObject({
+      code: 'marketplace_action_unavailable',
+      message: "Listora can't check eBay connections yet.",
+    });
   });
 });

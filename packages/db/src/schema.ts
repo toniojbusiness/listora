@@ -355,6 +355,10 @@ export interface MarketplaceConnectionTable {
    * so a runner holding an older session never overwrites a newer one.
    */
   credential_version: Generated<number>;
+  /** When the latest health check or use of the connection finished, whatever it found. */
+  last_checked_at: NullableTimestamp;
+  /** When the seller last asked for a check; pending while later than `last_checked_at`. */
+  check_requested_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }

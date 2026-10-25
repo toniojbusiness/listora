@@ -127,7 +127,9 @@ final class StubAPIServer: @unchecked Sendable {
         case ("POST", "/v1/items/\(Self.itemId)/listing-links"):
             return Self.http(status: "201 Created", body: Self.linkedListing)
         case ("GET", "/v1/connections"):
-            return Self.http(status: "200 OK", body: Self.connections)
+            return Self.http(status: "200 OK", body: #"{"data":\#(Self.connections)}"#)
+        case ("GET", "/v1/connection-health"):
+            return Self.http(status: "200 OK", body: Self.connectionHealth)
         default:
             return Self.http(
                 status: "404 Not Found",
@@ -184,8 +186,16 @@ final class StubAPIServer: @unchecked Sendable {
     "availableActions":[],"createdAt":"2026-10-24T12:00:00Z","updatedAt":"2026-10-24T12:00:00Z"}
     """
 
-    /// The Marketplaces screen before eBay is connected, in the words the server uses
-    /// (`packages/connections/src/status-display.ts`).
+    /// The Marketplaces screen before eBay is connected: the health summary, nothing needing
+    /// attention (`packages/connections/src/health-summary.ts`).
+    private static let connectionHealth = #"{"needsAttention":false,"attention":[],"#
+        + #""connections":\#(connections),"saleForwarding":{"status":"needs_domain","statusDisplay":"#
+        + #"{"tone":"neutral","label":"Set up when you add a domain","detail":"Forwarding your "#
+        + #"marketplaces' sale emails to Listora lets it spot sales sooner. It needs Listora's email "#
+        + #"domain, which isn't set up yet."}}}"#
+
+    /// Every marketplace's connection before eBay is connected, as a JSON array, in the words the
+    /// server uses (`packages/connections/src/status-display.ts`).
     private static let connections: String = {
         func capabilities(_ mode: String, connect: String) -> String {
             let verify = mode == "api" ? "api" : "user_confirm"
@@ -196,8 +206,9 @@ final class StubAPIServer: @unchecked Sendable {
         }
         func assisted(_ id: String, _ name: String) -> String {
             #"{"marketplace":"\#(id)","mode":"assisted","status":"not_connected","#
-                + #""statusDisplay":{"tone":"neutral","label":"Assisted","detail":"Listora prepares each "#
-                + #"listing and change, and you finish it in the \#(name) app, then confirm it."},"#
+                + #""statusDisplay":{"tone":"neutral","label":"Not linked","detail":"Listora works with "#
+                + #"\#(name) in assisted mode: it prepares each listing and change, and you finish it in the "#
+                + #"\#(name) app, then confirm it."},"#
                 + #""capabilities":\#(capabilities("assisted", connect: "none")),"availableActions":[]}"#
         }
         let ebay = #"{"marketplace":"ebay","mode":"api","status":"not_connected","#
@@ -206,7 +217,7 @@ final class StubAPIServer: @unchecked Sendable {
             + #"with eBay."},"capabilities":\#(capabilities("api", connect: "oauth")),"#
             + #""availableActions":["connect"]}"#
         let all = [ebay, assisted("depop", "Depop"), assisted("poshmark", "Poshmark"), assisted("mercari", "Mercari")]
-        return #"{"data":[\#(all.joined(separator: ","))]}"#
+        return "[\(all.joined(separator: ","))]"
     }()
 }
 

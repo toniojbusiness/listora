@@ -2,17 +2,19 @@
  * A marketplace's notice that a seller's authorization of Listora was revoked (eBay
  * `AUTHORIZATION_REVOCATION`; the notifications task, T-17, verifies and delivers it). It flips
  * every connection of that seller to `revoked` at once and deletes their tokens, so nothing
- * keeps using a dead grant and the app asks the seller to reconnect. A notice dated before a
- * connection's current grant is about an older grant and changes nothing; repeated deliveries
- * change nothing either.
+ * keeps using a dead grant, and the app and a notification ask the seller to reconnect. A
+ * notice dated before a connection's current grant is about an older grant and changes nothing;
+ * repeated deliveries change nothing either.
  */
-import type { DbExecutor, Marketplace } from '@listora/db';
+import { inTransaction, type DbExecutor, type Marketplace } from '@listora/db';
 import {
   MARKETPLACE_NAMES,
   type EbayAuthorizationRevocation,
   type EbayRevokeReason,
 } from '@listora/marketplaces';
 import { assertNever } from '@listora/shared';
+
+import { notifyConnectionBroken, WORKING_STATUSES } from './notifications.ts';
 
 export interface AuthorizationRevocation {
   marketplace: Marketplace;
@@ -27,32 +29,60 @@ export interface AuthorizationRevocation {
 
 /**
  * Marks the seller's connections revoked; returns the ids of the connections it changed (one per
- * Listora account that had connected that seller).
+ * Listora account that had connected that seller). Each one that was working until now also
+ * queues its account's notification; one that already waited for a reconnect has sent it.
  */
 export async function recordAuthorizationRevocation(
   db: DbExecutor,
   revocation: AuthorizationRevocation,
   now: Date = new Date(),
 ): Promise<string[]> {
-  const rows = await db
-    .updateTable('marketplace_connection')
-    .set({
-      status: 'revoked',
-      token_ciphertext: null,
-      last_error: revocation.message,
-      last_error_code: revocation.code,
-      last_error_at: now,
-    })
-    .where('marketplace', '=', revocation.marketplace)
-    .where('external_user_id', '=', revocation.externalUserId)
-    .where('mode', '=', 'api')
-    .where('status', '<>', 'revoked')
-    .where((eb) =>
-      eb.or([eb('granted_at', 'is', null), eb('granted_at', '<=', revocation.revokedAt)]),
-    )
-    .returning('id')
-    .execute();
-  return rows.map((row) => row.id);
+  return inTransaction(db, async (trx) => {
+    const rows = await trx
+      .selectFrom('marketplace_connection')
+      .select(['id', 'account_id', 'status'])
+      .where('marketplace', '=', revocation.marketplace)
+      .where('external_user_id', '=', revocation.externalUserId)
+      .where('mode', '=', 'api')
+      .where('status', '<>', 'revoked')
+      .where((eb) =>
+        eb.or([eb('granted_at', 'is', null), eb('granted_at', '<=', revocation.revokedAt)]),
+      )
+      .orderBy('id')
+      .forUpdate()
+      .execute();
+    if (rows.length === 0) return [];
+    await trx
+      .updateTable('marketplace_connection')
+      .set({
+        status: 'revoked',
+        token_ciphertext: null,
+        last_checked_at: now,
+        last_error: revocation.message,
+        last_error_code: revocation.code,
+        last_error_at: now,
+      })
+      .where(
+        'id',
+        'in',
+        rows.map((row) => row.id),
+      )
+      .execute();
+    for (const row of rows) {
+      if (!(WORKING_STATUSES as readonly string[]).includes(row.status)) continue;
+      await notifyConnectionBroken(
+        trx,
+        {
+          connectionId: row.id,
+          accountId: row.account_id,
+          marketplace: revocation.marketplace,
+          message: revocation.message,
+        },
+        now,
+      );
+    }
+    return rows.map((row) => row.id);
+  });
 }
 
 /** An eBay `AUTHORIZATION_REVOCATION` notification as a revocation. */

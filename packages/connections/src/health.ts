@@ -10,18 +10,25 @@
  * - the marketplace cannot be asked now → `degraded`, with the problem, until a later check
  *   succeeds.
  *
+ * A grant past its end (`refresh_expires_at`) is recorded as `reauth_required` without a call.
  * A connection that needs the seller (`reauth_required`, `revoked`) is not checked: only
  * connecting again can change it. The expiry warning needs no call: it comes from
- * `refresh_expires_at` (`describeConnection`).
+ * `refresh_expires_at` (`describeConnection`). The first change to a status that needs the
+ * seller queues their notification (`recordHealth`).
+ *
+ * The seller's "Retry check" runs the same check for one connection (`connection_health_check`,
+ * `runRequestedHealthCheck`).
  */
 import type { Db } from '@listora/db';
 import { MARKETPLACE_NAMES, type OAuthClients } from '@listora/marketplaces';
 import type { Logger } from '@listora/shared';
 
 import type { ConnectionTokens } from './credentials.ts';
-import { recordHealth, type HealthUpdate } from './store.ts';
+import { finishHealthCheck, recordHealth, type HealthUpdate } from './store.ts';
 
 export const CONNECTION_HEALTH_TASK = 'connection_health';
+/** One connection's check, when the seller asks for it ("Retry check"); payload `connectionId`. */
+export const CONNECTION_CHECK_TASK = 'connection_health_check';
 /** 05:41 UTC every day; Graphile Worker's cron runs it once across all workers. */
 export const CONNECTION_HEALTH_SCHEDULE = '41 5 * * *';
 
@@ -96,8 +103,20 @@ export async function checkConnectionHealth(
   let update: HealthUpdate | undefined;
   for (let attempt = 1; update === undefined; attempt += 1) {
     const token = await deps.tokens.accessToken(connectionId, signal);
-    // The credentials already recorded a refused or failed refresh on the connection.
-    if (token.type === 'reauth_required') return 'reauth_required';
+    if (token.type === 'reauth_required') {
+      // The credentials recorded a refused refresh themselves; a grant that ran out
+      // (`grant_expired`) is recorded here, so the status says so and the seller hears of it.
+      if (token.code !== 'not_connected') {
+        await recordHealth(
+          deps.db,
+          connectionId,
+          { status: 'reauth_required', code: token.code, message: token.message },
+          now(),
+        );
+      }
+      return 'reauth_required';
+    }
+    // The credentials already recorded a failed refresh on the connection.
     if (token.type === 'unavailable') return 'degraded';
     const identity = await oauth.identify(token.accessToken, { signal, now: now() });
     switch (identity.type) {
@@ -136,4 +155,29 @@ export async function checkConnectionHealth(
     );
   }
   return update.status;
+}
+
+/**
+ * The `connection_health_check` job: the check the seller asked for. It always marks the
+ * request finished, so the app stops showing "Checking" even when the connection changed
+ * meanwhile and was not checked.
+ */
+export async function runRequestedHealthCheck(
+  deps: ConnectionHealthDependencies,
+  payload: unknown,
+): Promise<void> {
+  const connectionId =
+    typeof payload === 'object' && payload !== null && 'connectionId' in payload
+      ? payload.connectionId
+      : undefined;
+  if (typeof connectionId !== 'string') {
+    deps.logger.error({ task: CONNECTION_CHECK_TASK }, 'job with an invalid payload; dropping it');
+    return;
+  }
+  const now = deps.now ?? (() => new Date());
+  try {
+    await checkConnectionHealth(deps, connectionId);
+  } finally {
+    await finishHealthCheck(deps.db, connectionId, now());
+  }
 }

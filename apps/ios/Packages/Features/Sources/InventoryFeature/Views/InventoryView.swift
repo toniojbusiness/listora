@@ -4,22 +4,31 @@ import SwiftUI
 
 /// The seller's items and their status on every marketplace, with search and filters. The list
 /// is read from the server each time it appears and on pull to refresh, so a newly saved item
-/// shows up right away.
-public struct InventoryView: View {
+/// shows up right away. `header` sits above the list, below the search field: the app's
+/// banners (a marketplace connection that needs attention) come from the caller (AppFeature),
+/// since a feature never imports another.
+public struct InventoryView<Header: View>: View {
     private let environment: InventoryEnvironment
     private let onAddItem: @MainActor () -> Void
+    private let header: Header
     @State private var model: InventoryListModel
     @State private var path: [ItemRoute] = []
 
-    public init(environment: InventoryEnvironment, onAddItem: @escaping @MainActor () -> Void) {
+    public init(
+        environment: InventoryEnvironment,
+        onAddItem: @escaping @MainActor () -> Void,
+        @ViewBuilder header: () -> Header,
+    ) {
         self.environment = environment
         self.onAddItem = onAddItem
+        self.header = header()
         _model = State(initialValue: environment.makeListModel())
     }
 
     public var body: some View {
         NavigationStack(path: $path) {
             content
+                .safeAreaInset(edge: .top, spacing: 0) { header }
                 .background(Palette.background)
                 .navigationTitle("Inventory")
                 .searchable(text: $model.query.search, prompt: "SKU, title, or brand")
@@ -302,6 +311,13 @@ extension StatusTone {
         case .actionNeeded: self = .actionNeeded
         case .neutral: self = .neutral
         }
+    }
+}
+
+extension InventoryView where Header == EmptyView {
+    /// Inventory without a header.
+    public init(environment: InventoryEnvironment, onAddItem: @escaping @MainActor () -> Void) {
+        self.init(environment: environment, onAddItem: onAddItem) { EmptyView() }
     }
 }
 

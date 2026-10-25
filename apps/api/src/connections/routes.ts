@@ -1,12 +1,14 @@
 import {
   accountConnections,
   completeAuthorization,
+  CONNECTION_CHECK_TASK,
   findAuthorization,
+  requestHealthCheck,
   startAuthorization,
   type CompleteAuthorizationDependencies,
   type TokenSealer,
 } from '@listora/connections';
-import { MARKETPLACES, type Marketplace } from '@listora/db';
+import { addJob, MARKETPLACES, type Marketplace } from '@listora/db';
 import {
   isMarketplace,
   MARKETPLACE_NAMES,
@@ -18,7 +20,12 @@ import type { FastifyInstance } from 'fastify';
 import { operationSpec } from '../contract/contract.ts';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { ApiError } from '../errors.ts';
-import { APP_CALLBACK_SCHEME, authorizationView, connectionView } from './views.ts';
+import {
+  APP_CALLBACK_SCHEME,
+  authorizationView,
+  connectionHealthView,
+  connectionView,
+} from './views.ts';
 
 export interface ConnectionsDependencies {
   /** The same adapters the worker runs with: each marketplace's capabilities. */
@@ -39,9 +46,10 @@ export interface ConnectionRouteDependencies extends RouteDependencies, Connecti
 }
 
 /**
- * Marketplace connections: `listConnections`, `getConnection`, `startConnectionAuthorization`,
+ * Marketplace connections: `listConnections`, `getConnection`, the health summary
+ * `getConnectionHealth`, `requestConnectionCheck` (Retry check), `startConnectionAuthorization`,
  * `getConnectionAuthorization`, and the marketplace's OAuth redirect,
- * `handleConnectionCallback` (docs/features/marketplaces.md; the flow is in
+ * `handleConnectionCallback` (docs/features/connections.md; the flow is in
  * `@listora/connections`).
  */
 export function registerConnectionRoutes(
@@ -70,6 +78,42 @@ export function registerConnectionRoutes(
     return {
       status: 200,
       body: connectionView(params.marketplace, connections.get(params.marketplace), context()),
+    };
+  });
+
+  contractRoute(app, deps, 'getConnectionHealth', async ({ tenant, db }) => {
+    const connections = await accountConnections(db, tenant.accountId);
+    return { status: 200, body: connectionHealthView(connections, context()) };
+  });
+
+  // The worker checks with the settings the API connects with, so `canConnect` decides both.
+  contractRoute(app, deps, 'requestConnectionCheck', async ({ tenant, db, params }) => {
+    const name = MARKETPLACE_NAMES[params.marketplace];
+    if (!canConnect(params.marketplace)) {
+      throw new ApiError(
+        'marketplace_action_unavailable',
+        `Listora can't check ${name} connections yet.`,
+      );
+    }
+    const connection = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
+    const now = deps.now();
+    if (connection === undefined || !(await requestHealthCheck(db, connection.id, now))) {
+      throw new ApiError(
+        'invalid_state_transition',
+        connection?.mode !== 'api'
+          ? `Connect ${name} first.`
+          : `Listora can't check this ${name} connection. Reconnect ${name}.`,
+      );
+    }
+    await addJob(db, {
+      task: CONNECTION_CHECK_TASK,
+      payload: { connectionId: connection.id },
+      jobKey: `connection_check:${connection.id}`,
+    });
+    const checked = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
+    return {
+      status: 202,
+      body: connectionView(params.marketplace, checked, { ...context(), now }),
     };
   });
 

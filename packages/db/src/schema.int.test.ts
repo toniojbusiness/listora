@@ -182,6 +182,8 @@ const COLUMNS = {
     'last_error_at',
     'orders_polled_through',
     'credential_version',
+    'last_checked_at',
+    'check_requested_at',
   ],
   connection_authorization: [
     'id',

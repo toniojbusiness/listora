@@ -26,6 +26,8 @@ function row(overrides: Partial<ConnectionRow> = {}): ConnectionRow {
     granted_at: new Date(NOW.getTime() - 10 * DAY),
     orders_polled_through: null,
     credential_version: 0,
+    last_checked_at: NOW,
+    check_requested_at: null,
     created_at: NOW,
     updated_at: NOW,
     ...overrides,
@@ -65,7 +67,7 @@ describe('describeConnection', () => {
     });
   });
 
-  it('shows assisted marketplaces as assisted, never as connected', () => {
+  it('shows assisted marketplaces as not linked, never as connected', () => {
     expect(
       describeConnection({
         marketplace: 'poshmark',
@@ -77,7 +79,12 @@ describe('describeConnection', () => {
     ).toMatchObject({
       mode: 'assisted',
       status: 'not_connected',
-      statusDisplay: { tone: 'neutral', label: 'Assisted' },
+      statusDisplay: {
+        tone: 'neutral',
+        label: 'Not linked',
+        detail:
+          'Listora works with Poshmark in assisted mode: it prepares each listing and change, and you finish it in the Poshmark app, then confirm it.',
+      },
       actions: [],
     });
   });
@@ -95,6 +102,7 @@ describe('describeConnection', () => {
       connectedAt: new Date(NOW.getTime() - 10 * DAY),
       grantExpiresAt: new Date(NOW.getTime() + 400 * DAY),
       lastOkAt: NOW,
+      lastCheckedAt: NOW,
     });
   });
 
@@ -137,9 +145,91 @@ describe('describeConnection', () => {
         label: 'Connection problem',
         detail: 'eBay had a problem. Try again soon. Listora keeps checking.',
       },
-      actions: ['reconnect'],
+      actions: ['check', 'reconnect'],
+      attention: 'connection_problem',
       lastIssue: { code: 'marketplace_error', message: 'eBay had a problem. Try again soon.' },
     });
+  });
+
+  it('shows a check the seller asked for as Checking until the worker finishes it', () => {
+    const degraded = {
+      status: 'degraded' as const,
+      last_error: 'eBay had a problem. Try again soon.',
+      last_error_code: 'marketplace_error',
+      last_error_at: NOW,
+      last_checked_at: new Date(NOW.getTime() - 60_000),
+    };
+    expect(
+      describeEbay(row({ ...degraded, check_requested_at: new Date(NOW.getTime() - 1_000) })),
+    ).toMatchObject({
+      status: 'degraded',
+      statusDisplay: {
+        tone: 'checking',
+        label: 'Checking...',
+        detail: 'Listora is checking your eBay connection now.',
+      },
+      actions: [],
+      attention: 'connection_problem',
+    });
+    // Finished: the result shows again.
+    expect(
+      describeEbay(row({ ...degraded, check_requested_at: new Date(NOW.getTime() - 120_000) }))
+        .statusDisplay.label,
+    ).toBe('Connection problem');
+    // Never finished (the job was lost): after 10 minutes it stops saying Checking.
+    expect(
+      describeEbay(
+        row({
+          ...degraded,
+          last_checked_at: null,
+          check_requested_at: new Date(NOW.getTime() - 11 * 60_000),
+        }),
+      ).statusDisplay.label,
+    ).toBe('Connection problem');
+    // Only a connection that holds its grant is checked.
+    expect(
+      describeEbay(
+        row({
+          status: 'reauth_required',
+          last_error: 'Reconnect eBay.',
+          last_error_code: 'grant_revoked',
+          last_error_at: NOW,
+          check_requested_at: NOW,
+        }),
+      ).statusDisplay.label,
+    ).toBe('Reconnect needed');
+  });
+
+  it('warns 30 days before a Depop grant (one year) ends, and not before', () => {
+    const depop = (daysLeft: number) =>
+      describeConnection({
+        marketplace: 'depop',
+        row: row({
+          marketplace: 'depop',
+          granted_at: new Date(NOW.getTime() - (365 - daysLeft) * DAY),
+          refresh_expires_at: new Date(NOW.getTime() + daysLeft * DAY),
+        }),
+        defaultMode: 'api',
+        canConnect: true,
+        now: NOW,
+      });
+    expect(depop(30)).toMatchObject({
+      status: 'connected',
+      statusDisplay: {
+        tone: 'action_needed',
+        label: 'Reconnect within 30 days',
+        detail:
+          "Listora's Depop access ends on November 23, 2026. Reconnect Depop before then to keep your listings in sync.",
+      },
+      actions: ['reconnect'],
+      attention: 'expiring',
+    });
+    expect(depop(31)).toMatchObject({
+      statusDisplay: { tone: 'success', label: 'Connected' },
+      actions: [],
+    });
+    expect(depop(31).attention).toBeUndefined();
+    expect(depop(0)).toMatchObject({ status: 'reauth_required', attention: 'reconnect' });
   });
 
   it('asks to reconnect when reauthorization is required or the grant expired', () => {

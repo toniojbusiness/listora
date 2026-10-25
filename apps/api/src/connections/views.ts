@@ -1,16 +1,19 @@
 import type {
   Connection,
   ConnectionAuthorization,
+  ConnectionHealthSummary,
   MarketplaceCapabilities as ContractCapabilities,
 } from '@listora/api-contract';
 import {
   authorizationState,
   describeConnection,
+  summarizeConnectionHealth,
   type AuthorizationFailureCode,
   type AuthorizationRow,
   type ConnectionRow,
+  type ConnectionView,
 } from '@listora/connections';
-import type { Marketplace } from '@listora/db';
+import { MARKETPLACES, type Marketplace } from '@listora/db';
 import type { AdapterRegistry, MarketplaceCapabilities } from '@listora/marketplaces';
 
 /** The URL scheme `ASWebAuthenticationSession` waits for; the callback redirects to it. */
@@ -42,18 +45,64 @@ export function connectionView(
   row: ConnectionRow | undefined,
   context: ConnectionViewContext,
 ): Connection {
-  const canConnect = context.canConnect(marketplace);
-  const capabilities = context.adapters.capabilities(
-    marketplace,
-    row === undefined ? null : { id: row.id, mode: row.mode, status: row.status },
+  return contractConnection(describe(marketplace, row, context), row, context);
+}
+
+/** `getConnectionHealth`: every marketplace in display order, and what needs attention. */
+export function connectionHealthView(
+  rows: ReadonlyMap<Marketplace, ConnectionRow>,
+  context: ConnectionViewContext,
+): ConnectionHealthSummary {
+  const views = MARKETPLACES.map((marketplace) =>
+    describe(marketplace, rows.get(marketplace), context),
   );
-  const view = describeConnection({
+  const summary = summarizeConnectionHealth(views);
+  return {
+    needsAttention: summary.needsAttention,
+    ...(summary.banner === undefined ? {} : { banner: summary.banner }),
+    attention: summary.attention,
+    connections: views.map((view) => contractConnection(view, rows.get(view.marketplace), context)),
+    saleForwarding: summary.saleForwarding,
+    ...(summary.lastCheckedAt === undefined
+      ? {}
+      : { lastCheckedAt: summary.lastCheckedAt.toISOString() }),
+  };
+}
+
+function describe(
+  marketplace: Marketplace,
+  row: ConnectionRow | undefined,
+  context: ConnectionViewContext,
+): ConnectionView {
+  const canConnect = context.canConnect(marketplace);
+  return describeConnection({
     marketplace,
     row,
-    defaultMode: defaultMode(capabilities, canConnect),
+    defaultMode: defaultMode(capabilitiesOf(marketplace, row, context), canConnect),
     canConnect,
     now: context.now,
   });
+}
+
+function capabilitiesOf(
+  marketplace: Marketplace,
+  row: ConnectionRow | undefined,
+  context: ConnectionViewContext,
+): MarketplaceCapabilities | undefined {
+  return context.adapters.capabilities(
+    marketplace,
+    row === undefined ? null : { id: row.id, mode: row.mode, status: row.status },
+  );
+}
+
+function contractConnection(
+  view: ConnectionView,
+  row: ConnectionRow | undefined,
+  context: ConnectionViewContext,
+): Connection {
+  const { marketplace } = view;
+  const canConnect = context.canConnect(marketplace);
+  const capabilities = capabilitiesOf(marketplace, row, context);
   return {
     marketplace: view.marketplace,
     mode: view.mode,
@@ -67,6 +116,9 @@ export function connectionView(
       ? {}
       : { grantExpiresAt: view.grantExpiresAt.toISOString() }),
     ...(view.lastOkAt === undefined ? {} : { lastOkAt: view.lastOkAt.toISOString() }),
+    ...(view.lastCheckedAt === undefined
+      ? {}
+      : { lastCheckedAt: view.lastCheckedAt.toISOString() }),
     ...(view.lastIssue === undefined
       ? {}
       : {

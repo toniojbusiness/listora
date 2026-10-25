@@ -8,14 +8,17 @@ import type { ConnectionMode, ConnectionStatus, Marketplace } from '@listora/db'
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { assertNever } from '@listora/shared';
 
-import type { ConnectionRow } from './store.ts';
+import { checkPending, type ConnectionRow } from './store.ts';
 
 /** The expiry warning starts this long before the grant ends. */
 export const EXPIRY_WARNING_MS = 30 * 24 * 60 * 60_000;
 
 export type ConnectionViewStatus = 'not_connected' | ConnectionStatus;
-export type ConnectionAction = 'connect' | 'reconnect';
+export type ConnectionAction = 'connect' | 'reconnect' | 'check';
 export type ConnectionTone = 'success' | 'checking' | 'action_needed' | 'neutral';
+/** Why a connection needs the seller's attention (the health summary's `attention`). */
+export type ConnectionAttentionReason =
+  'reconnect' | 'access_removed' | 'connection_problem' | 'expiring';
 
 export interface ConnectionView {
   marketplace: Marketplace;
@@ -27,7 +30,10 @@ export interface ConnectionView {
   connectedAt?: Date;
   grantExpiresAt?: Date;
   lastOkAt?: Date;
+  lastCheckedAt?: Date;
   lastIssue?: { code: string; message: string; occurredAt: Date };
+  /** Set while the connection needs the seller's attention. */
+  attention?: ConnectionAttentionReason;
 }
 
 export interface DescribeConnectionInput {
@@ -36,7 +42,10 @@ export interface DescribeConnectionInput {
   row: ConnectionRow | undefined;
   /** How the marketplace works without a connection: `api` (eBay) or `assisted`. */
   defaultMode: ConnectionMode;
-  /** Whether this process can connect the marketplace now (an OAuth client and a vault). */
+  /**
+   * Whether this process can connect the marketplace now (an OAuth client and a vault). The
+   * worker that checks connections reads the same settings, so it also decides `check`.
+   */
   canConnect: boolean;
   now: Date;
 }
@@ -55,8 +64,8 @@ export function describeConnection(input: DescribeConnectionInput): ConnectionVi
         status: 'not_connected',
         statusDisplay: {
           tone: 'neutral',
-          label: 'Assisted',
-          detail: `Listora prepares each listing and change, and you finish it in the ${name} app, then confirm it.`,
+          label: 'Not linked',
+          detail: `Listora works with ${name} in assisted mode: it prepares each listing and change, and you finish it in the ${name} app, then confirm it.`,
         },
         actions: connect('connect'),
       };
@@ -93,6 +102,7 @@ export function describeConnection(input: DescribeConnectionInput): ConnectionVi
     ...(row.granted_at === null ? {} : { connectedAt: row.granted_at }),
     ...(row.refresh_expires_at === null ? {} : { grantExpiresAt: row.refresh_expires_at }),
     ...(row.last_ok_at === null ? {} : { lastOkAt: row.last_ok_at }),
+    ...(row.last_checked_at === null ? {} : { lastCheckedAt: row.last_checked_at }),
     ...(row.last_error === null || row.last_error_code === null || row.last_error_at === null
       ? {}
       : {
@@ -103,6 +113,21 @@ export function describeConnection(input: DescribeConnectionInput): ConnectionVi
           },
         }),
   };
+
+  // The seller asked for a check, and the worker has not finished it: say so, and offer nothing
+  // until it has. A check only runs on a connection that still holds its grant.
+  if ((status === 'connected' || status === 'degraded') && checkPending(row, now)) {
+    return {
+      ...details,
+      statusDisplay: {
+        tone: 'checking',
+        label: 'Checking...',
+        detail: `Listora is checking your ${name} connection now.`,
+      },
+      actions: [],
+      ...(status === 'degraded' ? { attention: 'connection_problem' as const } : {}),
+    };
+  }
 
   switch (status) {
     case 'connected': {
@@ -117,6 +142,7 @@ export function describeConnection(input: DescribeConnectionInput): ConnectionVi
             detail: `Listora's ${name} access ends on ${formatDate(expiresAt)}. Reconnect ${name} before then to keep your listings in sync.`,
           },
           actions: connect('reconnect'),
+          attention: 'expiring',
         };
       }
       return {
@@ -137,7 +163,9 @@ export function describeConnection(input: DescribeConnectionInput): ConnectionVi
           label: 'Connection problem',
           detail: `${row.last_error ?? `Listora could not reach ${name}.`} Listora keeps checking.`,
         },
-        actions: connect('reconnect'),
+        // Retry check first: the problem may be gone. Reconnecting also fixes a refused grant.
+        actions: canConnect ? ['check', 'reconnect'] : [],
+        attention: 'connection_problem',
       };
     case 'reauth_required':
       return {
@@ -151,6 +179,7 @@ export function describeConnection(input: DescribeConnectionInput): ConnectionVi
               `Sign in to ${name} again so Listora can keep your listings in sync.`),
         },
         actions: connect('reconnect'),
+        attention: 'reconnect',
       };
     case 'revoked':
       return {
@@ -163,6 +192,7 @@ export function describeConnection(input: DescribeConnectionInput): ConnectionVi
             `Listora's access to your ${name} account was removed. Reconnect ${name}.`,
         },
         actions: connect('reconnect'),
+        attention: 'access_removed',
       };
     default:
       return assertNever(status, 'connection status');

@@ -59,6 +59,38 @@ describe('local e2e stack (real Postgres)', () => {
     expect(refused.status).toBe(422);
     expect((await fetch(`${stack.controlUrl}/ebay/faults`, { method: 'DELETE' })).status).toBe(204);
 
+    // The control endpoint sets the eBay connection's health; Retry check runs in the worker.
+    const setEbay = (status: string) =>
+      fetch(`${stack.controlUrl}/connections/ebay`, {
+        method: 'POST',
+        body: JSON.stringify({ status }),
+      });
+    const health = async () =>
+      (await (await fetch(`${stack.apiUrl}/v1/connection-health`, { headers: auth })).json()) as {
+        needsAttention: boolean;
+        banner?: { label: string };
+        connections: { statusDisplay: { label: string } }[];
+      };
+    expect((await setEbay('reauth_required')).status).toBe(204);
+    expect(await health()).toMatchObject({
+      needsAttention: true,
+      banner: { label: 'Reconnect eBay' },
+    });
+    expect((await setEbay('degraded')).status).toBe(204);
+    const check = await fetch(`${stack.apiUrl}/v1/connections/ebay/checks`, {
+      method: 'POST',
+      headers: { ...auth, 'idempotency-key': crypto.randomUUID() },
+    });
+    expect(check.status).toBe(202);
+    let label = '';
+    for (let tries = 0; tries < 50 && label !== 'Connected'; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      label = (await health()).connections[0]?.statusDisplay.label ?? '';
+    }
+    expect(label).toBe('Connected');
+    expect((await setEbay('broken')).status).toBe(422);
+    expect((await setEbay('connected')).status).toBe(204);
+
     await stack.stop();
     await expect(fetch(`${stack.apiUrl}/health/live`)).rejects.toThrow();
     await expect(fetch(`${stack.controlUrl}/items`, { method: 'POST' })).rejects.toThrow();

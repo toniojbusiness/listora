@@ -1341,6 +1341,55 @@ paths:
                 format: uri
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/connections/{marketplace}/checks:
+    parameters:
+      - $ref: '#/components/parameters/MarketplacePath'
+    post:
+      tags:
+        - connections
+      operationId: requestConnectionCheck
+      summary: Check a marketplace connection now (Retry check)
+      description: |
+        Queues the same cheap read the daily health check makes, for this connection only. The
+        answer is the connection with a `Checking` status; read it again (or
+        `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
+        connection with a problem. `409 invalid_state_transition` for a connection a check
+        cannot change (not connected, or waiting for the seller to reconnect);
+        `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: The check is queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/connection-health:
+    get:
+      tags:
+        - connections
+      operationId: getConnectionHealth
+      summary: The account's connection health summary
+      description: |
+        Every marketplace's connection (as `listConnections`), what needs the seller's
+        attention (broken or failing connections and grants that end within 30 days), the
+        banner the app shows while anything does, and sale email forwarding.
+      responses:
+        '200':
+          description: The summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionHealthSummary'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/sales:
     get:
       tags:
@@ -3874,9 +3923,12 @@ components:
         `connect`: start `startConnectionAuthorization` for a marketplace not connected yet.
         `reconnect`: the same, for a connection that needs the seller's consent again (its grant
         was revoked, expires within 30 days, or fails); it renews the existing connection.
+        `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
+        Listora may have cleared since.
       enum:
         - connect
         - reconnect
+        - check
     Connection:
       type: object
       required:
@@ -3914,6 +3966,10 @@ components:
           description: When the user must reconnect (Depop grants last one year; eBay refresh tokens about 18 months).
         lastOkAt:
           $ref: '#/components/schemas/Timestamp'
+          description: When the marketplace last accepted Listora's access (the last successful check).
+        lastCheckedAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When Listora last checked the connection, whatever it found.
         lastIssue:
           $ref: '#/components/schemas/ConnectionIssue'
     ConnectionList:
@@ -3971,6 +4027,97 @@ components:
           $ref: '#/components/schemas/Timestamp'
         completedAt:
           $ref: '#/components/schemas/Timestamp'
+    ConnectionAttentionReason:
+      description: |
+        A `KnownConnectionAttentionReason`, or a reason added after this client was built.
+        Clients show the entry's `statusDisplay` for an unknown reason.
+      anyOf:
+        - $ref: '#/components/schemas/KnownConnectionAttentionReason'
+        - type: string
+          maxLength: 64
+    KnownConnectionAttentionReason:
+      type: string
+      description: |
+        `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
+        `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
+        cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
+        ends within 30 days.
+      enum:
+        - reconnect
+        - access_removed
+        - connection_problem
+        - expiring
+    ConnectionAttention:
+      type: object
+      description: One connection that needs the seller's attention.
+      required:
+        - marketplace
+        - reason
+        - statusDisplay
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        reason:
+          $ref: '#/components/schemas/ConnectionAttentionReason'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+          description: The connection's own status, as in `Connection.statusDisplay`.
+    SaleForwardingStatus:
+      description: |
+        A `KnownSaleForwardingStatus`, or a status added after this client was built. Clients
+        show the `statusDisplay`.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSaleForwardingStatus'
+        - type: string
+          maxLength: 64
+    KnownSaleForwardingStatus:
+      type: string
+      description: |
+        `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+        email domain, which this deployment does not have yet.
+      enum:
+        - needs_domain
+    SaleForwarding:
+      type: object
+      description: Forwarding marketplace sale emails to Listora, which detects sales sooner.
+      required:
+        - status
+        - statusDisplay
+      properties:
+        status:
+          $ref: '#/components/schemas/SaleForwardingStatus'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+    ConnectionHealthSummary:
+      type: object
+      required:
+        - needsAttention
+        - attention
+        - connections
+        - saleForwarding
+      properties:
+        needsAttention:
+          type: boolean
+          description: True while any connection is in `attention`; the app shows `banner` then.
+        banner:
+          $ref: '#/components/schemas/StatusDisplay'
+          description: Present exactly when `needsAttention`.
+        attention:
+          type: array
+          maxItems: 20
+          description: The connections that need attention, those only the seller can fix first.
+          items:
+            $ref: '#/components/schemas/ConnectionAttention'
+        connections:
+          type: array
+          description: Every marketplace and its connection, as `listConnections` returns them.
+          items:
+            $ref: '#/components/schemas/Connection'
+        saleForwarding:
+          $ref: '#/components/schemas/SaleForwarding'
+        lastCheckedAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: The latest check of any connection; absent before the first.
     SaleStatus:
       description: |
         A `KnownSaleStatus`, or a status added after this client was built. Clients show an

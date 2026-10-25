@@ -1,7 +1,8 @@
 # Push notifications
 
-How Listora reaches the seller's phone: sales and delists today ([auto-delist.md](auto-delist.md)),
-reminders and reconnect alerts later. Code: `packages/push` and the worker's `push.ts`
+How Listora reaches the seller's phone: sales and delists ([auto-delist.md](auto-delist.md)) and
+broken marketplace connections ([connections.md](connections.md#health-dashboard)) today, reminders
+later. Code: `packages/push` and the worker's `push.ts`
 feature.
 
 - **The notification** (`PushNotification`) goes to everyone signed in to an account. It has a

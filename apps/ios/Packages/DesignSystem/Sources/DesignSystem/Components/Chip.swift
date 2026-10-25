@@ -1,16 +1,43 @@
 import SwiftUI
 
 /// A small non-interactive label on a capsule, such as a photo's role or "Cover". `prominent`
-/// uses the brand fill; otherwise it sits on the surface, readable over photos.
+/// uses the brand fill; otherwise it sits on the surface, readable over photos. `muted` sits on
+/// a card, for a fact beside the card's title such as how Listora works with a marketplace.
 public struct Chip: View {
+    public enum Emphasis: Sendable {
+        case surface
+        case prominent
+        case muted
+    }
+
     private let title: String
     private let systemImage: String?
-    private let isProminent: Bool
+    private let emphasis: Emphasis
 
     public init(_ title: String, systemImage: String? = nil, prominent: Bool = false) {
+        self.init(title, systemImage: systemImage, emphasis: prominent ? .prominent : .surface)
+    }
+
+    public init(_ title: String, systemImage: String? = nil, emphasis: Emphasis) {
         self.title = title
         self.systemImage = systemImage
-        isProminent = prominent
+        self.emphasis = emphasis
+    }
+
+    private var foreground: ColorToken {
+        switch emphasis {
+        case .surface: Palette.textPrimary
+        case .prominent: Palette.onBrand
+        case .muted: Palette.textSecondary
+        }
+    }
+
+    private var fill: ColorToken {
+        switch emphasis {
+        case .surface: Palette.surface
+        case .prominent: Palette.brand
+        case .muted: Palette.surfaceSecondary
+        }
     }
 
     public var body: some View {
@@ -21,10 +48,10 @@ public struct Chip: View {
             Text(title).lineLimit(1)
         }
         .font(Typography.label)
-        .foregroundStyle(isProminent ? Palette.onBrand : Palette.textPrimary)
+        .foregroundStyle(foreground)
         .padding(.horizontal, Spacing.xs)
         .padding(.vertical, Spacing.xxs)
-        .background(isProminent ? Palette.brand : Palette.surface, in: Capsule())
+        .background(fill, in: Capsule())
     }
 }
 

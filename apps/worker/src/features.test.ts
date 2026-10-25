@@ -43,7 +43,13 @@ const context = {
     marketplaces: { ebay: undefined },
     push: { driver: 'fake' },
   },
-  connections: { tokens: undefined, ebaySeller: undefined, scheduledTasks: [], revoker: undefined },
+  connections: {
+    tokens: undefined,
+    ebaySeller: undefined,
+    scheduledTasks: [],
+    tasks: {},
+    revoker: undefined,
+  },
   logger: createLogger({ service: 'worker-test', level: 'silent' }),
 } as unknown as WorkerContext;
 

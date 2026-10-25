@@ -15,37 +15,54 @@ public struct SettingsContent: Equatable, Sendable {
     }
 }
 
+/// A screen Settings opens, also from elsewhere in the app (the connection banner opens
+/// Marketplaces).
+public enum SettingsDestination: Hashable, Sendable {
+    case marketplaces
+}
+
 /// Account, marketplace connections, and app information. Dev builds also have a developer
 /// sign-in; the real account section (T-28, T-31) comes later. The Marketplaces screen comes from
-/// the caller (AppFeature), since a feature never imports another.
+/// the caller (AppFeature), since a feature never imports another; so does `path`, so the caller
+/// can open it.
 public struct SettingsView<Marketplaces: View>: View {
     private let content: SettingsContent
     private let devSignIn: DevSignInModel?
     private let marketplaces: Marketplaces?
+    /// The server's words for a connection that needs attention, shown on the Marketplaces row.
+    private let marketplacesAttention: String?
+    @Binding private var path: [SettingsDestination]
 
     public init(
         content: SettingsContent,
         devSignIn: DevSignInModel? = nil,
+        path: Binding<[SettingsDestination]>,
+        marketplacesAttention: String? = nil,
         @ViewBuilder marketplaces: () -> Marketplaces,
     ) {
         self.content = content
         self.devSignIn = devSignIn
+        _path = path
+        self.marketplacesAttention = marketplacesAttention
         self.marketplaces = marketplaces()
     }
 
     public var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
-                if let marketplaces {
+                if marketplaces != nil {
                     Section {
-                        NavigationLink {
-                            marketplaces
-                        } label: {
+                        NavigationLink(value: SettingsDestination.marketplaces) {
                             ListRow(
                                 "Marketplaces",
                                 subtitle: "Connect eBay, and see how Listora works with each marketplace.",
                                 systemImage: "link",
-                            )
+                            ) {
+                                if let marketplacesAttention {
+                                    StatusBadge(marketplacesAttention, tone: .actionNeeded)
+                                        .accessibilityIdentifier("settings.marketplaces.attention")
+                                }
+                            }
                         }
                         .accessibilityIdentifier("settings.marketplaces")
                     }
@@ -74,6 +91,12 @@ public struct SettingsView<Marketplaces: View>: View {
             .background(Palette.background)
             .foregroundStyle(Palette.textPrimary)
             .navigationTitle("Settings")
+            .navigationDestination(for: SettingsDestination.self) { destination in
+                switch destination {
+                case .marketplaces:
+                    marketplaces
+                }
+            }
         }
     }
 
@@ -108,6 +131,8 @@ extension SettingsView where Marketplaces == EmptyView {
         self.content = content
         self.devSignIn = devSignIn
         marketplaces = nil
+        marketplacesAttention = nil
+        _path = .constant([])
     }
 }
 
