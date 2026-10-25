@@ -2427,6 +2427,7 @@ export interface components {
             instructions?: string;
             marketplace?: components["schemas"]["Marketplace"];
             itemId?: components["schemas"]["Id"];
+            item?: components["schemas"]["UserTaskItem"];
             listingId?: components["schemas"]["Id"];
             operationId?: components["schemas"]["Id"];
             /** @description For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale. */
@@ -2441,12 +2442,22 @@ export interface components {
             createdAt: components["schemas"]["Timestamp"];
             completedAt?: components["schemas"]["Timestamp"];
         };
+        /** @description The item a task is about, enough to show it in the task inbox. */
+        UserTaskItem: {
+            id: components["schemas"]["Id"];
+            sku: components["schemas"]["Sku"];
+            title?: string;
+            coverPhoto?: components["schemas"]["Photo"];
+        };
         /**
          * @description The user's confirmation and, for some kinds, their decision. Which properties apply
          *     depends on the task's `kind`; a property that does not apply is
          *     `422 validation_failed`.
          *
-         *     - `list_manually`: `externalUrl`, the new listing's URL (links the listing).
+         *     - `list_manually`: optional `externalUrl`, the new listing's URL on the task's
+         *       marketplace (links the listing, so later tasks open it); `422 validation_failed` when
+         *       it is not a listing on that marketplace, and `409 already_exists` when another listing
+         *       already has it.
          *     - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
          *       `rejectMatch: true` when nothing matches. Exactly one of the two is required.
          *     - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
@@ -2772,6 +2783,7 @@ export type UserTaskUrgency = components['schemas']['UserTaskUrgency'];
 export type CopyField = components['schemas']['CopyField'];
 export type CopyAssist = components['schemas']['CopyAssist'];
 export type UserTask = components['schemas']['UserTask'];
+export type UserTaskItem = components['schemas']['UserTaskItem'];
 export type UserTaskCompletion = components['schemas']['UserTaskCompletion'];
 export type SaleCorrection = components['schemas']['SaleCorrection'];
 export type UserTaskPage = components['schemas']['UserTaskPage'];

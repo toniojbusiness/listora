@@ -146,6 +146,7 @@ extension MarketplaceRowState.Action {
         case .relist: "arrow.counterclockwise"
         case .check: "magnifyingglass"
         case .retry: "arrow.clockwise"
+        case .openTask: "checklist"
         }
     }
 }

@@ -184,6 +184,11 @@ extension ItemMatch {
             liveMarketplaces: Set(summary.listings.compactMap { listing in
                 let status = listing.status.value1?.rawValue ?? listing.status.value2 ?? ""
                 guard !Self.notLiveStatuses.contains(status) else { return nil }
+                // A listing waiting for the user to post it (its list task is open) takes the
+                // shared link: sharing it is how the user says they posted it.
+                if status == "draft", listing.statusDisplay.tone.value1 == .actionNeeded {
+                    return nil
+                }
                 return listing.marketplace.value1?.rawValue ?? listing.marketplace.value2
             }),
             acceptsLinks: summary.status.value1.map { Self.linkableStatuses.contains($0.rawValue) } ?? false,

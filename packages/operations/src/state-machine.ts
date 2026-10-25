@@ -6,6 +6,7 @@
  *     │           ├──────▶ retrying ──▶ running  (temporary failure; next attempt scheduled)
  *     │           ├──────▶ verifying ─▶ succeeded | retrying | verifying | failed
  *     │           ├──────▶ needs_user_action ──▶ succeeded (the user confirmed) | canceled
+ *     │           │                              └─▶ failed (the user dismissed the task)
  *     │           └──────▶ failed ──▶ queued     (the user taps Retry)
  *     └──▶ canceled
  *
@@ -19,7 +20,7 @@ export const OPERATION_TRANSITIONS = {
   running: ['succeeded', 'retrying', 'verifying', 'needs_user_action', 'failed'],
   retrying: ['running', 'failed', 'canceled'],
   verifying: ['succeeded', 'retrying', 'verifying', 'failed'],
-  needs_user_action: ['succeeded', 'canceled'],
+  needs_user_action: ['succeeded', 'failed', 'canceled'],
   failed: ['queued'],
   succeeded: [],
   canceled: [],

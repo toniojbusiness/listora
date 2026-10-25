@@ -5947,6 +5947,8 @@ extension Components {
             public var marketplace: Components.Schemas.Marketplace?
             /// - Remark: Generated from `#/components/schemas/UserTask/itemId`.
             public var itemId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/UserTask/item`.
+            public var item: Components.Schemas.UserTaskItem?
             /// - Remark: Generated from `#/components/schemas/UserTask/listingId`.
             public var listingId: Components.Schemas.Id?
             /// - Remark: Generated from `#/components/schemas/UserTask/operationId`.
@@ -5978,6 +5980,7 @@ extension Components {
             ///   - instructions:
             ///   - marketplace:
             ///   - itemId:
+            ///   - item:
             ///   - listingId:
             ///   - operationId:
             ///   - saleId: For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
@@ -5995,6 +5998,7 @@ extension Components {
                 instructions: Swift.String? = nil,
                 marketplace: Components.Schemas.Marketplace? = nil,
                 itemId: Components.Schemas.Id? = nil,
+                item: Components.Schemas.UserTaskItem? = nil,
                 listingId: Components.Schemas.Id? = nil,
                 operationId: Components.Schemas.Id? = nil,
                 saleId: Components.Schemas.Id? = nil,
@@ -6012,6 +6016,7 @@ extension Components {
                 self.instructions = instructions
                 self.marketplace = marketplace
                 self.itemId = itemId
+                self.item = item
                 self.listingId = listingId
                 self.operationId = operationId
                 self.saleId = saleId
@@ -6030,6 +6035,7 @@ extension Components {
                 case instructions
                 case marketplace
                 case itemId
+                case item
                 case listingId
                 case operationId
                 case saleId
@@ -6040,11 +6046,51 @@ extension Components {
                 case completedAt
             }
         }
+        /// The item a task is about, enough to show it in the task inbox.
+        ///
+        /// - Remark: Generated from `#/components/schemas/UserTaskItem`.
+        public struct UserTaskItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/UserTaskItem/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/UserTaskItem/sku`.
+            public var sku: Components.Schemas.Sku
+            /// - Remark: Generated from `#/components/schemas/UserTaskItem/title`.
+            public var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/UserTaskItem/coverPhoto`.
+            public var coverPhoto: Components.Schemas.Photo?
+            /// Creates a new `UserTaskItem`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - sku:
+            ///   - title:
+            ///   - coverPhoto:
+            public init(
+                id: Components.Schemas.Id,
+                sku: Components.Schemas.Sku,
+                title: Swift.String? = nil,
+                coverPhoto: Components.Schemas.Photo? = nil
+            ) {
+                self.id = id
+                self.sku = sku
+                self.title = title
+                self.coverPhoto = coverPhoto
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case sku
+                case title
+                case coverPhoto
+            }
+        }
         /// The user's confirmation and, for some kinds, their decision. Which properties apply
         /// depends on the task's `kind`; a property that does not apply is
         /// `422 validation_failed`.
         ///
-        /// - `list_manually`: `externalUrl`, the new listing's URL (links the listing).
+        /// - `list_manually`: optional `externalUrl`, the new listing's URL on the task's
+        ///   marketplace (links the listing, so later tasks open it); `422 validation_failed` when
+        ///   it is not a listing on that marketplace, and `409 already_exists` when another listing
+        ///   already has it.
         /// - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
         ///   `rejectMatch: true` when nothing matches. Exactly one of the two is required.
         /// - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.

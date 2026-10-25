@@ -25,6 +25,7 @@ public struct RootView: View {
                 Tab(tab.title, systemImage: tab.systemImage, value: tab) {
                     screen(for: tab)
                 }
+                .badge(tab == .tasks ? dependencies.tasks.inbox.openCount : 0)
             }
         }
         .tint(Palette.brand.color)
@@ -32,7 +33,15 @@ public struct RootView: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             dependencies.interactionMeter.setAppActive(phase == .active)
         }
+        .onReceive(NotificationCenter.default.publisher(for: TaskNotificationRouter.openTasks)) { _ in
+            selection = .tasks
+        }
         .task { dependencies.startBackgroundWork() }
+        // The badge follows the server while the app is open, and when it comes back.
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active else { return }
+            await dependencies.tasks.inbox.follow()
+        }
     }
 
     @ViewBuilder
@@ -43,7 +52,7 @@ public struct RootView: View {
         case .addItem:
             AddItemView(environment: dependencies.addItem)
         case .tasks:
-            TasksView()
+            TasksView(environment: dependencies.tasks)
         case .settings:
             SettingsView(
                 content: SettingsContent(configuration: dependencies.configuration, version: dependencies.version),
