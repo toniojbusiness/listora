@@ -51,9 +51,11 @@ KnownIntegrationMode:
   type: string
   description: |
     `api`: Listora acts through the marketplace's official API and verifies by read-back.
-    `assisted`: Listora prepares the work and the user does the final step in the
+    `automation`: Listora's browser runner acts in the seller's own marketplace session
+    (where the marketplace permits it and has no API) and verifies by read-back through that
+    session. `assisted`: Listora prepares the work and the user does the final step in the
     marketplace app, then confirms.
-  enum: [api, assisted]
+  enum: [api, automation, assisted]
 StatusTone:
   description: |
     A `KnownStatusTone`, or a tone added after this client was built. Clients style an
@@ -88,7 +90,7 @@ StatusDisplay:
       description: Extra context, for example the marketplace's error text.
 VerificationMethod:
   type: string
-  description: '`marketplace_api`: confirmed by an API read-back. `user_confirmation`: the user confirmed an assisted task.'
+  description: '`marketplace_api`: confirmed by a read-back from the marketplace (its API, or the automated browser session). `user_confirmation`: the user confirmed an assisted task.'
   enum: [marketplace_api, user_confirmation]
 Verification:
   type: object

@@ -43,35 +43,31 @@ final class ShareExtensionUITests: XCTestCase {
     /// Opens the share page in Safari, taps its share button, and picks Listora in the share sheet.
     ///
     /// On a freshly booted simulator (every CI run), Safari's first launch can drop the opened URL
-    /// and stay on its start page, and the first share taps can fail to open the sheet or open it
-    /// before the just-installed extension is listed. Each step therefore retries until it took
-    /// effect, and fails with Safari's element tree only when it never does.
+    /// and stay on its start page, a share tap can open no sheet at all, and a sheet can open
+    /// before the just-installed extension is listed. A share that opened no sheet stays pending
+    /// in the page, and Safari refuses every later share from it, so each attempt loads the page
+    /// afresh (a new query string), taps once, and closes a sheet without Listora. The test fails
+    /// with Safari's element tree, including how the page's last share ended, only when no
+    /// attempt shows Listora.
     private func shareFromSafari(server: StubAPIServer) throws {
-        let page = try XCTUnwrap(URL(string: server.baseURL + StubAPIServer.sharePagePath))
         let share = safari.webViews.buttons["Share listing"]
-        for _ in 0 ..< 3 where !share.exists {
-            XCUIDevice.shared.system.open(page)
-            XCTAssertTrue(safari.wait(for: .runningForeground, timeout: 15), "Safari did not open")
-            _ = share.waitForExistence(timeout: 15)
-        }
-        XCTAssertTrue(share.exists, "the share page did not load\n\(safari.debugDescription)")
-
         let listora = safari.descendants(matching: .any)["Listora Dev"].firstMatch
         // The share sheet's Close button; Safari's address bar has a "Close" (stop loading) too.
         let closeSheet = safari.buttons
             .matching(NSPredicate(format: "label == 'Close' AND identifier != 'StopButton'"))
             .firstMatch
-        for _ in 0 ..< 5 where !listora.exists {
-            // A sheet that opened without Listora (the extension not listed yet) is closed first,
-            // so the next tap opens a fresh one.
-            if share.exists, !share.isHittable, closeSheet.exists {
+        for attempt in 1 ... 5 where !listora.exists {
+            if closeSheet.exists {
                 closeSheet.tap()
             }
+            let page = try XCTUnwrap(URL(string: server.baseURL + StubAPIServer.sharePagePath + "?attempt=\(attempt)"))
+            XCUIDevice.shared.system.open(page)
+            XCTAssertTrue(safari.wait(for: .runningForeground, timeout: 15), "Safari did not open")
             // A tap that lands while the page is still settling may not open the share sheet.
-            if share.waitForExistence(timeout: 5), share.isHittable {
+            if share.waitForExistence(timeout: 15), share.isHittable {
                 share.tap()
+                _ = listora.waitForExistence(timeout: 15)
             }
-            _ = listora.waitForExistence(timeout: 10)
         }
         XCTAssertTrue(listora.exists, "Listora is not in the share sheet\n\(safari.debugDescription)")
         listora.tap()

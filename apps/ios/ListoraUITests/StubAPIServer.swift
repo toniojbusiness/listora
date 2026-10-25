@@ -146,14 +146,26 @@ final class StubAPIServer: @unchecked Sendable {
 
     static let itemId = "0b9d4e8a-1c2f-4a5b-8c7d-6e5f4a3b2c1d"
 
+    /// The page Safari shares the listing from. It shows how its last share ended ("Sharing",
+    /// "Shared", or "Share failed: <error>"), so the element tree of a test that saw no share sheet
+    /// tells a share that is still pending from one Safari refused.
     private static let sharePage = """
     <!doctype html>
     <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Share test</title></head>
     <body style="font: 20px -apple-system; padding: 40px">
-    <button id="share" style="font-size: 28px; padding: 24px"
-      onclick="navigator.share({url: '\(sharedListingURL)', title: 'Lululemon Align Pant 25 | Poshmark'})">
-      Share listing</button>
+    <button id="share" style="font-size: 28px; padding: 24px" onclick="share()">Share listing</button>
+    <p id="result"></p>
+    <script>
+    function share() {
+      const result = document.getElementById('result');
+      result.textContent = 'Sharing';
+      navigator.share({url: '\(sharedListingURL)', title: 'Lululemon Align Pant 25 | Poshmark'}).then(
+        () => { result.textContent = 'Shared'; },
+        (error) => { result.textContent = 'Share failed: ' + error.name; },
+      );
+    }
+    </script>
     </body></html>
     """
 

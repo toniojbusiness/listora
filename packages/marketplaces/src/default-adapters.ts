@@ -30,16 +30,28 @@ export interface MarketplaceAdaptersConfig {
    * asked to connect eBay.
    */
   ebaySeller?: EbaySellerSource;
+  /**
+   * The browser automation adapters, by marketplace (`createAutomationAdapters` in
+   * `@listora/automation`): each serves its marketplace's connections that hold a linked
+   * browser session (decision D1, docs/features/automation.md). eBay is never automated.
+   */
+  automation?: Partial<Record<AutomatedMarketplace, MarketplaceAdapter>>;
 }
+
+/** The marketplaces browser automation can serve: those without an API Listora uses. */
+export type AutomatedMarketplace = Exclude<Marketplace, 'ebay'>;
 
 /**
  * The marketplace adapters Listora runs with (docs/features/marketplaces.md): the worker runs
- * operations with them, and the API reads each marketplace's capabilities from them, so both
- * processes always agree.
+ * operations with them, the browser runner its automated steps, and the API reads each
+ * marketplace's capabilities from them, so every process routes an operation to the same mode.
  *
- * - Poshmark and Mercari are assisted until the browser runner lands (decision D1): every step
- *   is a user task, and only the user's confirmation finishes it. They need no credential.
- * - Depop is assisted until a seller's connection switches to the API. Its API adapter is the
+ * - Poshmark, Mercari, and Depop are assisted (every step is a user task that only the user's
+ *   confirmation finishes) until a seller links a browser session, when their automation
+ *   adapter serves them (decision D1). The per-marketplace automation adapters are their own
+ *   tasks; until each lands, `config.automation` has none for it, except the fake site's for all
+ *   three in development and tests (FAKE_AUTOMATION_SITE_URL).
+ * - Depop also switches to its API once a seller's connection does. Its API adapter is the
  *   Depop adapter with DEPOP_ENV set (`fake` for the fake Depop, or Depop's sandbox or
  *   production once Listora's partner access is granted); without DEPOP_ENV, the generic fake
  *   marketplace when FAKE_MARKETPLACE_URL is set (the operation engine's process tests).
@@ -48,6 +60,9 @@ export interface MarketplaceAdaptersConfig {
  *   when FAKE_MARKETPLACE_URL is set (the operation engine's process tests), and otherwise
  *   fail visibly with "Listora can't connect to eBay yet" (and a Retry action) rather than
  *   wait.
+ *
+ * The browser runner never runs API steps (they are never automated), so it builds no eBay or
+ * Depop API adapter.
  */
 export function createMarketplaceAdapters(
   config: MarketplaceAdaptersConfig,
@@ -67,11 +82,19 @@ export function createMarketplaceAdapters(
             ...(capabilities === undefined ? {} : { capabilities }),
           }),
         ];
+  const automation = config.automation ?? {};
+  const automated = (assisted: MarketplaceAdapter, marketplace: AutomatedMarketplace) => {
+    const adapter = automation[marketplace];
+    return adapter === undefined
+      ? assisted
+      : new ConnectionAwareAdapter({ assisted, automation: adapter });
+  };
   // Depop never reuses an external SKU and has no titles, whichever mode serves it.
   const depopApi: MarketplaceAdapter | undefined =
     config.depop === undefined
       ? fake('depop', { externalSkuReusable: false, title: 'none' })[0]
       : createDepopAdapter(config.depop, logger === undefined ? {} : { logger });
+  const depopAutomation = automation.depop;
   return createAdapterRegistry([
     ...(config.ebay === undefined
       ? fake('ebay')
@@ -84,8 +107,9 @@ export function createMarketplaceAdapters(
     new ConnectionAwareAdapter({
       assisted: createDepopAssistedAdapter(),
       ...(depopApi === undefined ? {} : { api: depopApi }),
+      ...(depopAutomation === undefined ? {} : { automation: depopAutomation }),
     }),
-    createPoshmarkAdapter(),
-    createMercariAdapter(),
+    automated(createPoshmarkAdapter(), 'poshmark'),
+    automated(createMercariAdapter(), 'mercari'),
   ]);
 }

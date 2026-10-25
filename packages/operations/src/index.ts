@@ -20,13 +20,14 @@ export type { SuccessProof } from './evidence.ts';
 export { runOperationStep } from './executor.ts';
 export type { StepDependencies } from './executor.ts';
 export {
+  AUTOMATION_OPERATION_TASK,
   listingQueueName,
   OPERATION_JOB_MAX_ATTEMPTS,
   OPERATION_PRIORITY,
   OPERATION_TASK,
   operationJobKey,
 } from './jobs.ts';
-export type { OperationJobPayload } from './jobs.ts';
+export type { OperationJobPayload, OperationTask } from './jobs.ts';
 export {
   DEFAULT_RETRY_POLICY,
   delayAfterAttempt,

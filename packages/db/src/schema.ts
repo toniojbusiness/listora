@@ -25,7 +25,10 @@ import type {
   AnalysisStatus,
   AnalysisTier,
   AuditActorKind,
+  AutomationRunOutcome,
+  AutomationRunPurpose,
   AuthProvider,
+  ChallengeKind,
   ConnectionAuthorizationStatus,
   ConnectionMode,
   ConnectionStatus,
@@ -48,6 +51,8 @@ import type {
   Plan,
   PreArchiveItemStatus,
   PricingSource,
+  SaleCheckOutcome,
+  SaleCheckReason,
   SaleDetectionSource,
   SaleStatus,
   SubscriptionSource,
@@ -330,6 +335,7 @@ export interface MarketplaceConnectionTable {
   mode: ConnectionMode;
   external_user_id: Nullable<string>;
   display_name: Nullable<string>;
+  /** OAuth tokens (api) or the browser session (automation), encrypted; never a password. */
   token_ciphertext: Nullable<Buffer>;
   access_expires_at: NullableTimestamp;
   refresh_expires_at: NullableTimestamp;
@@ -344,6 +350,11 @@ export interface MarketplaceConnectionTable {
   last_error_at: NullableTimestamp;
   /** When the marketplace issued the current grant; older revocation notices change nothing. */
   granted_at: NullableTimestamp;
+  /**
+   * Bumped by every write of an automation connection's browser session (the session vault),
+   * so a runner holding an older session never overwrites a newer one.
+   */
+  credential_version: Generated<number>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -680,6 +691,45 @@ export interface AccountDeletionGrantTable {
   outcome: Generated<AccountDeletionGrantOutcome>;
 }
 
+// Browser automation --------------------------------------------------------------------------
+
+/** One browser session the runner opened for a connection (docs/features/automation.md). */
+export interface AutomationRunTable {
+  id: Id;
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  purpose: AutomationRunPurpose;
+  script: string;
+  /** The operation an `operation` run is a step of, when it has one. */
+  operation_id: Nullable<string>;
+  started_at: Generated<Date>;
+  finished_at: NullableTimestamp;
+  outcome: Nullable<AutomationRunOutcome>;
+  challenge_kind: Nullable<ChallengeKind>;
+  failed_step: Nullable<string>;
+  error_code: Nullable<string>;
+  /** A private storage key of the redacted screenshot taken when the run failed. */
+  screenshot_key: Nullable<string>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** When the runner next checks an automation connection for sales. */
+export interface SaleCheckScheduleTable {
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  next_check_at: Timestamp;
+  next_reason: SaleCheckReason;
+  last_started_at: NullableTimestamp;
+  last_finished_at: NullableTimestamp;
+  last_outcome: Nullable<SaleCheckOutcome>;
+  checked_through: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 /** Every table and view in the schema, keyed by name. */
 export interface Database {
   account: AccountTable;
@@ -719,4 +769,6 @@ export interface Database {
   deleted_identity: DeletedIdentityTable;
   account_deletion: AccountDeletionTable;
   account_deletion_grant: AccountDeletionGrantTable;
+  automation_run: AutomationRunTable;
+  sale_check_schedule: SaleCheckScheduleTable;
 }

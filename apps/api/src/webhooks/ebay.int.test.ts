@@ -310,7 +310,7 @@ async function listOnFake(config: EbayConfig, connectionId: string): Promise<str
   if (bound === undefined) throw new Error('no config');
   const adapter = createEbayAdapter(bound, { requestTimeoutMs: 5_000 });
   const content = sampleListingContent();
-  const ref = { id: connectionId, mode: 'api' } as const;
+  const ref = { id: connectionId, mode: 'api', status: 'connected' } as const;
   const outcome = await adapter.execute(
     {
       operationId: 'op-webhook',

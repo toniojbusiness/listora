@@ -27,11 +27,19 @@
  *   when every targeted id reads back ended.
  *
  * Each operation runs in the mode its capability flag gives it under the listing's connection
- * (`operationMode`): an `api` operation succeeds only by a read-back, an `assisted` one only by
- * the user's confirmation (an adapter answer other than a user task cannot finish it), and an
- * `unsupported` one fails without being sent. A send builds the payload from the operation's
+ * (`operationMode`): an `api` or `automation` operation succeeds only by a read-back (through the
+ * API, or through the automated browser session), an `assisted` one only by the user's
+ * confirmation (an adapter answer other than a user task cannot finish it), and an `unsupported`
+ * one fails without being sent. An automated step that meets a check it must not pass (a CAPTCHA,
+ * a bot check, a login check) falls back to the user: its adapter answers with the assisted task,
+ * and only the user's confirmation finishes it. A send builds the payload from the operation's
  * listing content with the adapter's pure builder, and sends nothing the adapter's own
  * validation refuses.
+ *
+ * Automated steps need a browser, which only the browser runner has (decision D1). A worker that
+ * claims one hands its job over to the runner's task (`AUTOMATION_OPERATION_TASK`) on the same
+ * listing queue, without counting an attempt, and tells the host so it can start the runner;
+ * the runner runs the step with the same rules.
  *
  * Operations on a listing apply in creation order, with one exception: an end or mark-sold never
  * waits behind an older operation that waits for the user (an assisted edit nobody answered, say).
@@ -80,7 +88,7 @@ import {
   type SuccessProof,
 } from './evidence.ts';
 import type { OperationJobPayload } from './jobs.ts';
-import { removeOperationJob, scheduleOperationJob } from './jobs.ts';
+import { AUTOMATION_OPERATION_TASK, removeOperationJob, scheduleOperationJob } from './jobs.ts';
 import { wasSentThroughApi } from './history.ts';
 import { createdBefore } from './ordering.ts';
 import { syncItemListedStatus } from './item-status.ts';
@@ -103,6 +111,13 @@ export interface StepDependencies {
   callTimeoutMs: number;
   /** How long an operation waiting behind an older one on its listing sleeps between checks. */
   blockedRecheckMs: number;
+  /**
+   * Whether this process can run automated steps (it is the browser runner). Elsewhere they are
+   * handed over to the runner. Default false.
+   */
+  runsAutomation?: boolean;
+  /** Called after a step was handed over to the browser runner, to make sure one is running. */
+  onAutomationHandover?: () => void;
 }
 
 type ListingRow = Selectable<MarketplaceListingTable>;
@@ -126,7 +141,7 @@ interface StepContext {
   content: ListingContent | null;
   /** How the operation runs under the connection; an `unsupported` one is never sent. */
   mode: OperationMode;
-  /** Whether a read-back can decide the operation: only in `api` mode. */
+  /** Whether a read-back can decide the operation: only in `api` and `automation` mode. */
   canReadBack: boolean;
   /** How a read-back shows it is current (the adapter's `readFreshness`). */
   freshness: 'revision' | 'none';
@@ -185,6 +200,10 @@ export async function runOperationStep(
   signal: AbortSignal,
 ): Promise<void> {
   const step = await claimStep(deps, payload);
+  if (step === 'handed_over') {
+    deps.onAutomationHandover?.();
+    return;
+  }
   if (step === null) return;
   const seen = storedRevisions(step.ctx);
   const result =
@@ -196,10 +215,11 @@ export async function runOperationStep(
 
 // Claim -----------------------------------------------------------------------------------
 
+/** The step to run, `null` when there is none, or `handed_over` to the browser runner. */
 async function claimStep(
   deps: StepDependencies,
   payload: OperationJobPayload,
-): Promise<Step | null> {
+): Promise<Step | null | 'handed_over'> {
   return deps.db.transaction().execute(async (trx) => {
     const op = await trx
       .selectFrom('marketplace_operation')
@@ -272,7 +292,21 @@ async function claimStep(
     const connection = await loadConnection(trx, listing);
     const capabilities = adapter.capabilities(connection);
     const mode = operationMode(capabilities, op.kind);
-    const canReadBack = mode === 'api';
+    const canReadBack = mode === 'api' || mode === 'automation';
+    // Only the browser runner can act in a browser session; it takes the step from here.
+    const handOver = async (): Promise<'handed_over'> => {
+      await scheduleOperationJob(trx, {
+        accountId: op.account_id,
+        operationId: op.id,
+        listingId: op.listing_id,
+        priority: operationPriority(op),
+        runAt: null,
+        task: AUTOMATION_OPERATION_TASK,
+      });
+      log.debug({ status: op.status }, 'automated step handed over to the browser runner');
+      return 'handed_over';
+    };
+    const needsRunner = mode === 'automation' && deps.runsAutomation !== true;
     const base = {
       listing,
       adapter,
@@ -334,6 +368,7 @@ async function claimStep(
         });
         return null;
       }
+      if (needsRunner) return handOver();
       return { type: 'check', ctx: { op, ...base }, attempt: op.attempts + 1 };
     }
 
@@ -374,6 +409,8 @@ async function claimStep(
       return null;
     }
 
+    if (needsRunner) return handOver();
+
     const named = await nameNewListing(trx, op, base);
     if (named.type === 'taken') {
       await transitionOperation(trx, op, { to: 'failed', error: linkedElsewhere(name) });
@@ -413,7 +450,7 @@ async function loadConnection(
   if (listing.connection_id === null) return null;
   const connection = await trx
     .selectFrom('marketplace_connection')
-    .select(['id', 'mode'])
+    .select(['id', 'mode', 'status'])
     .where('account_id', '=', listing.account_id)
     .where('id', '=', listing.connection_id)
     .executeTakeFirst();
@@ -794,8 +831,9 @@ async function sendTo(
         detail,
       };
     case 'pendingUser':
-      // Only an assisted operation waits for the user; an api one must be read back.
-      if (ctx.mode !== 'assisted') {
+      // An assisted operation waits for the user, and so does an automated one whose session
+      // met a check automation must not pass; an api one must be read back.
+      if (ctx.mode !== 'assisted' && ctx.mode !== 'automation') {
         return {
           resolution: { type: 'failed', error: cannotConfirm(ctx.name) },
           detail: { ...detail, reason: 'a user task for an api operation' },
@@ -1059,7 +1097,11 @@ async function readOnce(
 ): Promise<ReadResult> {
   try {
     const result = await withDeadline(deps.callTimeoutMs, signal, (callSignal) =>
-      ctx.adapter.readListing(ref, { signal: callSignal, connection: ctx.connection }),
+      ctx.adapter.readListing(ref, {
+        signal: callSignal,
+        connection: ctx.connection,
+        operationId: ctx.op.id,
+      }),
     );
     if (!result.done) return { ok: false, error: 'timeout' };
     return { ok: true, remote: result.value };
@@ -1077,7 +1119,11 @@ async function executeOnce(
 ): Promise<Outcome> {
   try {
     const result = await withDeadline(deps.callTimeoutMs, signal, (callSignal) =>
-      ctx.adapter.execute(request, { signal: callSignal, connection: ctx.connection }),
+      ctx.adapter.execute(request, {
+        signal: callSignal,
+        connection: ctx.connection,
+        operationId: ctx.op.id,
+      }),
     );
     if (!result.done) {
       return { type: 'unknown', code: 'timeout', message: `${ctx.name} didn't answer in time.` };

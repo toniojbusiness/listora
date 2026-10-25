@@ -112,9 +112,10 @@ describe('eBay order sync', () => {
         payload: adapter.buildPayload(content.item, content.variant, {
           id: connectionId,
           mode: 'api',
+          status: 'connected',
         }),
       },
-      { signal: signal(), connection: { id: connectionId, mode: 'api' } },
+      { signal: signal(), connection: { id: connectionId, mode: 'api', status: 'connected' } },
     );
     if (outcome.type !== 'confirmed' || outcome.externalListingId === undefined) {
       throw new Error(JSON.stringify(outcome));

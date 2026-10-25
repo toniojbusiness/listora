@@ -8,6 +8,8 @@
  * run is `completed` only when every listing is one of the two.
  */
 import type {
+  ConnectionMode,
+  ConnectionStatus,
   DbExecutor,
   DelistRunStatus,
   ListingStatus,
@@ -59,8 +61,11 @@ export interface DelistOperationFacts {
 export interface DelistResult {
   listingId: string;
   marketplace: Marketplace;
-  /** `api` while the listing is on an API connection; otherwise the user does the delist. */
-  mode: 'api' | 'assisted';
+  /**
+   * `api` while the listing is on an API connection, `automation` while it is on an automation
+   * connection whose browser session works; otherwise the user does the delist.
+   */
+  mode: 'api' | 'automation' | 'assisted';
   operationId: string;
   operation: DelistOperationFacts;
   /** The attempts the operation gets, for "retry 2 of 6". */
@@ -273,6 +278,7 @@ export async function loadDelistRuns(
       'listing.marketplace',
       'listing.status as listing_status',
       'connection.mode as connection_mode',
+      'connection.status as connection_status',
     ])
     .where('op.account_id', '=', accountId)
     .where(
@@ -322,7 +328,7 @@ export async function loadDelistRuns(
     const result: DelistResult = {
       listingId: op.listing_id,
       marketplace: op.marketplace,
-      mode: op.connection_mode ?? 'assisted',
+      mode: delistMode(op.connection_mode, op.connection_status),
       operationId: op.id,
       operation,
       maxAttempts: max,
@@ -365,4 +371,17 @@ export async function loadDelistRuns(
       escalated: run.escalated_at !== null && status !== 'completed',
     };
   });
+}
+
+/** How a listing's delist is done, under its connection (as listing views say it). */
+function delistMode(
+  mode: ConnectionMode | null,
+  status: ConnectionStatus | null,
+): DelistResult['mode'] {
+  if (mode === 'api') return 'api';
+  // A session waiting to be relinked leaves the delist to the user.
+  if (mode === 'automation' && (status === 'connected' || status === 'degraded')) {
+    return 'automation';
+  }
+  return 'assisted';
 }

@@ -62,6 +62,7 @@ jobs:
               - 'packages/*/package.json'
               - 'apps/api/src/main.ts'
               - 'apps/worker/src/main.ts'
+              - 'apps/worker/src/runner/main.ts'
               # Read from the image's file system at startup: the feature discovery indexes
               # and the bundled contract the API validates requests with.
               - 'apps/api/src/features.ts'
@@ -107,6 +108,13 @@ jobs:
           key: swiftpm-${{ runner.os }}-${{ hashFiles('.build/swift-version.txt', 'packages/api-contract/swift/Package.resolved', 'packages/api-contract/tools/swift-generator/Package.resolved') }}
       - run: npm ci
       - run: scripts/dev-db.sh
+      # The browser runner's tests drive a real headless Chromium (against a local fake site).
+      - name: Cache headless Chromium
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .local/playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: scripts/dev-browser.sh --with-deps
       - run: npm run check
 
   # This job always reports a result, so it can be a required check: when no image input

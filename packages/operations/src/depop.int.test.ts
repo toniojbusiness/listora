@@ -61,7 +61,7 @@ describe('the engine with the Depop adapter and the fake Depop', () => {
         mode: 'api',
         external_user_id: String(fake.developmentSellerId),
       })
-      .returning(['id', 'mode'])
+      .returning(['id', 'mode', 'status'])
       .executeTakeFirstOrThrow();
     connectionId = connection.id;
     const config = loadDepopConfig({

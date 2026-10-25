@@ -8,6 +8,14 @@ import {
 } from '@listora/ai';
 import { AnalysisConfigError, loadAnalysisConfig, type AnalysisConfig } from '@listora/analysis';
 import {
+  AutomationConfigError,
+  loadAutomationSettings,
+  loadRunnerLaunchConfig,
+  RunnerLaunchConfigError,
+  type AutomationSettings,
+  type RunnerLaunchConfig,
+} from '@listora/automation';
+import {
   loadMarketplaceConfig,
   MarketplaceConfigError,
   type MarketplaceConfig,
@@ -48,6 +56,10 @@ export interface WorkerConfig {
   aiAlerts: AiAlertThresholds;
   /** PUSH_DRIVER, read by @listora/push: how sale and delist alerts reach the seller's phone. */
   push: PushConfig;
+  /** AUTOMATION_*, SALE_CHECK_*, FAKE_AUTOMATION_SITE_URL: which marketplaces are automated. */
+  automation: AutomationSettings;
+  /** BROWSER_RUNNER_*: how the worker starts the browser runner when automated work waits. */
+  runnerLaunch: RunnerLaunchConfig;
 }
 
 export class ConfigError extends Error {
@@ -101,6 +113,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const analysis = collect(issues, AnalysisConfigError, () => loadAnalysisConfig(env));
   const aiAlerts = collect(issues, AiConfigError, () => loadAiAlertConfig(env));
   const push = collect(issues, PushConfigError, () => loadPushConfig(env));
+  const automation = collect(issues, AutomationConfigError, () => loadAutomationSettings(env));
+  const runnerLaunch = collect(issues, RunnerLaunchConfigError, () => loadRunnerLaunchConfig(env));
 
   if (
     issues.length > 0 ||
@@ -110,7 +124,9 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     analysis === undefined ||
     aiAlerts === undefined ||
     push === undefined ||
-    marketplaces === undefined
+    marketplaces === undefined ||
+    automation === undefined ||
+    runnerLaunch === undefined
   ) {
     throw new ConfigError(issues);
   }
@@ -128,11 +144,18 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
       userPoolId === undefined ? undefined : { region: userPoolRegion(userPoolId), userPoolId },
     aiAlerts,
     push,
+    automation,
+    runnerLaunch,
   };
 }
 
 /** A job pool's size from `key`: an integer from 1 to 100. */
-function poolSize(issues: string[], env: NodeJS.ProcessEnv, key: string, fallback: string): number {
+export function poolSize(
+  issues: string[],
+  env: NodeJS.ProcessEnv,
+  key: string,
+  fallback: string,
+): number {
   const raw = env[key] ?? fallback;
   const size = Number(raw);
   if (!/^\d+$/.test(raw) || size < 1 || size > 100) {
@@ -142,7 +165,7 @@ function poolSize(issues: string[], env: NodeJS.ProcessEnv, key: string, fallbac
 }
 
 /** A package's own configuration, or undefined with its problems added to `issues`. */
-function collect<T>(
+export function collect<T>(
   issues: string[],
   type: new (...args: never[]) => Error & { readonly issues: readonly string[] },
   load: () => T,

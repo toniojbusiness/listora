@@ -77,34 +77,44 @@ its registrar and is not included.
 Poshmark, Mercari, and Depop (until its partner API is granted) are automated in the cloud by
 the headless-Chromium runner (decision D1 in [automation.md](automation.md)). The runner
 is reserved at 1 vCPU and 4 GB, with no task while idle (`browserRunner` in
-`infra/src/config.ts`), and runs as an on-demand Fargate task: one per batch of listing
-actions, and one for each scheduled sale check, about every 12 hours by default (the
-automation tasks will later adapt the interval to the seller's sales history). Once a domain
-is added, forwarded sale emails also detect sales between checks, almost immediately.
+`infra/src/config.ts`): it is the compute stack's `runner` service at a desired count of 0.
+The worker sets the count to 1 when automated listing actions or sale checks wait, and the
+runner sets it back to 0 as it exits, after two minutes with nothing to do
+(`RUNNER_IDLE_EXIT_SECONDS`). Each seller's marketplaces are checked for sales about every
+12 hours by default. The interval adapts to the seller's own sales history (sooner in the
+hours and days their sales usually happen and while items are hot, later when idle) while
+keeping about the same number of checks on average, and never more often than every 2 hours
+(`SALE_CHECK_MIN_HOURS`). Once a domain is added, forwarded sale emails also start a check at
+once, almost immediately after a sale.
 
 On demand the runner costs $0.0583 an hour (1 vCPU at $0.04048 and 4 GB at $0.004446, x86),
 plus $0.005 an hour for its public address while it runs. Assumptions:
 
-- About 60 scheduled checks a month at about 6 billed minutes each (task startup, then all
-  three marketplaces checked at human pace): 6 hours.
-- About 300 listing actions a month (creates, edits, delists), batched into jobs that total
+- About 60 scheduled checks a month at about 6 billed minutes each (task startup, all three
+  marketplaces checked at human pace, then the two idle minutes before it exits): 6 hours.
+- About 300 listing actions a month (creates, edits, delists), batched into runs that total
   about 15 hours.
-- One EventBridge Scheduler schedule starts the checks, within its free tier.
-- The Chromium image adds about 1.5 GB to ECR.
+- The worker's dispatch task (every minute, inside the worker's task) starts the runner; it
+  adds nothing to the bill.
+- The runner image adds about 1.5 GB of Chromium layers to ECR, stored again only when the
+  dependencies change; each release adds its application layer, as the app image does.
 
-| Item                               | Usage                                              |    Monthly |
-| ---------------------------------- | -------------------------------------------------- | ---------: |
-| Fargate runner, scheduled checks   | 6 hours at $0.0583 an hour                         |      $0.35 |
-| Fargate runner, listing jobs       | 15 hours at $0.0583 an hour                        |      $0.87 |
-| Public IPv4 address while running  | 21 hours at $0.005 an hour                         |      $0.11 |
-| EventBridge Scheduler              | 60 invocations, within the free 14 million a month |      $0.00 |
-| ECR storage for the Chromium image | About 1.5 GB more at $0.10 per GB                  |      $0.15 |
-| **Automation subtotal**            |                                                    |  **$1.48** |
-| **Total with browser automation**  | $34.52 plus the automation subtotal                | **$36.00** |
+| Item                               | Usage                                          |    Monthly |
+| ---------------------------------- | ---------------------------------------------- | ---------: |
+| Fargate runner, scheduled checks   | 6 hours at $0.0583 an hour                     |      $0.35 |
+| Fargate runner, listing jobs       | 15 hours at $0.0583 an hour                    |      $0.87 |
+| Public IPv4 address while running  | 21 hours at $0.005 an hour                     |      $0.11 |
+| Worker dispatch task               | Every minute, inside the always-on worker task |      $0.00 |
+| ECR storage for the Chromium image | About 1.5 GB more at $0.10 per GB              |      $0.15 |
+| **Automation subtotal**            |                                                |  **$1.48** |
+| **Total with browser automation**  | $34.52 plus the automation subtotal            | **$36.00** |
 
 An always-on runner (one 1 vCPU / 4 GB task 24/7) is the alternative if per-job startup ever
 gets in the way: about $42.56 a month, plus $3.65 for its address. Listing jobs scale with
-listing volume, at about $0.06 an hour of browser work.
+listing volume, at about $0.06 an hour of browser work. Checks are bounded by the 2-hour
+minimum: even a seller selling around the clock on all three marketplaces, with every check
+starting the runner, keeps scheduled checks under about 36 hours a month (about $2.30 with
+the address).
 
 ## What the design avoids
 
