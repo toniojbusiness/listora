@@ -49,6 +49,11 @@ export interface AutomationProfile {
   readonly origins: readonly string[];
   /** `poshmark.com`: the only cookies a session loads or keeps. */
   readonly cookieDomains: readonly string[];
+  /**
+   * The marketplace's own sign-in page, which the app opens to link the seller's account; the
+   * seller signs in there (with any two-step check) and the app hands Listora the cookies.
+   */
+  readonly loginUrl: string;
   readonly pacing: PacingSettings;
   readonly limits: RunLimits;
   readonly challenges: ChallengeSigns;
@@ -88,6 +93,7 @@ const PROFILES: Readonly<Record<Exclude<Marketplace, 'ebay'>, AutomationProfile>
     marketplace: 'poshmark',
     origins: ['https://poshmark.com', 'https://www.poshmark.com'],
     cookieDomains: ['poshmark.com'],
+    loginUrl: 'https://poshmark.com/login',
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: COMMON_SIGNS,
@@ -97,6 +103,7 @@ const PROFILES: Readonly<Record<Exclude<Marketplace, 'ebay'>, AutomationProfile>
     marketplace: 'mercari',
     origins: ['https://www.mercari.com', 'https://mercari.com'],
     cookieDomains: ['mercari.com'],
+    loginUrl: 'https://www.mercari.com/login/',
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: MERCARI_CHALLENGE_SIGNS,
@@ -106,6 +113,7 @@ const PROFILES: Readonly<Record<Exclude<Marketplace, 'ebay'>, AutomationProfile>
     marketplace: 'depop',
     origins: ['https://www.depop.com', 'https://depop.com'],
     cookieDomains: ['depop.com'],
+    loginUrl: 'https://www.depop.com/login/',
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: DEPOP_CHALLENGE_SIGNS,
@@ -135,9 +143,16 @@ export function automationProfile(marketplace: AutomatedMarketplace): Automation
 
 /**
  * A profile for a local stand-in of the marketplace's site (the fake site in development and
- * tests): the same rules, but its origin and cookie domain are the stand-in's.
+ * tests): the same rules, but its origin, cookie domain, and sign-in page are the stand-in's.
  */
 export function standInProfile(base: AutomationProfile, siteUrl: string): AutomationProfile {
   const site = new URL(siteUrl);
-  return { ...base, origins: [site.origin], cookieDomains: [site.hostname] };
+  return {
+    ...base,
+    origins: [site.origin],
+    cookieDomains: [site.hostname],
+    // The marketplace's own sign-in path, on the stand-in (`/login` on Poshmark, `/login/` on
+    // Mercari and Depop).
+    loginUrl: new URL(new URL(base.loginUrl).pathname, site.origin).href,
+  };
 }

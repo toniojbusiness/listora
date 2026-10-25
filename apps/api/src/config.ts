@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { USER_POOL_ID_PATTERN, userPoolRegion } from '@listora/accounts';
 import { AiConfigError, loadAiConfig, type AiConfig } from '@listora/ai';
 import {
+  AutomationConfigError,
+  loadAutomationSettings,
+  type AutomationSettings,
+} from '@listora/automation';
+import {
   loadMarketplaceConfig,
   MarketplaceConfigError,
   type MarketplaceConfig,
@@ -48,9 +53,15 @@ export interface ApiConfig {
   ai: AiConfig;
   /**
    * FAKE_MARKETPLACE_URL, EBAY_*, and TOKEN_* keys, read by @listora/connections: which
-   * marketplaces can be connected, and the token vault the API seals new grants with.
+   * marketplaces can be connected, and the token vault the API seals new grants and linked
+   * marketplace sessions with (only the worker and the browser runner decrypt them).
    */
   marketplaces: MarketplaceConfig;
+  /**
+   * AUTOMATION_* and FAKE_AUTOMATION_SITE_URL (@listora/automation): each automated
+   * marketplace's sign-in page and cookie domains, the same the worker and the runner use.
+   */
+  automation: AutomationSettings;
 }
 
 export class ConfigError extends Error {
@@ -160,7 +171,20 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     if (!(error instanceof MarketplaceConfigError)) throw error;
     issues.push(...error.issues);
   }
-  if (!parsed.success || storage === undefined || ai === undefined || marketplaces === undefined) {
+  let automation: AutomationSettings | undefined;
+  try {
+    automation = loadAutomationSettings(env);
+  } catch (error) {
+    if (!(error instanceof AutomationConfigError)) throw error;
+    issues.push(...error.issues);
+  }
+  if (
+    !parsed.success ||
+    storage === undefined ||
+    ai === undefined ||
+    marketplaces === undefined ||
+    automation === undefined
+  ) {
     throw new ConfigError(issues);
   }
   const values = parsed.data;
@@ -175,5 +199,6 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     storage,
     ai,
     marketplaces,
+    automation,
   };
 }

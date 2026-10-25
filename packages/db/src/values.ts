@@ -258,3 +258,7 @@ export type SaleCheckReason = (typeof SALE_CHECK_REASONS)[number];
 
 export const SALE_CHECK_OUTCOMES = ['succeeded', 'failed', 'challenge'] as const;
 export type SaleCheckOutcome = (typeof SALE_CHECK_OUTCOMES)[number];
+
+/** Whether a newly linked session works (`session_check.status`). */
+export const SESSION_CHECK_STATUSES = ['pending', 'passed', 'failed'] as const;
+export type SessionCheckStatus = (typeof SESSION_CHECK_STATUSES)[number];

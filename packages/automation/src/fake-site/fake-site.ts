@@ -6,6 +6,7 @@
  * and fault injection for every page automation must stop at or recover from.
  *
  *   GET  /login                 the login page (a password field: no Listora session needs it)
+ *   POST /login                 (also /login/) log in by hand: any username and password; sets the session cookie
  *   GET  /                      the seller's account page ([data-account])
  *   GET  /listings?sku=...      search by the seller's SKU
  *   GET  /listings/new          the new-listing form (multipart, with photo upload)
@@ -287,7 +288,24 @@ export class FakeAutomationSite {
       response.end(reply.body ?? '');
     };
 
-    if (url.pathname === '/login') {
+    if (url.pathname === '/login' || url.pathname === '/login/') {
+      if (method === 'POST') {
+        // The seller logs in by hand, as on the app's linking screen in development: any
+        // username with a password starts a session as that seller.
+        const form = await readForm(request);
+        const seller = form.text('username');
+        if (seller !== '' && form.text('password') !== '') {
+          const { value } = this.issueSession(seller);
+          send({
+            status: 303,
+            headers: {
+              location: '/',
+              'set-cookie': `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
+            },
+          });
+          return;
+        }
+      }
       send({ status: 200, body: page('Log in', loginForm()) });
       return;
     }

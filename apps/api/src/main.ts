@@ -5,7 +5,7 @@ import {
   PostgresUsageStore,
 } from '@listora/ai';
 import { graphileAnalysisJobs } from '@listora/analysis';
-import { createOAuthClients, createTokenVault, sealOnly } from '@listora/connections';
+import { createOAuthClients, createTokenVault, sealOnly, SessionVault } from '@listora/connections';
 import { addJob, createDatabase, createPool } from '@listora/db';
 import {
   ApplicationToken,
@@ -30,6 +30,11 @@ const db = createDatabase(pool);
 
 const ebay = config.marketplaces.ebay;
 const ebayNotifications = ebay?.notifications;
+// The API only seals with it: new grants and linked sessions. The worker and the runner open them.
+const tokenVault =
+  config.marketplaces.tokenVault === undefined
+    ? undefined
+    : createTokenVault(config.marketplaces.tokenVault);
 
 const app = buildApp({
   logger,
@@ -48,10 +53,7 @@ const app = buildApp({
     adapters: createMarketplaceAdapters(config.marketplaces),
     oauth: createOAuthClients(config.marketplaces),
     // The API only seals new grants; the worker opens them at use time.
-    sealer:
-      config.marketplaces.tokenVault === undefined
-        ? undefined
-        : sealOnly(createTokenVault(config.marketplaces.tokenVault)),
+    sealer: tokenVault === undefined ? undefined : sealOnly(tokenVault),
     // A new eBay grant subscribes its seller's notifications (the worker runs the job).
     ...(ebayNotifications === undefined
       ? {}
@@ -81,6 +83,11 @@ const app = buildApp({
           verificationToken: ebayNotifications.verificationToken,
         },
       }),
+  // Linked sessions are sealed with the same vault; only the browser runner opens them.
+  marketplaceSessions: {
+    vault: tokenVault === undefined ? undefined : new SessionVault({ vault: tokenVault, logger }),
+    profiles: config.automation.profiles,
+  },
   pingDatabase: () => pingDatabase(pool),
 });
 
