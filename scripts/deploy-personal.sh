@@ -221,8 +221,8 @@ if [[ "$dry_run" == true ]]; then
 else
   # First, before changing anything: an existing bootstrap must be this restricted one.
   bootstrapped=false
-  if toolkit=$(aws_ cloudformation describe-stacks --stack-name "$toolkit" --output json 2>"$workdir/err"); then
-    policies=$(jq -r '.Stacks[0].Parameters[]? | select(.ParameterKey == "CloudFormationExecutionPolicies") | .ParameterValue' <<<"$toolkit")
+  if toolkit_stack=$(aws_ cloudformation describe-stacks --stack-name "$toolkit" --output json 2>"$workdir/err"); then
+    policies=$(jq -r '.Stacks[0].Parameters[]? | select(.ParameterKey == "CloudFormationExecutionPolicies") | .ParameterValue' <<<"$toolkit_stack")
     [[ "$policies" == "$policy_arn" ]] ||
       fail "$toolkit runs CloudFormation with '${policies:-AdministratorAccess (the default)}', not $policy_arn; re-bootstrap it on purpose: npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile $profile $bootstrap_flags"
     bootstrapped=true
