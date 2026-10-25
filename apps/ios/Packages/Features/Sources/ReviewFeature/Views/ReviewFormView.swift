@@ -6,7 +6,6 @@ import SwiftUI
 /// each editable in place, then the listing copy per marketplace.
 struct ReviewFormView: View {
     @Bindable var model: ReviewFlowModel
-    @State private var editing: ReviewFieldKey?
     @State private var editingCopy: MarketplaceCopy?
 
     var body: some View {
@@ -37,6 +36,7 @@ struct ReviewFormView: View {
                 emphasis: emphasis,
                 escalation: model.escalation,
                 quotaLine: model.premiumQuotaLine,
+                isUsedUp: model.isPremiumQuotaUsedUp,
                 onStart: { Task { await model.startIdentifyHarder() } },
             )
         } else if model.escalation == .finished {
@@ -69,14 +69,10 @@ struct ReviewFormView: View {
                     }
                     FieldRow(
                         field: form.field(key),
-                        isEditing: editing == key,
-                        onEdit: { editing = key },
-                        onCommit: { value in
-                            model.update(key, to: value)
-                            if editing == key {
-                                editing = nil
-                            }
-                        },
+                        draftText: draftText(key),
+                        onEdit: { model.beginEditing(key) },
+                        onSelect: { value in model.update(key, to: value) },
+                        onCommit: { model.commitEditing(key) },
                     )
                 }
             }
@@ -86,6 +82,19 @@ struct ReviewFormView: View {
                     .strokeBorder(section == .attention ? Palette.warning : Palette.separator, lineWidth: 1),
             )
         }
+    }
+
+    /// The text typed in `key`'s editor, when it is the open one.
+    private func draftText(_ key: ReviewFieldKey) -> Binding<String>? {
+        guard model.editing?.key == key else { return nil }
+        return Binding(
+            get: { model.editing?.text ?? "" },
+            set: { text in
+                if model.editing?.key == key {
+                    model.editing?.text = text
+                }
+            },
+        )
     }
 
     @ViewBuilder
@@ -125,7 +134,6 @@ struct ReviewFormView: View {
                     .accessibilityIdentifier("review.missing")
             }
             Button {
-                editing = nil
                 Task { await model.continueToCost() }
             } label: {
                 if model.isWorking {
@@ -179,6 +187,7 @@ struct IdentifyHarderView: View {
     let emphasis: IdentifyHarderEmphasis
     let escalation: ReviewFlowModel.Escalation
     let quotaLine: String
+    let isUsedUp: Bool
     let onStart: () -> Void
 
     var body: some View {
@@ -214,7 +223,7 @@ struct IdentifyHarderView: View {
                 Label("Identify harder", systemImage: "sparkle.magnifyingglass")
             }
         }
-        .disabled(escalation == .running)
+        .disabled(escalation == .running || isUsedUp)
         .accessibilityIdentifier("review.identifyHarder")
     }
 
@@ -222,7 +231,7 @@ struct IdentifyHarderView: View {
     private var status: some View {
         switch escalation {
         case let .failed(message, canRetry):
-            Text(canRetry ? "\(message) Tap Identify harder to try again." : message)
+            Text(canRetry && !isUsedUp ? "\(message) Tap Identify harder to try again." : message)
                 .font(Typography.caption)
                 .foregroundStyle(Palette.danger)
                 .accessibilityIdentifier("review.identifyHarderProblem")

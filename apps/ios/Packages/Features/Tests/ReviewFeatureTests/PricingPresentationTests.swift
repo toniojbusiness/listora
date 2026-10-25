@@ -100,6 +100,8 @@ struct PricingPresentationTests {
         #expect(QuotaPresentation.premiumLine(Fixtures.usage(premiumUsed: 3, limit: nil))
             == "Uses 1 premium identification. 3 used this month.")
         #expect(QuotaPresentation.premiumLine(nil) == "Uses 1 premium identification.")
+        #expect(QuotaPresentation.premiumLine(Fixtures.usage(premiumUsed: 10, limit: 10))
+            == "All 10 premium identifications in your plan are used this month.")
         #expect(QuotaPresentation.isUsedUp(Fixtures.usage(premiumUsed: 10, limit: 10)))
         #expect(!QuotaPresentation.isUsedUp(Fixtures.usage(premiumUsed: 10, limit: nil)))
     }

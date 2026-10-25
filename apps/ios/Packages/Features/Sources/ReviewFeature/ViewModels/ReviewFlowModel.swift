@@ -74,6 +74,12 @@ final class ReviewFlowModel {
         var source = ""
     }
 
+    /// The detail open in its in-place editor, with the text typed so far.
+    struct FieldDraft: Equatable {
+        let key: ReviewFieldKey
+        var text: String
+    }
+
     struct SavedItem: Equatable {
         let sku: String
         let title: String?
@@ -95,6 +101,8 @@ final class ReviewFlowModel {
     var item: Item?
     var form: ReviewForm?
     var copies: [MarketplaceCopy] = []
+    /// The detail being edited in place. Its text is kept before anything that reads the form.
+    var editing: FieldDraft?
     /// The analysis whose details the form shows.
     var analysis: Analysis?
     /// The fast analysis, which "Identify harder" escalates.
@@ -166,15 +174,22 @@ final class ReviewFlowModel {
                 phase = .alreadySaved
                 return
             }
-            if let acceptedID = item.details.acceptedAnalysisId {
-                // Applied before (the flow was reopened): review what it proposed.
-                let accepted = try await service.analysis(id: acceptedID)
-                let fastID = accepted.tier == .premium ? accepted.escalatedFromAnalysisId : accepted.id
-                await enterReview(item: item, analysis: accepted, fastAnalysisID: fastID)
+            item = try await waitForPhotos(item)
+            // The server answers with the analysis of the current photo set when it has one, so
+            // starting again costs nothing for photos it analyzed before.
+            let started = try await startAnalysis()
+            if let acceptedID = item.details.acceptedAnalysisId,
+               acceptedID == started.id || acceptedID == started.escalationAnalysisId
+            {
+                // Applied before for these photos (the flow was reopened): review what it proposed.
+                let accepted = if acceptedID == started.id {
+                    started
+                } else {
+                    try await service.analysis(id: acceptedID)
+                }
+                await enterReview(item: item, analysis: accepted, fastAnalysisID: started.id)
                 return
             }
-            item = try await waitForPhotos(item)
-            let started = try await startAnalysis()
             let finished = try await waitForAnalysis(started, showsProgress: true)
             guard finished.status == .completed else {
                 phase = .failed(Self.problem(analysisFailure: finished.failure))
@@ -301,8 +316,13 @@ extension ReviewFlowModel {
     // MARK: Problems
 
     static func problem(_ failure: APIFailure) -> Problem {
-        Problem(
-            title: "Something went wrong",
+        let title = switch failure.knownCode {
+        case .quotaExceeded: "Your plan's limit is reached"
+        case .notFound: "This item isn't on Listora anymore"
+        default: "Something went wrong"
+        }
+        return Problem(
+            title: title,
             message: failure.message,
             canRetry: failure.retryable || failure.statusCode == nil,
             suggestsEditingPhotos: false,

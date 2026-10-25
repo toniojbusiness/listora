@@ -8,6 +8,8 @@ enum Fixtures {
     static let itemID = "0196d6f0-0000-7000-8000-000000000001"
     static let fastID = "0196d6f0-0000-7000-8000-0000000000f1"
     static let premiumID = "0196d6f0-0000-7000-8000-0000000000f2"
+    /// The fast analysis of a photo set changed after ``fastID`` was applied.
+    static let newPhotosID = "0196d6f0-0000-7000-8000-0000000000f3"
     static let date = Date(timeIntervalSince1970: 1_800_000_000)
 
     static func usd(_ cents: Int64) -> Schemas.Money {

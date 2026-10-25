@@ -243,26 +243,30 @@ skip.
 
 `ReviewFeature` takes a draft's server item from analysis to a saved inventory item. Each step
 saves to the server before the next screen opens, so after a relaunch the flow picks up where
-the server is (an item already analyzed reopens in review; a saved one shows as saved).
+the server is (an item already analyzed reopens in review; a saved one shows as saved). A
+reopened item whose photos changed since its analysis was applied is analyzed again.
 
 - **Analysis progress.** It waits for the server to process every photo, starts the analysis
   (`startItemAnalysis`, which returns the existing one for the photo set), and polls it. Every
   wait has a deadline (`ReviewTiming`) and ends in a failure with Try again, never an endless
   spinner. A photo the server could not process, or an analysis that needs other photos, says so
-  and offers Edit photos.
+  and offers Edit photos; any other failure that asking again won't fix (such as the plan's
+  limit) shows the server's reason and offers Go back.
 - **Review, confidence first.** Every detail with its value, its source (AI, Tag, Barcode, or
   You), and the analysis's confidence. Details proposed below 0.6 (the analysis prompt's own
   "a person should check it" line) and empty details every marketplace needs (title, category,
   condition) come first under "Check these", lowest confidence first. The order is fixed while
-  the seller edits, so rows never jump. Each detail edits in place; canonical ones (category,
-  department, size type, condition) are menus of the vocabulary in `Resources/vocabulary.json`,
-  a copy of @listora/analysis's that `packages/analysis/src/ios-vocabulary.test.ts` keeps equal.
+  the seller edits, so rows never jump. Each detail edits in place, and the typed text is kept
+  when the seller continues or opens another detail; canonical ones (category, department, size
+  type, condition) are menus of the vocabulary in `Resources/vocabulary.json`, a copy of
+  @listora/analysis's that `packages/analysis/src/ios-vocabulary.test.ts` keeps equal.
   The canonical title and description are details too; each marketplace's copy opens in an
   editor that counts its limits. The seller's copy edits stay on this iPhone
   (`ListingCopyStore` in `Core`) until the item's listings exist (plan task T-19).
 - **Identify harder** is prominent when the brand is missing or below 0.6, or the analysis asks
-  for it, and shows the plan's premium identifications (`getUsage`). It saves the seller's edits
-  first, so the premium details never replace them (`applyAnalysis` keeps `user` details).
+  for it, and shows the plan's premium identifications (`getUsage`); once they are used up it
+  says so and is unavailable. It saves the seller's edits first, so the premium details never
+  replace them (`applyAnalysis` keeps `user` details).
 - **Cost** on an in-app number pad (whole dollars or cents; no keyboard to open or dismiss), the
   purchase date, and where it was bought, with recent places as one-tap choices.
 - **Price.** "Don't sell below" per marketplace (tap for the breakdown), the quick sale,

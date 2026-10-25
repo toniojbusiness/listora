@@ -5,18 +5,20 @@ import SwiftUI
 /// to edit it in place; choices open a menu of the canonical values.
 struct FieldRow: View {
     let field: ReviewField
-    let isEditing: Bool
+    /// The text typed so far, while this row's editor is open.
+    let draftText: Binding<String>?
     let onEdit: () -> Void
-    let onCommit: (FieldValue) -> Void
+    let onSelect: (FieldValue) -> Void
+    let onCommit: () -> Void
 
     var body: some View {
         // The row's identifier goes on the row only: on a container it would also replace the
         // editor's own.
         if field.key.kind == .choice {
-            ChoiceMenu(key: field.key, onSelect: onCommit) { summary }
+            ChoiceMenu(key: field.key, onSelect: onSelect) { summary }
                 .accessibilityIdentifier("review.field.\(field.key.rawValue)")
-        } else if isEditing {
-            FieldEditor(field: field, onCommit: onCommit)
+        } else if let draftText {
+            FieldEditor(field: field, text: draftText, onCommit: onCommit)
         } else {
             Button(action: onEdit) { summary }
                 .buttonStyle(.plain)
@@ -104,17 +106,18 @@ struct ProvenanceBadge: View {
     }
 }
 
-/// The in-place editor of a text or list detail. Return or leaving the field keeps the value.
+/// The in-place editor of a text or list detail. Return or leaving the field keeps the value; the
+/// text lives in the model, so Continue or another row keeps it too.
 private struct FieldEditor: View {
     let field: ReviewField
-    let onCommit: (FieldValue) -> Void
-    @State private var text: String
+    @Binding var text: String
+    let onCommit: () -> Void
     @FocusState private var isFocused: Bool
 
-    init(field: ReviewField, onCommit: @escaping (FieldValue) -> Void) {
+    init(field: ReviewField, text: Binding<String>, onCommit: @escaping () -> Void) {
         self.field = field
+        _text = text
         self.onCommit = onCommit
-        _text = State(initialValue: field.value.editingText)
     }
 
     var body: some View {
@@ -134,7 +137,7 @@ private struct FieldEditor: View {
             .keyboardType(field.key == .upc || field.key == .rnNumber ? .numberPad : .default)
             .submitLabel(.done)
             .focused($isFocused)
-            .onSubmit(commit)
+            .onSubmit(onCommit)
             .onChange(of: text) { _, value in
                 if value.count > field.key.maxLength {
                     text = String(value.prefix(field.key.maxLength))
@@ -142,7 +145,7 @@ private struct FieldEditor: View {
             }
             .onChange(of: isFocused) { _, focused in
                 if !focused {
-                    commit()
+                    onCommit()
                 }
             }
             .accessibilityIdentifier("review.editor.\(field.key.rawValue)")
@@ -154,15 +157,11 @@ private struct FieldEditor: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done", action: commit)
+                Button("Done", action: onCommit)
                     .font(Typography.headline)
                     .accessibilityIdentifier("review.editor.done")
             }
         }
-    }
-
-    private func commit() {
-        onCommit(FieldValue.parse(text, as: field.key.kind))
     }
 }
 

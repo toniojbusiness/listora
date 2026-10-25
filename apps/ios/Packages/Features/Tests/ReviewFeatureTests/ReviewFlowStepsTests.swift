@@ -52,6 +52,36 @@ struct ReviewFlowStepsTests {
     }
 
     @Test
+    func `Continue keeps the text still open in a detail's editor`() async {
+        await harness.scriptHappyPath()
+        let model = harness.model()
+        await model.start()
+        model.beginEditing(.brand)
+        #expect(model.editing == ReviewFlowModel.FieldDraft(key: .brand, text: "Acme Outfitters"))
+        model.editing?.text = "Acme Co. "
+
+        await model.continueToCost()
+        #expect(model.editing == nil)
+        #expect(model.showsCost)
+        #expect(await harness.service.replacements.first?.details.brand == "Acme Co.")
+    }
+
+    @Test
+    func `opening another detail keeps the text of the one open before`() async {
+        await harness.scriptHappyPath()
+        let model = harness.model()
+        await model.start()
+        model.beginEditing(.colors)
+        model.editing?.text = "red, navy"
+        model.beginEditing(.pattern)
+        #expect(model.editing?.key == .pattern)
+        #expect(model.form?.field(.colors).value == .list(["red", "navy"]))
+
+        model.commitEditing(.colors)
+        #expect(model.editing?.key == .pattern, "a stale editor's commit leaves the open one alone")
+    }
+
+    @Test
     func `skipping the cost clears it and the price screen has no floors`() async {
         await harness.scriptHappyPath()
         await harness.service.setPricing([.success(Fixtures.pricing(floors: []))])

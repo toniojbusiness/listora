@@ -40,6 +40,7 @@ struct ReviewFlowView: View {
                 problem: problem,
                 onRetry: { Task { await model.start() } },
                 onEditPhotos: { onFinished(.editPhotos) },
+                onGoBack: { onFinished(.back) },
             )
         case .reviewing:
             ReviewFormView(model: model)
@@ -162,6 +163,7 @@ struct ProblemView: View {
     let problem: ReviewFlowModel.Problem
     let onRetry: () -> Void
     let onEditPhotos: () -> Void
+    let onGoBack: () -> Void
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
@@ -188,14 +190,18 @@ struct ProblemView: View {
                         .buttonStyle(.listoraPrimary)
                         .accessibilityIdentifier("review.retry")
                 }
-                if problem.canRetry, problem.suggestsEditingPhotos {
+                if problem.suggestsEditingPhotos, problem.canRetry {
                     Button("Edit photos", action: onEditPhotos)
                         .buttonStyle(.listoraSecondary)
                         .accessibilityIdentifier("review.editPhotos")
-                } else if !problem.canRetry {
+                } else if problem.suggestsEditingPhotos {
                     Button("Edit photos", action: onEditPhotos)
                         .buttonStyle(.listoraPrimary)
                         .accessibilityIdentifier("review.editPhotos")
+                } else if !problem.canRetry {
+                    Button("Go back", action: onGoBack)
+                        .buttonStyle(.listoraPrimary)
+                        .accessibilityIdentifier("review.goBack")
                 }
             }
         }
