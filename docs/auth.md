@@ -138,11 +138,13 @@ database at once, and leaves the rest to a job:
      signed tokens, so the API records a dev deletion as done at once, and signing in again
      needs no worker.
    - asks each pending grant's marketplace to revoke Listora's access, through the
-     `MarketplaceAccessRevoker` the marketplace adapters provide (eBay in T-16, Depop in T-24).
-     A confirmed revocation deletes the grant's tokens at once. After 7 days the job gives up on
-     the rest: it deletes their tokens too and records them as `manual` (the log line says
-     which marketplaces the seller must revoke themselves). Until an adapter can revoke, every
-     grant ends this way.
+     `MarketplaceAccessRevoker`: `OAuthGrantRevoker` (`@listora/connections`) opens the grant's
+     tokens in the token vault and calls the marketplace's revocation endpoint (eBay's
+     `token/revoke`; Depop's joins it in T-24). A confirmed revocation deletes the grant's tokens
+     at once. After 7 days the job gives up on the rest: it deletes their tokens too and records
+     them as `manual` (the log line says which marketplaces the seller must revoke themselves).
+     A marketplace the worker cannot revoke with (no OAuth client or no token vault) always
+     ends this way.
    - then deletes the tombstone. While anything is open, it runs again later (after 1 m, 5 m,
      15 m, 1 h, 3 h, then every 6 h; revocations get a last try when the 7 days end).
 

@@ -56,4 +56,14 @@ final class TabShellUITests: XCTestCase {
         XCTAssertTrue(apiBaseURL.exists)
         XCTAssertTrue(apiBaseURL.label.hasPrefix("http://"), "API base URL is \(apiBaseURL.label)")
     }
+
+    func testSettingsOpensTheMarketplacesScreen() {
+        let settings = app.tabBars.buttons["Settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        let marketplaces = app.buttons["settings.marketplaces"]
+        XCTAssertTrue(marketplaces.waitForExistence(timeout: 5))
+        marketplaces.tap()
+        XCTAssertTrue(app.navigationBars["Marketplaces"].waitForExistence(timeout: 5))
+    }
 }

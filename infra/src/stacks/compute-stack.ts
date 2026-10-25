@@ -110,9 +110,12 @@ export class ComputeStack extends ListoraStack {
       image,
       command: [...SERVICE_COMMANDS[service]],
       environment: containerEnvironment(service, url, {
-        bucket: props.photoBucket.bucketName,
-        region: target.region,
-        publicBaseUrl: `https://${props.photoCdnDomain}`,
+        photoStorage: {
+          bucket: props.photoBucket.bucketName,
+          region: target.region,
+          publicBaseUrl: `https://${props.photoCdnDomain}`,
+        },
+        tokenKeyArn: props.tokenKey.keyArn,
       }),
       secrets: containerSecrets(this, environment, service, props.database),
       portMappings: service === 'api' ? [{ containerPort: API_PORT }] : [],
@@ -127,14 +130,17 @@ export class ComputeStack extends ListoraStack {
     });
 
     // Designed access, least privilege: photos for both (uploads, derivatives), raw sale
-    // emails for the worker only, and envelope encryption of marketplace tokens for both. A
-    // combined task's role holds the union, since its two containers share it.
+    // emails for the worker only, and envelope encryption of marketplace tokens: the API only
+    // seals new grants (GenerateDataKey), and only the worker opens them (Decrypt). A combined
+    // task's role holds the union, since its two containers share it.
     const grant = (role: iam.IRole, containers: readonly ServiceName[]): void => {
       props.photoBucket.grantReadWrite(role);
       if (containers.includes('worker')) {
         props.inboundMailBucket.grantRead(role, `${INBOUND_MAIL_PREFIX}*`);
+        props.tokenKey.grant(role, 'kms:GenerateDataKey', 'kms:Decrypt');
+      } else {
+        props.tokenKey.grant(role, 'kms:GenerateDataKey');
       }
-      props.tokenKey.grant(role, 'kms:GenerateDataKey', 'kms:Decrypt');
     };
 
     const layout = settings.services;

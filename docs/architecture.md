@@ -105,8 +105,8 @@ The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
 ```text
 apps/
   api/          Fastify HTTP API (@listora/api)
-  worker/       Background worker: operation engine, account deletion, polls, health jobs,
-                photo processing, item analysis (@listora/worker)
+  worker/       Background worker: operation engine, account deletion, polls, the daily
+                connection health check, photo processing, item analysis (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
                 and account blocks (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
@@ -127,9 +127,12 @@ packages/
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
                 the photo processing job, an item's photo-set hash (@listora/photos)
   marketplaces/ Marketplace adapter framework: interface, capabilities, registry, listing content,
-                assisted adapters, conformance suite; the eBay adapter (ebay/) and the Depop
-                adapter (depop/); fake marketplace, fake eBay, and fake Depop with fault injection
-                (@listora/marketplaces)
+                assisted adapters, conformance suite; the eBay adapter and connect client (ebay/)
+                and the Depop adapter (depop/); fake marketplace, fake eBay, and fake Depop with
+                fault injection (@listora/marketplaces)
+  connections/  Marketplace account connections: OAuth connect, the token vault (local key or KMS),
+                use-time credentials with single-flight refresh, health checks, revocation
+                (@listora/connections)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
@@ -176,6 +179,7 @@ src/
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
   listings/      Listing views (honest statusDisplay) and shared-listing links
+  connections/   Marketplace connections, connect attempts, and the public OAuth callback
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -314,8 +318,10 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
 }
 ```
 
-Imports, orders, webhooks, emails, and credential refresh join the interface as optional
-members with the tasks that first use them (T-16, T-17, T-23, T-36).
+Imports, orders, webhooks, and emails join the interface as optional members with the tasks
+that first use them (T-17, T-23, T-36). Credentials are not part of the interface: an adapter
+gets a connection's tokens at use time from its own token source (eBay's `EbaySellerSource`,
+which `@listora/connections` implements over the token vault, below).
 
 | Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
 | ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
@@ -350,8 +356,9 @@ pending id, so a delist never waits on a listing that was never made.
 
 **Registry.** `createAdapterRegistry` (`registry.ts`) holds one adapter per marketplace and
 refuses, at startup, a duplicate or an adapter whose capabilities are incoherent without a
-connection or under either connection mode. The worker passes its `lookup` to the engine
-(`apps/worker/src/adapters.ts`), and the API asks it for capabilities under a connection.
+connection or under either connection mode. `createMarketplaceAdapters` (`default-adapters.ts`)
+builds the registry both processes run with: the worker passes its `lookup` to the engine, and
+the API asks it for capabilities under a connection.
 
 **Listing content and payloads.** A create, revise, or relist publishes listing content
 (`content.ts`): an `ItemSnapshot` (canonical attributes and photos with their listing URLs) and
@@ -461,11 +468,12 @@ eBay Picture Services by the Media API. Its rules:
   daily budget (5,000 by default), which keeps a reserve for ends and read-backs and re-reads the
   real usage from eBay's Developer Analytics API (the app-wide daily Trading rate, never a
   per-call or short-window one), so several workers share one quota.
-- **Tokens.** The adapter gets the seller's user token from an `EbaySellerSource`. Until
-  per-connection tokens arrive (T-16), `RefreshTokenSeller` serves one seller from
-  `EBAY_USER_REFRESH_TOKEN` (the fake's development seller with `EBAY_ENV=fake`), bound to the
-  one connection `EBAY_USER_CONNECTION_ID` names. It is a development and sandbox convenience
-  only: `EBAY_ENV=production` refuses both keys, so one seller's account never acts for every
+- **Tokens.** The adapter gets the seller's user token from an `EbaySellerSource`. In the
+  worker with a token vault, that is `ConnectionSeller` (`@listora/connections`): each
+  connection's own tokens (connections, below). Without a vault, `RefreshTokenSeller` serves one
+  seller from `EBAY_USER_REFRESH_TOKEN` (the fake's development seller with `EBAY_ENV=fake`),
+  bound to the one connection `EBAY_USER_CONNECTION_ID` names. That is a development and sandbox
+  convenience only: `EBAY_ENV=production` refuses both keys, so one seller's account never acts for every
   Listora user. Any other connection, a listing with no connection, and every connection
   without a configured seller get `reauth_required` ("Connect eBay") on every path (execute,
   read-back, health check, preparing). Token refreshes are single-flight, and the shared
@@ -510,7 +518,7 @@ other Depop listing runs assisted. Its rules:
   before they are stored, a failed write keeps them in use and is stored on the next call
   (clearing a "reconnect" mark another process set meanwhile), and a refused refresh token is
   checked against the store first, since another process may have refreshed. The tokens live in
-  a `DepopTokenStore`; until the token vault (T-16) implements it, `MemoryDepopTokenStore` holds
+  a `DepopTokenStore`; until Depop connect (T-24) implements it over the token vault, `MemoryDepopTokenStore` holds
   the one development or sandbox seller (`DEPOP_USER_REFRESH_TOKEN`, refused in production).
 - **Rate limits** (`rate-limits.ts`): Depop's per-seller allowances (creates and full updates 200
   per 10 seconds, everything else 6,000 a minute) and its application-wide 30,000 a minute
@@ -526,11 +534,52 @@ a byte-for-byte copy of Depop's published `openapi.yaml`, follows Depop's docume
 (PKCE, rotation), rate limits, and signed webhooks, and injects Depop's failure modes; its README
 cites the Depop pages it follows and what they leave open.
 
-The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth, Media, Taxonomy,
-Fulfillment, Developer Analytics, and Notification endpoints the adapter uses, signs
+The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth (with the consent
+page and token revocation), Commerce Identity, Media, Taxonomy, Fulfillment, Developer
+Analytics, and Notification endpoints the adapter and eBay connect use, signs
 notifications the way eBay does, and injects eBay's failure modes; its README cites the eBay
 documentation it follows and lists what eBay leaves undocumented. `npm run ebay:sandbox-check`
 runs the adapter against eBay's sandbox once the keys are in `.env` (README.md).
+
+**Connections** (`@listora/connections`). A seller connects an API marketplace with its
+official OAuth 2.0 authorization code grant; Listora never sees a marketplace password.
+
+- **Connect.** `startConnectionAuthorization` stores a `connection_authorization` with the
+  SHA-256 of a random single-use `state` (10 minutes) and returns the marketplace's consent URL,
+  which the app opens in `ASWebAuthenticationSession`. The marketplace sends the browser to the
+  public `handleConnectionCallback`, where the state finds the attempt and is used once; the API
+  exchanges the code, reads the seller's immutable id (eBay `getUser`), seals the tokens, and
+  stores them on the account's one connection for that marketplace, then redirects to
+  `listora://connections/<marketplace>?authorizationId=...`. The app reads the attempt back and
+  never trusts the redirect. Reconnecting renews the same connection; a different seller account
+  on that marketplace is refused, because the account's listings belong to the connected one.
+  `MarketplaceOAuthClient` (`oauth.ts`) is the marketplace side: eBay's (`EbayConnectClient`,
+  `ebay/connect.ts`) follows eBay's documented endpoints and needs the keyset's RuName
+  (`EBAY_RUNAME`), and the fake eBay serves them locally.
+- **Token vault.** Tokens are stored only encrypted, by envelope encryption: a new AES-256-GCM
+  data key per seal, wrapped by KMS (`KmsTokenVault`, deployed) or a local key
+  (`LocalTokenVault`, development), and bound to the marketplace and connection id (the GCM
+  additional data and the KMS encryption context). The API holds only a `TokenSealer`
+  (`sealOnly`) and its KMS role only `GenerateDataKey`; only the worker decrypts, at use time.
+  Tokens, codes, and states never reach a log line (the callback's request log shows its path
+  only) or an operation excerpt; tests check the captured logs.
+- **Credentials.** `ConnectionTokens` decrypts a connection's access token when the eBay adapter
+  (through `ConnectionSeller`, its `EbaySellerSource`) or the health check asks, keeps it in memory until it nears expiry, and refreshes it 5 minutes
+  before it expires. Refresh is single-flight per connection: callers in one process share one
+  refresh, and across workers the refresh holds the connection's row lock, so a worker that
+  waited finds the new token instead of refreshing again. A refused refresh (`invalid_grant`)
+  makes the connection `reauth_required`; one that fails for now makes it `degraded`.
+- **Health.** The daily `connection_health` job (a worker scheduled task) makes one cheap call per
+  connection that still holds its grant (eBay `getUser`, after a refresh if due): it works →
+  `connected` with `last_ok_at`; the grant is refused → `reauth_required`; the marketplace cannot
+  be asked → `degraded` with the problem, until a later check succeeds. `describeConnection`
+  renders the status, a warning 30 days before the grant expires (eBay refresh tokens last
+  about 18 months), and a reconnect action whenever only the seller can fix it.
+- **Revocation.** `recordAuthorizationRevocation` (eBay `AUTHORIZATION_REVOCATION`, parsed by
+  `parseAuthorizationRevocation`) flips every connection of that seller to `revoked` at once and
+  deletes the tokens; a notice older than the current grant changes nothing. The notifications
+  task (T-17) verifies and delivers the notices. Account deletion revokes grants through the
+  marketplace's revocation endpoint (`OAuthGrantRevoker`).
 
 **Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
 only". The marketplaces granted the product owner permission to automate where no API exists,
@@ -686,9 +735,10 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    tests inject 429s, 5xx errors (also after the change was applied), timeouts after send,
    stale reads, and a worker killed mid-operation, over listings that are ended and relisted
    more than once.
-10. **Concurrency (T-16, T-24).** Token refresh is single-flight per connection; Depop rotates
-    refresh tokens, so rotated tokens are kept in memory until they are stored (the Depop
-    adapter's tokens, section 4). Rate limits use per-seller and app-wide sliding windows.
+10. **Concurrency (T-16, T-24).** Token refresh is single-flight per connection: for eBay, in one
+    process and across workers (the connection's row lock, section 4); Depop rotates refresh
+    tokens, so rotated tokens are kept in memory until they are stored (the Depop adapter's
+    tokens, section 4). Rate limits use per-seller and app-wide sliding windows.
 
 **Auto-delist.** A sale event (webhook, poll, email, or manual entry) is deduplicated by
 its order (see `sale` in section 9). Then, in one transaction, Listora records the sale, sets
@@ -711,21 +761,21 @@ Nothing requires a real credential to build or test. Every external service sits
 interface with a fake or dev driver, selected by an environment variable. Each switch below
 lands with the task that introduces that dependency, and its keys are added to `.env.example`.
 
-| Dependency       | Dev/test                                                                                                                                                   | Production                 | Switch                                |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
-| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                                                 | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`   |
-| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                            | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                |
-| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                                                   | The same                   | none                                  |
-| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                           | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`            |
-| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                                        | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
-| eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`)                      | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`  |
-| Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`) | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production` |
-| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                                       | SES inbound                | `EMAIL_INGEST=folder\|ses`            |
-| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                         | Cognito                    | `AUTH_DRIVER=dev\|cognito`            |
-| Payments         | Fake Stripe client + StoreKit configuration file                                                                                                           | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`         |
-| Push             | Recording fake                                                                                                                                             | APNs                       | `PUSH_DRIVER`                         |
-| Token encryption | Local AES-GCM key from `.env`                                                                                                                              | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                    |
-| iOS              | iPhone 17 simulator, photo-library fixtures                                                                                                                | Device / TestFlight        | xcconfig `API_BASE_URL`               |
+| Dependency       | Dev/test                                                                                                                                                                | Production                 | Switch                                |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
+| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                                                              | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`   |
+| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                                         | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                |
+| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                                                                | The same                   | none                                  |
+| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                                        | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`            |
+| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                                                     | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
+| eBay             | `fake-ebay` server (OAuth consent, Commerce Identity, Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`  |
+| Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`)              | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production` |
+| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                                                    | SES inbound                | `EMAIL_INGEST=folder\|ses`            |
+| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                                      | Cognito                    | `AUTH_DRIVER=dev\|cognito`            |
+| Payments         | Fake Stripe client + StoreKit configuration file                                                                                                                        | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`         |
+| Push             | Recording fake                                                                                                                                                          | APNs                       | `PUSH_DRIVER`                         |
+| Token encryption | Local AES-GCM key from `.env` (`TOKEN_ENCRYPTION_KEY`)                                                                                                                  | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                    |
+| iOS              | iPhone 17 simulator, photo-library fixtures                                                                                                                             | Device / TestFlight        | xcconfig `API_BASE_URL`               |
 
 Live smoke tests for real providers skip automatically when their credential is absent. Fakes
 must stay true to the real contract: shapes, error codes, and failure modes.
@@ -935,7 +985,12 @@ Tables by area:
   `ai_usage_daily`, which a trigger on `ai_usage_event` keeps in step per account and UTC day.
   Monthly totals come from `UsageStore.monthlyUsage` (section 8). The operator controls are
   `ai_kill_switch`, `ai_account_block`, and the append-only `ai_control_audit`.
-- **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
+- **Marketplaces:** `marketplace_connection` (mode, the seller's immutable id, encrypted tokens,
+  expiries, scopes, status, when the grant was issued, `last_ok_at`, and the latest problem's
+  code, message, and time; a revoked connection holds no tokens; at most one per account and
+  marketplace, which connecting keeps under the account's row lock),
+  `connection_authorization` (one connect attempt: the state's SHA-256, its expiry, and the
+  result),
   `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot and
   newest seen revision, desired/applied version, `last_verified_at` for a read-back and
   `user_confirmed_at` for the user's confirmation; a listing known only by a share short link
@@ -1002,7 +1057,8 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
 - **Data.** RDS PostgreSQL 18 (Multi-AZ in prod; deletion protection in prod and personal), a
   private photo bucket whose `public/` prefix CloudFront serves by exact key (at its
   `*.cloudfront.net` domain), SES inbound mail for `in.<domain>` stored in a private bucket,
-  and a KMS key for token envelope encryption.
+  and a KMS key for token envelope encryption (`TOKEN_KMS_KEY_ID`: the API may only
+  `GenerateDataKey`, the worker also `Decrypt`).
 - **Deploys** run only from the manual Deploy workflow, on `main`, inside the protected GitHub
   environment, with OIDC role assumption (no stored AWS keys). Images are tagged with the
   commit and immutable. The environment's protection rules and the CDK bootstrap's

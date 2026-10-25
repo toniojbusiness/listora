@@ -241,6 +241,16 @@
                     ]
                   ]
                 }
+              },
+              {
+                "Name": "TOKEN_KMS_KEY_ID",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-secrets",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
+                  }
+                }
               }
             ],
             "Essential": true,
@@ -430,6 +440,16 @@
                       }
                     ]
                   ]
+                }
+              },
+              {
+                "Name": "TOKEN_KMS_KEY_ID",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-secrets",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
+                  }
                 }
               }
             ],

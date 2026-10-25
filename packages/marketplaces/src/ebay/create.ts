@@ -17,6 +17,11 @@ import {
 import { AnalyticsTradingUsage } from './rest.ts';
 
 export interface CreateEbayAdapterOptions {
+  /**
+   * Whose tokens operations act with: each connection's own, from the token vault
+   * (`@listora/connections`). Without it, the configured single seller (`EBAY_USER_*`), if any.
+   */
+  seller?: EbaySellerSource;
   /** Per-request timeout for every eBay call. */
   requestTimeoutMs?: number;
   now?: () => number;
@@ -35,7 +40,8 @@ export function createEbayAdapter(
   });
   const applicationToken = new ApplicationToken(oauth, options.now);
   const seller: EbaySellerSource =
-    config.seller === undefined
+    options.seller ??
+    (config.seller === undefined
       ? new UnconnectedSeller(config.listingSettings)
       : new RefreshTokenSeller({
           oauth,
@@ -43,7 +49,7 @@ export function createEbayAdapter(
           connectionId: config.seller.connectionId,
           settings: config.listingSettings,
           ...(options.now === undefined ? {} : { now: options.now }),
-        });
+        }));
   const endpoints = { api: config.endpoints.api, media: config.endpoints.media };
   return new EbayAdapter({
     endpoints: config.endpoints,

@@ -9,8 +9,9 @@ The app talks to the backend only through the generated `ListoraAPI` Swift packa
 
 ## Prerequisites
 
-- Xcode 26.3 with the iPhone 17 simulator (Xcode > Settings > Components installs the iOS
-  runtime). The tests reuse that simulator and never create one.
+- Xcode 26.3 or 27.1 with the iPhone 17 simulator (Xcode > Settings > Components installs the
+  iOS runtime). CI builds with 26.3; Xcode 27.1's stricter concurrency checks pass too, and
+  warnings stay errors on both. The tests reuse that simulator and never create one.
 - XcodeGen, SwiftLint, and SwiftFormat from Homebrew:
 
   ```sh
@@ -75,6 +76,8 @@ Packages/
     AddItemFeature    Add Item tab: guided capture, library import, drafts (GRDB), upload queue
     TasksFeature      Tasks tab
     SettingsFeature   Settings tab, with the developer sign-in in Dev builds
+    MarketplacesFeature  Marketplaces screen (from Settings): each marketplace's connection
+                      status, and connecting eBay through ASWebAuthenticationSession
     TagReadingFeature On-device tag reading with Vision (VisionTagReader); no UI
     ShareLinkFeature  The Share Extension's screen (ShareLinkView, ShareLinkModel)
 ```

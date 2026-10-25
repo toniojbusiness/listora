@@ -10,6 +10,7 @@ import {
   PostgresQuotaPolicy,
   PostgresUsageStore,
 } from '@listora/ai';
+import { createOAuthClients, createTokenVault } from '@listora/connections';
 import { createDatabase } from '@listora/db';
 import {
   createMetricsEmitter,
@@ -17,13 +18,14 @@ import {
   TRUST_METRICS_CRONTAB,
   TRUST_METRICS_TASK,
 } from '@listora/observability';
+import { createMarketplaceAdapters } from '@listora/marketplaces';
 import { startOperationWorker } from '@listora/operations';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
 
-import { createAdapters } from './adapters.ts';
 import { aiSpendCheckTask } from './ai-spend-check.ts';
 import { loadWorkerConfig } from './config.ts';
+import { createConnectionWork } from './connections.ts';
 import { createWorkerTasks } from './tasks.ts';
 
 const config = loadWorkerConfig();
@@ -34,11 +36,27 @@ const db = createDatabase({
 });
 const metrics = { db, emitter: createMetricsEmitter({ service: 'worker' }), logger };
 
+// The worker alone opens marketplace tokens: at use time, for the eBay adapter, the health
+// check, and account deletion's revocations.
+const connections = createConnectionWork({
+  db,
+  vault: config.marketplaces.tokenVault && createTokenVault(config.marketplaces.tokenVault),
+  oauth: createOAuthClients(config.marketplaces),
+  ebay: config.marketplaces.ebay,
+  logger,
+});
+
 try {
   const worker = await startOperationWorker({
     connectionString: config.databaseUrl,
     db,
-    adapters: createAdapters(config, logger).lookup,
+    adapters: createMarketplaceAdapters(
+      {
+        ...config.marketplaces,
+        ...(connections.ebaySeller === undefined ? {} : { ebaySeller: connections.ebaySeller }),
+      },
+      logger,
+    ).lookup,
     tasks: {
       ...createWorkerTasks({
         db,
@@ -55,8 +73,7 @@ try {
       [ACCOUNT_DELETION_TASK]: accountDeletionTask({
         db,
         cognito: config.cognitoUserPool && new AwsCognitoUserAdmin(config.cognitoUserPool),
-        // Marketplace adapters revoke their grants once they add OAuth connections (T-16, T-24).
-        marketplaceAccess: noMarketplaceAccessRevocation,
+        marketplaceAccess: connections.revoker ?? noMarketplaceAccessRevocation,
         logger,
       }),
       [TRUST_METRICS_TASK]: (payload) => runTrustMetricsTick(metrics, payload),
@@ -64,7 +81,7 @@ try {
     logger,
     concurrency: config.concurrency,
     taskConcurrency: config.taskConcurrency,
-    scheduledTasks: [aiSpendCheckTask(db, config.aiAlerts, logger)],
+    scheduledTasks: [aiSpendCheckTask(db, config.aiAlerts, logger), ...connections.scheduledTasks],
     crontab: [TRUST_METRICS_CRONTAB],
     onFatalError: (error) => {
       // Other workers recover this worker's jobs once its process is gone; exiting at once
@@ -86,8 +103,9 @@ try {
     {
       poolId: worker.poolId,
       taskPoolId: worker.taskPoolId,
-      fakeMarketplace: config.fakeMarketplaceUrl !== undefined,
-      ebay: config.ebay?.environment ?? null,
+      fakeMarketplace: config.marketplaces.fakeMarketplaceUrl !== undefined,
+      ebay: config.marketplaces.ebay?.environment ?? null,
+      tokenVault: config.marketplaces.tokenVault?.driver ?? null,
       aiProvider: config.ai.provider,
       cognitoUserPool: config.cognitoUserPool?.userPoolId,
     },

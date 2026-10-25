@@ -12,6 +12,7 @@ import {
   FAKE_EBAY_CLIENT_ID,
   FAKE_EBAY_CLIENT_SECRET,
   FAKE_EBAY_REFRESH_TOKEN,
+  FAKE_EBAY_RU_NAME,
 } from './fake/constants.ts';
 
 export const EBAY_ENVIRONMENTS = ['fake', 'sandbox', 'production'] as const;
@@ -27,8 +28,12 @@ export interface EbayEndpoints {
   media: string;
   /** The OAuth token endpoint. */
   oauthToken: string;
-  /** Where a seller grants consent (eBay connect, T-16). */
+  /** Where a seller grants consent (eBay connect). */
   authorize: string;
+  /** The OAuth token revocation endpoint (`token/revoke`). */
+  oauthRevoke: string;
+  /** Commerce Identity `getUser`: the seller a user token belongs to (`apiz.ebay.com`). */
+  identity: string;
 }
 
 export const DEFAULT_EBAY_FAKE_URL = 'http://127.0.0.1:4200';
@@ -45,6 +50,8 @@ export function ebayEndpoints(
         media: 'https://apim.ebay.com',
         oauthToken: 'https://api.ebay.com/identity/v1/oauth2/token',
         authorize: 'https://auth.ebay.com/oauth2/authorize',
+        oauthRevoke: 'https://api.ebay.com/identity/v1/oauth2/token/revoke',
+        identity: 'https://apiz.ebay.com/commerce/identity/v1/user',
       };
     case 'sandbox':
       return {
@@ -53,6 +60,9 @@ export function ebayEndpoints(
         media: 'https://apim.sandbox.ebay.com',
         oauthToken: 'https://api.sandbox.ebay.com/identity/v1/oauth2/token',
         authorize: 'https://auth.sandbox.ebay.com/oauth2/authorize',
+        // eBay documents the production revocation URL; the Sandbox follows its token endpoint.
+        oauthRevoke: 'https://api.sandbox.ebay.com/identity/v1/oauth2/token/revoke',
+        identity: 'https://apiz.sandbox.ebay.com/commerce/identity/v1/user',
       };
     case 'fake': {
       const base = fakeUrl.replace(/\/+$/, '');
@@ -62,6 +72,8 @@ export function ebayEndpoints(
         media: base,
         oauthToken: `${base}/identity/v1/oauth2/token`,
         authorize: `${base}/oauth2/authorize`,
+        oauthRevoke: `${base}/identity/v1/oauth2/token/revoke`,
+        identity: `${base}/commerce/identity/v1/user`,
       };
     }
   }
@@ -73,6 +85,12 @@ export interface EbayConfig {
   /** The application keyset (the fake's own in `fake`). */
   clientId: string;
   clientSecret: string;
+  /**
+   * The keyset's RuName (eBay redirect URL name; `EBAY_RUNAME`, the fake's own in `fake`). Its
+   * "auth accepted" and "auth declined" URLs, set in the eBay developer portal, are the API's
+   * `/v1/connections/ebay/callback`. Without one, sellers cannot connect eBay accounts.
+   */
+  ruName: string | undefined;
   /**
    * The one seller this process lists for in `fake` and `sandbox`, until eBay connections and
    * their token vault land (T-16): a refresh token from the seller's consent
@@ -123,6 +141,7 @@ export function loadEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfig
     value('EBAY_CLIENT_SECRET') ?? (isFake ? FAKE_EBAY_CLIENT_SECRET : undefined);
   if (clientId === undefined)
     issues.push(`EBAY_CLIENT_ID is required when EBAY_ENV is ${environment}`);
+  const ruName = value('EBAY_RUNAME') ?? (isFake ? FAKE_EBAY_RU_NAME : undefined);
   if (clientSecret === undefined) {
     issues.push(`EBAY_CLIENT_SECRET is required when EBAY_ENV is ${environment}`);
   }
@@ -166,6 +185,7 @@ export function loadEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfig
     endpoints: ebayEndpoints(environment, fakeUrl),
     clientId,
     clientSecret,
+    ruName,
     seller,
     listingSettings: {
       postalCode,

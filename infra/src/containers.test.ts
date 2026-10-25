@@ -13,6 +13,7 @@ import {
   MIGRATE_COMMAND,
   type ContainerName,
   type PhotoStorage,
+  type ServiceResources,
 } from './containers.ts';
 
 const DATABASE_URL = 'postgres://listora@db.internal:5432/listora?sslmode=verify-full';
@@ -21,11 +22,13 @@ const PHOTO_STORAGE: PhotoStorage = {
   region: 'us-east-1',
   publicBaseUrl: 'https://d111111abcdef8.cloudfront.net',
 };
+const TOKEN_KEY_ARN = 'arn:aws:kms:us-east-1:111122223333:key/0b6f7b3e-0000-4000-8000-000000000001';
+const RESOURCES: ServiceResources = { photoStorage: PHOTO_STORAGE, tokenKeyArn: TOKEN_KEY_ARN };
 
 /** What a task's process sees: the plain environment plus every injected secret. */
 function taskEnvironment(container: ContainerName): NodeJS.ProcessEnv {
   return {
-    ...containerEnvironment(container, DATABASE_URL, PHOTO_STORAGE),
+    ...containerEnvironment(container, DATABASE_URL, RESOURCES),
     ...Object.fromEntries(containerSecretNames(container).map((name) => [name, 'placeholder'])),
   };
 }
@@ -46,7 +49,7 @@ describe('container environment', () => {
     expect(loadWorkerConfig(taskEnvironment('worker'))).toMatchObject({ logLevel: 'info' });
   });
 
-  it('gives the API and the worker the same S3 photo storage and the Anthropic provider', () => {
+  it('gives the API and the worker the same S3 photo storage, Anthropic provider, and KMS token key', () => {
     for (const load of [
       () => loadApiConfig(taskEnvironment('api')),
       () => loadWorkerConfig(taskEnvironment('worker')),
@@ -59,6 +62,7 @@ describe('container environment', () => {
           publicBaseUrl: PHOTO_STORAGE.publicBaseUrl,
         },
         ai: { provider: 'anthropic', anthropicApiKey: 'placeholder' },
+        marketplaces: { tokenVault: { driver: 'kms', keyId: TOKEN_KEY_ARN, region: 'us-east-1' } },
       });
     }
     expect(containerEnvironment('migrate', DATABASE_URL)).not.toHaveProperty('STORAGE_DRIVER');
@@ -78,7 +82,7 @@ describe('container environment', () => {
 
   it('gets the database password only from the injected secret', () => {
     for (const container of CONTAINER_NAMES) {
-      const environment = containerEnvironment(container, DATABASE_URL, PHOTO_STORAGE);
+      const environment = containerEnvironment(container, DATABASE_URL, RESOURCES);
       const url = new URL(environment['DATABASE_URL'] ?? '');
       expect(url.password).toBe('');
       expect(containerSecretNames(container)).toContain('PGPASSWORD');

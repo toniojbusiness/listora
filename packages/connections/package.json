@@ -1,0 +1,21 @@
+{
+  "name": "@listora/connections",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Marketplace account connections: OAuth connect, the token vault (envelope encryption with a local key or KMS), use-time credentials with single-flight refresh, connection health checks, and revocation handling.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-kms": "^3.1156.0",
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

@@ -5,8 +5,15 @@
  * cites every page) so the eBay adapter can be tested against every failure mode without a
  * credential:
  *
- *   POST /identity/v1/oauth2/token                          OAuth: refresh-token and
- *                                                           client-credentials grants
+ *   GET  /oauth2/authorize                                  OAuth: the consent page
+ *                                                           ("Agree and Continue", "Not now")
+ *   POST /oauth2/authorize                                  the page's decision: redirects to
+ *                                                           the RuName's accept or decline URL
+ *   POST /identity/v1/oauth2/token                          OAuth: authorization-code,
+ *                                                           refresh-token, and client-credentials
+ *                                                           grants
+ *   POST /identity/v1/oauth2/token/revoke                   OAuth: revoke a seller's grant
+ *   GET  /commerce/identity/v1/user                         Commerce Identity: getUser
  *   POST /ws/api.dll                                        Trading API (trading.ts)
  *   POST /commerce/media/v1_beta/image/create_image_from_url  Media: copy a photo into EPS
  *   GET  /commerce/media/v1_beta/image/:id                  Media: getImage
@@ -36,6 +43,7 @@ import {
   FAKE_EBAY_CLIENT_SECRET,
   FAKE_EBAY_POLICIES,
   FAKE_EBAY_REFRESH_TOKEN,
+  FAKE_EBAY_RU_NAME,
 } from './constants.ts';
 import { NotificationSigner, type SignedNotification } from './notifications.ts';
 import type { FakeAccessToken, FakeEbayListing, FakeOrder, FakeSeller } from './state.ts';
@@ -52,7 +60,10 @@ const ACCESS_TOKEN_SECONDS = 7200;
 
 /** What a request to the fake asked for. */
 export type FakeEbayAction =
+  | 'authorize'
   | 'token'
+  | 'revoke'
+  | 'identity'
   | 'add'
   | 'verify'
   | 'revise'
@@ -139,6 +150,12 @@ export interface FakeEbayOptions {
    * (eBay's reads catch up within a short time). Default: no limit.
    */
   staleReadWindowMs?: number;
+  /**
+   * Where the consent page sends the browser: the fake RuName's "auth accepted" URL (Listora's
+   * callback; default the local API's), and its "auth declined" URL (default: the accept URL
+   * with `error=access_denied`).
+   */
+  consentRedirect?: { acceptUrl: string; declineUrl?: string };
   now?: () => Date;
 }
 
@@ -178,6 +195,13 @@ export class FakeEbay {
   readonly #timers = new Set<NodeJS.Timeout>();
   readonly #signer = new NotificationSigner();
   #chaos: FakeEbayFaultPicker | undefined;
+  /** When each refresh token from a code exchange expires (epoch ms). */
+  readonly #refreshExpiry = new Map<string, number>();
+  readonly #grantCounts = new Map<string, number>();
+  #consentRedirect: { acceptUrl: string; declineUrl?: string };
+  #signedInUserId = '';
+  /** Delay before every token endpoint answer, to widen races in tests. */
+  tokenDelayMs = 0;
   #tradingCalls = 0;
   #tradingWindowStart: number;
   #nextItem = 1;
@@ -186,7 +210,13 @@ export class FakeEbay {
   private constructor(options: FakeEbayOptions) {
     this.#options = options;
     this.#tradingWindowStart = this.#now().getTime();
-    this.addSeller({ username: 'listora_dev_seller', refreshToken: FAKE_EBAY_REFRESH_TOKEN });
+    this.#consentRedirect = options.consentRedirect ?? {
+      acceptUrl: 'http://127.0.0.1:3000/v1/connections/ebay/callback',
+    };
+    this.#signedInUserId = this.addSeller({
+      username: 'listora_dev_seller',
+      refreshToken: FAKE_EBAY_REFRESH_TOKEN,
+    }).userId;
     this.#server = createServer((request, response) => {
       this.#handle(request, response).catch((error: unknown) => {
         send(response, {
@@ -259,6 +289,71 @@ export class FakeEbay {
     const code = `v^1.1#i^1#f^0#I^3#p^3#r^1#fake-code-${randomUUID()}`;
     this.#codes.set(code, seller.userId);
     return code;
+  }
+
+  /** The seller signed in on the consent page from now on (default: the development seller). */
+  signInAs(userId: string): void {
+    if (!this.#sellers.some((seller) => seller.userId === userId)) {
+      throw new Error(`no fake eBay seller ${userId}`);
+    }
+    this.#signedInUserId = userId;
+  }
+
+  /** The seller signed in on the consent page. */
+  get signedInSeller(): { userId: string; username: string } {
+    const seller = this.#sellers.find((candidate) => candidate.userId === this.#signedInUserId);
+    if (seller === undefined) throw new Error('no seller is signed in');
+    return { userId: seller.userId, username: seller.username };
+  }
+
+  /** Where the consent page sends the browser next (Listora's callback). */
+  setConsentRedirect(redirect: { acceptUrl: string; declineUrl?: string }): void {
+    this.#consentRedirect = redirect;
+  }
+
+  /**
+   * What the consent page does when the signed-in seller decides, without a browser: the URL
+   * eBay sends the browser to next (the accept URL with `state`, `code`, and `expires_in`, or
+   * the decline URL). Throws for a consent URL eBay would refuse.
+   */
+  consent(authorizationUrl: string, decision: 'agree' | 'decline' = 'agree'): string {
+    const query = new URL(authorizationUrl).searchParams;
+    const problem = consentProblem(query);
+    if (problem !== undefined) throw new Error(`invalid consent request: ${problem}`);
+    return this.#decide(query, decision);
+  }
+
+  /**
+   * The seller removes Listora in My eBay ("Third-party app access"): every grant they gave
+   * stops working at once.
+   */
+  revokeSellerAccess(userId: string): void {
+    const seller = this.#sellers.find((candidate) => candidate.userId === userId);
+    if (seller === undefined) return;
+    seller.refreshTokens.clear();
+    for (const [token, grant] of this.#tokens) {
+      if (grant.sellerUserId === userId) this.#tokens.delete(token);
+    }
+  }
+
+  /** Every refresh token from a code exchange expires now (the 18-month limit). */
+  expireRefreshTokens(): void {
+    for (const token of this.#refreshExpiry.keys()) this.#refreshExpiry.set(token, 0);
+  }
+
+  /** Token endpoint requests of one grant type that reached the fake, faulted or not. */
+  tokenGrants(grantType: 'authorization_code' | 'refresh_token' | 'client_credentials'): number {
+    return this.#grantCounts.get(grantType) ?? 0;
+  }
+
+  /** Every code and token the fake issued, for tests that check none of them leaked. */
+  issuedSecrets(): string[] {
+    return [
+      ...this.#codes.keys(),
+      ...this.#tokens.keys(),
+      ...this.#refreshExpiry.keys(),
+      ...this.#sellers.flatMap((seller) => [...seller.refreshTokens]),
+    ];
   }
 
   /** The seller revokes Listora's access: its refresh and access tokens stop working. */
@@ -414,8 +509,23 @@ export class FakeEbay {
       send(response, this.#itemPage(decodeURIComponent(path.slice('/itm/'.length))));
       return;
     }
+    if (path === '/oauth2/authorize' && (method === 'GET' || method === 'POST')) {
+      this.#run(response, { action: 'authorize' }, () =>
+        this.#authorize(method, method === 'POST' ? new URLSearchParams(body) : url.searchParams),
+      );
+      return;
+    }
     if (method === 'POST' && path === '/identity/v1/oauth2/token') {
+      const grant = new URLSearchParams(body).get('grant_type') ?? '';
+      this.#grantCounts.set(grant, (this.#grantCounts.get(grant) ?? 0) + 1);
+      if (this.tokenDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.tokenDelayMs));
+      }
       this.#run(response, { action: 'token' }, (fault) => this.#token(request, body, fault));
+      return;
+    }
+    if (method === 'POST' && path === '/identity/v1/oauth2/token/revoke') {
+      this.#run(response, { action: 'revoke' }, () => this.#revoke(request, body));
       return;
     }
     if (method === 'POST' && path === '/ws/api.dll') {
@@ -562,6 +672,59 @@ export class FakeEbay {
 
   // OAuth ------------------------------------------------------------------------------------
 
+  #authorize(method: string, query: URLSearchParams): Reply {
+    const problem = consentProblem(query);
+    if (problem !== undefined) {
+      return {
+        status: 400,
+        body: `Invalid consent request: ${problem}`,
+        headers: { 'content-type': 'text/plain' },
+      };
+    }
+    if (method === 'GET') {
+      return {
+        status: 200,
+        body: consentPage(query, this.signedInSeller.username),
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      };
+    }
+    const decision = query.get('decision') === 'agree' ? 'agree' : 'decline';
+    return { status: 302, body: '', headers: { location: this.#decide(query, decision) } };
+  }
+
+  #decide(query: URLSearchParams, decision: 'agree' | 'decline'): string {
+    const state = query.get('state');
+    const { acceptUrl, declineUrl } = this.#consentRedirect;
+    if (decision === 'decline') {
+      const target = new URL(declineUrl ?? acceptUrl);
+      if (declineUrl === undefined) target.searchParams.set('error', 'access_denied');
+      if (state !== null) target.searchParams.set('state', state);
+      return target.toString();
+    }
+    const code = `v^1.1#i^1#f^0#I^3#p^3#r^1#fake-code-${randomUUID()}`;
+    this.#codes.set(code, this.#signedInUserId);
+    const target = new URL(acceptUrl);
+    if (state !== null) target.searchParams.set('state', state);
+    target.searchParams.set('code', code);
+    target.searchParams.set('expires_in', '299');
+    return target.toString();
+  }
+
+  #revoke(request: IncomingMessage, body: string): Reply {
+    const expected = `Basic ${Buffer.from(`${FAKE_EBAY_CLIENT_ID}:${FAKE_EBAY_CLIENT_SECRET}`).toString('base64')}`;
+    if (request.headers.authorization !== expected) {
+      return oauthError(401, 'invalid_client', 'Client authentication failed');
+    }
+    const token = new URLSearchParams(body).get('token') ?? '';
+    // Revoking a refresh token revokes its grant and the access tokens issued from it; an
+    // unknown or already revoked token is still a 200 with an empty body.
+    for (const seller of this.#sellers) seller.refreshTokens.delete(token);
+    for (const [access, grant] of this.#tokens) {
+      if (access === token || grant.refreshToken === token) this.#tokens.delete(access);
+    }
+    return { status: 200, body: '' };
+  }
+
   #token(request: IncomingMessage, body: string, fault: FakeEbayFault | undefined): Reply {
     const expected = `Basic ${Buffer.from(`${FAKE_EBAY_CLIENT_ID}:${FAKE_EBAY_CLIENT_SECRET}`).toString('base64')}`;
     if (request.headers.authorization !== expected) {
@@ -569,11 +732,16 @@ export class FakeEbay {
     }
     const form = new URLSearchParams(body);
     const grant = form.get('grant_type');
-    const issue = (sellerUserId: string | null, tokenType: string): Reply => {
+    const issue = (
+      sellerUserId: string | null,
+      tokenType: string,
+      refreshToken?: string,
+    ): Reply => {
       const token = `v^1.1#i^1#p^3#fake-${randomUUID()}`;
       this.#tokens.set(token, {
         sellerUserId,
         expiresAt: this.#now().getTime() + ACCESS_TOKEN_SECONDS * 1000,
+        ...(refreshToken === undefined ? {} : { refreshToken }),
       });
       return json(200, {
         access_token: token,
@@ -596,10 +764,10 @@ export class FakeEbay {
       }
       const refreshToken = `v^1.1#i^1#f^0#r^1#${randomUUID()}`;
       seller.refreshTokens.add(refreshToken);
-      const issued = JSON.parse(issue(seller.userId, 'User Access Token').body) as Record<
-        string,
-        unknown
-      >;
+      this.#refreshExpiry.set(refreshToken, this.#now().getTime() + 47_304_000_000);
+      const issued = JSON.parse(
+        issue(seller.userId, 'User Access Token', refreshToken).body,
+      ) as Record<string, unknown>;
       return json(200, {
         ...issued,
         refresh_token: refreshToken,
@@ -615,14 +783,16 @@ export class FakeEbay {
     }
     const refreshToken = form.get('refresh_token') ?? '';
     const seller = this.#sellers.find((candidate) => candidate.refreshTokens.has(refreshToken));
-    if (seller === undefined || fault?.type === 'unauthorized') {
+    const expiry = this.#refreshExpiry.get(refreshToken);
+    const expired = expiry !== undefined && expiry <= this.#now().getTime();
+    if (seller === undefined || expired || fault?.type === 'unauthorized') {
       return oauthError(
         400,
         'invalid_grant',
         'the provided authorization refresh token is invalid or was issued to another client',
       );
     }
-    return issue(seller.userId, 'User Access Token');
+    return issue(seller.userId, 'User Access Token', refreshToken);
   }
 
   // Trading ----------------------------------------------------------------------------------
@@ -781,6 +951,24 @@ export class FakeEbay {
         handle: (grant: FakeAccessToken) => Reply;
       }
     | undefined {
+    if (method === 'GET' && path === '/commerce/identity/v1/user') {
+      return {
+        meta: { action: 'identity' },
+        needsSeller: true,
+        handle: (grant) => {
+          const seller = this.#sellers.find((candidate) => candidate.userId === grant.sellerUserId);
+          if (seller === undefined)
+            throw new RestFailure(404, 140001, 'The requested user was not found.');
+          return json(200, {
+            userId: seller.userId,
+            username: seller.username,
+            accountType: 'INDIVIDUAL',
+            registrationMarketplaceId: 'EBAY_US',
+            status: 'CONFIRMED',
+          });
+        },
+      };
+    }
     if (method === 'POST' && path === '/commerce/media/v1_beta/image/create_image_from_url') {
       return {
         meta: { action: 'media' },
@@ -1189,6 +1377,59 @@ function restError(error: RestFailure): Reply {
       },
     ],
   });
+}
+
+/** Why eBay's consent page would refuse a request, or undefined when it is valid. */
+function consentProblem(query: URLSearchParams): string | undefined {
+  if (query.get('client_id') !== FAKE_EBAY_CLIENT_ID) return 'unknown client_id';
+  if (query.get('redirect_uri') !== FAKE_EBAY_RU_NAME) return 'unknown redirect_uri';
+  if (query.get('response_type') !== 'code') return 'response_type must be code';
+  if ((query.get('scope') ?? '') === '') return 'scope is required';
+  return undefined;
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => `&#${String(char.charCodeAt(0))};`);
+}
+
+/** eBay's "Grant Application Access" page, reduced to its two buttons. */
+function consentPage(query: URLSearchParams, username: string): string {
+  const hidden = [...query.entries()]
+    .map(
+      ([name, value]) =>
+        `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}">`,
+    )
+    .join('');
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grant application access | Fake eBay</title>
+<style>
+  :root { color-scheme: light dark; font-family: -apple-system, system-ui, sans-serif; }
+  body { margin: 0; padding: 32px 24px; max-width: 480px; margin-inline: auto; line-height: 1.45; }
+  h1 { font-size: 24px; margin: 0 0 8px; }
+  p { margin: 0 0 16px; }
+  .seller { font-weight: 600; }
+  button { display: block; width: 100%; font: inherit; font-size: 17px; font-weight: 600;
+    padding: 14px; border-radius: 24px; margin-top: 12px; cursor: pointer; }
+  .agree { background: #3665f3; color: #fff; border: none; }
+  .decline { background: transparent; color: inherit; border: 1px solid currentColor; }
+</style>
+</head>
+<body>
+<p>Fake eBay (development)</p>
+<h1>Listora wants access to your eBay account</h1>
+<p>Signed in as <span class="seller">${escapeHtml(username)}</span>.</p>
+<p>Listora will be able to list, revise, and end your items, and read your orders.</p>
+<form method="post" action="/oauth2/authorize">${hidden}
+<button class="agree" type="submit" name="decision" value="agree">Agree and Continue</button>
+<button class="decline" type="submit" name="decision" value="decline">Not now</button>
+</form>
+</body>
+</html>
+`;
 }
 
 function oauthError(status: number, error: string, description: string): Reply {

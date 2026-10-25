@@ -4,19 +4,22 @@
 //   node infra/src/container-env.ts <api|worker|migrate> <database-url>
 //
 // Secrets that ECS injects (PGPASSWORD and the app secrets) take their value from this
-// process's environment, or the word `placeholder` when unset. The photo storage is a
-// placeholder bucket: the smoke test starts the processes but stores no photo.
+// process's environment, or the word `placeholder` when unset. The photo storage and the token
+// key are placeholders: the smoke test starts the processes but stores no photo or token.
 import {
   CONTAINER_NAMES,
   containerEnvironment,
   containerSecretNames,
-  type PhotoStorage,
+  type ServiceResources,
 } from './containers.ts';
 
-const SMOKE_PHOTO_STORAGE: PhotoStorage = {
-  bucket: 'listora-smoke-photos',
-  region: 'us-east-1',
-  publicBaseUrl: 'https://photos.smoke.invalid',
+const SMOKE_RESOURCES: ServiceResources = {
+  photoStorage: {
+    bucket: 'listora-smoke-photos',
+    region: 'us-east-1',
+    publicBaseUrl: 'https://photos.smoke.invalid',
+  },
+  tokenKeyArn: 'alias/listora-smoke-tokens',
 };
 
 const [container, databaseUrl] = process.argv.slice(2);
@@ -27,7 +30,7 @@ if (known === undefined || databaseUrl === undefined) {
 }
 
 const entries: [string, string][] = [
-  ...Object.entries(containerEnvironment(known, databaseUrl, SMOKE_PHOTO_STORAGE)),
+  ...Object.entries(containerEnvironment(known, databaseUrl, SMOKE_RESOURCES)),
   ...containerSecretNames(known).map((name): [string, string] => [
     name,
     process.env[name] ?? 'placeholder',

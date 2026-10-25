@@ -11,12 +11,14 @@ import SwiftUI
 ///
 /// In debug builds with `LISTORA_FIXTURE_PHOTOS` set, it imports that folder's JPEGs instead, so
 /// UI tests add known photos without driving the system picker.
-struct PhotoLibraryButton<Label: View>: View {
+struct PhotoLibraryButton: View {
     let maxCount: Int
     let fixturePhotosDirectory: URL?
     @Binding var unloaded: PickedPhotos<PhotosPickerItem>?
     let onPicked: @MainActor ([Data]) async -> Void
-    @ViewBuilder let label: () -> Label
+    /// The button's label. Plain values, because the picker's label closure is Sendable.
+    let title: String
+    let systemImage: String
 
     @State private var selection: [PhotosPickerItem] = []
 
@@ -25,7 +27,7 @@ struct PhotoLibraryButton<Label: View>: View {
             Button {
                 Task { await onPicked(Self.fixtures(in: fixturePhotosDirectory, maxCount: maxCount)) }
             } label: {
-                label()
+                Label(title, systemImage: systemImage)
             }
         } else {
             PhotosPicker(
@@ -34,8 +36,8 @@ struct PhotoLibraryButton<Label: View>: View {
                 selectionBehavior: .ordered,
                 matching: .images,
                 preferredItemEncoding: .compatible,
-            ) {
-                label()
+            ) { [title, systemImage] in
+                Label(title, systemImage: systemImage)
             }
             .disabled(maxCount <= 0)
             .onChange(of: selection) { _, items in
@@ -69,7 +71,7 @@ struct PhotoLibraryButton<Label: View>: View {
 /// Photos picked in the library, loaded in the order picked. Loading one can fail, and a later
 /// ``load(using:)`` tries only the ones that have not loaded.
 @MainActor
-struct PickedPhotos<Item> {
+struct PickedPhotos<Item: Sendable> {
     private let items: [Item]
     private var images: [Data?]
 

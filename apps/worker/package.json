@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Listora background worker: the operation engine, photo processing, item analysis, and account deletion.",
+  "description": "Listora background worker: the operation engine, photo processing, item analysis, account deletion, and marketplace connection health.",
   "scripts": {
     "start": "node src/main.ts",
     "dev": "node --watch --env-file-if-exists=../../.env src/main.ts"
@@ -12,6 +12,7 @@
     "@listora/accounts": "*",
     "@listora/ai": "*",
     "@listora/analysis": "*",
+    "@listora/connections": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",
     "@listora/observability": "*",

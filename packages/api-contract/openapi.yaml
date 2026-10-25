@@ -1254,11 +1254,17 @@ paths:
         server exchanges the code and always answers with a redirect to the app
         (`listora://connections/{marketplace}?authorizationId=...`), also on failure; the
         app then calls `getConnectionAuthorization`. Query parameter names follow OAuth 2.0.
+        A request whose `state` names no attempt (missing, unknown, or already used by another
+        marketplace) changes nothing and redirects without `authorizationId`; the app then
+        reads the attempt it started. A repeated callback with the same `state` only redirects
+        again.
       security: []
       parameters:
         - name: state
           in: query
-          required: true
+          description: |
+            The attempt's `state`. Not marked required: a marketplace's "declined" redirect may
+            come without it, and that still has to reach the app.
           schema:
             type: string
             maxLength: 512
@@ -3440,9 +3446,24 @@ components:
           maxLength: 1000
         occurredAt:
           $ref: '#/components/schemas/Timestamp'
+    ConnectionAction:
+      description: |
+        A `KnownConnectionAction`, or an action added after this client was built. Clients hide
+        actions they do not know.
+      anyOf:
+        - $ref: '#/components/schemas/KnownConnectionAction'
+        - type: string
+          maxLength: 64
+    KnownConnectionAction:
+      type: string
+      description: |
+        `connect`: start `startConnectionAuthorization` for a marketplace not connected yet.
+        `reconnect`: the same, for a connection that needs the seller's consent again (its grant
+        was revoked, expires within 30 days, or fails); it renews the existing connection.
+      enum: [connect, reconnect]
     Connection:
       type: object
-      required: [marketplace, mode, status, statusDisplay, capabilities]
+      required: [marketplace, mode, status, statusDisplay, capabilities, availableActions]
       properties:
         marketplace:
           $ref: '#/components/schemas/Marketplace'
@@ -3454,6 +3475,12 @@ components:
           $ref: '#/components/schemas/StatusDisplay'
         capabilities:
           $ref: '#/components/schemas/MarketplaceCapabilities'
+        availableActions:
+          type: array
+          maxItems: 10
+          description: What the user can do about the connection now; empty when nothing.
+          items:
+            $ref: '#/components/schemas/ConnectionAction'
         displayName:
           type: string
           maxLength: 200
@@ -3480,7 +3507,7 @@ components:
       enum: [pending, completed, failed, expired]
     ConnectionAuthorization:
       type: object
-      required: [id, marketplace, status, authorizationUrl, callbackUrlScheme, expiresAt, createdAt]
+      required: [id, marketplace, status, callbackUrlScheme, expiresAt, createdAt]
       properties:
         id:
           $ref: '#/components/schemas/Id'
@@ -3491,7 +3518,10 @@ components:
         authorizationUrl:
           type: string
           format: uri
-          description: The marketplace's own consent page.
+          description: |
+            The marketplace's own consent page. Only in the `startConnectionAuthorization`
+            response (and its replays): it carries the attempt's single-use `state`, which
+            Listora keeps only as a hash.
         callbackUrlScheme:
           type: string
           maxLength: 32
