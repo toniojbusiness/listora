@@ -1,0 +1,79 @@
+{
+  "description": "The UI tests' item: the fixture photos in ListoraUITests/Fixtures, a shirt whose tag (3-tag.jpg) reads ACME OUTFITTERS, RN 12345, 60% cotton 40% polyester, style AB1234. The brand and color are uncertain, so review lists them first and offers Identify harder; the size is not on the tag.",
+  "outputs": {
+    "item_analysis": {
+      "attributes": {
+        "brand": "Acme Outfitters",
+        "productName": "",
+        "styleNumber": "AB1234",
+        "rnNumber": "12345",
+        "upc": "",
+        "department": "men",
+        "category": "clothing/tops",
+        "subcategory": "shirts",
+        "sizeLabel": "",
+        "sizeSystem": "",
+        "colors": ["blue"],
+        "pattern": "solid",
+        "materials": ["cotton", "polyester"],
+        "condition": "pre_owned_good",
+        "conditionNotes": "Light wear at the cuffs.",
+        "flaws": [],
+        "keywords": ["button up", "casual"]
+      },
+      "confidence": {
+        "title": 0.8,
+        "description": 0.8,
+        "brand": 0.45,
+        "productName": 0,
+        "styleNumber": 0.85,
+        "rnNumber": 0.9,
+        "upc": 0,
+        "department": 0.7,
+        "category": 0.9,
+        "subcategory": 0.85,
+        "sizeLabel": 0,
+        "sizeSystem": 0,
+        "colors": 0.5,
+        "pattern": 0.8,
+        "materials": 0.9,
+        "condition": 0.8,
+        "conditionNotes": 0.7,
+        "flaws": 0,
+        "keywords": 0.7
+      },
+      "title": "Acme Outfitters button-up shirt, cotton blend",
+      "description": "Blue Acme Outfitters button-up shirt in a cotton and polyester blend. Light wear at the cuffs.",
+      "variants": {
+        "ebay": {
+          "title": "Acme Outfitters Mens Button Up Shirt Blue Cotton Blend",
+          "description": "Blue button-up shirt by Acme Outfitters, 60% cotton 40% polyester. Light wear at the cuffs."
+        },
+        "depop": {
+          "title": "Acme Outfitters button up",
+          "description": "Easy blue button up from Acme Outfitters. Cotton blend, light wear at the cuffs.",
+          "hashtags": ["buttonup", "menswear"]
+        },
+        "poshmark": {
+          "title": "Acme Outfitters Button-Up Shirt",
+          "description": "Blue Acme Outfitters button-up in a soft cotton blend. Light wear at the cuffs."
+        },
+        "mercari": {
+          "title": "Acme Outfitters Blue Button Up Shirt",
+          "description": "Acme Outfitters button-up shirt, blue, cotton and polyester. Light wear at the cuffs."
+        }
+      },
+      "priceEstimate": {
+        "lowCents": 1800,
+        "midCents": 2600,
+        "highCents": 3800,
+        "confidence": 0.55
+      },
+      "looksVintage": false,
+      "looksDesigner": false,
+      "needsEscalation": false,
+      "escalationReason": ""
+    }
+  },
+  "usage": { "inputTokens": 1900, "outputTokens": 650 }
+}

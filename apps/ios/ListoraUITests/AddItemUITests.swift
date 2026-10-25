@@ -3,8 +3,8 @@ import XCTest
 /// Drives the Add Item flow on the simulator: import fixture photos into a draft, set roles and
 /// the cover, and find the draft unchanged after the app is relaunched. The simulator has no
 /// camera, so photos come from `Fixtures/` through the app's debug fixture import (the same path as
-/// the photo picker after selection). No API runs during `make ios-test`, so nobody is signed in
-/// and the draft stays on the phone, saying so.
+/// the photo picker after selection). These tests never sign in, so the draft stays on the phone,
+/// saying so; `ReviewFlowUITests` takes a draft through the local stack's API.
 @MainActor
 final class AddItemUITests: XCTestCase {
     private let app = XCUIApplication()

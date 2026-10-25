@@ -3,7 +3,9 @@ import APIClient
 import Core
 import Foundation
 import MarketplacesFeature
+import ReviewFeature
 import SettingsFeature
+import SwiftUI
 import TagReadingFeature
 
 /// Everything the app's features need, built once at launch.
@@ -17,6 +19,11 @@ public struct AppDependencies {
     public let apiClient: APIClient
     /// Reads text and barcodes on tag photos on the device, for the capture flow to upload.
     public let tagReader: any TagReader
+    /// Measures each new item's active interaction time and taps, from the first photo to the
+    /// saved item. The root view feeds it the app's taps and foreground state.
+    public let interactionMeter: InteractionMeter
+    /// Analysis progress, review, cost, price, and saving a new item.
+    public let review: ReviewEnvironment
     /// Drafts and the photo upload queue.
     public let addItem: AddItemEnvironment
     /// Dev builds only: sign in against the local API's dev auth driver.
@@ -28,6 +35,8 @@ public struct AppDependencies {
         configuration: AppConfiguration,
         version: AppVersion,
         dataDirectory: URL = AddItemEnvironment.defaultDataDirectory(),
+        listingCopyDirectory: URL = ListingCopyStore.defaultDirectory(),
+        defaults: UserDefaults = .standard,
         accessGrantStorage: (any AccessGrantStorage)? = nil,
         launchOptions: DebugLaunchOptions = .none,
     ) {
@@ -39,27 +48,40 @@ public struct AppDependencies {
         self.version = version
         let accessGrantStorage = accessGrantStorage
             ?? KeychainAccessGrantStorage.session(appGroup: configuration.appGroupIdentifier)
+        let interactionStorage = UserDefaultsInteractionStorage(defaults: defaults)
         if launchOptions.resetLocalData {
             try? FileManager.default.removeItem(at: dataDirectory)
+            try? FileManager.default.removeItem(at: listingCopyDirectory)
+            interactionStorage.reset()
+            ReviewEnvironment.resetLocalData(defaults: defaults)
             accessGrantStorage.save(nil)
         }
         let accessTokens = AccessTokenStore(storage: accessGrantStorage)
-        if let token = launchOptions.accessToken, configuration.environment == .dev {
-            accessTokens.signIn(AccessGrant(
-                accessToken: token,
-                expiresAt: .distantFuture,
-                email: "ui-test@listora.invalid",
-            ))
+        if let grant = launchOptions.accessGrant, configuration.environment == .dev {
+            accessTokens.signIn(grant)
         }
         self.accessTokens = accessTokens
         apiClient = APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens)
         let tagReader = VisionTagReader()
         self.tagReader = tagReader
+        let meter = InteractionMeter(storage: interactionStorage)
+        interactionMeter = meter
+        let review = ReviewEnvironment(
+            apiClient: apiClient,
+            meter: meter,
+            listingCopy: ListingCopyStore(directory: listingCopyDirectory),
+            defaults: defaults,
+        )
+        self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory,
             apiClient: apiClient,
             accessTokens: accessTokens,
             tagReader: tagReader,
+            meter: meter,
+            reviewDestination: { request, onFinished in
+                AnyView(review.flow(for: request, onFinished: onFinished))
+            },
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
         )
         marketplaces = MarketplacesModel(service: APIConnectionsService(client: apiClient.client))
@@ -86,6 +108,8 @@ public struct AppDependencies {
     public init(
         bundle: Bundle,
         dataDirectory: URL = AddItemEnvironment.defaultDataDirectory(),
+        listingCopyDirectory: URL = ListingCopyStore.defaultDirectory(),
+        defaults: UserDefaults = .standard,
         accessGrantStorage: (any AccessGrantStorage)? = nil,
         launchOptions: DebugLaunchOptions = .none,
     ) throws(ConfigurationError) {
@@ -94,6 +118,8 @@ public struct AppDependencies {
             configuration: AppConfiguration(infoDictionary: info),
             version: AppVersion(infoDictionary: info),
             dataDirectory: dataDirectory,
+            listingCopyDirectory: listingCopyDirectory,
+            defaults: defaults,
             accessGrantStorage: accessGrantStorage,
             launchOptions: launchOptions,
         )
@@ -107,41 +133,53 @@ public struct DebugLaunchOptions: Equatable, Sendable {
     public var resetLocalData = false
     /// `LISTORA_FIXTURE_PHOTOS=<folder>`: "Import photos" adds that folder's JPEGs.
     public var fixturePhotosDirectory: URL?
-    /// `LISTORA_DEV_ACCESS_TOKEN=<token>`: sign in with this bearer token (Dev only).
-    public var accessToken: String?
-    /// `LISTORA_DEV_API_BASE_URL=<url>`: talk to this API instead of the xcconfig one, and hand it
-    /// to the Share Extension (`DevOverrides`, Dev only).
+    /// `LISTORA_DEV_API_BASE_URL=<url>`: talk to this API instead of the xcconfig one (the UI
+    /// tests' local stack or stub), and hand it to the Share Extension (`DevOverrides`, Dev only).
     public var apiBaseURL: URL?
+    /// `LISTORA_DEV_ACCESS_TOKEN=<token>` (with `LISTORA_DEV_ACCESS_EMAIL`): start signed in with
+    /// this session, which the UI tests' local stack signed in through the dev auth driver (Dev only).
+    public var accessGrant: AccessGrant?
 
     public static let none = DebugLaunchOptions()
 
     public init(
         resetLocalData: Bool = false,
         fixturePhotosDirectory: URL? = nil,
-        accessToken: String? = nil,
         apiBaseURL: URL? = nil,
+        accessGrant: AccessGrant? = nil,
     ) {
         self.resetLocalData = resetLocalData
         self.fixturePhotosDirectory = fixturePhotosDirectory
-        self.accessToken = accessToken
         self.apiBaseURL = apiBaseURL
+        self.accessGrant = accessGrant
     }
 
     /// The options in this process's environment (debug builds), otherwise ``none``.
     public static func fromProcessEnvironment() -> DebugLaunchOptions {
         #if DEBUG
-            let environment = ProcessInfo.processInfo.environment
-            return DebugLaunchOptions(
-                resetLocalData: environment["LISTORA_RESET_LOCAL_DATA"] == "1",
-                fixturePhotosDirectory: environment["LISTORA_FIXTURE_PHOTOS"].map { URL(
-                    filePath: $0,
-                    directoryHint: .isDirectory,
-                ) },
-                accessToken: environment["LISTORA_DEV_ACCESS_TOKEN"].flatMap { $0.isEmpty ? nil : $0 },
-                apiBaseURL: environment["LISTORA_DEV_API_BASE_URL"].flatMap(URL.init(string:)),
-            )
+            from(environment: ProcessInfo.processInfo.environment)
         #else
             return .none
         #endif
+    }
+
+    /// The options in a launch environment.
+    public static func from(environment: [String: String], now: Date = Date()) -> DebugLaunchOptions {
+        let token = environment["LISTORA_DEV_ACCESS_TOKEN"].flatMap { $0.isEmpty ? nil : $0 }
+        return DebugLaunchOptions(
+            resetLocalData: environment["LISTORA_RESET_LOCAL_DATA"] == "1",
+            fixturePhotosDirectory: environment["LISTORA_FIXTURE_PHOTOS"].map {
+                URL(filePath: $0, directoryHint: .isDirectory)
+            },
+            apiBaseURL: environment["LISTORA_DEV_API_BASE_URL"].flatMap(URL.init(string:)),
+            // Dev sessions last a day; the server refuses the token once it ends.
+            accessGrant: token.map {
+                AccessGrant(
+                    accessToken: $0,
+                    expiresAt: now.addingTimeInterval(24 * 60 * 60),
+                    email: environment["LISTORA_DEV_ACCESS_EMAIL"] ?? "ui-test@listora.test",
+                )
+            },
+        )
     }
 }

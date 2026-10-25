@@ -116,6 +116,22 @@ struct DraftStoreTests {
     }
 
     @Test
+    func `completing a saved draft removes only this iPhone's copy, never the server item`() throws {
+        let draft = try attachedDraft(roles: [.front, .back])
+        let photos = try #require(try store.draft(id: draft.id)).photos
+        // A photo removed earlier still has its server deletion queued.
+        try store.deletePhoto(photos[1].id)
+
+        let removed = try store.completeDraft(draft.id)
+
+        #expect(removed.map(\.id) == [photos[0].id])
+        #expect(try store.drafts().isEmpty)
+        let deletions = try store.uploadSnapshot().deletions
+        #expect(deletions.map(\.kind) == [.photo], "the saved item stays on the server")
+        #expect(!FileManager.default.fileExists(atPath: store.fileURL(for: photos[0]).path(percentEncoded: false)))
+    }
+
+    @Test
     func `a photo that becomes a tag after it was attached without tag reads uploads again`() throws {
         let draft = try attachedDraft(roles: [.front, .detail])
         let photo = try #require(try store.draft(id: draft.id)?.photos.last)

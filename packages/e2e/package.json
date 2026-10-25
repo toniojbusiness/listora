@@ -1,0 +1,19 @@
+{
+  "name": "@listora/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local stack for end-to-end tests: the real API and worker with fake drivers on a scratch database, and a signed-in test user.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "stack": "node --env-file-if-exists=../../.env src/cli.ts"
+  },
+  "dependencies": {
+    "@listora/ai": "*",
+    "@listora/analysis": "*",
+    "@listora/db": "*",
+    "@listora/testing": "*"
+  }
+}

@@ -12,6 +12,7 @@ import TasksFeature
 public struct RootView: View {
     private let dependencies: AppDependencies
     @State private var selection: AppTab
+    @Environment(\.scenePhase) private var scenePhase
 
     public init(dependencies: AppDependencies, initialTab: AppTab = .inventory) {
         self.dependencies = dependencies
@@ -27,6 +28,10 @@ public struct RootView: View {
             }
         }
         .tint(Palette.brand.color)
+        .background { WindowTapCounter { [meter = dependencies.interactionMeter] in meter.recordTap() } }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            dependencies.interactionMeter.setAppActive(phase == .active)
+        }
         .task { dependencies.startBackgroundWork() }
     }
 

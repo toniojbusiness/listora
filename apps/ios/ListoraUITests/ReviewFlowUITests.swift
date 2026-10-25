@@ -1,0 +1,221 @@
+import XCTest
+
+/// Drives a fixture item from a draft through review and price to a saved inventory item with a
+/// SKU, against the real API and worker with the fake AI provider: the local stack
+/// `make ios-test` starts (`npm run e2e:stack`, packages/e2e), which signs in a test user and
+/// hands its URL and session to this test through xcodebuild's `TEST_RUNNER_` variables. The
+/// fake AI answers every photo set with `FakeAI/default.json`: a shirt whose brand and color are
+/// uncertain.
+@MainActor
+final class ReviewFlowUITests: XCTestCase {
+    private let app = XCUIApplication()
+
+    override func setUp() async throws {
+        continueAfterFailure = false
+    }
+
+    func testAFixtureItemGoesFromDraftThroughReviewAndPriceToASavedItemWithASKU() async throws {
+        let stack = try E2EStack.fromEnvironment()
+        try launch(signedInTo: stack)
+        createDraftAndOpenReview()
+        reviewConfidenceFirst()
+        identifyHarder()
+        enterCost()
+        let sku = choosePriceAndSave()
+
+        // The server has the inventory item as saved.
+        let item = try await stack.item(sku: sku)
+        XCTAssertEqual(item.status, "ready")
+        XCTAssertEqual(item.details.listPrice?.amountCents, 2600)
+        XCTAssertEqual(item.details.cost?.amountCents, 1200)
+        XCTAssertEqual(item.details.purchaseSource, "Goodwill")
+        XCTAssertEqual(item.details.colors, ["navy"])
+        XCTAssertEqual(item.fieldProvenance["colors"], "user")
+        XCTAssertNotNil(item.details.floorPrice)
+
+        // Done: back to Add Item, where the saved item's draft is gone.
+        app.buttons["saved.done"].tap()
+        XCTAssertTrue(app.staticTexts["Take photos once"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["draft.row"].exists)
+    }
+
+    // MARK: Steps
+
+    private func launch(signedInTo stack: E2EStack) throws {
+        let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
+        app.launchEnvironment = [
+            "LISTORA_FIXTURE_PHOTOS": fixtures.path(percentEncoded: false),
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_API_BASE_URL": stack.apiURL.absoluteString,
+            "LISTORA_DEV_ACCESS_TOKEN": stack.token,
+            "LISTORA_DEV_ACCESS_EMAIL": stack.email,
+        ]
+        app.launch()
+        let tab = app.tabBars.buttons["Add Item"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 10))
+        tab.tap()
+    }
+
+    /// Imports the fixture photos, makes the third one the tag so the phone reads it, and opens
+    /// the review, which waits for the upload, the photo processing, and the analysis.
+    private func createDraftAndOpenReview() {
+        app.buttons["addItem.importPhotos"].tap()
+        let tag = app.buttons["photo.tile.2"]
+        XCTAssertTrue(tag.waitForExistence(timeout: 15))
+        tag.tap()
+        let role = app.segmentedControls["photo.role"]
+        XCTAssertTrue(role.waitForExistence(timeout: 5))
+        role.buttons["Tag"].tap()
+        app.buttons["photo.done"].tap()
+
+        let review = app.buttons["draft.review"]
+        XCTAssertTrue(review.waitForExistence(timeout: 5))
+        review.tap()
+        let attention = app.staticTexts["review.section.attention"]
+        XCTAssertTrue(attention.waitForExistence(timeout: 120), "the review never appeared")
+        XCTAssertEqual(attention.label, "Check these (2)")
+        keepScreenshot("Review")
+    }
+
+    /// The uncertain brand (read off the tag) and color lead, highlighted; fixing the color in
+    /// place makes it the seller's.
+    private func reviewConfidenceFirst() {
+        let brand = app.buttons["review.field.brand"]
+        XCTAssertTrue(brand.label.hasPrefix("Brand, Acme Outfitters, From Tag, Check this: 45% sure"), brand.label)
+        let colors = app.buttons["review.field.colors"]
+        XCTAssertTrue(colors.label.hasPrefix("Colors, Blue, From AI, Check this: 50% sure"), colors.label)
+        XCTAssertLessThan(brand.frame.minY, colors.frame.minY, "the least certain detail comes first")
+        XCTAssertTrue(app.buttons["review.field.rnNumber"].label.hasPrefix("RN number, 12345, From Tag"))
+        let category = app.buttons["review.field.category"]
+        XCTAssertTrue(category.label.hasPrefix("Category, Clothing › Tops › Shirts, From AI"), category.label)
+
+        colors.tap()
+        let editor = app.textFields["review.editor.colors"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "navy")
+        app.buttons["review.editor.done"].tap()
+        let edited = app.buttons["review.field.colors"]
+        XCTAssertTrue(waitForLabel(of: edited, prefix: "Colors, Navy, From You"), edited.label)
+    }
+
+    /// "Identify harder" is prominent for the uncertain brand, says what it uses, and keeps the
+    /// seller's edit when its details arrive.
+    private func identifyHarder() {
+        // Back to the top: editing scrolled the review, and a large text size pushes the card off.
+        app.buttons["review.field.brand"].swipeDown()
+        let identifyHarder = app.buttons["review.identifyHarder"]
+        XCTAssertTrue(identifyHarder.exists)
+        XCTAssertEqual(
+            app.staticTexts["review.premiumQuota"].label,
+            "Uses 1 premium identification. 0 used this month.",
+        )
+        identifyHarder.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["review.premiumDone"].waitForExistence(timeout: 60))
+        XCTAssertTrue(app.buttons["review.field.colors"].label.hasPrefix("Colors, Navy, From You"))
+        XCTAssertEqual(app.staticTexts["review.section.attention"].label, "Check these (1)")
+    }
+
+    /// The cost on the in-app keypad, then where it was bought.
+    private func enterCost() {
+        app.buttons["review.continue"].tap()
+        let amount = app.staticTexts["cost.amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 10))
+        app.buttons["keypad.1"].tap()
+        app.buttons["keypad.2"].tap()
+        XCTAssertEqual(amount.value as? String, "$12")
+        keepScreenshot("Cost")
+        // Scrolled into view: a field still under the Continue bar would take the bar's tap.
+        amount.swipeUp()
+        let source = app.textFields["cost.source"]
+        source.tap()
+        source.typeText("Goodwill\n")
+        app.buttons["cost.continue"].tap()
+    }
+
+    /// Floors per marketplace and the server's labels, exactly; then the save. Returns the SKU.
+    private func choosePriceAndSave() -> String {
+        let estimate = app.staticTexts["price.estimateLabel"]
+        XCTAssertTrue(estimate.waitForExistence(timeout: 15))
+        XCTAssertEqual(estimate.label, "AI estimate - not based on sold listings")
+        XCTAssertTrue(app.staticTexts["price.estimateDetail"].label.hasSuffix("Confidence 55%"))
+        XCTAssertEqual(app.staticTexts["price.noSoldData"].label, "No sold data available for this item")
+        let recommended = app.buttons["price.tier.recommended"]
+        XCTAssertTrue(recommended.label.contains("Recommended (AI estimate)"), recommended.label)
+        XCTAssertTrue(recommended.label.contains("$26.00"), recommended.label)
+        XCTAssertTrue(app.buttons["price.floor.ebay"].label.hasPrefix("eBay, don't sell below $"))
+        XCTAssertTrue(app.buttons["price.floor.depop"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["price.research.0"].exists)
+        keepScreenshot("Price")
+
+        recommended.tap()
+        app.buttons["price.save"].tap()
+        let sku = app.staticTexts["saved.sku"]
+        XCTAssertTrue(sku.waitForExistence(timeout: 15))
+        let text = sku.label.replacingOccurrences(of: "SKU ", with: "")
+        XCTAssertNotNil(text.wholeMatch(of: /[A-Z0-9]{1,8}-[0-9]{6,}/), text)
+        XCTAssertEqual(app.staticTexts["saved.price"].label, "Price $26.00")
+        // The interaction measurement from the first photo to here.
+        XCTAssertTrue(app.descendants(matching: .any)["saved.metric"].label.contains(" taps"))
+        keepScreenshot("Saved")
+        return text
+    }
+
+    /// Keeps a screenshot in the result bundle, passing or not, for reviewing the screens.
+    private func keepScreenshot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func waitForLabel(of element: XCUIElement, prefix: String, timeout: TimeInterval = 5) -> Bool {
+        let predicate = NSPredicate(format: "label BEGINSWITH %@", prefix)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+}
+
+/// The local stack's API and signed-in session, from xcodebuild's `TEST_RUNNER_` variables.
+private struct E2EStack {
+    let apiURL: URL
+    let token: String
+    let email: String
+
+    static func fromEnvironment() throws -> E2EStack {
+        let environment = ProcessInfo.processInfo.environment
+        guard let url = environment["LISTORA_E2E_API_BASE_URL"].flatMap(URL.init(string:)),
+              let token = environment["LISTORA_E2E_ACCESS_TOKEN"]
+        else {
+            throw XCTSkip("Needs the local stack. Run `make ios-test`, which starts it.")
+        }
+        return E2EStack(apiURL: url, token: token, email: environment["LISTORA_E2E_EMAIL"] ?? "e2e@listora.test")
+    }
+
+    /// The item as the API has it (`getItemBySku`).
+    func item(sku: String) async throws -> SavedItem {
+        var request = URLRequest(url: apiURL.appending(path: "v1/skus/\(sku)"))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        return try JSONDecoder().decode(SavedItem.self, from: data)
+    }
+}
+
+/// The parts of the contract's `Item` the test checks.
+private struct SavedItem: Decodable {
+    let status: String
+    let details: SavedDetails
+    let fieldProvenance: [String: String]
+}
+
+private struct SavedDetails: Decodable {
+    let listPrice: SavedMoney?
+    let floorPrice: SavedMoney?
+    let cost: SavedMoney?
+    let purchaseSource: String?
+    let colors: [String]?
+}
+
+private struct SavedMoney: Decodable {
+    let amountCents: Int
+}
