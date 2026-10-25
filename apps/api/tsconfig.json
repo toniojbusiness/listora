@@ -15,6 +15,7 @@
     { "path": "../../packages/connections" },
     { "path": "../../packages/db" },
     { "path": "../../packages/marketplaces" },
+    { "path": "../../packages/operations" },
     { "path": "../../packages/photos" },
     { "path": "../../packages/pricing" },
     { "path": "../../packages/sales" },

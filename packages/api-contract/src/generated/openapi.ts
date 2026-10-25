@@ -800,9 +800,11 @@ export interface paths {
         put?: never;
         /**
          * Retry a failed operation
-         * @description Only for `failed` operations. Creates a new operation with the same desired state
-         *     (`retryOfOperationId` points at the failed one); the failed operation and its history
-         *     stay unchanged.
+         * @description Only for `failed` operations. Queues the same operation again with a fresh set of
+         *     attempts; its history keeps the failure. Its first step reads the listing back before
+         *     sending anything, because an earlier attempt may have been applied.
+         *     `409 invalid_state_transition` when the operation has not failed, or when a newer
+         *     operation on the listing exists (retrying would undo it).
          */
         post: operations["retryOperation"];
         delete?: never;
@@ -2874,6 +2876,13 @@ export interface operations {
                 status?: components["schemas"]["KnownItemStatus"][];
                 /** @description Free-text search over SKU, title, brand, and keywords. */
                 q?: string;
+                /**
+                 * @description Only items with a listing on this marketplace that is not ended or sold (a draft
+                 *     listing, or one being published, counts).
+                 */
+                marketplace?: components["schemas"]["KnownMarketplace"];
+                /** @description Only items of this brand (exact, ignoring case). */
+                brand?: string;
                 /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Page size. */
@@ -3937,7 +3946,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The new operation. */
+            /** @description The queued operation. */
             202: {
                 headers: {
                     [name: string]: unknown;

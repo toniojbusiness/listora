@@ -7,7 +7,7 @@ import {
 import { createOAuthClients, createTokenVault } from '@listora/connections';
 import { createDatabase } from '@listora/db';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
-import { startOperationWorker } from '@listora/operations';
+import { scaledRetryPolicy, startOperationWorker } from '@listora/operations';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
 
@@ -62,6 +62,7 @@ try {
     adapters,
     tasks,
     logger,
+    policy: scaledRetryPolicy(config.operationRetryDelayScale),
     concurrency: config.concurrency,
     taskConcurrency: config.taskConcurrency,
     scheduledTasks,

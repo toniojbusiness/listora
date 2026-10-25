@@ -370,9 +370,11 @@ public protocol APIProtocol: Sendable {
     func listOperationEvents(_ input: Operations.ListOperationEvents.Input) async throws -> Operations.ListOperationEvents.Output
     /// Retry a failed operation
     ///
-    /// Only for `failed` operations. Creates a new operation with the same desired state
-    /// (`retryOfOperationId` points at the failed one); the failed operation and its history
-    /// stay unchanged.
+    /// Only for `failed` operations. Queues the same operation again with a fresh set of
+    /// attempts; its history keeps the failure. Its first step reads the listing back before
+    /// sending anything, because an earlier attempt may have been applied.
+    /// `409 invalid_state_transition` when the operation has not failed, or when a newer
+    /// operation on the listing exists (retrying would undo it).
     ///
     ///
     /// - Remark: HTTP `POST /v1/operations/{operationId}/retry`.
@@ -1166,9 +1168,11 @@ extension APIProtocol {
     }
     /// Retry a failed operation
     ///
-    /// Only for `failed` operations. Creates a new operation with the same desired state
-    /// (`retryOfOperationId` points at the failed one); the failed operation and its history
-    /// stay unchanged.
+    /// Only for `failed` operations. Queues the same operation again with a fresh set of
+    /// attempts; its history keeps the failure. Its first step reads the listing back before
+    /// sending anything, because an earlier attempt may have been applied.
+    /// `409 invalid_state_transition` when the operation has not failed, or when a newer
+    /// operation on the listing exists (retrying would undo it).
     ///
     ///
     /// - Remark: HTTP `POST /v1/operations/{operationId}/retry`.

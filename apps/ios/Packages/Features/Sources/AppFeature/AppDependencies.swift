@@ -2,6 +2,7 @@ import AddItemFeature
 import APIClient
 import Core
 import Foundation
+import InventoryFeature
 import MarketplacesFeature
 import ReviewFeature
 import SettingsFeature
@@ -26,6 +27,8 @@ public struct AppDependencies {
     public let review: ReviewEnvironment
     /// Drafts and the photo upload queue.
     public let addItem: AddItemEnvironment
+    /// The inventory, item, and listing screens.
+    public let inventory: InventoryEnvironment
     /// Dev builds only: sign in against the local API's dev auth driver.
     public let devSignIn: DevSignInModel?
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
@@ -66,12 +69,9 @@ public struct AppDependencies {
         self.tagReader = tagReader
         let meter = InteractionMeter(storage: interactionStorage)
         interactionMeter = meter
-        let review = ReviewEnvironment(
-            apiClient: apiClient,
-            meter: meter,
-            listingCopy: ListingCopyStore(directory: listingCopyDirectory),
-            defaults: defaults,
-        )
+        let listingCopy = ListingCopyStore(directory: listingCopyDirectory)
+        let review = ReviewEnvironment(apiClient: apiClient, meter: meter, listingCopy: listingCopy, defaults: defaults)
+        inventory = InventoryEnvironment(apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy)
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory,

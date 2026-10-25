@@ -18,6 +18,7 @@
     "@listora/connections": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",
+    "@listora/operations": "*",
     "@listora/photos": "*",
     "@listora/pricing": "*",
     "@listora/sales": "*",
