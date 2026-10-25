@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs';
+
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
+
+import { MARKETPLACES } from '@listora/db';
+import { METRIC_NAMESPACE, TRUST_METRICS } from '@listora/observability/catalog';
 
 import { APP_SECRETS, ENVIRONMENT_SETTINGS, SERVICE_NAMES } from './config.ts';
 import { containerEnvironment, containerSecretNames, MIGRATE_COMMAND } from './containers.ts';
@@ -768,18 +773,36 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
   describe('observability', () => {
     const t = template(shape, 'observability');
 
-    it('defines baseline alarms that notify the alarm topic on alarm and recovery', () => {
+    const alarmNamed = (name: string) => {
+      const found = resources(t, 'AWS::CloudWatch::Alarm').find(
+        (alarm) => alarm.Properties?.['AlarmName'] === `listora-${environment}-${name}`,
+      );
+      if (found === undefined) throw new Error(`no ${name} alarm`);
+      return found.Properties ?? {};
+    };
+    const serviceNames = settings.services.layout === 'separate' ? ['api', 'worker'] : ['app'];
+
+    it('defines the baseline and trust alarms, notifying the topic on alarm and recovery', () => {
       const alarms = resources(t, 'AWS::CloudWatch::Alarm');
       const names = alarms.map((alarm) => alarm.Properties?.['AlarmName']);
       const endpointAlarms =
         settings.ingress.via === 'load-balancer'
           ? ['api-5xx', 'load-balancer-5xx', 'api-unhealthy-tasks', 'api-latency-p95']
-          : ['api-5xx', 'api-latency-p95', 'api-no-running-task'];
-      const serviceNames = settings.services.layout === 'separate' ? ['api', 'worker'] : ['app'];
+          : ['api-5xx', 'api-latency-p95'];
       expect(names).toEqual(
         [
           ...endpointAlarms,
-          ...serviceNames.flatMap((name) => [`${name}-cpu`, `${name}-memory`]),
+          ...serviceNames.flatMap((name) => [
+            `${name}-running-tasks`,
+            `${name}-cpu`,
+            `${name}-memory`,
+          ]),
+          'operation-unverified',
+          'delist-failed',
+          'ai-daily-cost',
+          'connection-needs-relink',
+          ...MARKETPLACES.map((marketplace) => `delist-latency-${marketplace}`),
+          ...MARKETPLACES.map((marketplace) => `verified-success-${marketplace}`),
           'database-cpu',
           'database-free-storage',
           'database-free-memory',
@@ -794,15 +817,17 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       t.resourceCountIs('AWS::SNS::Subscription', 0);
     });
 
-    if (settings.ingress.via === 'http-api') {
-      const alarmNamed = (name: string) => {
-        const found = resources(t, 'AWS::CloudWatch::Alarm').find(
-          (alarm) => alarm.Properties?.['AlarmName'] === `listora-${environment}-${name}`,
-        );
-        if (found === undefined) throw new Error(`no ${name} alarm`);
-        return found.Properties ?? {};
-      };
+    if (environment === 'personal') {
+      it('has the alarm count docs/costs.md prices', () => {
+        // Ten beyond the always-free ten standard alarms, at $0.10 each a month.
+        const count = resources(t, 'AWS::CloudWatch::Alarm').length;
+        expect(count).toBe(20);
+        const costs = readFileSync(new URL('../../docs/costs.md', import.meta.url), 'utf8');
+        expect(costs).toContain(`| ${String(count)} standard alarms;`);
+      });
+    }
 
+    if (settings.ingress.via === 'http-api') {
       it('alarms on server errors and latency (in milliseconds) of the HTTP API', () => {
         // One user sends few requests: any server error counts, in 2 of 3 periods.
         expect(alarmNamed('api-5xx')).toMatchObject({
@@ -822,84 +847,191 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           Threshold: 2000,
         });
       });
+    }
 
-      it('alarms when no task runs the API, since no load balancer counts healthy hosts', () => {
-        const service = settings.services.layout === 'separate' ? 'api' : 'app';
-        expect(alarmNamed('api-no-running-task')).toMatchObject({
-          Namespace: 'AWS/ECS',
-          MetricName: 'CPUUtilization',
-          Statistic: 'SampleCount',
-          Period: 60,
-          Threshold: 1,
-          ComparisonOperator: 'LessThanThreshold',
+    it('alarms when a service, the worker included, runs fewer tasks than it should', () => {
+      for (const name of serviceNames) {
+        const alarm = alarmNamed(`${name}-running-tasks`);
+        expect(alarm).toMatchObject({
           EvaluationPeriods: 3,
-          // No samples is exactly the failure this alarm exists for.
+          // No data is exactly the failure this alarm exists for.
           TreatMissingData: 'breaching',
         });
-        const dimensions = JSON.stringify(alarmNamed('api-no-running-task')['Dimensions']);
-        expect(dimensions).toContain(`PublishOutputFnGetAtt${service}service`);
-      });
+        if (settings.containerInsights) {
+          expect(alarm).toMatchObject({
+            Threshold: 1,
+            ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+          });
+          const queries = alarm['Metrics'] as Record<string, unknown>[];
+          expect(queries.find((query) => query['Id'] === 'expr_1')).toMatchObject({
+            Expression: 'desired - running',
+            ReturnData: true,
+          });
+          for (const [id, metricName, stat] of [
+            ['desired', 'DesiredTaskCount', 'Maximum'],
+            ['running', 'RunningTaskCount', 'Minimum'],
+          ] as const) {
+            const query = queries.find((candidate) => candidate['Id'] === id);
+            expect(query).toMatchObject({
+              ReturnData: false,
+              MetricStat: {
+                Metric: { Namespace: 'ECS/ContainerInsights', MetricName: metricName },
+                Period: 60,
+                Stat: stat,
+              },
+            });
+            const dimensions = JSON.stringify(query?.['MetricStat']);
+            expect(dimensions).toContain('"Name":"ClusterName"');
+            expect(dimensions).toContain('"Name":"ServiceName"');
+            expect(dimensions).toContain(`PublishOutputFnGetAtt${name}service`);
+          }
+        } else {
+          const size =
+            settings.services.layout === 'separate'
+              ? settings.services[name === 'api' ? 'api' : 'worker']
+              : settings.services.app;
+          // ECS reports a service's CPU every minute from each running task.
+          expect(alarm).toMatchObject({
+            Namespace: 'AWS/ECS',
+            MetricName: 'CPUUtilization',
+            Statistic: 'SampleCount',
+            Period: 60,
+            Threshold: size.minTasks,
+            ComparisonOperator: 'LessThanThreshold',
+          });
+          expect(JSON.stringify(alarm['Dimensions'])).toContain(
+            `PublishOutputFnGetAtt${name}service`,
+          );
+        }
+      }
+    });
 
-      it('sends unplanned task stops (crash loops) to the alarm topic, not deploy stops', () => {
-        const serviceNames = settings.services.layout === 'separate' ? ['api', 'worker'] : ['app'];
-        const topic = { Ref: Match.stringLikeRegexp('^Alarms') };
-        t.resourceCountIs('AWS::Events::Rule', 1);
-        const [rule] = resources(t, 'AWS::Events::Rule');
-        expect(rule?.Properties).toMatchObject({
-          Name: `listora-${environment}-task-stopped`,
-          State: 'ENABLED',
-          EventPattern: {
-            source: ['aws.ecs'],
-            'detail-type': ['ECS Task State Change'],
-            detail: {
-              clusterArn: [
-                {
-                  'Fn::GetStackOutput': expect.objectContaining({
-                    StackName: `listora-${environment}-compute`,
-                    OutputName: expect.stringMatching(/^PublishOutputFnGetAttCluster/) as unknown,
-                  }) as unknown,
-                },
-              ],
-              group: serviceNames.map((name) => `service:${name}`),
-              lastStatus: ['STOPPED'],
-              stoppedReason: [{ 'anything-but': { prefix: 'Scaling activity initiated by' } }],
-            },
-          },
+    it('alarms on the trust metrics the worker publishes, with dimensions it publishes', () => {
+      const expected = {
+        'operation-unverified': ['OldestUnverifiedOperationAge', 'Maximum', 1800],
+        'delist-failed': ['DelistFailed', 'Sum', 1],
+        'ai-daily-cost': ['AiDailyCostUsd', 'Maximum', settings.aiDailyCostAlarmUsd],
+        'connection-needs-relink': ['ConnectionsNeedingRelink', 'Maximum', 1],
+      } as const;
+      for (const [name, [metricName, statistic, threshold]] of Object.entries(expected)) {
+        const alarm = alarmNamed(name);
+        expect(alarm).toMatchObject({
+          Namespace: METRIC_NAMESPACE,
+          MetricName: metricName,
+          Statistic: statistic,
+          Period: 300,
+          Threshold: threshold,
+          ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+          EvaluationPeriods: 1,
+          // The worker publishes nothing while it is down; running-tasks covers that.
+          TreatMissingData: 'notBreaching',
         });
-        const targets = rule?.Properties?.['Targets'] as Record<string, unknown>[];
-        expect(targets).toHaveLength(1);
-        expect(targets[0]).toMatchObject({
-          Arn: { Ref: expect.stringMatching(/^Alarms/) as unknown },
-        });
-        expect(JSON.stringify(targets[0]?.['InputTransformer'])).toContain(
-          '$.detail.stoppedReason',
+        // The alarm reads the metric without dimensions, so the worker must publish that set.
+        expect(alarm['Dimensions']).toBeUndefined();
+        expect(TRUST_METRICS[metricName].dimensionSets).toContainEqual([]);
+      }
+      expect(String(alarmNamed('ai-daily-cost')['AlarmDescription'])).toContain('$0.80');
+    });
+
+    it('alarms per marketplace on p95 delist latency and the verified-success rate', () => {
+      expect(Object.keys(settings.delistLatencyAlarmMinutes)).toEqual([...MARKETPLACES]);
+      expect(settings.delistLatencyAlarmMinutes).toEqual({
+        ebay: 10,
+        depop: 13 * 60,
+        poshmark: 13 * 60,
+        mercari: 13 * 60,
+      });
+      for (const marketplace of MARKETPLACES) {
+        const dimensions = [{ Name: 'Marketplace', Value: marketplace }];
+        expect(alarmNamed(`delist-latency-${marketplace}`)).toEqual(
+          expect.objectContaining({
+            Namespace: METRIC_NAMESPACE,
+            MetricName: 'DelistLatency',
+            ExtendedStatistic: 'p95',
+            Dimensions: dimensions,
+            Period: 3600,
+            // DelistLatency is in milliseconds.
+            Threshold: settings.delistLatencyAlarmMinutes[marketplace] * 60_000,
+            ComparisonOperator: 'GreaterThanThreshold',
+            EvaluationPeriods: 1,
+            TreatMissingData: 'notBreaching',
+          }),
         );
-        t.hasResourceProperties('AWS::SNS::TopicPolicy', {
-          PolicyDocument: {
-            Statement: Match.arrayWith([
-              Match.objectLike({
-                Sid: 'TaskStoppedEvents',
-                Effect: 'Allow',
-                Action: 'sns:Publish',
-                Principal: { Service: 'events.amazonaws.com' },
-                Resource: topic,
-                Condition: {
-                  ArnEquals: {
-                    'aws:SourceArn': {
-                      'Fn::GetAtt': [Match.stringLikeRegexp('^TaskStopped'), 'Arn'],
-                    },
+        expect(alarmNamed(`verified-success-${marketplace}`)).toEqual(
+          expect.objectContaining({
+            Namespace: METRIC_NAMESPACE,
+            MetricName: 'VerifiedSuccess',
+            Statistic: 'Average',
+            Dimensions: dimensions,
+            Period: 86_400,
+            Threshold: 0.9,
+            ComparisonOperator: 'LessThanThreshold',
+            EvaluationPeriods: 1,
+            TreatMissingData: 'notBreaching',
+          }),
+        );
+      }
+      // The alarms read each metric per marketplace alone, so the worker must publish that set.
+      expect(TRUST_METRICS.DelistLatency.dimensionSets).toContainEqual(['Marketplace']);
+      expect(TRUST_METRICS.VerifiedSuccess.dimensionSets).toContainEqual(['Marketplace']);
+      expect(String(alarmNamed('delist-latency-ebay')['AlarmDescription'])).toContain('10 minutes');
+      expect(String(alarmNamed('delist-latency-mercari')['AlarmDescription'])).toContain(
+        '13 hours',
+      );
+    });
+
+    it('sends unplanned task stops (crash loops) to the alarm topic, not deploy stops', () => {
+      const topic = { Ref: Match.stringLikeRegexp('^Alarms') };
+      t.resourceCountIs('AWS::Events::Rule', 1);
+      const [rule] = resources(t, 'AWS::Events::Rule');
+      expect(rule?.Properties).toMatchObject({
+        Name: `listora-${environment}-task-stopped`,
+        State: 'ENABLED',
+        EventPattern: {
+          source: ['aws.ecs'],
+          'detail-type': ['ECS Task State Change'],
+          detail: {
+            clusterArn: [
+              {
+                'Fn::GetStackOutput': expect.objectContaining({
+                  StackName: `listora-${environment}-compute`,
+                  OutputName: expect.stringMatching(/^PublishOutputFnGetAttCluster/) as unknown,
+                }) as unknown,
+              },
+            ],
+            group: serviceNames.map((name) => `service:${name}`),
+            lastStatus: ['STOPPED'],
+            stoppedReason: [{ 'anything-but': { prefix: 'Scaling activity initiated by' } }],
+          },
+        },
+      });
+      const targets = rule?.Properties?.['Targets'] as Record<string, unknown>[];
+      expect(targets).toHaveLength(1);
+      expect(targets[0]).toMatchObject({
+        Arn: { Ref: expect.stringMatching(/^Alarms/) as unknown },
+      });
+      expect(JSON.stringify(targets[0]?.['InputTransformer'])).toContain('$.detail.stoppedReason');
+      t.hasResourceProperties('AWS::SNS::TopicPolicy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'TaskStoppedEvents',
+              Effect: 'Allow',
+              Action: 'sns:Publish',
+              Principal: { Service: 'events.amazonaws.com' },
+              Resource: topic,
+              Condition: {
+                ArnEquals: {
+                  'aws:SourceArn': {
+                    'Fn::GetAtt': [Match.stringLikeRegexp('^TaskStopped'), 'Arn'],
                   },
                 },
-              }),
-            ]),
-          },
-        });
+              },
+            }),
+          ]),
+        },
       });
-    } else {
-      it('leaves task stops to the load balancer health alarms', () => {
-        t.resourceCountIs('AWS::Events::Rule', 0);
-      });
-    }
+    });
 
     it('forwards the database low-storage events, including the autoscaling ceiling', () => {
       const topic = { Ref: Match.stringLikeRegexp('^Alarms') };

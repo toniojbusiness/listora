@@ -11,6 +11,12 @@ import {
   PostgresUsageStore,
 } from '@listora/ai';
 import { createDatabase } from '@listora/db';
+import {
+  createMetricsEmitter,
+  runTrustMetricsTick,
+  TRUST_METRICS_CRONTAB,
+  TRUST_METRICS_TASK,
+} from '@listora/observability';
 import { startOperationWorker } from '@listora/operations';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
@@ -26,6 +32,7 @@ const db = createDatabase({
   connectionString: config.databaseUrl,
   max: config.concurrency + config.taskConcurrency + 5,
 });
+const metrics = { db, emitter: createMetricsEmitter({ service: 'worker' }), logger };
 
 try {
   const worker = await startOperationWorker({
@@ -52,11 +59,13 @@ try {
         marketplaceAccess: noMarketplaceAccessRevocation,
         logger,
       }),
+      [TRUST_METRICS_TASK]: (payload) => runTrustMetricsTick(metrics, payload),
     },
     logger,
     concurrency: config.concurrency,
     taskConcurrency: config.taskConcurrency,
     scheduledTasks: [aiSpendCheckTask(db, config.aiAlerts, logger)],
+    crontab: [TRUST_METRICS_CRONTAB],
     onFatalError: (error) => {
       // Other workers recover this worker's jobs once its process is gone; exiting at once
       // is what keeps two workers from running the same step.

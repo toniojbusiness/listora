@@ -19,6 +19,7 @@ import { createInventoryItem, inTransaction, type Marketplace } from '@listora/d
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
 import { FakeEbay, FakeMarketplace } from '@listora/marketplaces';
 import { contentWith } from '@listora/marketplaces/testing';
+import { TRUST_METRICS_TASK } from '@listora/observability';
 import { enqueueOperation, LIVENESS_APPLICATION_PREFIX } from '@listora/operations';
 import { graphilePhotoJobs, itemPhotoSet, storageKeys } from '@listora/photos';
 import { photoSetHash, sha256Hex } from '@listora/shared';
@@ -213,6 +214,54 @@ describe('worker process (real Postgres)', () => {
     const done = await waitForOperation(operation.id, 'succeeded');
     expect(done.success_evidence).toBe('read_back');
     expect(fake.listings('ebay', listing.id)).toHaveLength(1);
+  });
+
+  it('publishes trust metrics as CloudWatch EMF lines on its stdout', async () => {
+    const worker = await startWorker();
+    const { operation } = await createOperation();
+    await waitForOperation(operation.id, 'succeeded');
+    const settled = await database.db
+      .selectFrom('operation_event')
+      .select('created_at')
+      .where('operation_id', '=', operation.id)
+      .where('to_status', '=', 'succeeded')
+      .executeTakeFirstOrThrow();
+
+    // The cron tick whose window holds the success: the minute that starts 90 s after it.
+    const tick = new Date(settled.created_at.getTime() + 90_000);
+    await sql`
+      select graphile_worker.add_job(
+        ${TRUST_METRICS_TASK},
+        json_build_object('_cron', json_build_object('ts', ${tick.toISOString()}::text,
+          'backfilled', false))
+      )
+    `.execute(database.db);
+
+    const line = await worker.waitForLog(
+      (candidate) => candidate['VerifiedSuccess'] !== undefined && candidate['Kind'] === 'create',
+      20_000,
+    );
+    expect(line).toMatchObject({
+      service: 'worker',
+      Marketplace: 'ebay',
+      Kind: 'create',
+      _aws: {
+        CloudWatchMetrics: [
+          {
+            Namespace: 'Listora',
+            Dimensions: [['Marketplace', 'Kind'], ['Marketplace']],
+            Metrics: [{ Name: 'VerifiedSuccess', Unit: 'Count' }],
+          },
+        ],
+      },
+    });
+    // Earlier tests' operations may have settled in the same minute: every one succeeded.
+    expect([line['VerifiedSuccess']].flat()).toContain(1);
+    expect([line['VerifiedSuccess']].flat().every((value) => value === 1)).toBe(true);
+    // The same tick publishes the current state too.
+    await worker.waitForLog(
+      (candidate) => typeof candidate['OldestUnverifiedOperationAge'] === 'number',
+    );
   });
 
   it('lists eBay operations on the fake eBay with EBAY_ENV=fake, for the bound connection only', async () => {

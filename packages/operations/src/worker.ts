@@ -66,6 +66,8 @@ export interface OperationWorkerOptions {
   blockedRecheckMs?: number;
   /** Recurring jobs, run on the same runner as `tasks`. */
   scheduledTasks?: readonly ScheduledTask[];
+  /** Graphile crontab lines that schedule `tasks` (one job per tick across all workers). */
+  crontab?: readonly string[];
   /**
    * The worker can no longer run safely (its liveness session or the job runner failed). The
    * process must exit at once; other workers then recover its jobs.
@@ -92,6 +94,12 @@ export async function startOperationWorker(
   }
   const scheduledTasks = options.scheduledTasks ?? [];
   validScheduledTasks(scheduledTasks, tasks);
+  const crontab = [
+    ...scheduledTasks.map(
+      (task) => `${task.schedule} ${task.name} ?max=${String(task.maxAttempts ?? 1)}`,
+    ),
+    ...(options.crontab ?? []),
+  ];
   const deps: StepDependencies = {
     db: options.db,
     adapters: options.adapters,
@@ -128,21 +136,13 @@ export async function startOperationWorker(
     },
   );
   let background: StartedRunner | undefined;
-  if (Object.keys(tasks).length > 0 || scheduledTasks.length > 0) {
+  if (Object.keys(tasks).length > 0 || crontab.length > 0) {
     try {
       background = await startRunner(
         {
           ...runnerOptions,
           concurrency: options.taskConcurrency ?? 2,
-          ...(scheduledTasks.length === 0
-            ? {}
-            : {
-                crontab: scheduledTasks
-                  .map(
-                    (task) => `${task.schedule} ${task.name} ?max=${String(task.maxAttempts ?? 1)}`,
-                  )
-                  .join('\n'),
-              }),
+          ...(crontab.length === 0 ? {} : { crontab: crontab.join('\n') }),
         },
         Object.fromEntries([
           ...Object.entries(tasks).map(([name, task]): [string, JobHandler] => [

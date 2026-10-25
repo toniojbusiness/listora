@@ -1,5 +1,7 @@
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
 
+import type { Marketplace } from '@listora/db';
+
 /**
  * Deployment configuration. Two kinds of settings, kept apart on purpose:
  *
@@ -107,8 +109,40 @@ export interface EnvironmentSettings {
   readonly browserRunner: ServiceSize;
   /** CloudWatch Logs retention for service, database, and VPC logs. */
   readonly logRetention: RetentionDays;
+  /**
+   * ECS Container Insights: per-service task counts (and more) at a CloudWatch charge. With
+   * it, the running-tasks alarms compare running with desired tasks; without it, they count
+   * the tasks that report CPU against the service's minimum.
+   */
   readonly containerInsights: boolean;
+  /**
+   * The `ai-daily-cost` alarm fires when one account's AI cost today (UTC) reaches this many
+   * US dollars: before the default daily circuit breaker (`AI_DAILY_BUDGET_USD`, $1) refuses
+   * that account's next call.
+   */
+  readonly aiDailyCostAlarmUsd: number;
+  /**
+   * The `delist-latency-<marketplace>` alarms fire when the p95 delist latency on the
+   * marketplace over an hour (from the sale being recorded to the verified delist of the
+   * item's listing there) exceeds this many minutes: the item may stay for sale after selling.
+   */
+  readonly delistLatencyAlarmMinutes: Readonly<Record<Marketplace, number>>;
 }
+
+/** Most of the default $1 daily AI budget per account (packages/ai). */
+const AI_DAILY_COST_ALARM_USD = 0.8;
+
+/**
+ * eBay delists through its API within minutes of a sale. The browser runner delists Depop
+ * (until its partner API is granted), Poshmark, and Mercari, and their scheduled sale checks
+ * run about every 12 hours, so a delist there can take that long.
+ */
+const DELIST_LATENCY_ALARM_MINUTES: Readonly<Record<Marketplace, number>> = {
+  ebay: 10,
+  depop: 13 * 60,
+  poshmark: 13 * 60,
+  mercari: 13 * 60,
+};
 
 /** Headless Chromium wants about a gigabyte per busy page; four leave room for a few. */
 const BROWSER_RUNNER: ServiceSize = { cpu: 1024, memoryMiB: 4096, minTasks: 0, maxTasks: 1 };
@@ -138,6 +172,8 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.ONE_MONTH,
     containerInsights: false,
+    aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
+    delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
   },
   prod: {
     protectData: true,
@@ -163,6 +199,8 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.THREE_MONTHS,
     containerInsights: true,
+    aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
+    delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
   },
   // One reseller, around 500 items, light traffic, every service running 24/7, at the lowest
   // monthly cost (docs/costs.md has the estimate and the alternatives it beat). The data is
@@ -199,6 +237,8 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     browserRunner: BROWSER_RUNNER,
     logRetention: RetentionDays.ONE_WEEK,
     containerInsights: false,
+    aiDailyCostAlarmUsd: AI_DAILY_COST_ALARM_USD,
+    delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
   },
 };
 

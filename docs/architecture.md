@@ -132,6 +132,8 @@ packages/
   operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
+  observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
+                (@listora/observability)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
@@ -742,7 +744,7 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
   the queue then runs the job again with backoff.
 
 `@listora/ai` is the provider layer behind steps 3, 4, and 6, and implements step 7's metering,
-guards, cost reports, and spend check:
+guards, cost reports, and spend check (the AI cost alarm is in section 10):
 
 - **`AiClient` is the only way to call AI.** A call names its account, purpose, and tier
   (`standard` is the Fast tier, `premium` the escalation). The client checks the guards in
@@ -934,6 +936,32 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   so every migration must be compatible with the code currently running: expand, then
   contract (add first and use in a later release; stop using first and drop in a later
   release).
+- **Trust metrics and alarms.** The worker publishes the product's trust metrics in CloudWatch
+  Embedded Metric Format: JSON lines on stdout that CloudWatch Logs turns into metrics (no
+  agent, no API calls). `TRUST_METRICS` in `packages/observability/src/catalog.ts` names each
+  one, its unit, and its dimensions, and both the worker and the CDK alarms read it. A Graphile
+  cron job (`trust_metrics`, once a minute across all workers, filled in for up to an hour
+  after downtime) computes them from committed rows, so a rolled-back change is never counted
+  and every writer (worker steps, user confirmations through the API) is covered. For minute T
+  it publishes the operations that settled in [T - 2 min, T - 1 min): `VerifiedSuccess` (1 or 0
+  per settled operation, so Average is the verified-success rate) per marketplace and kind and
+  per marketplace, `OperationFailed` per marketplace and kind, `DelistFailed`, and
+  `DelistLatency` from the recorded sale to the verified delist per marketplace (p50, p95).
+  Every scheduled tick, however late, also publishes the state at the time it runs (the job
+  runs ahead of every operation step in the queue, so a backlog cannot silence it):
+  `StuckOperations` and `OldestStuckOperationAge` per status (verifying, retrying,
+  needs_user_action), `OldestUnverifiedOperationAge`, `AiDailyCostUsd` per account (UTC day),
+  `MarketplaceConnections` per marketplace and status, and `ConnectionsNeedingRelink`. The
+  observability stack alarms on an operation unverified for 30 minutes, any failed delist, an
+  account's AI cost today over `aiDailyCostAlarmUsd`, a connection needing relink, and per
+  marketplace on p95 delist latency over an hour above `delistLatencyAlarmMinutes` (10 minutes
+  for eBay's API, 13 hours for the browser-automated marketplaces and their 12-hour sale
+  checks) and a verified-success rate below 90% over a day, and on every service running
+  fewer tasks than it should, and sends unplanned task stops to the alarm topic. The relink
+  alarm fires on a level, which suits one seller; an environment with many sellers should
+  alarm on increases instead, so one unlinked connection does not mask the next. A new metric
+  adds a catalog entry; keep dimensions few, since CloudWatch bills each combination of values
+  as a metric ([costs.md](costs.md)).
 - **Offline.** Synthesis never calls AWS: no `fromLookup`, zones resolve at deploy time, and
   `npm run infra:synth` (part of `npm run check`) runs `cdk synth` of every environment with
   credentials hidden.

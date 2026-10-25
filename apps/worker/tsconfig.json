@@ -12,6 +12,7 @@
     { "path": "../../packages/testing" },
     { "path": "../../packages/db" },
     { "path": "../../packages/marketplaces" },
+    { "path": "../../packages/observability" },
     { "path": "../../packages/operations" },
     { "path": "../../packages/storage" },
     { "path": "../../packages/ai" },

@@ -30,6 +30,27 @@
               "Action": "sns:Publish",
               "Condition": {
                 "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "TaskStopped92FAA25A",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "TaskStoppedEvents"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "ArnEquals": {
                   "aws:SourceArn": "arn:aws:rds:us-east-1:222222222222:es:listora-prod-database-storage"
                 }
               },
@@ -389,6 +410,103 @@
         "TreatMissingData": "notBreaching"
       }
     },
+    "apirunningtasks189F1F93": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The api service ran fewer tasks than desired for 3 minutes.",
+        "AlarmName": "listora-prod-api-running-tasks",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 3,
+        "Metrics": [
+          {
+            "Expression": "desired - running",
+            "Id": "expr_1",
+            "Label": "Tasks short of desired",
+            "ReturnData": true
+          },
+          {
+            "Id": "desired",
+            "MetricStat": {
+              "Metric": {
+                "Dimensions": [
+                  {
+                    "Name": "ClusterName",
+                    "Value": {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-prod-compute",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+                      }
+                    }
+                  },
+                  {
+                    "Name": "ServiceName",
+                    "Value": {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-prod-compute",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputFnGetAttapiserviceServiceBEA4D09ENameC4EFDA8C"
+                      }
+                    }
+                  }
+                ],
+                "MetricName": "DesiredTaskCount",
+                "Namespace": "ECS/ContainerInsights"
+              },
+              "Period": 60,
+              "Stat": "Maximum"
+            },
+            "ReturnData": false
+          },
+          {
+            "Id": "running",
+            "MetricStat": {
+              "Metric": {
+                "Dimensions": [
+                  {
+                    "Name": "ClusterName",
+                    "Value": {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-prod-compute",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+                      }
+                    }
+                  },
+                  {
+                    "Name": "ServiceName",
+                    "Value": {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-prod-compute",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputFnGetAttapiserviceServiceBEA4D09ENameC4EFDA8C"
+                      }
+                    }
+                  }
+                ],
+                "MetricName": "RunningTaskCount",
+                "Namespace": "ECS/ContainerInsights"
+              },
+              "Period": 60,
+              "Stat": "Minimum"
+            },
+            "ReturnData": false
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Threshold": 1,
+        "TreatMissingData": "breaching"
+      }
+    },
     "apicpu084AC2EC": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -483,6 +601,103 @@
         "TreatMissingData": "notBreaching"
       }
     },
+    "workerrunningtasksBD7EB9DC": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The worker service ran fewer tasks than desired for 3 minutes.",
+        "AlarmName": "listora-prod-worker-running-tasks",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 3,
+        "Metrics": [
+          {
+            "Expression": "desired - running",
+            "Id": "expr_1",
+            "Label": "Tasks short of desired",
+            "ReturnData": true
+          },
+          {
+            "Id": "desired",
+            "MetricStat": {
+              "Metric": {
+                "Dimensions": [
+                  {
+                    "Name": "ClusterName",
+                    "Value": {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-prod-compute",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+                      }
+                    }
+                  },
+                  {
+                    "Name": "ServiceName",
+                    "Value": {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-prod-compute",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputFnGetAttworkerserviceService99067999Name8CDE44B0"
+                      }
+                    }
+                  }
+                ],
+                "MetricName": "DesiredTaskCount",
+                "Namespace": "ECS/ContainerInsights"
+              },
+              "Period": 60,
+              "Stat": "Maximum"
+            },
+            "ReturnData": false
+          },
+          {
+            "Id": "running",
+            "MetricStat": {
+              "Metric": {
+                "Dimensions": [
+                  {
+                    "Name": "ClusterName",
+                    "Value": {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-prod-compute",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+                      }
+                    }
+                  },
+                  {
+                    "Name": "ServiceName",
+                    "Value": {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-prod-compute",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputFnGetAttworkerserviceService99067999Name8CDE44B0"
+                      }
+                    }
+                  }
+                ],
+                "MetricName": "RunningTaskCount",
+                "Namespace": "ECS/ContainerInsights"
+              },
+              "Period": 60,
+              "Stat": "Minimum"
+            },
+            "ReturnData": false
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Threshold": 1,
+        "TreatMissingData": "breaching"
+      }
+    },
     "workercpu7725A7C7": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -574,6 +789,412 @@
         "Period": 300,
         "Statistic": "Average",
         "Threshold": 85,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "TaskStopped92FAA25A": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Unplanned ECS task stops: crashes, exited containers, failed health checks.",
+        "EventPattern": {
+          "source": [
+            "aws.ecs"
+          ],
+          "detail-type": [
+            "ECS Task State Change"
+          ],
+          "detail": {
+            "clusterArn": [
+              {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-prod-compute",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputFnGetAttClusterEB0386A7Arn0CAA3DA3"
+                }
+              }
+            ],
+            "group": [
+              "service:api",
+              "service:worker"
+            ],
+            "lastStatus": [
+              "STOPPED"
+            ],
+            "stoppedReason": [
+              {
+                "anything-but": {
+                  "prefix": "Scaling activity initiated by"
+                }
+              }
+            ]
+          }
+        },
+        "Name": "listora-prod-task-stopped",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "Alarms04B5A0BF"
+            },
+            "Id": "Target0",
+            "InputTransformer": {
+              "InputPathsMap": {
+                "detail-group": "$.detail.group",
+                "detail-stoppedReason": "$.detail.stoppedReason",
+                "detail-stopCode": "$.detail.stopCode",
+                "detail-taskArn": "$.detail.taskArn"
+              },
+              "InputTemplate": "\"ECS stopped a <detail-group> task in listora-prod: <detail-stoppedReason> (stop code <detail-stopCode>, task <detail-taskArn>).\""
+            }
+          }
+        ]
+      }
+    },
+    "operationunverified5F6E7766": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "A marketplace operation has gone 30 minutes without a verified result (queued, running, retrying, or verifying): its status may be wrong or stuck.",
+        "AlarmName": "listora-prod-operation-unverified",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "MetricName": "OldestUnverifiedOperationAge",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Maximum",
+        "Threshold": 1800,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "delistfailed4FD4395F": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "A delist (end or mark-sold) failed on a marketplace: the item may still be for sale there.",
+        "AlarmName": "listora-prod-delist-failed",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "MetricName": "DelistFailed",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Sum",
+        "Threshold": 1,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "aidailycostF0901007": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "An account's AI cost today (UTC) reached $0.80.",
+        "AlarmName": "listora-prod-ai-daily-cost",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "MetricName": "AiDailyCostUsd",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Maximum",
+        "Threshold": 0.8,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "connectionneedsrelink120D2670": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "A marketplace connection needs the seller to link it again (reauth_required or revoked).",
+        "AlarmName": "listora-prod-connection-needs-relink",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "MetricName": "ConnectionsNeedingRelink",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Maximum",
+        "Threshold": 1,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "delistlatencyebayE5A35E96": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The p95 delist latency on ebay over the last hour (from the sale being recorded to the verified delist) exceeded 10 minutes: sold items stay for sale there.",
+        "AlarmName": "listora-prod-delist-latency-ebay",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "Marketplace",
+            "Value": "ebay"
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "ExtendedStatistic": "p95",
+        "MetricName": "DelistLatency",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 3600,
+        "Threshold": 600000,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "delistlatencydepop919E4D65": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The p95 delist latency on depop over the last hour (from the sale being recorded to the verified delist) exceeded 13 hours: sold items stay for sale there.",
+        "AlarmName": "listora-prod-delist-latency-depop",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "Marketplace",
+            "Value": "depop"
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "ExtendedStatistic": "p95",
+        "MetricName": "DelistLatency",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 3600,
+        "Threshold": 46800000,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "delistlatencyposhmark9B3D3A95": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The p95 delist latency on poshmark over the last hour (from the sale being recorded to the verified delist) exceeded 13 hours: sold items stay for sale there.",
+        "AlarmName": "listora-prod-delist-latency-poshmark",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "Marketplace",
+            "Value": "poshmark"
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "ExtendedStatistic": "p95",
+        "MetricName": "DelistLatency",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 3600,
+        "Threshold": 46800000,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "delistlatencymercari4F65EE8F": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The p95 delist latency on mercari over the last hour (from the sale being recorded to the verified delist) exceeded 13 hours: sold items stay for sale there.",
+        "AlarmName": "listora-prod-delist-latency-mercari",
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "Marketplace",
+            "Value": "mercari"
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "ExtendedStatistic": "p95",
+        "MetricName": "DelistLatency",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 3600,
+        "Threshold": 46800000,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "verifiedsuccessebay8F03BB6B": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "Fewer than 90% of the ebay operations that settled over the last day succeeded with a verified result.",
+        "AlarmName": "listora-prod-verified-success-ebay",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "Marketplace",
+            "Value": "ebay"
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "MetricName": "VerifiedSuccess",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 86400,
+        "Statistic": "Average",
+        "Threshold": 0.9,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "verifiedsuccessdepop201C3F48": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "Fewer than 90% of the depop operations that settled over the last day succeeded with a verified result.",
+        "AlarmName": "listora-prod-verified-success-depop",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "Marketplace",
+            "Value": "depop"
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "MetricName": "VerifiedSuccess",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 86400,
+        "Statistic": "Average",
+        "Threshold": 0.9,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "verifiedsuccessposhmarkDB37FE98": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "Fewer than 90% of the poshmark operations that settled over the last day succeeded with a verified result.",
+        "AlarmName": "listora-prod-verified-success-poshmark",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "Marketplace",
+            "Value": "poshmark"
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "MetricName": "VerifiedSuccess",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 86400,
+        "Statistic": "Average",
+        "Threshold": 0.9,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "verifiedsuccessmercari9C1C63E2": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "Fewer than 90% of the mercari operations that settled over the last day succeeded with a verified result.",
+        "AlarmName": "listora-prod-verified-success-mercari",
+        "ComparisonOperator": "LessThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "Marketplace",
+            "Value": "mercari"
+          }
+        ],
+        "EvaluationPeriods": 1,
+        "MetricName": "VerifiedSuccess",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 86400,
+        "Statistic": "Average",
+        "Threshold": 0.9,
         "TreatMissingData": "notBreaching"
       }
     },

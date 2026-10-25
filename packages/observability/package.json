@@ -1,0 +1,19 @@
+{
+  "name": "@listora/observability",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Trust metrics: the metric catalog, CloudWatch Embedded Metric Format output, and the worker's metrics job.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./catalog": "./src/catalog.ts"
+  },
+  "dependencies": {
+    "@listora/db": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

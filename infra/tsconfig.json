@@ -13,6 +13,7 @@
   "references": [
     { "path": "../packages/shared" },
     { "path": "../packages/db" },
+    { "path": "../packages/observability" },
     { "path": "../apps/api" },
     { "path": "../apps/worker" }
   ]
