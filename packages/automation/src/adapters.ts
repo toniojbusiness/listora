@@ -1,12 +1,13 @@
 /**
  * The automation adapters a process serves, per marketplace (decision D1). Poshmark, Mercari,
- * and Depop have their own adapters (poshmark/, mercari/, depop/), which drive poshmark.com,
- * mercari.com, and depop.com, or their fakes with `FAKE_POSHMARK_URL`, `FAKE_MERCARI_SITE_URL`,
- * and `FAKE_DEPOP_SITE_URL`. In development and tests, `FAKE_AUTOMATION_SITE_URL` serves each
- * marketplace without its own fake through the fake site's adapter, so a development setup
- * never drives a real marketplace. Depop's automation adapter serves only sellers whose Depop
- * connection is a browser session: one that uses Depop's API gets the API adapter
- * (`createMarketplaceAdapters` in `@listora/marketplaces`).
+ * Depop, and eBay have their own adapters (poshmark/, mercari/, depop/, ebay/), which drive
+ * poshmark.com, mercari.com, depop.com, and ebay.com, or their fakes with `FAKE_POSHMARK_URL`,
+ * `FAKE_MERCARI_SITE_URL`, `FAKE_DEPOP_SITE_URL`, and `FAKE_EBAY_SITE_URL`. In development and
+ * tests, `FAKE_AUTOMATION_SITE_URL` serves each marketplace without its own fake through the
+ * fake site's adapter, so a development setup never drives a real marketplace. The Depop and
+ * eBay automation adapters serve only sellers whose connection is a browser session: one that
+ * uses the marketplace's API gets the API adapter (`createMarketplaceAdapters` in
+ * `@listora/marketplaces`).
  *
  * The worker and the browser runner build the same adapters (with and without a browser), so
  * both route every operation to the same mode.
@@ -17,6 +18,7 @@ import type { Logger } from '@listora/shared';
 import type { PhotoSource } from './adapter/photos.ts';
 import type { AutomationSessions } from './adapter/sessions.ts';
 import { createDepopAutomationAdapter } from './depop/adapter.ts';
+import { createEbayAutomationAdapter } from './ebay/adapter.ts';
 import { createFakeSiteAdapter } from './fake-site/fake-site-adapter.ts';
 import { createPoshmarkAutomationAdapter } from './poshmark/adapter.ts';
 import { createMercariAutomationAdapter } from './mercari/adapter.ts';
@@ -80,6 +82,15 @@ export function createAutomationAdapters(
       photos: deps.photos,
       logger: deps.logger,
       ...(settings.fakeDepopSiteUrl === undefined ? {} : { siteUrl: settings.fakeDepopSiteUrl }),
+    });
+  }
+  if (settings.fakeEbaySiteUrl !== undefined || siteUrl === undefined) {
+    adapters.ebay = createEbayAutomationAdapter({
+      profile: settings.profiles.ebay,
+      sessions: deps.sessions,
+      photos: deps.photos,
+      logger: deps.logger,
+      ...(settings.fakeEbaySiteUrl === undefined ? {} : { siteUrl: settings.fakeEbaySiteUrl }),
     });
   }
   return adapters;

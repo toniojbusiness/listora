@@ -393,23 +393,27 @@ describe('marketplace connections API without eBay or a token vault', () => {
     await api.close();
   });
 
-  it('shows eBay as coming soon and refuses to connect it', async () => {
+  it('shows eBay as assisted until its API or a linked session serves it, and refuses to connect it', async () => {
     const token = await api.signIn('off@example.com');
     const listed = await api.call('listConnections', { token });
+    // Without Listora's eBay API keys, eBay works like the marketplaces without an API: the
+    // user lists there, until they link an eBay session (Settings > Link accounts).
     expect(listed.body.data[0]).toMatchObject({
       marketplace: 'ebay',
-      mode: 'api',
+      mode: 'assisted',
       status: 'not_connected',
-      statusDisplay: { label: 'Coming soon' },
+      statusDisplay: { label: 'Not linked' },
       availableActions: [],
-      capabilities: { connect: 'none', create: 'none' },
+      capabilities: { connect: 'none', create: 'assisted' },
     });
     const started = await api.call('startConnectionAuthorization', {
       token,
       params: { marketplace: 'ebay' },
     });
     expect(started.status).toBe(409);
-    expect(started.error.message).toBe("Listora can't connect eBay accounts yet.");
+    expect(started.error.message).toBe(
+      'eBay has no account connection in Listora yet; Listora works with eBay in assisted mode.',
+    );
     const checked = await api.call('requestConnectionCheck', {
       token,
       params: { marketplace: 'ebay' },

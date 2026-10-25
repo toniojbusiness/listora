@@ -119,6 +119,29 @@ describe('inspectPage', () => {
       inspectPage(signals({ url: 'https://poshmark.com/account/enter' }), strict),
     ).toMatchObject({ kind: 'session_rejected' });
   });
+
+  it("stops at eBay's own security check, and at its sign-in pages as a rejected session", () => {
+    const ebay = automationProfile('ebay');
+    const at = (url: string, more: Partial<PageSignals> = {}) =>
+      inspectPage(signals({ url, title: 'eBay', text: 'ebay', ...more }), ebay);
+    expect(at('https://www.ebay.com/sh/ovw')).toBeNull();
+    expect(at('https://www.ebay.com/splashui/challenge?ap=1&appName=orch')).toMatchObject({
+      kind: 'bot_check',
+      sign: 'bot-check page',
+    });
+    expect(at('https://www.ebay.com/splashui/captcha')).toMatchObject({ kind: 'bot_check' });
+    expect(at('https://www.ebay.com/x', { title: 'Pardon Our Interruption...' })).toMatchObject({
+      kind: 'bot_check',
+    });
+    expect(at('https://signin.ebay.com/signin/')).toMatchObject({ kind: 'session_rejected' });
+    expect(
+      at('https://signin.ebay.com/ws/eBayISAPI.dll?SignIn', { hasPasswordField: true }),
+    ).toMatchObject({ kind: 'session_rejected' });
+    expect(at('https://signin.ebay.com/signin/mfa/verify')).toMatchObject({
+      kind: 'login_challenge',
+    });
+    expect(at('https://www.ebay.co.uk/sh/ovw')).toMatchObject({ kind: 'unexpected_page' });
+  });
 });
 
 describe('challengeMessage', () => {

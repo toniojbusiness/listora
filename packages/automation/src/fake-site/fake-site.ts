@@ -6,7 +6,7 @@
  * and fault injection for every page automation must stop at or recover from.
  *
  *   GET  /login                 the login page (a password field: no Listora session needs it)
- *   POST /login                 (also /login/) log in by hand: any username and password; sets the session cookie
+ *   POST /login                 (also /login/, and eBay's /signin/) log in by hand: any username and password; sets the session cookie
  *   GET  /                      the seller's account page ([data-account])
  *   GET  /listings?sku=...      search by the seller's SKU
  *   GET  /listings/new          the new-listing form (multipart, with photo upload)
@@ -296,7 +296,9 @@ export class FakeAutomationSite {
       response.end(reply.body ?? '');
     };
 
-    if (url.pathname === '/login' || url.pathname === '/login/') {
+    // Each marketplace's own sign-in path, as the app opens it on this stand-in (eBay's is
+    // `/signin/`).
+    if (['/login', '/login/', '/signin', '/signin/'].includes(url.pathname)) {
       if (method === 'POST') {
         // The seller logs in by hand, as on the app's linking screen in development: any
         // username with a password starts a session as that seller.

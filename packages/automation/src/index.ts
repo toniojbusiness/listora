@@ -15,6 +15,17 @@ export { createAutomationAdapters } from './adapters.ts';
 export { createDepopAutomationAdapter } from './depop/adapter.ts';
 export type { DepopAutomationAdapterOptions } from './depop/adapter.ts';
 export type { DepopAutomationPayload } from './depop/payload.ts';
+export { createEbayAutomationAdapter } from './ebay/adapter.ts';
+export type { EbayAutomationAdapterOptions } from './ebay/adapter.ts';
+export { FakeEbaySite } from './ebay/fake/fake-ebay-site.ts';
+export type {
+  FakeEbaySiteAction,
+  FakeEbaySiteFault,
+  FakeEbaySiteFaultRule,
+  FakeEbaySiteListing,
+  FakeEbaySiteOptions,
+} from './ebay/fake/fake-ebay-site.ts';
+export type { EbayAutomationPayload } from './ebay/payload.ts';
 export type { AutomationAdapterDependencies } from './adapters.ts';
 export {
   AUTOMATION_DISPATCH_SCHEDULE,

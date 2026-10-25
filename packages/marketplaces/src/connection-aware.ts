@@ -2,7 +2,8 @@
  * One marketplace served in more than one mode, picked per connection
  * (docs/features/marketplaces.md): Depop runs assisted, through browser automation once the
  * seller links a session, and through the API once Listora's partner access is granted and the
- * seller connects it; Poshmark and Mercari run assisted or automated. Every mode reads and
+ * seller connects it; eBay runs through its API, or through browser automation until its API
+ * is connected; Poshmark and Mercari run assisted or automated. Every mode reads and
  * writes the same `marketplace_listing` rows, so a switch is a change to the connection and
  * needs no data migration; each attempt builds its payload under the connection it runs with.
  *
@@ -32,8 +33,16 @@ import type {
 import type { ItemSnapshot, ListingVariant } from './content.ts';
 
 export interface ConnectionAwareAdapterOptions {
-  /** Serves listings without a connection, or under an assisted one. */
+  /**
+   * Serves listings under an assisted connection, and every step automation has to give to the
+   * user; also those without a connection unless `unconnected` is set.
+   */
   assisted: MarketplaceAdapter;
+  /**
+   * Serves listings without a connection, when that is not the assisted adapter (eBay with its
+   * API adapter configured: an unconnected listing is asked to connect eBay).
+   */
+  unconnected?: MarketplaceAdapter;
   /**
    * Serves listings under an `api` connection. Without it (no API adapter configured yet), those
    * listings are served assisted too: the user does the step, which is always honest.
@@ -52,12 +61,14 @@ const USABLE_SESSION_STATUSES: readonly ConnectionStatus[] = ['connected', 'degr
 export class ConnectionAwareAdapter implements MarketplaceAdapter {
   readonly id: Marketplace;
   readonly #assisted: MarketplaceAdapter;
+  readonly #unconnected: MarketplaceAdapter;
   readonly #api: MarketplaceAdapter | undefined;
   readonly #automation: MarketplaceAdapter | undefined;
 
   constructor(options: ConnectionAwareAdapterOptions) {
-    const { assisted, api, automation } = options;
+    const { assisted, unconnected, api, automation } = options;
     for (const [mode, adapter] of [
+      ['unconnected', unconnected],
       ['api', api],
       ['automation', automation],
     ] as const) {
@@ -69,13 +80,14 @@ export class ConnectionAwareAdapter implements MarketplaceAdapter {
     }
     this.id = assisted.id;
     this.#assisted = assisted;
+    this.#unconnected = unconnected ?? assisted;
     this.#api = api;
     this.#automation = automation;
   }
 
   /** The adapter that serves a connection. */
   adapterFor(connection: ConnectionRef | null | undefined): MarketplaceAdapter {
-    if (connection === null || connection === undefined) return this.#assisted;
+    if (connection === null || connection === undefined) return this.#unconnected;
     switch (connection.mode) {
       case 'api':
         return this.#api ?? this.#assisted;

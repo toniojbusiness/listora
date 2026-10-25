@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Browser automation for marketplaces without an API (decision D1): the headless-Chromium runner, its safety rules (pacing, rate limits, challenge detection, redaction), the automation adapter base, the Poshmark, Mercari, and Depop automation adapters, sale-check scheduling, the runner launcher, and the fake marketplace site and the fake Poshmark, Mercari, and Depop sites used in development and tests.",
+  "description": "Browser automation for marketplaces without an API (decision D1): the headless-Chromium runner, its safety rules (pacing, rate limits, challenge detection, redaction), the automation adapter base, the Poshmark, Mercari, Depop, and eBay automation adapters, sale-check scheduling, the runner launcher, and the fake marketplace site and the fake Poshmark, Mercari, Depop, and eBay sites used in development and tests.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -11,7 +11,8 @@
     "fake-site": "node --env-file-if-exists=../../.env src/fake-site/cli.ts",
     "fake-poshmark": "node --env-file-if-exists=../../.env src/poshmark/fake/cli.ts",
     "fake-mercari": "node --env-file-if-exists=../../.env src/mercari/fake/cli.ts",
-    "fake-depop-site": "node --env-file-if-exists=../../.env src/depop/fake/cli.ts"
+    "fake-depop-site": "node --env-file-if-exists=../../.env src/depop/fake/cli.ts",
+    "fake-ebay-site": "node --env-file-if-exists=../../.env src/ebay/fake/cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ecs": "^3.1156.0",
