@@ -186,8 +186,9 @@ The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, Sw
 and PostgreSQL 18 from Homebrew and Node with `npm ci`, then runs `make ios-lint` and
 `make ios-test`, whose UI tests that go through the backend run against the local stack
 (`packages/e2e`). It caches the app's SwiftPM checkouts but not DerivedData, because a fresh
-checkout resets the file timestamps Xcode's incremental build relies on. A failed run uploads
-the test results and the stack's API and worker logs.
+checkout resets the file timestamps Xcode's incremental build relies on. Every run, passed or
+failed, uploads the test results (including the UI tests' screenshots) and the stack's API
+and worker logs.
 
 **Cost rule.** macOS runner minutes bill at 10 times Linux minutes, so the iOS job builds
 only when the pull request (or the pushed `main` commit) changes a file the iOS build reads:

@@ -151,8 +151,10 @@ jobs:
         run: make ios-lint
       - if: ${{ env.IOS_AFFECTED == 'true' }}
         run: make ios-test
-      - name: Upload test results
-        if: ${{ failure() && env.IOS_AFFECTED == 'true' }}
+      # Uploads on success too, so the UI tests' kept screenshots (Review, Cost, Price, Saved)
+      # are available as evidence, not only when a run fails.
+      - name: Upload test results and screenshots
+        if: ${{ always() && env.IOS_AFFECTED == 'true' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-test-results
