@@ -52,6 +52,19 @@ Gates: **G-eBay** (developer keys), **G-AI** (Anthropic key), **G-Apple** (devel
 | T-26 | Manual mark-sold, sale lifecycle (confirm, cancel, return → relist prompt), fee lines                                | T-20             | I     |
 | T-27 | Full-stack E2E suite: photo → list on eBay/Depop fakes + assisted Poshmark → sale → auto-delist                      | T-20..T-26       | J     |
 
+### Browser automation (decision D1, revised 2026-10-24)
+
+The marketplaces permitted automation where no API exists, so Poshmark, Mercari, and Depop
+(until G-Depop) are automated in the cloud; assisted mode stays their fallback.
+
+| ID                  | Task                                                                                                                             | Deps                    | Group |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ----- |
+| automation-runner   | Browser runner (Playwright, on-demand Fargate), session vault, safety rules, `automation` mode, sale-check scheduling, fake site | T-06, T-10              | H     |
+| automation-poshmark | Poshmark automation adapter: scripts for list, edit, price, delist, relist, read-back, sold orders                               | automation-runner       | I     |
+| automation-mercari  | Mercari automation adapter (the same scripts for Mercari)                                                                        | automation-runner       | I     |
+| automation-depop    | Depop automation adapter, until its partner API (T-24) is granted                                                                | automation-runner       | I     |
+| automation-linking  | Linking: the iPhone screen to log into a marketplace, and the API endpoint that stores its session (`linkAutomationSession`)     | automation-runner, T-22 | I     |
+
 ## Phase 3 - M3 accounts, billing, launch readiness
 
 | ID   | Task                                                                                     | Deps       | Group | Gate              |

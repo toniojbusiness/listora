@@ -59,7 +59,7 @@ describe('the engine with the eBay adapter and the fake eBay', () => {
         mode: 'api',
         external_user_id: 'listora_dev_seller',
       })
-      .returning(['id', 'mode'])
+      .returning(['id', 'mode', 'status'])
       .executeTakeFirstOrThrow();
     connectionId = connection.id;
     const config = loadEbayConfig({

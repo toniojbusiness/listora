@@ -7,9 +7,15 @@ import { MARKETPLACES } from '@listora/db';
 import { METRIC_NAMESPACE, TRUST_METRICS } from '@listora/observability/catalog';
 
 import { APP_SECRETS, ENVIRONMENT_SETTINGS, SERVICE_NAMES } from './config.ts';
-import { containerEnvironment, containerSecretNames, MIGRATE_COMMAND } from './containers.ts';
+import {
+  containerEnvironment,
+  containerSecretNames,
+  MIGRATE_COMMAND,
+  RUNNER_COMMAND,
+  type Deployment,
+} from './containers.ts';
 import type { ListoraStacks } from './app.ts';
-import { HTTP_API_THROTTLE } from './stacks/compute-stack.ts';
+import { HTTP_API_THROTTLE, RUNNER_SERVICE_NAME, SESSION_PURPOSE } from './stacks/compute-stack.ts';
 import { PLACEHOLDER_SHAPES } from './placeholders.ts';
 import { MIGRATE_OUTPUTS, migrateTaskNames } from './stacks/migrate-stack.ts';
 import { stackList, synthesize } from './test-support.ts';
@@ -46,6 +52,13 @@ function statements(t: Template): Record<string, unknown>[] {
 function asList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [value];
 }
+
+/** Any deployment, for the names of the variables a container gets. */
+const ANY_DEPLOYMENT: Deployment = {
+  photoStorage: { bucket: '', region: '', publicBaseUrl: '' },
+  runner: { cluster: '', service: '', region: '' },
+  tokenKeyArn: '',
+};
 
 describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, overrides }) => {
   const settings = ENVIRONMENT_SETTINGS[environment];
@@ -226,6 +239,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
             Rules: [
               Match.objectLike({ AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 } }),
               Match.objectLike({ NoncurrentVersionExpiration: { NoncurrentDays: 30 } }),
+              // The browser runner's screenshots, which the worker deletes after 14 days.
+              Match.objectLike({ Prefix: 'automation/', ExpirationInDays: 30 }),
             ],
           },
         }),
@@ -365,15 +380,17 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
   });
 
   describe('registry', () => {
-    it('keeps immutable, scanned images', () => {
-      template(shape, 'registry').hasResource('AWS::ECR::Repository', {
-        DeletionPolicy: 'Retain',
-        Properties: Match.objectLike({
-          RepositoryName: 'listora/app',
-          ImageTagMutability: 'IMMUTABLE',
-          ImageScanningConfiguration: { ScanOnPush: true },
-        }),
-      });
+    it('keeps immutable, scanned images of the application and the browser runner', () => {
+      for (const name of ['listora/app', 'listora/runner']) {
+        template(shape, 'registry').hasResource('AWS::ECR::Repository', {
+          DeletionPolicy: 'Retain',
+          Properties: Match.objectLike({
+            RepositoryName: name,
+            ImageTagMutability: 'IMMUTABLE',
+            ImageScanningConfiguration: { ScanOnPush: true },
+          }),
+        });
+      }
     });
   });
 
@@ -399,6 +416,18 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       return found;
     };
 
+    const runnerService = () => {
+      const found = resources(t, 'AWS::ECS::Service').find(
+        (service) => service.Properties?.['ServiceName'] === RUNNER_SERVICE_NAME,
+      );
+      if (found === undefined) throw new Error('no runner service');
+      return found;
+    };
+    const appServices = () =>
+      resources(t, 'AWS::ECS::Service').filter(
+        (service) => service.Properties?.['ServiceName'] !== RUNNER_SERVICE_NAME,
+      );
+
     it('runs the api and worker containers as the services and task sizes of the layout', () => {
       expect(
         taskDefinitions.map((task) => [
@@ -407,17 +436,75 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           task.Properties?.['Cpu'],
           task.Properties?.['Memory'],
         ]),
-      ).toEqual(
-        expectedServices.map(({ name, containers, size }) => [
+      ).toEqual([
+        ...expectedServices.map(({ name, containers, size }) => [
           `listora-${environment}-${name}`,
           containers,
           String(size.cpu),
           String(size.memoryMiB),
         ]),
-      );
+        [
+          `listora-${environment}-runner`,
+          ['runner'],
+          String(settings.browserRunner.cpu),
+          String(settings.browserRunner.memoryMiB),
+        ],
+      ]);
       expect(
         resources(t, 'AWS::ECS::Service').map((service) => service.Properties?.['ServiceName']),
-      ).toEqual(expectedServices.map(({ name }) => name));
+      ).toEqual([...expectedServices.map(({ name }) => name), RUNNER_SERVICE_NAME]);
+    });
+
+    it('runs the browser runner on demand: no task while idle, never two at once', () => {
+      const publicIp = settings.network.taskEgress.via === 'public-ip';
+      expect(runnerService().Properties).toMatchObject({
+        DesiredCount: 0,
+        LaunchType: 'FARGATE',
+        NetworkConfiguration: {
+          AwsvpcConfiguration: { AssignPublicIp: publicIp ? 'ENABLED' : 'DISABLED' },
+        },
+        DeploymentConfiguration: {
+          DeploymentCircuitBreaker: { Enable: true, Rollback: true },
+          MinimumHealthyPercent: 0,
+          MaximumPercent: 100,
+        },
+      });
+      // Nothing scales it but the worker and the runner itself.
+      expect(
+        JSON.stringify(resources(t, 'AWS::ApplicationAutoScaling::ScalableTarget')),
+      ).not.toContain('runnerservice');
+      const runner = container('runner');
+      expect(runner['Command']).toEqual(RUNNER_COMMAND);
+      expect(runner['ReadonlyRootFilesystem']).toBe(true);
+      expect(runner['MountPoints']).toEqual([
+        { ContainerPath: '/tmp', ReadOnly: false, SourceVolume: 'tmp' },
+      ]);
+      // The runner image repository's, not the application's.
+      expect(JSON.stringify(runner['Image'])).toMatch(/OutputFnGetAttRunner/);
+      expect(JSON.stringify(runner['Image'])).not.toMatch(/OutputFnGetAttApp/);
+      expect(JSON.stringify(runner['Image'])).toContain(`:${target.imageTag}"`);
+      const env = Object.fromEntries(
+        (runner['Environment'] as { Name: string; Value: unknown }[]).map((entry) => [
+          entry.Name,
+          entry.Value,
+        ]),
+      );
+      expect(Object.keys(env)).toEqual(
+        Object.keys(containerEnvironment('runner', 'postgres://', ANY_DEPLOYMENT)),
+      );
+      expect(env).toMatchObject({
+        BROWSER_RUNNER_LAUNCH: 'ecs',
+        BROWSER_RUNNER_CLUSTER: `listora-${environment}`,
+        BROWSER_RUNNER_SERVICE: RUNNER_SERVICE_NAME,
+        STORAGE_DRIVER: 's3',
+      });
+      expect(JSON.stringify(env['TOKEN_KMS_KEY_ID'])).toContain('TokenKey');
+      const secrets = runner['Secrets'] as { Name: string }[];
+      expect(secrets.map((secret) => secret.Name)).toEqual(['PGPASSWORD']);
+      t.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: `/listora/${environment}/runner`,
+        RetentionInDays: settings.logRetention,
+      });
     });
 
     it('runs api and worker from the deployed image tag, with a read-only root file system', () => {
@@ -446,13 +533,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         );
         expect(secrets.map((secret) => secret.Name)).toEqual(containerSecretNames(service));
         expect(env.map((entry) => entry.Name)).toEqual(
-          Object.keys(
-            containerEnvironment(service, 'postgres://', {
-              bucket: '',
-              region: '',
-              publicBaseUrl: '',
-            }),
-          ),
+          Object.keys(containerEnvironment(service, 'postgres://', ANY_DEPLOYMENT)),
         );
         // Nothing secret-looking travels as plain environment.
         for (const { Name } of env) expect(Name).not.toMatch(/PASSWORD|SECRET|KEY/);
@@ -481,7 +562,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
 
     it('runs tasks where the task egress places them, with rollback on failed deploys', () => {
       const publicIp = settings.network.taskEgress.via === 'public-ip';
-      for (const service of resources(t, 'AWS::ECS::Service')) {
+      for (const service of appServices()) {
         // Autoscaling owns the task count; a template count would reset it on every deploy.
         expect(service.Properties?.['DesiredCount']).toBeUndefined();
         expect(service.Properties).toMatchObject({
@@ -525,7 +606,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
     });
 
     it('keeps service logs for the environment retention', () => {
-      for (const service of ['api', 'worker']) {
+      for (const service of ['api', 'worker', 'runner']) {
         t.hasResourceProperties('AWS::Logs::LogGroup', {
           LogGroupName: `/listora/${environment}/${service}`,
           RetentionInDays: settings.logRetention,
@@ -540,16 +621,38 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         if (found === undefined) throw new Error(`no policy ${prefix}`);
         return JSON.stringify(found[1]);
       };
+      const sessions = { 'kms:EncryptionContext:purpose': SESSION_PURPOSE };
       for (const { name, containers } of expectedServices) {
         const policy = policyOf(`${name}taskTaskRole`);
         expect(policy).toContain('Photos');
-        // Raw sale email only for a task that runs the worker.
+        // Raw sale email, and starting the browser runner, only for a task that runs the worker.
         expect(policy.includes('InboundMail')).toBe(containers.includes('worker'));
         if (containers.includes('worker')) expect(policy).toContain('/inbound/*');
-        expect(policy).toContain('"kms:Decrypt","kms:GenerateDataKey"');
+        expect(policy.includes('ecs:UpdateService')).toBe(containers.includes('worker'));
+        // Tokens yes, sellers' browser sessions never: only the runner decrypts those.
+        expect(policy).toContain('"kms:GenerateDataKey"');
+        expect(policy).toContain(
+          JSON.stringify({
+            Action: 'kms:Decrypt',
+            Condition: { StringNotEquals: sessions },
+          }).slice(1, -1),
+        );
         expect(policy).not.toContain('kms:*');
         expect(policy).not.toContain('secretsmanager');
       }
+      const runner = policyOf('runnertaskTaskRole');
+      expect(runner).toContain(
+        JSON.stringify({
+          Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
+          Condition: { StringEquals: sessions },
+        }).slice(1, -1),
+      );
+      expect(runner).toContain('/automation/*');
+      expect(runner).toContain('"s3:PutObject"');
+      expect(runner).not.toContain('s3:GetObject');
+      expect(runner).not.toContain('s3:DeleteObject');
+      expect(runner).not.toContain('InboundMail');
+      expect(runner).toContain('ecs:UpdateService');
 
       for (const statement of statements(t)) {
         expect(asList(statement['Action'])).not.toContain('*');

@@ -163,13 +163,16 @@ extension Components {
             }
         }
         /// `api`: Listora acts through the marketplace's official API and verifies by read-back.
-        /// `assisted`: Listora prepares the work and the user does the final step in the
+        /// `automation`: Listora's browser runner acts in the seller's own marketplace session
+        /// (where the marketplace permits it and has no API) and verifies by read-back through that
+        /// session. `assisted`: Listora prepares the work and the user does the final step in the
         /// marketplace app, then confirms.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownIntegrationMode`.
         @frozen public enum KnownIntegrationMode: String, Codable, Hashable, Sendable, CaseIterable {
             case api = "api"
+            case automation = "automation"
             case assisted = "assisted"
         }
         /// A `KnownStatusTone`, or a tone added after this client was built. Clients style an
@@ -273,7 +276,7 @@ extension Components {
                 case detail
             }
         }
-        /// `marketplace_api`: confirmed by an API read-back. `user_confirmation`: the user confirmed an assisted task.
+        /// `marketplace_api`: confirmed by a read-back from the marketplace (its API, or the automated browser session). `user_confirmation`: the user confirmed an assisted task.
         ///
         /// - Remark: Generated from `#/components/schemas/VerificationMethod`.
         @frozen public enum VerificationMethod: String, Codable, Hashable, Sendable, CaseIterable {
@@ -4149,9 +4152,15 @@ extension Components {
                 ])
             }
         }
+        /// `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
+        /// seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+        /// `none`: not offered.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/KnownCapabilityMode`.
         @frozen public enum KnownCapabilityMode: String, Codable, Hashable, Sendable, CaseIterable {
             case api = "api"
+            case automation = "automation"
             case assisted = "assisted"
             case bulkFile = "bulk_file"
             case none = "none"
@@ -4210,6 +4219,7 @@ extension Components {
         /// - Remark: Generated from `#/components/schemas/KnownMarkSoldMode`.
         @frozen public enum KnownMarkSoldMode: String, Codable, Hashable, Sendable, CaseIterable {
             case api = "api"
+            case automation = "automation"
             case assisted = "assisted"
             case bulkFile = "bulk_file"
             case none = "none"
@@ -4266,9 +4276,15 @@ extension Components {
                 ])
             }
         }
+        /// `oauth`: the seller authorizes Listora on the marketplace. `session`: the seller logs into
+        /// the marketplace in the app, and Listora keeps the session's cookies (never the password)
+        /// for its browser runner. `none`: nothing to connect.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/KnownConnectMethod`.
         @frozen public enum KnownConnectMethod: String, Codable, Hashable, Sendable, CaseIterable {
             case oauth = "oauth"
+            case session = "session"
             case none = "none"
         }
         /// A `KnownVerifyReadMode`, or a mode added after this client was built. Clients offer no
@@ -4322,11 +4338,14 @@ extension Components {
                 ])
             }
         }
-        /// How success is established.
+        /// How success is established: a read-back through the API, a read-back through the
+        /// automated browser session, or the user's confirmation.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownVerifyReadMode`.
         @frozen public enum KnownVerifyReadMode: String, Codable, Hashable, Sendable, CaseIterable {
             case api = "api"
+            case automation = "automation"
             case userConfirm = "user_confirm"
         }
         /// A `KnownImportListingsMode`, or a mode added after this client was built. Clients

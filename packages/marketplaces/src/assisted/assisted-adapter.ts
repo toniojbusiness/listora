@@ -55,7 +55,7 @@ export interface AssistedAdapterOptions {
    * listing whose page is unknown). A listing URL counts only on this site's domain.
    */
   siteUrl: string;
-  /** Flags that differ from the assisted defaults; a write mode may not be `api`. */
+  /** Flags that differ from the assisted defaults; a write mode may not be `api` or `automation`. */
   capabilities?: AssistedCapabilityOverrides;
   /** The marketplace's own limits, checked before a task is created. */
   limits?: { titleMaxLength?: number; descriptionMaxLength?: number; maxPhotos?: number };
@@ -107,8 +107,9 @@ export class AssistedAdapter implements MarketplaceAdapter<AssistedListingPayloa
     this.#siteDomain = site.hostname.replace(/^www\./, '');
     this.#capabilities = { ...ASSISTED_CAPABILITIES, ...options.capabilities };
     for (const flag of Object.values(CAPABILITY_FOR_KIND)) {
-      if (this.#capabilities[flag] === 'api') {
-        throw new Error(`an assisted adapter cannot have ${flag}: api`);
+      const mode = this.#capabilities[flag];
+      if (mode === 'api' || mode === 'automation') {
+        throw new Error(`an assisted adapter cannot have ${flag}: ${mode}`);
       }
     }
     this.#limits = options.limits ?? {};

@@ -38,6 +38,23 @@ const ASSISTED: MarketplaceCapabilities = {
   limits: {},
 };
 
+const AUTOMATION: MarketplaceCapabilities = {
+  ...API,
+  connect: 'session',
+  create: 'automation',
+  updatePrice: 'automation',
+  updateDetails: 'automation',
+  delist: 'automation',
+  relist: 'automation',
+  markSold: 'not_needed',
+  verifyRead: 'automation',
+  readFreshness: 'none',
+  importListings: 'share_sheet',
+  saleDetection: ['poll', 'email', 'manual'],
+  imageTransport: 'upload',
+  limits: {},
+};
+
 describe('operationMode', () => {
   it('routes every kind of an api marketplace through the api', () => {
     expect(OPERATION_KINDS.map((kind) => operationMode(API, kind))).toEqual(
@@ -73,23 +90,53 @@ describe('operationMode', () => {
     expect(operationMode(mixed, 'mark_sold')).toBe('unsupported');
   });
 
-  it('never routes an api write that nothing can read back', () => {
+  it('routes automated kinds to the browser runner, verified through the same session', () => {
+    expect(
+      Object.fromEntries(OPERATION_KINDS.map((kind) => [kind, operationMode(AUTOMATION, kind)])),
+    ).toEqual({
+      create: 'automation',
+      revise: 'automation',
+      price: 'automation',
+      end: 'automation',
+      relist: 'automation',
+      mark_sold: 'unsupported',
+      verify: 'automation',
+    });
+    // Each kind switches on its own: an automated delist next to an assisted create.
+    expect(operationMode({ ...AUTOMATION, create: 'assisted' }, 'create')).toBe('assisted');
+    expect(operationMode({ ...AUTOMATION, create: 'assisted' }, 'end')).toBe('automation');
+  });
+
+  it('never routes a write that nothing can read back through its own channel', () => {
     const blind: MarketplaceCapabilities = { ...API, verifyRead: 'user_confirm' };
     expect(operationMode(blind, 'create')).toBe('unsupported');
     expect(operationMode(blind, 'verify')).toBe('unsupported');
+    expect(operationMode({ ...AUTOMATION, verifyRead: 'api' }, 'end')).toBe('unsupported');
+    expect(operationMode({ ...API, verifyRead: 'automation' }, 'end')).toBe('unsupported');
   });
 });
 
 describe('checkCapabilities', () => {
-  it('accepts coherent api and assisted flags', () => {
+  it('accepts coherent api, automation, and assisted flags', () => {
     expect(checkCapabilities(API)).toEqual([]);
+    expect(checkCapabilities(AUTOMATION)).toEqual([]);
+    expect(checkCapabilities({ ...AUTOMATION, readFreshness: 'revision' })).toEqual([]);
     expect(checkCapabilities(ASSISTED)).toEqual([]);
   });
 
-  it('refuses api writes or freshness markers without api reads', () => {
+  it('refuses writes or freshness markers without read-backs through the same channel', () => {
     expect(checkCapabilities({ ...ASSISTED, delist: 'api', readFreshness: 'revision' })).toEqual([
       'delist is api, but verifyRead is not: no read-back could confirm it',
-      'readFreshness needs verifyRead api: there are no reads to mark',
+      'readFreshness needs read-backs: there are no reads to mark',
+    ]);
+    expect(checkCapabilities({ ...API, relist: 'automation' })).toEqual([
+      'relist is automation, but verifyRead is not: no read-back could confirm it',
+    ]);
+  });
+
+  it('refuses automated reads without a seller session', () => {
+    expect(checkCapabilities({ ...AUTOMATION, connect: 'oauth' })).toEqual([
+      'verifyRead automation needs connect session: reads run in the seller session',
     ]);
   });
 

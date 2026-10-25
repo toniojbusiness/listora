@@ -85,7 +85,16 @@ async function objectKeysOf(db: Db, accountId: string): Promise<string[]> {
     .select('storage_key')
     .where('account_id', '=', accountId)
     .execute();
-  return [...photos.flatMap(photoObjectKeys), ...uploads.map((upload) => upload.storage_key)];
+  const runs = await db
+    .selectFrom('automation_run')
+    .select('screenshot_key')
+    .where('account_id', '=', accountId)
+    .execute();
+  return [
+    ...photos.flatMap(photoObjectKeys),
+    ...uploads.map((upload) => upload.storage_key),
+    ...runs.flatMap((run) => (run.screenshot_key === null ? [] : [run.screenshot_key])),
+  ];
 }
 
 interface ConnectionSeed {
@@ -148,6 +157,35 @@ describe('deleteAccount (real Postgres)', () => {
     // An upload no photo uses yet.
     await api.uploads.add(tenant);
     const connectionId = await addConnection(tenant, { marketplace: 'ebay' });
+    // A browser automation connection, and the screenshot of one of its failed runs.
+    const automation = await api.db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: tenant.accountId,
+        marketplace: 'mercari',
+        mode: 'automation',
+        token_ciphertext: Buffer.from('sealed session'),
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const screenshotKey = `automation/${tenant.accountId}/run-1.png`;
+    await api.storage.put(screenshotKey, new Uint8Array([137, 80, 78, 71]), {
+      contentType: 'image/png',
+    });
+    await api.db
+      .insertInto('automation_run')
+      .values({
+        account_id: tenant.accountId,
+        connection_id: automation.id,
+        marketplace: 'mercari',
+        purpose: 'health',
+        script: 'health check',
+        finished_at: new Date(),
+        outcome: 'failed',
+        failed_step: 'open the account',
+        screenshot_key: screenshotKey,
+      })
+      .execute();
     const listing = await api.db
       .insertInto('marketplace_listing')
       .values({
@@ -204,18 +242,19 @@ describe('deleteAccount (real Postgres)', () => {
     const neighborRows = await rowsOf(api.db, neighborTenant.accountId);
     const keys = await objectKeysOf(api.db, tenant.accountId);
     const neighborKeys = await objectKeysOf(api.db, neighborTenant.accountId);
-    // The processed photo's four derived images and the unattached upload (processing
-    // already deleted the photo's own upload).
+    // The processed photo's four derived images, the unattached upload (processing already
+    // deleted the photo's own upload), and the automation screenshot.
     const stored = async (list: string[]) =>
       (
         await Promise.all(list.map(async (key) => ((await api.storage.head(key)) ? key : null)))
       ).filter((key) => key !== null);
-    expect(await stored(keys)).toHaveLength(5);
+    expect(await stored(keys)).toHaveLength(6);
     const neighborStored = await stored(neighborKeys);
-    expect(neighborStored).toHaveLength(5);
+    expect(neighborStored).toHaveLength(6);
     expect(Object.keys(await rowsOf(api.db, tenant.accountId))).toEqual(
       expect.arrayContaining([
         'audit_log',
+        'automation_run',
         'ai_usage_event',
         'ai_usage_daily',
         'idempotency_record',

@@ -85,13 +85,14 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
   const email = new EmailStack(app, id('email'), props('email', 'SES inbound sale email'));
   const front = settings.ingress.via === 'load-balancer' ? 'an ALB' : 'an API Gateway HTTP API';
   const compute = new ComputeStack(app, id('compute'), {
-    ...props('compute', `ECS Fargate api and worker behind ${front}`),
+    ...props('compute', `ECS Fargate api and worker behind ${front}, and the browser runner`),
     vpc: network.vpc,
     ingressSecurityGroup: network.ingressSecurityGroup,
     apiSecurityGroup: network.apiSecurityGroup,
     workerSecurityGroup: network.workerSecurityGroup,
     database: data.database,
     repository: registry.repository,
+    runnerRepository: registry.runnerRepository,
     photoBucket: storage.photoBucket,
     photoCdnDomain: storage.photoDistribution.distributionDomainName,
     inboundMailBucket: email.inboundMailBucket,
