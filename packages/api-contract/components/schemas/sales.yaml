@@ -1,0 +1,221 @@
+SaleStatus:
+  description: |
+    A `KnownSaleStatus`, or a status added after this client was built. Clients show an
+    unknown status generically.
+  anyOf:
+    - $ref: '#/KnownSaleStatus'
+    - type: string
+      maxLength: 64
+KnownSaleStatus:
+  type: string
+  enum: [detected, confirmed, canceled, returned]
+SaleDetectionSource:
+  description: |
+    A `KnownSaleDetectionSource`, or a source added after this client was built. Clients
+    show an unknown source generically.
+  anyOf:
+    - $ref: '#/KnownSaleDetectionSource'
+    - type: string
+      maxLength: 64
+KnownSaleDetectionSource:
+  type: string
+  enum: [webhook, poll, email, manual]
+DelistRunStatus:
+  type: string
+  description: '`completed`: every other listing is verified ended or confirmed by the user. `needs_attention`: something failed or waits for the user.'
+  enum: [in_progress, completed, needs_attention]
+DelistResultState:
+  description: |
+    A `KnownDelistResultState`, or a state added after this client was built. Clients
+    show the result's `statusDisplay` for an unknown state and never treat it as delisted.
+  anyOf:
+    - $ref: '#/KnownDelistResultState'
+    - type: string
+      maxLength: 64
+KnownDelistResultState:
+  type: string
+  enum: [pending, verifying, delisted, user_confirmed, needs_user_action, failed]
+DelistResult:
+  type: object
+  required: [listingId, itemId, marketplace, mode, state, statusDisplay]
+  properties:
+    listingId:
+      $ref: './common.yaml#/Id'
+    itemId:
+      $ref: './common.yaml#/Id'
+      description: The sold item this listing belongs to (a bundle has several).
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    mode:
+      $ref: './common.yaml#/IntegrationMode'
+    state:
+      $ref: '#/DelistResultState'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+    operationId:
+      $ref: './common.yaml#/Id'
+    userTaskId:
+      $ref: './common.yaml#/Id'
+DelistRun:
+  type: object
+  description: The automatic delist of every other listing of the sold items after a sale.
+  required: [id, status, statusDisplay, results, startedAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    status:
+      $ref: '#/DelistRunStatus'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+    results:
+      type: array
+      items:
+        $ref: '#/DelistResult'
+    startedAt:
+      $ref: './common.yaml#/Timestamp'
+    completedAt:
+      $ref: './common.yaml#/Timestamp'
+SaleItem:
+  type: object
+  description: One item of an order.
+  required: [itemId, salePrice]
+  properties:
+    itemId:
+      $ref: './common.yaml#/Id'
+    listingId:
+      $ref: './common.yaml#/Id'
+      description: The listing the item sold through, when known. Absent for a sale recorded without one.
+    salePrice:
+      $ref: './common.yaml#/Money'
+      description: This item's part of the order's sale price (for a bundle, its share of the bundle price).
+KnownFeeType:
+  type: string
+  enum: [marketplace, payment, shipping_label, promotion, tax, other]
+FeeType:
+  description: |
+    A `KnownFeeType`, or a type added after this client was built. Clients show an unknown
+    type like `other`.
+  anyOf:
+    - $ref: '#/KnownFeeType'
+    - type: string
+      maxLength: 64
+FeeSource:
+  type: string
+  description: "`actual`: reported by the marketplace. `estimated`: from Listora's fee table until the marketplace reports the actual fee."
+  enum: [actual, estimated]
+FeeLine:
+  type: object
+  description: One fee deducted from the sale.
+  required: [type, amount, source]
+  properties:
+    type:
+      $ref: '#/FeeType'
+    amount:
+      $ref: './common.yaml#/Money'
+      description: A positive amount the seller pays.
+    source:
+      $ref: '#/FeeSource'
+SaleCreate:
+  type: object
+  required: [marketplace, items]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/KnownMarketplace'
+    items:
+      type: array
+      description: The items of the order, each at most once; more than one for a bundle.
+      minItems: 1
+      maxItems: 100
+      items:
+        $ref: '#/SaleItem'
+    shippingCharged:
+      $ref: './common.yaml#/Money'
+    soldAt:
+      $ref: './common.yaml#/Timestamp'
+      description: Defaults to now.
+    externalOrderId:
+      type: string
+      maxLength: 128
+Sale:
+  type: object
+  description: |
+    One marketplace order. It has one or more items (a bundle has several). Money values
+    that depend on fees are absent until they are known.
+  required:
+    [
+      id,
+      marketplace,
+      items,
+      soldAt,
+      salePrice,
+      detectionSource,
+      status,
+      isDoubleSale,
+      createdAt,
+      updatedAt,
+    ]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    externalOrderId:
+      type: string
+      maxLength: 128
+    items:
+      type: array
+      minItems: 1
+      items:
+        $ref: '#/SaleItem'
+    soldAt:
+      $ref: './common.yaml#/Timestamp'
+    salePrice:
+      $ref: './common.yaml#/Money'
+      description: The order's sale price before fees, the sum of `items[].salePrice`.
+    shippingCharged:
+      $ref: './common.yaml#/Money'
+      description: What the buyer paid for shipping.
+    fees:
+      type: array
+      description: Every fee deducted from the payout. Absent until known.
+      items:
+        $ref: '#/FeeLine'
+    shippingCost:
+      $ref: './common.yaml#/Money'
+      description: |
+        What the seller paid to ship outside the payout, for example a label bought
+        separately. A label the marketplace deducts is a `shipping_label` fee instead.
+    netProceeds:
+      $ref: './common.yaml#/Money'
+      description: The payout, `salePrice` plus `shippingCharged` minus `fees`. Absent until the fees are known.
+    profit:
+      $ref: './common.yaml#/Money'
+      description: |
+        `netProceeds` minus `shippingCost` minus the items' `cost`. Absent until
+        `netProceeds` is known and every item has a cost.
+    detectionSource:
+      $ref: '#/SaleDetectionSource'
+    status:
+      $ref: '#/SaleStatus'
+    shipBy:
+      $ref: './common.yaml#/Timestamp'
+    isDoubleSale:
+      type: boolean
+      description: True when an item of the order had already sold elsewhere; the user must cancel one sale.
+    delistRun:
+      $ref: '#/DelistRun'
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    updatedAt:
+      $ref: './common.yaml#/Timestamp'
+SalePage:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/Sale'
+    nextCursor:
+      type: string
+      description: Present when there are more results.

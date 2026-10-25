@@ -47,7 +47,7 @@ export function listingVerification(row: ListingRow): Verification | undefined {
 }
 
 /**
- * The honest status label (docs/architecture.md section 6). `success` only for a state that a
+ * The honest status label (docs/features/operations.md). `success` only for a state that a
  * read-back or the user confirmed; an unverified `active` or `ended` is still being checked.
  * The listing actions (T-19) and assisted tasks (T-21) refine the in-progress and assisted
  * labels with operation details such as retry counts.

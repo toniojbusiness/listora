@@ -1,7 +1,7 @@
 /**
  * The job queue's schema. Listora runs Graphile Worker on the same Postgres database, in its
  * own `graphile_worker` schema, so a job can be enqueued in the same transaction as the row it
- * works on (docs/architecture.md section 6). Graphile Worker owns and versions that schema;
+ * works on (docs/features/operations.md). Graphile Worker owns and versions that schema;
  * `npm run db:migrate` installs or upgrades it after Listora's own migrations, before any
  * process enqueues a job.
  */

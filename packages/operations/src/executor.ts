@@ -1,5 +1,5 @@
 /**
- * Runs one step of an operation (docs/architecture.md section 6). A job runs one step:
+ * Runs one step of an operation (docs/features/operations.md). A job runs one step:
  *
  * 1. **Claim** (transaction): lock the operation and decide the step. Before a step can send
  *    anything, the operation is marked `running` and committed, so a step interrupted by a

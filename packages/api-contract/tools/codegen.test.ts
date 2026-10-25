@@ -2,9 +2,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  bundleSpec,
   checkTargets,
   findDrift,
   generateTypeScript,
@@ -28,6 +29,9 @@ async function writeFiles(dir: string, files: Record<string, string>): Promise<v
     await writeFile(join(dir, path), content);
   }
 }
+
+/** Stands in for Redocly in tests whose targets ignore the bundle. */
+const noBundle = (): void => undefined;
 
 /** A target that "generates" fixed files, standing in for the real generators. */
 function fixedTarget(files: Record<string, string>): GenerationTarget {
@@ -75,27 +79,56 @@ describe('checkTargets and writeTargets', () => {
       'Client.swift': 'client v2',
       'Types.swift': 'edited',
     });
-    const [result] = await checkTargets([target], scratch);
+    const [result] = await checkTargets([target], scratch, noBundle);
     expect(result?.drift).toEqual([{ path: 'Types.swift', kind: 'changed' }]);
   });
 
   it('passes once the committed copy is regenerated, and removes stale files', async () => {
     await writeFiles(join(scratch, 'out'), { 'Client.swift': 'client v1', 'Old.swift': 'old' });
-    await writeTargets([target], scratch);
-    const [result] = await checkTargets([target], scratch);
+    await writeTargets([target], scratch, noBundle);
+    const [result] = await checkTargets([target], scratch, noBundle);
     expect(result?.drift).toEqual([]);
     await expect(readFile(join(scratch, 'out/Old.swift'))).rejects.toThrow(/ENOENT/);
   });
 });
 
+// One real bundle (Redocly runs as a child process) for every test that needs it.
+let bundleDir: string;
+let bundlePath: string;
+
+beforeAll(async () => {
+  bundleDir = await mkdtemp(join(tmpdir(), 'listora-codegen-bundle-'));
+  bundlePath = join(bundleDir, 'openapi.yaml');
+  bundleSpec(bundlePath);
+}, 60_000);
+
+afterAll(async () => {
+  await rm(bundleDir, { recursive: true, force: true });
+});
+
+describe('bundleSpec', () => {
+  it('matches the committed bundled/openapi.yaml (run `npm run contract:generate`)', async () => {
+    const fresh = await readFile(bundlePath, 'utf8');
+    const committed = await readFile(join(import.meta.dirname, '../bundled/openapi.yaml'), 'utf8');
+    expect(fresh === committed).toBe(true);
+  });
+
+  it('resolves every reference between files into the one document', async () => {
+    const bundled = await readFile(bundlePath, 'utf8');
+    const refs = [...bundled.matchAll(/\$ref: '?([^'\s]+)/g)].map((match) => match[1]);
+    expect(refs.length).toBeGreaterThan(0);
+    expect(refs.filter((ref) => !ref?.startsWith('#/components/'))).toEqual([]);
+  });
+});
+
 describe('generateTypeScript', () => {
   it('matches the committed src/generated/openapi.ts (run `npm run contract:generate`)', async () => {
-    await generateTypeScript(scratch);
+    await generateTypeScript(scratch, bundlePath);
     const fresh = await readFile(join(scratch, 'openapi.ts'), 'utf8');
     const committed = await readFile(
       join(import.meta.dirname, '../src/generated/openapi.ts'),
       'utf8',
     );
     expect(fresh === committed).toBe(true);
-  });
+  }, 30_000);
 });

@@ -1,5 +1,5 @@
 /**
- * The assisted adapter base (docs/architecture.md section 4): where Listora can't act on a
+ * The assisted adapter base (docs/features/marketplaces.md): where Listora can't act on a
  * marketplace itself (Poshmark, Mercari, and Depop until the browser runner or Depop's partner
  * API takes over, and whenever automation has to stop), Listora prepares the work and the user
  * does the final step in the marketplace's own app.

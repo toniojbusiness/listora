@@ -1,6 +1,6 @@
 /**
  * `fake-depop`: an HTTP server that speaks the part of Depop's Selling API Listora uses, for
- * development and tests (docs/architecture.md section 7). Every request it accepts and every
+ * development and tests (docs/architecture.md section 5). Every request it accepts and every
  * response it sends is checked against Depop's published openapi.yaml (spec.ts), and it follows
  * Depop's documented rules (README.md cites each), so the Depop adapter can be tested against
  * every failure mode without a credential:

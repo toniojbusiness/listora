@@ -1,6 +1,6 @@
 /**
  * Which data may be called what, and which data may feed a computed price. These rules come
- * from the marketplace terms (docs/architecture.md section 5) and are the only place that
+ * from the marketplace terms (docs/features/pricing.md) and are the only place that
  * decides them.
  */
 import type { KnownMarketplace, KnownSoldDataSource } from '@listora/api-contract';

@@ -1,15 +1,16 @@
 /**
- * Listora-specific rules for openapi.yaml that a generic linter cannot know. Redocly (the
+ * Listora-specific rules for the contract (openapi.yaml and the files it references, read as
+ * the bundled document) that a generic linter cannot know. Redocly (the
  * package's `npm run lint`, part of `npm run contract:check`) checks that the document is
  * valid OpenAPI; these tests check
  * that it follows the conventions in README.md, so new endpoints cannot quietly drop them.
  */
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
+import { CONTRACT_BUNDLE_PATH, CONTRACT_SPEC_PATH } from './document.ts';
 import { openEnumKnownRef } from './open-enum.ts';
 
 interface Schema {
@@ -59,7 +60,7 @@ interface Document {
   };
 }
 
-const doc = parse(readFileSync(join(import.meta.dirname, '../openapi.yaml'), 'utf8')) as Document;
+const doc = parse(readFileSync(CONTRACT_BUNDLE_PATH, 'utf8')) as Document;
 const METHODS = ['get', 'put', 'post', 'patch', 'delete'] as const;
 
 const operations = Object.entries(doc.paths).flatMap(([path, item]) => {
@@ -413,7 +414,7 @@ describe('enums', () => {
 describe('vocabulary', () => {
   const values = (name: string): string[] | undefined => doc.components.schemas[name]?.enum;
 
-  // These sets mirror the data model (docs/architecture.md section 9). Changing one is a
+  // These sets mirror the data model (docs/architecture.md section 6). Changing one is a
   // contract change: update the database, the server, and the iOS app together.
   it.each([
     ['KnownMarketplace', ['ebay', 'depop', 'poshmark', 'mercari']],
@@ -493,5 +494,45 @@ describe('vocabulary', () => {
     ]);
     const apiError = doc.components.schemas['ApiError'];
     expect(apiError?.required).toEqual(['code', 'message', 'retryable', 'requestId']);
+  });
+});
+
+describe('file layout', () => {
+  // The root only points at the per-resource files, so a change to one resource edits that
+  // resource's files (plus one line in openapi.yaml per new path or component) and never
+  // another resource's.
+  const root = parse(readFileSync(CONTRACT_SPEC_PATH, 'utf8')) as Document;
+
+  it('defines every path in paths/<tag>.yaml, named after its operations tag', () => {
+    for (const [path, item] of Object.entries(root.paths)) {
+      const tags = [
+        ...new Set(
+          METHODS.flatMap(
+            (method) => (doc.paths[path]?.[method] as Operation | undefined)?.tags ?? [],
+          ),
+        ),
+      ];
+      expect(tags, path).toHaveLength(1);
+      const pointer = `#/${path.replaceAll('~', '~0').replaceAll('/', '~1')}`;
+      expect(item, path).toEqual({ $ref: `./paths/${tags[0] ?? ''}.yaml${pointer}` });
+    }
+  });
+
+  it.each(['parameters', 'responses'] as const)(
+    'defines every component in components/%s.yaml',
+    (kind) => {
+      for (const [name, node] of Object.entries(root.components[kind])) {
+        expect(node, name).toEqual({ $ref: `./components/${kind}.yaml#/${name}` });
+      }
+    },
+  );
+
+  it('defines every schema in a components/schemas/<area>.yaml file', () => {
+    for (const [name, node] of Object.entries(root.components.schemas)) {
+      expect(node.$ref, name).toMatch(
+        new RegExp(`^\\./components/schemas/[a-z-]+\\.yaml#/${name}$`),
+      );
+      expect(Object.keys(node), name).toEqual(['$ref']);
+    }
   });
 });

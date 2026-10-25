@@ -1,0 +1,130 @@
+/v1/operations:
+  get:
+    tags: [operations]
+    operationId: listOperations
+    summary: List marketplace operations
+    description: Newest first. Filters combine with AND.
+    parameters:
+      - name: itemId
+        in: query
+        schema:
+          $ref: '../components/schemas/common.yaml#/Id'
+      - name: listingId
+        in: query
+        schema:
+          $ref: '../components/schemas/common.yaml#/Id'
+      - name: status
+        in: query
+        schema:
+          type: array
+          items:
+            $ref: '../components/schemas/operations.yaml#/KnownOperationStatus'
+        style: form
+        explode: true
+      - $ref: '../components/parameters.yaml#/Cursor'
+      - $ref: '../components/parameters.yaml#/Limit'
+    responses:
+      '200':
+        description: A page of operations.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/operations.yaml#/OperationPage'
+      '400':
+        $ref: '../components/responses.yaml#/BadRequest'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/operations/{operationId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/OperationId'
+  get:
+    tags: [operations]
+    operationId: getOperation
+    summary: Get an operation
+    responses:
+      '200':
+        description: The operation.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/operations.yaml#/Operation'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/operations/{operationId}/events:
+  parameters:
+    - $ref: '../components/parameters.yaml#/OperationId'
+  get:
+    tags: [operations]
+    operationId: listOperationEvents
+    summary: List an operation's history
+    description: Oldest first (by `sequence`). Events are append-only.
+    parameters:
+      - $ref: '../components/parameters.yaml#/Cursor'
+      - $ref: '../components/parameters.yaml#/Limit'
+    responses:
+      '200':
+        description: A page of events.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/operations.yaml#/OperationEventPage'
+      '400':
+        $ref: '../components/responses.yaml#/BadRequest'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/operations/{operationId}/retry:
+  parameters:
+    - $ref: '../components/parameters.yaml#/OperationId'
+  post:
+    tags: [operations]
+    operationId: retryOperation
+    summary: Retry a failed operation
+    description: |
+      Only for `failed` operations. Creates a new operation with the same desired state
+      (`retryOfOperationId` points at the failed one); the failed operation and its history
+      stay unchanged.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '202':
+        description: The new operation.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/operations.yaml#/Operation'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/operations/{operationId}/cancel:
+  parameters:
+    - $ref: '../components/parameters.yaml#/OperationId'
+  post:
+    tags: [operations]
+    operationId: cancelOperation
+    summary: Cancel an operation that has not been sent
+    description: |
+      Only while `queued` or `retrying`. Once a request may have reached the marketplace
+      the operation cannot be canceled (`409 invalid_state_transition`), because its outcome
+      must still be verified.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The canceled operation.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/operations.yaml#/Operation'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

@@ -7,18 +7,12 @@ import type { PhotoJobQueue } from '@listora/photos';
 import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
 import { fastify, LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 
-import { registerAccountRoutes } from './account/routes.ts';
-import { registerAnalysisRoutes } from './analyses/routes.ts';
 import type { AuthDriver } from './auth/driver.ts';
 import { registerErrorHandling } from './errors.ts';
+import { API_FEATURES, type ApiRouteContext } from './features.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
-import { registerItemRoutes } from './items/routes.ts';
-import { registerListingRoutes } from './listings/routes.ts';
-import { registerPhotoRoutes } from './photos/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
-import { registerPricingRoutes } from './pricing/routes.ts';
 import { registerLocalStorageRoutes } from './storage/local-routes.ts';
-import { registerUploadRoutes } from './uploads/routes.ts';
 import { SessionPhotoUploads } from './uploads/uploads.ts';
 
 export interface AppDependencies extends HealthDependencies {
@@ -72,23 +66,18 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   deps.auth.registerRoutes?.(app);
   if (deps.storage instanceof LocalDiskStorage) registerLocalStorageRoutes(app, deps.storage);
   const now = deps.now ?? (() => new Date());
-  const routeDeps = { db: deps.db, auth: deps.auth, storage: deps.storage };
-  registerAccountRoutes(app, routeDeps);
-  registerItemRoutes(app, routeDeps);
-  registerListingRoutes(app, routeDeps);
-  registerUploadRoutes(app, { ...routeDeps, now });
-  registerPhotoRoutes(app, {
-    ...routeDeps,
+  const context: ApiRouteContext = {
+    db: deps.db,
+    auth: deps.auth,
+    storage: deps.storage,
     uploads: deps.uploads ?? new SessionPhotoUploads(deps.storage, now),
     photoJobs: deps.photoJobs,
-  });
-  registerPricingRoutes(app, routeDeps);
-  registerAnalysisRoutes(app, {
-    ...routeDeps,
     ai: deps.ai,
     analysisJobs: deps.analysisJobs,
     now,
-  });
+  };
+  // Each feature folder's routes (features.ts), so a new feature never edits this file.
+  for (const { feature } of API_FEATURES) feature.registerRoutes(app, context);
   return app;
 }
 

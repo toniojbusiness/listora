@@ -818,11 +818,14 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
     });
 
     if (environment === 'personal') {
-      it('has the alarm count docs/costs.md prices', () => {
+      it('has the alarm count docs/features/costs.md prices', () => {
         // Ten beyond the always-free ten standard alarms, at $0.10 each a month.
         const count = resources(t, 'AWS::CloudWatch::Alarm').length;
         expect(count).toBe(20);
-        const costs = readFileSync(new URL('../../docs/costs.md', import.meta.url), 'utf8');
+        const costs = readFileSync(
+          new URL('../../docs/features/costs.md', import.meta.url),
+          'utf8',
+        );
         expect(costs).toContain(`| ${String(count)} standard alarms;`);
       });
     }

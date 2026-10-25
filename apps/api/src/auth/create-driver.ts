@@ -8,7 +8,7 @@ import { CognitoAuthDriver } from './cognito-driver.ts';
 import { DevAuthDriver } from './dev-driver.ts';
 import type { AuthDriver } from './driver.ts';
 
-/** The auth driver AUTH_DRIVER selects (docs/architecture.md section 7). */
+/** The auth driver AUTH_DRIVER selects (docs/architecture.md section 5). */
 export function createAuthDriver(auth: AuthConfig, logger: FastifyBaseLogger): AuthDriver {
   switch (auth.driver) {
     case 'dev': {

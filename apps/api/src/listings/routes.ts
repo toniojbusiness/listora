@@ -32,7 +32,7 @@ const LINKABLE_ITEM_STATUSES = new Set(['draft', 'ready', 'listed']);
 
 /**
  * Listings the user created on a marketplace themselves and shared to Listora (assisted mode,
- * docs/architecture.md section 4): `linkItemListing` links one to an item, and
+ * docs/features/marketplaces.md): `linkItemListing` links one to an item, and
  * `importSharedListing` creates an item for it first. Both only read the shared URL; nothing
  * is fetched from the marketplace, and the link is the user's confirmation, never the
  * marketplace's.

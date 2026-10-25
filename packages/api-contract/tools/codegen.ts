@@ -2,7 +2,11 @@
  * Generates the code derived from openapi.yaml, checks that the committed copy is current,
  * and compiles and tests the Swift package.
  *
- *   node tools/codegen.ts generate     rewrite src/generated and the Swift Generated folder
+ * openapi.yaml is the root of a multi-file spec: it `$ref`s the per-resource files in paths/
+ * and components/. Redocly bundles them into one document first, and every target is
+ * generated from that bundle.
+ *
+ *   node tools/codegen.ts generate     rewrite bundled/, src/generated, and the Swift Generated folder
  *   node tools/codegen.ts check        regenerate into a temp dir; exit 1 if anything differs
  *   node tools/codegen.ts swift-test   `swift test` the ListoraAPI package (compile proof)
  *
@@ -39,17 +43,34 @@ export interface GenerationTarget {
   name: string;
   /** Committed output directory, relative to the package directory. */
   dir: string;
-  generate: (outDir: string) => Promise<void>;
+  /** Writes the target's files into `outDir`, from the bundled spec at `bundlePath`. */
+  generate: (outDir: string, bundlePath: string) => Promise<void>;
 }
 
 export const TARGETS: readonly GenerationTarget[] = [
+  { name: 'Bundled spec', dir: 'bundled', generate: copyBundle },
   { name: 'TypeScript types', dir: 'src/generated', generate: generateTypeScript },
   { name: 'Swift client', dir: 'swift/Sources/ListoraAPI/Generated', generate: generateSwift },
 ];
 
+/**
+ * Bundles openapi.yaml and the files it references into one document at `outPath`, with
+ * Redocly (the same CLI that lints the spec). Every component keeps the name and position
+ * openapi.yaml gives it, and references between files become `#/components/...` references.
+ */
+export function bundleSpec(outPath: string): void {
+  run(join(repoRoot, 'node_modules/.bin/redocly'), ['bundle', specPath, '-o', outPath], packageDir);
+}
+
+/** Writes the bundled spec as `openapi.yaml`; the server loads it at runtime (src/document.ts). */
+async function copyBundle(outDir: string, bundlePath: string): Promise<void> {
+  await mkdir(outDir, { recursive: true });
+  await cp(bundlePath, join(outDir, 'openapi.yaml'));
+}
+
 /** Writes `openapi.ts` (types only, plus `as const` enum value arrays) into `outDir`. */
-export async function generateTypeScript(outDir: string): Promise<void> {
-  const ast = await openapiTS(pathToFileURL(specPath), {
+export async function generateTypeScript(outDir: string, bundlePath: string): Promise<void> {
+  const ast = await openapiTS(pathToFileURL(bundlePath), {
     // Root aliases (`Item`, `Money`, ...) and runtime enum value arrays for server validation.
     rootTypes: true,
     rootTypesNoSchemaPrefix: true,
@@ -67,7 +88,7 @@ export async function generateTypeScript(outDir: string): Promise<void> {
 }
 
 /** Builds the pinned swift-openapi-generator and writes the Swift types and client into `outDir`. */
-export async function generateSwift(outDir: string): Promise<void> {
+export async function generateSwift(outDir: string, bundlePath: string): Promise<void> {
   const scratchPath = join(swiftBuildRoot, 'swift-generator');
   const buildArgs = ['-c', 'release', '--product', 'swift-openapi-generator'];
   runSwift(['build', ...buildArgs], swiftGeneratorPackageDir, scratchPath);
@@ -82,7 +103,7 @@ export async function generateSwift(outDir: string): Promise<void> {
     join(binDir, 'swift-openapi-generator'),
     [
       'generate',
-      specPath,
+      bundlePath,
       '--config',
       join(swiftPackageDir, 'openapi-generator-config.yaml'),
       '--output-directory',
@@ -150,13 +171,16 @@ export async function findDrift(generatedDir: string, committedDir: string): Pro
 export async function checkTargets(
   targets: readonly GenerationTarget[],
   baseDir: string = packageDir,
+  bundle: (outPath: string) => void = bundleSpec,
 ): Promise<{ target: GenerationTarget; drift: Drift[] }[]> {
   const scratch = await mkdtemp(join(tmpdir(), 'listora-contract-'));
   try {
+    const bundlePath = join(scratch, 'openapi.bundled.yaml');
+    bundle(bundlePath);
     const results = [];
     for (const [index, target] of targets.entries()) {
       const outDir = join(scratch, String(index));
-      await target.generate(outDir);
+      await target.generate(outDir, bundlePath);
       results.push({ target, drift: await findDrift(outDir, join(baseDir, target.dir)) });
     }
     return results;
@@ -169,12 +193,15 @@ export async function checkTargets(
 export async function writeTargets(
   targets: readonly GenerationTarget[],
   baseDir: string = packageDir,
+  bundle: (outPath: string) => void = bundleSpec,
 ): Promise<void> {
   const scratch = await mkdtemp(join(tmpdir(), 'listora-contract-'));
   try {
+    const bundlePath = join(scratch, 'openapi.bundled.yaml');
+    bundle(bundlePath);
     for (const [index, target] of targets.entries()) {
       const outDir = join(scratch, String(index));
-      await target.generate(outDir);
+      await target.generate(outDir, bundlePath);
       const committedDir = join(baseDir, target.dir);
       await rm(committedDir, { recursive: true, force: true });
       await cp(outDir, committedDir, { recursive: true });

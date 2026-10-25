@@ -1,0 +1,91 @@
+ErrorResponse:
+  type: object
+  description: The body of every error response.
+  required: [error]
+  properties:
+    error:
+      $ref: '#/ApiError'
+ApiError:
+  type: object
+  required: [code, message, retryable, requestId]
+  properties:
+    code:
+      $ref: '#/ErrorCode'
+    message:
+      type: string
+      maxLength: 1000
+      description: User-readable explanation, safe to show as is. Never contains secrets.
+    retryable:
+      type: boolean
+      description: |
+        True when the same request may succeed later without changes. Retry it with the
+        same `Idempotency-Key`, after `retryAfterSeconds` when present.
+    retryAfterSeconds:
+      type: integer
+      format: int32
+      minimum: 0
+    requestId:
+      type: string
+      maxLength: 128
+      description: Correlates with server logs; show it in support views.
+    fieldErrors:
+      type: array
+      description: Per-field problems for `validation_failed`.
+      maxItems: 100
+      items:
+        $ref: '#/FieldError'
+FieldError:
+  type: object
+  required: [field, message]
+  properties:
+    field:
+      type: string
+      maxLength: 200
+      description: Dotted path into the request body, for example `details.title` or `variant.price`.
+    message:
+      type: string
+      maxLength: 500
+ErrorCode:
+  description: |
+    A `KnownErrorCode`, or a code added after this client was built. Clients must handle
+    unknown codes by using `message` and `retryable`, so new codes never break decoding.
+  anyOf:
+    - $ref: '#/KnownErrorCode'
+    - type: string
+      maxLength: 64
+KnownErrorCode:
+  type: string
+  description: |
+    HTTP status per code: `invalid_request` 400; `unauthenticated` 401; `quota_exceeded`
+    402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
+    `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
+    `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
+    `marketplace_action_unavailable` 409; `payload_too_large` 413; `validation_failed`,
+    `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
+    `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
+    and `marketplace_authorization_failed` appear only inside a failed
+    `ConnectionAuthorization`.
+  enum:
+    - invalid_request
+    - unauthenticated
+    - quota_exceeded
+    - forbidden
+    - not_found
+    - version_conflict
+    - invalid_state_transition
+    - already_exists
+    - idempotency_key_in_progress
+    - upload_incomplete
+    - upload_expired
+    - marketplace_not_connected
+    - marketplace_reauth_required
+    - marketplace_action_unavailable
+    - payload_too_large
+    - validation_failed
+    - idempotency_key_reused
+    - rate_limited
+    - ai_budget_exceeded
+    - internal_error
+    - service_unavailable
+    - marketplace_authorization_denied
+    - marketplace_authorization_failed

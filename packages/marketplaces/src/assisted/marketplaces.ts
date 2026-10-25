@@ -1,5 +1,5 @@
 /**
- * The assisted marketplaces (docs/architecture.md section 4). Poshmark, Mercari, and Depop run
+ * The assisted marketplaces (docs/features/marketplaces.md). Poshmark, Mercari, and Depop run
  * assisted until the browser runner (decision D1) or Depop's partner API takes over (see
  * ConnectionAwareAdapter), and assisted stays their fallback when automation has to stop.
  *

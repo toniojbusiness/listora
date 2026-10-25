@@ -2,20 +2,42 @@
 
 How people sign in to Listora and delete their account (plan task T-31, decision D10). The
 API side is in `apps/api/src/auth/` and `apps/api/src/account/`, and the account deletion job
-the worker runs is in `packages/accounts`; the overview is in
-[architecture.md](architecture.md#the-api-appsapi).
+the worker runs is in `packages/accounts`. The API conventions every route follows, the
+tenancy guard included, are in [architecture.md](../architecture.md#4-api-conventions).
 
 ## Drivers
 
 `AUTH_DRIVER` picks how the API verifies bearer tokens. Every `/v1` request needs one.
 
-| Driver    | Used for                    | How a person signs in                                                     |
-| --------- | --------------------------- | ------------------------------------------------------------------------- |
-| `dev`     | Local development and tests | A one-time code printed to the API log (see the README)                   |
-| `cognito` | Staging and production      | The app signs in with the Cognito user pool and sends the pool's ID token |
+| Driver    | Used for                    | How a person signs in                                                              |
+| --------- | --------------------------- | ---------------------------------------------------------------------------------- |
+| `dev`     | Local development and tests | A one-time code printed to the API log ([Signing in locally](#signing-in-locally)) |
+| `cognito` | Staging and production      | The app signs in with the Cognito user pool and sends the pool's ID token          |
 
 The API never sees a password or an Apple credential. With `cognito`, the app talks to
 Cognito directly, and the API only verifies the tokens Cognito issued.
+
+## Signing in locally
+
+With `AUTH_DRIVER=dev` (the `.env.example` setting), the API signs people in with a one-time
+code that it prints to its log instead of emailing it. The first sign-in of an email creates
+its account.
+
+```sh
+curl -X POST localhost:3000/dev/auth/codes -H 'content-type: application/json' \
+  -d '{"email": "you@example.com"}'
+# The API log shows: dev sign-in code for you@example.com: 123456
+curl -X POST localhost:3000/dev/auth/sessions -H 'content-type: application/json' \
+  -d '{"email": "you@example.com", "code": "123456"}'
+# → {"accessToken": "...", "tokenType": "Bearer", "expiresInSeconds": 86400}
+```
+
+Send the token as `Authorization: Bearer <accessToken>` on every `/v1` request, and an
+`Idempotency-Key` header (a new UUID per action) on every POST.
+
+Staging and production use `AUTH_DRIVER=cognito`, where the app signs in with the Cognito user
+pool (Sign in with Apple or an emailed code). The rest of this file covers both drivers,
+the user pool settings, and in-app account deletion (`DELETE /v1/account`).
 
 ## How the API verifies a Cognito token
 
@@ -185,3 +207,16 @@ deletes them at the identity provider).
   needs a decision at G-Apple: either native Sign in with Apple in the app, with the API
   exchanging the authorization code and keeping the Apple refresh token so it can revoke it,
   or confirmation that the Cognito flow is acceptable.
+
+## Data
+
+The tenancy tables (`account`, `app_user`, `membership`) are in
+[architecture.md](../architecture.md#6-data-model).
+
+- **Deleted identities:** `deleted_identity` (the SHA-256 of each identity whose account was
+  deleted and when, so its earlier tokens are refused; its only timestamp is `deleted_at`, and
+  later deletions purge rows older than 48 hours).
+- **Account deletion:** `account_deletion` (the tombstone of a committed deletion whose job
+  has not finished: the identity's SHA-256 and provider username, attempts) and
+  `account_deletion_grant` (the deleted account's marketplace grants still to revoke, with
+  their encrypted tokens only while pending). The job deletes the tombstone when it is done.

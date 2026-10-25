@@ -4,11 +4,11 @@ The `personal` environment (`ENVIRONMENT_SETTINGS.personal` in `infra/src/config
 Listora for one reseller in their own AWS account. Every service runs around the clock. This
 page estimates its monthly AWS bill, explains the choices that keep it low, and lists the
 levers that would cut it further. The design is described in
-[infra/README.md](../infra/README.md#the-personal-environment).
+[infra/README.md](../../infra/README.md#the-personal-environment).
 
 **Estimate: about $35 a month, or about $36 a month with browser automation**, before any
 Free Tier credit, deployed as it starts: without a domain
-([infra/README.md](../infra/README.md#without-a-domain)). It costs $0.56 more once a domain is
+([infra/README.md](../../infra/README.md#without-a-domain)). It costs $0.56 more once a domain is
 added (its Route 53 hosted zone and SES inbound sale email), plus the domain's registration.
 A copy of the staging layout (NAT gateway, load balancer, two services) would cost about $100.
 
@@ -75,7 +75,7 @@ its registrar and is not included.
 ## Browser automation
 
 Poshmark, Mercari, and Depop (until its partner API is granted) are automated in the cloud by
-the headless-Chromium runner (decision D1 in [architecture.md](architecture.md)). The runner
+the headless-Chromium runner (decision D1 in [automation.md](automation.md)). The runner
 is reserved at 1 vCPU and 4 GB, with no task while idle (`browserRunner` in
 `infra/src/config.ts`), and runs as an on-demand Fargate task: one per batch of listing
 actions, and one for each scheduled sale check, about every 12 hours by default (the

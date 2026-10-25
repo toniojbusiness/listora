@@ -1,0 +1,240 @@
+PhotoRole:
+  type: string
+  enum: [front, back, tag, flaw, detail]
+PhotoStatus:
+  type: string
+  description: '`processing` until the derived images exist; `failed` when the file is not a usable image.'
+  enum: [processing, ready, failed]
+ImageContentType:
+  type: string
+  description: |
+    JPEG only: the server's image pipeline cannot decode HEIC, so clients convert photos to
+    JPEG when they resize them.
+  enum: [image/jpeg]
+OcrLine:
+  type: object
+  description: A text line recognized on the device (Vision).
+  required: [text, confidence]
+  properties:
+    text:
+      type: string
+      maxLength: 500
+    confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+Barcode:
+  type: object
+  description: A barcode detected on the device.
+  required: [symbology, payload]
+  properties:
+    symbology:
+      type: string
+      maxLength: 32
+      description: For example `ean13`, `upce`, `qr`.
+    payload:
+      type: string
+      maxLength: 2048
+PhotoUrls:
+  type: object
+  description: Unguessable URLs of the derived images; present only when the photo is `ready`.
+  required: [thumbnail, listing]
+  properties:
+    thumbnail:
+      type: string
+      format: uri
+      description: 400 px long edge.
+    listing:
+      type: string
+      format: uri
+      description: 1600 px long edge; what marketplaces fetch.
+Photo:
+  type: object
+  required:
+    [id, itemId, position, role, status, width, height, sha256, ocrLines, barcodes, createdAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    itemId:
+      $ref: './common.yaml#/Id'
+    position:
+      type: integer
+      format: int32
+      minimum: 0
+    role:
+      $ref: '#/PhotoRole'
+    status:
+      $ref: '#/PhotoStatus'
+    width:
+      type: integer
+      format: int32
+      minimum: 1
+    height:
+      type: integer
+      format: int32
+      minimum: 1
+    sha256:
+      $ref: '#/Sha256'
+    urls:
+      $ref: '#/PhotoUrls'
+    failureReason:
+      type: string
+      maxLength: 500
+      description: Why the file is not a usable image, for the user; present only when `status` is `failed`.
+    ocrLines:
+      type: array
+      items:
+        $ref: '#/OcrLine'
+    barcodes:
+      type: array
+      items:
+        $ref: '#/Barcode'
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+PhotoList:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/Photo'
+PhotoCreate:
+  type: object
+  required: [uploadFileId, role]
+  properties:
+    uploadFileId:
+      $ref: './common.yaml#/Id'
+    role:
+      $ref: '#/PhotoRole'
+    position:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Insert position; appended when absent.
+    width:
+      type: integer
+      format: int32
+      minimum: 1
+    height:
+      type: integer
+      format: int32
+      minimum: 1
+    ocrLines:
+      type: array
+      maxItems: 500
+      items:
+        $ref: '#/OcrLine'
+    barcodes:
+      type: array
+      maxItems: 50
+      items:
+        $ref: '#/Barcode'
+PhotoUpdate:
+  type: object
+  required: [role]
+  properties:
+    role:
+      $ref: '#/PhotoRole'
+PhotoOrder:
+  type: object
+  required: [photoIds]
+  properties:
+    photoIds:
+      type: array
+      minItems: 1
+      maxItems: 24
+      items:
+        $ref: './common.yaml#/Id'
+Sha256:
+  type: string
+  description: Lowercase hex SHA-256 of the file bytes.
+  pattern: '^[0-9a-f]{64}$'
+UploadFileCreate:
+  type: object
+  required: [contentType, byteSize, sha256]
+  properties:
+    contentType:
+      $ref: '#/ImageContentType'
+    byteSize:
+      type: integer
+      format: int64
+      minimum: 1
+      maximum: 20971520
+      description: At most 20 MiB.
+    sha256:
+      $ref: '#/Sha256'
+UploadSessionCreate:
+  type: object
+  required: [files]
+  properties:
+    files:
+      type: array
+      minItems: 1
+      maxItems: 24
+      items:
+        $ref: '#/UploadFileCreate'
+UploadFileStatus:
+  type: string
+  description: '`pending`: bytes not received yet. `uploaded`: bytes received and verified. `attached`: used by a photo.'
+  enum: [pending, uploaded, attached]
+HttpHeader:
+  type: object
+  required: [name, value]
+  properties:
+    name:
+      type: string
+      maxLength: 256
+    value:
+      type: string
+      maxLength: 4096
+UploadTarget:
+  type: object
+  description: Where and how to send one file's bytes. Send exactly these headers.
+  required: [method, url, headers, expiresAt]
+  properties:
+    method:
+      type: string
+      enum: [PUT]
+    url:
+      type: string
+      format: uri
+    headers:
+      type: array
+      items:
+        $ref: '#/HttpHeader'
+    expiresAt:
+      $ref: './common.yaml#/Timestamp'
+UploadFile:
+  type: object
+  required: [id, status, contentType, byteSize, sha256]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    status:
+      $ref: '#/UploadFileStatus'
+    contentType:
+      $ref: '#/ImageContentType'
+    byteSize:
+      type: integer
+      format: int64
+      minimum: 1
+    sha256:
+      $ref: '#/Sha256'
+    upload:
+      $ref: '#/UploadTarget'
+UploadSession:
+  type: object
+  required: [id, expiresAt, files, createdAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    expiresAt:
+      $ref: './common.yaml#/Timestamp'
+    files:
+      type: array
+      description: In the order of the request's `files`. `upload` is present only for `pending` files.
+      items:
+        $ref: '#/UploadFile'
+    createdAt:
+      $ref: './common.yaml#/Timestamp'

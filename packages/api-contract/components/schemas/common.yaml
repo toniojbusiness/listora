@@ -1,0 +1,113 @@
+Id:
+  type: string
+  format: uuid
+  description: Server-generated UUID.
+Timestamp:
+  type: string
+  format: date-time
+  description: RFC 3339 timestamp in UTC.
+Sku:
+  type: string
+  description: Account prefix, a dash, and a zero-padded gapless number, for example `AJ-000184`.
+  pattern: '^[A-Z0-9]{1,8}-[0-9]{6,}$'
+  maxLength: 32
+CurrencyCode:
+  type: string
+  description: ISO 4217 code. Listora launches US-only, so USD is the only currency for now.
+  enum: [USD]
+Money:
+  type: object
+  description: An amount in integer minor units (cents) plus a currency. Never a floating-point amount.
+  required: [amountCents, currency]
+  properties:
+    amountCents:
+      type: integer
+      format: int64
+      minimum: -9007199254740991
+      maximum: 9007199254740991
+      description: Integer minor units, for example 3400 for $34.00.
+    currency:
+      $ref: '#/CurrencyCode'
+Marketplace:
+  description: |
+    A `KnownMarketplace`, or a marketplace added after this client was built. Clients show
+    an unknown marketplace generically (its raw id and the server's `statusDisplay`).
+  anyOf:
+    - $ref: '#/KnownMarketplace'
+    - type: string
+      maxLength: 64
+KnownMarketplace:
+  type: string
+  enum: [ebay, depop, poshmark, mercari]
+IntegrationMode:
+  description: |
+    A `KnownIntegrationMode`, or a mode added after this client was built. Clients offer
+    nothing that depends on an unknown mode.
+  anyOf:
+    - $ref: '#/KnownIntegrationMode'
+    - type: string
+      maxLength: 64
+KnownIntegrationMode:
+  type: string
+  description: |
+    `api`: Listora acts through the marketplace's official API and verifies by read-back.
+    `assisted`: Listora prepares the work and the user does the final step in the
+    marketplace app, then confirms.
+  enum: [api, assisted]
+StatusTone:
+  description: |
+    A `KnownStatusTone`, or a tone added after this client was built. Clients style an
+    unknown tone like `neutral` and still show the `label`.
+  anyOf:
+    - $ref: '#/KnownStatusTone'
+    - type: string
+      maxLength: 64
+KnownStatusTone:
+  type: string
+  description: |
+    How to style a status. `success` is used only for states verified by an API read-back
+    or confirmed by the user.
+  enum: [success, in_progress, checking, failed, action_needed, neutral]
+StatusDisplay:
+  type: object
+  description: |
+    Server-rendered honest status, for example `Active (confirmed by eBay)`,
+    `Delisting... retry 2 of 6`, `Delist failed - Retry`, `Checking...`,
+    `Action needed - delist on Poshmark`, or `Done (you confirmed)`. Clients show
+    `label` as given and never compute success themselves.
+  required: [tone, label]
+  properties:
+    tone:
+      $ref: '#/StatusTone'
+    label:
+      type: string
+      maxLength: 120
+    detail:
+      type: string
+      maxLength: 1000
+      description: Extra context, for example the marketplace's error text.
+VerificationMethod:
+  type: string
+  description: '`marketplace_api`: confirmed by an API read-back. `user_confirmation`: the user confirmed an assisted task.'
+  enum: [marketplace_api, user_confirmation]
+Verification:
+  type: object
+  description: How and when the current state was established. Absent when it is not verified.
+  required: [method, verifiedAt]
+  properties:
+    method:
+      $ref: '#/VerificationMethod'
+    verifiedAt:
+      $ref: '#/Timestamp'
+Provenance:
+  description: |
+    A `KnownProvenance`, or a source added after this client was built. Clients treat an
+    unknown source as not entered by the user (highlight it for review).
+  anyOf:
+    - $ref: '#/KnownProvenance'
+    - type: string
+      maxLength: 64
+KnownProvenance:
+  type: string
+  description: Where a field value came from.
+  enum: [ai, ocr, barcode, user]

@@ -1,0 +1,205 @@
+ConnectionStatus:
+  description: |
+    A `KnownConnectionStatus`, or a status added after this client was built. Clients
+    show the connection's `statusDisplay` for an unknown status.
+  anyOf:
+    - $ref: '#/KnownConnectionStatus'
+    - type: string
+      maxLength: 64
+KnownConnectionStatus:
+  type: string
+  description: |
+    State of the API connection. Assisted marketplaces (`mode: assisted`) have no account
+    connection and report `not_connected`; their `statusDisplay` says so.
+  enum: [not_connected, connected, degraded, reauth_required, revoked]
+CapabilityMode:
+  description: |
+    A `KnownCapabilityMode`, or a mode added after this client was built. Clients treat
+    an unknown mode like `none` (the capability is not offered).
+  anyOf:
+    - $ref: '#/KnownCapabilityMode'
+    - type: string
+      maxLength: 64
+KnownCapabilityMode:
+  type: string
+  enum: [api, assisted, bulk_file, none]
+MarkSoldMode:
+  description: |
+    A `KnownMarkSoldMode`, or a mode added after this client was built. Clients treat an
+    unknown mode like `none`.
+  anyOf:
+    - $ref: '#/KnownMarkSoldMode'
+    - type: string
+      maxLength: 64
+KnownMarkSoldMode:
+  type: string
+  enum: [api, assisted, bulk_file, none, not_needed]
+ConnectMethod:
+  description: |
+    A `KnownConnectMethod`, or a method added after this client was built. Clients treat
+    an unknown method like `none` (no connect button).
+  anyOf:
+    - $ref: '#/KnownConnectMethod'
+    - type: string
+      maxLength: 64
+KnownConnectMethod:
+  type: string
+  enum: [oauth, none]
+VerifyReadMode:
+  description: |
+    A `KnownVerifyReadMode`, or a mode added after this client was built. Clients offer no
+    "check again" action for an unknown mode.
+  anyOf:
+    - $ref: '#/KnownVerifyReadMode'
+    - type: string
+      maxLength: 64
+KnownVerifyReadMode:
+  type: string
+  description: How success is established.
+  enum: [api, user_confirm]
+ImportListingsMode:
+  description: |
+    A `KnownImportListingsMode`, or a mode added after this client was built. Clients
+    treat an unknown mode like `none`.
+  anyOf:
+    - $ref: '#/KnownImportListingsMode'
+    - type: string
+      maxLength: 64
+KnownImportListingsMode:
+  type: string
+  enum: [api, share_sheet, bulk_file, none]
+ImageTransportMode:
+  description: |
+    A `KnownImageTransportMode`, or a mode added after this client was built. Clients
+    treat an unknown mode like `user_saves_photos`.
+  anyOf:
+    - $ref: '#/KnownImageTransportMode'
+    - type: string
+      maxLength: 64
+KnownImageTransportMode:
+  type: string
+  enum: [url_fetch, upload, user_saves_photos]
+MarketplaceCapabilities:
+  type: object
+  description: |
+    What Listora can do on this marketplace for this account. Clients branch on these
+    flags, never on the marketplace name; they can change when access is granted.
+  required:
+    [
+      connect,
+      create,
+      updatePrice,
+      updateDetails,
+      delist,
+      relist,
+      markSold,
+      verifyRead,
+      importListings,
+      saleDetection,
+      imageTransport,
+    ]
+  properties:
+    connect:
+      $ref: '#/ConnectMethod'
+    create:
+      $ref: '#/CapabilityMode'
+    updatePrice:
+      $ref: '#/CapabilityMode'
+    updateDetails:
+      $ref: '#/CapabilityMode'
+    delist:
+      $ref: '#/CapabilityMode'
+    relist:
+      $ref: '#/CapabilityMode'
+    markSold:
+      $ref: '#/MarkSoldMode'
+    verifyRead:
+      $ref: '#/VerifyReadMode'
+    importListings:
+      $ref: '#/ImportListingsMode'
+    saleDetection:
+      type: array
+      items:
+        $ref: './sales.yaml#/SaleDetectionSource'
+    imageTransport:
+      $ref: '#/ImageTransportMode'
+ConnectionIssue:
+  type: object
+  required: [code, message, occurredAt]
+  properties:
+    code:
+      type: string
+      maxLength: 64
+    message:
+      type: string
+      maxLength: 1000
+    occurredAt:
+      $ref: './common.yaml#/Timestamp'
+Connection:
+  type: object
+  required: [marketplace, mode, status, statusDisplay, capabilities]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    mode:
+      $ref: './common.yaml#/IntegrationMode'
+    status:
+      $ref: '#/ConnectionStatus'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+    capabilities:
+      $ref: '#/MarketplaceCapabilities'
+    displayName:
+      type: string
+      maxLength: 200
+      description: The seller's name on the marketplace.
+    connectedAt:
+      $ref: './common.yaml#/Timestamp'
+    grantExpiresAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When the user must reconnect (Depop grants last one year; eBay refresh tokens about 18 months).
+    lastOkAt:
+      $ref: './common.yaml#/Timestamp'
+    lastIssue:
+      $ref: '#/ConnectionIssue'
+ConnectionList:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/Connection'
+ConnectionAuthorizationStatus:
+  type: string
+  enum: [pending, completed, failed, expired]
+ConnectionAuthorization:
+  type: object
+  required: [id, marketplace, status, authorizationUrl, callbackUrlScheme, expiresAt, createdAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    status:
+      $ref: '#/ConnectionAuthorizationStatus'
+    authorizationUrl:
+      type: string
+      format: uri
+      description: The marketplace's own consent page.
+    callbackUrlScheme:
+      type: string
+      maxLength: 32
+      description: The URL scheme `ASWebAuthenticationSession` waits for (`listora`).
+    expiresAt:
+      $ref: './common.yaml#/Timestamp'
+    failure:
+      $ref: './errors.yaml#/ApiError'
+      description: Present when `status` is `failed`.
+    connection:
+      $ref: '#/Connection'
+      description: Present when `status` is `completed`.
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    completedAt:
+      $ref: './common.yaml#/Timestamp'

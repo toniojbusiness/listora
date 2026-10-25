@@ -15,7 +15,7 @@ import type { Marketplace } from '@listora/db';
 /**
  * `staging` and `prod` are the product's environments, each in its own AWS account.
  * `personal` is the smallest footprint that still runs every service around the clock, for
- * one reseller running Listora in their own AWS account (docs/costs.md prices it).
+ * one reseller running Listora in their own AWS account (docs/features/costs.md prices it).
  */
 export const ENVIRONMENT_NAMES = ['staging', 'prod', 'personal'] as const;
 export type EnvironmentName = (typeof ENVIRONMENT_NAMES)[number];
@@ -101,9 +101,9 @@ export interface EnvironmentSettings {
   readonly services: ServiceLayout;
   /**
    * Reserved size of the on-demand headless-Chromium runner, a later task, that automates
-   * Poshmark, Mercari, and Depop (decision D1 in docs/architecture.md): started per batch of
+   * Poshmark, Mercari, and Depop (decision D1 in docs/features/automation.md): started per batch of
    * listing actions and per scheduled sale check, zero tasks while idle. Nothing is
-   * provisioned from it yet; it fixes the size that docs/costs.md prices, and the runner task
+   * provisioned from it yet; it fixes the size that docs/features/costs.md prices, and the runner task
    * builds on it.
    */
   readonly browserRunner: ServiceSize;
@@ -203,7 +203,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     delistLatencyAlarmMinutes: DELIST_LATENCY_ALARM_MINUTES,
   },
   // One reseller, around 500 items, light traffic, every service running 24/7, at the lowest
-  // monthly cost (docs/costs.md has the estimate and the alternatives it beat). The data is
+  // monthly cost (docs/features/costs.md has the estimate and the alternatives it beat). The data is
   // real, so it is protected like prod's; everything else is the minimum that works.
   personal: {
     protectData: true,

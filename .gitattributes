@@ -1,4 +1,5 @@
 # Generated from packages/api-contract/openapi.yaml (`npm run contract:generate`); collapsed in
 # GitHub diffs. CI fails when these differ from a fresh generation.
+packages/api-contract/bundled/** linguist-generated=true
 packages/api-contract/src/generated/** linguist-generated=true
 packages/api-contract/swift/Sources/ListoraAPI/Generated/** linguist-generated=true

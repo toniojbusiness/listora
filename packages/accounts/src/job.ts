@@ -1,6 +1,6 @@
 /**
  * The `account_deletion` job: finishes a committed account deletion with the outside services
- * (docs/auth.md, "Account deletion"). Every run, for what is still open:
+ * (docs/features/auth.md, "Account deletion"). Every run, for what is still open:
  *
  * 1. Deletes the person at the identity provider (for Cognito, `AdminDeleteUser` once
  *    `AdminGetUser` shows the username still belongs to the deleted `sub`; a dev deletion is

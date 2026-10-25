@@ -1,0 +1,201 @@
+AnalysisTier:
+  type: string
+  description: '`fast`: the default low-cost model. `premium`: "Identify harder", counted against the plan quota.'
+  enum: [fast, premium]
+AnalysisStatus:
+  type: string
+  enum: [queued, running, completed, failed]
+AnalysisProvenance:
+  description: |
+    A `KnownAnalysisProvenance`, or a source added after this client was built. Clients
+    treat an unknown source like `ai`.
+  anyOf:
+    - $ref: '#/KnownAnalysisProvenance'
+    - type: string
+      maxLength: 64
+KnownAnalysisProvenance:
+  type: string
+  description: Where an analyzed value came from (users are not a source inside an analysis).
+  enum: [ai, ocr, barcode]
+Confidence:
+  type: number
+  minimum: 0
+  maximum: 1
+  description: 0 to 1. Clients highlight low-confidence fields for review.
+AnalyzedText:
+  type: object
+  required: [value, confidence, provenance]
+  properties:
+    value:
+      type: string
+      maxLength: 10000
+    confidence:
+      $ref: '#/Confidence'
+    provenance:
+      $ref: '#/AnalysisProvenance'
+AnalyzedTextList:
+  type: object
+  required: [values, confidence, provenance]
+  properties:
+    values:
+      type: array
+      items:
+        type: string
+        maxLength: 200
+    confidence:
+      $ref: '#/Confidence'
+    provenance:
+      $ref: '#/AnalysisProvenance'
+AnalyzedCondition:
+  type: object
+  required: [value, confidence, provenance]
+  properties:
+    value:
+      $ref: './items.yaml#/ItemCondition'
+    confidence:
+      $ref: '#/Confidence'
+    provenance:
+      $ref: '#/AnalysisProvenance'
+AnalyzedDetails:
+  type: object
+  description: Proposed item details; a property is absent when the analysis found nothing.
+  properties:
+    title:
+      $ref: '#/AnalyzedText'
+    description:
+      $ref: '#/AnalyzedText'
+    brand:
+      $ref: '#/AnalyzedText'
+    productName:
+      $ref: '#/AnalyzedText'
+    styleNumber:
+      $ref: '#/AnalyzedText'
+    rnNumber:
+      $ref: '#/AnalyzedText'
+    upc:
+      $ref: '#/AnalyzedText'
+    department:
+      $ref: '#/AnalyzedText'
+    category:
+      $ref: '#/AnalyzedText'
+    sizeLabel:
+      $ref: '#/AnalyzedText'
+    sizeSystem:
+      $ref: '#/AnalyzedText'
+    colors:
+      $ref: '#/AnalyzedTextList'
+    pattern:
+      $ref: '#/AnalyzedText'
+    materials:
+      $ref: '#/AnalyzedTextList'
+    condition:
+      $ref: '#/AnalyzedCondition'
+    conditionNotes:
+      $ref: '#/AnalyzedText'
+    flaws:
+      $ref: '#/AnalyzedTextList'
+    keywords:
+      $ref: '#/AnalyzedTextList'
+VariantSuggestion:
+  type: object
+  description: |
+    Marketplace-specific copy written by the analysis, within that marketplace's limits:
+    eBay and Poshmark titles up to 80 characters, a Poshmark description up to 1,500, and
+    a Mercari title and description up to 80 and 1,000. Depop has no title (this one is a
+    short headline); its `description` and `hashtags` (up to 5, without the `#`) together
+    fit Depop's 1,000 characters once the hashtags are appended on their own line.
+  required: [marketplace, title, description]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    title:
+      type: string
+      maxLength: 200
+    description:
+      type: string
+      maxLength: 10000
+    hashtags:
+      type: array
+      maxItems: 10
+      items:
+        type: string
+        maxLength: 64
+AnalysisResult:
+  type: object
+  required: [details, variants, needsEscalation]
+  properties:
+    details:
+      $ref: '#/AnalyzedDetails'
+    variants:
+      type: array
+      items:
+        $ref: '#/VariantSuggestion'
+    priceEstimate:
+      $ref: './pricing.yaml#/AiPriceEstimate'
+    needsEscalation:
+      type: boolean
+      description: |
+        True when a fast analysis suggests "Identify harder": its brand or product is
+        uncertain, the item looks designer or vintage, or the model asked for it. Always
+        false for a premium analysis.
+    escalationReason:
+      type: string
+      maxLength: 500
+AnalysisFailure:
+  type: object
+  description: |
+    Why the analysis failed. Starting or escalating it again queues it again; `retryable`
+    says whether that may succeed without changing anything (for example after a
+    provider outage), as opposed to needing other photos or a plan change.
+  required: [code, message, retryable]
+  properties:
+    code:
+      type: string
+      maxLength: 64
+      description: |
+        Stable snake_case, for example `invalid_output` (the AI's answer broke the schema
+        twice), `rate_limited`, `ai_budget_exceeded`, `quota_exceeded`, `photo_set_changed`.
+    message:
+      type: string
+      maxLength: 1000
+      description: Safe to show to the user.
+    retryable:
+      type: boolean
+Analysis:
+  type: object
+  required: [id, itemId, photoSetHash, tier, status, createdAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    itemId:
+      $ref: './common.yaml#/Id'
+    photoSetHash:
+      $ref: './photos.yaml#/Sha256'
+    tier:
+      $ref: '#/AnalysisTier'
+    status:
+      $ref: '#/AnalysisStatus'
+    result:
+      $ref: '#/AnalysisResult'
+    failure:
+      $ref: '#/AnalysisFailure'
+    escalatedFromAnalysisId:
+      $ref: './common.yaml#/Id'
+      description: For a `premium` analysis, the fast analysis it escalates.
+    escalationAnalysisId:
+      $ref: './common.yaml#/Id'
+      description: For a fast analysis, the premium analysis that escalates it, once started.
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    completedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When the analysis completed or failed.
+AnalysisApply:
+  type: object
+  required: [expectedVersion]
+  properties:
+    expectedVersion:
+      type: integer
+      format: int64
+      minimum: 1
+      description: The item `version` the client last read (optimistic lock).

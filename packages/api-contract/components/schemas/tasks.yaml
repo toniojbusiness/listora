@@ -1,0 +1,137 @@
+UserTaskKind:
+  description: |
+    A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
+    unknown task's `title`, `instructions`, and `deepLink`, and ask the user to update
+    the app to complete it.
+  anyOf:
+    - $ref: '#/KnownUserTaskKind'
+    - type: string
+      maxLength: 64
+KnownUserTaskKind:
+  type: string
+  enum: [list_manually, delist_manually, edit_manually, confirm_sale, reconnect, review_match]
+UserTaskStatus:
+  type: string
+  enum: [open, completed, dismissed]
+UserTaskUrgency:
+  type: string
+  description: '`urgent` for delists after a sale (pushed, and re-alerted until done).'
+  enum: [normal, urgent]
+CopyField:
+  type: object
+  description: One value the user copies into the marketplace app with one tap.
+  required: [label, value]
+  properties:
+    label:
+      type: string
+      maxLength: 64
+    value:
+      type: string
+      maxLength: 10000
+CopyAssist:
+  type: object
+  description: Everything the user needs to do the task by hand.
+  required: [fields, photos]
+  properties:
+    fields:
+      type: array
+      items:
+        $ref: '#/CopyField'
+    photos:
+      type: array
+      description: Photos to save to the camera roll, in posting order.
+      items:
+        $ref: './photos.yaml#/Photo'
+UserTask:
+  type: object
+  required: [id, kind, status, urgency, title, createdAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    kind:
+      $ref: '#/UserTaskKind'
+    status:
+      $ref: '#/UserTaskStatus'
+    urgency:
+      $ref: '#/UserTaskUrgency'
+    title:
+      type: string
+      maxLength: 200
+      description: For example "Sold on Depop - delist on Poshmark".
+    instructions:
+      type: string
+      maxLength: 2000
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    itemId:
+      $ref: './common.yaml#/Id'
+    listingId:
+      $ref: './common.yaml#/Id'
+    operationId:
+      $ref: './common.yaml#/Id'
+    saleId:
+      $ref: './common.yaml#/Id'
+      description: For `confirm_sale`, the sale to confirm.
+    deepLink:
+      type: string
+      format: uri
+      description: Opens the right screen in the marketplace app or site.
+    copyAssist:
+      $ref: '#/CopyAssist'
+    dueAt:
+      $ref: './common.yaml#/Timestamp'
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    completedAt:
+      $ref: './common.yaml#/Timestamp'
+UserTaskCompletion:
+  type: object
+  description: |
+    The user's confirmation and, for some kinds, their decision. Which properties apply
+    depends on the task's `kind`; a property that does not apply is
+    `422 validation_failed`.
+
+    - `list_manually`: `externalUrl`, the new listing's URL (links the listing).
+    - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
+      `rejectMatch: true` when nothing matches. Exactly one of the two is required.
+    - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+    - `delist_manually`, `edit_manually`, `reconnect`: nothing besides `note`.
+    - Every kind: optional `note`.
+  properties:
+    externalUrl:
+      type: string
+      format: uri
+    matchedItemId:
+      $ref: './common.yaml#/Id'
+    matchedListingId:
+      $ref: './common.yaml#/Id'
+    rejectMatch:
+      type: boolean
+    saleCorrection:
+      $ref: '#/SaleCorrection'
+    note:
+      type: string
+      maxLength: 1000
+SaleCorrection:
+  type: object
+  description: Corrected sale details; a property that is absent keeps the detected value.
+  properties:
+    salePrice:
+      $ref: './common.yaml#/Money'
+      description: The order's sale price; for a bundle it is split across the items in proportion.
+    soldAt:
+      $ref: './common.yaml#/Timestamp'
+    externalOrderId:
+      type: string
+      maxLength: 128
+UserTaskPage:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/UserTask'
+    nextCursor:
+      type: string
+      description: Present when there are more results.

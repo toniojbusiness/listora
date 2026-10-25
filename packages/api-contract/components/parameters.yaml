@@ -1,0 +1,93 @@
+IdempotencyKey:
+  name: Idempotency-Key
+  in: header
+  required: true
+  description: |
+    A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+    every retry of that action. The server stores the first successful response for at
+    least 24 hours: a retry with the same key and body gets that response again without
+    repeating the action; the same key with a different body gets
+    `422 idempotency_key_reused`; a retry while the first request is still running gets
+    `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+    stored, so retrying it with the same key runs it again.
+  schema:
+    type: string
+    minLength: 1
+    maxLength: 255
+Cursor:
+  name: cursor
+  in: query
+  description: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
+  schema:
+    type: string
+    maxLength: 1024
+Limit:
+  name: limit
+  in: query
+  description: Page size.
+  schema:
+    type: integer
+    format: int32
+    minimum: 1
+    maximum: 100
+    default: 25
+ItemId:
+  name: itemId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+PhotoId:
+  name: photoId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+SessionId:
+  name: sessionId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+AnalysisId:
+  name: analysisId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+ListingId:
+  name: listingId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+OperationId:
+  name: operationId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+AuthorizationId:
+  name: authorizationId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+SaleId:
+  name: saleId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+TaskId:
+  name: taskId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+MarketplacePath:
+  name: marketplace
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/KnownMarketplace'

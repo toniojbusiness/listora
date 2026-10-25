@@ -1,5 +1,5 @@
 /**
- * The hourly AI spend check (docs/architecture.md, AI cost controls). Each run logs one
+ * The hourly AI spend check (docs/features/ai.md, spend check). Each run logs one
  * `ai_spend_alert` line per limit an account or the platform is approaching or over, then an
  * `ai_spend_check` summary, through the worker's logger; CloudWatch alarms key on those lines.
  */
@@ -7,6 +7,8 @@ import { checkAiSpend, type AiAlertThresholds } from '@listora/ai';
 import type { Db } from '@listora/db';
 import type { ScheduledTask } from '@listora/operations';
 import type { Logger } from '@listora/shared';
+
+import type { WorkerFeature } from '../features.ts';
 
 export const AI_SPEND_CHECK_TASK = 'ai_spend_check';
 
@@ -28,3 +30,10 @@ export function aiSpendCheckTask(
     },
   };
 }
+
+/** Runs the check with the thresholds from the worker's own environment. */
+export const feature: WorkerFeature = {
+  jobs: ({ config, db, logger }) => ({
+    scheduledTasks: [aiSpendCheckTask(db, config.aiAlerts, logger)],
+  }),
+};

@@ -4,8 +4,9 @@ Mobile-first reseller operating system: take photos once, create the item once, 
 everywhere (Depop, Poshmark, Mercari, eBay).
 
 Read [docs/architecture.md](docs/architecture.md) before contributing. It covers the stack,
-the conventions, and the product invariants. [docs/roadmap.md](docs/roadmap.md) lists the
-tasks and how they depend on each other.
+the conventions, and the product invariants, and links to each feature's own doc in
+[docs/features/](docs/features/); [docs/README.md](docs/README.md) says where new docs go.
+[docs/roadmap.md](docs/roadmap.md) is the phase overview.
 
 ## Prerequisites
 
@@ -43,24 +44,10 @@ Depop API operations locally (listings on a connection whose mode is `api`), set
 ### Signing in locally
 
 With `AUTH_DRIVER=dev` (the `.env.example` setting), the API signs people in with a one-time
-code that it prints to its log instead of emailing it. The first sign-in of an email creates
-its account.
-
-```sh
-curl -X POST localhost:3000/dev/auth/codes -H 'content-type: application/json' \
-  -d '{"email": "you@example.com"}'
-# The API log shows: dev sign-in code for you@example.com: 123456
-curl -X POST localhost:3000/dev/auth/sessions -H 'content-type: application/json' \
-  -d '{"email": "you@example.com", "code": "123456"}'
-# → {"accessToken": "...", "tokenType": "Bearer", "expiresInSeconds": 86400}
-```
-
-Send the token as `Authorization: Bearer <accessToken>` on every `/v1` request, and an
-`Idempotency-Key` header (a new UUID per action) on every POST.
-
-Staging and production use `AUTH_DRIVER=cognito`, where the app signs in with the Cognito user
-pool (Sign in with Apple or an emailed code). [docs/auth.md](docs/auth.md) covers both drivers,
-the user pool settings, and in-app account deletion (`DELETE /v1/account`).
+code that it prints to its log; [Signing in locally](docs/features/auth.md#signing-in-locally)
+has the two requests. Staging and production use `AUTH_DRIVER=cognito`;
+[docs/features/auth.md](docs/features/auth.md) covers both drivers, the user pool settings,
+and in-app account deletion (`DELETE /v1/account`).
 
 ## Commands
 
@@ -70,8 +57,8 @@ the user pool settings, and in-app account deletion (`DELETE /v1/account`).
 | `npm run format`               | Rewrite files with Prettier                                                                                                                      |
 | `npm run lint`                 | ESLint (type-aware, zero warnings) and shellcheck                                                                                                |
 | `npm run typecheck`            | `tsc --build` over every workspace (type check only; no JS output)                                                                               |
-| `npm run contract:generate`    | Regenerate the TypeScript types and Swift client from `packages/api-contract/openapi.yaml`                                                       |
-| `npm run contract:check`       | Lint the API spec, fail if generated code is stale, and test the Swift client package                                                            |
+| `npm run contract:generate`    | Bundle the API contract (`packages/api-contract/openapi.yaml` and the files it references) and regenerate the TypeScript types and Swift client  |
+| `npm run contract:check`       | Lint the API spec, fail if the bundle or generated code is stale, and test the Swift client package                                              |
 | `npm run infra:synth`          | `cdk synth` of the AWS stacks for every environment, offline with placeholder settings (see `infra/README.md`)                                   |
 | `npm run test:unit`            | Unit tests (`*.test.ts`, no external services)                                                                                                   |
 | `npm run test:integration`     | Integration tests (`*.int.test.ts`) against the local Postgres                                                                                   |
@@ -80,7 +67,7 @@ the user pool settings, and in-app account deletion (`DELETE /v1/account`).
 | `npm run dev:fake-marketplace` | Run the fake marketplace at `FAKE_MARKETPLACE_URL`, for the worker in development                                                                |
 | `npm run dev:fake-ebay`        | Run the fake eBay at `EBAY_FAKE_URL`, which the worker lists on with `EBAY_ENV=fake`                                                             |
 | `npm run dev:fake-depop`       | Run the fake Depop at `DEPOP_FAKE_URL`, which api-connected Depop listings use with `DEPOP_ENV=fake`                                             |
-| `npm run ebay:sandbox-token`   | Sign a sandbox test seller in on eBay and save their refresh token in `.env` (see [eBay sandbox check](#ebay-sandbox-check))                     |
+| `npm run ebay:sandbox-token`   | Sign a sandbox test seller in on eBay and save their refresh token in `.env` (see [the sandbox check](docs/features/ebay.md#sandbox-check))      |
 | `npm run ebay:sandbox-check`   | Run the eBay adapter end to end against eBay's sandbox; fails with what to set when keys are missing                                             |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
 | `npm run admin -- --help`      | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail)                                   |
@@ -105,32 +92,6 @@ The iOS app has its own `make` targets, run from the repository root. The full l
 The cluster listens only on `127.0.0.1`, on port `LISTORA_PG_PORT` (default 55432). Each
 worktree has its own cluster. Give each worktree a different port in its `.env` if more than
 one runs at the same time.
-
-## eBay sandbox check
-
-Everything builds and tests against the fake eBay (`packages/marketplaces/src/ebay/fake`). Once
-the eBay developer keys exist, one command checks the adapter against eBay's real sandbox:
-
-1. On [developer.ebay.com](https://developer.ebay.com) (My Account > Application Keys), take the
-   **sandbox** keyset's App ID and Cert ID. Under User Tokens, add an eBay Redirect URL (RuName)
-   and note its name. Create a sandbox test user
-   ([sandbox user registration](https://developer.ebay.com/sandbox/register)).
-2. Put `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, and `EBAY_RUNAME` in `.env`.
-3. `npm run ebay:sandbox-token`: open the URL it prints, sign in as the sandbox test user, agree,
-   and paste the address of the page eBay shows. It saves `EBAY_USER_REFRESH_TOKEN` in `.env`.
-4. `npm run ebay:sandbox-check`. The check binds the test user to its own connection. To have a
-   sandbox worker list for that user, also set `EBAY_USER_CONNECTION_ID` to the id of the
-   Listora eBay connection (`marketplace_connection` row) it lists for. Listings on any other
-   connection, or on none, get "Connect eBay". Production refuses both keys: there, every
-   eBay connection gets its own token with eBay connect.
-
-The check uses about 15 Trading calls. It tests both OAuth grants, that every category Listora
-maps to is still an eBay leaf, the health check, preparing a listing (item specifics and eBay's
-dry run), and one listing's whole life (create, duplicate protection, read-back, price change,
-end, relist), and it ends every listing it creates. It writes eBay's real size lists for the
-mapped categories to `.local/ebay-sandbox-check.json`, to refresh the fake's fixtures. If eBay
-refuses listings without business policies for the test seller, set the three
-`EBAY_*_POLICY_ID` keys. Without the keys, `npm run check` skips the sandbox test.
 
 ## Repository layout
 
@@ -158,7 +119,7 @@ scripts/                dev-db.sh (local PostgreSQL 18 cluster), container-smoke
                         ios-release.sh (iOS archive and TestFlight upload)
 Dockerfile              Application image: one image runs the API and the worker
 Makefile                iOS commands (make ios-*)
-docs/                   Architecture overview, roadmap, personal environment cost estimate
+docs/                   Architecture overview, roadmap, one doc per feature (docs/features/)
 ```
 
 ## CI
@@ -201,10 +162,10 @@ A new push to a pull request cancels the run it supersedes. Runs on `main` are n
 cancelled, so every merged commit gets a full result. Every job has a `timeout-minutes`
 limit.
 
-Deploys are separate: `.github/workflows/deploy.yml` runs only when started by hand for
-`staging`, `prod`, or `personal` (one reseller's own low-cost setup, priced in
-[docs/costs.md](docs/costs.md)), inside the protected GitHub environment of that name, and reaches AWS
-through OIDC with no stored keys. Setup and the first deploy are described in
+Deploys are separate: `.github/workflows/deploy.yml` runs only when started by hand for `staging`,
+`prod`, or `personal` (one reseller's own low-cost setup, priced in
+[docs/features/costs.md](docs/features/costs.md)), inside the protected GitHub environment of that
+name, and reaches AWS through OIDC with no stored keys. Setup and the first deploy are described in
 [infra/README.md](infra/README.md).
 
 TestFlight uploads are separate too: `.github/workflows/testflight.yml` runs only when started

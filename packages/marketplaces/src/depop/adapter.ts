@@ -1,5 +1,5 @@
 /**
- * The Depop adapter (docs/architecture.md section 4): listings through Depop's Selling API,
+ * The Depop adapter (docs/features/depop.md): listings through Depop's Selling API,
  * which Listora uses once its partner access is granted and a seller connects Depop with OAuth.
  * Until then Depop runs assisted, and `ConnectionAwareAdapter` serves this adapter only to
  * connections whose mode is `api`.

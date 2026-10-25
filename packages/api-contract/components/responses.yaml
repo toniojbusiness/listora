@@ -1,0 +1,62 @@
+DefaultError:
+  description: Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/errors.yaml#/ErrorResponse'
+BadRequest:
+  description: Malformed request, for example an invalid cursor (`invalid_request`).
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/errors.yaml#/ErrorResponse'
+NotFound:
+  description: The resource does not exist in this account (`not_found`).
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/errors.yaml#/ErrorResponse'
+Conflict:
+  description: |
+    The request conflicts with the current state, for example `version_conflict`,
+    `invalid_state_transition`, `already_exists`, or a marketplace that is not connected.
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/errors.yaml#/ErrorResponse'
+ValidationFailed:
+  description: The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/errors.yaml#/ErrorResponse'
+PayloadTooLarge:
+  description: A declared file is larger than allowed (`payload_too_large`).
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/errors.yaml#/ErrorResponse'
+QuotaExceeded:
+  description: The plan's quota for this action is used up (`quota_exceeded`).
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/errors.yaml#/ErrorResponse'
+RateLimited:
+  description: Too many requests or the daily AI budget is reached; see `retryAfterSeconds`.
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/errors.yaml#/ErrorResponse'
+ServiceUnavailable:
+  description: A service the request needs is switched off or down (`service_unavailable`).
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/errors.yaml#/ErrorResponse'
+ListingOperationAccepted:
+  description: The operation was queued. Watch `operation.status` or the listing's `statusDisplay`.
+  content:
+    application/json:
+      schema:
+        $ref: './schemas/listings.yaml#/ListingOperationAccepted'

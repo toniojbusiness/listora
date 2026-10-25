@@ -215,7 +215,7 @@ add that folder's JPEGs, and `LISTORA_RESET_LOCAL_DATA=1` starts with no drafts,
 ### Signing in (Dev)
 
 Uploads need a session. Until the app signs in with Cognito (the API side is in
-[docs/auth.md](../../docs/auth.md)), Dev builds have a developer sign-in in Settings: enter an
+[docs/features/auth.md](../../docs/features/auth.md)), Dev builds have a developer sign-in in Settings: enter an
 email, tap "Send code", and enter the code the API prints to its log (`AUTH_DRIVER=dev`). The
 session is kept in the Keychain. These `/dev/auth` endpoints are outside the OpenAPI contract,
 so `DevSignInClient` is the one place the app calls the API without the generated client.

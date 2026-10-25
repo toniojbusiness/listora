@@ -26,7 +26,7 @@ import { photoSetHash, sha256Hex } from '@listora/shared';
 import { createStorage, type ObjectStorage } from '@listora/storage';
 import { startNodeProcess, type StartedProcess } from '@listora/testing';
 
-import { AI_SPEND_CHECK_TASK } from './ai-spend-check.ts';
+import { AI_SPEND_CHECK_TASK } from './features/ai-spend-check.ts';
 
 const entry = fileURLToPath(new URL('main.ts', import.meta.url));
 const LIFECYCLE = new Set(['worker ready', 'shutting down', 'shutdown complete']);

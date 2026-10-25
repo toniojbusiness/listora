@@ -1,0 +1,85 @@
+/v1/sales:
+  get:
+    tags: [sales]
+    operationId: listSales
+    summary: List sales
+    description: Newest first (by `soldAt`).
+    parameters:
+      - name: itemId
+        in: query
+        description: Only sales whose order contains this item.
+        schema:
+          $ref: '../components/schemas/common.yaml#/Id'
+      - name: status
+        in: query
+        schema:
+          type: array
+          items:
+            $ref: '../components/schemas/sales.yaml#/KnownSaleStatus'
+        style: form
+        explode: true
+      - $ref: '../components/parameters.yaml#/Cursor'
+      - $ref: '../components/parameters.yaml#/Limit'
+    responses:
+      '200':
+        description: A page of sales.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sales.yaml#/SalePage'
+      '400':
+        $ref: '../components/responses.yaml#/BadRequest'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  post:
+    tags: [sales]
+    operationId: createSale
+    summary: Record a sale manually ("Mark sold")
+    description: |
+      For sales Listora did not detect itself. One sale is one order; a bundle lists several
+      items. Starts the same automatic delist run as a detected sale: every other listing
+      of every item in the order gets a delist operation or an urgent assisted task. A
+      sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+      `422 validation_failed` when an item appears twice or a `listingId` does not belong
+      to its item on `marketplace`.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/sales.yaml#/SaleCreate'
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sales.yaml#/Sale'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/sales/{saleId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/SaleId'
+  get:
+    tags: [sales]
+    operationId: getSale
+    summary: Get a sale and its delist run
+    responses:
+      '200':
+        description: The sale.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sales.yaml#/Sale'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

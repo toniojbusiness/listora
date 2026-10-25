@@ -1,0 +1,109 @@
+/v1/tasks:
+  get:
+    tags: [tasks]
+    operationId: listTasks
+    summary: List assisted-mode tasks
+    description: Urgent first, then oldest first.
+    parameters:
+      - name: status
+        in: query
+        schema:
+          type: array
+          items:
+            $ref: '../components/schemas/tasks.yaml#/UserTaskStatus'
+        style: form
+        explode: true
+      - name: itemId
+        in: query
+        schema:
+          $ref: '../components/schemas/common.yaml#/Id'
+      - $ref: '../components/parameters.yaml#/Cursor'
+      - $ref: '../components/parameters.yaml#/Limit'
+    responses:
+      '200':
+        description: A page of tasks.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/tasks.yaml#/UserTaskPage'
+      '400':
+        $ref: '../components/responses.yaml#/BadRequest'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/tasks/{taskId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/TaskId'
+  get:
+    tags: [tasks]
+    operationId: getTask
+    summary: Get a task
+    responses:
+      '200':
+        description: The task.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/tasks.yaml#/UserTask'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/tasks/{taskId}/complete:
+  parameters:
+    - $ref: '../components/parameters.yaml#/TaskId'
+  post:
+    tags: [tasks]
+    operationId: completeTask
+    summary: Confirm that the user did the task
+    description: |
+      The explicit user confirmation that finishes an assisted operation. The linked
+      listing then shows "Done (you confirmed)", never "confirmed by <marketplace>".
+      `409 invalid_state_transition` when the task is not `open`.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/tasks.yaml#/UserTaskCompletion'
+    responses:
+      '200':
+        description: The completed task.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/tasks.yaml#/UserTask'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/tasks/{taskId}/dismiss:
+  parameters:
+    - $ref: '../components/parameters.yaml#/TaskId'
+  post:
+    tags: [tasks]
+    operationId: dismissTask
+    summary: Dismiss a task without doing it
+    description: |
+      Dismissing never counts as doing the work: a linked operation becomes `failed` (with
+      a Retry action), not `succeeded`.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '200':
+        description: The dismissed task.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/tasks.yaml#/UserTask'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

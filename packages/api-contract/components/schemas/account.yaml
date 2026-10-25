@@ -1,0 +1,29 @@
+AccountDeletion:
+  type: object
+  required: [deletedAt, marketplaceAccess]
+  properties:
+    deletedAt:
+      $ref: './common.yaml#/Timestamp'
+    marketplaceAccess:
+      type: array
+      maxItems: 100
+      description: One entry per API marketplace connection the account had; assisted connections hold no access.
+      items:
+        $ref: '#/MarketplaceAccessRevocation'
+MarketplaceAccessRevocation:
+  type: object
+  required: [marketplace, revoked]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    displayName:
+      type: string
+      maxLength: 200
+      description: The seller's name on the marketplace.
+    revoked:
+      type: boolean
+      description: |
+        True only when the marketplace had confirmed, before the deletion, that Listora's
+        access is revoked. False means it is not confirmed, so the user must revoke it
+        manually in the marketplace's settings (Listora also keeps asking the marketplace
+        for up to 7 days when it still holds the connection's tokens).

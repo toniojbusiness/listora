@@ -1,0 +1,153 @@
+/v1/upload-sessions:
+  post:
+    tags: [photos]
+    operationId: createUploadSession
+    summary: Start a photo upload session
+    description: |
+      Returns one pre-signed upload target per file. The client sends each file's bytes
+      with the given method, URL, and headers (directly to object storage; background
+      uploads are fine), then attaches each uploaded file to an item with `addItemPhoto`.
+      Clients resize to at most 2048 px on the long edge, encode JPEG, and strip GPS before
+      uploading. Upload targets expire after 15 minutes (`getUploadSession` returns fresh
+      ones) and the session after 24 hours; files must be attached before it expires.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/photos.yaml#/UploadSessionCreate'
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/photos.yaml#/UploadSession'
+      '413':
+        $ref: '../components/responses.yaml#/PayloadTooLarge'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/upload-sessions/{sessionId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/SessionId'
+  get:
+    tags: [photos]
+    operationId: getUploadSession
+    summary: Get an upload session
+    description: |
+      Used to resume after an app relaunch: shows which files the server already has, and
+      returns fresh upload targets for files still `pending`.
+    responses:
+      '200':
+        description: The session.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/photos.yaml#/UploadSession'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/items/{itemId}/photos:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  post:
+    tags: [photos]
+    operationId: addItemPhoto
+    summary: Attach an uploaded file to an item as a photo
+    description: |
+      The server checks that the file's bytes arrived and match the declared size and
+      SHA-256 (`409 upload_incomplete` if not), then creates the photo in `processing`
+      while it derives the thumbnail, AI, and listing images.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/photos.yaml#/PhotoCreate'
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/photos.yaml#/Photo'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/items/{itemId}/photo-order:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  put:
+    tags: [photos]
+    operationId: reorderItemPhotos
+    summary: Reorder an item's photos
+    description: '`photoIds` must list every photo of the item exactly once; the first is the cover.'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/photos.yaml#/PhotoOrder'
+    responses:
+      '200':
+        description: The photos in their new order.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/photos.yaml#/PhotoList'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/items/{itemId}/photos/{photoId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+    - $ref: '../components/parameters.yaml#/PhotoId'
+  patch:
+    tags: [photos]
+    operationId: updateItemPhoto
+    summary: Change a photo's role
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/photos.yaml#/PhotoUpdate'
+    responses:
+      '200':
+        description: The updated photo.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/photos.yaml#/Photo'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  delete:
+    tags: [photos]
+    operationId: deleteItemPhoto
+    summary: Remove a photo from an item
+    responses:
+      '204':
+        description: Deleted.
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

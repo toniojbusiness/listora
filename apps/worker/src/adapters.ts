@@ -17,7 +17,7 @@ import type { Logger } from '@listora/shared';
 import type { WorkerConfig } from './config.ts';
 
 /**
- * The marketplace adapters this worker runs operations with (docs/architecture.md section 4).
+ * The marketplace adapters this worker runs operations with (docs/features/marketplaces.md).
  *
  * - Poshmark and Mercari are assisted until the browser runner lands (decision D1): every step
  *   is a user task, and only the user's confirmation finishes it. They need no credential.

@@ -79,6 +79,7 @@ describe('fake item_analysis fixtures', () => {
 });
 
 describe('AnalysisEvalProvider', () => {
+  // The whole corpus through the production analysis: seconds of work on a busy machine.
   it('runs the production analysis on every case, scored on the tag facts it reports', async () => {
     const { provider, store } = analysisProvider(directoryFixtures(DEFAULT_FAKE_FIXTURES_DIR));
     const report = await runEval(corpus, { providers: [provider] });
@@ -95,7 +96,7 @@ describe('AnalysisEvalProvider', () => {
     const total = store.events.reduce((sum, event) => sum + event.costMicros, 0);
     expect(system?.costMicrosTotal).toBe(total);
     expect(system?.costMicrosPerItem).toBeGreaterThan(0);
-  });
+  }, 30_000);
 
   it('meters the premium tier at its own prices', async () => {
     const small = { ...corpus, cases: corpus.cases.slice(0, 3) };
