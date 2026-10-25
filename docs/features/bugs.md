@@ -37,6 +37,9 @@ listing prices of $0 or less are refused.
 
 ## Open (follow-ups)
 
+- The batch rapid review (`BatchReviewView`) lists a missing clothing size under "Check these" but
+  still approves without it, to keep one tap per item; such an item gets its size on the item
+  screen before it can be listed.
 - Today has no card for a failed listing change ("Publish failed"); it shows only on the item
   screen.
 - When Today's reload fails or hangs, it keeps the last cards (by design) with no sign that they

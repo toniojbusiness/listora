@@ -109,8 +109,7 @@ public struct AppDependencies {
         self.marketplaces = marketplaces
         linkAccounts = LinkAccountsModel(service: APIMarketplaceSessionService(api: apiClient))
         today = Self.makeToday(apiClient, accessTokens, inventory, sales, marketplaces)
-        signIn = SignInModel(method: Self.signInMethod(configuration, cognito), tokens: accessTokens)
-        accountDeletion = Self.makeAccountDeletion(apiClient, accessTokens)
+        (signIn, accountDeletion) = Self.makeAccount(configuration, cognito, apiClient, accessTokens)
     }
 
     /// The Cognito client of a build with a user pool app client. The Share Extension builds the
@@ -131,14 +130,20 @@ public struct AppDependencies {
         return cognito.map(EmailCodeSignIn.init(client:))
     }
 
-    private static func makeAccountDeletion(_ apiClient: APIClient, _ accessTokens: AccessTokenStore)
-        -> AccountDeletionModel
-    {
-        AccountDeletionModel(
+    /// Settings' account section: signing in, and deleting the account.
+    private static func makeAccount(
+        _ configuration: AppConfiguration,
+        _ cognito: CognitoSignInClient?,
+        _ apiClient: APIClient,
+        _ accessTokens: AccessTokenStore,
+    ) -> (SignInModel, AccountDeletionModel) {
+        let signIn = SignInModel(method: signInMethod(configuration, cognito), tokens: accessTokens)
+        let deletion = AccountDeletionModel(
             service: APIAccountDeletionService(client: apiClient.client),
             isSignedIn: { accessTokens.grant != nil },
             signOut: { accessTokens.signOut() },
         )
+        return (signIn, deletion)
     }
 
     /// The sales screens the item screen opens, from the sales feature.
