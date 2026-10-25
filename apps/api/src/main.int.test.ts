@@ -13,6 +13,9 @@ import {
 
 const entry = fileURLToPath(new URL('main.ts', import.meta.url));
 const DEV_SECRET = 'process-test-secret-at-least-32-characters';
+// A cold start loads the whole app from TypeScript sources. On a loaded machine (the
+// integration project runs browser tests in parallel) it can take more than 10 seconds.
+const START_TIMEOUT_MS = 30_000;
 
 /** Boots the real API process on an ephemeral port and returns its base URL. */
 async function startApi(
@@ -31,6 +34,7 @@ async function startApi(
   });
   const listening = await api.waitForLog(
     (line) => typeof line['msg'] === 'string' && line['msg'].startsWith('Server listening at '),
+    START_TIMEOUT_MS,
   );
   const baseUrl = String(listening['msg']).replace('Server listening at ', '');
   return { api, baseUrl };
@@ -51,7 +55,7 @@ async function signIn(api: StartedProcess, baseUrl: string, email: string): Prom
   return ((await session.json()) as { accessToken: string }).accessToken;
 }
 
-describe('api process (real Postgres)', () => {
+describe('api process (real Postgres)', { timeout: START_TIMEOUT_MS + 20_000 }, () => {
   let scratch: ScratchDatabase;
   let api: StartedProcess | undefined;
 
