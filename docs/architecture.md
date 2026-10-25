@@ -327,9 +327,10 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
   [packages/api-contract/README.md](../packages/api-contract/README.md).
 - CI runs the same fresh-clone path as local development; see the CI section of the
   [README](../README.md#ci). A Linux job builds the application image and smoke-tests it
-  (`scripts/container-smoke.sh`). A macOS job runs `make ios-lint` and `make ios-test`, but
-  only when a file the iOS build reads changed (macOS minutes cost 10 times Linux minutes);
-  the Linux backend check runs on every pull request.
+  (`scripts/container-smoke.sh`) when an image input changed. A macOS job runs
+  `make ios-lint` and `make ios-test`, but only when a file the iOS build reads changed (macOS
+  minutes cost 10 times Linux minutes); the Linux backend check runs on every non-draft pull
+  request.
 
 ## 8. Feature docs
 

@@ -124,16 +124,16 @@ docs/                   Architecture overview, roadmap, one doc per feature (doc
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs the same fresh-clone path as local
-development on every pull request and on every push to `main`. Branch pushes without a pull
-request do not run CI, so one change never runs twice. It has four jobs:
+`.github/workflows/ci.yml` runs on every pull request that is not a draft (marking a draft
+ready for review starts it) and on every push to `main`. Branch pushes without a pull request
+do not run CI, so one commit never runs twice. It has four jobs:
 
-| Job                                              | Runner                   | When it does real work                  |
-| ------------------------------------------------ | ------------------------ | --------------------------------------- |
-| `Detect changed areas`                           | Linux                    | Always; decides whether iOS is affected |
-| `Backend check (Linux)`                          | Linux                    | Always                                  |
-| `Application image build and smoke test (Linux)` | Linux                    | Always                                  |
-| `iOS lint, build and test (macOS)`               | macOS, or Linux as no-op | Only when an iOS input changed          |
+| Job                                              | Runner                   | When it does real work                                      |
+| ------------------------------------------------ | ------------------------ | ----------------------------------------------------------- |
+| `Detect changed areas`                           | Linux                    | Always; decides whether the iOS and image jobs build        |
+| `Backend check (Linux)`                          | Linux                    | Always                                                      |
+| `Application image build and smoke test (Linux)` | Linux                    | Only when an image input changed; otherwise a passing no-op |
+| `iOS lint, build and test (macOS)`               | macOS, or Linux as no-op | Only when an iOS input changed                              |
 
 The backend job installs PostgreSQL 18 from the PGDG apt repository (Swift comes with the
 runner image), then runs `npm ci`, `scripts/dev-db.sh` (with
@@ -142,21 +142,38 @@ the API contract's SwiftPM builds.
 
 The image job runs `scripts/container-smoke.sh`: it builds the application image, runs the
 schema migrations, and starts the API and the worker from it, configured as in AWS, against
-a PostgreSQL container.
+a PostgreSQL container. It builds only when the change touches what decides whether the image
+builds and starts: `Dockerfile`, `.dockerignore`, `.nvmrc`, `.npmrc`, `package.json`,
+`package-lock.json`, any `apps/*/package.json` or `packages/*/package.json`, the entry points
+`apps/api/src/main.ts` and `apps/worker/src/main.ts`, the files they read from the image at
+startup (the feature discovery indexes `apps/api/src/features.ts` and
+`apps/worker/src/features.ts`, and the bundled contract `packages/api-contract/bundled/**`),
+`infra/**`, `scripts/container-smoke.sh`, or `.github/workflows/ci.yml` (the `image` filter in
+the `changes` job).
 
 The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, and SwiftFormat
 from Homebrew, then runs `make ios-lint` and `make ios-test`. It caches the app's SwiftPM
 checkouts but not DerivedData, because a fresh checkout resets the file timestamps Xcode's
-incremental build relies on.
+incremental build relies on. It builds only when the change touches a file the iOS build
+reads: `apps/ios/**`, `packages/api-contract/**` (the OpenAPI spec and the generated
+`ListoraAPI` Swift package), `packages/shared/fixtures/listing-urls.json` (the listing URL
+fixtures the iOS parser is tested against), `Makefile`, or `.github/workflows/ci.yml` (the
+`ios` filter).
 
-**Cost rule.** macOS runner minutes bill at 10 times Linux minutes, so the iOS job builds
-only when the pull request (or the pushed `main` commit) changes a file the iOS build reads:
-`apps/ios/**`, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI`
-Swift package), `packages/shared/fixtures/listing-urls.json` (the listing URL fixtures the iOS
-parser is tested against), `Makefile`, or `.github/workflows/ci.yml`. Otherwise it runs on Linux and
-succeeds in seconds without building, so it still reports a result and can be a required
-check. It fails, rather than passing, when change detection fails. When the iOS build starts
-reading a new file outside these paths, add it to the `ios` filter in the `changes` job.
+**Cost rule.** macOS runner minutes are the expensive ones, so the iOS and image jobs build
+only when one of their inputs changed. Otherwise they succeed in seconds without building, so
+they still report a result and can be required checks; they fail, rather than passing, when
+change detection fails. When either build starts reading a new file, add it to its filter.
+
+Which jobs do real work, by change:
+
+| Change                           | Real work                      |
+| -------------------------------- | ------------------------------ |
+| iOS only (`apps/ios/**`)         | changes, backend, iOS          |
+| Backend only (`apps/api/src/**`) | changes, backend               |
+| Infra (`infra/**`, `Dockerfile`) | changes, backend, image        |
+| Docs only                        | changes, backend               |
+| Draft pull request               | nothing until ready for review |
 
 A new push to a pull request cancels the run it supersedes. Runs on `main` are never
 cancelled, so every merged commit gets a full result. Every job has a `timeout-minutes`

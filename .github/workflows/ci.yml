@@ -1,12 +1,14 @@
 name: CI
 
-# Cost rule: macOS minutes bill at 10x Linux minutes, so the macOS iOS job only does real work
-# when a file the iOS build can read changed (the `ios` filter in the `changes` job). See the CI
-# section of README.md. Pushes run only for `main`; branches are covered by their pull request.
+# Cost rules (the CI section of README.md): the macOS iOS job and the image job only do real
+# work when one of their inputs changed (the filters in the `changes` job). Pushes run only for `main`; branches are covered by
+# their pull request, so one commit never runs twice. Draft pull requests run nothing until
+# they are marked ready for review.
 on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -21,6 +23,7 @@ concurrency:
 jobs:
   changes:
     name: Detect changed areas
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -29,12 +32,17 @@ jobs:
       pull-requests: read
     outputs:
       ios: ${{ steps.filter.outputs.ios }}
+      image: ${{ steps.filter.outputs.image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
-          # Everything the iOS job reads. Keep in sync with the CI section of README.md.
+          # What decides whether the application image builds and starts: the Dockerfile and
+          # its context rules, the dependency manifests, the entry points, the container
+          # configuration in infra/, and the smoke test. Source changes behind the entry points
+          # are covered by the backend check. Keep in sync with the CI section of README.md.
+          # `ios`: everything the iOS job reads.
           filters: |
             ios:
               - 'apps/ios/**'
@@ -42,9 +50,29 @@ jobs:
               - 'packages/shared/fixtures/listing-urls.json'
               - 'Makefile'
               - '.github/workflows/ci.yml'
+            image:
+              - 'Dockerfile'
+              - '.dockerignore'
+              - '.nvmrc'
+              - '.npmrc'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'apps/*/package.json'
+              - 'packages/*/package.json'
+              - 'apps/api/src/main.ts'
+              - 'apps/worker/src/main.ts'
+              # Read from the image's file system at startup: the feature discovery indexes
+              # and the bundled contract the API validates requests with.
+              - 'apps/api/src/features.ts'
+              - 'apps/worker/src/features.ts'
+              - 'packages/api-contract/bundled/**'
+              - 'infra/**'
+              - 'scripts/container-smoke.sh'
+              - '.github/workflows/ci.yml'
 
   backend:
     name: Backend check (Linux)
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
@@ -80,18 +108,37 @@ jobs:
       - run: scripts/dev-db.sh
       - run: npm run check
 
+  # This job always reports a result, so it can be a required check: when no image input
+  # changed it succeeds in seconds without building. It never succeeds when change detection
+  # failed. Skipped (which also satisfies a required check) on a draft pull request.
   image:
     name: Application image build and smoke test (Linux)
+    needs: changes
+    if: ${{ !cancelled() && !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      IMAGE_AFFECTED: ${{ needs.changes.outputs.image }}
     steps:
+      - name: Require a successful change detection
+        if: ${{ needs.changes.result != 'success' }}
+        run: |
+          echo "::error::Change detection ended with '${{ needs.changes.result }}', so the image result is unknown."
+          exit 1
+      - name: Skip the image build (no image input changed)
+        if: ${{ env.IMAGE_AFFECTED != 'true' }}
+        run: echo "No file the application image depends on changed; see the changes job for the filter."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ env.IMAGE_AFFECTED == 'true' }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: ${{ env.IMAGE_AFFECTED == 'true' }}
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
-      - run: scripts/container-smoke.sh
+      - if: ${{ env.IMAGE_AFFECTED == 'true' }}
+        run: npm ci
+      - if: ${{ env.IMAGE_AFFECTED == 'true' }}
+        run: scripts/container-smoke.sh
 
   # This job always reports a result, so it can be a required check: when no iOS input changed
   # it runs on Linux and succeeds in seconds without building. It never succeeds when change
@@ -99,7 +146,7 @@ jobs:
   ios:
     name: iOS lint, build and test (macOS)
     needs: changes
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && !github.event.pull_request.draft }}
     runs-on: ${{ needs.changes.outputs.ios == 'true' && 'macos-26' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     env:
