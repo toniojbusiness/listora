@@ -74,6 +74,8 @@ every step before it only fills in or reads.
 - **A relist is a new item number**, as with the Trading API's relist. The relisted listing keeps
   the photos it had; its other details are the listing's content. A listing still on sale is left
   as it is.
+- A revise fills in every item specific the listing's content has; one the content no longer
+  has stays as it was on eBay.
 - A sold or ended listing cannot be revised. Listora refuses those steps and tells the user to
   relist the item.
 - `listListings` reports each active listing's item number, title, and price. Seller Hub's rows
@@ -205,10 +207,13 @@ listings with pagination. It can inject each failure:
 - a stale read
 - a redesigned page
 
-Three test files cover it:
+Four test files cover it:
 
 - `adapter.conformance.int.test.ts` runs the shared adapter conformance suite.
 - `adapter.int.test.ts` covers the eBay flows and each check.
+- `sale-check.int.test.ts` covers a sale check on real Postgres: a sale on the Sold page is
+  recorded once by its order number and starts the auto-delist, and a connection that switched to
+  the API is no longer checked.
 - `mapping.test.ts` covers the mapping tables, the payload, and how prices and times are read.
 
 `packages/automation/src/adapters.test.ts` covers the routing: automation for a linked session,
