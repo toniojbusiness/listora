@@ -167,9 +167,18 @@ The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, Sw
 and PostgreSQL 18 from Homebrew and Node with `npm ci`, then runs `make ios-lint` and
 `make ios-test`, whose UI tests that go through the backend run against the local stack
 (`packages/e2e`). It caches the app's SwiftPM checkouts but not DerivedData, because a fresh
-checkout resets the file timestamps Xcode's incremental build relies on. Every run, passed or
-failed, uploads the test results (including the UI tests' screenshots) and the stack's API and
-worker logs. It builds only when the change touches a file the iOS build reads:
+checkout resets the file timestamps Xcode's incremental build relies on. Before the tests it
+shuts down every simulator and erases and boots the iPhone 17 one once, waiting until it has
+finished booting. Every run, passed or failed, uploads the test results (`Test.xcresult`,
+including the UI tests' screenshots), the failing-test summary, and the stack's API and worker
+logs, and puts the summary in the job summary, so a failure names its test instead of a bare
+`** TEST FAILED **`.
+
+**Flaky test rule.** `make ios-test` retries a failing test up to twice
+(`-retry-tests-on-failure -test-iterations 3`, locally and in CI). A test that fails every try
+fails the run. A test that passes only on a retry does not block the merge, but it is still
+flaky: the summary lists it under "Flaky", and it gets a follow-up fix (open a task for it in
+the pull request description) rather than being left to retry forever. It builds only when the change touches a file the iOS build reads:
 `apps/ios/**`, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI`
 Swift package), `packages/shared/fixtures/listing-urls.json` (the listing URL fixtures the iOS
 parser is tested against), `packages/e2e/**` (the local stack), `Makefile`, or

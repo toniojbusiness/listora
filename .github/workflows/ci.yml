@@ -149,7 +149,8 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && !github.event.pull_request.draft }}
     runs-on: ${{ needs.changes.outputs.ios == 'true' && 'macos-26' || 'ubuntu-24.04' }}
-    timeout-minutes: 40
+    # Room for a cold build plus up to two retries of a failing test (make ios-test).
+    timeout-minutes: 60
     env:
       IOS_AFFECTED: ${{ needs.changes.outputs.ios }}
       # Pinned to the Xcode used for local development (README prerequisites).
@@ -196,8 +197,24 @@ jobs:
           key: ios-swiftpm-${{ runner.os }}-xcode-26.3-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/*/Package.swift', 'apps/ios/**/Package.resolved') }}
       - if: ${{ env.IOS_AFFECTED == 'true' }}
         run: make ios-lint
+      # One clean boot of the test simulator before the tests: every other simulator is shut
+      # down, the test one is erased and booted, and the tests start only once it has finished
+      # booting, so the first UI test does not race a half-booted device.
+      - name: Boot a clean iPhone 17 simulator
+        if: ${{ env.IOS_AFFECTED == 'true' }}
+        run: |
+          xcrun simctl shutdown all
+          xcrun simctl erase 'iPhone 17'
+          xcrun simctl boot 'iPhone 17'
+          xcrun simctl bootstatus 'iPhone 17' -b
+      # Retries a failing test up to twice. It ends by naming the tests that failed and the ones
+      # that passed only on a retry; the same summary goes into .build/ios/test-summary.txt.
       - if: ${{ env.IOS_AFFECTED == 'true' }}
-        run: make ios-test
+        run: make ios-test IOS_TEST_SUMMARY_FILE=.build/ios/test-summary.txt
+      - name: Show the failing-test summary
+        if: ${{ always() && env.IOS_AFFECTED == 'true' && hashFiles('.build/ios/test-summary.txt') != '' }}
+        run: |
+          { echo '### iOS tests'; echo '```'; cat .build/ios/test-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       # Uploads on success too, so the UI tests' kept screenshots (Review, Cost, Price, Saved)
       # are available as evidence, not only when a run fails.
       - name: Upload test results and screenshots
@@ -208,4 +225,5 @@ jobs:
           path: |
             .build/ios/Test.xcresult
             .build/ios/e2e-logs
+            .build/ios/test-summary.txt
           retention-days: 7
