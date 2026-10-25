@@ -1,8 +1,21 @@
-import { LISTING_STATUSES, MARKETPLACES } from '@listora/db';
+import { LISTING_STATUSES, MARKETPLACES, OPERATION_STATUSES } from '@listora/db';
+import { createMarketplaceAdapters, loadEbayConfig } from '@listora/marketplaces';
 import { describe, expect, it } from 'vitest';
 
-import type { ListingRow } from './repository.ts';
-import { listingStatusDisplay, listingView } from './views.ts';
+import type { ListingRow, OperationRow } from './repository.ts';
+import { actionsForState, listingStatusDisplay, listingView, type ListingState } from './views.ts';
+
+/** The adapters the API runs with when eBay is configured (the fake eBay's hosts). */
+const CONTEXT = {
+  adapters: createMarketplaceAdapters({
+    fakeMarketplaceUrl: undefined,
+    ebay: loadEbayConfig({ EBAY_ENV: 'fake' }),
+    depop: undefined,
+  }),
+};
+
+const view = (listing: ListingRow, operation?: OperationRow) =>
+  listingView({ row: listing, operation }, CONTEXT);
 
 const AT = new Date('2026-10-24T12:00:00.000Z');
 
@@ -23,7 +36,9 @@ function row(overrides: Partial<ListingRow> = {}): ListingRow {
     currency: 'USD',
     price_cents: null,
     category_ref: null,
-    aspects: {},
+    aspects: [],
+    condition: null,
+    hashtags: [],
     listed_at: null,
     ended_at: null,
     last_verified_at: null,
@@ -69,7 +84,7 @@ describe('listing views', () => {
         });
         const display = listingStatusDisplay(listing);
         expect(display.label).not.toMatch(/confirmed by/i);
-        expect(listingView(listing).verification?.method).toBe('user_confirmation');
+        expect(view(listing).verification?.method).toBe('user_confirmation');
         if (display.tone === 'success') {
           expect(display.label).toBe('Active (you confirmed)');
         }
@@ -85,7 +100,7 @@ describe('listing views', () => {
           ...(mode === 'api' ? { connection_id: 'c', connection_mode: 'api' } : {}),
         });
         expect(listingStatusDisplay(listing).tone).not.toBe('success');
-        expect(listingView(listing).verification).toBeUndefined();
+        expect(view(listing).verification).toBeUndefined();
       }
     }
   });
@@ -100,9 +115,9 @@ describe('listing views', () => {
   });
 
   it("shows Listora's variant only for a listing it wrote", () => {
-    expect(listingView(row()).variant).toBeUndefined();
+    expect(view(row()).variant).toBeUndefined();
     expect(
-      listingView(row({ title: 'Levi 501', price_cents: 4500, category_ref: '11483' })).variant,
+      view(row({ title: 'Levi 501', price_cents: 4500, category_ref: '11483' })).variant,
     ).toEqual({
       title: 'Levi 501',
       description: '',
@@ -110,4 +125,103 @@ describe('listing views', () => {
       categoryRef: '11483',
     });
   });
+
+  it("shows the newest operation's truth: in progress, retrying, failed, confirmed", () => {
+    const api = { connection_id: 'c', connection_mode: 'api' as const };
+    expect(
+      view(row({ ...api, status: 'draft' }), operation({ kind: 'create', status: 'queued' }))
+        .statusDisplay,
+    ).toEqual({ tone: 'in_progress', label: 'Publishing...' });
+    expect(
+      view(
+        row({ ...api, status: 'active' }),
+        operation({ kind: 'end', status: 'retrying', attempts: 2, error_message: 'eBay is busy.' }),
+      ).statusDisplay,
+    ).toEqual({ tone: 'in_progress', label: 'Delisting... retry 2 of 6', detail: 'eBay is busy.' });
+    expect(
+      view(
+        row({ ...api, status: 'active' }),
+        operation({
+          kind: 'end',
+          status: 'failed',
+          error_code: 'x',
+          error_message: 'eBay refused it.',
+        }),
+      ).statusDisplay,
+    ).toEqual({ tone: 'failed', label: 'Delist failed - Retry', detail: 'eBay refused it.' });
+    expect(
+      view(
+        row({ ...api, status: 'ended', last_verified_at: AT }),
+        operation({ kind: 'end', status: 'succeeded', success_evidence: 'read_back' }),
+      ).statusDisplay,
+    ).toEqual({ tone: 'success', label: 'Delisted (confirmed by eBay)' });
+  });
+
+  it("offers actions only when no change is unfinished, by the listing's state", () => {
+    const state = (status: ListingRow['status'], op?: Partial<OperationRow>): ListingState => ({
+      row: row({ status }),
+      operation: op === undefined ? undefined : operation(op),
+    });
+    expect(actionsForState(state('draft'))).toEqual(['publish']);
+    // A publish that failed may have been applied: Retry it, never publish twice.
+    expect(actionsForState(state('draft', { kind: 'create', status: 'failed' }))).toEqual([]);
+    expect(actionsForState(state('active'))).toEqual(['change_price', 'revise', 'end', 'verify']);
+    // A failed price change must never keep the seller from delisting.
+    expect(actionsForState(state('active', { kind: 'price', status: 'failed' }))).toContain('end');
+    expect(actionsForState(state('ended'))).toEqual(['relist', 'verify']);
+    for (const status of OPERATION_STATUSES) {
+      const unfinished = !['succeeded', 'failed', 'canceled'].includes(status);
+      const actions = actionsForState(state('active', { kind: 'end', status }));
+      expect(actions.length === 0, status).toBe(unfinished);
+    }
+  });
+
+  it('offers API actions under an API connection, and none for an assisted listing yet', () => {
+    const ebay = view(row({ status: 'active', connection_id: 'c', connection_mode: 'api' }));
+    expect(ebay.availableActions).toEqual([
+      { action: 'change_price', mode: 'api' },
+      { action: 'revise', mode: 'api' },
+      { action: 'end', mode: 'api' },
+      { action: 'verify', mode: 'api' },
+    ]);
+    expect(view(row({ marketplace: 'poshmark', status: 'active' })).availableActions).toEqual([]);
+  });
+
+  it('includes the newest operation with its own label', () => {
+    const listing = view(
+      row({ connection_id: 'c', connection_mode: 'api', status: 'active', last_verified_at: AT }),
+      operation({ kind: 'create', status: 'succeeded', success_evidence: 'read_back' }),
+    );
+    expect(listing.latestOperation).toMatchObject({
+      kind: 'create',
+      status: 'succeeded',
+      statusDisplay: { tone: 'success', label: 'Published (confirmed by eBay)' },
+      verification: { method: 'marketplace_api' },
+      attempt: 1,
+      maxAttempts: 7,
+    });
+  });
 });
+
+function operation(overrides: Partial<OperationRow> = {}): OperationRow {
+  return {
+    id: '0199f0b4-0000-7000-8000-0000000000cc',
+    account_id: '0199f0b4-0000-7000-8000-0000000000aa',
+    listing_id: '0199f0b4-0000-7000-8000-000000000001',
+    kind: 'create',
+    idempotency_key: 'k',
+    desired: { status: 'active' },
+    status: 'queued',
+    success_evidence: null,
+    attempts: 1,
+    next_attempt_at: null,
+    error_code: null,
+    error_message: null,
+    origin: 'user',
+    delist_run_id: null,
+    created_at: AT,
+    updated_at: AT,
+    content: null,
+    ...overrides,
+  };
+}

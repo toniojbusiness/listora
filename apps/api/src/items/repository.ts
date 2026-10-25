@@ -11,6 +11,7 @@ import {
   type InventoryItem,
   type JsonObject,
   type ListingStatus,
+  type Marketplace,
   type PreArchiveItemStatus,
 } from '@listora/db';
 import { sql } from 'kysely';
@@ -72,6 +73,10 @@ export async function findItemBySku(
 export interface ItemListFilter {
   statuses: readonly ItemStatus[] | undefined;
   search: string | undefined;
+  /** Only items with a listing on it that is not ended or sold. */
+  marketplace: Marketplace | undefined;
+  /** Only items of this brand, ignoring case. */
+  brand: string | undefined;
   /** Return only items older than this one (keyset pagination). */
   beforeId: string | undefined;
   limit: number;
@@ -102,6 +107,23 @@ export async function listItemRows(
         eb('brand', 'ilike', pattern),
         sql<boolean>`exists (select 1 from unnest(${eb.ref('keywords')}) as keyword where keyword ilike ${pattern})`,
       ]),
+    );
+  }
+  if (filter.brand !== undefined && filter.brand !== '') {
+    query = query.where(sql<string>`lower(brand)`, '=', filter.brand.toLowerCase());
+  }
+  const { marketplace } = filter;
+  if (marketplace !== undefined) {
+    query = query.where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom('marketplace_listing as listing')
+          .select('listing.id')
+          .whereRef('listing.account_id', '=', 'inventory_item.account_id')
+          .whereRef('listing.item_id', '=', 'inventory_item.id')
+          .where('listing.marketplace', '=', marketplace)
+          .where('listing.status', 'not in', ['ended', 'sold']),
+      ),
     );
   }
   if (filter.beforeId !== undefined) query = query.where('id', '<', filter.beforeId);

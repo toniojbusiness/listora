@@ -1,0 +1,297 @@
+import DesignSystem
+import ListoraAPI
+import SwiftUI
+
+/// One item: photos, details, cost and profit, storage location, and its marketplaces, each with
+/// the listing's status exactly as the server words it, its actions, and its history. While a
+/// change runs the screen keeps reading the server, so the status follows the operation engine.
+struct ItemDetailView: View {
+    private let environment: InventoryEnvironment
+    @State private var model: ItemDetailModel
+    @State private var listingFlow: ListingFlowModel?
+    @State private var priceChange: PriceChange?
+    @State private var ending: MarketplaceRowState?
+
+    init(environment: InventoryEnvironment, itemID: String) {
+        self.environment = environment
+        _model = State(initialValue: environment.makeDetailModel(itemID: itemID))
+    }
+
+    var body: some View {
+        content
+            .background(Palette.background)
+            .navigationTitle(model.item?.sku ?? "Item")
+            .navigationBarTitleDisplayMode(.inline)
+            .task {
+                await model.load()
+                await model.followChanges()
+            }
+            .refreshable { await model.load() }
+            .sheet(
+                item: $listingFlow,
+                onDismiss: { Task { await model.refresh() } },
+                content: { flow in ListingFlowView(model: flow) { listingFlow = nil } },
+            )
+            .sheet(item: $priceChange) { change in
+                PriceChangeView(change: change) { price in
+                    priceChange = nil
+                    Task {
+                        await model.perform(
+                            .changePrice(listingID: change.listingID, price: price),
+                            marketplace: change.marketplace,
+                        )
+                    }
+                }
+            }
+            .confirmationDialog(
+                "End the \(ending?.name ?? "") listing?",
+                isPresented: Binding(get: { ending != nil }, set: {
+                    if !$0 {
+                        ending = nil
+                    }
+                }),
+                titleVisibility: .visible,
+                presenting: ending,
+            ) { row in
+                ForEach(EndReason.allCases) { reason in
+                    Button(reason.title, role: .destructive) { end(row, reason: reason) }
+                        .accessibilityIdentifier("end.\(reason.rawValue)")
+                }
+                Button("Keep it listed", role: .cancel) {}
+            } message: { row in
+                Text("Listora ends it on \(row.name) and shows it as delisted once \(row.name) confirms.")
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch model.phase {
+        case .loading where model.item == nil:
+            ProgressView("Loading item")
+                .foregroundStyle(Palette.textSecondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case let .failed(message) where model.item == nil:
+            EmptyStateView(
+                systemImage: "exclamationmark.triangle",
+                title: "Item unavailable",
+                message: message,
+                action: .init("Try again") { Task { await model.load() } },
+            )
+        default:
+            if let item = model.item {
+                details(of: item)
+            }
+        }
+    }
+
+    private func details(of item: Item) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                PhotoCarousel(photos: item.photos)
+                ItemHeader(item: item)
+                if let notice = model.notice {
+                    NoticeBanner(message: notice) { model.notice = nil }
+                }
+                MarketplacesSection(
+                    rows: model.rows,
+                    histories: model.histories,
+                    events: model.events,
+                    busyMarketplace: model.busyMarketplace,
+                    perform: perform,
+                    loadEvents: { id in await model.loadEvents(operationID: id) },
+                )
+                MoneySection(item: item)
+                DetailsSection(item: item)
+            }
+            .padding(Spacing.md)
+        }
+    }
+
+    private func perform(_ action: MarketplaceRowState.Action, on row: MarketplaceRowState) {
+        switch action {
+        case .list:
+            guard let item = model.item else { return }
+            listingFlow = environment.makeListingFlow(item: item)
+        case .changePrice:
+            guard let listing = row.listing else { return }
+            priceChange = PriceChange(
+                listingID: listing.id,
+                marketplace: row.id,
+                name: row.name,
+                current: listing.variant?.price,
+            )
+        case .end:
+            ending = row
+        case .relist:
+            guard let listing = row.listing else { return }
+            Task { await model.perform(.relist(listingID: listing.id), marketplace: row.id) }
+        case .check:
+            guard let listing = row.listing else { return }
+            Task { await model.perform(.verify(listingID: listing.id), marketplace: row.id) }
+        case let .retry(operationID):
+            Task { await model.retry(operationID: operationID, marketplace: row.id) }
+        }
+    }
+
+    private func end(_ row: MarketplaceRowState, reason: EndReason) {
+        ending = nil
+        guard let listing = row.listing else { return }
+        Task { await model.perform(.end(listingID: listing.id, reason: reason.contract), marketplace: row.id) }
+    }
+}
+
+/// Why the seller ends a listing.
+enum EndReason: String, CaseIterable, Identifiable {
+    case soldElsewhere
+    case notAvailable
+
+    var id: Self {
+        self
+    }
+
+    var title: String {
+        switch self {
+        case .soldElsewhere: "End: sold elsewhere"
+        case .notAvailable: "End: no longer available"
+        }
+    }
+
+    var contract: Components.Schemas.ListingEndReason {
+        switch self {
+        case .soldElsewhere: .soldElsewhere
+        case .notAvailable: .notAvailable
+        }
+    }
+}
+
+/// Title, SKU, status, and list price.
+private struct ItemHeader: View {
+    let item: Item
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Text(item.details.title ?? "Untitled item")
+                .font(Typography.title)
+                .foregroundStyle(Palette.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("item.title")
+            HStack(spacing: Spacing.sm) {
+                Text(item.sku)
+                    .font(Typography.callout.monospacedDigit())
+                    .foregroundStyle(Palette.textSecondary)
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("item.sku")
+                Text(item.status.label)
+                    .font(Typography.callout.weight(.semibold))
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("item.status")
+                Spacer(minLength: 0)
+                if let price = item.details.listPrice {
+                    Text(Formatting.money(price))
+                        .font(Typography.price)
+                        .foregroundStyle(Palette.brand)
+                        .accessibilityLabel("List price \(Formatting.money(price))")
+                }
+            }
+        }
+    }
+}
+
+/// List price, cost, and profit: the sale's profit once sold, before that an estimate before
+/// marketplace fees, labeled as such.
+private struct MoneySection: View {
+    let item: Item
+
+    var body: some View {
+        SectionCard(title: "Cost and profit") {
+            LabeledRow("List price", value: item.details.listPrice.map(Formatting.money) ?? "Not set")
+            LabeledRow("Cost", value: item.details.cost.map(Formatting.money) ?? "Not set")
+                .accessibilityIdentifier("item.cost")
+            if let profit = item.saleSummary?.profit {
+                LabeledRow("Profit", value: Formatting.money(profit))
+                    .accessibilityIdentifier("item.profit")
+            } else if let price = item.details.listPrice, let cost = item.details.cost {
+                LabeledRow(
+                    "Profit at list price",
+                    value: Formatting.money(cents: price.amountCents - cost.amountCents),
+                    note: "Before marketplace fees and shipping",
+                )
+                .accessibilityIdentifier("item.profit")
+            }
+            if let source = item.details.purchaseSource {
+                LabeledRow("Bought at", value: source)
+            }
+        }
+    }
+}
+
+/// The item's details and where it is kept.
+private struct DetailsSection: View {
+    let item: Item
+
+    var body: some View {
+        SectionCard(title: "Details") {
+            LabeledRow(
+                "Storage location",
+                value: item.storageLocation.map { "\($0.label) (\($0.code))" } ?? "Not set",
+            )
+            .accessibilityIdentifier("item.storage")
+            if let brand = item.details.brand {
+                LabeledRow("Brand", value: brand)
+            }
+            if let size = item.details.sizeLabel {
+                LabeledRow("Size", value: size)
+            }
+            if let condition = item.details.condition {
+                LabeledRow("Condition", value: condition.label)
+            }
+            if let colors = item.details.colors, !colors.isEmpty {
+                LabeledRow("Colors", value: colors.map(\.capitalized).joined(separator: ", "))
+            }
+            if let materials = item.details.materials, !materials.isEmpty {
+                LabeledRow("Materials", value: materials.joined(separator: ", "))
+            }
+            if let description = item.details.description, !description.isEmpty {
+                Text(description)
+                    .font(Typography.body)
+                    .foregroundStyle(Palette.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, Spacing.xxs)
+            }
+        }
+    }
+}
+
+extension Components.Schemas.ItemCondition {
+    var label: String {
+        switch self {
+        case .newWithTags: "New with tags"
+        case .newWithoutTags: "New without tags"
+        case .newWithDefects: "New with defects"
+        case .preOwnedExcellent: "Pre-owned, excellent"
+        case .preOwnedGood: "Pre-owned, good"
+        case .preOwnedFair: "Pre-owned, fair"
+        }
+    }
+}
+
+/// The item's photos, swipeable, cover first.
+private struct PhotoCarousel: View {
+    let photos: [Components.Schemas.Photo]
+
+    var body: some View {
+        if photos.isEmpty {
+            PhotoView(url: nil, cornerRadius: Radius.large)
+                .frame(height: 200)
+        } else {
+            TabView {
+                ForEach(photos, id: \.id) { photo in
+                    PhotoView(url: photo.urls?.listing ?? photo.urls?.thumbnail, cornerRadius: Radius.large)
+                        .accessibilityLabel("Photo \(photo.position + 1) of \(photos.count)")
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: photos.count > 1 ? .automatic : .never))
+            .frame(height: 240)
+        }
+    }
+}

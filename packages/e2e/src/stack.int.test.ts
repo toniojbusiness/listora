@@ -32,8 +32,36 @@ describe('local e2e stack (real Postgres)', () => {
     const anonymous = await fetch(`${stack.apiUrl}/v1/usage`);
     expect(anonymous.status).toBe(401);
 
+    // eBay is connected, through the fake eBay's consent page.
+    const auth = { authorization: `Bearer ${stack.accessToken}` };
+    const ebay = await fetch(`${stack.apiUrl}/v1/connections/ebay`, { headers: auth });
+    expect(await ebay.json()).toMatchObject({ mode: 'api', status: 'connected' });
+
+    // The control endpoint seeds a ready item and injects eBay faults.
+    const seeded = await fetch(`${stack.controlUrl}/items`, { method: 'POST' });
+    expect(seeded.status).toBe(201);
+    const { id, sku } = (await seeded.json()) as { id: string; sku: string };
+    expect(sku).toMatch(/^[A-Z0-9]+-\d{6}$/);
+    const item = await fetch(`${stack.apiUrl}/v1/items/${id}`, { headers: auth });
+    expect(await item.json()).toMatchObject({
+      status: 'ready',
+      photos: [{ status: 'ready' }, { status: 'ready' }],
+    });
+    const fault = await fetch(`${stack.controlUrl}/ebay/faults`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'end', fault: { type: 'reject' } }),
+    });
+    expect(fault.status).toBe(204);
+    const refused = await fetch(`${stack.controlUrl}/ebay/faults`, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'end', fault: { type: 'hang' } }),
+    });
+    expect(refused.status).toBe(422);
+    expect((await fetch(`${stack.controlUrl}/ebay/faults`, { method: 'DELETE' })).status).toBe(204);
+
     await stack.stop();
     await expect(fetch(`${stack.apiUrl}/health/live`)).rejects.toThrow();
+    await expect(fetch(`${stack.controlUrl}/items`, { method: 'POST' })).rejects.toThrow();
     const apiLog = await readFile(join(dir, 'logs', 'api.log'), 'utf8');
     expect(apiLog).toContain('Server listening at');
     const workerLog = await readFile(join(dir, 'logs', 'worker.log'), 'utf8');
@@ -42,14 +70,21 @@ describe('local e2e stack (real Postgres)', () => {
 
   it("hands its settings to xcodebuild's test runner too", () => {
     expect(
-      stackEnvironment({ apiUrl: 'http://127.0.0.1:5', accessToken: 'token', email: 'a@b.c' }),
+      stackEnvironment({
+        apiUrl: 'http://127.0.0.1:5',
+        accessToken: 'token',
+        email: 'a@b.c',
+        controlUrl: 'http://127.0.0.1:6',
+      }),
     ).toEqual({
       LISTORA_E2E_API_BASE_URL: 'http://127.0.0.1:5',
       LISTORA_E2E_ACCESS_TOKEN: 'token',
       LISTORA_E2E_EMAIL: 'a@b.c',
+      LISTORA_E2E_CONTROL_URL: 'http://127.0.0.1:6',
       TEST_RUNNER_LISTORA_E2E_API_BASE_URL: 'http://127.0.0.1:5',
       TEST_RUNNER_LISTORA_E2E_ACCESS_TOKEN: 'token',
       TEST_RUNNER_LISTORA_E2E_EMAIL: 'a@b.c',
+      TEST_RUNNER_LISTORA_E2E_CONTROL_URL: 'http://127.0.0.1:6',
     });
   });
 });

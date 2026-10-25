@@ -2,7 +2,16 @@
  * Marketplace listing queries. Like every repository, each function takes the request's
  * `Tenant` and filters on its account.
  */
-import type { DbExecutor, DbTransaction, Marketplace, MarketplaceListingTable } from '@listora/db';
+import type { ListingVariant } from '@listora/api-contract';
+import {
+  jsonb,
+  type DbExecutor,
+  type DbTransaction,
+  type ListingStatus,
+  type Marketplace,
+  type MarketplaceListingTable,
+  type MarketplaceOperationTable,
+} from '@listora/db';
 import { sql, type Selectable } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
@@ -11,6 +20,8 @@ import type { Tenant } from '../tenancy.ts';
 export type ListingRow = Selectable<MarketplaceListingTable> & {
   connection_mode: 'api' | 'assisted' | null;
 };
+
+export type OperationRow = Selectable<MarketplaceOperationTable>;
 
 function listingQuery(db: DbExecutor, tenant: Tenant) {
   return db
@@ -145,4 +156,173 @@ export async function insertLinkedListing(
   const row = await findListing(trx, tenant, id);
   if (!row) throw new Error(`listing ${id} vanished inside its own transaction`);
   return row;
+}
+
+/**
+ * Each listing's newest operation that was not canceled (a canceled one never reached the
+ * marketplace, so the one before it still speaks for the listing), keyed by listing id.
+ */
+export async function latestOperations(
+  db: DbExecutor,
+  tenant: Tenant,
+  listingIds: readonly string[],
+): Promise<Map<string, OperationRow>> {
+  const byListing = new Map<string, OperationRow>();
+  if (listingIds.length === 0) return byListing;
+  const rows = await db
+    .selectFrom('marketplace_operation')
+    .selectAll()
+    .distinctOn('listing_id')
+    .where('account_id', '=', tenant.accountId)
+    .where('listing_id', 'in', listingIds)
+    .where('status', '<>', 'canceled')
+    .orderBy('listing_id')
+    .orderBy('created_at', 'desc')
+    .orderBy('id', 'desc')
+    .execute();
+  for (const row of rows) byListing.set(row.listing_id, row);
+  return byListing;
+}
+
+/** Whether any operation was ever queued for the listing (canceled ones included). */
+export async function hasOperations(
+  db: DbExecutor,
+  tenant: Tenant,
+  listingId: string,
+): Promise<boolean> {
+  const row = await db
+    .selectFrom('marketplace_operation')
+    .select('id')
+    .where('account_id', '=', tenant.accountId)
+    .where('listing_id', '=', listingId)
+    .where('status', '<>', 'canceled')
+    .limit(1)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
+/**
+ * Row-locks the listing until the transaction ends, so two actions on one listing are decided
+ * one after the other; then reads it with its connection's mode.
+ */
+export async function lockListing(
+  trx: DbTransaction,
+  tenant: Tenant,
+  listingId: string,
+): Promise<ListingRow | undefined> {
+  const locked = await trx
+    .selectFrom('marketplace_listing')
+    .select('id')
+    .where('account_id', '=', tenant.accountId)
+    .where('id', '=', listingId)
+    .forUpdate()
+    .executeTakeFirst();
+  return locked === undefined ? undefined : findListing(trx, tenant, locked.id);
+}
+
+/** The listing columns of a variant (the contract's `ListingVariant`). */
+export function variantColumns(variant: ListingVariant) {
+  return {
+    title: variant.title,
+    description: variant.description,
+    price_cents: variant.price.amountCents,
+    currency: variant.price.currency,
+    category_ref: variant.categoryRef ?? null,
+    condition: variant.condition ?? null,
+    aspects: jsonb(variant.aspects ?? []),
+    hashtags: variant.hashtags ?? [],
+  };
+}
+
+/** A new `draft` listing: Listora's variant, nothing sent to the marketplace yet. */
+export async function insertDraftListing(
+  trx: DbTransaction,
+  tenant: Tenant,
+  input: {
+    itemId: string;
+    marketplace: Marketplace;
+    connectionId: string | null;
+    variant: ListingVariant;
+  },
+): Promise<ListingRow> {
+  const { id } = await trx
+    .insertInto('marketplace_listing')
+    .values({
+      account_id: tenant.accountId,
+      item_id: input.itemId,
+      marketplace: input.marketplace,
+      connection_id: input.connectionId,
+      status: 'draft',
+      ...variantColumns(input.variant),
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+  const row = await findListing(trx, tenant, id);
+  if (!row) throw new Error(`listing ${id} vanished inside its own transaction`);
+  return row;
+}
+
+/**
+ * Replaces the listing's variant, Listora's version of it, and counts the change in
+ * `desired_version`. On a live listing it is what the queued operation asks for; the
+ * marketplace's own state is in `remote_snapshot` until a read-back confirms it.
+ */
+export async function updateVariant(
+  trx: DbTransaction,
+  tenant: Tenant,
+  listingId: string,
+  variant: ListingVariant,
+): Promise<ListingRow> {
+  await trx
+    .updateTable('marketplace_listing')
+    .set({ ...variantColumns(variant), desired_version: sql<number>`desired_version + 1` })
+    .where('account_id', '=', tenant.accountId)
+    .where('id', '=', listingId)
+    .execute();
+  const row = await findListing(trx, tenant, listingId);
+  if (!row) throw new Error(`listing ${listingId} vanished inside its own transaction`);
+  return row;
+}
+
+/** Changes only the variant's price (a price change), counted in `desired_version`. */
+export async function updateVariantPrice(
+  trx: DbTransaction,
+  tenant: Tenant,
+  listingId: string,
+  priceCents: number,
+): Promise<void> {
+  await trx
+    .updateTable('marketplace_listing')
+    .set({ price_cents: priceCents, desired_version: sql<number>`desired_version + 1` })
+    .where('account_id', '=', tenant.accountId)
+    .where('id', '=', listingId)
+    .execute();
+}
+
+export interface ListingListFilter {
+  marketplace: Marketplace | undefined;
+  statuses: readonly ListingStatus[] | undefined;
+  /** Return only listings older than this one (keyset pagination). */
+  beforeId: string | undefined;
+  limit: number;
+}
+
+/** Newest first, up to `limit + 1` rows so the caller can tell whether another page exists. */
+export async function listListingRows(
+  db: DbExecutor,
+  tenant: Tenant,
+  filter: ListingListFilter,
+): Promise<ListingRow[]> {
+  let query = listingQuery(db, tenant);
+  if (filter.marketplace !== undefined) {
+    query = query.where('listing.marketplace', '=', filter.marketplace);
+  }
+  if (filter.statuses && filter.statuses.length > 0) {
+    query = query.where('listing.status', 'in', filter.statuses);
+  }
+  if (filter.beforeId !== undefined) query = query.where('listing.id', '<', filter.beforeId);
+  return query
+    .orderBy('listing.id', 'desc')
+    .limit(filter.limit + 1)
+    .execute();
 }

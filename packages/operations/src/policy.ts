@@ -29,6 +29,19 @@ export const DEFAULT_RETRY_POLICY: RetryPolicy = {
   random: Math.random,
 };
 
+/**
+ * The default schedule with every delay multiplied by `scale` (0 < scale <= 1), keeping the
+ * number of attempts. Only local stacks and tests shorten it (`OPERATION_RETRY_DELAY_SCALE`),
+ * so an eBay confirmation, which needs two matching reads one delay apart, takes seconds there.
+ */
+export function scaledRetryPolicy(scale: number): RetryPolicy {
+  if (!(scale > 0 && scale <= 1)) throw new RangeError('the retry delay scale must be in (0, 1]');
+  return {
+    ...DEFAULT_RETRY_POLICY,
+    delaysMs: DEFAULT_RETRY_POLICY.delaysMs.map((delay) => Math.round(delay * scale)),
+  };
+}
+
 /** Attempts an operation gets before it fails (7 with the default schedule). */
 export function maxAttempts(policy: RetryPolicy): number {
   return policy.delaysMs.length + 1;
