@@ -4,12 +4,15 @@ import SwiftUI
 
 /// The Sales tab: recent sales, newest first, with what each one sold for and its profit. The
 /// list is read from the server each time it appears and on pull to refresh.
-public struct SalesView: View {
+public struct SalesView<Settings: View>: View {
     private let environment: SalesEnvironment
+    private let settings: Settings
     @State private var model: SalesListModel
 
-    public init(environment: SalesEnvironment) {
+    /// `settings` is the header's button that opens Settings.
+    public init(environment: SalesEnvironment, @ViewBuilder settings: () -> Settings) {
         self.environment = environment
+        self.settings = settings()
         _model = State(initialValue: environment.makeListModel())
     }
 
@@ -18,6 +21,7 @@ public struct SalesView: View {
             content
                 .background(Palette.background)
                 .navigationTitle("Sales")
+                .toolbar { ToolbarItem(placement: .topBarTrailing) { settings } }
                 .navigationDestination(for: SaleRoute.self) { route in
                     SaleDetailView(environment: environment, saleID: route.saleID)
                 }

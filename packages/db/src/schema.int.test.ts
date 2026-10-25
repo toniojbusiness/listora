@@ -486,6 +486,15 @@ const COLUMNS = {
     'created_at',
     'updated_at',
   ],
+  today_summary_setting: [
+    'account_id',
+    'enabled',
+    'local_time',
+    'time_zone',
+    'last_sent_on',
+    'created_at',
+    'updated_at',
+  ],
 } as const satisfies { [Table in keyof Database]: readonly (keyof Database[Table])[] };
 
 type MissingColumns = {

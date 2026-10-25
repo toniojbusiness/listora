@@ -578,6 +578,34 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/tasks/{taskId}/dismiss`.
     /// - Remark: Generated from `#/paths//v1/tasks/{taskId}/dismiss/post(dismissTask)`.
     func dismissTask(_ input: Operations.DismissTask.Input) async throws -> Operations.DismissTask.Output
+    /// Get what needs the seller today
+    ///
+    /// The Today screen: one card per thing that needs the seller (items to ship, delists that
+    /// are not done, connections to reconnect, drafts to review, and old listings that could use
+    /// a price drop or a relist), most urgent first, and the money summary. Computed from the
+    /// account's own data on every request, with no AI and no marketplace call, so the app asks
+    /// for it each time it opens. A card is gone once its work is done.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/today`.
+    /// - Remark: Generated from `#/paths//v1/today/get(getToday)`.
+    func getToday(_ input: Operations.GetToday.Input) async throws -> Operations.GetToday.Output
+    /// Get the morning summary setting
+    ///
+    /// The account's morning summary notification setting (defaults until saved).
+    ///
+    /// - Remark: HTTP `GET /v1/today/settings`.
+    /// - Remark: Generated from `#/paths//v1/today/settings/get(getTodaySettings)`.
+    func getTodaySettings(_ input: Operations.GetTodaySettings.Input) async throws -> Operations.GetTodaySettings.Output
+    /// Replace the morning summary setting
+    ///
+    /// Turns the morning summary on or off and sets its time, in the device's time zone. A time
+    /// zone the server does not know is `422 validation_failed`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/today/settings`.
+    /// - Remark: Generated from `#/paths//v1/today/settings/put(replaceTodaySettings)`.
+    func replaceTodaySettings(_ input: Operations.ReplaceTodaySettings.Input) async throws -> Operations.ReplaceTodaySettings.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -1621,6 +1649,46 @@ extension APIProtocol {
         try await dismissTask(Operations.DismissTask.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Get what needs the seller today
+    ///
+    /// The Today screen: one card per thing that needs the seller (items to ship, delists that
+    /// are not done, connections to reconnect, drafts to review, and old listings that could use
+    /// a price drop or a relist), most urgent first, and the money summary. Computed from the
+    /// account's own data on every request, with no AI and no marketplace call, so the app asks
+    /// for it each time it opens. A card is gone once its work is done.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/today`.
+    /// - Remark: Generated from `#/paths//v1/today/get(getToday)`.
+    public func getToday(headers: Operations.GetToday.Input.Headers = .init()) async throws -> Operations.GetToday.Output {
+        try await getToday(Operations.GetToday.Input(headers: headers))
+    }
+    /// Get the morning summary setting
+    ///
+    /// The account's morning summary notification setting (defaults until saved).
+    ///
+    /// - Remark: HTTP `GET /v1/today/settings`.
+    /// - Remark: Generated from `#/paths//v1/today/settings/get(getTodaySettings)`.
+    public func getTodaySettings(headers: Operations.GetTodaySettings.Input.Headers = .init()) async throws -> Operations.GetTodaySettings.Output {
+        try await getTodaySettings(Operations.GetTodaySettings.Input(headers: headers))
+    }
+    /// Replace the morning summary setting
+    ///
+    /// Turns the morning summary on or off and sets its time, in the device's time zone. A time
+    /// zone the server does not know is `422 validation_failed`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/today/settings`.
+    /// - Remark: Generated from `#/paths//v1/today/settings/put(replaceTodaySettings)`.
+    public func replaceTodaySettings(
+        headers: Operations.ReplaceTodaySettings.Input.Headers = .init(),
+        body: Operations.ReplaceTodaySettings.Input.Body
+    ) async throws -> Operations.ReplaceTodaySettings.Output {
+        try await replaceTodaySettings(Operations.ReplaceTodaySettings.Input(
+            headers: headers,
+            body: body
         ))
     }
 }

@@ -18,6 +18,7 @@
     { "path": "packages/push" },
     { "path": "packages/auto-delist" },
     { "path": "packages/sales" },
+    { "path": "packages/today" },
     { "path": "packages/automation" },
     { "path": "packages/tag-parse" },
     { "path": "packages/analysis" },

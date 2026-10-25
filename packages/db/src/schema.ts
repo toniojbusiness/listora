@@ -747,6 +747,22 @@ export interface SaleCheckScheduleTable {
   updated_at: UpdatedAt;
 }
 
+// Today ---------------------------------------------------------------------------------------
+
+/** The morning summary notification's setting, one per account (docs/features/today.md). */
+export interface TodaySummarySettingTable {
+  account_id: string;
+  enabled: Generated<boolean>;
+  /** Wall-clock time in `time_zone`, as `HH:MM:SS` (whole minutes). */
+  local_time: ColumnType<string, string | undefined, string>;
+  /** An IANA time zone name; the summary is never sent without one. */
+  time_zone: Nullable<string>;
+  /** The local date of the latest summary sent. */
+  last_sent_on: Nullable<DateString>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 /** Every table and view in the schema, keyed by name. */
 export interface Database {
   account: AccountTable;
@@ -788,4 +804,5 @@ export interface Database {
   account_deletion_grant: AccountDeletionGrantTable;
   automation_run: AutomationRunTable;
   sale_check_schedule: SaleCheckScheduleTable;
+  today_summary_setting: TodaySummarySettingTable;
 }

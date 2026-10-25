@@ -24,6 +24,7 @@
     "@listora/sales": "*",
     "@listora/shared": "*",
     "@listora/storage": "*",
+    "@listora/today": "*",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "fastify": "^5.12.7",

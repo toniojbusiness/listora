@@ -44,6 +44,13 @@ struct E2EStack {
         return try JSONDecoder().decode(SeededItem.self, from: data)
     }
 
+    /// A ready item, kept in bin B-12, that sold on eBay and ships by tomorrow
+    /// (`POST /today/sold-item`): a Today ship card.
+    func seedSoldItem() async throws -> SoldItem {
+        let data = try await control("today/sold-item", method: "POST", body: [:])
+        return try JSONDecoder().decode(SoldItem.self, from: data)
+    }
+
     /// Makes the fake eBay fail the next matching request (`POST /ebay/faults`).
     func injectEbayFault(action: String, type: String, message: String? = nil) async throws {
         var fault: [String: Any] = ["type": type]
@@ -79,6 +86,13 @@ struct E2EStack {
 struct SeededItem: Decodable {
     let id: String
     let sku: String
+}
+
+struct SoldItem: Decodable {
+    let id: String
+    let sku: String
+    let saleId: String
+    let saleItemId: String
 }
 
 /// The parts of the contract's `Item` the test checks.

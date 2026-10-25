@@ -8,6 +8,7 @@ let package = Package(
     platforms: [.iOS(.v18)],
     products: [
         .library(name: "AppFeature", targets: ["AppFeature"]),
+        .library(name: "TodayFeature", targets: ["TodayFeature"]),
         .library(name: "InventoryFeature", targets: ["InventoryFeature"]),
         .library(name: "SalesFeature", targets: ["SalesFeature"]),
         .library(name: "AddItemFeature", targets: ["AddItemFeature"]),
@@ -34,6 +35,7 @@ let package = Package(
                 "Core",
                 "DesignSystem",
                 "APIClient",
+                "TodayFeature",
                 "InventoryFeature",
                 "SalesFeature",
                 "AddItemFeature",
@@ -43,6 +45,10 @@ let package = Package(
                 "MarketplacesFeature",
                 "TagReadingFeature",
             ],
+        ),
+        .target(
+            name: "TodayFeature",
+            dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .target(
             name: "InventoryFeature",
@@ -93,6 +99,10 @@ let package = Package(
             ],
         ),
         .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient"]),
+        .testTarget(
+            name: "TodayFeatureTests",
+            dependencies: ["TodayFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
         .testTarget(
             name: "InventoryFeatureTests",
             dependencies: ["InventoryFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],

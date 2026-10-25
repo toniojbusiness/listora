@@ -19,6 +19,7 @@
     { "path": "../../packages/auto-delist" },
     { "path": "../../packages/sales" },
     { "path": "../../packages/storage" },
+    { "path": "../../packages/today" },
     { "path": "../../packages/ai" },
     { "path": "../../packages/photos" },
     { "path": "../../packages/analysis" },

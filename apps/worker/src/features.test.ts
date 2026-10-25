@@ -12,6 +12,7 @@ import { PHOTO_PROCESSING_TASK } from '@listora/photos';
 import { PUSH_TASK } from '@listora/push';
 import { SALE_FEES_TASK } from '@listora/sales';
 import { createLogger } from '@listora/shared';
+import { TODAY_SUMMARY_TASK } from '@listora/today';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -72,6 +73,7 @@ describe('worker feature discovery', () => {
       'photos',
       'push',
       'sale-fees',
+      'today-summary',
       'trust-metrics',
     ]);
   });
@@ -93,6 +95,7 @@ describe('worker feature discovery', () => {
     expect(scheduledTasks.map(({ name }) => name)).toEqual([
       AI_SPEND_CHECK_TASK,
       AUTO_DELIST_SLA_TASK,
+      TODAY_SUMMARY_TASK,
     ]);
     expect(crontab).toEqual([TRUST_METRICS_CRONTAB]);
   });

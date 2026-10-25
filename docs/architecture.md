@@ -81,7 +81,8 @@ apps/
   worker/       Background worker: operation engine, plus one module per feature's jobs in
                 src/features/ (account deletion, AI spend check, item analysis, photo
                 processing, trust metrics, the daily connection health check, the delist SLA,
-                push delivery, sale fees); and the on-demand browser runner (src/runner/main.ts)
+                push delivery, sale fees, the morning summary); and the on-demand browser runner
+                (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
                 and account blocks (@listora/admin)
@@ -122,6 +123,8 @@ packages/
                 per-marketplace truth, SLA re-alerts, double-sale incidents (@listora/auto-delist)
   push/         Push notifications: the notification, the sender interface and its recording
                 fake, the outbox job (@listora/push)
+  today/        The Today screen: card rules, the summary's plain queries, the money summary, the
+                morning summary job and its setting (@listora/today)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
@@ -199,6 +202,7 @@ src/
                  and the public OAuth callback
   sales/         The sales feed (listSales, getSale) with each sale's money, delist runs, and
                  double sales; Mark as sold (createSale), the lifecycle, and the relist question
+  today/         The Today summary (getToday) and the morning summary setting
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
 ```
 
@@ -310,7 +314,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   [operations.md](features/operations.md#data) (double-sale incidents in
   [auto-delist.md](features/auto-delist.md#data), the lifecycle and fee columns in
   [sales.md](features/sales.md#data)); pricing in [pricing.md](features/pricing.md#data);
-  deleted identities and account deletion in [auth.md](features/auth.md#data). Billing
+  deleted identities and account deletion in [auth.md](features/auth.md#data); the morning
+  summary setting in [today.md](features/today.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
@@ -404,6 +409,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/inventory.md](features/inventory.md)                   | The Inventory tab, the item screen, the listing flow and its API              |
 | [features/sales.md](features/sales.md)                           | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI   |
 | [features/tasks.md](features/tasks.md)                           | Assisted mode: the task inbox, copy-assist, confirmations, reminders          |
+| [features/today.md](features/today.md)                           | The Today tab (the home), its card rules and money summary, the morning push  |
 
 ### Former section numbers
 

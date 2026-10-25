@@ -21,6 +21,7 @@
     { "path": "../../packages/sales" },
     { "path": "../../packages/shared" },
     { "path": "../../packages/storage" },
+    { "path": "../../packages/today" },
     { "path": "../../packages/testing" }
   ]
 }
