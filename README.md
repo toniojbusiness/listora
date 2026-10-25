@@ -198,10 +198,11 @@ only when the pull request (or the pushed `main` commit) changes a file the iOS 
 `apps/ios/**`, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI`
 Swift package), `packages/shared/fixtures/listing-urls.json` (the listing URL fixtures the iOS
 parser is tested against), `packages/e2e/**` (the local stack), `Makefile`, or
-`.github/workflows/ci.yml`. Other backend changes do not run it: the backend job covers them,
-and the contract keeps the API and the app in step. Otherwise it runs on Linux and
-succeeds in seconds without building, so it still reports a result and can be a required
-check. It fails, rather than passing, when change detection fails. When the iOS build starts
+`.github/workflows/ci.yml`. Otherwise it runs on Linux and succeeds in seconds without
+building, so it still reports a result and can be a required check. Other backend changes do
+not build it, though the UI tests run the backend: the backend job covers them, and the
+contract keeps the API and the app in step. It fails, rather than passing, when change
+detection fails. When the iOS build starts
 reading a new file outside these paths, add it to the `ios` filter in the `changes` job.
 
 A new push to a pull request cancels the run it supersedes. Runs on `main` are never
