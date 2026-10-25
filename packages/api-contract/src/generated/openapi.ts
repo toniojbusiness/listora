@@ -411,6 +411,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/items/{itemId}/voice-corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Interpret a spoken correction the app could not parse
+         * @description Maps the short text of a spoken correction on the review screen ("the pattern is
+         *     houndstooth, it's from the nineties") to proposed detail changes, with the cheap text
+         *     model. The app transcribes speech on the device and parses routine phrases itself, so
+         *     it sends only the phrases its own parser could not map, and only their text, never
+         *     audio. The answer is a proposal: nothing is changed on the item, and the app shows each
+         *     change for the seller to accept or undo before it saves anything (`replaceItem`).
+         *     Canonical details (category, department, size type, colors, pattern, materials,
+         *     condition) hold canonical values only, and `cost` and `listPrice` carry an `amount`;
+         *     every other change carries a `value`. A phrase the model could not map is left out, so
+         *     `changes` may be empty. The call is metered and counted in the account's daily AI
+         *     budget like every AI call, but uses no plan quota: `429 ai_budget_exceeded` when the
+         *     budget is used up, `503 service_unavailable` while AI is switched off or the model
+         *     could not answer (retryable), and `403 forbidden` when AI is turned off for the account.
+         */
+        post: operations["interpretVoiceCorrection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/items/{itemId}/pricing": {
         parameters: {
             query?: never;
@@ -2156,6 +2190,40 @@ export interface components {
             /** @description One per `KnownUsageMetric`, in that order. */
             quotas: components["schemas"]["QuotaUsage"][];
         };
+        VoiceCorrectionRequest: {
+            /**
+             * @description The phrases of the seller's spoken correction that the app's own parser could not
+             *     map, as text (on-device speech recognition). Never audio.
+             */
+            transcript: string;
+        };
+        VoiceCorrection: {
+            /** @description The proposed changes in the order they were said; empty when nothing mapped. */
+            changes: components["schemas"]["VoiceCorrectionChange"][];
+        };
+        /**
+         * @description One proposed change. `cost` (what the seller paid) and `listPrice` carry `amount`; every
+         *     other field carries `value`: a canonical value for category (`<category>/<subcategory>`),
+         *     department, sizeSystem, colors, pattern, materials, and condition, otherwise text. A list
+         *     detail gets one change per entry: the colors (or materials) of one answer together
+         *     replace the item's, and each keyword or flaw is added to the item's.
+         */
+        VoiceCorrectionChange: {
+            field: components["schemas"]["VoiceCorrectionField"];
+            value?: string;
+            amount?: components["schemas"]["Money"];
+        };
+        /**
+         * @description A `KnownVoiceCorrectionField`, or a field added after this client was built. Clients
+         *     ignore a change to a field they do not know.
+         */
+        VoiceCorrectionField: components["schemas"]["KnownVoiceCorrectionField"];
+        /**
+         * @description The item detail a change is for, named like `ItemDetails`; `cost` is what the seller paid
+         *     and `purchaseSource` where they bought it.
+         * @enum {string}
+         */
+        KnownVoiceCorrectionField: "title" | "brand" | "productName" | "category" | "department" | "sizeLabel" | "sizeSystem" | "colors" | "pattern" | "materials" | "keywords" | "styleNumber" | "condition" | "conditionNotes" | "flaws" | "cost" | "purchaseSource" | "listPrice";
         /**
          * @description A `KnownListingStatus`, or a status added after this client was built. Clients show
          *     the listing's `statusDisplay` for an unknown status and never treat it as success.
@@ -3644,6 +3712,11 @@ export type UsageMetric = components['schemas']['UsageMetric'];
 export type KnownUsageMetric = components['schemas']['KnownUsageMetric'];
 export type QuotaUsage = components['schemas']['QuotaUsage'];
 export type Usage = components['schemas']['Usage'];
+export type VoiceCorrectionRequest = components['schemas']['VoiceCorrectionRequest'];
+export type VoiceCorrection = components['schemas']['VoiceCorrection'];
+export type VoiceCorrectionChange = components['schemas']['VoiceCorrectionChange'];
+export type VoiceCorrectionField = components['schemas']['VoiceCorrectionField'];
+export type KnownVoiceCorrectionField = components['schemas']['KnownVoiceCorrectionField'];
 export type ListingStatus = components['schemas']['ListingStatus'];
 export type KnownListingStatus = components['schemas']['KnownListingStatus'];
 export type ListingAction = components['schemas']['ListingAction'];
@@ -4416,6 +4489,48 @@ export interface operations {
                     "application/json": components["schemas"]["Usage"];
                 };
             };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    interpretVoiceCorrection: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceCorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The proposed changes, possibly none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceCorrection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -5876,6 +5991,7 @@ export const priceTierNameValues: ReadonlyArray<FlattenedDeepRequired<components
 export const knownPriceBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPriceBasis"]> = ["sold_data", "ai_estimate", "cost_floor"];
 export const knownFeeEstimateSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeEstimateSource"]> = ["fee_table", "actual_fees"];
 export const knownUsageMetricValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUsageMetric"]> = ["ai_items", "premium_identifications"];
+export const knownVoiceCorrectionFieldValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownVoiceCorrectionField"]> = ["title", "brand", "productName", "category", "department", "sizeLabel", "sizeSystem", "colors", "pattern", "materials", "keywords", "styleNumber", "condition", "conditionNotes", "flaws", "cost", "purchaseSource", "listPrice"];
 export const knownListingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingStatus"]> = ["draft", "queued", "publishing", "active", "ending", "ended", "sold", "error", "unknown", "needs_user_action"];
 export const knownListingActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingAction"]> = ["publish", "revise", "change_price", "end", "relist", "verify"];
 export const listingEndReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ListingEndReason"]> = ["sold_elsewhere", "not_available", "other"];

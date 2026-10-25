@@ -5,20 +5,6 @@ import ListoraAPI
 import Observation
 import os
 
-/// How often the flow asks the server how photos and analyses are doing, and when it stops
-/// waiting. Every wait ends: in the review, or in a failure the seller can retry.
-struct ReviewTiming: Sendable {
-    var pollInterval: Duration = .seconds(1)
-    /// Polls for the server to process the photos before giving up.
-    var photoPolls = 90
-    /// Polls after which the analysis counts as slow ("taking longer than usual").
-    var slowAnalysisPolls = 20
-    /// Polls for the analysis before giving up.
-    var analysisPolls = 120
-
-    static let standard = ReviewTiming()
-}
-
 /// One item's review, cost, price, and save: the state of every screen of the flow and the
 /// requests behind them. Each step saves to the server before the next screen opens, so a
 /// relaunch picks up where the server is.
@@ -103,6 +89,8 @@ final class ReviewFlowModel {
     var copies: [MarketplaceCopy] = []
     /// The detail being edited in place. Its text is kept before anything that reads the form.
     var editing: FieldDraft?
+    /// The detail "Next to check" moved to (the review scrolls to it).
+    var focusedField: ReviewFieldKey?
     /// The analysis whose details the form shows.
     var analysis: Analysis?
     /// The fast analysis, which "Identify harder" escalates.

@@ -12,6 +12,7 @@ import SwiftUI
 import TagReadingFeature
 import TasksFeature
 import TodayFeature
+import VoiceInputFeature
 
 /// Everything the app's features need, built once at launch.
 @MainActor
@@ -77,7 +78,10 @@ public struct AppDependencies {
         let meter = InteractionMeter(storage: interactionStorage)
         interactionMeter = meter
         let listingCopy = ListingCopyStore(directory: listingCopyDirectory)
-        let review = ReviewEnvironment(apiClient: apiClient, meter: meter, listingCopy: listingCopy, defaults: defaults)
+        let review = ReviewEnvironment(
+            apiClient: apiClient, meter: meter, listingCopy: listingCopy,
+            transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
+        )
         sales = SalesEnvironment(apiClient: apiClient, accessTokens: accessTokens)
         tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens)
         let inventory = InventoryEnvironment(
@@ -144,6 +148,14 @@ public struct AppDependencies {
         )
     }
 
+    /// The microphone, or in UI tests the transcript they script (`LISTORA_VOICE_TRANSCRIPT`).
+    private static func transcriber(for launchOptions: DebugLaunchOptions) -> any VoiceTranscriber {
+        if let transcript = launchOptions.voiceTranscript {
+            return ScriptedVoiceTranscriber(transcript: transcript, authorization: launchOptions.voicePermission)
+        }
+        return AppleSpeechTranscriber()
+    }
+
     /// The background URLSession that photo uploads use; the app scene handles its events.
     public static let backgroundUploadSessionIdentifier = AddItemEnvironment.backgroundSessionIdentifier
 
@@ -198,6 +210,12 @@ public struct DebugLaunchOptions: Equatable, Sendable {
     /// `LISTORA_DEV_ACCESS_TOKEN=<token>` (with `LISTORA_DEV_ACCESS_EMAIL`): start signed in with
     /// this session, which the UI tests' local stack signed in through the dev auth driver (Dev only).
     public var accessGrant: AccessGrant?
+    /// `LISTORA_VOICE_TRANSCRIPT=<text>`: the talk button "hears" this instead of the microphone,
+    /// which the simulator cannot feed.
+    public var voiceTranscript: String?
+    /// `LISTORA_VOICE_PERMISSION=denied|restricted`: asking for voice permission ends this way
+    /// (with ``voiceTranscript``; granted otherwise).
+    public var voicePermission: SpeechAuthorization = .authorized
 
     public static let none = DebugLaunchOptions()
 
@@ -207,12 +225,16 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         fakeCameraDirectory: URL? = nil,
         apiBaseURL: URL? = nil,
         accessGrant: AccessGrant? = nil,
+        voiceTranscript: String? = nil,
+        voicePermission: SpeechAuthorization = .authorized,
     ) {
         self.resetLocalData = resetLocalData
         self.fixturePhotosDirectory = fixturePhotosDirectory
         self.fakeCameraDirectory = fakeCameraDirectory
         self.apiBaseURL = apiBaseURL
         self.accessGrant = accessGrant
+        self.voiceTranscript = voiceTranscript
+        self.voicePermission = voicePermission
     }
 
     /// The options in this process's environment (debug builds), otherwise ``none``.
@@ -244,6 +266,16 @@ public struct DebugLaunchOptions: Equatable, Sendable {
                     email: environment["LISTORA_DEV_ACCESS_EMAIL"] ?? "ui-test@listora.test",
                 )
             },
+            voiceTranscript: environment["LISTORA_VOICE_TRANSCRIPT"],
+            voicePermission: voicePermission(environment["LISTORA_VOICE_PERMISSION"]),
         )
+    }
+
+    private static func voicePermission(_ value: String?) -> SpeechAuthorization {
+        switch value {
+        case "denied": .microphoneDenied
+        case "restricted": .restricted
+        default: .authorized
+        }
     }
 }
