@@ -31,9 +31,8 @@ export interface AutomationSettings {
   readonly profiles: Readonly<Record<AutomatedMarketplace, AutomationProfile>>;
   readonly saleChecks: SaleCheckSettings;
   /**
-   * Development and tests only: the fake marketplace site that stands in for Poshmark,
-   * Mercari, and Depop without a fake of their own, whose automation connections then run
-   * against it.
+   * Development and tests only: the fake marketplace site that stands in for each automated
+   * marketplace without a fake of its own, whose automation connections then run against it.
    */
   readonly fakeSiteUrl: string | undefined;
   /**
@@ -53,6 +52,12 @@ export interface AutomationSettings {
    * `fakeSiteUrl` for Depop).
    */
   readonly fakeDepopSiteUrl: string | undefined;
+  /**
+   * Development and tests only: the fake eBay site (`npm run dev:fake-ebay-site`), which the
+   * eBay automation adapter then drives instead of ebay.com (it takes precedence over
+   * `fakeSiteUrl` for eBay).
+   */
+  readonly fakeEbaySiteUrl: string | undefined;
 }
 
 export class AutomationConfigError extends Error {
@@ -89,6 +94,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
   const fakePoshmarkUrl = localUrl(issues, env, 'FAKE_POSHMARK_URL');
   const fakeMercariSiteUrl = localUrl(issues, env, 'FAKE_MERCARI_SITE_URL');
   const fakeDepopSiteUrl = localUrl(issues, env, 'FAKE_DEPOP_SITE_URL');
+  const fakeEbaySiteUrl = localUrl(issues, env, 'FAKE_EBAY_SITE_URL');
 
   const profiles = Object.fromEntries(
     AUTOMATED_MARKETPLACES.map((marketplace) => {
@@ -136,6 +142,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
         poshmark: fakePoshmarkUrl,
         mercari: fakeMercariSiteUrl,
         depop: fakeDepopSiteUrl,
+        ebay: fakeEbaySiteUrl,
       }[marketplace];
       const standIn = ownFake ?? fakeSiteUrl;
       return [marketplace, standIn === undefined ? profile : standInProfile(profile, standIn)];
@@ -168,6 +175,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
     fakePoshmarkUrl,
     fakeMercariSiteUrl,
     fakeDepopSiteUrl,
+    fakeEbaySiteUrl,
   };
 }
 

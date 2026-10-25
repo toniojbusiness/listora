@@ -57,6 +57,7 @@ export const DEPOP_CHALLENGE_SIGNS: ChallengeSigns = {
     /^\/(verify|verification|two-factor|2fa|otp|challenge|mfa)(\/|$)/i,
     /^\/login\/(verify|verification|code|magic-link|mfa|otp|challenge)(\/|$)/i,
   ],
+  botCheckPaths: [],
   challengeSelectors: [],
 };
 

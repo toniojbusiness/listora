@@ -1,7 +1,7 @@
 # Assisted mode: the task inbox
 
-Where Listora can't act on a marketplace itself (Poshmark, Mercari, and Depop until its API is
-connected, plan task T-21), it prepares the work and the user does the last step in the
+Where Listora can't act on a marketplace itself (Poshmark, Mercari, Depop, and eBay without a
+connected API or a working linked session, plan task T-21), it prepares the work and the user does the last step in the
 marketplace's app. Each such step is a **user task**. The iPhone's Tasks tab is the inbox of
 them; the server finishes a task only on the user's word, so an assisted listing reads "Done (you
 confirmed)" and never "confirmed by <marketplace>" ([operations.md](operations.md)).

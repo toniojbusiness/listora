@@ -19,7 +19,7 @@ describe('the sales feed (real Postgres)', () => {
   let token: string;
   let otherToken: string;
   let accountId: string;
-  // Assisted Poshmark, Mercari, and Depop; no eBay adapter (its delists would fail visibly).
+  // Every marketplace assisted: no eBay or Depop API adapter, and no automation adapters.
   const adapters = createMarketplaceAdapters({
     fakeMarketplaceUrl: undefined,
     ebay: undefined,

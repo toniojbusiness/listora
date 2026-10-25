@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createMarketplaceAdapters, loadDepopConfig } from '@listora/marketplaces';
+import { createMarketplaceAdapters, loadDepopConfig, loadEbayConfig } from '@listora/marketplaces';
 import { createLogger } from '@listora/shared';
 
 import { HttpPhotoSource } from './adapter/photos.ts';
@@ -12,7 +12,7 @@ const api = { id: 'connection-1', mode: 'api', status: 'connected' } as const;
 const automated = { id: 'connection-2', mode: 'automation', status: 'connected' } as const;
 
 describe('createAutomationAdapters in the marketplace adapters', () => {
-  it('automates Poshmark, Mercari, and Depop for linked sessions when they have an automation adapter', () => {
+  it('automates Poshmark, Mercari, Depop, and eBay for linked sessions when they have an automation adapter', () => {
     const settings = loadAutomationSettings({ FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400' });
     const automation = createAutomationAdapters({
       settings,
@@ -40,6 +40,14 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
       ).toBe('assisted');
     }
     expect(adapters.capabilities('depop', api)?.verifyRead).toBe('api');
+    // eBay too; a listing without a connection still goes to the eBay API's stand-in.
+    expect(adapters.capabilities('ebay', automated)).toMatchObject({
+      connect: 'session',
+      create: 'automation',
+      verifyRead: 'automation',
+    });
+    expect(adapters.capabilities('ebay', null)?.verifyRead).toBe('api');
+    expect(adapters.capabilities('ebay', api)?.verifyRead).toBe('api');
   });
 
   it('automates Poshmark on poshmark.com in production, and never a real site in development', () => {
@@ -103,6 +111,76 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
     expect(mercari.capabilities('mercari', automated)?.readFreshness).toBe('revision');
     const depop = build({ FAKE_DEPOP_SITE_URL: 'http://127.0.0.1:4700' });
     expect(depop.capabilities('depop', automated)?.readFreshness).toBe('revision');
+    // And the fake eBay site eBay's.
+    const ebay = build({ FAKE_EBAY_SITE_URL: 'http://127.0.0.1:4800' });
+    expect(ebay.capabilities('ebay', automated)?.readFreshness).toBe('revision');
+  });
+
+  it('automates eBay on ebay.com for a linked session until its API is connected', () => {
+    const production = createMarketplaceAdapters({
+      fakeMarketplaceUrl: undefined,
+      ebay: undefined,
+      depop: undefined,
+      automation: createAutomationAdapters({
+        settings: loadAutomationSettings({}),
+        sessions: NoBrowserSessions,
+        photos: new HttpPhotoSource(),
+        logger: createLogger({ service: 'test', level: 'silent' }),
+      }),
+    });
+    expect(production.capabilities('ebay', automated)).toMatchObject({
+      connect: 'session',
+      create: 'automation',
+      updatePrice: 'automation',
+      updateDetails: 'automation',
+      delist: 'automation',
+      relist: 'automation',
+      // eBay marks its own sales sold.
+      markSold: 'not_needed',
+      verifyRead: 'automation',
+      readFreshness: 'revision',
+      title: 'field',
+      externalSkuReusable: true,
+      saleDetection: ['poll', 'email', 'manual'],
+    });
+    // Without the eBay API's keys, eBay is assisted until the seller links a session, and
+    // whenever automation has to stop.
+    expect(production.capabilities('ebay', null)?.create).toBe('assisted');
+    expect(
+      production.capabilities('ebay', { ...automated, status: 'reauth_required' })?.create,
+    ).toBe('assisted');
+  });
+
+  it("serves a seller's eBay API connection through the API, ahead of automation", () => {
+    const adapters = createMarketplaceAdapters({
+      fakeMarketplaceUrl: undefined,
+      ebay: loadEbayConfig({ EBAY_ENV: 'fake' }),
+      depop: undefined,
+      automation: createAutomationAdapters({
+        settings: loadAutomationSettings({}),
+        sessions: NoBrowserSessions,
+        photos: new HttpPhotoSource(),
+        logger: createLogger({ service: 'test', level: 'silent' }),
+      }),
+    });
+    // The API adapter, never the browser, for a connection that uses eBay's API.
+    expect(adapters.capabilities('ebay', api)).toMatchObject({
+      connect: 'oauth',
+      create: 'api',
+      delist: 'api',
+      verifyRead: 'api',
+    });
+    // An eBay API connection that needs reconnecting is never automated either.
+    expect(adapters.capabilities('ebay', { ...api, status: 'reauth_required' })?.create).toBe(
+      'api',
+    );
+    // A listing without a connection is asked to connect eBay, as before automation.
+    expect(adapters.capabilities('ebay', null)?.create).toBe('api');
+    // Automation serves only connections that are browser sessions.
+    expect(adapters.capabilities('ebay', automated)).toMatchObject({
+      connect: 'session',
+      create: 'automation',
+    });
   });
 
   it("serves a seller's Depop API connection through the API, ahead of automation", () => {

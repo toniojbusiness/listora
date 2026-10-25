@@ -8,6 +8,7 @@ import { createTestApi, fieldsOf, type TestApi } from '../test-support.ts';
 
 const OWNER = 'linking.owner@example.com';
 const OTHER = 'linking.other@example.com';
+const EBAY_SELLER = 'linking.ebay@example.com';
 
 /** A value no response, log line, or stored row other than the vault's ciphertext may hold. */
 const SECRET = `posh-session-${randomUUID()}`;
@@ -105,12 +106,50 @@ describe('marketplace sessions (real Postgres)', () => {
         statusDisplay: { tone: 'neutral', label: 'Not linked' },
         login: { url: 'https://www.depop.com/login/', cookieDomains: ['depop.com'] },
       },
+      {
+        marketplace: 'ebay',
+        status: 'not_linked',
+        statusDisplay: { tone: 'neutral', label: 'Not linked' },
+        login: { url: 'https://signin.ebay.com/signin/', cookieDomains: ['ebay.com'] },
+      },
     ]);
   });
 
-  it('answers 404 for eBay, which connects through its API', async () => {
-    expect((await get('ebay')).status).toBe(404);
-    expect((await link('ebay', { cookies: [cookie({ domain: 'ebay.com' })] })).status).toBe(404);
+  it('links eBay by signing in until its API is connected, which then takes over', async () => {
+    const seller = await api.signIn(EBAY_SELLER);
+    const ebayCookie = cookie({ name: 'nonsession', domain: '.ebay.com' });
+    expect(
+      (await link('ebay', { cookies: [cookie({ domain: '.ebay.co.uk' })] }, { as: seller })).status,
+    ).toBe(422);
+    const linked = await link('ebay', { cookies: [ebayCookie] }, { as: seller });
+    expect(linked.status).toBe(201);
+    expect(linked.body).toMatchObject({
+      marketplace: 'ebay',
+      status: 'checking',
+      login: { url: 'https://signin.ebay.com/signin/', cookieDomains: ['ebay.com'] },
+    });
+    const connection = await connectionOf(EBAY_SELLER, 'ebay');
+    expect(connection).toMatchObject({ mode: 'automation', status: 'connected' });
+    expect(connection?.token_ciphertext?.toString('utf8')).not.toContain(SECRET);
+    expect((await checkOf(EBAY_SELLER, 'ebay')).status).toBe('pending');
+
+    // The seller connects eBay's API (as completeAuthorization stores a grant on the account's
+    // connection): the same connection, and so the same listings, switch to the API.
+    await api.db
+      .updateTable('marketplace_connection')
+      .set({ mode: 'api', token_ciphertext: Buffer.from('sealed tokens') })
+      .where('id', '=', connection?.id ?? '')
+      .execute();
+    expect((await get('ebay', seller)).body).toMatchObject({
+      status: 'api_connected',
+      statusDisplay: { label: 'Connected through the eBay API' },
+    });
+    const again = await link('ebay', { cookies: [ebayCookie] }, { as: seller });
+    expect(again.status).toBe(409);
+    expect(again.error).toMatchObject({
+      code: 'marketplace_action_unavailable',
+      message: 'eBay is connected through its API, so there is nothing to sign in to.',
+    });
   });
 
   it('stores the session in the vault, asks the runner to check it, and reports checking', async () => {
@@ -332,6 +371,7 @@ describe('marketplace sessions without a token vault (real Postgres)', () => {
     expect(await api.db.selectFrom('marketplace_connection').select('id').execute()).toEqual([]);
     const listed = await api.call('listMarketplaceSessions', { token });
     expect(listed.body.data.map((session) => session.status)).toEqual([
+      'not_linked',
       'not_linked',
       'not_linked',
       'not_linked',

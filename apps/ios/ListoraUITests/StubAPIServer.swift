@@ -274,7 +274,7 @@ extension StubAPIServer {
         case ("GET", Self.accountPath):
             return Self.http(status: "200 OK", contentType: "text/html; charset=utf-8", body: Self.accountPage)
         case ("GET", "/v1/marketplace-sessions"):
-            let sessions = [poshmarkSession(), Self.mercariSession, Self.depopSession]
+            let sessions = [poshmarkSession(), Self.mercariSession, Self.depopSession, Self.ebaySession]
             return Self.http(status: "200 OK", body: #"{"data":["# + sessions.joined(separator: ",") + "]}")
         case ("POST", "/v1/marketplace-sessions/poshmark"):
             poshmarkChecks = 0
@@ -343,6 +343,11 @@ extension StubAPIServer {
     private static let depopSession = """
     {"marketplace":"depop","status":"not_linked","statusDisplay":{"tone":"neutral","label":"Not linked"},
     "login":{"url":"https://www.depop.com/login/","cookieDomains":["depop.com"]}}
+    """
+
+    private static let ebaySession = """
+    {"marketplace":"ebay","status":"not_linked","statusDisplay":{"tone":"neutral","label":"Not linked"},
+    "login":{"url":"https://signin.ebay.com/signin/","cookieDomains":["ebay.com"]}}
     """
 }
 

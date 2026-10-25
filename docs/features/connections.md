@@ -112,8 +112,8 @@ thing.
   marketplace, so it notifies too.
 - **Automation sessions** (decision D1, [automation.md](automation.md)) join the same model when
   the session vault lands: a session the marketplace rejects is a connection that needs relinking,
-  shown and notified like `reauth_required`. Until then Poshmark, Mercari, and Depop show Not
-  linked.
+  shown and notified like `reauth_required`. Until then Poshmark, Mercari, Depop, and eBay
+  (without its API keys) show Not linked.
 - **In the app** (`MarketplacesFeature`): one card per marketplace with its mode, status, detail,
   last successful check, and actions (Connect, Reconnect, Retry check; the main one filled); a
   Sale emails card; and `ConnectionAttentionBanner`, which Inventory shows above the list while
