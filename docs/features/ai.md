@@ -15,7 +15,9 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
    user taps "Identify harder". It counts against the plan's premium quota.
 5. **Analyze once.** There is one `ai_analysis` per item, photo-set hash, and tier
    (`standard`, plus `premium` only after escalation). Edits, repricing, delist, sync, and
-   profit tracking never call AI. Bulk work uses the Batch API.
+   profit tracking never call AI. Bulk work uses the Batch API. The one exception is a spoken
+   correction the phone could not parse: one short text call on the standard tier (purpose
+   `voice_correction`, no images, no plan quota; [voice.md](voice.md)).
 6. **Evaluation.** `npm run eval` scores the parsers, and providers behind the `EvalProvider`
    interface, on the synthetic tag corpus in `packages/eval/corpus`: AI tag reading, and the
    full production analysis (`analyzeItem`), scored on the tag facts it reports. It prints

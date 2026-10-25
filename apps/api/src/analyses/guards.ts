@@ -26,25 +26,33 @@ export async function assertAnalysisAllowed(
     });
   } catch (error) {
     if (!(error instanceof AiGuardError)) throw error;
-    const { message } = analysisFailure(error);
-    const { reason } = error;
-    switch (reason.kind) {
-      case 'kill_switch':
-        throw new ApiError('service_unavailable', message, { cause: error });
-      case 'account_blocked':
-        throw new ApiError('forbidden', message, { cause: error });
-      case 'daily_budget':
-        throw new ApiError('ai_budget_exceeded', message, {
-          retryAfterSeconds: Math.max(
-            1,
-            Math.ceil((reason.resetsAt.getTime() - now.getTime()) / 1_000),
-          ),
-          cause: error,
-        });
-      case 'quota':
-        throw new ApiError('quota_exceeded', message, { cause: error });
-      default:
-        return assertNever(reason);
-    }
+    throw aiGuardApiError(error, analysisFailure(error).message, now);
+  }
+}
+
+/**
+ * The API error for a refused AI call: the kill switch (`503`), an operator's block on the
+ * account (`403`), the account's daily AI budget (`429`, with the seconds until it resets), or
+ * the plan quota (`402`), with `message` for the user.
+ */
+export function aiGuardApiError(error: AiGuardError, message: string, now: Date): ApiError {
+  const { reason } = error;
+  switch (reason.kind) {
+    case 'kill_switch':
+      return new ApiError('service_unavailable', message, { cause: error });
+    case 'account_blocked':
+      return new ApiError('forbidden', message, { cause: error });
+    case 'daily_budget':
+      return new ApiError('ai_budget_exceeded', message, {
+        retryAfterSeconds: Math.max(
+          1,
+          Math.ceil((reason.resetsAt.getTime() - now.getTime()) / 1_000),
+        ),
+        cause: error,
+      });
+    case 'quota':
+      return new ApiError('quota_exceeded', message, { cause: error });
+    default:
+      return assertNever(reason);
   }
 }
