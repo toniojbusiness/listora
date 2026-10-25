@@ -6,7 +6,8 @@
   "description": "Listora HTTP API (Fastify).",
   "scripts": {
     "start": "node src/main.ts",
-    "dev": "node --watch --env-file-if-exists=../../.env src/main.ts"
+    "dev": "node --watch --env-file-if-exists=../../.env src/main.ts",
+    "perf": "node --env-file-if-exists=../../.env src/perf/bench.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1156.0",

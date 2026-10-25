@@ -41,8 +41,9 @@ public struct AppDependencies {
     public let tasks: TasksEnvironment
     /// The Today screen, whose cards open the item and marketplace screens.
     public let today: TodayEnvironment
-    /// Dev builds only: sign in against the local API's dev auth driver.
-    public let devSignIn: DevSignInModel?
+    /// Signing in from Settings: the local API's dev driver in Dev builds, otherwise the
+    /// environment's Cognito user pool, with an emailed code.
+    public let signIn: SignInModel
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
     public let marketplaces: MarketplacesModel
     /// Link accounts: sign in on Poshmark, Mercari, Depop, and eBay for Listora to automate them.
@@ -69,7 +70,8 @@ public struct AppDependencies {
         if launchOptions.resetLocalData {
             Self.resetLocalData([dataDirectory, listingCopyDirectory], interactionStorage, defaults, accessGrantStorage)
         }
-        let accessTokens = AccessTokenStore(storage: accessGrantStorage)
+        let cognito = Self.cognitoClient(configuration)
+        let accessTokens = AccessTokenStore(storage: accessGrantStorage, refresher: cognito)
         if let grant = launchOptions.accessGrant, configuration.environment == .dev {
             accessTokens.signIn(grant)
         }
@@ -104,9 +106,25 @@ public struct AppDependencies {
         self.marketplaces = marketplaces
         linkAccounts = LinkAccountsModel(service: APIMarketplaceSessionService(api: apiClient))
         today = Self.makeToday(apiClient, accessTokens, inventory, sales, marketplaces)
-        devSignIn = configuration.environment == .dev
-            ? DevSignInModel(client: DevSignInClient(baseURL: configuration.apiBaseURL), tokens: accessTokens)
-            : nil
+        signIn = SignInModel(method: Self.signInMethod(configuration, cognito), tokens: accessTokens)
+    }
+
+    /// The Cognito client of a build with a user pool app client. The Share Extension builds the
+    /// same one (ShareViewController), so either can renew the session they share.
+    private static func cognitoClient(_ configuration: AppConfiguration) -> CognitoSignInClient? {
+        configuration.cognito.map { CognitoSignInClient(region: $0.region, clientID: $0.clientID) }
+    }
+
+    /// Dev signs in with the local API's dev driver; Staging and Prod with their user pool, when
+    /// the build has its app client, and otherwise not at all.
+    private static func signInMethod(
+        _ configuration: AppConfiguration,
+        _ cognito: CognitoSignInClient?,
+    ) -> (any SignInMethod)? {
+        if configuration.environment == .dev {
+            return DevSignIn(client: DevSignInClient(baseURL: configuration.apiBaseURL))
+        }
+        return cognito.map(EmailCodeSignIn.init(client:))
     }
 
     /// The sales screens the item screen opens, from the sales feature.

@@ -4,6 +4,7 @@ import {
   DEFAULT_RETRY_POLICY,
   delayAfterAttempt,
   maxAttempts,
+  queuePollIntervalMs,
   RETRY_DELAYS_MS,
   scaledRetryPolicy,
   type RetryPolicy,
@@ -57,5 +58,13 @@ describe('retry policy', () => {
     for (const scale of [0, -1, 1.5, Number.NaN]) {
       expect(() => scaledRetryPolicy(scale)).toThrow(RangeError);
     }
+  });
+
+  it('polls the queue at a sixth of the shortest delay, between 2 s and 5 s', () => {
+    expect(queuePollIntervalMs(DEFAULT_RETRY_POLICY)).toBe(5_000);
+    expect(queuePollIntervalMs({ ...DEFAULT_RETRY_POLICY, delaysMs: [18_000] })).toBe(3_000);
+    // The local stack's tenth-scale delays (3 s first) keep the 2 s floor.
+    expect(queuePollIntervalMs(scaledRetryPolicy(0.1))).toBe(2_000);
+    expect(queuePollIntervalMs({ ...DEFAULT_RETRY_POLICY, delaysMs: [600_000] })).toBe(5_000);
   });
 });

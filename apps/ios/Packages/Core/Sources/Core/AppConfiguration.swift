@@ -9,17 +9,23 @@ public struct AppConfiguration: Equatable, Sendable {
         public static let environment = "ListoraEnvironment"
         public static let apiBaseURL = "ListoraAPIBaseURL"
         public static let appGroup = "ListoraAppGroup"
+        public static let cognitoRegion = "ListoraCognitoRegion"
+        public static let cognitoClientID = "ListoraCognitoClientID"
     }
 
     public let environment: AppEnvironment
     public let apiBaseURL: URL
     /// The App Group the app shares with its Share Extension (the session keychain item).
     public let appGroupIdentifier: String
+    /// The Cognito user pool client the app signs in with outside Dev, or nil when the build has
+    /// none (`COGNITO_CLIENT_ID` in the xcconfig is empty).
+    public let cognito: CognitoConfiguration?
 
     public init(
         environment: AppEnvironment,
         apiBaseURL: URL,
         appGroupIdentifier: String,
+        cognito: CognitoConfiguration? = nil,
     ) throws(ConfigurationError) {
         try Self.validate(apiBaseURL, key: InfoKey.apiBaseURL, for: environment)
         guard appGroupIdentifier.hasPrefix("group."), appGroupIdentifier.count > "group.".count else {
@@ -28,6 +34,7 @@ public struct AppConfiguration: Equatable, Sendable {
         self.environment = environment
         self.apiBaseURL = apiBaseURL
         self.appGroupIdentifier = appGroupIdentifier
+        self.cognito = cognito
     }
 
     /// Parses and validates the configuration. Errors name the bad key but never echo its value.
@@ -41,7 +48,12 @@ public struct AppConfiguration: Equatable, Sendable {
             throw .invalid(key: InfoKey.apiBaseURL, reason: Self.notAnHTTPURL)
         }
         let appGroup = try Self.string(for: InfoKey.appGroup, in: infoDictionary)
-        try self.init(environment: environment, apiBaseURL: url, appGroupIdentifier: appGroup)
+        try self.init(
+            environment: environment,
+            apiBaseURL: url,
+            appGroupIdentifier: appGroup,
+            cognito: Self.cognito(in: infoDictionary),
+        )
     }
 
     public init(bundle: Bundle) throws(ConfigurationError) {
@@ -49,6 +61,27 @@ public struct AppConfiguration: Equatable, Sendable {
     }
 
     private static let notAnHTTPURL = "must be an absolute http(s) URL with a host"
+
+    /// The app client id turns sign-in on, and then needs its region. Without a client id the
+    /// build has no sign-in, whatever the region says (Prod keeps its region while the client id
+    /// waits for the first deploy).
+    private static func cognito(in info: [String: Any]) throws(ConfigurationError) -> CognitoConfiguration? {
+        guard let clientID = try optionalString(for: InfoKey.cognitoClientID, in: info) else { return nil }
+        guard let region = try optionalString(for: InfoKey.cognitoRegion, in: info) else {
+            throw .missing(key: InfoKey.cognitoRegion)
+        }
+        return try CognitoConfiguration(region: region, clientID: clientID)
+    }
+
+    /// A value that may be left empty: nil when missing, empty, or an unexpanded variable.
+    private static func optionalString(for key: String, in info: [String: Any]) throws(ConfigurationError) -> String? {
+        do throws(ConfigurationError) {
+            return try string(for: key, in: info)
+        } catch {
+            guard case .missing = error else { throw error }
+            return nil
+        }
+    }
 
     private static func string(for key: String, in info: [String: Any]) throws(ConfigurationError) -> String {
         guard let rawValue = info[key] else { throw .missing(key: key) }
@@ -83,6 +116,27 @@ public struct AppConfiguration: Equatable, Sendable {
         guard url.query() == nil, url.fragment() == nil else {
             throw .invalid(key: key, reason: "must not have a query or fragment")
         }
+    }
+}
+
+/// The Cognito user pool app client the app signs in with (docs/features/auth.md): its region and
+/// client id, neither of them a secret. The deploy prints both (infra/README.md).
+public struct CognitoConfiguration: Equatable, Sendable {
+    public let region: String
+    public let clientID: String
+
+    public init(region: String, clientID: String) throws(ConfigurationError) {
+        guard region.wholeMatch(of: /[a-z]{2}(-[a-z]+)+-\d/) != nil else {
+            throw .invalid(
+                key: AppConfiguration.InfoKey.cognitoRegion,
+                reason: "must be an AWS region such as us-east-1",
+            )
+        }
+        guard clientID.wholeMatch(of: /[\w+]{1,128}/) != nil else {
+            throw .invalid(key: AppConfiguration.InfoKey.cognitoClientID, reason: "must be a Cognito app client id")
+        }
+        self.region = region
+        self.clientID = clientID
     }
 }
 

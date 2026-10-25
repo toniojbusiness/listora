@@ -1,12 +1,16 @@
 // Post-deploy smoke test of a deployed API (scripts/deploy-personal.sh runs it after every
-// deploy; infra/README.md, The personal environment's first deploy). It checks health, signs
-// in with the environment's configured auth driver, creates a draft item, reads it back, and
-// deletes it. It never starts an analysis or touches a marketplace, so it costs no AI usage
-// and changes nothing outside Listora. With the dev driver it also deletes the throwaway
-// account it signed in to, leaving nothing behind.
+// deploy; infra/README.md, The personal environment's first deploy). It checks health, that
+// the API refuses a request without a token, signs in with the environment's configured auth
+// driver, creates a draft item, reads it back, and deletes it. It never starts an analysis or
+// touches a marketplace, so it costs no AI usage and changes nothing outside Listora. With the
+// dev driver it also deletes the throwaway account it signed in to, leaving nothing behind.
+//
+// With the cognito driver it also checks that the dev sign-in is off. An owner pool has one
+// user, the owner, and no smoke user, so the signed-in steps run only with the ID token of a
+// user the caller chose (LISTORA_SMOKE_ID_TOKEN); without one they are skipped.
 //
 //   node infra/src/deploy/smoke.ts --api-url <url> --auth dev --log-group /listora/<env>/api
-//   LISTORA_SMOKE_ID_TOKEN=<id token> node infra/src/deploy/smoke.ts --api-url <url> --auth cognito
+//   [LISTORA_SMOKE_ID_TOKEN=<id token>] node infra/src/deploy/smoke.ts --api-url <url> --auth cognito
 //
 // The dev driver prints sign-in codes to the API log, so the dev path reads its code from the
 // API's CloudWatch log group with the ambient AWS credentials (`aws logs filter-log-events`).
@@ -24,8 +28,11 @@ export type SmokeAuth =
     }
   | {
       readonly driver: 'cognito';
-      /** An ID token of a dedicated smoke-test user of the environment's user pool. */
-      readonly idToken: string;
+      /**
+       * An ID token of a user of the environment's user pool, whose account gets the smoke item;
+       * without one, the signed-in steps are skipped.
+       */
+      readonly idToken: string | undefined;
     };
 
 export interface SmokeOptions {
@@ -92,6 +99,23 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
   }
   options.log('smoke: health ok (live, and ready with the database reachable)');
 
+  expectStatus('refuse a request without a token', await call('GET', '/v1/items'), 401);
+  if (options.auth.driver === 'cognito') {
+    const json = { 'content-type': 'application/json' };
+    const devCode = await call('POST', '/dev/auth/codes', {
+      headers: json,
+      body: JSON.stringify({ email: 'smoke@example.com' }),
+    });
+    expectStatus('the dev sign-in is off', devCode, 404);
+    options.log('smoke: the API refuses requests without a token, and the dev sign-in is off');
+    if (options.auth.idToken === undefined) {
+      options.log(
+        'smoke: ok (no LISTORA_SMOKE_ID_TOKEN, so the signed-in steps were skipped: the user pool has no smoke user)',
+      );
+      return;
+    }
+  }
+
   let token: string;
   const email = `smoke-${randomBytes(6).toString('hex')}@example.com`;
   if (options.auth.driver === 'dev') {
@@ -115,7 +139,7 @@ export async function runSmoke(options: SmokeOptions): Promise<void> {
     token = accessToken;
     options.log(`smoke: signed in with the dev driver as ${email}`);
   } else {
-    token = options.auth.idToken;
+    token = options.auth.idToken ?? '';
     options.log('smoke: signing in with the Cognito ID token');
   }
   const authorized = (headers: Record<string, string> = {}) => ({
@@ -242,17 +266,13 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const apiUrl = values['api-url'];
   const usage =
     'usage: node infra/src/deploy/smoke.ts --api-url <url> --auth dev --log-group <group>\n' +
-    '       LISTORA_SMOKE_ID_TOKEN=<token> node infra/src/deploy/smoke.ts --api-url <url> --auth cognito\n';
+    '       [LISTORA_SMOKE_ID_TOKEN=<token>] node infra/src/deploy/smoke.ts --api-url <url> --auth cognito\n';
   let auth: SmokeAuth | undefined;
   if (values.auth === 'dev' && values['log-group'] !== undefined) {
     auth = { driver: 'dev', readCode: cloudWatchCodeReader(values['log-group']) };
   } else if (values.auth === 'cognito') {
     const idToken = process.env['LISTORA_SMOKE_ID_TOKEN'];
-    if (idToken === undefined || idToken === '') {
-      process.stderr.write('smoke: --auth cognito needs LISTORA_SMOKE_ID_TOKEN (.env.example)\n');
-      process.exit(2);
-    }
-    auth = { driver: 'cognito', idToken };
+    auth = { driver: 'cognito', idToken: idToken === '' ? undefined : idToken };
   }
   if (apiUrl === undefined || auth === undefined) {
     process.stderr.write(usage);

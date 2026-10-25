@@ -63,14 +63,10 @@ struct PhotoView: View {
         // The color takes exactly the proposed size; the photo fills it and is clipped to it.
         Palette.surfaceSecondary.color
             .overlay {
-                AsyncImage(url: url.flatMap(URL.init(string:))) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        Image(systemName: "photo")
-                            .font(Typography.title3)
-                            .foregroundStyle(Palette.textSecondary)
-                    }
+                RemoteImage(url: url.flatMap(URL.init(string:))) {
+                    Image(systemName: "photo")
+                        .font(Typography.title3)
+                        .foregroundStyle(Palette.textSecondary)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))

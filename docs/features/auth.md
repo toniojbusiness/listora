@@ -1,18 +1,28 @@
 # Sign-in and account deletion
 
 How people sign in to Listora and delete their account (plan task T-31, decision D10). The
-API side is in `apps/api/src/auth/` and `apps/api/src/account/`, and the account deletion job
-the worker runs is in `packages/accounts`. The API conventions every route follows, the
+API side is in `apps/api/src/auth/` and `apps/api/src/account/`, the account deletion job
+the worker runs is in `packages/accounts`, the personal environment's user pool is
+`infra/src/stacks/auth-stack.ts`, and the app's sign-in is `CognitoSignInClient` (APIClient)
+and `SignInModel` (SettingsFeature) in `apps/ios`. The API conventions every route follows, the
 tenancy guard included, are in [architecture.md](../architecture.md#4-api-conventions).
 
 ## Drivers
 
 `AUTH_DRIVER` picks how the API verifies bearer tokens. Every `/v1` request needs one.
 
-| Driver    | Used for                    | How a person signs in                                                              |
-| --------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| `dev`     | Local development and tests | A one-time code printed to the API log ([Signing in locally](#signing-in-locally)) |
-| `cognito` | Staging and production      | The app signs in with the Cognito user pool and sends the pool's ID token          |
+| Driver    | Used for                                                          | How a person signs in                                                              |
+| --------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `dev`     | Local development and tests; staging and prod until a pool        | A one-time code printed to the API log ([Signing in locally](#signing-in-locally)) |
+| `cognito` | The personal environment (its owner pool); staging and prod later | The app signs in with the Cognito user pool and sends the pool's ID token          |
+
+Which driver a deployed environment runs is its `signIn` setting (`ENVIRONMENT_SETTINGS` in
+`infra/src/config.ts`), and `signInResources` (`infra/src/containers.ts`) turns it into the
+containers' environment: an `owner-pool` environment gets `AUTH_DRIVER=cognito` with its
+pool, never the dev driver, and only a `dev` environment gets the dev driver. Either without
+the other fails synthesis instead of falling back. `scripts/deploy-personal.sh` refuses to
+deploy personal unless the API's `AUTH_DRIVER` is `cognito`, and its smoke test checks that
+the deployed API answers `404` on `/dev/auth/codes`.
 
 The API never sees a password or an Apple credential. With `cognito`, the app talks to
 Cognito directly, and the API only verifies the tokens Cognito issued.
@@ -35,16 +45,18 @@ curl -X POST localhost:3000/dev/auth/sessions -H 'content-type: application/json
 Send the token as `Authorization: Bearer <accessToken>` on every `/v1` request, and an
 `Idempotency-Key` header (a new UUID per action) on every POST.
 
-Guessing is limited, because the personal environment runs this driver on the internet until
-the iPhone app signs in with Cognito (T-31). An email gets 10 wrong codes an hour, and all
-emails together get 100. Asking for a new code does not reset either limit. Past a limit,
-both endpoints answer `429 rate_limited` with `retryAfterSeconds`, even for the right code.
-The limits live in memory, so they reset when the API restarts.
+Guessing is limited, in case the driver ever runs where others can reach it. An email gets 10
+wrong codes an hour, and all emails together get 100. Asking for a new code does not reset
+either limit. Past a limit, both endpoints answer `429 rate_limited` with
+`retryAfterSeconds`, even for the right code. The limits live in memory, so they reset when
+the API restarts.
 
-Staging and production use `AUTH_DRIVER=cognito`, where the app signs in with the Cognito user
-pool (Sign in with Apple or an emailed code). The Deploy workflow refuses to deploy staging or
-prod while the API container's `AUTH_DRIVER` is anything else. The rest of this file covers both drivers,
-the user pool settings, and in-app account deletion (`DELETE /v1/account`).
+No deployed environment runs this driver: the personal environment uses `AUTH_DRIVER=cognito`
+with its owner pool ([The owner pool](#the-owner-pool-personal)), and the Deploy workflow
+refuses to deploy any environment whose API container has another `AUTH_DRIVER`, so staging
+and production deploy once they have their pools (with Sign in with Apple and public
+sign-up). The rest of this file covers both drivers, the user pool settings, and in-app
+account deletion (`DELETE /v1/account`).
 
 ## How the API verifies a Cognito token
 
@@ -68,6 +80,33 @@ membership (see the tenancy guard). The email is taken only from an ID token who
 app sends the **ID token**. An access token also works, but an account created from one is
 named "My account" with the SKU prefix `LS`.
 
+## The owner pool (personal)
+
+The personal environment is one person's own copy of Listora, so its pool (the auth stack,
+`signIn: { via: 'owner-pool' }`) lets exactly that person in:
+
+- **One user.** The stack creates the deploy target's `ownerEmail` (`LISTORA_OWNER_EMAIL`,
+  from deploy config, never from code) as the pool's only user, verified, with no password and
+  no invitation. Self sign-up is off and the app client has no hosted UI, so nobody else can
+  get a user. Changing the owner email replaces the user: the new one signs in to a new, empty
+  Listora account.
+- **Email one-time codes only.** Essentials plan, `AllowedFirstAuthFactors: [PASSWORD,
+EMAIL_OTP]` (Cognito requires `PASSWORD` in the list; nobody has one), MFA off (one-time
+  codes cannot be combined with it), and no account recovery (there is no password to reset).
+- **SES sending.** Email codes need the pool to send through SES (`DEVELOPER`). The email stack
+  holds the owner's address as an SES identity, which in the SES sandbox is also what lets SES
+  send to it. The codes come from the owner's own address without a domain, and from
+  `no-reply@<domain>` (the domain's DKIM-verified identity) with one.
+- **The one-time setup.** Creating the identity emails the owner a verification link from AWS.
+  `scripts/deploy-personal.sh` waits after the email stack until it is clicked, then deploys
+  the pool, and at the end prints `COGNITO_CLIENT_ID` for the iPhone app's
+  `Config/Prod.xcconfig` (infra/README.md, Deploying the personal environment).
+- **The app client** is the iPhone app's, as specified below for staging and prod, minus the
+  OAuth settings: `ALLOW_USER_AUTH` and refresh only, no secret, ID and access tokens for an
+  hour, refresh tokens for 30 days, and 10 minutes to enter a code.
+- **Deleting the account** in the app deletes the owner's Cognito user too (the worker's job);
+  signing in again then needs the user recreated (infra/README.md has the command).
+
 ## The flows the app uses
 
 Both flows end with the app holding the pool's ID, access, and refresh tokens. The app keeps
@@ -79,10 +118,20 @@ them in the Keychain and refreshes them with the refresh token (`REFRESH_TOKEN_A
   in `ASWebAuthenticationSession`, which goes straight to Apple's sheet, and exchanges the
   returned code (with the PKCE verifier) at `https://<auth domain>/oauth2/token`.
 - **Email one-time code** uses Cognito's passwordless sign-in (choice-based authentication).
-  A new person calls `SignUp` with only their email (no password) and `ConfirmSignUp` with the
-  emailed code; the returned session signs them in through `InitiateAuth` with
-  `AuthFlow=USER_AUTH`. A returning person calls `InitiateAuth` with `AuthFlow=USER_AUTH` and
-  `PREFERRED_CHALLENGE=EMAIL_OTP`, then `RespondToAuthChallenge` with `EMAIL_OTP_CODE`.
+  A returning person calls `InitiateAuth` with `AuthFlow=USER_AUTH` and
+  `PREFERRED_CHALLENGE=EMAIL_OTP`, then `RespondToAuthChallenge` with `EMAIL_OTP_CODE`; the app
+  does this today (`CognitoSignInClient`, from Settings), against the owner pool. Cognito's
+  errors are shown in the app's own words, and a challenge other than `EMAIL_OTP` is refused.
+  With public sign-up (later), a new person calls `SignUp` with only their email (no password)
+  and `ConfirmSignUp` with the emailed code; the returned session signs them in through
+  `InitiateAuth` with `AuthFlow=USER_AUTH`.
+
+The app's `AccessTokenStore` renews the ID token with the refresh token 5 minutes before it
+expires, one refresh at a time however many requests wait, and treats the session as signed in
+while it can still be renewed. A refresh that Cognito rejects (`NotAuthorizedException`: the
+refresh token was revoked or expired, or the user deleted) signs the session out; one that
+cannot reach Cognito keeps it, and the token works until it expires. Signing out revokes the
+refresh token (`RevokeToken`) without waiting for the answer.
 
 An Apple sign-in and an email sign-in with the same address are two different Cognito users
 (two `sub`s), so they reach two different Listora accounts. Linking them (a pre sign-up
@@ -90,9 +139,10 @@ trigger with `AdminLinkProviderForUser`) is a follow-up.
 
 ## What the Cognito user pool needs
 
-This is the specification for the infrastructure task (T-30 or its follow-up). Nothing here
-needs a credential to build or test; it is needed only to run against a real pool (gates G-AWS
-and G-Apple).
+This is the specification for staging's and prod's pools (T-30's follow-up); the personal
+environment's [owner pool](#the-owner-pool-personal) is the same minus sign-up, Sign in with
+Apple, and the managed login domain. Nothing here needs a credential to build or test; it is
+needed only to run against a real pool (gates G-AWS and G-Apple).
 
 **User pool**
 
@@ -130,10 +180,11 @@ and G-Apple).
 - Token validity: ID and access tokens 60 minutes, refresh tokens 30 days. The API refuses
   tokens older than a day, so ID and access tokens must stay at or below one day.
 
-**API configuration**: `AUTH_DRIVER=cognito` (`containerEnvironment` in `infra/src/containers.ts`
-still sets `dev` until the pool exists, so only the personal environment deploys today), `COGNITO_USER_POOL_ID`, and
-`COGNITO_CLIENT_IDS` (the app client's id; a later web client is added to the list). The API
-needs outbound HTTPS to `cognito-idp.<region>.amazonaws.com` for the JWKS.
+**API configuration**: `AUTH_DRIVER=cognito`, `COGNITO_USER_POOL_ID`, and
+`COGNITO_CLIENT_IDS` (the app client's id; a later web client is added to the list), which
+`containerEnvironment` in `infra/src/containers.ts` sets from the environment's pool (staging
+and prod switch when their `signIn` setting does). The API needs outbound HTTPS to
+`cognito-idp.<region>.amazonaws.com` for the JWKS.
 
 **Worker configuration**: `COGNITO_USER_POOL_ID` too, for account deletion. The worker's ECS
 task role needs `cognito-idp:AdminGetUser` and `cognito-idp:AdminDeleteUser` on the pool, and the worker needs outbound HTTPS to

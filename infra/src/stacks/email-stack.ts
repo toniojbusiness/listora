@@ -25,6 +25,12 @@ export const INBOUND_MAIL_SUBDOMAIN = 'in';
  * Receiving email needs a domain. Without one (personal, until a domain is added) the stack
  * holds only the empty bucket, so the worker's grant and the deploy are the same either way;
  * sales are then detected by the scheduled checks and marketplace webhooks alone.
+ *
+ * With an owner pool (`ownerEmail`, personal), the stack also holds the owner's address as an
+ * SES identity: the pool emails the sign-in codes through SES, and in the SES sandbox SES sends
+ * only to verified addresses (and, without a domain, from one). Creating it emails the owner a
+ * verification link, the one manual step of the first deploy (infra/README.md); the auth stack
+ * deploys after it, once the address is verified.
  */
 export class EmailStack extends ListoraStack {
   readonly inboundMailBucket: s3.Bucket;
@@ -37,6 +43,13 @@ export class EmailStack extends ListoraStack {
     const { dns } = target;
 
     if (dns !== undefined) this.verifyDomain(dns, target);
+    // An identity that already exists outside this stack is left alone (`ownerEmailIdentity`);
+    // the deploy still waits until it is verified before the user pool deploys.
+    if (target.ownerEmail !== undefined && target.ownerEmailIdentity === 'create') {
+      new ses.EmailIdentity(this, 'OwnerAddress', {
+        identity: ses.Identity.email(target.ownerEmail),
+      });
+    }
 
     this.inboundMailBucket = new s3.Bucket(this, 'InboundMail', {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,

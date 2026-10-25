@@ -40,8 +40,12 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
 <profile>` (`--dry-run` checks everything offline and prints each step). It refuses any
   account but the captain's, bootstraps with the restricted policy, runs the workflow's steps
   in the same order, stores the Anthropic key from `~/.config/listora/anthropic.env`, and ends
-  with a smoke test (`infra/src/deploy/smoke.ts`: health, sign-in, create and delete an item,
-  no AI usage). The steps, rollback, teardown (the database's deletion protection), and how to
+  with a smoke test (`infra/src/deploy/smoke.ts`: health, that the API refuses requests
+  without a token and has no dev sign-in, and with `LISTORA_SMOKE_ID_TOKEN` creating and
+  deleting an item; no AI usage). Personal signs in only with its owner pool, the auth stack
+  (a Cognito user pool whose one user is `LISTORA_OWNER_EMAIL`; [auth.md](auth.md)): the
+  script refuses the dev driver, and on the first deploy waits for the owner to click SES's
+  verification link before it deploys the pool. The steps, rollback, teardown (the database's deletion protection), and how to
   point the iPhone app at the printed URL are in infra/README.md, Deploying the personal
   environment.
 - **Migrations** run on every deploy as a one-off ECS task (`listora-<env>-migrate`, the

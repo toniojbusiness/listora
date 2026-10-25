@@ -212,6 +212,7 @@ src/
   today/         The Today summary (getToday) and the morning summary setting
   voice/         interpretVoiceCorrection: the text model's reading of a spoken correction
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
+  perf/          The synthetic seller and the latency benchmark (`npm run perf:api`); not served
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -426,6 +427,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push  |
 | [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"          |
 | [features/security.md](features/security.md)                       | The security review: findings, severities, fixes, and follow-ups              |
+| [features/performance.md](features/performance.md)                 | Latency, idle cost, AI cost per item, and the API benchmark at 2,000 items    |
 
 ### Former section numbers
 

@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 const script = fileURLToPath(new URL('../../../scripts/deploy-personal.sh', import.meta.url));
 const ACCOUNT = '976033325938';
 const POLICY_ARN = `arn:aws:iam::${ACCOUNT}:policy/listora-personal-cdk-execution`;
+const OWNER = 'owner@example.com';
 
 /** An answer of the fake `aws`: printed output and exit status. */
 interface Answer {
@@ -32,7 +33,7 @@ afterEach(() => {
 function deploy(
   args: string[],
   answers: Record<string, Answer> = {},
-  { key = 'not-a-real-test-key', realSynth = false } = {},
+  { key = 'not-a-real-test-key', realSynth = false, owner = 'Owner@Example.com' } = {},
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'deploy-personal-'));
   dirs.push(dir);
@@ -73,6 +74,7 @@ echo "unexpected aws call: \${args[*]}" >&2; exit 99`,
   stub(
     'npx',
     `echo "npx $*" >>"${calls}"
+if [[ -n "\${AWS_CONFIG_FILE:-}" ]]; then sed 's/^/config: /' "$AWS_CONFIG_FILE" >>"${calls}"; fi
 if [[ "${String(realSynth)}" == true && "$1 $2" == "cdk synth" ]]; then exec "${npx}" "$@"; fi
 echo "npx must not run in this test" >&2; exit 98`,
   );
@@ -80,7 +82,11 @@ echo "npx must not run in this test" >&2; exit 98`,
   writeFileSync(keyFile, `ANTHROPIC_API_KEY=${key}\n# a comment\n`);
   const result = spawnSync('bash', [script, ...args, '--anthropic-env', keyFile], {
     encoding: 'utf8',
-    env: { PATH: `${dir}:${process.env['PATH'] ?? ''}`, HOME: process.env['HOME'] },
+    env: {
+      PATH: `${dir}:${process.env['PATH'] ?? ''}`,
+      HOME: process.env['HOME'],
+      LISTORA_OWNER_EMAIL: owner,
+    },
   });
   return {
     status: result.status,
@@ -112,6 +118,13 @@ describe('scripts/deploy-personal.sh', () => {
     const run = deploy([]);
     expect(run.status).toBe(1);
     expect(run.output).toContain('name the AWS profile');
+    expect(run.calls).toEqual([]);
+  });
+
+  it('refuses to run without the owner email, the only person who can sign in', () => {
+    const run = deploy(['--profile', 'p'], {}, { owner: '' });
+    expect(run.status).toBe(1);
+    expect(run.output).toContain('set LISTORA_OWNER_EMAIL');
     expect(run.calls).toEqual([]);
   });
 
@@ -159,6 +172,10 @@ describe('scripts/deploy-personal.sh', () => {
       stderr: 'An error occurred (ValidationError): Stack with id x does not exist',
       status: 254,
     },
+    'sesv2 get-email-identity': {
+      stderr: 'An error occurred (NotFoundException) when calling the GetEmailIdentity operation',
+      status: 254,
+    },
   };
   const toolkit = (policies: string): Answer => ({
     stdout: JSON.stringify({
@@ -171,6 +188,30 @@ describe('scripts/deploy-personal.sh', () => {
         },
       ],
     }),
+  });
+
+  it('creates the owner email identity only when the account does not already have it', () => {
+    const synthOf = (answers: Record<string, Answer>) => {
+      const run = deploy(['--profile', 'p'], { ...freshAccount, ...answers });
+      return { run, synth: run.calls.find((call) => call.startsWith('npx cdk synth')) ?? '' };
+    };
+    // A fresh account: the email stack creates it (and AWS emails the verification link).
+    expect(synthOf({}).synth).toContain('--context ownerEmailIdentity=create');
+
+    // Already in the account, outside Listora's stacks: left alone, never taken over.
+    const outside = synthOf({
+      'sesv2 get-email-identity': { stdout: '{"VerifiedForSendingStatus": true}' },
+      'cloudformation list-stack-resources': { stdout: '' },
+    });
+    expect(outside.synth).toContain('--context ownerEmailIdentity=existing');
+    expect(outside.run.output).toContain('already in the account outside Listora');
+
+    // Made by Listora's email stack on an earlier deploy: the stack keeps managing it.
+    const owned = synthOf({
+      'sesv2 get-email-identity': { stdout: '{"VerifiedForSendingStatus": true}' },
+      'cloudformation list-stack-resources': { stdout: `${OWNER}\n` },
+    });
+    expect(owned.synth).toContain('--context ownerEmailIdentity=create');
   });
 
   it("refuses Listora's bootstrap when it is not the restricted one, changing nothing", () => {
@@ -212,9 +253,20 @@ describe('scripts/deploy-personal.sh', () => {
     expect(run.calls).toContainEqual(
       expect.stringMatching(
         new RegExp(
-          `^npx cdk bootstrap aws://${ACCOUNT}/us-east-1 --app cdk.out/deploy-personal --qualifier listora --toolkit-stack-name CDKToolkit-listora --cloudformation-execution-policies ${POLICY_ARN} --termination-protection --profile p `,
+          `^npx cdk bootstrap aws://${ACCOUNT}/us-east-1 --app cdk.out/deploy-personal --qualifier listora --toolkit-stack-name CDKToolkit-listora --cloudformation-execution-policies ${POLICY_ARN} --termination-protection --profile listora-deploy-cdk `,
         ),
       ),
+    );
+    // cdk gets the profile's credentials from the AWS CLI through a private config, which
+    // names the CLI command but holds no credentials.
+    expect(run.calls).toContain('config: [profile listora-deploy-cdk]');
+    expect(run.calls).toContainEqual(
+      expect.stringMatching(
+        /^config: credential_process = env AWS_CONFIG_FILE=".+" aws configure export-credentials --profile p --format process$/,
+      ),
+    );
+    expect(run.calls.filter((call) => call.startsWith('config: '))).not.toContainEqual(
+      expect.stringMatching(/aws_access_key_id|aws_secret_access_key|aws_session_token/i),
     );
   }, 120_000);
 
@@ -236,6 +288,9 @@ describe('scripts/deploy-personal.sh', () => {
       'listora-personal-cdk-execution updated to the committed document',
     );
     expect(run.calls.some((call) => call.startsWith('npx cdk bootstrap'))).toBe(false);
+    // Every cdk command that talks to AWS first renews the sign-in through the CLI.
+    const deployCall = run.calls.findIndex((call) => call.startsWith('npx cdk deploy'));
+    expect(run.calls[deployCall - 1]).toMatch(/sts get-caller-identity$/);
     // Next it deploys the registry, which the fake npx refuses.
     expect(run.calls).toContainEqual(
       expect.stringMatching(
@@ -254,6 +309,7 @@ describe('scripts/deploy-personal.sh', () => {
     ]);
     expect(run.output).toContain('would run: aws sts get-caller-identity --profile p');
     expect(run.output).toContain('cdk synth failed');
+    expect(run.calls[0]).toContain(`--context ownerEmail=${OWNER}`);
   });
 });
 
@@ -270,7 +326,11 @@ describe('scripts/deploy-personal.sh --dry-run with the real cdk', () => {
       [script, '--dry-run', '--profile', 'p', '--anthropic-env', join(dir, 'anthropic.env')],
       {
         encoding: 'utf8',
-        env: { PATH: `${dir}:${process.env['PATH'] ?? ''}`, HOME: process.env['HOME'] },
+        env: {
+          PATH: `${dir}:${process.env['PATH'] ?? ''}`,
+          HOME: process.env['HOME'],
+          LISTORA_OWNER_EMAIL: OWNER,
+        },
       },
     );
     expect(result.stderr).toBe('');
@@ -278,7 +338,10 @@ describe('scripts/deploy-personal.sh --dry-run with the real cdk', () => {
     expect(() => readFileSync(join(dir, 'calls'))).toThrow();
     const output = result.stdout;
     for (const expected of [
-      'api: AUTH_DRIVER=dev, AI_PROVIDER=anthropic (the fake AI is off)',
+      'api: AUTH_DRIVER=cognito, AI_PROVIDER=anthropic (the fake AI is off)',
+      `sign-in: the Cognito user pool, no sign-up, and ${OWNER} its only user`,
+      `aws sesv2 get-email-identity --email-identity <each of ${OWNER}>`,
+      'npx cdk deploy --app cdk.out/deploy-personal --require-approval never listora-personal-auth',
       'database: deletion protection on',
       `--cloudformation-execution-policies ${POLICY_ARN} --termination-protection`,
       'listora-personal-data: 6 resources',
@@ -286,7 +349,7 @@ describe('scripts/deploy-personal.sh --dry-run with the real cdk', () => {
       // Both images the stacks run, as the Deploy workflow builds them.
       '--target app --tag 976033325938.dkr.ecr.us-east-1.amazonaws.com/listora/app:',
       '--target runner --tag 976033325938.dkr.ecr.us-east-1.amazonaws.com/listora/runner:',
-      'node infra/src/deploy/smoke.ts --api-url <ApiUrl> --auth dev --log-group /listora/personal/api',
+      'node infra/src/deploy/smoke.ts --api-url <ApiUrl> --auth cognito',
       'dry run ok; nothing was sent to AWS',
     ]) {
       expect(output).toContain(expected);
@@ -299,6 +362,8 @@ describe('scripts/deploy-personal.sh --dry-run with the real cdk', () => {
       'Deploy the image repository',
       'Build and push',
       'state stacks and the migration task',
+      'Wait until SES has verified',
+      'Deploy the user pool',
       'Store the Anthropic key',
       'Run the schema migrations',
       'Deploy the services and alarms',

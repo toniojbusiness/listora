@@ -23,13 +23,14 @@ public enum SettingsDestination: Hashable, Sendable {
 }
 
 /// Account, marketplace connections, and app information, opened over the app from the gear in
-/// the Today and Sales headers. Dev builds also have a developer sign-in; the real account section
-/// (T-28, T-31) comes later. The Marketplaces and Link accounts screens come from the caller
+/// the Today and Sales headers. The account section signs in: with an emailed code from the
+/// environment's user pool, or in Dev builds with the developer sign-in against the local API.
+/// The Marketplaces and Link accounts screens come from the caller
 /// (AppFeature), since a feature never imports another; so does `path`, so the caller can open
 /// them.
 public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
     private let content: SettingsContent
-    private let devSignIn: DevSignInModel?
+    private let signIn: SignInModel?
     private let marketplaces: Marketplaces?
     private let linkAccounts: LinkAccounts?
     /// The server's words for a connection that needs attention, shown on the Marketplaces row.
@@ -40,7 +41,7 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
 
     public init(
         content: SettingsContent,
-        devSignIn: DevSignInModel? = nil,
+        signIn: SignInModel? = nil,
         path: Binding<[SettingsDestination]>,
         marketplacesAttention: String? = nil,
         onDone: (@MainActor () -> Void)? = nil,
@@ -48,7 +49,7 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
         @ViewBuilder linkAccounts: () -> LinkAccounts,
     ) {
         self.content = content
-        self.devSignIn = devSignIn
+        self.signIn = signIn
         _path = path
         self.marketplacesAttention = marketplacesAttention
         self.onDone = onDone
@@ -90,8 +91,8 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
                     }
                     .listRowBackground(Palette.surface.color)
                 }
-                if let devSignIn {
-                    DevSignInSection(model: devSignIn)
+                if let signIn {
+                    SignInSection(model: signIn)
                         .listRowBackground(Palette.surface.color)
                 }
                 Section {
@@ -159,9 +160,9 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
 
 extension SettingsView where Marketplaces == EmptyView, LinkAccounts == EmptyView {
     /// Settings without the Marketplaces and Link accounts screens.
-    public init(content: SettingsContent, devSignIn: DevSignInModel? = nil) {
+    public init(content: SettingsContent, signIn: SignInModel? = nil) {
         self.content = content
-        self.devSignIn = devSignIn
+        self.signIn = signIn
         marketplaces = nil
         linkAccounts = nil
         marketplacesAttention = nil
@@ -183,16 +184,23 @@ extension SettingsView where Marketplaces == EmptyView, LinkAccounts == EmptyVie
     ))
 }
 
-/// Sign in against the local API's dev auth driver: the code appears in the API's log.
-struct DevSignInSection: View {
-    @Bindable var model: DevSignInModel
+/// Signing in: the email, then the code. The developer sign-in reads its code from the local API's
+/// log; the email-code sign-in gets it by email from the environment's user pool.
+struct SignInSection: View {
+    @Bindable var model: SignInModel
 
     var body: some View {
         Section {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 switch model.stage {
+                case .unavailable:
+                    Banner(
+                        "This build can't sign in: it has no Cognito app client (COGNITO_CLIENT_ID in its xcconfig).",
+                        tone: .failed,
+                    )
+                    .accessibilityIdentifier("signIn.unavailable")
                 case .enterEmail:
-                    ListoraTextField("Email", hint: "Dev builds only. Start the API with AUTH_DRIVER=dev.") {
+                    ListoraTextField("Email", hint: emailHint) {
                         TextField(
                             "Email",
                             text: $model.email,
@@ -202,53 +210,77 @@ struct DevSignInSection: View {
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .accessibilityIdentifier("devSignIn.email")
+                        .submitLabel(.send)
+                        .onSubmit {
+                            if model.canRequestCode {
+                                Task { await model.requestCode() }
+                            }
+                        }
+                        .accessibilityIdentifier("signIn.email")
                     }
-                    Button("Send code") { Task { await model.requestCode() } }
-                        .buttonStyle(.listoraPrimary)
-                        .disabled(!model.canRequestCode)
-                        .loading(model.isWorking)
-                        .accessibilityIdentifier("devSignIn.sendCode")
+                    Button(model.kind == .developer ? "Send code" : "Email me a code") {
+                        Task { await model.requestCode() }
+                    }
+                    .buttonStyle(.listoraPrimary)
+                    .disabled(!model.canRequestCode)
+                    .loading(model.isWorking)
+                    .accessibilityIdentifier("signIn.sendCode")
                 case .enterCode:
-                    ListoraTextField(
-                        "6-digit code",
-                        hint: "Enter the code from the API's log for \(model.email).",
-                    ) {
+                    ListoraTextField("Code", hint: codeHint) {
                         TextField(
-                            "6-digit code",
+                            "Code",
                             text: $model.code,
                             prompt: Text("123456").foregroundStyle(Palette.textSecondary),
                         )
                         .textContentType(.oneTimeCode)
                         .keyboardType(.numberPad)
-                        .accessibilityIdentifier("devSignIn.code")
+                        .accessibilityIdentifier("signIn.code")
                     }
                     Button("Sign in") { Task { await model.signIn() } }
                         .buttonStyle(.listoraPrimary)
                         .disabled(!model.canSignIn)
                         .loading(model.isWorking)
-                        .accessibilityIdentifier("devSignIn.signIn")
-                    Button("Use a different email") { model.signOut() }
+                        .accessibilityIdentifier("signIn.signIn")
+                    Button("Send a new code") { Task { await model.requestCode() } }
                         .buttonStyle(.listoraTertiary)
+                        .disabled(model.isWorking)
+                        .accessibilityIdentifier("signIn.resend")
+                    Button("Use a different email") { model.startOver() }
+                        .buttonStyle(.listoraTertiary)
+                        .disabled(model.isWorking)
                 case let .signedIn(email):
                     ListRow("Signed in as") {
                         IconTile(systemImage: "person.crop.circle.badge.checkmark", tone: .success)
                     } trailing: {
                         Text(email)
                             .foregroundStyle(Palette.textSecondary)
-                            .accessibilityIdentifier("devSignIn.signedInEmail")
+                            .accessibilityIdentifier("signIn.signedInEmail")
                     }
                     Button("Sign out", role: .destructive) { model.signOut() }
                         .buttonStyle(.listora(.destructiveText, size: .large))
+                        .accessibilityIdentifier("signIn.signOut")
                 }
                 if let message = model.message {
                     Banner(message, tone: .failed)
+                        .accessibilityIdentifier("signIn.message")
                 }
             }
             .padding(.vertical, Spacing.xs)
         } header: {
-            SectionHeader("Developer sign-in")
+            SectionHeader(model.kind == .developer ? "Developer sign-in" : "Account")
         }
         .onAppear { model.refresh() }
+    }
+
+    private var emailHint: String {
+        model.kind == .developer
+            ? "Dev builds only. Start the API with AUTH_DRIVER=dev."
+            : "We'll email you a code to sign in. No password needed."
+    }
+
+    private var codeHint: String {
+        model.kind == .developer
+            ? "Enter the code from the API's log for \(model.email)."
+            : "Enter the code we emailed to \(model.email). It works for 10 minutes."
     }
 }

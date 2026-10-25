@@ -12,6 +12,9 @@
 #   --anthropic-env  File with the ANTHROPIC_API_KEY=... line (default
 #                    ~/.config/listora/anthropic.env). The key is never printed.
 #
+# Required, from the environment: LISTORA_OWNER_EMAIL, the address the owner signs in to the app
+# with (the user pool's only user; docs/features/auth.md).
+#
 # Optional settings, from the environment (.env.example): LISTORA_AWS_REGION (us-east-1),
 # LISTORA_AVAILABILITY_ZONES, LISTORA_ALARM_EMAIL, LISTORA_DOMAIN with LISTORA_HOSTED_ZONE_ID,
 # and LISTORA_CONTAINER_CLI (docker).
@@ -19,10 +22,12 @@
 # Steps: verify the account; check the zones and the existing stacks; synthesize offline; make
 # sure the restricted CDK bootstrap is in place (create its execution policy and bootstrap if
 # the account has none, refuse if it has another); deploy the registry; build and push the
-# image; deploy the state stacks and the migration task; store the Anthropic key; run the
-# migrations; deploy the services and alarms; wait for health; run the smoke test; print the
-# API URL. It never deletes or replaces anything that already exists: a stack in a failed state
-# or a bootstrap it did not make stops it with the reason.
+# image; deploy the state stacks and the migration task; wait until SES has verified the
+# owner's address (the first deploy emails them a link to click); deploy the user pool; store
+# the Anthropic key; run the migrations; deploy the services and alarms; wait for health; run
+# the smoke test; print the API URL and the iPhone app's sign-in settings. It never deletes or
+# replaces anything that already exists: a stack in a failed state or a bootstrap it did not
+# make stops it with the reason.
 set -euo pipefail
 
 # The captain's personal AWS account. Deploying anywhere else is refused.
@@ -64,7 +69,9 @@ readonly policy_name="listora-$ENVIRONMENT-cdk-execution"
 readonly policy_arn="arn:aws:iam::$EXPECTED_ACCOUNT:policy/$policy_name"
 readonly registry="$EXPECTED_ACCOUNT.dkr.ecr.$region.amazonaws.com"
 readonly api_log_group="/listora/$ENVIRONMENT/api"
-readonly stacks=(registry network secrets data storage email migrate compute observability)
+readonly stacks=(registry network secrets data storage email auth migrate compute observability)
+owner_email=$(tr '[:upper:]' '[:lower:]' <<<"${LISTORA_OWNER_EMAIL:-}")
+readonly owner_email
 
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
@@ -83,8 +90,22 @@ fail() {
 
 # Every AWS call names the profile and region; nothing is exported.
 aws_() { aws --profile "$profile" --region "$region" "$@"; }
+# cdk reads an SSO profile's cached access token, which lasts about an hour, and cannot renew
+# it, while the AWS CLI keeps working from its own cached role credentials. So cdk gets its
+# credentials from the CLI: a private AWS config in the work directory (removed on exit) holds
+# one profile whose credential_process asks the CLI for the profile's credentials. Nothing is
+# exported or written to disk but that config, which holds no credentials.
+readonly cdk_profile=listora-deploy-cdk
+cdk_config() {
+  local source_config=${AWS_CONFIG_FILE:-$HOME/.aws/config}
+  (umask 077 && printf '[profile %s]\ncredential_process = env AWS_CONFIG_FILE="%s" aws configure export-credentials --profile %s --format process\nregion = %s\n' \
+    "$cdk_profile" "$source_config" "$profile" "$region" >"$workdir/aws-config")
+}
 cdk_() {
-  (cd infra && npx cdk "$@" --profile "$profile" --no-notices --no-version-reporting)
+  aws_ sts get-caller-identity >/dev/null ||
+    fail "the sign-in of profile $profile has expired; run aws sso login --profile $profile and run this again"
+  [[ -e "$workdir/aws-config" ]] || cdk_config
+  (cd infra && AWS_CONFIG_FILE="$workdir/aws-config" npx cdk "$@" --profile "$cdk_profile" --no-notices --no-version-reporting)
 }
 
 # --- 1. Local checks --------------------------------------------------------------------------
@@ -107,6 +128,10 @@ image_tag=$(git rev-parse HEAD)
 readonly image_tag
 info "commit $image_tag, region $region, profile ${profile:-(none)}"
 
+[[ -n "$owner_email" ]] ||
+  fail "set LISTORA_OWNER_EMAIL to the email address you sign in to the app with (the only account the deployed app accepts)"
+info "owner (the only person who can sign in): $owner_email"
+
 [[ -r "$anthropic_env" ]] || fail "no Anthropic key file at $anthropic_env"
 anthropic_key=$(sed -n 's/^ANTHROPIC_API_KEY=//p' "$anthropic_env" | tail -n 1 | sed -e 's/^["'\'']//' -e 's/["'\'']$//')
 [[ -n "$anthropic_key" ]] || fail "$anthropic_env has no ANTHROPIC_API_KEY= line"
@@ -128,8 +153,13 @@ fi
 step "Check the availability zones and the existing stacks"
 zones=${LISTORA_AVAILABILITY_ZONES:-}
 compute_existed=false
+# The email stack creates the owner's SES identity unless the account already has one that no
+# Listora stack owns (CloudFormation refuses to create an identity that exists, and the script
+# never takes over or changes a resource it did not make).
+owner_identity=${LISTORA_OWNER_EMAIL_IDENTITY:-create}
 if [[ "$dry_run" == true ]]; then
   would "aws ec2 describe-availability-zones  (refuse a zone without API Gateway VPC links, use1-az3)"
+  would "aws sesv2 get-email-identity --email-identity $owner_email  (an identity no Listora stack owns is left alone: ownerEmailIdentity=existing)"
   would "aws cloudformation describe-stacks --stack-name listora-$ENVIRONMENT-<each stack>  (refuse a failed or busy stack)"
 else
   zone_table=$(aws_ ec2 describe-availability-zones --filters Name=state,Values=available \
@@ -165,12 +195,27 @@ else
     [[ "$name" != compute ]] || compute_existed=true
     info "$stack: $status"
   done
+  if aws_ sesv2 get-email-identity --email-identity "$owner_email" >/dev/null 2>"$workdir/err"; then
+    owned=$(aws_ cloudformation list-stack-resources --stack-name "listora-$ENVIRONMENT-email" \
+      --query "StackResourceSummaries[?ResourceType=='AWS::SES::EmailIdentity'].PhysicalResourceId" \
+      --output text 2>/dev/null || true)
+    if grep -qx "$owner_email" <<<"${owned//$'\t'/$'\n'}"; then
+      owner_identity=create
+      info "SES identity $owner_email: managed by listora-$ENVIRONMENT-email"
+    else
+      owner_identity=existing
+      info "SES identity $owner_email: already in the account outside Listora's stacks; left alone"
+    fi
+  else
+    grep -q 'NotFoundException' "$workdir/err" || fail "cannot read the SES identity $owner_email: $(cat "$workdir/err")"
+  fi
 fi
 
 # --- 4. Offline synthesis and template checks ------------------------------------------------
 step "Synthesize the stacks offline with the real settings"
 context=(--context "env=$ENVIRONMENT" --context "account=$EXPECTED_ACCOUNT" --context "region=$region"
-  --context "imageTag=$image_tag")
+  --context "imageTag=$image_tag" --context "ownerEmail=$owner_email"
+  --context "ownerEmailIdentity=$owner_identity")
 [[ -z "$zones" ]] || context+=(--context "availabilityZones=$zones")
 [[ -z "${LISTORA_ALARM_EMAIL:-}" ]] || context+=(--context "alarmEmail=$LISTORA_ALARM_EMAIL")
 [[ -z "${LISTORA_DOMAIN:-}" ]] || context+=(--context "domain=$LISTORA_DOMAIN")
@@ -195,7 +240,15 @@ container_env() {
 }
 auth_driver=$(container_env api AUTH_DRIVER)
 ai_provider=$(container_env api AI_PROVIDER)
-[[ "$auth_driver" == dev || "$auth_driver" == cognito ]] || fail "unexpected AUTH_DRIVER '$auth_driver' in the api container"
+# The dev driver writes sign-in codes to the API log and lets anyone ask for one, so it never
+# runs here: personal signs in only with its user pool (docs/features/auth.md).
+[[ "$auth_driver" == cognito ]] ||
+  fail "the api container would run AUTH_DRIVER '$auth_driver'; personal signs in only with its Cognito user pool"
+[[ "$(jq '[.Resources[] | select(.Type == "AWS::Cognito::UserPool") | .Properties.AdminCreateUserConfig.AllowAdminCreateUserOnly] == [true]' "$(template auth)")" == true ]] ||
+  fail "the user pool would allow self sign-up"
+[[ "$(jq -r '[.Resources[] | select(.Type == "AWS::Cognito::UserPoolUser") | .Properties.Username] | join(",")' "$(template auth)")" == "$owner_email" ]] ||
+  fail "the user pool's only user must be $owner_email"
+info "sign-in: the Cognito user pool, no sign-up, and $owner_email its only user"
 [[ "$ai_provider" != fake && -n "$ai_provider" ]] || fail "the api container would run the fake AI provider"
 [[ "$(container_env worker AI_PROVIDER)" == "$ai_provider" ]] || fail "the worker's AI_PROVIDER differs from the api's"
 info "api: AUTH_DRIVER=$auth_driver, AI_PROVIDER=$ai_provider (the fake AI is off)"
@@ -299,6 +352,40 @@ done
 step "Deploy the state stacks and the migration task"
 deploy_stacks network secrets registry data storage email migrate
 
+# The user pool emails the sign-in codes through SES, which (in its sandbox) sends only to
+# verified addresses. The email stack made the owner's address an SES identity, and SES emailed
+# them a link; until it is clicked, no code can reach them. With a domain, the codes come from
+# no-reply@<domain>, whose DKIM records verify the domain within minutes.
+identities=("$owner_email")
+[[ -z "${LISTORA_DOMAIN:-}" ]] || identities+=("$LISTORA_DOMAIN")
+step "Wait until SES has verified ${identities[*]} (the sign-in codes are emailed through SES)"
+if [[ "$dry_run" == true ]]; then
+  would "aws sesv2 get-email-identity --email-identity <each of ${identities[*]}>  (until it is verified, 30 minutes at most)"
+else
+  for identity in "${identities[@]}"; do
+    verified=false
+    for attempt in $(seq 180); do
+      status=$(aws_ sesv2 get-email-identity --email-identity "$identity" \
+        --query VerifiedForSendingStatus --output text) || fail "cannot read the SES identity $identity"
+      if [[ "$status" == True || "$status" == true ]]; then
+        verified=true
+        break
+      fi
+      if [[ "$attempt" == 1 && "$identity" == "$owner_email" ]]; then
+        info "waiting for you: open the email \"Amazon Web Services - Email Address Verification Request\" sent to $owner_email and click its link"
+        info "(not there? resend it: aws ses verify-email-identity --email-address $owner_email --profile $profile --region $region)"
+      fi
+      sleep 10
+    done
+    [[ "$verified" == true ]] ||
+      fail "SES has not verified $identity yet; click the verification link (or wait for the domain's DKIM records), then run this again"
+    info "$identity: verified"
+  done
+fi
+
+step "Deploy the user pool (sign-in for $owner_email only)"
+deploy_stacks auth
+
 step "Store the Anthropic key in Secrets Manager (listora/$ENVIRONMENT/anthropic-api-key)"
 secret_changed=false
 if [[ "$dry_run" == true ]]; then
@@ -359,9 +446,11 @@ else
   info "$api_url/health/ready: $ready"
 fi
 
-step "Smoke test (health, sign-in with the $auth_driver driver, create and delete an item)"
+# The owner pool has no smoke user, so the signed-in steps (create and delete an item) run only
+# with LISTORA_SMOKE_ID_TOKEN, an ID token of the owner's (infra/README.md).
+step "Smoke test (health, no access without a token, the dev sign-in off; with LISTORA_SMOKE_ID_TOKEN, create and delete an item)"
 smoke=(node infra/src/deploy/smoke.ts --api-url)
-if [[ "$auth_driver" == dev ]]; then smoke_auth=(--auth dev --log-group "$api_log_group"); else smoke_auth=(--auth cognito); fi
+smoke_auth=(--auth cognito)
 if [[ "$dry_run" == true ]]; then
   would "AWS_PROFILE=<profile> AWS_REGION=$region ${smoke[*]} <ApiUrl> ${smoke_auth[*]}"
 else
@@ -373,7 +462,12 @@ if [[ "$dry_run" == true ]]; then
   printf '\ndeploy-personal: dry run ok; nothing was sent to AWS. Deploy with: scripts/deploy-personal.sh --profile <profile>\n'
 else
   printf '\ndeploy-personal: deployed %s\n\n  API URL: %s\n\n' "$image_tag" "$api_url"
-  printf 'Point the iPhone app at it: set API_BASE_URL = %s in apps/ios/Config/Prod.xcconfig\n' "${api_url/:\/\//:\/\$()\/}"
+  app_client_id=$(aws_ cloudformation describe-stacks --stack-name "listora-$ENVIRONMENT-auth" \
+    --query "Stacks[0].Outputs[?OutputKey=='AppClientId'].OutputValue" --output text)
+  printf 'Point the iPhone app at it, in apps/ios/Config/Prod.xcconfig:\n\n'
+  printf '  API_BASE_URL = %s\n' "${api_url/:\/\//:\/\$()\/}"
+  printf '  COGNITO_REGION = %s\n  COGNITO_CLIENT_ID = %s\n\n' "$region" "$app_client_id"
   # shellcheck disable=SC2016 # a literal $(), as the xcconfig needs
   printf '(the $() keeps xcconfig from reading // as a comment), then ship a TestFlight build.\n'
+  printf 'Sign in from Settings with %s: the app emails you a one-time code.\n' "$owner_email"
 fi

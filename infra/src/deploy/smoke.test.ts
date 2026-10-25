@@ -23,6 +23,10 @@ async function fakeApi(overrides: Record<string, Handler> = {}) {
       (JSON.parse(body) as { code: string }).code === '123456'
         ? { status: 200, body: { accessToken: 'dev-token', tokenType: 'Bearer' } }
         : { status: 401, body: { error: { code: 'unauthenticated' } } },
+    'GET /v1/items': (request) =>
+      request.headers.authorization === undefined
+        ? { status: 401, body: { error: { code: 'unauthenticated' } } }
+        : { status: 200, body: { items: [] } },
     'POST /v1/items': () => ({ status: 201, body: item }),
     'GET /v1/items/:id': () => (deleted ? { status: 404 } : { status: 200, body: item }),
     'DELETE /v1/items/:id': () => {
@@ -71,6 +75,7 @@ describe('runSmoke', () => {
     expect(api.routes()).toEqual([
       'GET /health/live',
       'GET /health/ready',
+      'GET /v1/items',
       'POST /dev/auth/codes',
       'POST /dev/auth/sessions',
       'POST /v1/items',
@@ -135,13 +140,44 @@ describe('runSmoke', () => {
     );
   });
 
+  /** The cognito driver serves no dev sign-in routes. */
+  const cognitoApi = () => fakeApi({ 'POST /dev/auth/codes': () => ({ status: 404 }) });
+
   it('signs in with a Cognito ID token and keeps the Cognito user', async () => {
-    const api = await fakeApi();
+    const api = await cognitoApi();
     await run(api.url, { driver: 'cognito', idToken: 'cognito-id-token' });
-    expect(api.routes()).not.toContain('POST /dev/auth/codes');
+    expect(api.routes()).not.toContain('POST /dev/auth/sessions');
     expect(api.routes()).not.toContain('DELETE /v1/account');
     const create = api.requests.find((request) => request.route === 'POST /v1/items');
     expect(create?.headers.authorization).toBe('Bearer cognito-id-token');
+  });
+
+  it('with Cognito and no ID token, checks that the dev sign-in is off and skips the signed-in steps', async () => {
+    const api = await cognitoApi();
+    const lines: string[] = [];
+    await run(api.url, { driver: 'cognito', idToken: undefined }, lines);
+    expect(api.routes()).toEqual([
+      'GET /health/live',
+      'GET /health/ready',
+      'GET /v1/items',
+      'POST /dev/auth/codes',
+    ]);
+    expect(lines.at(-1)).toContain('the signed-in steps were skipped');
+  });
+
+  it('fails when a Cognito API still serves the dev sign-in', async () => {
+    const api = await fakeApi();
+    await expect(run(api.url, { driver: 'cognito', idToken: undefined })).rejects.toThrow(
+      'the dev sign-in is off: expected HTTP 404, got 202',
+    );
+  });
+
+  it('fails when the API answers a request without a token', async () => {
+    const api = await fakeApi({ 'GET /v1/items': () => ({ status: 200, body: { items: [] } }) });
+    await expect(run(api.url)).rejects.toThrow(
+      'refuse a request without a token: expected HTTP 401, got 200',
+    );
+    expect(api.routes()).not.toContain('POST /dev/auth/codes');
   });
 
   it('fails when the API cannot be reached', async () => {

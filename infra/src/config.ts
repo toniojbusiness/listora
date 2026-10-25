@@ -69,6 +69,18 @@ export type TaskEgress =
  *   registered at the `execute-api` URL until they are re-registered at `api.<domain>`
  *   (infra/README.md, Adding a domain later).
  */
+/**
+ * How people sign in (docs/features/auth.md):
+ *
+ * - `dev`: the API's dev driver, whose one-time codes appear only in the API's log. Staging and
+ *   prod run it until they get their user pool (with public sign-up and Sign in with Apple,
+ *   T-31's follow-up); it must never serve real people.
+ * - `owner-pool`: a Cognito user pool (the auth stack) with email one-time codes, no self
+ *   sign-up, and one user, the deploy target's `ownerEmail`. The API runs the `cognito` driver
+ *   against it, and the dev driver is refused.
+ */
+export type SignIn = { readonly via: 'dev' } | { readonly via: 'owner-pool' };
+
 export type ApiIngress =
   | { readonly via: 'load-balancer' }
   | { readonly via: 'http-api'; readonly disableDefaultEndpoint: boolean };
@@ -88,6 +100,7 @@ export interface EnvironmentSettings {
     readonly rejectedFlowLogs: boolean;
   };
   readonly ingress: ApiIngress;
+  readonly signIn: SignIn;
   readonly database: {
     /** RDS instance class, for example `t4g.micro` (Graviton burstable). */
     readonly instanceType: string;
@@ -156,6 +169,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       rejectedFlowLogs: true,
     },
     ingress: { via: 'load-balancer' },
+    signIn: { via: 'dev' },
     database: {
       instanceType: 't4g.micro',
       multiAz: false,
@@ -183,6 +197,7 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
       rejectedFlowLogs: true,
     },
     ingress: { via: 'load-balancer' },
+    signIn: { via: 'dev' },
     database: {
       instanceType: 't4g.medium',
       multiAz: true,
@@ -220,6 +235,8 @@ export const ENVIRONMENT_SETTINGS: Readonly<Record<EnvironmentName, EnvironmentS
     // The execute-api URL stays on until every URL registered with a third party has moved
     // to api.<domain>.
     ingress: { via: 'http-api', disableDefaultEndpoint: false },
+    // The owner signs in to their own copy with an emailed code; nobody else can (no sign-up).
+    signIn: { via: 'owner-pool' },
     database: {
       // Single-AZ Graviton RDS beats Aurora Serverless v2: the worker keeps connections open,
       // so Aurora never pauses and bills at least 0.5 ACU around the clock.
@@ -293,6 +310,20 @@ export interface DeployTarget {
   /** Optional address subscribed to the alarm topic. */
   readonly alarmEmail: string | undefined;
   /**
+   * The one person who may sign in, where the environment signs in with an owner pool
+   * (`signIn.via === 'owner-pool'`, so personal): the pool's only user, to whom the sign-in
+   * codes are emailed. Required there, and unset elsewhere.
+   */
+  readonly ownerEmail: string | undefined;
+  /**
+   * Whether the email stack creates the owner's SES email identity (`create`, the default) or
+   * leaves one that already exists outside it alone (`existing`): an account can hold an
+   * address's identity only once, and CloudFormation refuses to create one that exists.
+   * scripts/deploy-personal.sh picks `existing` when the account already has the identity and
+   * no Listora stack owns it. Only with an owner pool.
+   */
+  readonly ownerEmailIdentity: OwnerEmailIdentity;
+  /**
    * The two availability zones the VPC spans, when they must be chosen: some services skip
    * a zone (in us-east-1, API Gateway VPC links and Graviton instances are not offered in
    * `use1-az3`), and zone names map to different zone ids in every account. Unset means the
@@ -300,6 +331,9 @@ export interface DeployTarget {
    */
   readonly availabilityZones: readonly string[] | undefined;
 }
+
+export const OWNER_EMAIL_IDENTITIES = ['create', 'existing'] as const;
+export type OwnerEmailIdentity = (typeof OWNER_EMAIL_IDENTITIES)[number];
 
 /** A domain and its hosted zone, always set together. */
 export interface DnsTarget {
@@ -337,6 +371,8 @@ const SOURCES = {
   imageTag: { context: 'imageTag', env: 'LISTORA_IMAGE_TAG' },
   githubRepository: { context: 'githubRepository', env: 'LISTORA_GITHUB_REPOSITORY' },
   alarmEmail: { context: 'alarmEmail', env: 'LISTORA_ALARM_EMAIL' },
+  ownerEmail: { context: 'ownerEmail', env: 'LISTORA_OWNER_EMAIL' },
+  ownerEmailIdentity: { context: 'ownerEmailIdentity', env: 'LISTORA_OWNER_EMAIL_IDENTITY' },
   availabilityZones: { context: 'availabilityZones', env: 'LISTORA_AVAILABILITY_ZONES' },
 } as const satisfies Record<Exclude<keyof DeployTarget, 'dns'> | keyof DnsTarget, Source>;
 
@@ -438,6 +474,23 @@ export function loadDeployTarget(
   if (alarmEmail !== undefined && !EMAIL.test(alarmEmail)) {
     issues.push(`${describe(SOURCES.alarmEmail)} must be an email address`);
   }
+  // Only an owner pool has an owner; anywhere else the setting would silently do nothing.
+  const ownsPool = settings[environment].signIn.via === 'owner-pool';
+  const ownerEmail = ownsPool
+    ? required(SOURCES.ownerEmail, EMAIL, 'an email address').toLowerCase()
+    : undefined;
+  if (!ownsPool && read(SOURCES.ownerEmail) !== undefined) {
+    issues.push(`${describe(SOURCES.ownerEmail)} is only for an environment with an owner pool`);
+  }
+  const identityValue = read(SOURCES.ownerEmailIdentity);
+  const ownerEmailIdentity = OWNER_EMAIL_IDENTITIES.find((value) => value === identityValue);
+  if (identityValue !== undefined && ownerEmailIdentity === undefined) {
+    issues.push(`${describe(SOURCES.ownerEmailIdentity)} must be create or existing`);
+  } else if (!ownsPool && identityValue !== undefined) {
+    issues.push(
+      `${describe(SOURCES.ownerEmailIdentity)} is only for an environment with an owner pool`,
+    );
+  }
 
   const zonesValue = read(SOURCES.availabilityZones);
   const availabilityZones = zonesValue?.split(',').map((zone) => zone.trim());
@@ -462,6 +515,8 @@ export function loadDeployTarget(
     imageTag,
     githubRepository,
     alarmEmail,
+    ownerEmail,
+    ownerEmailIdentity: ownerEmailIdentity ?? 'create',
     availabilityZones,
   };
 }

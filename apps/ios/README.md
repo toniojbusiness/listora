@@ -75,7 +75,7 @@ Packages/
   DesignSystem/  Palette (light and dark colors), Typography, Spacing, Radius, Elevation, Motion,
                  Haptics, and the shared components (docs/features/design.md)
   APIClient/     The generated ListoraAPI client over URLSession, the signed-in session (Keychain),
-                 APIFailure (the contract's error model), and the dev sign-in client
+                 APIFailure (the contract's error model), and the sign-in clients (dev, Cognito)
   Features/      One library per feature:
     AppFeature        Root tab shell and AppDependencies (composes the features)
     TodayFeature      Today tab (the home): what needs the seller, the money summary, and the
@@ -85,7 +85,7 @@ Packages/
     ReviewFeature     Analysis progress, confidence-first review, cost, price, and the saved item
     TasksFeature      Tasks tab
     SettingsFeature   Settings (opened from the gear in the Today and Sales headers), with the
-                      developer sign-in in Dev builds
+                      sign-in (an emailed code, or the developer sign-in in Dev builds)
     MarketplacesFeature  Marketplaces screen (from Settings): each marketplace's connection
                       health, connecting eBay through ASWebAuthenticationSession, Retry
                       check, and the connection banner Inventory shows
@@ -289,13 +289,25 @@ skip.
 saved inventory item, and `InteractionMeter` (in `Core`) measures each item's active time and
 taps. How they work is in [docs/features/review.md](../../docs/features/review.md).
 
-### Signing in (Dev)
+### Signing in
 
-Uploads need a session. Until the app signs in with Cognito (the API side is in
-[docs/features/auth.md](../../docs/features/auth.md)), Dev builds have a developer sign-in in Settings: enter an
-email, tap "Send code", and enter the code the API prints to its log (`AUTH_DRIVER=dev`). The
-session is kept in the Keychain. These `/dev/auth` endpoints are outside the OpenAPI contract,
-so `DevSignInClient` is the one place the app calls the API without the generated client.
+Uploads need a session. Settings signs in with an email and a one-time code
+([docs/features/auth.md](../../docs/features/auth.md)); `SignInModel` (SettingsFeature) runs
+the steps, and the build picks how the code arrives:
+
+- **Dev builds** have the developer sign-in: enter an email, tap "Send code", and enter the
+  code the API prints to its log (`AUTH_DRIVER=dev`). These `/dev/auth` endpoints are outside
+  the OpenAPI contract, so `DevSignInClient` calls the API without the generated client.
+- **Staging and Prod builds** sign in with the environment's Cognito user pool:
+  `CognitoSignInClient` (APIClient) calls Cognito's `InitiateAuth` (`USER_AUTH`, preferring
+  `EMAIL_OTP`), the pool emails the code, and `RespondToAuthChallenge` exchanges it for the
+  pool's tokens. The app client is public, so these calls need no AWS credentials. The session's
+  bearer token is the ID token, and `AccessTokenStore` renews it with the refresh token (one
+  refresh at a time, 5 minutes before it expires) for 30 days; the Share Extension renews it
+  the same way. Signing out revokes the refresh token. A build without `COGNITO_CLIENT_ID` says
+  in Settings that it cannot sign in.
+
+The session is kept in the Keychain, in the App Group's access group (Share Extension).
 
 ## Environments
 
@@ -303,11 +315,11 @@ Each build configuration reads one xcconfig file in `Config/`, and `AppConfigura
 values from Info.plist at launch. A missing or invalid value stops the app at launch with an
 error that names the key.
 
-| Configuration     | xcconfig                  | `API_BASE_URL`                                                                           | Bundle id suffix |
-| ----------------- | ------------------------- | ---------------------------------------------------------------------------------------- | ---------------- |
-| `Dev-Debug`       | `Config/Dev.xcconfig`     | `http://127.0.0.1:3000` (local API)                                                      | `.dev`           |
-| `Staging-Release` | `Config/Staging.xcconfig` | placeholder `.invalid` host                                                              | `.staging`       |
-| `Prod-Release`    | `Config/Prod.xcconfig`    | the personal environment's `ApiUrl` (placeholder `.invalid` host until its first deploy) | none             |
+| Configuration     | xcconfig                  | `API_BASE_URL`                                                                           | Sign-in                                                     | Bundle id suffix |
+| ----------------- | ------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------- |
+| `Dev-Debug`       | `Config/Dev.xcconfig`     | `http://127.0.0.1:3000` (local API)                                                      | the local API's dev driver                                  | `.dev`           |
+| `Staging-Release` | `Config/Staging.xcconfig` | placeholder `.invalid` host                                                              | none until staging has a user pool                          | `.staging`       |
+| `Prod-Release`    | `Config/Prod.xcconfig`    | the personal environment's `ApiUrl` (placeholder `.invalid` host until its first deploy) | its user pool (`COGNITO_CLIENT_ID` empty until that deploy) | none             |
 
 - Run and test use `Dev-Debug`; archive uses `Prod-Release`. The build type is part of each
   name because Xcode gives Swift packages debug settings only for configurations whose name
@@ -325,6 +337,10 @@ error that names the key.
   added, before the `execute-api` URL is turned off
   ([infra/README.md](../../infra/README.md#without-a-domain)). Staging's domain arrives
   with the staging AWS account (gate G-AWS, T-30).
+- Sign-in outside Dev needs `COGNITO_REGION` and `COGNITO_CLIENT_ID`, the user pool's region
+  and its iPhone app client (`Base.xcconfig` leaves both empty). `scripts/deploy-personal.sh`
+  prints Prod's with the API URL; set them in `Config/Prod.xcconfig` before the next TestFlight
+  build. An empty client id is a build that cannot sign in, not an error.
 - To point Dev at a different port or host (for example a LAN address for a physical device),
   copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` (gitignored) and set
   `API_BASE_URL` there.

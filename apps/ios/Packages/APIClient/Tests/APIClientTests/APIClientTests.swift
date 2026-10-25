@@ -168,3 +168,147 @@ struct APIFailureTests {
 extension AccessGrant {
     static let test = AccessGrant(accessToken: "token-1", expiresAt: .distantFuture, email: "seller@example.com")
 }
+
+/// Renews sessions on demand, counting the calls; `answer` decides each outcome.
+final class FakeRefresher: AccessGrantRefresher {
+    let calls = Mutex(0)
+    private let answer: @Sendable (AccessGrant) async throws(APIFailure) -> AccessGrant
+
+    init(_ answer: @escaping @Sendable (AccessGrant) async throws(APIFailure) -> AccessGrant) {
+        self.answer = answer
+    }
+
+    func refresh(_ grant: AccessGrant) async throws(APIFailure) -> AccessGrant {
+        calls.withLock { $0 += 1 }
+        return try await answer(grant)
+    }
+}
+
+struct AccessTokenRefreshTests {
+    private static let start = Date(timeIntervalSince1970: 10000)
+    private static let expiring = AccessGrant(
+        accessToken: "id-1",
+        expiresAt: start.addingTimeInterval(60),
+        email: "owner@example.com",
+        refreshToken: "refresh-1",
+    )
+    private static let renewed = AccessGrant(
+        accessToken: "id-2",
+        expiresAt: start.addingTimeInterval(3600),
+        email: "owner@example.com",
+        refreshToken: "refresh-1",
+    )
+
+    @Test
+    func `renews a token that expires within the margin before sending it, and saves the renewal`() async {
+        let storage = InMemoryAccessGrantStorage(Self.expiring)
+        let refresher = FakeRefresher { _ in Self.renewed }
+        let tokens = AccessTokenStore(storage: storage, refresher: refresher, now: { Self.start })
+
+        #expect(await tokens.accessToken() == "id-2")
+        #expect(storage.load() == Self.renewed)
+        // The renewed token is good for an hour: no second refresh.
+        #expect(await tokens.accessToken() == "id-2")
+        #expect(refresher.calls.withLock { $0 } == 1)
+    }
+
+    @Test
+    func `sends a token that is not close to expiring without refreshing`() async {
+        let fresh = AccessGrant(
+            accessToken: "id-1", expiresAt: Self.start.addingTimeInterval(3600),
+            email: "o@e.com", refreshToken: "r",
+        )
+        let refresher = FakeRefresher { _ in Self.renewed }
+        let tokens = AccessTokenStore(
+            storage: InMemoryAccessGrantStorage(fresh),
+            refresher: refresher,
+            now: { Self.start },
+        )
+
+        #expect(await tokens.accessToken() == "id-1")
+        #expect(refresher.calls.withLock { $0 } == 0)
+    }
+
+    @Test
+    func `many requests waiting for a renewal share one refresh`() async {
+        let refresher = FakeRefresher { _ in
+            try? await Task.sleep(for: .milliseconds(50))
+            return Self.renewed
+        }
+        let tokens = AccessTokenStore(
+            storage: InMemoryAccessGrantStorage(Self.expiring), refresher: refresher, now: { Self.start },
+        )
+
+        let sent = await withTaskGroup(of: String?.self) { group in
+            for _ in 0 ..< 8 {
+                group.addTask { await tokens.accessToken() }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
+        }
+
+        #expect(sent == Array(repeating: "id-2", count: 8))
+        #expect(refresher.calls.withLock { $0 } == 1)
+    }
+
+    @Test
+    func `an expired session that can be renewed still reads as signed in`() {
+        let expired = AccessGrant(accessToken: "id-1", expiresAt: .distantPast, email: "o@e.com", refreshToken: "r")
+        let refreshable = AccessTokenStore(
+            storage: InMemoryAccessGrantStorage(expired), refresher: FakeRefresher { _ in Self.renewed },
+        )
+        #expect(refreshable.grant == expired)
+        // Without a refresher (or a refresh token), it simply ended.
+        #expect(AccessTokenStore(storage: InMemoryAccessGrantStorage(expired)).grant == nil)
+    }
+
+    @Test
+    func `a refresh token that no longer works signs the session out`() async {
+        let storage = InMemoryAccessGrantStorage(Self.expiring)
+        let refresher = FakeRefresher { _ throws(APIFailure) in
+            throw APIFailure(statusCode: 401, code: "unauthenticated", message: "Sign in again.", retryable: false)
+        }
+        let tokens = AccessTokenStore(storage: storage, refresher: refresher, now: { Self.start })
+
+        #expect(await tokens.accessToken() == nil)
+        #expect(tokens.grant == nil)
+        #expect(storage.load() == nil)
+    }
+
+    @Test
+    func `without a connection the session stays, with its token until that expires`() async {
+        let storage = InMemoryAccessGrantStorage(Self.expiring)
+        let refresher = FakeRefresher { _ throws(APIFailure) in throw .networkUnavailable }
+        let now = Mutex(Self.start)
+        let tokens = AccessTokenStore(storage: storage, refresher: refresher, now: { now.withLock { $0 } })
+
+        #expect(await tokens.accessToken() == "id-1")
+        now.withLock { $0 = Self.start.addingTimeInterval(120) }
+        #expect(await tokens.accessToken() == nil)
+        #expect(tokens.grant == Self.expiring)
+        #expect(storage.load() == Self.expiring)
+    }
+
+    @Test
+    func `a sign-out during a refresh wins over the renewed session`() async {
+        let storage = InMemoryAccessGrantStorage(Self.expiring)
+        let tokensBox = Mutex<AccessTokenStore?>(nil)
+        let refresher = FakeRefresher { _ in
+            tokensBox.withLock { $0 }?.signOut()
+            return Self.renewed
+        }
+        let tokens = AccessTokenStore(storage: storage, refresher: refresher, now: { Self.start })
+        tokensBox.withLock { $0 = tokens }
+
+        #expect(await tokens.accessToken() == nil)
+        #expect(tokens.grant == nil)
+        #expect(storage.load() == nil)
+    }
+
+    @Test
+    func `a session saved before refresh tokens existed still reads`() throws {
+        let saved = Data(#"{"accessToken":"t","expiresAt":0,"email":"a@b.c"}"#.utf8)
+        let grant = try JSONDecoder().decode(AccessGrant.self, from: saved)
+        #expect(grant.refreshToken == nil)
+        #expect(grant.accessToken == "t")
+    }
+}
