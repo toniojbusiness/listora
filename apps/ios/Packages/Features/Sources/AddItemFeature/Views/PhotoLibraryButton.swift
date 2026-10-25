@@ -69,7 +69,7 @@ struct PhotoLibraryButton<Label: View>: View {
 /// Photos picked in the library, loaded in the order picked. Loading one can fail, and a later
 /// ``load(using:)`` tries only the ones that have not loaded.
 @MainActor
-struct PickedPhotos<Item> {
+struct PickedPhotos<Item: Sendable> {
     private let items: [Item]
     private var images: [Data?]
 

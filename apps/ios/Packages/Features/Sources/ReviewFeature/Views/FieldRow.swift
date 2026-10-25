@@ -122,9 +122,19 @@ private struct FieldEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
-            Text(field.key.title)
-                .font(Typography.caption)
-                .foregroundStyle(Palette.brand)
+            HStack(alignment: .firstTextBaseline) {
+                Text(field.key.title)
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.brand)
+                Spacer()
+                // In the row rather than above the keyboard: a keyboard toolbar inside a lazy
+                // stack does not reliably act, and number pads have no Return key.
+                Button("Done", action: onCommit)
+                    .font(Typography.headline)
+                    .foregroundStyle(Palette.brand)
+                    .frame(minWidth: Layout.minimumTapTarget, minHeight: Layout.minimumTapTarget)
+                    .accessibilityIdentifier("review.editor.done")
+            }
             TextField(
                 field.key.kind == .list ? "Separate with commas" : "Add \(field.key.title.lowercased())",
                 text: $text,
@@ -154,14 +164,6 @@ private struct FieldEditor: View {
         .padding(.vertical, Spacing.sm)
         .frame(minHeight: Layout.minimumTapTarget)
         .onAppear { isFocused = true }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done", action: onCommit)
-                    .font(Typography.headline)
-                    .accessibilityIdentifier("review.editor.done")
-            }
-        }
     }
 }
 

@@ -10,7 +10,9 @@ The app talks to the backend only through the generated `ListoraAPI` Swift packa
 ## Prerequisites
 
 - Xcode 26.3 with the iPhone 17 simulator (Xcode > Settings > Components installs the iOS
-  runtime). The tests reuse that simulator and never create one.
+  runtime). The tests reuse that simulator and never create one. CI pins 26.3; the app also
+  builds and passes `make ios-test` with Xcode 27.1 (with the iOS 26.3 simulator runtime), whose
+  stricter Swift concurrency checks the code keeps clean.
 - XcodeGen, SwiftLint, and SwiftFormat from Homebrew:
 
   ```sh
