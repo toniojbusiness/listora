@@ -28,7 +28,7 @@ public struct RootView: View {
                 Tab(tab.title, systemImage: tab.systemImage, value: tab) {
                     screen(for: tab)
                 }
-                .badge(tab == .settings ? dependencies.marketplaces.attention?.count ?? 0 : 0)
+                .badge(badgeCount(for: tab))
             }
         }
         .tint(Palette.brand.color)
@@ -39,7 +39,24 @@ public struct RootView: View {
                 Task { await dependencies.marketplaces.refreshAttention() }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: TaskNotificationRouter.openTasks)) { _ in
+            selection = .tasks
+        }
         .task { dependencies.startBackgroundWork() }
+        // The badge follows the server while the app is open, and when it comes back.
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active else { return }
+            await dependencies.tasks.inbox.follow()
+        }
+    }
+
+    /// Settings counts the connections that need the seller, Tasks the open tasks.
+    private func badgeCount(for tab: AppTab) -> Int {
+        switch tab {
+        case .settings: dependencies.marketplaces.attention?.count ?? 0
+        case .tasks: dependencies.tasks.inbox.openCount
+        case .inventory, .addItem: 0
+        }
     }
 
     @ViewBuilder
@@ -59,7 +76,7 @@ public struct RootView: View {
         case .addItem:
             AddItemView(environment: dependencies.addItem)
         case .tasks:
-            TasksView()
+            TasksView(environment: dependencies.tasks)
         case .settings:
             SettingsView(
                 content: SettingsContent(configuration: dependencies.configuration, version: dependencies.version),

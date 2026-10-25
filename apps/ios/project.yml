@@ -79,6 +79,9 @@ targets:
         ListoraAppGroup: $(APP_GROUP_IDENTIFIER)
         ITSAppUsesNonExemptEncryption: false
         NSCameraUsageDescription: Listora uses the camera to photograph the items you sell.
+        # Assisted tasks save an item's photos to the camera roll, in posting order, for the
+        # marketplace's app to pick up (add-only access).
+        NSPhotoLibraryAddUsageDescription: Listora saves your item's photos so you can post them in a marketplace's app.
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UIApplicationSceneManifest:
@@ -199,6 +202,7 @@ schemes:
         - package: Features/InventoryFeatureTests
         - package: Features/AddItemFeatureTests
         - package: Features/ReviewFeatureTests
+        - package: Features/TasksFeatureTests
         - package: Features/SettingsFeatureTests
         - package: Features/MarketplacesFeatureTests
         - package: Features/TagReadingFeatureTests

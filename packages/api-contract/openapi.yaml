@@ -584,6 +584,8 @@ components:
       $ref: './components/schemas/tasks.yaml#/CopyAssist'
     UserTask:
       $ref: './components/schemas/tasks.yaml#/UserTask'
+    UserTaskItem:
+      $ref: './components/schemas/tasks.yaml#/UserTaskItem'
     UserTaskCompletion:
       $ref: './components/schemas/tasks.yaml#/UserTaskCompletion'
     SaleCorrection:

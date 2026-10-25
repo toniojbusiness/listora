@@ -25,6 +25,8 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         case check
         /// Retry the failed operation.
         case retry(operationID: String)
+        /// Open the task the assisted operation waits on, in the task inbox.
+        case openTask(operationID: String)
 
         var title: String {
             switch self {
@@ -34,6 +36,7 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
             case .relist: "Relist"
             case .check: "Check status"
             case .retry: "Retry"
+            case .openTask: "Open task"
             }
         }
 
@@ -46,6 +49,7 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
             case .relist: "relist"
             case .check: "check"
             case .retry: "retry"
+            case .openTask: "openTask"
             }
         }
     }
@@ -68,7 +72,7 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         name = Formatting.marketplaceName(marketplace.rawValue)
         self.listing = listing
         let usesAPI = (listing?.mode ?? connection?.mode)?.value1 == .api
-        modeLabel = usesAPI ? "Through \(name)'s API" : "Assisted"
+        modeLabel = usesAPI ? "Through \(name)'s API" : "Assisted - you finish each step in the \(name) app"
         priceLabel = listing?.variant.map { Formatting.money($0.price) }
         if let listing {
             statusLabel = listing.statusDisplay.label
@@ -79,7 +83,7 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
             statusLabel = "Not listed"
             statusDetail = nil
             tone = .neutral
-            actions = Self.canList(connection: connection) ? [.list] : []
+            actions = Self.canList(marketplace: marketplace, connection: connection) ? [.list] : []
         }
     }
 
@@ -97,19 +101,31 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         listing?.latestOperation
     }
 
-    /// Only API marketplaces can be listed from here for now; assisted listing joins with the
-    /// task inbox (T-21). A marketplace needs a usable connection to publish through its API.
-    static func canList(connection: Connection?) -> Bool {
-        guard let connection, connection.mode.value1 == .api else { return false }
-        switch connection.status.value1 {
-        case .connected, .degraded: return true
-        default: return false
+    /// Whether the item can be listed on the marketplace from here. Under an API connection the
+    /// connection must be usable; without one, every marketplace but eBay (which Listora reaches
+    /// only through its API) is listed assisted, through a task the user finishes in its app.
+    static func canList(marketplace: KnownMarketplace, connection: Connection?) -> Bool {
+        if let connection, connection.mode.value1 == .api {
+            switch connection.status.value1 {
+            case .connected, .degraded: return true
+            default: return false
+            }
         }
+        return isAssisted(marketplace: marketplace, connection: connection)
     }
 
-    /// The server's actions, in the order the row shows them, plus Retry for a failed change.
+    /// Whether a new listing on the marketplace is assisted: no API connection, and not eBay.
+    static func isAssisted(marketplace: KnownMarketplace, connection: Connection?) -> Bool {
+        connection?.mode.value1 != .api && marketplace != .ebay
+    }
+
+    /// The server's actions, in the order the row shows them, plus Retry for a failed change
+    /// and Open task for a step waiting on the user.
     private static func actions(of listing: Listing) -> [Action] {
         var actions: [Action] = []
+        if let operation = listing.latestOperation, operation.status.value1 == .needsUserAction {
+            actions.append(.openTask(operationID: operation.id))
+        }
         if let operation = listing.latestOperation, operation.status.value1 == .failed,
            operation.error?.retryable ?? true
         {

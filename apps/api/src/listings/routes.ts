@@ -6,7 +6,6 @@ import {
   type DbTransaction,
   type InventoryItem,
 } from '@listora/db';
-import { assertNever, parseListingUrl } from '@listora/shared';
 import type { FastifyInstance } from 'fastify';
 
 import { writeAudit } from '../audit.ts';
@@ -18,14 +17,18 @@ import { findItem, lockItem } from '../items/repository.ts';
 import type { ItemRouteDependencies } from '../items/routes.ts';
 import { itemView } from '../items/views.ts';
 import type { Tenant } from '../tenancy.ts';
+import { identityFromUrl } from './identity.ts';
+import { completeUserTask } from '../tasks/commands.ts';
+import { openListTaskFor } from '../tasks/repository.ts';
 import {
+  findListing,
   findListingByIdentity,
   hasLiveListingOn,
   insertLinkedListing,
   type ListingIdentity,
   type ListingRow,
 } from './repository.ts';
-import { listingView, marketplaceName, type ListingViewContext } from './views.ts';
+import { listingStates, listingView, marketplaceName, type ListingViewContext } from './views.ts';
 
 /** Item statuses a shared listing can be linked to; the item's status then follows its listings. */
 const LINKABLE_ITEM_STATUSES = new Set(['draft', 'ready', 'listed']);
@@ -44,6 +47,16 @@ export function registerListingRoutes(app: FastifyInstance, deps: ItemRouteDepen
       const identity = identityFromUrl(body.url);
       const item = await lockItem(trx, tenant, params.itemId);
       if (!item) throw notFound('Item');
+      // Sharing the listing an open list task asked for is the user saying they posted it.
+      const taskId = await openListTaskFor(trx, tenant, item.id, identity.marketplace);
+      if (taskId !== undefined) {
+        const task = await completeUserTask(trx, tenant, taskId, { externalUrl: body.url });
+        const row =
+          task.listing_id === null ? undefined : await findListing(trx, tenant, task.listing_id);
+        const [state] = row === undefined ? [] : await listingStates(trx, tenant, [row]);
+        if (state === undefined) throw new Error(`task ${task.id} lost its listing`);
+        return { status: 201, body: listingView(state, views) };
+      }
       const listing = await linkListing(trx, tenant, item, identity);
       return { status: 201, body: listingView({ row: listing, operation: undefined }, views) };
     }),
@@ -78,36 +91,6 @@ export function registerListingRoutes(app: FastifyInstance, deps: ItemRouteDepen
       };
     }),
   );
-}
-
-/** The marketplace and listing a shared URL names, or `422` on `url` saying why it is not one. */
-function identityFromUrl(url: string): ListingIdentity {
-  const parsed = parseListingUrl(url);
-  switch (parsed.kind) {
-    case 'listing':
-      return {
-        marketplace: parsed.marketplace,
-        listingId: parsed.listingId,
-        url: parsed.canonicalUrl,
-      };
-    case 'not_listing':
-      throw validationFailed(
-        [
-          {
-            field: 'url',
-            message: `is a ${marketplaceName(parsed.marketplace)} page but not a single listing`,
-          },
-        ],
-        `This is not a ${marketplaceName(parsed.marketplace)} listing. Share the listing itself.`,
-      );
-    case 'unsupported':
-      throw validationFailed(
-        [{ field: 'url', message: 'is not a listing on eBay, Depop, Poshmark, or Mercari' }],
-        'Listora links listings from eBay, Depop, Poshmark, and Mercari. Share a listing from one of them.',
-      );
-    default:
-      return assertNever(parsed);
-  }
 }
 
 async function assertNotLinked(
