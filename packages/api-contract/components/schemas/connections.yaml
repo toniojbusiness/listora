@@ -135,9 +135,24 @@ ConnectionIssue:
       maxLength: 1000
     occurredAt:
       $ref: './common.yaml#/Timestamp'
+ConnectionAction:
+  description: |
+    A `KnownConnectionAction`, or an action added after this client was built. Clients hide
+    actions they do not know.
+  anyOf:
+    - $ref: '#/KnownConnectionAction'
+    - type: string
+      maxLength: 64
+KnownConnectionAction:
+  type: string
+  description: |
+    `connect`: start `startConnectionAuthorization` for a marketplace not connected yet.
+    `reconnect`: the same, for a connection that needs the seller's consent again (its grant
+    was revoked, expires within 30 days, or fails); it renews the existing connection.
+  enum: [connect, reconnect]
 Connection:
   type: object
-  required: [marketplace, mode, status, statusDisplay, capabilities]
+  required: [marketplace, mode, status, statusDisplay, capabilities, availableActions]
   properties:
     marketplace:
       $ref: './common.yaml#/Marketplace'
@@ -149,6 +164,12 @@ Connection:
       $ref: './common.yaml#/StatusDisplay'
     capabilities:
       $ref: '#/MarketplaceCapabilities'
+    availableActions:
+      type: array
+      maxItems: 10
+      description: What the user can do about the connection now; empty when nothing.
+      items:
+        $ref: '#/ConnectionAction'
     displayName:
       type: string
       maxLength: 200
@@ -175,7 +196,7 @@ ConnectionAuthorizationStatus:
   enum: [pending, completed, failed, expired]
 ConnectionAuthorization:
   type: object
-  required: [id, marketplace, status, authorizationUrl, callbackUrlScheme, expiresAt, createdAt]
+  required: [id, marketplace, status, callbackUrlScheme, expiresAt, createdAt]
   properties:
     id:
       $ref: './common.yaml#/Id'
@@ -186,7 +207,10 @@ ConnectionAuthorization:
     authorizationUrl:
       type: string
       format: uri
-      description: The marketplace's own consent page.
+      description: |
+        The marketplace's own consent page. Only in the `startConnectionAuthorization`
+        response (and its replays): it carries the attempt's single-use `state`, which
+        Listora keeps only as a hash.
     callbackUrlScheme:
       type: string
       maxLength: 32

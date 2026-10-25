@@ -448,14 +448,16 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(env.map((entry) => entry.Name)).toEqual(
           Object.keys(
             containerEnvironment(service, 'postgres://', {
-              bucket: '',
-              region: '',
-              publicBaseUrl: '',
+              photoStorage: { bucket: '', region: '', publicBaseUrl: '' },
+              tokenKeyArn: '',
             }),
           ),
         );
-        // Nothing secret-looking travels as plain environment.
-        for (const { Name } of env) expect(Name).not.toMatch(/PASSWORD|SECRET|KEY/);
+        // Nothing secret-looking travels as plain environment (a KMS key's id is not a secret).
+        for (const { Name } of env) expect(Name).not.toMatch(/PASSWORD|SECRET|KEY(?!_ID$)/);
+        expect(JSON.stringify(env.find((entry) => entry.Name === 'TOKEN_KMS_KEY_ID'))).toContain(
+          'TokenKey',
+        );
       }
     });
 
@@ -546,7 +548,13 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         // Raw sale email only for a task that runs the worker.
         expect(policy.includes('InboundMail')).toBe(containers.includes('worker'));
         if (containers.includes('worker')) expect(policy).toContain('/inbound/*');
-        expect(policy).toContain('"kms:Decrypt","kms:GenerateDataKey"');
+        // Only the worker opens marketplace tokens; the API only seals new grants.
+        if (containers.includes('worker')) {
+          expect(policy).toContain('"kms:Decrypt","kms:GenerateDataKey"');
+        } else {
+          expect(policy).toContain('"Action":"kms:GenerateDataKey"');
+          expect(policy).not.toContain('kms:Decrypt');
+        }
         expect(policy).not.toContain('kms:*');
         expect(policy).not.toContain('secretsmanager');
       }

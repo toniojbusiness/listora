@@ -5,7 +5,9 @@ import {
   PostgresUsageStore,
 } from '@listora/ai';
 import { graphileAnalysisJobs } from '@listora/analysis';
+import { createOAuthClients, createTokenVault, sealOnly } from '@listora/connections';
 import { createDatabase, createPool } from '@listora/db';
+import { createMarketplaceAdapters } from '@listora/marketplaces';
 import { graphilePhotoJobs } from '@listora/photos';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
@@ -33,6 +35,15 @@ const app = buildApp({
     logger,
   }),
   analysisJobs: graphileAnalysisJobs,
+  connections: {
+    adapters: createMarketplaceAdapters(config.marketplaces),
+    oauth: createOAuthClients(config.marketplaces),
+    // The API only seals new grants; the worker opens them at use time.
+    sealer:
+      config.marketplaces.tokenVault === undefined
+        ? undefined
+        : sealOnly(createTokenVault(config.marketplaces.tokenVault)),
+  },
   pingDatabase: () => pingDatabase(pool),
 });
 

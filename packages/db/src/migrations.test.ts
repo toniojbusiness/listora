@@ -16,7 +16,7 @@ async function migrationsDir(files: readonly string[]): Promise<string> {
 }
 
 /** The last migration named with a four-digit number; every later one has a UTC timestamp. */
-const LAST_NUMBERED_MIGRATION = '0013_trust_metric_indexes';
+const LAST_NUMBERED_MIGRATION = '0014_marketplace_connect';
 
 /**
  * Problems with the shipped migration names: a prefix used twice, or a numbered migration
@@ -139,7 +139,7 @@ describe('SqlFileMigrationProvider', () => {
     const pair = (name: string) => [`${name}.up.sql`, `${name}.down.sql`];
     expect(namingProblems([...pair('0001_a'), ...pair('0003_c')])).toEqual([]);
     expect(
-      namingProblems([...pair('0013_trust_metric_indexes'), ...pair('20261024153000_a')]),
+      namingProblems([...pair('0014_marketplace_connect'), ...pair('20261024153000_a')]),
     ).toEqual([]);
     expect(namingProblems([...pair('0001_a'), ...pair('0002_b'), ...pair('0002_c')])).toEqual([
       '0002 is used by 0002_b and 0002_c',
@@ -147,8 +147,8 @@ describe('SqlFileMigrationProvider', () => {
     expect(namingProblems([...pair('20261024153000_a'), ...pair('20261024153000_b')])).toEqual([
       '20261024153000 is used by 20261024153000_a and 20261024153000_b',
     ]);
-    expect(namingProblems(pair('0014_new'))).toEqual([
-      '0014_new needs a UTC timestamp name (YYYYMMDDHHMMSS_name)',
+    expect(namingProblems(pair('0015_new'))).toEqual([
+      '0015_new needs a UTC timestamp name (YYYYMMDDHHMMSS_name)',
     ]);
   });
 

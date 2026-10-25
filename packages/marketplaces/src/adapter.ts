@@ -15,8 +15,10 @@
  * - The shared conformance suite (conformance/suite.ts) checks each of these rules against the
  *   adapter's own fake marketplace.
  *
- * Imports, orders, webhooks, emails, and credential refresh join this interface with the tasks
- * that first use them (T-16, T-17, T-23, T-36), as optional members.
+ * Imports, orders, webhooks, and emails join this interface with the tasks that first use them
+ * (T-17, T-23, T-36), as optional members. Credentials are not members: an adapter gets a
+ * connection's tokens at use time from its own token source (eBay's `EbaySellerSource`, which
+ * `@listora/connections` implements over the token vault).
  */
 import type {
   ConnectionMode,
@@ -114,7 +116,7 @@ export interface ListingRef {
   externalUrl: string | null;
 }
 
-/** The connection an operation runs under, without credentials (T-16 adds token access). */
+/** The connection an operation runs under, without credentials (adapters fetch those at use time). */
 export interface ConnectionRef {
   id: string;
   /** `api` once the seller connected an official API; capabilities follow it. */

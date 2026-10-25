@@ -489,6 +489,10 @@ components:
       $ref: './components/schemas/connections.yaml#/MarketplaceCapabilities'
     ConnectionIssue:
       $ref: './components/schemas/connections.yaml#/ConnectionIssue'
+    ConnectionAction:
+      $ref: './components/schemas/connections.yaml#/ConnectionAction'
+    KnownConnectionAction:
+      $ref: './components/schemas/connections.yaml#/KnownConnectionAction'
     Connection:
       $ref: './components/schemas/connections.yaml#/Connection'
     ConnectionList:

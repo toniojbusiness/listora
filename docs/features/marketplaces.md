@@ -51,8 +51,10 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
 }
 ```
 
-Imports, orders, webhooks, emails, and credential refresh join the interface as optional
-members with the tasks that first use them (T-16, T-17, T-23, T-36).
+Imports, orders, webhooks, and emails join the interface as optional members with the tasks
+that first use them (T-17, T-23, T-36). Credentials are not part of the interface: an adapter
+gets a connection's tokens at use time from its own token source (eBay's `EbaySellerSource`,
+which `@listora/connections` implements over the token vault, [connections.md](connections.md)).
 
 | Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
 | ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
@@ -87,8 +89,9 @@ pending id, so a delist never waits on a listing that was never made.
 
 **Registry.** `createAdapterRegistry` (`registry.ts`) holds one adapter per marketplace and
 refuses, at startup, a duplicate or an adapter whose capabilities are incoherent without a
-connection or under either connection mode. The worker passes its `lookup` to the engine
-(`apps/worker/src/adapters.ts`), and the API asks it for capabilities under a connection.
+connection or under either connection mode. `createMarketplaceAdapters` (`default-adapters.ts`)
+builds the registry both processes run with: the worker passes its `lookup` to the engine, and
+the API asks it for capabilities under a connection.
 
 **Listing content and payloads.** A create, revise, or relist publishes listing content
 (`content.ts`): an `ItemSnapshot` (canonical attributes and photos with their listing URLs) and
@@ -175,7 +178,8 @@ produce each failure mode the suite asks for (`ConformanceMarketplace`).
 
 ## Data
 
-- **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
+- **Marketplaces:** `marketplace_connection` and `connection_authorization`
+  ([connections.md](connections.md#data)),
   `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot and
   newest seen revision, desired/applied version, `last_verified_at` for a read-back and
   `user_confirmed_at` for the user's confirmation; a listing known only by a share short link

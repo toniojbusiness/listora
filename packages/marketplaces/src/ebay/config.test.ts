@@ -38,7 +38,10 @@ describe('loadEbayConfig', () => {
       media: 'http://127.0.0.1:4555',
       oauthToken: 'http://127.0.0.1:4555/identity/v1/oauth2/token',
       authorize: 'http://127.0.0.1:4555/oauth2/authorize',
+      oauthRevoke: 'http://127.0.0.1:4555/identity/v1/oauth2/token/revoke',
+      identity: 'http://127.0.0.1:4555/commerce/identity/v1/user',
     });
+    expect(config?.ruName).toBe('Listora-Fake-RuName');
   });
 
   it('configures no seller without a connection to bind it to', () => {
@@ -102,6 +105,15 @@ describe('loadEbayConfig', () => {
       EBAY_RETURN_POLICY_ID: '333',
     });
     expect(production?.endpoints.trading).toBe('https://api.ebay.com/ws/api.dll');
+    expect(production?.endpoints.identity).toBe('https://apiz.ebay.com/commerce/identity/v1/user');
+    expect(production?.endpoints.oauthRevoke).toBe(
+      'https://api.ebay.com/identity/v1/oauth2/token/revoke',
+    );
+    // Without a RuName, sellers cannot connect; listing for a configured seller still works.
+    expect(production?.ruName).toBeUndefined();
+    expect(loadEbayConfig({ EBAY_ENV: 'production', ...keys, EBAY_RUNAME: 'ru' })?.ruName).toBe(
+      'ru',
+    );
     expect(production?.seller).toBeUndefined();
     expect(production?.listingSettings.policies).toEqual({
       fulfillmentPolicyId: '111',

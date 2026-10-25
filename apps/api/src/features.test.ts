@@ -31,6 +31,7 @@ describe('API feature discovery', () => {
     expect(API_FEATURES.map(({ name }) => name)).toEqual([
       'account',
       'analyses',
+      'connections',
       'items',
       'listings',
       'photos',
@@ -72,6 +73,7 @@ describe('buildApp', () => {
   it.each([
     ['account', 'deleteAccount'],
     ['analyses', 'startItemAnalysis'],
+    ['connections', 'listConnections'],
     ['items', 'createItem'],
     ['listings', 'linkItemListing'],
     ['photos', 'addItemPhoto'],

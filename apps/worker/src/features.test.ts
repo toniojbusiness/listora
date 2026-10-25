@@ -33,6 +33,7 @@ afterEach(async () => {
 /** Features' `jobs` only build closures, so they never touch the context's services. */
 const context = {
   config: { aiAlerts: {}, analysis: { autoEscalate: false } },
+  connections: { ebaySeller: undefined, scheduledTasks: [], revoker: undefined },
 } as unknown as WorkerContext;
 
 const feature = (
@@ -46,6 +47,7 @@ describe('worker feature discovery', () => {
       'account-deletion',
       'ai-spend-check',
       'analysis',
+      'connection-health',
       'photos',
       'trust-metrics',
     ]);

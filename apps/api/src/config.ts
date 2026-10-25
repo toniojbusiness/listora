@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 import { USER_POOL_ID_PATTERN, userPoolRegion } from '@listora/accounts';
 import { AiConfigError, loadAiConfig, type AiConfig } from '@listora/ai';
+import {
+  loadMarketplaceConfig,
+  MarketplaceConfigError,
+  type MarketplaceConfig,
+} from '@listora/connections';
 import { assertNever, LOG_LEVELS, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -41,6 +46,11 @@ export interface ApiConfig {
   storage: StorageConfig;
   /** AI_* keys, read by @listora/ai: the guards analysis requests are checked against. */
   ai: AiConfig;
+  /**
+   * FAKE_MARKETPLACE_URL, EBAY_*, and TOKEN_* keys, read by @listora/connections: which
+   * marketplaces can be connected, and the token vault the API seals new grants with.
+   */
+  marketplaces: MarketplaceConfig;
 }
 
 export class ConfigError extends Error {
@@ -143,7 +153,14 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     if (!(error instanceof AiConfigError)) throw error;
     issues.push(...error.issues);
   }
-  if (!parsed.success || storage === undefined || ai === undefined) {
+  let marketplaces: MarketplaceConfig | undefined;
+  try {
+    marketplaces = loadMarketplaceConfig(env);
+  } catch (error) {
+    if (!(error instanceof MarketplaceConfigError)) throw error;
+    issues.push(...error.issues);
+  }
+  if (!parsed.success || storage === undefined || ai === undefined || marketplaces === undefined) {
     throw new ConfigError(issues);
   }
   const values = parsed.data;
@@ -157,5 +174,6 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     auth,
     storage,
     ai,
+    marketplaces,
   };
 }

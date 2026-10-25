@@ -22,7 +22,36 @@ describe('loadApiConfig', () => {
         signingSecret: undefined,
       },
       ai: loadAiConfig({}),
+      marketplaces: {
+        fakeMarketplaceUrl: undefined,
+        ebay: undefined,
+        depop: undefined,
+        tokenVault: undefined,
+      },
     });
+  });
+
+  it('reads the eBay keyset and the token vault, without echoing a secret', () => {
+    const key = Buffer.alloc(32, 7).toString('base64');
+    expect(
+      loadApiConfig({
+        ...REQUIRED,
+        EBAY_ENV: 'fake',
+        EBAY_FAKE_URL: 'http://127.0.0.1:4110',
+        TOKEN_ENCRYPTION_KEY: key,
+      }).marketplaces,
+    ).toMatchObject({ ebay: { environment: 'fake' }, tokenVault: { driver: 'local' } });
+    const error = captureConfigError({
+      ...REQUIRED,
+      EBAY_ENV: 'production',
+      EBAY_CLIENT_SECRET: 'very-secret',
+      TOKEN_KMS_KEY_ID: 'not a key',
+    });
+    expect(error.issues).toEqual([
+      'EBAY_CLIENT_ID is required when EBAY_ENV is production',
+      'TOKEN_KMS_KEY_ID must be a KMS key ARN, key id, or alias/<name>',
+    ]);
+    expect(String(error)).not.toContain('very-secret');
   });
 
   it('reads explicit values', () => {

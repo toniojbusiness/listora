@@ -12,6 +12,7 @@
     { "path": "packages/ai" },
     { "path": "packages/pricing" },
     { "path": "packages/marketplaces" },
+    { "path": "packages/connections" },
     { "path": "packages/operations" },
     { "path": "packages/observability" },
     { "path": "packages/tag-parse" },

@@ -18,8 +18,9 @@ the conventions, and the product invariants, and links to each feature's own doc
 - **Swift 6 toolchain**, used by `npm run contract:check` to regenerate and test the Swift API
   client. It comes with Xcode on macOS (on Linux, install Swift 6 from swift.org).
 - Docker is not needed.
-- For the iOS app only: **Xcode 26.3** with the iPhone 17 simulator, plus XcodeGen, SwiftLint,
-  and SwiftFormat (`brew install xcodegen swiftlint swiftformat`). See
+- For the iOS app only: **Xcode 26.3 or 27.1** (CI uses 26.3; the app builds without warnings on
+  both) with the iPhone 17 simulator, plus XcodeGen, SwiftLint, and SwiftFormat
+  (`brew install xcodegen swiftlint swiftformat`). See
   [apps/ios/README.md](apps/ios/README.md).
 
 ## Setup
@@ -49,6 +50,12 @@ has the two requests. Staging and production use `AUTH_DRIVER=cognito`;
 [docs/features/auth.md](docs/features/auth.md) covers both drivers, the user pool settings,
 and in-app account deletion (`DELETE /v1/account`).
 
+### Connecting eBay locally
+
+Connecting an eBay account locally needs no eBay credential: the fake eBay stands in for
+eBay's consent page and tokens. [Connecting locally](docs/features/ebay.md#connecting-locally)
+has the steps.
+
 ## Commands
 
 | Command                        | What it does                                                                                                                                     |
@@ -65,7 +72,7 @@ and in-app account deletion (`DELETE /v1/account`).
 | `npm run dev:api`              | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                                                         |
 | `npm run dev:worker`           | Run the worker with reload on change                                                                                                             |
 | `npm run dev:fake-marketplace` | Run the fake marketplace at `FAKE_MARKETPLACE_URL`, for the worker in development                                                                |
-| `npm run dev:fake-ebay`        | Run the fake eBay at `EBAY_FAKE_URL`, which the worker lists on with `EBAY_ENV=fake`                                                             |
+| `npm run dev:fake-ebay`        | Run the fake eBay at `EBAY_FAKE_URL`, which the worker lists on and sellers connect with under `EBAY_ENV=fake`                                   |
 | `npm run dev:fake-depop`       | Run the fake Depop at `DEPOP_FAKE_URL`, which api-connected Depop listings use with `DEPOP_ENV=fake`                                             |
 | `npm run ebay:sandbox-token`   | Sign a sandbox test seller in on eBay and save their refresh token in `.env` (see [the sandbox check](docs/features/ebay.md#sandbox-check))      |
 | `npm run ebay:sandbox-check`   | Run the eBay adapter end to end against eBay's sandbox; fails with what to set when keys are missing                                             |
@@ -107,7 +114,8 @@ packages/api-contract/  OpenAPI v1 contract + generated TS and Swift code (@list
 packages/db/            SQL migrations, migration runner, Kysely types (@listora/db)
 packages/storage/       Object storage drivers: local disk (.local/storage) and S3 (@listora/storage)
 packages/photos/        Image pipeline: derivatives, metadata stripping, hashes, processing job (@listora/photos)
-packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay and Depop adapters, the fake marketplace, fake eBay, and fake Depop (@listora/marketplaces)
+packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay and Depop adapters, eBay's connect client, the fake marketplace, fake eBay, and fake Depop (@listora/marketplaces)
+packages/connections/   Marketplace connections: OAuth connect, token vault, credentials, health (@listora/connections)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker metrics job (@listora/observability)
 packages/shared/        Shared types and utilities (@listora/shared)

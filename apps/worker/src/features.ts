@@ -14,6 +14,7 @@ import type { Logger } from '@listora/shared';
 import type { ObjectStorage } from '@listora/storage';
 
 import type { WorkerConfig } from './config.ts';
+import type { ConnectionWork } from './connections.ts';
 
 /** Everything a feature's jobs may use, built once by main.ts. */
 export interface WorkerContext {
@@ -23,6 +24,8 @@ export interface WorkerContext {
   storage: ObjectStorage;
   /** The AI client, with the guards, metering, and quotas of `config.ai`. */
   ai: AiClient;
+  /** Marketplace connections: per-connection tokens, the health check, grant revocation. */
+  connections: ConnectionWork;
   logger: Logger;
 }
 

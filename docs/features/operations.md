@@ -85,9 +85,10 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    tests inject 429s, 5xx errors (also after the change was applied), timeouts after send,
    stale reads, and a worker killed mid-operation, over listings that are ended and relisted
    more than once.
-10. **Concurrency (T-16, T-24).** Token refresh is single-flight per connection; Depop rotates
-    refresh tokens, so rotated tokens are kept in memory until they are stored (the Depop
-    adapter's tokens, [depop.md](depop.md)). Rate limits use per-seller and app-wide sliding
+10. **Concurrency (T-16, T-24).** Token refresh is single-flight per connection: for eBay, in one
+    process and across workers (the connection's row lock, [connections.md](connections.md));
+    Depop rotates refresh tokens, so rotated tokens are kept in memory until they are stored (the
+    Depop adapter's tokens, [depop.md](depop.md)). Rate limits use per-seller and app-wide sliding
     windows.
 
 **Auto-delist.** A sale event (webhook, poll, email, or manual entry) is deduplicated by

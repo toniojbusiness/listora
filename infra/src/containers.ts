@@ -29,6 +29,13 @@ export interface PhotoStorage {
   readonly publicBaseUrl: string;
 }
 
+/** The AWS resources the API and the worker share, which their environment names. */
+export interface ServiceResources {
+  readonly photoStorage: PhotoStorage;
+  /** The KMS key that wraps the data keys of marketplace tokens (`TOKEN_KMS_KEY_ID`). */
+  readonly tokenKeyArn: string;
+}
+
 /**
  * Plain (non-secret) environment of a container: only keys the process reads
  * (`.env.example`). A task that adds a required key adds it here, and `containers.test.ts`
@@ -38,8 +45,9 @@ export interface PhotoStorage {
  * `databaseUrl` names the host, port, database, and user but no password: node-postgres
  * falls back to `PGPASSWORD` for a URL without one, and ECS injects that from the RDS secret.
  * The API and the worker share the S3 photo storage (the API stores uploads, the worker
- * processes and analyzes them) and call the Anthropic API with the injected
- * `ANTHROPIC_API_KEY`.
+ * processes and analyzes them), call the Anthropic API with the injected
+ * `ANTHROPIC_API_KEY`, and use the KMS token key: the API seals new marketplace grants
+ * (`kms:GenerateDataKey` only), the worker also opens them (`kms:Decrypt`).
  */
 export function containerEnvironment(
   container: 'migrate',
@@ -48,16 +56,17 @@ export function containerEnvironment(
 export function containerEnvironment(
   container: ContainerName,
   databaseUrl: string,
-  photoStorage: PhotoStorage,
+  resources: ServiceResources,
 ): Record<string, string>;
 export function containerEnvironment(
   container: ContainerName,
   databaseUrl: string,
-  photoStorage?: PhotoStorage,
+  resources?: ServiceResources,
 ): Record<string, string> {
   const common = { DATABASE_URL: databaseUrl, LOG_LEVEL: 'info' };
   const services = (): Record<string, string> => {
-    if (photoStorage === undefined) throw new Error(`the ${container} container needs storage`);
+    if (resources === undefined) throw new Error(`the ${container} container needs its resources`);
+    const { photoStorage } = resources;
     return {
       ...common,
       AI_PROVIDER: 'anthropic',
@@ -65,6 +74,9 @@ export function containerEnvironment(
       STORAGE_S3_BUCKET: photoStorage.bucket,
       STORAGE_S3_REGION: photoStorage.region,
       STORAGE_PUBLIC_BASE_URL: photoStorage.publicBaseUrl,
+      // eBay connects once the environment has an eBay keyset (EBAY_ENV, EBAY_CLIENT_ID,
+      // EBAY_RUNAME, and the EBAY_CLIENT_SECRET secret; the eBay go-live task, T-35).
+      TOKEN_KMS_KEY_ID: resources.tokenKeyArn,
     };
   };
   switch (container) {

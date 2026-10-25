@@ -8652,6 +8652,10 @@ public enum Operations {
     /// server exchanges the code and always answers with a redirect to the app
     /// (`listora://connections/{marketplace}?authorizationId=...`), also on failure; the
     /// app then calls `getConnectionAuthorization`. Query parameter names follow OAuth 2.0.
+    /// A request whose `state` names no attempt (missing, unknown, or already used by another
+    /// marketplace) changes nothing and redirects without `authorizationId`; the app then
+    /// reads the attempt it started. A repeated callback with the same `state` only redirects
+    /// again.
     ///
     ///
     /// - Remark: HTTP `GET /v1/connections/{marketplace}/callback`.
@@ -8674,8 +8678,12 @@ public enum Operations {
             public var path: Operations.HandleConnectionCallback.Input.Path
             /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/callback/GET/query`.
             public struct Query: Sendable, Hashable {
+                /// The attempt's `state`. Not marked required: a marketplace's "declined" redirect may
+                /// come without it, and that still has to reach the app.
+                ///
+                ///
                 /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/callback/GET/query/state`.
-                public var state: Swift.String
+                public var state: Swift.String?
                 /// Authorization code; absent when the user declined.
                 ///
                 /// - Remark: Generated from `#/paths/v1/connections/{marketplace}/callback/GET/query/code`.
@@ -8689,12 +8697,12 @@ public enum Operations {
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
-                ///   - state:
+                ///   - state: The attempt's `state`. Not marked required: a marketplace's "declined" redirect may
                 ///   - code: Authorization code; absent when the user declined.
                 ///   - error: OAuth error code, for example `access_denied`.
                 ///   - errorDescription:
                 public init(
-                    state: Swift.String,
+                    state: Swift.String? = nil,
                     code: Swift.String? = nil,
                     error: Swift.String? = nil,
                     errorDescription: Swift.String? = nil
@@ -8726,7 +8734,7 @@ public enum Operations {
             ///   - headers:
             public init(
                 path: Operations.HandleConnectionCallback.Input.Path,
-                query: Operations.HandleConnectionCallback.Input.Query,
+                query: Operations.HandleConnectionCallback.Input.Query = .init(),
                 headers: Operations.HandleConnectionCallback.Input.Headers = .init()
             ) {
                 self.path = path

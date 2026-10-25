@@ -26,6 +26,7 @@ import type {
   AnalysisTier,
   AuditActorKind,
   AuthProvider,
+  ConnectionAuthorizationStatus,
   ConnectionMode,
   ConnectionStatus,
   DelistRunListingSource,
@@ -335,7 +336,31 @@ export interface MarketplaceConnectionTable {
   scopes: TextArray;
   status: Generated<ConnectionStatus>;
   last_ok_at: NullableTimestamp;
+  /** The latest problem's user-readable message; with its code and time, or none of them. */
   last_error: Nullable<string>;
+  last_error_code: Nullable<string>;
+  last_error_at: NullableTimestamp;
+  /** When the marketplace issued the current grant; older revocation notices change nothing. */
+  granted_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** One attempt to connect a marketplace account over OAuth (the `state` is stored hashed). */
+export interface ConnectionAuthorizationTable {
+  id: Id;
+  account_id: string;
+  user_id: string;
+  marketplace: Marketplace;
+  state_sha256: Buffer;
+  /** When the callback claimed the attempt (its state is single-use). */
+  callback_at: NullableTimestamp;
+  status: Generated<ConnectionAuthorizationStatus>;
+  connection_id: Nullable<string>;
+  failure_code: Nullable<string>;
+  failure_message: Nullable<string>;
+  expires_at: Timestamp;
+  completed_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -662,6 +687,7 @@ export interface Database {
   ai_account_block: AiAccountBlockTable;
   ai_control_audit: AiControlAuditTable;
   marketplace_connection: MarketplaceConnectionTable;
+  connection_authorization: ConnectionAuthorizationTable;
   marketplace_listing: MarketplaceListingTable;
   marketplace_operation: MarketplaceOperationTable;
   operation_event: OperationEventTable;

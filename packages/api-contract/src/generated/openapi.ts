@@ -920,6 +920,10 @@ export interface paths {
          *     server exchanges the code and always answers with a redirect to the app
          *     (`listora://connections/{marketplace}?authorizationId=...`), also on failure; the
          *     app then calls `getConnectionAuthorization`. Query parameter names follow OAuth 2.0.
+         *     A request whose `state` names no attempt (missing, unknown, or already used by another
+         *     marketplace) changes nothing and redirects without `authorizationId`; the app then
+         *     reads the attempt it started. A repeated callback with the same `state` only redirects
+         *     again.
          */
         get: operations["handleConnectionCallback"];
         put?: never;
@@ -2054,12 +2058,26 @@ export interface components {
             message: string;
             occurredAt: components["schemas"]["Timestamp"];
         };
+        /**
+         * @description A `KnownConnectionAction`, or an action added after this client was built. Clients hide
+         *     actions they do not know.
+         */
+        ConnectionAction: components["schemas"]["KnownConnectionAction"];
+        /**
+         * @description `connect`: start `startConnectionAuthorization` for a marketplace not connected yet.
+         *     `reconnect`: the same, for a connection that needs the seller's consent again (its grant
+         *     was revoked, expires within 30 days, or fails); it renews the existing connection.
+         * @enum {string}
+         */
+        KnownConnectionAction: "connect" | "reconnect";
         Connection: {
             marketplace: components["schemas"]["Marketplace"];
             mode: components["schemas"]["IntegrationMode"];
             status: components["schemas"]["ConnectionStatus"];
             statusDisplay: components["schemas"]["StatusDisplay"];
             capabilities: components["schemas"]["MarketplaceCapabilities"];
+            /** @description What the user can do about the connection now; empty when nothing. */
+            availableActions: components["schemas"]["ConnectionAction"][];
             /** @description The seller's name on the marketplace. */
             displayName?: string;
             connectedAt?: components["schemas"]["Timestamp"];
@@ -2079,9 +2097,11 @@ export interface components {
             status: components["schemas"]["ConnectionAuthorizationStatus"];
             /**
              * Format: uri
-             * @description The marketplace's own consent page.
+             * @description The marketplace's own consent page. Only in the `startConnectionAuthorization`
+             *     response (and its replays): it carries the attempt's single-use `state`, which
+             *     Listora keeps only as a hash.
              */
-            authorizationUrl: string;
+            authorizationUrl?: string;
             /** @description The URL scheme `ASWebAuthenticationSession` waits for (`listora`). */
             callbackUrlScheme: string;
             expiresAt: components["schemas"]["Timestamp"];
@@ -2561,6 +2581,8 @@ export type ImageTransportMode = components['schemas']['ImageTransportMode'];
 export type KnownImageTransportMode = components['schemas']['KnownImageTransportMode'];
 export type MarketplaceCapabilities = components['schemas']['MarketplaceCapabilities'];
 export type ConnectionIssue = components['schemas']['ConnectionIssue'];
+export type ConnectionAction = components['schemas']['ConnectionAction'];
+export type KnownConnectionAction = components['schemas']['KnownConnectionAction'];
 export type Connection = components['schemas']['Connection'];
 export type ConnectionList = components['schemas']['ConnectionList'];
 export type ConnectionAuthorizationStatus = components['schemas']['ConnectionAuthorizationStatus'];
@@ -3930,8 +3952,12 @@ export interface operations {
     };
     handleConnectionCallback: {
         parameters: {
-            query: {
-                state: string;
+            query?: {
+                /**
+                 * @description The attempt's `state`. Not marked required: a marketplace's "declined" redirect may
+                 *     come without it, and that still has to reach the app.
+                 */
+                state?: string;
                 /** @description Authorization code; absent when the user declined. */
                 code?: string;
                 /** @description OAuth error code, for example `access_denied`. */
@@ -4227,6 +4253,7 @@ export const knownConnectMethodValues: ReadonlyArray<FlattenedDeepRequired<compo
 export const knownVerifyReadModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownVerifyReadMode"]> = ["api", "user_confirm"];
 export const knownImportListingsModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImportListingsMode"]> = ["api", "share_sheet", "bulk_file", "none"];
 export const knownImageTransportModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImageTransportMode"]> = ["url_fetch", "upload", "user_saves_photos"];
+export const knownConnectionActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAction"]> = ["connect", "reconnect"];
 export const connectionAuthorizationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ConnectionAuthorizationStatus"]> = ["pending", "completed", "failed", "expired"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];

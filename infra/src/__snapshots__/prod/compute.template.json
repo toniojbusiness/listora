@@ -84,10 +84,7 @@
               ]
             },
             {
-              "Action": [
-                "kms:Decrypt",
-                "kms:GenerateDataKey"
-              ],
+              "Action": "kms:GenerateDataKey",
               "Effect": "Allow",
               "Resource": {
                 "Fn::GetStackOutput": {
@@ -199,6 +196,16 @@
                       }
                     ]
                   ]
+                }
+              },
+              {
+                "Name": "TOKEN_KMS_KEY_ID",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-prod-secrets",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
+                  }
                 }
               }
             ],
@@ -617,6 +624,16 @@
                       }
                     ]
                   ]
+                }
+              },
+              {
+                "Name": "TOKEN_KMS_KEY_ID",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-prod-secrets",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
+                  }
                 }
               }
             ],

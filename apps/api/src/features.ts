@@ -14,6 +14,7 @@ import type { PhotoJobQueue } from '@listora/photos';
 import type { ObjectStorage } from '@listora/storage';
 import type { FastifyInstance } from 'fastify';
 
+import type { ConnectionsDependencies } from './connections/routes.ts';
 import type { RouteDependencies } from './contract/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
 
@@ -29,6 +30,8 @@ export interface ApiRouteContext extends RouteDependencies {
   ai: AiClient;
   /** Where starting or escalating an analysis adds its job. */
   analysisJobs: AnalysisJobQueue;
+  /** Marketplace adapters, OAuth clients, and the token sealer of connections. */
+  connections: ConnectionsDependencies;
   /** The clock upload sessions expire by. */
   now: () => Date;
 }

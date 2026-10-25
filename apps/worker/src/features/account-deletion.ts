@@ -12,13 +12,12 @@ import type { WorkerFeature } from '../features.ts';
  * and revokes marketplace grants, retrying until done.
  */
 export const feature: WorkerFeature = {
-  jobs: ({ config, db, logger }) => ({
+  jobs: ({ config, db, connections, logger }) => ({
     tasks: {
       [ACCOUNT_DELETION_TASK]: accountDeletionTask({
         db,
         cognito: config.cognitoUserPool && new AwsCognitoUserAdmin(config.cognitoUserPool),
-        // Marketplace adapters revoke their grants once they add OAuth connections (T-16, T-24).
-        marketplaceAccess: noMarketplaceAccessRevocation,
+        marketplaceAccess: connections.revoker ?? noMarketplaceAccessRevocation,
         logger,
       }),
     },

@@ -79,7 +79,7 @@ apps/
   api/          Fastify HTTP API (@listora/api)
   worker/       Background worker: operation engine, plus one module per feature's jobs in
                 src/features/ (account deletion, AI spend check, item analysis, photo
-                processing) (@listora/worker)
+                processing, trust metrics, the daily connection health check) (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
                 and account blocks (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
@@ -100,9 +100,12 @@ packages/
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
                 the photo processing job, an item's photo-set hash (@listora/photos)
   marketplaces/ Marketplace adapter framework: interface, capabilities, registry, listing content,
-                assisted adapters, conformance suite; the eBay adapter (ebay/) and the Depop
-                adapter (depop/); fake marketplace, fake eBay, and fake Depop with fault injection
-                (@listora/marketplaces)
+                assisted adapters, conformance suite; the eBay adapter and connect client (ebay/)
+                and the Depop adapter (depop/); fake marketplace, fake eBay, and fake Depop with
+                fault injection (@listora/marketplaces)
+  connections/  Marketplace account connections: OAuth connect, the token vault (local key or KMS),
+                use-time credentials with single-flight refresh, health checks, revocation
+                (@listora/connections)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
@@ -170,6 +173,7 @@ src/
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
   listings/      Listing views (honest statusDisplay) and shared-listing links
+  connections/   Marketplace connections, connect attempts, and the public OAuth callback
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -212,21 +216,21 @@ Nothing requires a real credential to build or test. Every external service sits
 interface with a fake or dev driver, selected by an environment variable. Each switch below
 lands with the task that introduces that dependency, and its keys are added to `.env.example`.
 
-| Dependency       | Dev/test                                                                                                                                                   | Production                 | Switch                                |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
-| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                                                 | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`   |
-| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                            | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                |
-| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                                                   | The same                   | none                                  |
-| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                           | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`            |
-| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                                        | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
-| eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`)                      | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`  |
-| Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`) | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production` |
-| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                                       | SES inbound                | `EMAIL_INGEST=folder\|ses`            |
-| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                         | Cognito                    | `AUTH_DRIVER=dev\|cognito`            |
-| Payments         | Fake Stripe client + StoreKit configuration file                                                                                                           | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`         |
-| Push             | Recording fake                                                                                                                                             | APNs                       | `PUSH_DRIVER`                         |
-| Token encryption | Local AES-GCM key from `.env`                                                                                                                              | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                    |
-| iOS              | iPhone 17 simulator, photo-library fixtures                                                                                                                | Device / TestFlight        | xcconfig `API_BASE_URL`               |
+| Dependency       | Dev/test                                                                                                                                                                | Production                 | Switch                                |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
+| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                                                              | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`   |
+| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                                         | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                |
+| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                                                                | The same                   | none                                  |
+| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                                        | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`            |
+| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                                                     | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
+| eBay             | `fake-ebay` server (OAuth consent, Commerce Identity, Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`  |
+| Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`)              | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production` |
+| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                                                    | SES inbound                | `EMAIL_INGEST=folder\|ses`            |
+| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                                      | Cognito                    | `AUTH_DRIVER=dev\|cognito`            |
+| Payments         | Fake Stripe client + StoreKit configuration file                                                                                                                        | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`         |
+| Push             | Recording fake                                                                                                                                                          | APNs                       | `PUSH_DRIVER`                         |
+| Token encryption | Local AES-GCM key from `.env` (`TOKEN_ENCRYPTION_KEY`)                                                                                                                  | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                    |
+| iOS              | iPhone 17 simulator, photo-library fixtures                                                                                                                             | Device / TestFlight        | xcconfig `API_BASE_URL`               |
 
 Live smoke tests for real providers skip automatically when their credential is absent. Fakes
 must stay true to the real contract: shapes, error codes, and failure modes.
@@ -270,13 +274,14 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
 - **API:** `idempotency_record` (the stored first successful response per account and
   `Idempotency-Key`, kept 24 hours; written once, so it has no `updated_at`, and deleted in
   batches by later POSTs once expired).
-- **Elsewhere:** inventory, photos, and history in [items.md](features/items.md); uploads in
+- **Elsewhere:** connections and connect attempts in [connections.md](features/connections.md#data);
+  inventory, photos, and history in [items.md](features/items.md); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
   [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in
   [operations.md](features/operations.md#data); pricing in [pricing.md](features/pricing.md#data);
   deleted identities and account deletion in [auth.md](features/auth.md#data). Billing
-  (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands
-  (T-28); `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
+  (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
+  `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
 **Migrations.** Each migration is a pair of plain SQL files, `<prefix>_name.up.sql` and
 `<prefix>_name.down.sql`, run by Kysely's migrator in one transaction with a lock (`npm run
@@ -285,7 +290,7 @@ db:migrate`; in AWS, the deploy runs them before new code starts, see
 
 - **Names.** The prefix of a new migration is the UTC time you create it, `YYYYMMDDHHMMSS`
   (`date -u +%Y%m%d%H%M%S`), so branches written in parallel never pick the same name. The
-  first migrations keep their four-digit numbers (`0001` to `0013`), which sort before every
+  first migrations keep their four-digit numbers (`0001` to `0014`), which sort before every
   timestamp; no new numbered migration is added.
 - **Order.** Migrations apply in name order, and the migrator refuses to apply a migration that
   sorts before one already applied (Kysely's default; it is never turned off). So at your final
@@ -293,8 +298,8 @@ db:migrate`; in AWS, the deploy runs them before new code starts, see
   rename yours (both files) to the current UTC time. Never rename a merged migration.
 - **Checks.** `migrations.test.ts` checks that every migration has both files, that prefixes are
   unique, that timestamps are real UTC times, and that no numbered migration follows
-  `0013_trust_metric_indexes`. The migration integration tests read the list from the directory, so
-  a new migration edits no test.
+  `0014_marketplace_connect`. The migration integration tests read the list from the directory, so a
+  new migration edits no test.
 
 A schema change updates the Kysely table types in `packages/db/src/schema.ts` and the value
 lists in `values.ts` in the same change; `schema.int.test.ts` fails when they drift. `bigint`

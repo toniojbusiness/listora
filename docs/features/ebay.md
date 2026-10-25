@@ -46,25 +46,41 @@ eBay Picture Services by the Media API. Its rules:
   daily budget (5,000 by default), which keeps a reserve for ends and read-backs and re-reads the
   real usage from eBay's Developer Analytics API (the app-wide daily Trading rate, never a
   per-call or short-window one), so several workers share one quota.
-- **Tokens.** The adapter gets the seller's user token from an `EbaySellerSource`. Until
-  per-connection tokens arrive (T-16), `RefreshTokenSeller` serves one seller from
-  `EBAY_USER_REFRESH_TOKEN` (the fake's development seller with `EBAY_ENV=fake`), bound to the
-  one connection `EBAY_USER_CONNECTION_ID` names. It is a development and sandbox convenience
+- **Tokens.** The adapter gets the seller's user token from an `EbaySellerSource`. In the worker
+  with a token vault, that is `ConnectionSeller` (`@listora/connections`): each connection's own
+  tokens ([connections.md](connections.md)). Without a vault, `RefreshTokenSeller` serves one seller
+  from `EBAY_USER_REFRESH_TOKEN` (the fake's development seller with `EBAY_ENV=fake`), bound to the
+  one connection `EBAY_USER_CONNECTION_ID` names. That is a development and sandbox convenience
   only: `EBAY_ENV=production` refuses both keys, so one seller's account never acts for every
-  Listora user. Any other connection, a listing with no connection, and every connection
-  without a configured seller get `reauth_required` ("Connect eBay") on every path (execute,
-  read-back, health check, preparing). Token refreshes are single-flight, and the shared
-  refresh runs under the OAuth client's own timeout, so one caller's deadline never fails the
-  others. The health check is one Fulfillment `getOrders` call.
+  Listora user. Any other connection, a listing with no connection, and every connection without a
+  configured seller get `reauth_required` ("Connect eBay") on every path (execute, read-back, health
+  check, preparing). Token refreshes are single-flight, and the shared refresh runs under the OAuth
+  client's own timeout, so one caller's deadline never fails the others. The health check is one
+  Fulfillment `getOrders` call.
 
 ## The fake eBay
 
-The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth, Media, Taxonomy,
-Fulfillment, Developer Analytics, and Notification endpoints the adapter uses, signs
+The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth (with the consent
+page and token revocation), Commerce Identity, Media, Taxonomy, Fulfillment, Developer
+Analytics, and Notification endpoints the adapter and eBay connect use, signs
 notifications the way eBay does, and injects eBay's failure modes; its README cites the eBay
 documentation it follows and lists what eBay leaves undocumented. `npm run ebay:sandbox-check`
 runs the adapter against eBay's sandbox once the keys are in `.env`
 ([Sandbox check](#sandbox-check)).
+
+## Connecting locally
+
+The fake eBay server stands in for eBay's consent page, token endpoint, and seller identity, so
+connecting an eBay account needs no eBay credential. With `.env.example`'s `EBAY_ENV=fake`, add a
+token vault key to `.env` (any 32 random bytes), then run `npm run dev:fake-ebay` next to the
+API and the worker:
+
+```sh
+TOKEN_ENCRYPTION_KEY=<output of openssl rand -base64 32>
+```
+
+In the app, Settings > Marketplaces > Connect eBay opens the fake consent page ("Agree and
+Continue"), which sends the browser back through the API's callback to the app.
 
 ## Sandbox check
 

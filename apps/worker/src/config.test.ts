@@ -13,10 +13,13 @@ describe('loadWorkerConfig', () => {
       logLevel: 'info',
       concurrency: 5,
       taskConcurrency: 2,
-      fakeMarketplaceUrl: undefined,
+      marketplaces: {
+        fakeMarketplaceUrl: undefined,
+        ebay: undefined,
+        depop: undefined,
+        tokenVault: undefined,
+      },
       cognitoUserPool: undefined,
-      ebay: undefined,
-      depop: undefined,
       storage: { driver: 'local' },
       ai: { provider: 'fake', fakeFixturesDir: DEFAULT_FAKE_FIXTURES_DIR },
       analysis: { autoEscalate: true },
@@ -57,7 +60,7 @@ describe('loadWorkerConfig', () => {
       logLevel: 'debug',
       concurrency: 12,
       taskConcurrency: 3,
-      fakeMarketplaceUrl: 'http://127.0.0.1:4100',
+      marketplaces: { fakeMarketplaceUrl: 'http://127.0.0.1:4100' },
       cognitoUserPool: { region: 'eu-west-2', userPoolId: 'eu-west-2_AbC123xyZ' },
     });
   });
@@ -95,7 +98,29 @@ describe('loadWorkerConfig', () => {
   it('treats an empty FAKE_MARKETPLACE_URL or COGNITO_USER_POOL_ID as unset', () => {
     expect(
       loadWorkerConfig({ DATABASE_URL, FAKE_MARKETPLACE_URL: '', COGNITO_USER_POOL_ID: '' }),
-    ).toMatchObject({ fakeMarketplaceUrl: undefined, cognitoUserPool: undefined });
+    ).toMatchObject({
+      marketplaces: { fakeMarketplaceUrl: undefined },
+      cognitoUserPool: undefined,
+    });
+  });
+
+  it('reads the eBay keyset and the token vault it refreshes and checks connections with', () => {
+    expect(
+      loadWorkerConfig({
+        DATABASE_URL,
+        EBAY_ENV: 'fake',
+        EBAY_FAKE_URL: 'http://127.0.0.1:4110',
+        TOKEN_KMS_KEY_ID: 'alias/listora-staging-tokens',
+      }).marketplaces,
+    ).toMatchObject({
+      ebay: { environment: 'fake' },
+      tokenVault: { driver: 'kms', keyId: 'alias/listora-staging-tokens' },
+    });
+    // Without a vault eBay still lists for the configured development seller; nothing connects.
+    expect(
+      loadWorkerConfig({ DATABASE_URL, EBAY_ENV: 'fake', EBAY_FAKE_URL: 'http://127.0.0.1:4110' })
+        .marketplaces.tokenVault,
+    ).toBeUndefined();
   });
 
   it('reports every invalid key at once', () => {
@@ -132,13 +157,13 @@ describe('loadWorkerConfig', () => {
   });
 
   it('reads the Depop settings, and reports a bad one with the rest', () => {
-    expect(loadWorkerConfig({ DATABASE_URL }).depop).toBeUndefined();
+    expect(loadWorkerConfig({ DATABASE_URL }).marketplaces.depop).toBeUndefined();
     expect(
       loadWorkerConfig({
         DATABASE_URL,
         DEPOP_ENV: 'fake',
         DEPOP_USER_CONNECTION_ID: 'connection-1',
-      }).depop,
+      }).marketplaces.depop,
     ).toMatchObject({ environment: 'fake', seller: { connectionId: 'connection-1' } });
     expect(() =>
       loadWorkerConfig({ DATABASE_URL, DEPOP_ENV: 'production', LOG_LEVEL: 'loud' }),
@@ -148,7 +173,7 @@ describe('loadWorkerConfig', () => {
   it('reads the eBay settings, and reports a bad one with the rest', () => {
     expect(
       loadWorkerConfig({ DATABASE_URL, EBAY_ENV: 'fake', EBAY_USER_CONNECTION_ID: 'connection-1' })
-        .ebay,
+        .marketplaces.ebay,
     ).toMatchObject({ environment: 'fake', seller: { connectionId: 'connection-1' } });
     expect(() =>
       loadWorkerConfig({ DATABASE_URL, EBAY_ENV: 'sandbox', LOG_LEVEL: 'loud' }),

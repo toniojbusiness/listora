@@ -43,12 +43,12 @@ other Depop listing runs assisted. Its rules:
   (`duplicate_sku`, `product_not_on_sale`, validation) are `rejected` with Depop's reason.
 - **Tokens** (`oauth.ts`, `tokens.ts`). Sellers connect with the authorization code flow and PKCE
   (S256). Depop rotates refresh tokens and invalidates the old ones at once, so refreshes are
-  single-flight per connection (ten callers, one refresh), the new tokens are kept in memory
-  before they are stored, a failed write keeps them in use and is stored on the next call
-  (clearing a "reconnect" mark another process set meanwhile), and a refused refresh token is
-  checked against the store first, since another process may have refreshed. The tokens live in
-  a `DepopTokenStore`; until the token vault (T-16) implements it, `MemoryDepopTokenStore` holds
-  the one development or sandbox seller (`DEPOP_USER_REFRESH_TOKEN`, refused in production).
+  single-flight per connection (ten callers, one refresh), the new tokens are kept in memory before
+  they are stored, a failed write keeps them in use and is stored on the next call (clearing a
+  "reconnect" mark another process set meanwhile), and a refused refresh token is checked against
+  the store first, since another process may have refreshed. The tokens live in a `DepopTokenStore`;
+  until Depop connect (T-24) implements it over the token vault, `MemoryDepopTokenStore` holds the
+  one development or sandbox seller (`DEPOP_USER_REFRESH_TOKEN`, refused in production).
 - **Rate limits** (`rate-limits.ts`): Depop's per-seller allowances (creates and full updates 200
   per 10 seconds, everything else 6,000 a minute) and its application-wide 30,000 a minute
   (`DEPOP_APP_REQUESTS_PER_MINUTE` is this process's share), as sliding windows a little longer

@@ -20,7 +20,7 @@ export const MIGRATIONS_DIR = fileURLToPath(new URL('../migrations/', import.met
 /**
  * `20261024153000_add_sales.up.sql` and `20261024153000_add_sales.down.sql` form the migration
  * `20261024153000_add_sales`. The prefix is a UTC timestamp (`YYYYMMDDHHMMSS`), so branches
- * written in parallel never pick the same name. The first migrations, `0001` to `0013`, have
+ * written in parallel never pick the same name. The first migrations, `0001` to `0014`, have
  * four-digit numbers instead and sort before every timestamp.
  */
 const MIGRATION_FILE = /^((?:\d{4}|\d{14})_[a-z0-9_]+)\.(up|down)\.sql$/;

@@ -21,7 +21,8 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
 - **Data.** RDS PostgreSQL 18 (Multi-AZ in prod; deletion protection in prod and personal), a
   private photo bucket whose `public/` prefix CloudFront serves by exact key (at its
   `*.cloudfront.net` domain), SES inbound mail for `in.<domain>` stored in a private bucket,
-  and a KMS key for token envelope encryption.
+  and a KMS key for token envelope encryption (`TOKEN_KMS_KEY_ID`: the API may only
+  `GenerateDataKey`, the worker also `Decrypt`).
 - **Deploys** run only from the manual Deploy workflow, on `main`, inside the protected GitHub
   environment, with OIDC role assumption (no stored AWS keys). Images are tagged with the
   commit and immutable. The environment's protection rules and the CDK bootstrap's
