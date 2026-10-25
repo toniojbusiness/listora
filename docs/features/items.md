@@ -13,7 +13,9 @@ analysis in [ai.md](ai.md), and listings in [marketplaces.md](marketplaces.md).
 - **Item status.** Archiving records the item's earlier status in `pre_archive_status`, so
   unarchiving never overwrites a status the server owns (listed, sold, shipped). Which
   transitions the user may make is part of the contract: see `ItemStatus` in
-  `packages/api-contract/components/schemas/items.yaml`.
+  `packages/api-contract/components/schemas/items.yaml`. A sale makes the item
+  `sold_pending_delist` and, once every other listing is delisted or confirmed, `sold`
+  ([auto-delist.md](auto-delist.md)); `getItem` then shows its `saleSummary` and `delistRun`.
 
 ## Data
 

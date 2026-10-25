@@ -85,8 +85,8 @@ minutes before its last complete run (`marketplace_connection.orders_polled_thro
   pending), else by SKU, and records the `sale` (unique per account, marketplace, and order id)
   with one `sale_item` per item, so the webhook and the poll record an order once. An order with
   no line Listora knows is not recorded.
-- The same transaction adds a `sale_recorded` job, the domain event the auto-delist
-  orchestrator (T-20) consumes. Until T-20 registers that task, its jobs wait in the queue.
+- The same transaction starts the sale's auto-delist ([auto-delist.md](auto-delist.md)): the
+  item is `sold_pending_delist` and every other listing gets its delist.
 - Each poll-found order also gets one `poll` inbound event (`order:<id>`), so the next poll
   skips it at once.
 - No buyer data is kept: only the order id, line prices, shipping charged, sale time, and the

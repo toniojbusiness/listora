@@ -29,9 +29,19 @@ async function startApi(
     LOG_LEVEL: 'info',
     ...env,
   });
-  const listening = await api.waitForLog(
-    (line) => typeof line['msg'] === 'string' && line['msg'].startsWith('Server listening at '),
-  );
+  let listening: Awaited<ReturnType<StartedProcess['waitForLog']>>;
+  try {
+    // As long as the worker's process tests allow: a loaded machine starts Node slowly.
+    listening = await api.waitForLog(
+      (line) => typeof line['msg'] === 'string' && line['msg'].startsWith('Server listening at '),
+      20_000,
+    );
+  } catch (error) {
+    // The test never gets the process to stop, so a process that did not come up in time
+    // must not outlive it.
+    await api.stop('SIGKILL');
+    throw error;
+  }
   const baseUrl = String(listening['msg']).replace('Server listening at ', '');
   return { api, baseUrl };
 }

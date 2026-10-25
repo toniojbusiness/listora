@@ -36,6 +36,7 @@ describe('API feature discovery', () => {
       'listings',
       'photos',
       'pricing',
+      'sales',
       'uploads',
       'usage',
       'webhooks',

@@ -217,6 +217,14 @@ Item:
         $ref: './listings.yaml#/Listing'
     saleSummary:
       $ref: '#/ItemSaleSummary'
+    delistRun:
+      $ref: './sales.yaml#/DelistRun'
+      description: |
+        The delist run of the item's latest sale (the "Sold" banner and the delist results),
+        once the item has sold. Absent for an item that never sold.
+    doubleSale:
+      $ref: './sales.yaml#/DoubleSale'
+      description: The item's newest double sale that is still open; absent when there is none.
     createdAt:
       $ref: './common.yaml#/Timestamp'
     updatedAt:

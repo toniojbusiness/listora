@@ -7,12 +7,13 @@
  * and it was not canceled. Listora keeps no buyer data: only the order id, the items' prices,
  * shipping charged, the sale time, and the ship-by date.
  */
+import type { AutoDelistDependencies } from '@listora/auto-delist';
 import type { DbExecutor, JsonObject } from '@listora/db';
 import type { EbayAmount, EbayOrder } from '@listora/marketplaces';
 import type { CurrencyCode } from '@listora/shared';
 
 import { finishInboundEvent, recordInboundEvent } from '../inbound.ts';
-import { recordSale, type RecordSaleResult, type SaleLine } from '../sales.ts';
+import { recordSale, type MarketplaceSaleLine, type RecordSaleResult } from '../sales.ts';
 
 const PAID_STATUSES = new Set(['PAID', 'PARTIALLY_REFUNDED']);
 
@@ -46,6 +47,7 @@ export async function recordEbayOrder(
     order: EbayOrder;
     detection: { source: 'webhook'; inboundEventId: string } | { source: 'poll' };
   },
+  deps: AutoDelistDependencies,
 ): Promise<EbayOrderResult> {
   const { order } = input;
   if (!isPaidOrder(order)) {
@@ -76,18 +78,22 @@ export async function recordEbayOrder(
     inboundEventId = event.id;
   }
 
-  const result = await recordSale(executor, {
-    accountId: input.accountId,
-    marketplace: 'ebay',
-    externalOrderId: order.orderId,
-    soldAt: sale.soldAt,
-    currency: sale.currency,
-    shippingChargedCents: sale.shippingCents,
-    detectionSource: input.detection.source,
-    inboundEventId,
-    shipBy: sale.shipBy,
-    lines: sale.lines,
-  });
+  const result = await recordSale(
+    executor,
+    {
+      accountId: input.accountId,
+      marketplace: 'ebay',
+      externalOrderId: order.orderId,
+      soldAt: sale.soldAt,
+      currency: sale.currency,
+      shippingChargedCents: sale.shippingCents,
+      detectionSource: input.detection.source,
+      inboundEventId,
+      shipBy: sale.shipBy,
+      lines: sale.lines,
+    },
+    deps,
+  );
   if (input.detection.source === 'poll') {
     await finishInboundEvent(
       executor,
@@ -126,12 +132,12 @@ function saleOf(order: EbayOrder):
       currency: CurrencyCode;
       shippingCents: number;
       shipBy: Date | null;
-      lines: SaleLine[];
+      lines: MarketplaceSaleLine[];
     }
   | { reason: string } {
   const soldAt = new Date(order.creationDate);
   if (Number.isNaN(soldAt.getTime())) return { reason: 'the order has no creation date' };
-  const lines: SaleLine[] = [];
+  const lines: MarketplaceSaleLine[] = [];
   let shipBy = null as Date | null;
   for (const line of order.lineItems) {
     const cost = line.lineItemCost === null ? null : usdCents(line.lineItemCost);

@@ -128,6 +128,13 @@ import Testing
         #expect(sale.netProceeds?.amountCents == 5100)
         #expect(sale.profit?.amountCents == 3100)
         #expect(sale.shippingCost == nil)
+        let run = try #require(sale.delistRuns.first)
+        #expect(run.status == .needsAttention)
+        #expect(run.escalated == false)
+        #expect(run.results.map(\.state.value1) == [.delisted, nil])
+        #expect(run.results.last?.state.value2 == "awaiting_runner")
+        #expect(run.results.last?.userTaskId == "7c6e1f5b-8d9a-4b2c-9d4e-5f6a7b8c9d0e")
+        #expect(sale.doubleSales.isEmpty)
     }
 
     @Test func readinessFailureDecodesAs503() async throws {
@@ -295,6 +302,44 @@ private let bundleSaleJSON = """
       "detectionSource": "webhook",
       "status": "detected",
       "isDoubleSale": false,
+      "delistRuns": [
+        {
+          "id": "2d1f6a0c-3e4b-4c7d-8e9f-0a1b2c3d4e5f",
+          "saleId": "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b",
+          "itemId": "0b9d4e8a-1c2f-4a5b-8c7d-6e5f4a3b2c1d",
+          "soldOn": "depop",
+          "status": "needs_attention",
+          "statusDisplay": { "tone": "action_needed", "label": "Action needed - delist on Poshmark" },
+          "results": [
+            {
+              "listingId": "3e2a7b1d-4f5c-4d8e-9f0a-1b2c3d4e5f6a",
+              "marketplace": "ebay",
+              "mode": "api",
+              "state": "delisted",
+              "statusDisplay": { "tone": "success", "label": "Delisted (confirmed by eBay)" },
+              "operationId": "4f3b8c2e-5a6d-4e9f-8a1b-2c3d4e5f6a7b",
+              "attempt": 1,
+              "maxAttempts": 7,
+              "updatedAt": "2026-10-24T13:00:20Z"
+            },
+            {
+              "listingId": "5a4c9d3f-6b7e-4f0a-9b2c-3d4e5f6a7b8c",
+              "marketplace": "poshmark",
+              "mode": "assisted",
+              "state": "awaiting_runner",
+              "statusDisplay": { "tone": "action_needed", "label": "Action needed - delist on Poshmark" },
+              "operationId": "6b5d0e4a-7c8f-4a1b-8c3d-4e5f6a7b8c9d",
+              "attempt": 1,
+              "maxAttempts": 7,
+              "userTaskId": "7c6e1f5b-8d9a-4b2c-9d4e-5f6a7b8c9d0e",
+              "updatedAt": "2026-10-24T13:00:06Z"
+            }
+          ],
+          "escalated": false,
+          "startedAt": "2026-10-24T13:00:05Z"
+        }
+      ],
+      "doubleSales": [],
       "createdAt": "2026-10-24T13:00:05Z",
       "updatedAt": "2026-10-24T13:00:05Z"
     }

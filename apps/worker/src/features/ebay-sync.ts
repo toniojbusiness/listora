@@ -121,7 +121,7 @@ export function createEbaySyncWork(deps: EbaySyncDependencies): EbaySyncWork {
     };
   }
   if (tokens !== undefined) {
-    const sync = { db, endpoints: ebay.endpoints, tokens, logger };
+    const sync = { db, adapters: deps.adapters, endpoints: ebay.endpoints, tokens, logger };
     tasks[EBAY_NOTIFICATION_TASK] = async (payload, signal) => {
       if (!isEbayNotificationJobPayload(payload)) {
         dropped(logger, EBAY_NOTIFICATION_TASK);

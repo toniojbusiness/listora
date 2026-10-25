@@ -14,6 +14,7 @@
     "@listora/ai": "*",
     "@listora/analysis": "*",
     "@listora/api-contract": "*",
+    "@listora/auto-delist": "*",
     "@listora/connections": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",

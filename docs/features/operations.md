@@ -94,16 +94,15 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
     Depop adapter's tokens, [depop.md](depop.md)). Rate limits use per-seller and app-wide sliding
     windows.
 
-**Auto-delist.** A sale event (webhook, poll, email, or manual entry) is deduplicated by
-its order (see `sale` under [Data](#data)). Then, in one transaction, Listora records the sale, sets
-the item to `sold_pending_delist`, and creates a high-priority delist operation or urgent
-assisted task for every other listing. A `delist_run` gathers the per-marketplace results. If
-anything is still unconfirmed after 10 minutes, Listora alerts the user again, and after 30
-minutes it escalates the alert. A second sale opens a double-sale incident. Today
-`recordSale` (`@listora/sales`) records the sale and, in the same transaction, adds its
-`sale_recorded` job, the event the orchestrator (T-20) will consume; eBay sales arrive by the
-`ORDER_CONFIRMATION` webhook and the 5-minute order poll
-([ebay-notifications.md](ebay-notifications.md)).
+**Auto-delist** ([auto-delist.md](auto-delist.md)). A sale event (webhook, poll, email, or
+manual entry) is deduplicated by its order (see `sale` under [Data](#data)). Then, in one
+transaction, `recordSale` (`@listora/sales`) records the sale, sets the item to
+`sold_pending_delist`, cancels the item's moot operations (`cancelMootOperations`: edits waiting
+to run or retry, and publishes that never reached the marketplace), and creates a high-priority
+delist operation for every other listing that may be live, which an assisted listing turns into
+an urgent task. A `delist_run` gathers the per-marketplace results. If anything is still not
+delisted or confirmed after 10 minutes, Listora alerts the user again, and after 30 minutes it
+escalates the alert. A second sale opens a double-sale incident.
 
 **Status vocabulary** shown to users: `Active (confirmed by eBay)`, `Delisting... retry 2 of 6`,
 `Delist failed - Retry`, `Checking...`, `Action needed - delist on Poshmark`,
@@ -124,6 +123,7 @@ confirmed. The API serves them as `statusDisplay` (T-19).
   it sold, one per item (an order can be a bundle), each with its price and, when known, the
   item's listing on the sale's marketplace. `delist_run` is one per sold item and must point
   at an item of its sale; the `delist_run_listing` view lists its operations and user tasks.
-  `fee_line` belongs to a sale and optionally to one of its items. Also `user_task` and
+  `fee_line` belongs to a sale and optionally to one of its items. Also `user_task` (its
+  `sale_id` names the sale a task is about: the later sale of a `resolve_double_sale`) and
   `expense`. Auto-delist operations have `origin = 'auto_delist'` and reference their
   `delist_run`.

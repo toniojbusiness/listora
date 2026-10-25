@@ -524,6 +524,8 @@ export interface UserTaskTable {
   completed_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  /** The sale the task is about (the later sale of a double sale). */
+  sale_id: Nullable<string>;
 }
 
 export interface FeeLineTable {

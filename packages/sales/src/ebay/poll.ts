@@ -100,7 +100,7 @@ export async function pollEbayConnectionOrders(
     for (const order of result.orders) {
       summary.orders += 1;
       if (!isPaidOrder(order)) continue;
-      if (await recordPolledOrder(deps.db, connection.account_id, sellerUserId, order)) {
+      if (await recordPolledOrder(deps, connection.account_id, sellerUserId, order)) {
         summary.recorded += 1;
       }
     }
@@ -142,18 +142,17 @@ export async function pollEbayConnectionOrders(
 }
 
 async function recordPolledOrder(
-  db: Db,
+  deps: Pick<EbaySyncDependencies, 'db' | 'adapters'>,
   accountId: string,
   sellerUserId: string,
   order: EbayOrder,
 ): Promise<boolean> {
-  return inTransaction(db, async (trx) => {
-    const result = await recordEbayOrder(trx, {
-      accountId,
-      sellerUserId,
-      order,
-      detection: { source: 'poll' },
-    });
+  return inTransaction(deps.db, async (trx) => {
+    const result = await recordEbayOrder(
+      trx,
+      { accountId, sellerUserId, order, detection: { source: 'poll' } },
+      { adapters: deps.adapters },
+    );
     return result.type === 'recorded';
   });
 }

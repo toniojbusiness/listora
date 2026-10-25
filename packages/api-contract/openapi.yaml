@@ -533,6 +533,8 @@ components:
       $ref: './components/schemas/sales.yaml#/DelistResult'
     DelistRun:
       $ref: './components/schemas/sales.yaml#/DelistRun'
+    DoubleSale:
+      $ref: './components/schemas/sales.yaml#/DoubleSale'
     SaleItem:
       $ref: './components/schemas/sales.yaml#/SaleItem'
     KnownFeeType:

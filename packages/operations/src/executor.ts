@@ -81,6 +81,7 @@ import {
 } from './evidence.ts';
 import type { OperationJobPayload } from './jobs.ts';
 import { removeOperationJob, scheduleOperationJob } from './jobs.ts';
+import { wasSentThroughApi } from './history.ts';
 import { createdBefore } from './ordering.ts';
 import { delayAfterAttempt, maxAttempts, type RetryPolicy } from './policy.ts';
 import { dismissOpenTasks } from './commands.ts';
@@ -597,23 +598,6 @@ async function supersedeUserSteps(
     superseded.push(candidate.id);
   }
   log.info({ superseded }, 'a delist superseded operations waiting for the user');
-}
-
-/**
- * Whether any step of the operation started under a mode other than assisted, so its request
- * may have reached the marketplace. A `running` event without a recorded mode counts.
- */
-async function wasSentThroughApi(trx: DbTransaction, op: OperationRow): Promise<boolean> {
-  const event = await trx
-    .selectFrom('operation_event')
-    .select('id')
-    .where('account_id', '=', op.account_id)
-    .where('operation_id', '=', op.id)
-    .where('to_status', '=', 'running')
-    .where(sql<string | null>`detail->>'mode'`, 'is distinct from', 'assisted')
-    .limit(1)
-    .executeTakeFirst();
-  return event !== undefined;
 }
 
 /** Whether any earlier step started sending this operation (its history has a `running`). */
