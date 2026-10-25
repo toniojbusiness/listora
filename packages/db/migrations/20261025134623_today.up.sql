@@ -1,9 +1,9 @@
 -- The Today screen and its morning summary (docs/features/today.md).
 --
 -- The Today summary is computed on every app open from the tables that already hold the truth
--- (sales, delist runs, connections, listings, items), so it adds no table of its own; these
--- indexes keep its per-account reads cheap.
-create index sale_sold_at_idx on sale (account_id, sold_at);
+-- (sales, delist runs, connections, listings, items), so it adds no table of its own; this index
+-- keeps its read of open delist runs cheap (its sales read uses the profit dashboard's
+-- `sale_sold_at_idx`).
 create index delist_run_open_idx on delist_run (account_id, created_at) where status <> 'completed';
 
 -- The morning summary notification, one setting per account (the notification goes to every

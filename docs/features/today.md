@@ -85,5 +85,6 @@ that opens its sale, where Mark shipped finishes it and the card leaves.
 - `today_summary_setting`: one row per account: `enabled`, `local_time` (whole minutes),
   `time_zone` (IANA, null until the app sends one), and `last_sent_on`, the local date of the
   latest summary. Deleted with the account.
-- Indexes for the summary's reads: `sale (account_id, sold_at)` for the money summary, and
-  `delist_run (account_id, created_at)` over runs that are not completed.
+- An index for the summary's read of open delist runs: `delist_run (account_id, created_at)`
+  over runs that are not completed. The money summary uses the profit dashboard's
+  `sale (account_id, sold_at)` ([profit.md](profit.md#data)).
