@@ -161,25 +161,21 @@ docs/                   Architecture overview, roadmap, personal environment cos
 
 ## CI
 
-GitHub Actions bills macOS minutes at 10 times Linux minutes, so CI is split by cost. Before
-pushing, run the tests of what you changed locally, including `make ios-test` when you touched
-iOS: pull requests no longer build the iOS app.
-
 `.github/workflows/ci.yml` runs on every pull request that is not a draft (marking a draft
 ready for review starts it) and on every push to `main`. Branch pushes without a pull request
-do not run CI, so one commit never runs twice. All its jobs run on Linux:
+do not run CI, so one commit never runs twice. It has four jobs:
 
-| Job                                              | When it does real work                                      |
-| ------------------------------------------------ | ----------------------------------------------------------- |
-| `Detect changed areas`                           | Always; decides whether the image job builds                |
-| `Backend check (Linux)`                          | Always                                                      |
-| `Application image build and smoke test (Linux)` | Only when an image input changed; otherwise a passing no-op |
+| Job                                              | Runner                   | When it does real work                                      |
+| ------------------------------------------------ | ------------------------ | ----------------------------------------------------------- |
+| `Detect changed areas`                           | Linux                    | Always; decides whether the iOS and image jobs build        |
+| `Backend check (Linux)`                          | Linux                    | Always                                                      |
+| `Application image build and smoke test (Linux)` | Linux                    | Only when an image input changed; otherwise a passing no-op |
+| `iOS lint, build and test (macOS)`               | macOS, or Linux as no-op | Only when an iOS input changed                              |
 
 The backend job installs PostgreSQL 18 from the PGDG apt repository (Swift comes with the
 runner image), then runs `npm ci`, `scripts/dev-db.sh` (with
 `PG_BIN_DIR=/usr/lib/postgresql/18/bin`), and `npm run check`. It caches npm downloads and
-the API contract's SwiftPM builds. `npm run check` includes `contract:check`, which tests the
-generated `ListoraAPI` Swift package on Linux.
+the API contract's SwiftPM builds.
 
 The image job runs `scripts/container-smoke.sh`: it builds the application image, runs the
 schema migrations, and starts the API and the worker from it, configured as in AWS, against
@@ -187,30 +183,35 @@ a PostgreSQL container. It builds only when the change touches what decides whet
 builds and starts: `Dockerfile`, `.dockerignore`, `.nvmrc`, `.npmrc`, `package.json`,
 `package-lock.json`, any `apps/*/package.json` or `packages/*/package.json`, the entry points
 `apps/api/src/main.ts` and `apps/worker/src/main.ts`, `infra/**`, `scripts/container-smoke.sh`,
-or `.github/workflows/ci.yml` (the `image` filter in the `changes` job). Otherwise it succeeds
-in seconds without building, so it still reports a result; it fails, rather than passing, when
-change detection fails.
+or `.github/workflows/ci.yml` (the `image` filter in the `changes` job).
 
-`.github/workflows/nightly.yml` runs the iOS job (`iOS lint, build and test (macOS)`) once a
-night on `main`, and when started by hand from the Actions tab. On macOS with Xcode 26.3 it
-installs XcodeGen, SwiftLint, and SwiftFormat from Homebrew, then runs `make ios-lint` and
-`make ios-test`. It caches the app's SwiftPM checkouts but not DerivedData, because a fresh
-checkout resets the file timestamps Xcode's incremental build relies on. A scheduled run skips
-the macOS job when `main` is still at the commit of the last successful nightly run.
+The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, and SwiftFormat
+from Homebrew, then runs `make ios-lint` and `make ios-test`. It caches the app's SwiftPM
+checkouts but not DerivedData, because a fresh checkout resets the file timestamps Xcode's
+incremental build relies on. It builds only when the change touches a file the iOS build
+reads: `apps/ios/**`, `packages/api-contract/**` (the OpenAPI spec and the generated
+`ListoraAPI` Swift package), `packages/shared/fixtures/listing-urls.json` (the listing URL
+fixtures the iOS parser is tested against), `Makefile`, or `.github/workflows/ci.yml` (the
+`ios` filter).
+
+**Cost rule.** macOS runner minutes are the expensive ones, so the iOS and image jobs build
+only when one of their inputs changed. Otherwise they succeed in seconds without building, so
+they still report a result and can be required checks; they fail, rather than passing, when
+change detection fails. When either build starts reading a new file, add it to its filter.
 
 Which jobs do real work, by change:
 
-| Change                         | Pull request                                          | Nightly on `main` |
-| ------------------------------ | ----------------------------------------------------- | ----------------- |
-| iOS only (`apps/ios/**`)       | changes, backend; image no-op                         | iOS               |
-| Backend only (`apps/api/src`)  | changes, backend; image no-op (unless an entry point) | iOS (main moved)  |
-| Infra (`infra/**`, Dockerfile) | changes, backend, image                               | iOS (main moved)  |
-| Docs only                      | changes, backend; image no-op                         | iOS (main moved)  |
-| Draft pull request             | nothing until marked ready                            | -                 |
+| Change                           | Real work                      |
+| -------------------------------- | ------------------------------ |
+| iOS only (`apps/ios/**`)         | changes, backend, iOS          |
+| Backend only (`apps/api/src/**`) | changes, backend               |
+| Infra (`infra/**`, `Dockerfile`) | changes, backend, image        |
+| Docs only                        | changes, backend               |
+| Draft pull request               | nothing until ready for review |
 
 A new push to a pull request cancels the run it supersedes. Runs on `main` are never
 cancelled, so every merged commit gets a full result. Every job has a `timeout-minutes`
-limit. When the image starts depending on a new file, add it to the `image` filter.
+limit.
 
 Deploys are separate: `.github/workflows/deploy.yml` runs only when started by hand for
 `staging`, `prod`, or `personal` (one reseller's own low-cost setup, priced in

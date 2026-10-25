@@ -993,7 +993,7 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   [packages/api-contract/README.md](../packages/api-contract/README.md).
 - CI runs the same fresh-clone path as local development; see the CI section of the
   [README](../README.md#ci). A Linux job builds the application image and smoke-tests it
-  (`scripts/container-smoke.sh`) when an image input changed. The macOS iOS job
-  (`make ios-lint`, `make ios-test`) runs only nightly on `main` (macOS minutes cost 10 times
-  Linux minutes); contributors run `make ios-test` locally before pushing iOS changes. The
-  Linux backend check runs on every non-draft pull request.
+  (`scripts/container-smoke.sh`) when an image input changed. A macOS job runs
+  `make ios-lint` and `make ios-test`, but only when a file the iOS build reads changed (macOS
+  minutes cost 10 times Linux minutes); the Linux backend check runs on every non-draft pull
+  request.

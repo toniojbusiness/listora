@@ -1,8 +1,7 @@
 name: CI
 
-# Cost rules (the CI section of README.md): macOS minutes bill at 10x Linux minutes, so the iOS
-# job does not run here at all; it runs nightly on `main` (nightly.yml), and workers run
-# `make ios-test` locally before pushing. Pushes run only for `main`; branches are covered by
+# Cost rules (the CI section of README.md): the macOS iOS job and the image job only do real
+# work when one of their inputs changed (the filters in the `changes` job). Pushes run only for `main`; branches are covered by
 # their pull request, so one commit never runs twice. Draft pull requests run nothing until
 # they are marked ready for review.
 on:
@@ -32,6 +31,7 @@ jobs:
       # paths-filter lists a pull request's files through the API.
       pull-requests: read
     outputs:
+      ios: ${{ steps.filter.outputs.ios }}
       image: ${{ steps.filter.outputs.image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,7 +42,14 @@ jobs:
           # its context rules, the dependency manifests, the entry points, the container
           # configuration in infra/, and the smoke test. Source changes behind the entry points
           # are covered by the backend check. Keep in sync with the CI section of README.md.
+          # `ios`: everything the iOS job reads.
           filters: |
+            ios:
+              - 'apps/ios/**'
+              - 'packages/api-contract/**'
+              - 'packages/shared/fixtures/listing-urls.json'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
             image:
               - 'Dockerfile'
               - '.dockerignore'
@@ -127,3 +134,59 @@ jobs:
         run: npm ci
       - if: ${{ env.IMAGE_AFFECTED == 'true' }}
         run: scripts/container-smoke.sh
+
+  # This job always reports a result, so it can be a required check: when no iOS input changed
+  # it runs on Linux and succeeds in seconds without building. It never succeeds when change
+  # detection failed.
+  ios:
+    name: iOS lint, build and test (macOS)
+    needs: changes
+    if: ${{ !cancelled() && !github.event.pull_request.draft }}
+    runs-on: ${{ needs.changes.outputs.ios == 'true' && 'macos-26' || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    env:
+      IOS_AFFECTED: ${{ needs.changes.outputs.ios }}
+      # Pinned to the Xcode used for local development (README prerequisites).
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - name: Require a successful change detection
+        if: ${{ needs.changes.result != 'success' }}
+        run: |
+          echo "::error::Change detection ended with '${{ needs.changes.result }}', so the iOS result is unknown."
+          exit 1
+      - name: Skip the iOS build (no iOS input changed)
+        if: ${{ env.IOS_AFFECTED != 'true' }}
+        run: echo "No file the iOS build reads changed; see the changes job for the filter."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ env.IOS_AFFECTED == 'true' }}
+      - name: Show Xcode and simulators
+        if: ${{ env.IOS_AFFECTED == 'true' }}
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available | grep iPhone
+      - name: Install XcodeGen, SwiftLint, and SwiftFormat
+        if: ${{ env.IOS_AFFECTED == 'true' }}
+        run: brew install xcodegen swiftlint swiftformat
+      # SwiftPM checkouts for the app's package graph. DerivedData is not cached: Xcode keys
+      # incremental builds on file timestamps, which every fresh checkout resets.
+      - name: Cache SwiftPM checkouts for the iOS app
+        if: ${{ env.IOS_AFFECTED == 'true' }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/ios/SourcePackages
+            .build/ios/PackageCache
+          key: ios-swiftpm-${{ runner.os }}-xcode-26.3-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/*/Package.swift', 'apps/ios/**/Package.resolved') }}
+      - if: ${{ env.IOS_AFFECTED == 'true' }}
+        run: make ios-lint
+      - if: ${{ env.IOS_AFFECTED == 'true' }}
+        run: make ios-test
+      - name: Upload test results
+        if: ${{ failure() && env.IOS_AFFECTED == 'true' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-test-results
+          path: .build/ios/Test.xcresult
+          retention-days: 7
