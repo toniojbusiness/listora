@@ -68,7 +68,8 @@ export interface ListingIdentity {
 
 /**
  * The listing this identity names, live or not, with its item's SKU. A listing id is unique
- * per account and marketplace whatever the status, and so is a short link's URL.
+ * per account and marketplace whatever the status, whether confirmed or still pending a
+ * read-back, and so is a short link's URL.
  */
 export async function findListingByIdentity(
   db: DbExecutor,
@@ -90,7 +91,12 @@ export async function findListingByIdentity(
       ? query
           .where('listing.external_listing_id', 'is', null)
           .where('listing.external_url', '=', identity.url)
-      : query.where('listing.external_listing_id', '=', identity.listingId);
+      : query.where((eb) =>
+          eb.or([
+            eb('listing.external_listing_id', '=', identity.listingId),
+            eb('listing.pending_external_listing_id', '=', identity.listingId),
+          ]),
+        );
   return query.executeTakeFirst();
 }
 

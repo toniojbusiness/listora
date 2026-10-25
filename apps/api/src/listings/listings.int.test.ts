@@ -164,6 +164,30 @@ describe('shared listing links (real Postgres)', () => {
       expect(other.status).toBe(201);
     });
 
+    it('refuses a listing id still pending a read-back on another item', async () => {
+      const published = await createItem();
+      const linked = await link(published.id, 'https://www.ebay.com/itm/111111111111');
+      expect(linked.status).toBe(201);
+      await api.db
+        .updateTable('marketplace_listing')
+        .set({
+          status: 'publishing',
+          external_listing_id: null,
+          external_url: null,
+          pending_external_listing_id: '222222222222',
+        })
+        .where('id', '=', linked.body.id)
+        .execute();
+
+      const other = await createItem();
+      const duplicate = await link(other.id, 'https://www.ebay.com/itm/222222222222');
+      expect(duplicate.status).toBe(409);
+      expect(duplicate.error).toMatchObject({
+        code: 'already_exists',
+        message: `This eBay listing is already linked to ${published.sku}.`,
+      });
+    });
+
     it('allows one live listing per marketplace on an item', async () => {
       const item = await createItem();
       expect(
