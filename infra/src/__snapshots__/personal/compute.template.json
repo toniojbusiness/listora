@@ -94,6 +94,20 @@
             },
             {
               "Action": [
+                "cognito-idp:AdminDeleteUser",
+                "cognito-idp:AdminGetUser"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-personal-auth",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputFnGetAttUserPool6BA7E5F2Arn6E09B627"
+                }
+              }
+            },
+            {
+              "Action": [
                 "s3:GetBucket*",
                 "s3:GetObject*",
                 "s3:List*"
@@ -189,7 +203,27 @@
               },
               {
                 "Name": "AUTH_DRIVER",
-                "Value": "dev"
+                "Value": "cognito"
+              },
+              {
+                "Name": "COGNITO_USER_POOL_ID",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-auth",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefUserPool6BA7E5F24B752AC8"
+                  }
+                }
+              },
+              {
+                "Name": "COGNITO_CLIENT_IDS",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-auth",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefUserPoolIPhoneApp88BB6ABF22F930E1"
+                  }
+                }
               },
               {
                 "Name": "DATABASE_URL",
@@ -469,6 +503,16 @@
                     "StackName": "listora-personal-secrets",
                     "Region": "us-east-1",
                     "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
+                  }
+                }
+              },
+              {
+                "Name": "COGNITO_USER_POOL_ID",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-auth",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefUserPool6BA7E5F24B752AC8"
                   }
                 }
               },

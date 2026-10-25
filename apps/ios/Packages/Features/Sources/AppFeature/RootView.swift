@@ -105,7 +105,7 @@ extension RootView {
     private var settings: some View {
         SettingsView(
             content: SettingsContent(configuration: dependencies.configuration, version: dependencies.version),
-            devSignIn: dependencies.devSignIn,
+            signIn: dependencies.signIn,
             path: $settingsPath,
             marketplacesAttention: dependencies.marketplaces.attention == nil ? nil : "Needs attention",
             onDone: { showsSettings = false },

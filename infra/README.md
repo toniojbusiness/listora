@@ -191,6 +191,7 @@ and fails fast, naming the missing or invalid key without printing its value.
 | `hostedZoneId`      | `LISTORA_HOSTED_ZONE_ID`     | yes      | Route 53 public hosted zone for `domain`; set with `domain`      |
 | `imageTag`          | `LISTORA_IMAGE_TAG`          | yes      | Image tag to run (the commit SHA); `latest` is refused           |
 | `alarmEmail`        | `LISTORA_ALARM_EMAIL`        | no       | Subscribed to the alarm topic                                    |
+| `ownerEmail`        | `LISTORA_OWNER_EMAIL`        | personal | The only person who can sign in (owner pool); refused elsewhere  |
 | `githubRepository`  | `LISTORA_GITHUB_REPOSITORY`  | no       | Repository allowed to deploy; default `toniojbusiness/listora`   |
 | `availabilityZones` | `LISTORA_AVAILABILITY_ZONES` | no       | Two zones of the region, comma-separated; default: the first two |
 
@@ -202,9 +203,12 @@ involved. It deploys only to the captain's account `976033325938` (pinned in the
 other account is refused) and runs the same steps in the same order as the workflow.
 
 **Before the first run:** sign in to the account's AWS CLI profile (for example
-`aws sso login --profile prequal-main`), start Docker (`LISTORA_CONTAINER_CLI=finch` uses Finch
+`aws sso login --profile prequal-main`; one sign-in covers the whole deploy, since `cdk` gets
+the profile's credentials from the AWS CLI through `credential_process` in a private config the
+script removes on exit, instead of the hour-long SSO token `cdk` cannot renew), start Docker (`LISTORA_CONTAINER_CLI=finch` uses Finch
 instead), and put the Anthropic key in `~/.config/listora/anthropic.env` as one
-`ANTHROPIC_API_KEY=...` line. Optional settings (`LISTORA_AWS_REGION`,
+`ANTHROPIC_API_KEY=...` line. Export `LISTORA_OWNER_EMAIL`, the address you sign in to the app
+with: the user pool's only user (docs/features/auth.md, The owner pool). Optional settings (`LISTORA_AWS_REGION`,
 `LISTORA_AVAILABILITY_ZONES`, `LISTORA_ALARM_EMAIL`, `LISTORA_DOMAIN` with
 `LISTORA_HOSTED_ZONE_ID`) come from the environment, as for `cdk` ([Settings](#settings)).
 
@@ -215,14 +219,17 @@ scripts/deploy-personal.sh --profile prequal-main             # deploys
 
 From a clean checkout of the commit to deploy (the image is tagged with it), the script:
 
-1. **Checks locally**: the tools, a clean checkout, and the Anthropic key file (never printed).
+1. **Checks locally**: the tools, a clean checkout, `LISTORA_OWNER_EMAIL`, and the Anthropic
+   key file (never printed).
 2. **Verifies the account**: `aws sts get-caller-identity` must be `976033325938`.
 3. **Checks the zones and the stacks**: refuses `use1-az3` (no API Gateway VPC links) and
    suggests a `LISTORA_AVAILABILITY_ZONES` value; refuses any stack that is busy, failed, or
    `ROLLBACK_COMPLETE`, so it never deletes or replaces something that exists.
 4. **Synthesizes offline** with the real settings into `infra/cdk.out/deploy-personal` and
    deploys exactly that assembly. It checks the templates first: the database has deletion
-   protection, the API's `AUTH_DRIVER` is `dev` or `cognito`, and `AI_PROVIDER` is not `fake`.
+   protection, the API's `AUTH_DRIVER` is `cognito` (the dev driver is refused), the user pool
+   allows no sign-up and its only user is `LISTORA_OWNER_EMAIL`, and `AI_PROVIDER` is not
+   `fake`.
 5. **Makes sure Listora's own CDK bootstrap is the restricted one**
    ([Trust boundary](#trust-boundary)). Listora bootstraps separately from any other CDK app
    in the account: qualifier `listora` and toolkit stack `CDKToolkit-listora`
@@ -243,28 +250,57 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
 6. **Deploys** the registry, builds the `app` and `runner` images for `linux/amd64` (the
    tasks run on X86_64) and pushes them (reusing an image already pushed for the commit), then
    the state stacks and the migrate stack.
-7. **Stores the Anthropic key** in `listora/personal/anthropic-api-key` from a private
+7. **Waits until SES has verified the owner's address** (and, with a domain, the domain), then
+   deploys the auth stack (the user pool). The pool emails the sign-in codes through SES, which
+   sends only to verified addresses while the account is in the SES sandbox. **The one manual
+   step:** on the first deploy, the email stack makes the owner's address an SES identity and
+   AWS emails it "Amazon Web Services - Email Address Verification Request"; click its link
+   while the script waits (30 minutes at most; run the script again after that). No email?
+   `aws ses verify-email-identity --email-address <owner> --profile <profile>` sends it again.
+   Later deploys find it verified and go straight on.
+8. **Stores the Anthropic key** in `listora/personal/anthropic-api-key` from a private
    temporary file, only when it differs; if the services were already running, it restarts
    them so they read it.
-8. **Runs the migrations** (`scripts/run-migrations.sh`, the workflow's step), then deploys
+9. **Runs the migrations** (`scripts/run-migrations.sh`, the workflow's step), then deploys
    compute and observability.
-9. **Waits for health** (`/health/ready` with the database ok, 10 minutes at most), runs the
-   **smoke test**, and prints the API URL and the line to put in the iPhone app's Prod
-   configuration.
+10. **Waits for health** (`/health/ready` with the database ok, 10 minutes at most), runs the
+    **smoke test**, and prints the API URL and the app client id to put in the iPhone app's
+    Prod configuration.
 
 **Smoke test** (`src/deploy/smoke.ts`, also runnable on its own): `/health/live` and
-`/health/ready`, a sign-in with the configured driver, then it creates a draft item, reads it,
-deletes it, and checks that it is gone. With the `dev` driver it requests a code, reads it from
-the API's log group `/listora/personal/api`, and finally deletes the throwaway account it
-signed in to. With `cognito` it signs in with `LISTORA_SMOKE_ID_TOKEN`, an ID token of a
-dedicated smoke user, whose account it keeps. It never starts an analysis or touches a
-marketplace, so it costs no AI usage. A failed step fails the deploy with the step's name.
+`/health/ready`, a `401` for a request without a token, a sign-in with the configured driver,
+then it creates a draft item, reads it, deletes it, and checks that it is gone. With the `dev`
+driver it requests a code, reads it from the API's log group, and finally deletes the
+throwaway account it signed in to. With `cognito` it also checks that the dev sign-in is off
+(`404`), and signs in only with `LISTORA_SMOKE_ID_TOKEN`, an ID token of a user of the pool,
+whose account it keeps. Personal's pool has one user, the owner, so the deploy runs without
+one and skips the signed-in steps; to run them against your own account, pass your ID token:
+`LISTORA_SMOKE_ID_TOKEN=<token> node infra/src/deploy/smoke.ts --api-url <url> --auth cognito`.
+It never starts an analysis or touches a marketplace, so it costs no AI usage. A failed step
+fails the deploy with the step's name.
 
-**Point the iPhone app at it.** Set the printed URL in `apps/ios/Config/Prod.xcconfig`, keeping
-the `$()` that stops xcconfig from reading `//` as a comment, for example
-`API_BASE_URL = https:/$()/abc123.execute-api.us-east-1.amazonaws.com`, then ship a TestFlight
-build ([apps/ios/README.md](../apps/ios/README.md#environments)). The URL changes only when a
-domain is added ([Without a domain](#without-a-domain)).
+**Point the iPhone app at it.** Set the printed values in `apps/ios/Config/Prod.xcconfig`,
+keeping the `$()` that stops xcconfig from reading `//` as a comment, for example:
+
+```text
+API_BASE_URL = https:/$()/abc123.execute-api.us-east-1.amazonaws.com
+COGNITO_REGION = us-east-1
+COGNITO_CLIENT_ID = 1example23456789abcdefghij
+```
+
+Then ship a TestFlight build ([apps/ios/README.md](../apps/ios/README.md#environments)) and
+sign in from Settings with `LISTORA_OWNER_EMAIL`: the app emails you a code. The URL changes
+only when a domain is added ([Without a domain](#without-a-domain)); the client id only if the
+auth stack is replaced.
+
+**The owner's account.** The auth stack creates the owner's Cognito user, verified and without
+a password, so the first sign-in is an emailed code like every later one. Changing
+`LISTORA_OWNER_EMAIL` replaces that user, and the new one signs in to a new, empty Listora
+account (the account belongs to the Cognito user's `sub`). Deleting the account in the app
+deletes the Cognito user too; to sign in again, recreate it with
+`aws cognito-idp admin-create-user --user-pool-id <UserPoolId output> --username <owner>
+--user-attributes Name=email,Value=<owner> Name=email_verified,Value=true --message-action
+SUPPRESS --profile <profile>`.
 
 ### Rollback
 
@@ -286,9 +322,11 @@ domain is added ([Without a domain](#without-a-domain)).
 ### Teardown
 
 Removing the personal environment destroys its data; there is no undo except the final
-database snapshot. Remove the stacks in reverse order (observability, compute, email, storage,
-migrate, data, secrets, network, registry), turning off each stack's termination protection
-first. Before the data stack:
+database snapshot. Remove the stacks in reverse order (observability, compute, auth, email,
+storage, migrate, data, secrets, network, registry), turning off each stack's termination
+protection first. The user pool has deletion protection and is retained: turn the protection
+off (`aws cognito-idp update-user-pool --deletion-protection INACTIVE ...`) and delete it by
+hand. Before the data stack:
 
 - **The database has deletion protection.** Turn it off on purpose, or removing the stack
   fails: `aws rds modify-db-instance --db-instance-identifier <id> --no-deletion-protection
@@ -342,7 +380,10 @@ arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protecti
    reviewers, and deployment branches limited to `main`. Add the environment variables
    `AWS_ACCOUNT_ID`, `AWS_REGION`, `DOMAIN`,
    `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL` and `AVAILABILITY_ZONES` (personal without a
-   domain leaves out `DOMAIN` and `HOSTED_ZONE_ID`). No secrets are needed.
+   domain leaves out `DOMAIN` and `HOSTED_ZONE_ID`; personal also needs `OWNER_EMAIL`, the one
+   person its user pool lets sign in). No secrets are needed. Deploy personal the first time
+   with `scripts/deploy-personal.sh`, which waits for the owner to click SES's verification
+   link before it deploys the user pool; the workflow's user pool step does not wait.
 5. **Deploy.** Run the **Deploy** workflow (Actions tab) on `main` with `staging`. It tests
    and synthesizes offline, assumes the deploy role through OIDC, deploys the registry, builds
    and pushes the application and runner images tagged with the commit, deploys the state
@@ -365,7 +406,9 @@ listora/staging/<name> --secret-string ...`, then redeploy or force a new ECS de
    `aws cloudformation describe-stacks --stack-name listora-personal-compute --query
 "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text`. Set it as
    `API_BASE_URL` in `apps/ios/Config/Prod.xcconfig` (see
-   [apps/ios/README.md](../apps/ios/README.md#environments)) before the next TestFlight build.
+   [apps/ios/README.md](../apps/ios/README.md#environments)) before the next TestFlight build,
+   and `COGNITO_CLIENT_ID` from the auth stack's `AppClientId` output (`COGNITO_REGION` is the
+   region).
    Run this again whenever the URL changes (adding a domain later changes it; see
    [Adding a domain later](#without-a-domain)).
 

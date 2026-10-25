@@ -94,6 +94,7 @@ use is in `Typography.swift`.
 | `Banner`, `toast(_:)`                      | Inline status message with Retry or dismiss; a passing confirmation                                                                               |
 | `BottomActionBar`, `bottomActionBar(_:)`   | The pinned bar for a screen's main actions                                                                                                        |
 | `solidBarEdges()`                          | A hard edge under the navigation bar (iOS 26), so content never shows through; set once at the root                                               |
+| `RemoteImage`, `RemoteImageLoader`         | A server photo filling its frame: disk and memory caches, decoded at display size ([performance.md](performance.md#ios)); never `AsyncImage`      |
 
 The review flow enters amounts on its own keypad (`KeypadView` in `ReviewFeature`) rather than
 `PriceField`, so the system keyboard never covers the bottom bar; `PriceField` is for amount

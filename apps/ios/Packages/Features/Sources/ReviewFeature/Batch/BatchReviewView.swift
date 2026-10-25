@@ -137,12 +137,8 @@ struct BatchReviewPage: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.xs) {
                     ForEach(model.item?.photos ?? [], id: \.id) { photo in
-                        AsyncImage(url: photo.urls.flatMap { URL(string: $0.thumbnail) }) { phase in
-                            if let image = phase.image {
-                                image.resizable().scaledToFill()
-                            } else {
-                                Palette.surfaceSecondary.color
-                            }
+                        RemoteImage(url: photo.urls.flatMap { URL(string: $0.thumbnail) }) {
+                            Palette.surfaceSecondary.color
                         }
                         .frame(width: 96, height: 96)
                         .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))

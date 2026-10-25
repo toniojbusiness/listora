@@ -75,7 +75,9 @@ final class InventoryListModel {
         do {
             let page = try await service.items(query, cursor: cursor)
             guard query == self.query else { return }
-            items += page.items.filter { new in !items.contains { $0.id == new.id } }
+            // A set, so the 40th page of a 2,000-item inventory is not checked row by row.
+            let shown = Set(items.map(\.id))
+            items += page.items.filter { !shown.contains($0.id) }
             nextCursor = page.nextCursor
             remember(brandsOf: page.items)
         } catch {

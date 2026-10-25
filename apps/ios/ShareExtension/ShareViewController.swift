@@ -50,9 +50,11 @@ final class ShareViewController: UIViewController {
         #if DEBUG
             configuration = DevOverrides.applied(to: configuration)
         #endif
-        // The session the app signed in with, from the App Group keychain.
+        // The session the app signed in with, from the App Group keychain, renewed with the same
+        // Cognito client as the app's (AppDependencies) when its token expires.
         let accessTokens = AccessTokenStore(
             storage: KeychainAccessGrantStorage.session(appGroup: configuration.appGroupIdentifier),
+            refresher: configuration.cognito.map { CognitoSignInClient(region: $0.region, clientID: $0.clientID) },
         )
         let api = APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens)
         return ShareLinkModel(content: content, service: APIListingLinkService(api: api, accessTokens: accessTokens))

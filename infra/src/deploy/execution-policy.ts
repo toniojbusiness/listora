@@ -25,6 +25,7 @@ export const SERVICE_PREFIXES: Readonly<Record<string, string>> = {
   CertificateManager: 'acm',
   CloudFront: 'cloudfront',
   CloudWatch: 'cloudwatch',
+  Cognito: 'cognito-idp',
   EC2: 'ec2',
   ECR: 'ecr',
   ECS: 'ecs',

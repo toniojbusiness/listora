@@ -34,6 +34,7 @@ export {
   DEFAULT_RETRY_POLICY,
   delayAfterAttempt,
   maxAttempts,
+  queuePollIntervalMs,
   RETRY_DELAYS_MS,
   scaledRetryPolicy,
 } from './policy.ts';

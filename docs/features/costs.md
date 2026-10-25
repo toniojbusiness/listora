@@ -12,6 +12,9 @@ Free Tier credit, deployed as it starts: without a domain
 added (its Route 53 hosted zone and SES inbound sale email), plus the domain's registration.
 A copy of the staging layout (NAT gateway, load balancer, two services) would cost about $100.
 
+Rechecked on 2026-10-25 after the efficiency pass ([performance.md](performance.md)): it added
+or removed no billed resource and changed no task size, so the estimate stands.
+
 Prices were read on 2026-10-24 for US East (N. Virginia), on demand, from the AWS pricing
 pages linked below (the price data behind their tables). A month is 730 hours. Taxes, the
 domain registration, and the Anthropic API bill are not included.
@@ -48,6 +51,8 @@ domain registration, and the Anthropic API bill are not included.
 | S3 photo storage and requests        | 8 GB at $0.023 per GB, 15,000 PUTs at $0.005 per 1,000          |      $0.27 |
 | CloudFront                           | Within the always-free 1 TB and 10 million requests             |      $0.00 |
 | SES inbound sale email               | None without a domain (SES receives only for a verified domain) |      $0.00 |
+| Cognito user pool (Essentials plan)  | 1 monthly active user; the first 10,000 are free                |      $0.00 |
+| SES sign-in codes                    | About 60 emails at $0.10 per 1,000: under a cent                |      $0.00 |
 | Secrets Manager                      | 2 secrets (database, Anthropic key) at $0.40                    |      $0.80 |
 | KMS token key                        | 1 key at $1.00 (each yearly rotation adds $1, for two years)    |      $1.00 |
 | CloudWatch Logs                      | 1.15 GB ingested at $0.50, kept 7 days at $0.03 per GB          |      $0.59 |
@@ -192,6 +197,7 @@ status one).
 - [Amazon S3 pricing](https://aws.amazon.com/s3/pricing/)
 - [Amazon CloudFront pricing](https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/)
 - [Amazon SES pricing](https://aws.amazon.com/ses/pricing/)
+- [Amazon Cognito pricing](https://aws.amazon.com/cognito/pricing/)
 - [AWS Secrets Manager pricing](https://aws.amazon.com/secrets-manager/pricing/)
 - [AWS KMS pricing](https://aws.amazon.com/kms/pricing/)
 - [Amazon CloudWatch pricing](https://aws.amazon.com/cloudwatch/pricing/)

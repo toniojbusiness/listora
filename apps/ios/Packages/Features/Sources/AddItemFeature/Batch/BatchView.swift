@@ -197,12 +197,8 @@ struct BatchView: View {
         if let file = row.coverFile {
             PhotoThumbnail(url: file, pointSize: thumbnailSize)
         } else {
-            AsyncImage(url: row.coverURL) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                } else {
-                    Palette.surfaceSecondary.color
-                }
+            RemoteImage(url: row.coverURL) {
+                Palette.surfaceSecondary.color
             }
         }
     }
