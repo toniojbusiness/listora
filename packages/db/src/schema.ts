@@ -55,6 +55,7 @@ import type {
   SaleCheckReason,
   SaleDetectionSource,
   SaleStatus,
+  SessionCheckStatus,
   SubscriptionSource,
   SubscriptionStatus,
   SuccessEvidence,
@@ -734,6 +735,27 @@ export interface SaleCheckScheduleTable {
   updated_at: UpdatedAt;
 }
 
+/**
+ * The check that an automation connection's newest linked session works, which the app waits
+ * for before it shows the marketplace as linked (one row per connection).
+ */
+export interface SessionCheckTable {
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  /** The link this check is for; a relink sets a new one. */
+  check_id: Generated<string>;
+  status: Generated<SessionCheckStatus>;
+  attempts: Generated<number>;
+  failure_code: Nullable<string>;
+  /** User-readable and names the marketplace. */
+  failure_message: Nullable<string>;
+  requested_at: Generated<Date>;
+  finished_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 /** Every table and view in the schema, keyed by name. */
 export interface Database {
   account: AccountTable;
@@ -775,4 +797,5 @@ export interface Database {
   account_deletion_grant: AccountDeletionGrantTable;
   automation_run: AutomationRunTable;
   sale_check_schedule: SaleCheckScheduleTable;
+  session_check: SessionCheckTable;
 }

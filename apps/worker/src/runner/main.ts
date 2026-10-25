@@ -1,9 +1,10 @@
 /**
  * The browser runner (decision D1): the on-demand process that runs automated marketplace
- * steps and sale checks in headless Chromium, one seller session at a time. The worker starts
- * it when automated work waits (a child process locally, the ECS service in AWS), and it exits
- * once it has had nothing to do for `RUNNER_IDLE_EXIT_SECONDS`, scaling its ECS service back to
- * zero. `self-test` launches the browser once and exits (the image smoke test).
+ * steps, sale checks, and the checks of newly linked sessions in headless Chromium, one seller
+ * session at a time. The worker starts it when automated work waits (a child process locally,
+ * the ECS service in AWS), and it exits once it has had nothing to do for
+ * `RUNNER_IDLE_EXIT_SECONDS`, scaling its ECS service back to zero. `self-test` launches the
+ * browser once and exits (the image smoke test).
  */
 import { ECSClient } from '@aws-sdk/client-ecs';
 
@@ -12,13 +13,16 @@ import {
   HttpPhotoSource,
   isAutomatedMarketplace,
   isSaleCheckJobPayload,
+  isSessionCheckJobPayload,
   loadChromium,
   openRunnerPresence,
   PlaywrightBrowserRunner,
   RunnerSessions,
   runnerWorkPending,
   runSaleCheck,
+  runSessionCheck,
   SALE_CHECK_TASK,
+  SESSION_CHECK_TASK,
   scaleRunnerServiceToZero,
   StorageScreenshotStore,
 } from '@listora/automation';
@@ -110,6 +114,13 @@ async function run(): Promise<void> {
             payload,
             signal,
           );
+        },
+        [SESSION_CHECK_TASK]: async (payload, signal) => {
+          if (!isSessionCheckJobPayload(payload)) {
+            logger.error({ task: SESSION_CHECK_TASK }, 'job with an invalid payload; dropping it');
+            return;
+          }
+          await runSessionCheck({ db, automation, logger }, payload, signal);
         },
       },
       onFatalError: fatal,

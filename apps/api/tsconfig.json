@@ -12,6 +12,7 @@
     { "path": "../../packages/analysis" },
     { "path": "../../packages/api-contract" },
     { "path": "../../packages/auto-delist" },
+    { "path": "../../packages/automation" },
     { "path": "../../packages/connections" },
     { "path": "../../packages/db" },
     { "path": "../../packages/marketplaces" },

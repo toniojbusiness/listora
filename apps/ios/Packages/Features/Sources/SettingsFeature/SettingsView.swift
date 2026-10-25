@@ -19,16 +19,18 @@ public struct SettingsContent: Equatable, Sendable {
 /// Marketplaces).
 public enum SettingsDestination: Hashable, Sendable {
     case marketplaces
+    case linkAccounts
 }
 
 /// Account, marketplace connections, and app information. Dev builds also have a developer
-/// sign-in; the real account section (T-28, T-31) comes later. The Marketplaces screen comes from
-/// the caller (AppFeature), since a feature never imports another; so does `path`, so the caller
-/// can open it.
-public struct SettingsView<Marketplaces: View>: View {
+/// sign-in; the real account section (T-28, T-31) comes later. The Marketplaces and Link accounts
+/// screens come from the caller (AppFeature), since a feature never imports another; so does
+/// `path`, so the caller can open them.
+public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
     private let content: SettingsContent
     private let devSignIn: DevSignInModel?
     private let marketplaces: Marketplaces?
+    private let linkAccounts: LinkAccounts?
     /// The server's words for a connection that needs attention, shown on the Marketplaces row.
     private let marketplacesAttention: String?
     @Binding private var path: [SettingsDestination]
@@ -39,32 +41,46 @@ public struct SettingsView<Marketplaces: View>: View {
         path: Binding<[SettingsDestination]>,
         marketplacesAttention: String? = nil,
         @ViewBuilder marketplaces: () -> Marketplaces,
+        @ViewBuilder linkAccounts: () -> LinkAccounts,
     ) {
         self.content = content
         self.devSignIn = devSignIn
         _path = path
         self.marketplacesAttention = marketplacesAttention
         self.marketplaces = marketplaces()
+        self.linkAccounts = linkAccounts()
     }
 
     public var body: some View {
         NavigationStack(path: $path) {
             List {
-                if marketplaces != nil {
+                if marketplaces != nil || linkAccounts != nil {
                     Section {
-                        NavigationLink(value: SettingsDestination.marketplaces) {
-                            ListRow(
-                                "Marketplaces",
-                                subtitle: "Connect eBay, and see how Listora works with each marketplace.",
-                                systemImage: "link",
-                            ) {
-                                if let marketplacesAttention {
-                                    StatusBadge(marketplacesAttention, tone: .actionNeeded)
-                                        .accessibilityIdentifier("settings.marketplaces.attention")
+                        if marketplaces != nil {
+                            NavigationLink(value: SettingsDestination.marketplaces) {
+                                ListRow(
+                                    "Marketplaces",
+                                    subtitle: "Connect eBay, and see how Listora works with each marketplace.",
+                                    systemImage: "link",
+                                ) {
+                                    if let marketplacesAttention {
+                                        StatusBadge(marketplacesAttention, tone: .actionNeeded)
+                                            .accessibilityIdentifier("settings.marketplaces.attention")
+                                    }
                                 }
                             }
+                            .accessibilityIdentifier("settings.marketplaces")
                         }
-                        .accessibilityIdentifier("settings.marketplaces")
+                        if linkAccounts != nil {
+                            NavigationLink(value: SettingsDestination.linkAccounts) {
+                                ListRow(
+                                    "Link accounts",
+                                    subtitle: "Sign in on Poshmark, Mercari, and Depop for Listora to automate them.",
+                                    systemImage: "person.badge.key",
+                                )
+                            }
+                            .accessibilityIdentifier("settings.linkAccounts")
+                        }
                     }
                     .listRowBackground(Palette.surface.color)
                 }
@@ -95,6 +111,8 @@ public struct SettingsView<Marketplaces: View>: View {
                 switch destination {
                 case .marketplaces:
                     marketplaces
+                case .linkAccounts:
+                    linkAccounts
                 }
             }
         }
@@ -125,12 +143,13 @@ public struct SettingsView<Marketplaces: View>: View {
     }
 }
 
-extension SettingsView where Marketplaces == EmptyView {
-    /// Settings without a Marketplaces screen.
+extension SettingsView where Marketplaces == EmptyView, LinkAccounts == EmptyView {
+    /// Settings without the Marketplaces and Link accounts screens.
     public init(content: SettingsContent, devSignIn: DevSignInModel? = nil) {
         self.content = content
         self.devSignIn = devSignIn
         marketplaces = nil
+        linkAccounts = nil
         marketplacesAttention = nil
         _path = .constant([])
     }

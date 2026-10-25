@@ -8,6 +8,7 @@
  * a CAPTCHA, a login code, a logged-out session), with fault injection for each.
  *
  *   GET  /login/                      the login page (a password field: no session needs it)
+ *   POST /login/                      log in by hand: any email and password; sets the session cookie
  *   GET  /login/verify/               a login code step
  *   GET  /mypage/                     the seller's account ([data-testid="MyPage"])
  *   GET  /sell/                       the sell form; POST /sell/ lists (multipart, photos)
@@ -325,6 +326,23 @@ export class FakeMercariSite {
     };
 
     if (url.pathname === '/login/') {
+      if (method === 'POST') {
+        // The seller logs in by hand, as on the app's Link accounts screen in development: any
+        // email with a password starts a session as that seller.
+        const form = await readForm(request);
+        const seller = form.text('email');
+        if (seller !== '' && form.text('password') !== '') {
+          const { value } = this.issueSession(seller);
+          send({
+            status: 303,
+            headers: {
+              location: '/mypage/',
+              'set-cookie': `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
+            },
+          });
+          return;
+        }
+      }
       send({ status: 200, body: page('Log in | Mercari', loginForm()) });
       return;
     }

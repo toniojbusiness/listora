@@ -3,6 +3,7 @@ import APIClient
 import Core
 import Foundation
 import InventoryFeature
+import MarketplaceLinkingFeature
 import MarketplacesFeature
 import ReviewFeature
 import SettingsFeature
@@ -33,6 +34,8 @@ public struct AppDependencies {
     public let devSignIn: DevSignInModel?
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
     public let marketplaces: MarketplacesModel
+    /// Link accounts: sign in on Poshmark, Mercari, and Depop for Listora to automate them.
+    public let linkAccounts: LinkAccountsModel
 
     public init(
         configuration: AppConfiguration,
@@ -89,6 +92,7 @@ public struct AppDependencies {
             service: APIConnectionsService(client: apiClient.client),
             isSignedIn: { accessTokens.grant != nil },
         )
+        linkAccounts = LinkAccountsModel(service: APIMarketplaceSessionService(api: apiClient))
         devSignIn = configuration.environment == .dev
             ? DevSignInModel(client: DevSignInClient(baseURL: configuration.apiBaseURL), tokens: accessTokens)
             : nil

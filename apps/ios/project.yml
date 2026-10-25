@@ -203,6 +203,7 @@ schemes:
         - package: Features/MarketplacesFeatureTests
         - package: Features/TagReadingFeatureTests
         - package: Features/ShareLinkFeatureTests
+        - package: Features/MarketplaceLinkingFeatureTests
     profile:
       config: Prod-Release
     analyze:

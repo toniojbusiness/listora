@@ -195,6 +195,8 @@ src/
   operations/    Operations, their history, Retry, and Cancel
   connections/   Marketplace connections, the health summary and Retry check, connect attempts,
                  and the public OAuth callback
+  marketplace-sessions/  Linking marketplaces by signing in: stores the session the app hands
+                 over and reports its check (docs/features/marketplace-linking.md)
   sales/         The sales feed (listSales, getSale) with each sale's delist runs and double sales
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
 ```
@@ -372,31 +374,32 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 
 ## 8. Feature docs
 
-| File                                                             | Covers                                                                        |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [features/operations.md](features/operations.md)                 | The operation engine, the honest status vocabulary                            |
-| [features/auto-delist.md](features/auto-delist.md)               | Sale intake, the delist fan-out, delist runs, SLA re-alerts, double sales     |
-| [features/connections.md](features/connections.md)               | Connecting accounts, the token vault, health checks, the health dashboard     |
-| [features/push.md](features/push.md)                             | Push notifications: the outbox job and the drivers                            |
-| [features/marketplaces.md](features/marketplaces.md)             | The adapter interface, capabilities, assisted adapters, conformance, listings |
-| [features/ebay.md](features/ebay.md)                             | The eBay adapter, the fake eBay, the sandbox check                            |
-| [features/ebay-notifications.md](features/ebay-notifications.md) | eBay notifications, the order poll, eBay account deletion                     |
-| [features/depop.md](features/depop.md)                           | Depop: assisted today, the partner API adapter to come                        |
-| [features/automation.md](features/automation.md)                 | Browser automation for marketplaces without an API (decision D1)              |
-| [features/poshmark.md](features/poshmark.md)                     | The Poshmark automation adapter, its mapping tables, and the fake Poshmark    |
-| [features/mercari.md](features/mercari.md)                       | The Mercari automation adapter, its mappings, the fake Mercari site           |
-| [features/ai.md](features/ai.md)                                 | The AI pipeline, item analysis, cost metering and controls                    |
-| [features/pricing.md](features/pricing.md)                       | Pricing data rules, floors, fee tables, tiers, the label guard                |
-| [features/photos.md](features/photos.md)                         | Uploads, storage drivers, photo processing                                    |
-| [features/items.md](features/items.md)                           | Inventory items, item status, the audit log                                   |
-| [features/auth.md](features/auth.md)                             | Sign-in drivers, the Cognito user pool, account deletion                      |
-| [features/infra.md](features/infra.md)                           | Hosting and deploys                                                           |
-| [features/costs.md](features/costs.md)                           | The personal environment's monthly cost                                       |
-| [features/observability.md](features/observability.md)           | Logs, request ids, the signals alarms key on                                  |
-| [features/ios.md](features/ios.md)                               | iOS app conventions                                                           |
-| [features/review.md](features/review.md)                         | The iPhone review, cost, and price screens and the interaction-time metric    |
-| [features/design.md](features/design.md)                         | The iPhone app's design system, screenshots, and UI audit                     |
-| [features/inventory.md](features/inventory.md)                   | The Inventory tab, the item screen, the listing flow and its API              |
+| File                                                               | Covers                                                                         |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| [features/operations.md](features/operations.md)                   | The operation engine, the honest status vocabulary                             |
+| [features/auto-delist.md](features/auto-delist.md)                 | Sale intake, the delist fan-out, delist runs, SLA re-alerts, double sales      |
+| [features/connections.md](features/connections.md)                 | Connecting accounts, the token vault, health checks, the health dashboard      |
+| [features/push.md](features/push.md)                               | Push notifications: the outbox job and the drivers                             |
+| [features/marketplaces.md](features/marketplaces.md)               | The adapter interface, capabilities, assisted adapters, conformance, listings  |
+| [features/ebay.md](features/ebay.md)                               | The eBay adapter, the fake eBay, the sandbox check                             |
+| [features/ebay-notifications.md](features/ebay-notifications.md)   | eBay notifications, the order poll, eBay account deletion                      |
+| [features/depop.md](features/depop.md)                             | Depop: assisted today, the partner API adapter to come                         |
+| [features/automation.md](features/automation.md)                   | Browser automation for marketplaces without an API (decision D1)               |
+| [features/marketplace-linking.md](features/marketplace-linking.md) | Linking Poshmark, Mercari, and Depop from the iPhone, and each session's check |
+| [features/poshmark.md](features/poshmark.md)                       | The Poshmark automation adapter, its mapping tables, and the fake Poshmark     |
+| [features/mercari.md](features/mercari.md)                         | The Mercari automation adapter, its mappings, the fake Mercari site            |
+| [features/ai.md](features/ai.md)                                   | The AI pipeline, item analysis, cost metering and controls                     |
+| [features/pricing.md](features/pricing.md)                         | Pricing data rules, floors, fee tables, tiers, the label guard                 |
+| [features/photos.md](features/photos.md)                           | Uploads, storage drivers, photo processing                                     |
+| [features/items.md](features/items.md)                             | Inventory items, item status, the audit log                                    |
+| [features/auth.md](features/auth.md)                               | Sign-in drivers, the Cognito user pool, account deletion                       |
+| [features/infra.md](features/infra.md)                             | Hosting and deploys                                                            |
+| [features/costs.md](features/costs.md)                             | The personal environment's monthly cost                                        |
+| [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                   |
+| [features/ios.md](features/ios.md)                                 | iOS app conventions                                                            |
+| [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric     |
+| [features/design.md](features/design.md)                           | The iPhone app's design system, screenshots, and UI audit                      |
+| [features/inventory.md](features/inventory.md)                     | The Inventory tab, the item screen, the listing flow and its API               |
 
 ### Former section numbers
 

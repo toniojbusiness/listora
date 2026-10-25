@@ -5218,6 +5218,355 @@ extension Components {
                 case lastCheckedAt
             }
         }
+        /// A `KnownMarketplaceSessionStatus`, or a status added after this client was built.
+        /// Clients show `statusDisplay` for an unknown status and offer to link again.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSessionStatus`.
+        public struct MarketplaceSessionStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionStatus/value1`.
+            public var value1: Components.Schemas.KnownMarketplaceSessionStatus?
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `MarketplaceSessionStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownMarketplaceSessionStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `not_linked`: no session. `checking`: a session was just linked and the browser runner
+        /// is checking it. `linked`: the check passed, and Listora automates the marketplace in
+        /// that session. `needs_relink`: the marketplace rejected the session, or showed a check
+        /// automation must not pass; the user signs in again. `check_failed`: Listora could not
+        /// confirm the session works (see `issue`); linking again checks again. `api_connected`:
+        /// the marketplace is connected through its API, so there is nothing to sign in to.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownMarketplaceSessionStatus`.
+        @frozen public enum KnownMarketplaceSessionStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case notLinked = "not_linked"
+            case checking = "checking"
+            case linked = "linked"
+            case needsRelink = "needs_relink"
+            case checkFailed = "check_failed"
+            case apiConnected = "api_connected"
+        }
+        /// Where the app signs the user in, and which of that site's cookies it hands over.
+        ///
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin`.
+        public struct MarketplaceSessionLogin: Codable, Hashable, Sendable {
+            /// The marketplace's own sign-in page.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin/url`.
+            public var url: Swift.String
+            /// The marketplace's own domains (`poshmark.com`). The app sends only cookies whose
+            /// domain is one of these or a subdomain of one; the server refuses any other.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin/cookieDomains`.
+            public var cookieDomains: [Swift.String]
+            /// Creates a new `MarketplaceSessionLogin`.
+            ///
+            /// - Parameters:
+            ///   - url: The marketplace's own sign-in page.
+            ///   - cookieDomains: The marketplace's own domains (`poshmark.com`). The app sends only cookies whose
+            public init(
+                url: Swift.String,
+                cookieDomains: [Swift.String]
+            ) {
+                self.url = url
+                self.cookieDomains = cookieDomains
+            }
+            public enum CodingKeys: String, CodingKey {
+                case url
+                case cookieDomains
+            }
+        }
+        /// A marketplace linked by signing in (`connect: session`). It is shown as linked only
+        /// after the browser runner confirmed the marketplace accepts the session.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSession`.
+        public struct MarketplaceSession: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/status`.
+            public var status: Components.Schemas.MarketplaceSessionStatus
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/login`.
+            public var login: Components.Schemas.MarketplaceSessionLogin
+            /// The seller's name on the marketplace, when the app or the check knows it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/displayName`.
+            public var displayName: Swift.String?
+            /// When the current session was linked.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/linkedAt`.
+            public var linkedAt: Components.Schemas.Timestamp?
+            /// When the current session's check finished.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/checkedAt`.
+            public var checkedAt: Components.Schemas.Timestamp?
+            /// Why the session needs relinking, or why its check failed.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/issue`.
+            public var issue: Components.Schemas.ConnectionIssue?
+            /// Creates a new `MarketplaceSession`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - status:
+            ///   - statusDisplay:
+            ///   - login:
+            ///   - displayName: The seller's name on the marketplace, when the app or the check knows it.
+            ///   - linkedAt: When the current session was linked.
+            ///   - checkedAt: When the current session's check finished.
+            ///   - issue: Why the session needs relinking, or why its check failed.
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                status: Components.Schemas.MarketplaceSessionStatus,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                login: Components.Schemas.MarketplaceSessionLogin,
+                displayName: Swift.String? = nil,
+                linkedAt: Components.Schemas.Timestamp? = nil,
+                checkedAt: Components.Schemas.Timestamp? = nil,
+                issue: Components.Schemas.ConnectionIssue? = nil
+            ) {
+                self.marketplace = marketplace
+                self.status = status
+                self.statusDisplay = statusDisplay
+                self.login = login
+                self.displayName = displayName
+                self.linkedAt = linkedAt
+                self.checkedAt = checkedAt
+                self.issue = issue
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case status
+                case statusDisplay
+                case login
+                case displayName
+                case linkedAt
+                case checkedAt
+                case issue
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSessionList`.
+        public struct MarketplaceSessionList: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionList/data`.
+            public var data: [Components.Schemas.MarketplaceSession]
+            /// Creates a new `MarketplaceSessionList`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            public init(data: [Components.Schemas.MarketplaceSession]) {
+                self.data = data
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+            }
+        }
+        /// One cookie as the app's web view holds it (`HTTPCookie`), in the browser runner's
+        /// terms. A name plus value of at most 4096 bytes, as browsers allow.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SessionCookie`.
+        public struct SessionCookie: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/value`.
+            public var value: Swift.String
+            /// A host (`www.poshmark.com`) or a domain cookie (`.poshmark.com`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/domain`.
+            public var domain: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/path`.
+            public var path: Swift.String
+            /// Unix time in whole seconds; `-1` for a cookie that lasts as long as the browser session.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/expires`.
+            public var expires: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/httpOnly`.
+            public var httpOnly: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/secure`.
+            public var secure: Swift.Bool
+            /// `lax` when the site set none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/sameSite`.
+            @frozen public enum SameSitePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case strict = "strict"
+                case lax = "lax"
+                case none = "none"
+            }
+            /// `lax` when the site set none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/sameSite`.
+            public var sameSite: Components.Schemas.SessionCookie.SameSitePayload
+            /// Creates a new `SessionCookie`.
+            ///
+            /// - Parameters:
+            ///   - name:
+            ///   - value:
+            ///   - domain: A host (`www.poshmark.com`) or a domain cookie (`.poshmark.com`).
+            ///   - path:
+            ///   - expires: Unix time in whole seconds; `-1` for a cookie that lasts as long as the browser session.
+            ///   - httpOnly:
+            ///   - secure:
+            ///   - sameSite: `lax` when the site set none.
+            public init(
+                name: Swift.String,
+                value: Swift.String,
+                domain: Swift.String,
+                path: Swift.String,
+                expires: Swift.Int64,
+                httpOnly: Swift.Bool,
+                secure: Swift.Bool,
+                sameSite: Components.Schemas.SessionCookie.SameSitePayload
+            ) {
+                self.name = name
+                self.value = value
+                self.domain = domain
+                self.path = path
+                self.expires = expires
+                self.httpOnly = httpOnly
+                self.secure = secure
+                self.sameSite = sameSite
+            }
+            public enum CodingKeys: String, CodingKey {
+                case name
+                case value
+                case domain
+                case path
+                case expires
+                case httpOnly
+                case secure
+                case sameSite
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.value = try container.decode(
+                    Swift.String.self,
+                    forKey: .value
+                )
+                self.domain = try container.decode(
+                    Swift.String.self,
+                    forKey: .domain
+                )
+                self.path = try container.decode(
+                    Swift.String.self,
+                    forKey: .path
+                )
+                self.expires = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .expires
+                )
+                self.httpOnly = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .httpOnly
+                )
+                self.secure = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .secure
+                )
+                self.sameSite = try container.decode(
+                    Components.Schemas.SessionCookie.SameSitePayload.self,
+                    forKey: .sameSite
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "name",
+                    "value",
+                    "domain",
+                    "path",
+                    "expires",
+                    "httpOnly",
+                    "secure",
+                    "sameSite"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLink`.
+        public struct MarketplaceSessionLink: Codable, Hashable, Sendable {
+            /// The marketplace's cookies after the user signed in, and no other site's.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLink/cookies`.
+            public var cookies: [Components.Schemas.SessionCookie]
+            /// The seller's name on the marketplace, when the app knows it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLink/displayName`.
+            public var displayName: Swift.String?
+            /// Creates a new `MarketplaceSessionLink`.
+            ///
+            /// - Parameters:
+            ///   - cookies: The marketplace's cookies after the user signed in, and no other site's.
+            ///   - displayName: The seller's name on the marketplace, when the app knows it.
+            public init(
+                cookies: [Components.Schemas.SessionCookie],
+                displayName: Swift.String? = nil
+            ) {
+                self.cookies = cookies
+                self.displayName = displayName
+            }
+            public enum CodingKeys: String, CodingKey {
+                case cookies
+                case displayName
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.cookies = try container.decode(
+                    [Components.Schemas.SessionCookie].self,
+                    forKey: .cookies
+                )
+                self.displayName = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .displayName
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "cookies",
+                    "displayName"
+                ])
+            }
+        }
         /// A `KnownSaleStatus`, or a status added after this client was built. Clients show an
         /// unknown status generically.
         ///

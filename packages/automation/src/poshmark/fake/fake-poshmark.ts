@@ -12,6 +12,7 @@
  * with Poshmark's form rules. It injects every failure the adapter must stop at or recover from.
  *
  *   GET  /login                      the login page (a password field: no Listora session needs it)
+ *   POST /login                      log in by hand: any username and password; sets the session cookie
  *   GET  /create-listing             the listing form (a session is required)
  *   POST /create-listing             list
  *   GET  /listing/<title>-<id>       a listing's public page (also /listing/<id>)
@@ -301,6 +302,23 @@ export class FakePoshmark {
     };
 
     if (url.pathname === '/login') {
+      if (method === 'POST') {
+        // The seller logs in by hand, as on the app's Link accounts screen in development: any
+        // username with a password starts a session as that seller.
+        const form = await readForm(request);
+        const seller = form.text('login_form[username_email]');
+        if (seller !== '' && form.text('login_form[password]') !== '') {
+          const { value } = this.issueSession(seller);
+          send({
+            status: 303,
+            headers: {
+              location: `/closet/${encodeURIComponent(seller)}`,
+              'set-cookie': `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
+            },
+          });
+          return;
+        }
+      }
       send({ status: 200, body: page('Login - Poshmark', loginForm(), null) });
       return;
     }

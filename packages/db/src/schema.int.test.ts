@@ -477,6 +477,20 @@ const COLUMNS = {
     'created_at',
     'updated_at',
   ],
+  session_check: [
+    'account_id',
+    'connection_id',
+    'marketplace',
+    'check_id',
+    'status',
+    'attempts',
+    'failure_code',
+    'failure_message',
+    'requested_at',
+    'finished_at',
+    'created_at',
+    'updated_at',
+  ],
 } as const satisfies { [Table in keyof Database]: readonly (keyof Database[Table])[] };
 
 type MissingColumns = {
@@ -512,6 +526,7 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['automation_run', 'challenge_kind', values.CHALLENGE_KINDS],
   ['sale_check_schedule', 'next_reason', values.SALE_CHECK_REASONS],
   ['sale_check_schedule', 'last_outcome', values.SALE_CHECK_OUTCOMES],
+  ['session_check', 'status', values.SESSION_CHECK_STATUSES],
   ['marketplace_listing', 'status', values.LISTING_STATUSES],
   ['marketplace_operation', 'kind', values.OPERATION_KINDS],
   ['marketplace_operation', 'status', values.OPERATION_STATUSES],
