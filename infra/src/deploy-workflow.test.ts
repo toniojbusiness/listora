@@ -106,8 +106,11 @@ describe('deploy workflow', () => {
   });
 
   it('runs the migration task by name and fails the deploy unless it exits 0', () => {
-    const names = migrateTaskNames('$LISTORA_ENV');
-    const run = job.steps[stepIndex('Run schema migrations')]?.run ?? '';
+    // The step runs scripts/run-migrations.sh, which scripts/deploy-personal.sh runs too.
+    const step = job.steps[stepIndex('Run schema migrations')]?.run ?? '';
+    expect(step.trim()).toBe('scripts/run-migrations.sh "$LISTORA_ENV" "deploy-$GITHUB_RUN_ID"');
+    const run = readFileSync(new URL('../../scripts/run-migrations.sh', import.meta.url), 'utf8');
+    const names = migrateTaskNames('$environment');
     expect(run).toContain(`cluster="${names.cluster}"`);
     expect(run).toContain(`--task-definition "${names.family}"`);
     expect(run).toContain(`--stack-name "${names.stack}"`);
@@ -119,6 +122,6 @@ describe('deploy workflow', () => {
     expect(run).toContain('.tasks[0].lastStatus');
     expect(run).toMatch(/while true; do\n[\s\S]*"\$status" == STOPPED \]\]; then break; fi/);
     expect(run).toContain('.tasks[0].containers[0].exitCode');
-    expect(run).toMatch(/if \[\[ "\$code" != 0 \]\]; then\n.*\n\s*exit 1/);
+    expect(run).toMatch(/if \[\[ "\$code" != 0 \]\]; then\n(.*\n)+?\s*exit 1/);
   });
 });

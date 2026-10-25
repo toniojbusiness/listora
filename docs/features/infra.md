@@ -26,7 +26,17 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
 - **Deploys** run only from the manual Deploy workflow, on `main`, inside the protected GitHub
   environment, with OIDC role assumption (no stored AWS keys). Images are tagged with the
   commit and immutable. The environment's protection rules and the CDK bootstrap's
-  CloudFormation execution policy bound what a deploy can change (infra/README.md).
+  CloudFormation execution policy bound what a deploy can change (infra/README.md). Every
+  bootstrap uses the restricted execution policy in `infra/src/deploy/execution-policy.ts`,
+  never `AdministratorAccess`.
+- **Personal deploys** are one command from a Mac, `scripts/deploy-personal.sh --profile
+<profile>` (`--dry-run` checks everything offline and prints each step). It refuses any
+  account but the captain's, bootstraps with the restricted policy, runs the workflow's steps
+  in the same order, stores the Anthropic key from `~/.config/listora/anthropic.env`, and ends
+  with a smoke test (`infra/src/deploy/smoke.ts`: health, sign-in, create and delete an item,
+  no AI usage). The steps, rollback, teardown (the database's deletion protection), and how to
+  point the iPhone app at the printed URL are in infra/README.md, Deploying the personal
+  environment.
 - **Migrations** run on every deploy as a one-off ECS task (`listora-<env>-migrate`, the
   worker's database access) after the image push and before the new services start; a
   failed migration stops the deploy. The previous release is still serving while they run,

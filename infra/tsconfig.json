@@ -15,6 +15,7 @@
     { "path": "../packages/db" },
     { "path": "../packages/observability" },
     { "path": "../apps/api" },
-    { "path": "../apps/worker" }
+    { "path": "../apps/worker" },
+    { "path": "../packages/testing" }
   ]
 }
