@@ -29,6 +29,12 @@
                 "NoncurrentDays": 30
               },
               "Status": "Enabled"
+            },
+            {
+              "ExpirationInDays": 30,
+              "Id": "expire-automation-screenshots",
+              "Prefix": "automation/",
+              "Status": "Enabled"
             }
           ]
         },

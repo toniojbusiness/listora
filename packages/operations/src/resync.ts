@@ -267,7 +267,7 @@ async function loadConnection(db: Db, listing: ListingRow): Promise<ConnectionRe
   if (listing.connection_id === null) return null;
   const connection = await db
     .selectFrom('marketplace_connection')
-    .select(['id', 'mode'])
+    .select(['id', 'mode', 'status'])
     .where('account_id', '=', listing.account_id)
     .where('id', '=', listing.connection_id)
     .executeTakeFirst();

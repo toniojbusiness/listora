@@ -32,7 +32,7 @@ function adapterAt(url: string) {
 describeAdapterConformance({
   name: 'EbayAdapter',
   adapter: adapterAt(fake.url),
-  connection: { id: CONNECTION_ID, mode: 'api' },
+  connection: { id: CONNECTION_ID, mode: 'api', status: 'connected' },
   goldenDir: fileURLToPath(new URL('__golden__/', import.meta.url)),
   marketplace: fakeEbayConformanceMarketplace(fake, { lateAnswerMs: 5 * CONFORMANCE_TIMEOUT_MS }),
   unreachable: adapterAt(unreachableUrl),

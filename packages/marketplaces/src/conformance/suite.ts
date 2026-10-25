@@ -3,15 +3,18 @@
  * it against its own fake marketplace before the engine may use it: call
  * `describeAdapterConformance` from the adapter's test file, once per connection mode it serves.
  *
- * The suite branches on capability flags, like the engine: kinds whose mode is `api` are checked
- * against the marketplace (create, price and detail updates, end, relist, mark sold, read-back
- * with freshness, not-found classification, error mapping, rate limiting, health), and kinds whose
- * mode is `assisted` are checked to become user tasks that never touch the marketplace and can
- * never be confirmed by a read. Every adapter's payload builder and validation are pinned by
+ * The suite branches on capability flags, like the engine: kinds whose mode is `api` or
+ * `automation` (read-back kinds) are checked against the marketplace (create, price and detail
+ * updates, end, relist, mark sold, read-back with freshness, not-found classification, error
+ * mapping, rate limiting, health), and kinds whose mode is `assisted` are checked to become user
+ * tasks that never touch the marketplace and can never be confirmed by a read. An automated kind
+ * whose session the marketplace rejects falls back to the same user task, never to a failure
+ * the user can only retry. Every adapter's payload builder and validation are pinned by
  * golden files in its `__golden__` directory (rewrite them with `vitest -u` after a deliberate
  * change, and review the diff).
  *
- * Test-only: imported by `*.test.ts` files of this package, never by runtime code.
+ * Test-only: imported by adapters' `*.test.ts` files, in this package and others (as
+ * `@listora/marketplaces/conformance`), never by runtime code.
  */
 import { afterAll, afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
@@ -93,9 +96,12 @@ export interface AdapterConformanceOptions {
    * taxonomy maps), applied under every change a check makes.
    */
   content?: SampleContentOverrides;
-  /** Required when any capability is `api`. */
+  /** Required when any capability is `api` or `automation`. */
   marketplace?: ConformanceMarketplace;
-  /** The same adapter pointed at an address where nothing listens. Required with `api`. */
+  /**
+   * The same adapter pointed at an address where nothing listens. Required with `api` or
+   * `automation`.
+   */
   unreachable?: MarketplaceAdapter;
   /** Runs after the suite (for example to stop the fake marketplace). */
   teardown?: () => Promise<void>;
@@ -120,7 +126,11 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
   const { adapter, connection } = options;
   const capabilities = adapter.capabilities(connection);
   const modeOf = (kind: OperationKind) => operationMode(capabilities, kind);
-  const usesApi = OPERATION_KINDS.some((kind) => modeOf(kind) === 'api');
+  const readsBack = (kind: OperationKind): boolean => {
+    const mode = modeOf(kind);
+    return mode === 'api' || mode === 'automation';
+  };
+  const usesReadBack = OPERATION_KINDS.some(readsBack);
   const name = MARKETPLACE_NAMES[adapter.id];
   const golden = (file: string): string => `${options.goldenDir.replace(/\/+$/, '')}/${file}`;
   /** What a read-back of this desired state must show (no title where listings have none). */
@@ -185,9 +195,9 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
     it('declares capabilities the engine can rely on', () => {
       expect(checkCapabilities(capabilities)).toEqual([]);
       expect(adapter.capabilities(connection)).toEqual(capabilities);
-      if (usesApi) {
-        expect(options.marketplace, 'api capabilities need a fake marketplace').toBeDefined();
-        expect(options.unreachable, 'api capabilities need an unreachable adapter').toBeDefined();
+      if (usesReadBack) {
+        expect(options.marketplace, 'read-back kinds need a fake marketplace').toBeDefined();
+        expect(options.unreachable, 'read-back kinds need an unreachable adapter').toBeDefined();
       }
     });
 
@@ -240,7 +250,7 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
 
     const assisted = WRITE_KINDS.filter((kind) => modeOf(kind) === 'assisted');
     if (assisted.length > 0) describeAssistedKinds(assisted);
-    if (usesApi) describeApiKinds();
+    if (usesReadBack) describeReadBackKinds();
   });
 
   function describeAssistedKinds(assisted: readonly WriteOperationKind[]): void {
@@ -308,18 +318,20 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
 
       it('never confirms an assisted step itself, and never reads the marketplace', async () => {
         blockNetwork();
-        expect(capabilities.verifyRead).toBe('user_confirm');
         for (const kind of assisted) {
           const outcome = await adapter.execute(request(kind, newRef()), ctx());
           expect(['pendingUser', 'rejected', 'transient'], kind).toContain(outcome.type);
         }
-        await expect(adapter.readListing(newRef(), ctx())).rejects.toThrow();
+        if (!usesReadBack) {
+          expect(capabilities.verifyRead).toBe('user_confirm');
+          await expect(adapter.readListing(newRef(), ctx())).rejects.toThrow();
+        }
       });
     });
   }
 
-  function describeApiKinds(): void {
-    describe('api kinds', () => {
+  function describeReadBackKinds(): void {
+    describe('read-back kinds', () => {
       const market = (): ConformanceMarketplace => {
         if (options.marketplace === undefined) throw new Error('no conformance marketplace');
         return options.marketplace;
@@ -328,7 +340,7 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
         if (options.unreachable === undefined) throw new Error('no unreachable adapter');
         return options.unreachable;
       };
-      const isApi = (kind: OperationKind): boolean => modeOf(kind) === 'api';
+      const isApi = readsBack;
 
       afterEach(() => {
         market().reset();
@@ -357,7 +369,7 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
         return remote;
       }
 
-      it('creates through the api, the kind every error-mapping check below uses', () => {
+      it('creates with a read-back, the kind every error-mapping check below uses', () => {
         expect(isApi('create')).toBe(true);
       });
 
@@ -534,11 +546,22 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
           expectNamed(outcome, name);
         });
 
-        it('maps an expired authorization to a rejected outcome that asks to reconnect', async () => {
+        it('maps an expired authorization to a request to reconnect', async () => {
+          const op = request('create', newRef());
           market().failNext('create', { type: 'unauthorized' });
-          const outcome = await adapter.execute(request('create', newRef()), ctx());
-          expect(outcome).toMatchObject({ type: 'rejected', code: 'reauth_required' });
+          const outcome = await adapter.execute(op, ctx());
+          if (modeOf('create') === 'automation') {
+            // A rejected browser session is never retried: the user posts this one, and logs in
+            // again for the next.
+            expect(outcome).toMatchObject({
+              type: 'pendingUser',
+              task: { kind: TASK_KINDS.create, payload: { action: 'create' } },
+            });
+          } else {
+            expect(outcome).toMatchObject({ type: 'rejected', code: 'reauth_required' });
+          }
           expectNamed(outcome, name);
+          expect(market().countListings(op.listing)).toBe(0);
         });
 
         it('maps a timeout after sending to an unknown outcome, never a failure', async () => {

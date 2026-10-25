@@ -100,11 +100,11 @@ export interface EnvironmentSettings {
   };
   readonly services: ServiceLayout;
   /**
-   * Reserved size of the on-demand headless-Chromium runner, a later task, that automates
-   * Poshmark, Mercari, and Depop (decision D1 in docs/features/automation.md): started per batch of
-   * listing actions and per scheduled sale check, zero tasks while idle. Nothing is
-   * provisioned from it yet; it fixes the size that docs/features/costs.md prices, and the runner task
-   * builds on it.
+   * Size of the on-demand headless-Chromium runner that automates Poshmark, Mercari, and Depop
+   * (decision D1 in docs/features/automation.md): the compute stack's `runner` service, with no
+   * task while idle, started by the worker when automated steps or sale checks wait
+   * (docs/features/costs.md prices it). Only `cpu` and `memoryMiB` apply: it runs at most one
+   * task, and nothing autoscales it.
    */
   readonly browserRunner: ServiceSize;
   /** CloudWatch Logs retention for service, database, and VPC logs. */

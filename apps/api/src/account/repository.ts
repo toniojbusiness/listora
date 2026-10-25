@@ -22,6 +22,8 @@ export interface DeletedUserData {
   photos: PhotoRow[];
   /** Stored objects of uploads no photo uses yet. */
   uploadKeys: string[];
+  /** The redacted screenshots of the account's failed browser automation runs. */
+  screenshotKeys: string[];
 }
 
 /**
@@ -59,6 +61,7 @@ export async function deleteUserData(
   let grants: GrantToKeep[] = [];
   let photos: PhotoRow[] = [];
   let uploadKeys: string[] = [];
+  let screenshotKeys: string[] = [];
   if (owner) {
     const rows = await trx
       .selectFrom('marketplace_connection')
@@ -95,6 +98,15 @@ export async function deleteUserData(
       .where('status', '<>', 'attached')
       .execute();
     uploadKeys = uploads.map((upload) => upload.storage_key);
+    const screenshots = await trx
+      .selectFrom('automation_run')
+      .select('screenshot_key')
+      .where('account_id', '=', tenant.accountId)
+      .where('screenshot_key', 'is not', null)
+      .execute();
+    screenshotKeys = screenshots.flatMap((run) =>
+      run.screenshot_key === null ? [] : [run.screenshot_key],
+    );
   }
 
   const { deletedAt } = await startAccountDeletion(trx, { identity, grants });
@@ -102,7 +114,7 @@ export async function deleteUserData(
   // Cascades to the person's memberships; their AI usage and audit entries stay with the
   // account (if it remains) without the reference.
   await trx.deleteFrom('app_user').where('id', '=', tenant.userId).execute();
-  return { deletedAt, connections, photos, uploadKeys };
+  return { deletedAt, connections, photos, uploadKeys, screenshotKeys };
 }
 
 /** How many people besides `tenant`'s user belong to the account. */

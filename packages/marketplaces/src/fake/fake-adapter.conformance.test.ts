@@ -37,7 +37,7 @@ describeAdapterConformance({
     requestTimeoutMs: CONFORMANCE_TIMEOUT_MS,
     readFreshness: 'none',
   }),
-  connection: { id: 'connection-depop', mode: 'api' },
+  connection: { id: 'connection-depop', mode: 'api', status: 'connected' },
   goldenDir: fileURLToPath(new URL('__golden__/no-freshness/', import.meta.url)),
   marketplace: fakeConformanceMarketplace(fake, 'depop'),
   unreachable: new FakeMarketplaceAdapter({ marketplace: 'depop', baseUrl: unreachableUrl }),

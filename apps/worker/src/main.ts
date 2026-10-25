@@ -1,9 +1,21 @@
+import { fileURLToPath } from 'node:url';
+
 import {
   createAiClient,
   PostgresAiControls,
   PostgresQuotaPolicy,
   PostgresUsageStore,
 } from '@listora/ai';
+import {
+  AUTOMATION_DISPATCH_SCHEDULE,
+  AUTOMATION_DISPATCH_TASK,
+  AutomationDispatcher,
+  createAutomationAdapters,
+  createRunnerLauncher,
+  HttpPhotoSource,
+  NoBrowserSessions,
+  ProcessRunnerLauncher,
+} from '@listora/automation';
 import { createOAuthClients, createTokenVault } from '@listora/connections';
 import { createDatabase } from '@listora/db';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
@@ -22,8 +34,8 @@ const db = createDatabase({
   max: config.concurrency + config.taskConcurrency + 5,
 });
 
-// The worker alone opens marketplace tokens: at use time, for the eBay adapter, the health
-// check, and account deletion's revocations.
+// The worker opens marketplace OAuth tokens: at use time, for the eBay adapter, the health
+// check, and account deletion's revocations. Browser sessions only the browser runner opens.
 const connections = createConnectionWork({
   db,
   vault: config.marketplaces.tokenVault && createTokenVault(config.marketplaces.tokenVault),
@@ -32,20 +44,43 @@ const connections = createConnectionWork({
   logger,
 });
 
+const storage = createStorage(config.storage);
+// Automated steps run on the browser runner (docs/features/automation.md): the engine hands
+// them over, and the dispatcher starts the runner whenever automated work waits for it. The
+// worker's automation adapters have no browser; they only route each operation to its mode.
+const launcher = createRunnerLauncher(config.runnerLaunch, {
+  logger,
+  runnerEntry: fileURLToPath(new URL('runner/main.ts', import.meta.url)),
+});
+const automation = createAutomationAdapters({
+  settings: config.automation,
+  sessions: NoBrowserSessions,
+  photos: new HttpPhotoSource(),
+  logger,
+});
 const adapters = createMarketplaceAdapters(
   {
     ...config.marketplaces,
     ...(connections.ebaySeller === undefined ? {} : { ebaySeller: connections.ebaySeller }),
+    automation,
   },
   logger,
 ).lookup;
+const dispatcher = new AutomationDispatcher({
+  db,
+  launcher,
+  storage,
+  logger,
+  adapters,
+  deferUnsupportedMs: config.automation.saleChecks.maxIntervalMs,
+});
 
 try {
   // Every feature's jobs (features.ts), so a new feature never edits this file.
   const { tasks, scheduledTasks, crontab, starts } = collectWorkerJobs(WORKER_FEATURES, {
     config,
     db,
-    storage: createStorage(config.storage),
+    storage,
     ai: createAiClient(config.ai, {
       usageStore: new PostgresUsageStore(db),
       controls: new PostgresAiControls(db),
@@ -64,8 +99,18 @@ try {
     logger,
     concurrency: config.concurrency,
     taskConcurrency: config.taskConcurrency,
-    scheduledTasks,
+    scheduledTasks: [
+      ...scheduledTasks,
+      {
+        name: AUTOMATION_DISPATCH_TASK,
+        schedule: AUTOMATION_DISPATCH_SCHEDULE,
+        run: () => dispatcher.dispatch(),
+      },
+    ],
     crontab,
+    onAutomationHandover: () => {
+      dispatcher.nudge();
+    },
     onFatalError: (error) => {
       // Other workers recover this worker's jobs once its process is gone; exiting at once
       // is what keeps two workers from running the same step.
@@ -80,6 +125,7 @@ try {
     logger,
     shutdown: async () => {
       await worker.stop();
+      if (launcher instanceof ProcessRunnerLauncher) launcher.stop();
       await db.destroy();
     },
   });
@@ -94,6 +140,8 @@ try {
       ebayNotifications: config.marketplaces.ebay?.notifications !== undefined,
       aiProvider: config.ai.provider,
       cognitoUserPool: config.cognitoUserPool?.userPoolId,
+      automated: Object.keys(automation),
+      runnerLaunch: launcher.kind,
     },
     'worker ready',
   );

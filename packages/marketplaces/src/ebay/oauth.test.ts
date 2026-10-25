@@ -15,7 +15,7 @@ import {
 } from './oauth.ts';
 
 const signal = new AbortController().signal;
-const connection = { id: 'connection-ebay', mode: 'api' } as const;
+const connection = { id: 'connection-ebay', mode: 'api', status: 'connected' } as const;
 
 describe('eBay OAuth against the fake eBay', () => {
   let fake: FakeEbay;
@@ -127,7 +127,10 @@ describe('eBay OAuth against the fake eBay', () => {
       connectionId: connection.id,
     });
     const before = tokenRequests();
-    for (const other of [{ id: 'another-connection', mode: 'api' } as const, null]) {
+    for (const other of [
+      { id: 'another-connection', mode: 'api', status: 'connected' } as const,
+      null,
+    ]) {
       const refused = seller.accessToken(other, signal);
       await expect(refused).rejects.toBeInstanceOf(EbayReauthRequiredError);
       await expect(refused).rejects.toThrow('Connect eBay to list there.');

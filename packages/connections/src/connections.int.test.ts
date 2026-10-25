@@ -388,13 +388,16 @@ describe('eBay connections (real Postgres, fake eBay)', () => {
         listingSettings: DEFAULT_LISTING_SETTINGS,
       });
       const signal = AbortSignal.timeout(5_000);
-      const token = await seller.accessToken({ id: connection.id, mode: 'api' }, signal);
+      const token = await seller.accessToken(
+        { id: connection.id, mode: 'api', status: 'connected' },
+        signal,
+      );
       expect(fake.issuedSecrets()).toContain(token);
       await expect(seller.accessToken(null, signal)).rejects.toBeInstanceOf(
         EbayReauthRequiredError,
       );
       await expect(
-        seller.accessToken({ id: connection.id, mode: 'assisted' }, signal),
+        seller.accessToken({ id: connection.id, mode: 'assisted', status: 'connected' }, signal),
       ).rejects.toBeInstanceOf(EbayReauthRequiredError);
       await recordAuthorizationRevocation(database.db, {
         marketplace: 'ebay',
@@ -403,9 +406,9 @@ describe('eBay connections (real Postgres, fake eBay)', () => {
         code: 'revoked_by_seller',
         message: 'You removed Listora.',
       });
-      await expect(seller.accessToken({ id: connection.id, mode: 'api' }, signal)).rejects.toThrow(
-        'You removed Listora.',
-      );
+      await expect(
+        seller.accessToken({ id: connection.id, mode: 'api', status: 'connected' }, signal),
+      ).rejects.toThrow('You removed Listora.');
       expect(seller.listingSettings()).toEqual(DEFAULT_LISTING_SETTINGS);
     });
   });

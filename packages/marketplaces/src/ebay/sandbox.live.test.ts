@@ -60,7 +60,7 @@ describe.runIf(ready)('eBay sandbox check', { timeout: 120_000 }, () => {
   });
   const ctx = (): AdapterContext => ({
     signal: AbortSignal.timeout(110_000),
-    connection: { id: CONNECTION_ID, mode: 'api' },
+    connection: { id: CONNECTION_ID, mode: 'api', status: 'connected' },
   });
   const runId = String(Date.now());
   const live = new Set<string>();

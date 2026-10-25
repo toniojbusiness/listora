@@ -25,19 +25,20 @@ These two rules from the product owner override every other design choice.
 
 ## 2. Stack
 
-| Area       | Choice                                                                                          | Why                                                                                       |
-| ---------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| iPhone app | Native Swift 6 / SwiftUI, iOS 18+, XcodeGen, local SPM modules, GRDB                            | Camera, Vision OCR, barcodes, background upload, Share Extension, and StoreKit are native |
-| Backend    | TypeScript on Node 26: Fastify API plus a worker process                                        | One language for the API, worker, infra (CDK), and the later web app                      |
-| Contract   | OpenAPI 3.1 in `packages/api-contract` → generated TS types and Swift client; CI fails on drift | Client and server cannot drift apart                                                      |
-| Database   | PostgreSQL 18 (Homebrew locally, RDS in prod), Kysely, plain SQL migrations                     | Relational inventory, strong constraints, JSONB for marketplace payloads                  |
-| Jobs       | Graphile Worker (Postgres-backed), enqueued in the same transaction as the operation row        | No second datastore; an operation can't be recorded without its job, or the reverse       |
-| Photos     | Client sends JPEG without GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives  | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
-| Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                  | Managed and in the same AWS account                                                       |
-| Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                  | App Store rule 3.1.3(b)                                                                   |
-| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK (`infra`) | Standard, robust, one security boundary                                                   |
-| Push       | APNs (token-based key); fake driver in dev                                                      | Delist alerts and assisted tasks                                                          |
-| Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                      | No extra package manager or build system                                                  |
+| Area       | Choice                                                                                            | Why                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| iPhone app | Native Swift 6 / SwiftUI, iOS 18+, XcodeGen, local SPM modules, GRDB                              | Camera, Vision OCR, barcodes, background upload, Share Extension, and StoreKit are native |
+| Backend    | TypeScript on Node 26: Fastify API plus a worker process                                          | One language for the API, worker, infra (CDK), and the later web app                      |
+| Contract   | OpenAPI 3.1 in `packages/api-contract` → generated TS types and Swift client; CI fails on drift   | Client and server cannot drift apart                                                      |
+| Database   | PostgreSQL 18 (Homebrew locally, RDS in prod), Kysely, plain SQL migrations                       | Relational inventory, strong constraints, JSONB for marketplace payloads                  |
+| Jobs       | Graphile Worker (Postgres-backed), enqueued in the same transaction as the operation row          | No second datastore; an operation can't be recorded without its job, or the reverse       |
+| Photos     | Client sends JPEG without GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives    | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
+| Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                    | Managed and in the same AWS account                                                       |
+| Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                    | App Store rule 3.1.3(b)                                                                   |
+| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK (`infra`)   | Standard, robust, one security boundary                                                   |
+| Push       | APNs (token-based key); fake driver in dev                                                        | Delist alerts and assisted tasks                                                          |
+| Automation | Playwright's headless Chromium in the on-demand browser runner (Fargate; a child process locally) | Poshmark, Mercari, and Depop without an API ([automation.md](features/automation.md))     |
+| Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                        | No extra package manager or build system                                                  |
 
 ### TypeScript conventions
 
@@ -79,7 +80,8 @@ apps/
   api/          Fastify HTTP API (@listora/api)
   worker/       Background worker: operation engine, plus one module per feature's jobs in
                 src/features/ (account deletion, AI spend check, item analysis, photo
-                processing, trust metrics, the daily connection health check) (@listora/worker)
+                processing, trust metrics, the daily connection health check); and the
+                on-demand browser runner (src/runner/main.ts) (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
                 and account blocks (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
@@ -103,9 +105,12 @@ packages/
                 assisted adapters, conformance suite; the eBay adapter and connect client (ebay/)
                 and the Depop adapter (depop/); fake marketplace, fake eBay, and fake Depop with
                 fault injection (@listora/marketplaces)
-  connections/  Marketplace account connections: OAuth connect, the token vault (local key or KMS),
-                use-time credentials with single-flight refresh, health checks, revocation
-                (@listora/connections)
+  connections/  Marketplace account connections: OAuth connect, the token vault (local key or KMS)
+                for OAuth tokens and browser sessions, the session vault, use-time credentials
+                with single-flight refresh, health checks, revocation (@listora/connections)
+  automation/   Browser automation (decision D1): the Playwright runner, its safety rules, the
+                automation adapter base, sale-check scheduling, the runner launcher, and the
+                fake marketplace site (@listora/automation)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
                 drift resync (@listora/operations)
   sales/        Sale intake: inbound events, recording sales for auto-delist; eBay notifications,
@@ -121,9 +126,10 @@ packages/
 infra/          AWS CDK v2 app: one environment per synth, stacks per lifecycle (@listora/infra)
 scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
+  dev-browser.sh  The browser runner's headless Chromium, in .local/playwright
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
   ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
-Dockerfile      Application image; the API and the worker run from the same image
+Dockerfile      Images: `app` runs the API and the worker; `runner` adds headless Chromium
 docs/           This overview, the roadmap, and one doc per feature in docs/features/
 Makefile        iOS commands (make ios-test, ios-lint, ...)
 ```
@@ -224,7 +230,9 @@ lands with the task that introduces that dependency, and its keys are added to `
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
 | Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                                                              | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`   |
 | Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                                         | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                |
-| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                                                                | The same                   | none                                  |
+| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until a seller links a session (D1) or connects Depop's API                                                       | The same                   | none                                  |
+| Automation       | Fake marketplace site (`npm run dev:fake-site`) in local headless Chromium                                                                                              | Per-marketplace adapters   | `FAKE_AUTOMATION_SITE_URL`            |
+| Browser runner   | A child process of the worker (`npm run dev:runner` by hand)                                                                                                            | ECS service, 0 to 1 tasks  | `BROWSER_RUNNER_LAUNCH`               |
 | Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                                        | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`            |
 | AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                                                     | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
 | eBay             | `fake-ebay` server (OAuth consent, Commerce Identity, Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`  |
@@ -233,7 +241,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                                      | Cognito                    | `AUTH_DRIVER=dev\|cognito`            |
 | Payments         | Fake Stripe client + StoreKit configuration file                                                                                                                        | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`         |
 | Push             | Recording fake                                                                                                                                                          | APNs                       | `PUSH_DRIVER`                         |
-| Token encryption | Local AES-GCM key from `.env` (`TOKEN_ENCRYPTION_KEY`)                                                                                                                  | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                    |
+| Token encryption | Local AES-GCM key from `.env` (`TOKEN_ENCRYPTION_KEY`), for OAuth tokens and browser sessions                                                                           | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                    |
 | iOS              | iPhone 17 simulator, photo-library fixtures                                                                                                                             | Device / TestFlight        | xcconfig `API_BASE_URL`               |
 
 Live smoke tests for real providers skip automatically when their credential is absent. Fakes
@@ -279,6 +287,7 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   `Idempotency-Key`, kept 24 hours; written once, so it has no `updated_at`, and deleted in
   batches by later POSTs once expired).
 - **Elsewhere:** connections and connect attempts in [connections.md](features/connections.md#data);
+  automation runs and sale-check schedules in [automation.md](features/automation.md#data);
   inventory, photos, and history in [items.md](features/items.md); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
   [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in

@@ -50,5 +50,27 @@ export type {
 } from './status-display.ts';
 export { accountConnections, recordHealth } from './store.ts';
 export type { ConnectionProblem, ConnectionRow, HealthUpdate } from './store.ts';
-export { sealOnly, TokenVaultError } from './vault.ts';
-export type { TokenContext, TokenSealer, TokenVault } from './vault.ts';
+export {
+  cookieOnDomains,
+  liveCookies,
+  MAX_SESSION_COOKIES,
+  sameCookies,
+  sessionCookieSchema,
+} from './session.ts';
+export type { SessionCookie, StoredSession } from './session.ts';
+export {
+  ConnectionModeConflictError,
+  relinkDeepLink,
+  SessionCookieError,
+  SessionVault,
+} from './session-vault.ts';
+export type {
+  ConnectionKey,
+  LinkedSession,
+  LinkSessionInput,
+  LoadedSession,
+  RelinkReason,
+  SessionVaultOptions,
+} from './session-vault.ts';
+export { CREDENTIAL_PURPOSES, sealOnly, TokenVaultError } from './vault.ts';
+export type { CredentialKind, TokenContext, TokenSealer, TokenVault } from './vault.ts';

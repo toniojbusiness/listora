@@ -13,7 +13,13 @@ import {
 import { KmsTokenVault } from './kms-vault.ts';
 import { LocalTokenVault } from './local-vault.ts';
 import { FakeKms } from './testing.ts';
-import { sealOnly, TokenVaultError, type TokenContext, type TokenVault } from './vault.ts';
+import {
+  CREDENTIAL_PURPOSES,
+  sealOnly,
+  TokenVaultError,
+  type TokenContext,
+  type TokenVault,
+} from './vault.ts';
 
 const TOKENS = {
   accessToken: 'v^1.1#i^1#p^3#r^0#access-secret-value',
@@ -48,6 +54,24 @@ function behavesLikeAVault(name: string, make: () => TokenVault) {
         expect(text).not.toContain('secret-value');
         expect(text).not.toContain(Buffer.from('secret-value').toString('base64'));
       }
+    });
+
+    it('seals browser sessions apart from tokens: neither kind ever opens as the other', async () => {
+      const vault = make();
+      const session = Buffer.from('{"cookies":[{"name":"sid","value":"session-secret-value"}]}');
+      const sealedSession = await vault.sealSession(session, CONTEXT);
+      expect((await vault.openSession(sealedSession, CONTEXT)).equals(session)).toBe(true);
+      expect(sealedSession.toString('latin1')).not.toContain('secret-value');
+      await expect(vault.open(sealedSession, CONTEXT)).rejects.toMatchObject({ kind: 'corrupt' });
+      await expect(
+        vault.openSession(await vault.seal(TOKENS, CONTEXT), CONTEXT),
+      ).rejects.toMatchObject({ kind: 'corrupt' });
+      await expect(
+        vault.openSession(sealedSession, {
+          ...CONTEXT,
+          connectionId: '0199a1f0-0000-7000-8000-00000000c002',
+        }),
+      ).rejects.toMatchObject({ kind: 'corrupt' });
     });
 
     it('refuses a damaged or foreign ciphertext as corrupt', async () => {
@@ -130,11 +154,23 @@ describe('KmsTokenVault against a fake KMS', () => {
 });
 
 describe('sealOnly', () => {
-  it('hands out only the seal', async () => {
+  it('hands out only the seals', async () => {
     const vault = new LocalTokenVault(randomBytes(32));
     const sealer = sealOnly(vault);
-    expect(Object.keys(sealer)).toEqual(['seal']);
+    expect(Object.keys(sealer)).toEqual(['seal', 'sealSession']);
     expect(await vault.open(await sealer.seal(TOKENS, CONTEXT), CONTEXT)).toEqual(TOKENS);
+    const session = Buffer.from('{"cookies":[]}');
+    const sealed = await sealer.sealSession(session, CONTEXT);
+    expect((await vault.openSession(sealed, CONTEXT)).equals(session)).toBe(true);
+  });
+});
+
+describe('CREDENTIAL_PURPOSES', () => {
+  it("names each kind's KMS purpose, which infra's IAM conditions key on", () => {
+    expect(CREDENTIAL_PURPOSES).toEqual({
+      tokens: 'listora-marketplace-tokens',
+      session: 'listora-marketplace-session',
+    });
   });
 });
 

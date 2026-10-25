@@ -17,6 +17,8 @@ the conventions, and the product invariants, and links to each feature's own doc
 - **shellcheck**, used by `npm run lint`. Install it with `brew install shellcheck`.
 - **Swift 6 toolchain**, used by `npm run contract:check` to regenerate and test the Swift API
   client. It comes with Xcode on macOS (on Linux, install Swift 6 from swift.org).
+- **Headless Chromium** for the browser runner and its tests: `scripts/dev-browser.sh`
+  installs the build Playwright pins (about 200 MB) into `.local/playwright`.
 - Docker is not needed.
 - For the iOS app only: **Xcode 26.3 or 27.1** (CI uses 26.3; the app builds without warnings on
   both) with the iPhone 17 simulator, plus XcodeGen, SwiftLint, and SwiftFormat
@@ -28,6 +30,7 @@ the conventions, and the product invariants, and links to each feature's own doc
 ```sh
 npm ci                 # install the exact locked dependencies
 scripts/dev-db.sh      # start this checkout's Postgres 18 cluster (.local/pg)
+scripts/dev-browser.sh # install the browser runner's headless Chromium (.local/playwright)
 npm run db:migrate     # apply the schema migrations to the dev database
 npm run check          # format, lint, type check, unit + integration tests
 ```
@@ -41,6 +44,11 @@ photos and runs item analyses for the API, so run `npm run dev:worker` next to
 Depop runs assisted until Listora's Depop partner access is granted. To watch the worker run
 Depop API operations locally (listings on a connection whose mode is `api`), set
 `DEPOP_ENV=fake` and `DEPOP_USER_CONNECTION_ID` and start `npm run dev:fake-depop`.
+To watch browser automation (decision D1,
+[docs/features/automation.md](docs/features/automation.md)), set `FAKE_AUTOMATION_SITE_URL` and
+start `npm run dev:fake-site`: Poshmark, Mercari, and Depop connections that hold a linked
+session are then automated against that local site, and the worker starts the browser runner
+as a child process whenever automated work waits.
 
 ### Signing in locally
 
@@ -76,6 +84,8 @@ has the steps.
 | `npm run dev:fake-depop`       | Run the fake Depop at `DEPOP_FAKE_URL`, which api-connected Depop listings use with `DEPOP_ENV=fake`                                             |
 | `npm run ebay:sandbox-token`   | Sign a sandbox test seller in on eBay and save their refresh token in `.env` (see [the sandbox check](docs/features/ebay.md#sandbox-check))      |
 | `npm run ebay:sandbox-check`   | Run the eBay adapter end to end against eBay's sandbox; fails with what to set when keys are missing                                             |
+| `npm run dev:fake-site`        | Run the fake marketplace site at `FAKE_AUTOMATION_SITE_URL`, which browser automation drives in development                                      |
+| `npm run dev:runner`           | Run the browser runner by hand (the worker starts it on demand otherwise)                                                                        |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
 | `npm run admin -- --help`      | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail)                                   |
 | `npm run eval`                 | Score the tag parsers, AI tag reading, and the full item analysis on the synthetic corpus (fake AI); `-- --provider anthropic` uses the real API |
@@ -86,6 +96,7 @@ has the steps.
 | `scripts/dev-db.sh status`     | Show whether the cluster is running and on which port                                                                                            |
 | `scripts/dev-db.sh url test`   | Print a connection URL (`dev` or `test`)                                                                                                         |
 | `scripts/dev-db.sh psql`       | Open psql on the dev database                                                                                                                    |
+| `scripts/dev-browser.sh`       | Install the headless Chromium that the browser runner and its tests use, in `.local/playwright`                                                  |
 
 The iOS app has its own `make` targets, run from the repository root. The full list is in
 [apps/ios/README.md](apps/ios/README.md#commands).
@@ -104,7 +115,7 @@ one runs at the same time.
 
 ```text
 apps/api/               Fastify HTTP API (@listora/api)
-apps/worker/            Background worker (@listora/worker)
+apps/worker/            Background worker and the on-demand browser runner (@listora/worker)
 apps/admin/             Operator CLI: AI cost reports, spend check, kill switch, blocks (@listora/admin)
 apps/ios/               iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift packages
 packages/ai/            AI provider layer: providers, price table, metering, budget guards, quota counter (@listora/ai)
@@ -115,7 +126,8 @@ packages/db/            SQL migrations, migration runner, Kysely types (@listora
 packages/storage/       Object storage drivers: local disk (.local/storage) and S3 (@listora/storage)
 packages/photos/        Image pipeline: derivatives, metadata stripping, hashes, processing job (@listora/photos)
 packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay and Depop adapters, eBay's connect client, the fake marketplace, fake eBay, and fake Depop (@listora/marketplaces)
-packages/connections/   Marketplace connections: OAuth connect, token vault, credentials, health (@listora/connections)
+packages/connections/   Marketplace connections: OAuth connect, token vault, browser session vault, credentials, health (@listora/connections)
+packages/automation/    Browser automation: Playwright runner, safety rules, automation adapter base, sale checks, fake site (@listora/automation)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker metrics job (@listora/observability)
 packages/sales/         Sale intake, eBay notifications, the order poll, eBay account deletion (@listora/sales)
@@ -124,9 +136,10 @@ packages/testing/       Test-only helpers (@listora/testing)
 packages/tag-parse/     Deterministic tag-text parsers (@listora/tag-parse)
 packages/eval/          Synthetic tag corpus and eval harness CLI (@listora/eval)
 infra/                  AWS CDK stacks and deploy setup (@listora/infra; see infra/README.md)
-scripts/                dev-db.sh (local PostgreSQL 18 cluster), container-smoke.sh (image smoke test),
-                        ios-release.sh (iOS archive and TestFlight upload)
-Dockerfile              Application image: one image runs the API and the worker
+scripts/                dev-db.sh (local PostgreSQL 18 cluster), dev-browser.sh (headless Chromium),
+                        container-smoke.sh (image smoke test), ios-release.sh (iOS archive and
+                        TestFlight upload)
+Dockerfile              Images: `app` runs the API and the worker; `runner` adds headless Chromium
 Makefile                iOS commands (make ios-*)
 docs/                   Architecture overview, roadmap, one doc per feature (docs/features/)
 ```
@@ -146,19 +159,21 @@ do not run CI, so one commit never runs twice. It has four jobs:
 
 The backend job installs PostgreSQL 18 from the PGDG apt repository (Swift comes with the
 runner image), then runs `npm ci`, `scripts/dev-db.sh` (with
-`PG_BIN_DIR=/usr/lib/postgresql/18/bin`), and `npm run check`. It caches npm downloads and
-the API contract's SwiftPM builds.
+`PG_BIN_DIR=/usr/lib/postgresql/18/bin`), `scripts/dev-browser.sh --with-deps` (headless
+Chromium and its system libraries), and `npm run check`. It caches npm downloads, the browser,
+and the API contract's SwiftPM builds.
 
-The image job runs `scripts/container-smoke.sh`: it builds the application image, runs the
-schema migrations, and starts the API and the worker from it, configured as in AWS, against
-a PostgreSQL container. It builds only when the change touches what decides whether the image
-builds and starts: `Dockerfile`, `.dockerignore`, `.nvmrc`, `.npmrc`, `package.json`,
+The image job runs `scripts/container-smoke.sh`: it builds the application and runner images,
+checks that the runner image's browser starts, runs the schema migrations, and starts the
+API, the worker, and the browser runner from them, configured as in AWS, against a
+PostgreSQL container. It builds only when the change touches what decides whether the images
+build and start: `Dockerfile`, `.dockerignore`, `.nvmrc`, `.npmrc`, `package.json`,
 `package-lock.json`, any `apps/*/package.json` or `packages/*/package.json`, the entry points
-`apps/api/src/main.ts` and `apps/worker/src/main.ts`, the files they read from the image at
-startup (the feature discovery indexes `apps/api/src/features.ts` and
-`apps/worker/src/features.ts`, and the bundled contract `packages/api-contract/bundled/**`),
-`infra/**`, `scripts/container-smoke.sh`, or `.github/workflows/ci.yml` (the `image` filter in
-the `changes` job).
+`apps/api/src/main.ts`, `apps/worker/src/main.ts`, and `apps/worker/src/runner/main.ts`, the
+files they read from the image at startup (the feature discovery indexes
+`apps/api/src/features.ts` and `apps/worker/src/features.ts`, and the bundled contract
+`packages/api-contract/bundled/**`), `infra/**`, `scripts/container-smoke.sh`, or
+`.github/workflows/ci.yml` (the `image` filter in the `changes` job).
 
 The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, and SwiftFormat
 from Homebrew, then runs `make ios-lint` and `make ios-test`. It caches the app's SwiftPM

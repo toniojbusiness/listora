@@ -15,6 +15,8 @@ export type {
   Outcome,
   RemoteListingState,
   RemoteListingStatus,
+  RemoteOrder,
+  RemoteOrderItem,
   UserTaskSpec,
   ValidationIssue,
   WriteOperationKind,
@@ -40,7 +42,7 @@ export {
 export type { OperationMode } from './capabilities.ts';
 export { ConnectionAwareAdapter } from './connection-aware.ts';
 export { createMarketplaceAdapters } from './default-adapters.ts';
-export type { MarketplaceAdaptersConfig } from './default-adapters.ts';
+export type { AutomatedMarketplace, MarketplaceAdaptersConfig } from './default-adapters.ts';
 export type { ConnectionAwareAdapterOptions } from './connection-aware.ts';
 export {
   CONTENT_KINDS,

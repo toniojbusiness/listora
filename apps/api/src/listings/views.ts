@@ -22,21 +22,35 @@ export function marketplaceName(marketplace: Marketplace): string {
 }
 
 /**
- * A listing is `api` only while it is on an API connection. Without one Listora cannot act on
- * the marketplace or read the listing back, so the user does the marketplace's part: assisted.
+ * A listing is `api` only while it is on an API connection, and `automation` only while it is
+ * on a browser automation connection whose session works (decision D1). Otherwise Listora
+ * cannot act on the marketplace or read the listing back, so the user does the marketplace's
+ * part: assisted.
  */
 export function listingMode(row: ListingRow): IntegrationMode {
-  return row.connection_mode ?? 'assisted';
+  switch (row.connection_mode) {
+    case 'api':
+      return 'api';
+    case 'automation':
+      return row.connection_status === 'connected' || row.connection_status === 'degraded'
+        ? 'automation'
+        : 'assisted';
+    case 'assisted':
+    case null:
+      return 'assisted';
+    default:
+      return assertNever(row.connection_mode);
+  }
 }
 
 /**
- * How the listing's current state was established. Only an API listing can be verified by a
- * read-back and only an assisted one by the user, so an assisted listing can never claim the
- * marketplace confirmed it.
+ * How the listing's current state was established. Only an API or automated listing can be
+ * verified by a read-back (through the API, or the seller's browser session) and only an
+ * assisted one by the user, so an assisted listing can never claim the marketplace confirmed it.
  */
 export function listingVerification(row: ListingRow): Verification | undefined {
   const mode = listingMode(row);
-  if (mode === 'api') {
+  if (mode === 'api' || mode === 'automation') {
     return row.last_verified_at === null
       ? undefined
       : { method: 'marketplace_api', verifiedAt: row.last_verified_at.toISOString() };

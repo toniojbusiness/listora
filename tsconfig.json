@@ -16,6 +16,7 @@
     { "path": "packages/operations" },
     { "path": "packages/observability" },
     { "path": "packages/sales" },
+    { "path": "packages/automation" },
     { "path": "packages/tag-parse" },
     { "path": "packages/analysis" },
     { "path": "packages/eval" },

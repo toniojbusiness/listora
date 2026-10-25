@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { loadApiConfig } from '@listora/api/src/config.ts';
 import { loadMigrateConfig } from '@listora/db';
 import { loadWorkerConfig } from '@listora/worker/src/config.ts';
+import { loadRunnerConfig } from '@listora/worker/src/runner/config.ts';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -11,6 +12,8 @@ import {
   containerEnvironment,
   containerSecretNames,
   MIGRATE_COMMAND,
+  RUNNER_COMMAND,
+  SERVICE_COMMANDS,
   type ContainerName,
   type PhotoStorage,
   type ServiceResources,
@@ -23,11 +26,16 @@ const PHOTO_STORAGE: PhotoStorage = {
   publicBaseUrl: 'https://d111111abcdef8.cloudfront.net',
 };
 const TOKEN_KEY_ARN = 'arn:aws:kms:us-east-1:111122223333:key/0b6f7b3e-0000-4000-8000-000000000001';
-const RESOURCES: ServiceResources = { photoStorage: PHOTO_STORAGE, tokenKeyArn: TOKEN_KEY_ARN };
+const RESOURCES: ServiceResources = {
+  photoStorage: PHOTO_STORAGE,
+  runner: { cluster: 'listora-staging', service: 'runner', region: 'us-east-1' },
+  tokenKeyArn: TOKEN_KEY_ARN,
+};
 
-/** What a task's process sees: the plain environment plus every injected secret. */
+/** What a task's process sees: the plain environment, the image's, and every injected secret. */
 function taskEnvironment(container: ContainerName): NodeJS.ProcessEnv {
   return {
+    NODE_ENV: 'production',
     ...containerEnvironment(container, DATABASE_URL, RESOURCES),
     ...Object.fromEntries(containerSecretNames(container).map((name) => [name, 'placeholder'])),
   };
@@ -46,7 +54,28 @@ describe('container environment', () => {
   });
 
   it('is accepted by the worker config loader as-is', () => {
-    expect(loadWorkerConfig(taskEnvironment('worker'))).toMatchObject({ logLevel: 'info' });
+    expect(loadWorkerConfig(taskEnvironment('worker'))).toMatchObject({
+      logLevel: 'info',
+      runnerLaunch: { kind: 'ecs', cluster: 'listora-staging', service: 'runner' },
+    });
+  });
+
+  it('is accepted by the browser runner config loader as-is: KMS, S3, and its own service', () => {
+    expect(loadRunnerConfig(taskEnvironment('runner'))).toMatchObject({
+      logLevel: 'info',
+      tokenVault: { driver: 'kms', keyId: TOKEN_KEY_ARN, region: 'us-east-1' },
+      storage: { driver: 's3', bucket: PHOTO_STORAGE.bucket },
+      launch: { kind: 'ecs', cluster: 'listora-staging', service: 'runner' },
+    });
+    expect(containerSecretNames('runner')).toEqual(['PGPASSWORD']);
+  });
+
+  it('runs commands whose entry points exist', () => {
+    for (const command of [...Object.values(SERVICE_COMMANDS), RUNNER_COMMAND]) {
+      const [node, script = ''] = command;
+      expect(node).toBe('node');
+      expect(existsSync(new URL(`../../${script}`, import.meta.url)), script).toBe(true);
+    }
   });
 
   it('gives the API and the worker the same S3 photo storage, Anthropic provider, and KMS token key', () => {

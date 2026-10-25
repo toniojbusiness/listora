@@ -9,7 +9,8 @@ import { EbayAdapter } from './ebay/adapter.ts';
 import { loadEbayConfig } from './ebay/config.ts';
 import { FakeMarketplaceAdapter } from './fake/fake-adapter.ts';
 
-const api = { id: 'connection-1', mode: 'api' } as const;
+const api = { id: 'connection-1', mode: 'api', status: 'connected' } as const;
+const automated = { id: 'connection-2', mode: 'automation', status: 'connected' } as const;
 
 describe('createMarketplaceAdapters', () => {
   it('serves the assisted marketplaces, and no eBay, without FAKE_MARKETPLACE_URL', () => {
@@ -42,9 +43,13 @@ describe('createMarketplaceAdapters', () => {
     expect(depop?.capabilities(null).externalSkuReusable).toBe(false);
     expect(depop?.capabilities(api).externalSkuReusable).toBe(false);
     expect(adapters.capabilities('ebay', api)?.externalSkuReusable).toBe(true);
-    // Poshmark and Mercari have no api; they stay assisted until the browser runner lands.
+    // Poshmark and Mercari have no api; they stay assisted without an automation adapter.
     for (const marketplace of ['poshmark', 'mercari'] as const) {
       expect(adapters.capabilities(marketplace, api)).toMatchObject({
+        create: 'assisted',
+        verifyRead: 'user_confirm',
+      });
+      expect(adapters.capabilities(marketplace, automated)).toMatchObject({
         create: 'assisted',
         verifyRead: 'user_confirm',
       });
@@ -82,9 +87,10 @@ describe('createMarketplaceAdapters', () => {
         markSold: 'api',
         externalSkuReusable: false,
       });
-      expect(adapters.capabilities('depop', { id: api.id, mode: 'assisted' })?.verifyRead).toBe(
-        'user_confirm',
-      );
+      expect(
+        adapters.capabilities('depop', { id: api.id, mode: 'assisted', status: 'connected' })
+          ?.verifyRead,
+      ).toBe('user_confirm');
     }
   });
 });

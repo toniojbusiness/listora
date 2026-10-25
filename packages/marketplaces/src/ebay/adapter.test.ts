@@ -25,7 +25,13 @@ import type { EbayListingPayload } from './payload.ts';
 /** The connection the configured seller is bound to (`EBAY_USER_CONNECTION_ID`). */
 const CONNECTION_ID = 'connection-ebay';
 
-const ctx = (connection: AdapterContext['connection'] = { id: CONNECTION_ID, mode: 'api' }) => ({
+const ctx = (
+  connection: AdapterContext['connection'] = {
+    id: CONNECTION_ID,
+    mode: 'api',
+    status: 'connected',
+  },
+) => ({
   signal: new AbortController().signal,
   connection,
 });
@@ -298,7 +304,10 @@ describe('EbayAdapter against the fake eBay', () => {
 
   it("acts for the configured seller's connection only: any other, or none, must connect eBay", async () => {
     const before = fake.requests.length;
-    for (const connection of [{ id: 'another-connection', mode: 'api' } as const, null]) {
+    for (const connection of [
+      { id: 'another-connection', mode: 'api', status: 'connected' } as const,
+      null,
+    ]) {
       expect(await adapter.execute(request('create', newRef()), ctx(connection))).toMatchObject({
         type: 'rejected',
         code: 'reauth_required',
