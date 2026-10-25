@@ -499,6 +499,19 @@ describe('eBay order sync', () => {
         .where('id', '=', kept.id)
         .execute(),
     ).toHaveLength(1);
+    // The completion record has the counts and nothing that names the eBay user.
+    const records = await db
+      .selectFrom('deletion_record')
+      .selectAll()
+      .where('kind', '=', 'ebay_user')
+      .execute();
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      reason: 'marketplace_account_deletion',
+      marketplace: 'ebay',
+      summary: { connections: 1, listings: 1, inboundEvents: 1, verified: { rows: 0 } },
+    });
+    expect(JSON.stringify(records)).not.toContain('deletedUser');
     // A repeat finds nothing.
     expect(await purgeEbayUser({ db, logger }, { ebayUserId: 'deletedUser' })).toEqual({
       connections: 0,

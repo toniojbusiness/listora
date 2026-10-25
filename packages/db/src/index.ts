@@ -24,3 +24,5 @@ export type { MigrationStatus } from './migrations.ts';
 export type * from './schema.ts';
 export { allocateSku, formatSku, MAX_SKU_NUMBER, SkuAllocationError } from './sku.ts';
 export * from './values.ts';
+export { DELETION_COMPLETION_DEADLINE_MS, recordDeletion, rowsReferencing } from './deletions.ts';
+export type { DeletionRecord } from './deletions.ts';

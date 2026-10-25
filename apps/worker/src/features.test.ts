@@ -7,10 +7,12 @@ import { ITEM_ANALYSIS_TASK } from '@listora/analysis';
 import { AUTO_DELIST_SLA_TASK } from '@listora/auto-delist';
 import { SALE_ORDER_TASK } from '@listora/automation';
 import { BATCH_ITEM_ANALYSIS_TASK } from '@listora/batches';
+import { CONNECTION_DELETION_TASK } from '@listora/connections';
 import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observability';
 import { LISTING_RESYNC_TASK } from '@listora/operations';
 import { PHOTO_PROCESSING_TASK } from '@listora/photos';
 import { PUSH_TASK } from '@listora/push';
+import { DATA_RETENTION_TASK } from '@listora/retention';
 import { SALE_FEES_TASK } from '@listora/sales';
 import { createLogger } from '@listora/shared';
 import { TODAY_SUMMARY_TASK } from '@listora/today';
@@ -70,7 +72,9 @@ describe('worker feature discovery', () => {
       'auto-delist',
       'automation-sales',
       'batches',
+      'connection-deletion',
       'connection-health',
+      'data-retention',
       'ebay-sync',
       'photos',
       'push',
@@ -86,6 +90,7 @@ describe('worker feature discovery', () => {
       [
         ACCOUNT_DELETION_TASK,
         BATCH_ITEM_ANALYSIS_TASK,
+        CONNECTION_DELETION_TASK,
         ITEM_ANALYSIS_TASK,
         LISTING_RESYNC_TASK,
         PHOTO_PROCESSING_TASK,
@@ -98,6 +103,7 @@ describe('worker feature discovery', () => {
     expect(scheduledTasks.map(({ name }) => name)).toEqual([
       AI_SPEND_CHECK_TASK,
       AUTO_DELIST_SLA_TASK,
+      DATA_RETENTION_TASK,
       TODAY_SUMMARY_TASK,
     ]);
     expect(crontab).toEqual([TRUST_METRICS_CRONTAB]);

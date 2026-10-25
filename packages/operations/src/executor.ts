@@ -457,8 +457,11 @@ async function loadConnection(
   return connection ?? null;
 }
 
-/** The `running` event detail key that records the id a step named a new listing with. */
-const NAMED_LISTING_KEY = 'namedListingId';
+/**
+ * The `running` event detail key that records the id a step named a new listing with. Events
+ * with it are kept for good (the retention job skips them), so a name is never given twice.
+ */
+export const NAMED_LISTING_KEY = 'namedListingId';
 
 type Naming =
   | { type: 'none' }

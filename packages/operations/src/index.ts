@@ -19,7 +19,7 @@ export {
   SupersededOperationError,
 } from './errors.ts';
 export type { SuccessProof } from './evidence.ts';
-export { runOperationStep } from './executor.ts';
+export { NAMED_LISTING_KEY, runOperationStep } from './executor.ts';
 export type { StepDependencies } from './executor.ts';
 export {
   AUTOMATION_OPERATION_TASK,

@@ -241,6 +241,44 @@ describe('marketplace connections API (fake eBay)', () => {
       .execute();
   }
 
+  it('unlinks eBay: the connection and its data go at once, and the worker revokes the grant', async () => {
+    const { token, connectionId } = await connectedAccount('unlink@example.com');
+    const unlinked = await api.call('disconnectConnection', {
+      token,
+      params: { marketplace: 'ebay' },
+    });
+    expect(unlinked.status).toBe(200);
+    expect(unlinked.body).toMatchObject({
+      marketplace: 'ebay',
+      status: 'not_connected',
+      availableActions: ['connect'],
+    });
+    expect(unlinked.body).not.toHaveProperty('displayName');
+    expect(
+      (await api.call('getConnection', { token, params: { marketplace: 'ebay' } })).body,
+    ).toMatchObject({ status: 'not_connected' });
+    const rows = await api.db
+      .selectFrom('marketplace_connection')
+      .select('id')
+      .where('id', '=', connectionId)
+      .execute();
+    expect(rows).toEqual([]);
+    // The sealed grant waits in the tombstone, for the worker's revocation only.
+    const tombstone = await api.db
+      .selectFrom('connection_deletion')
+      .select(['reason', 'revocation'])
+      .where('connection_id', '=', connectionId)
+      .executeTakeFirstOrThrow();
+    expect(tombstone).toEqual({ reason: 'unlinked', revocation: 'pending' });
+
+    const again = await api.call('disconnectConnection', {
+      token,
+      params: { marketplace: 'ebay' },
+    });
+    expect(again.status).toBe(404);
+    expect(again.error.code).toBe('not_found');
+  });
+
   describe('connection health', () => {
     it('summarizes an account with nothing connected: no attention, email forwarding needs a domain', async () => {
       const token = await api.signIn('health-none@example.com');

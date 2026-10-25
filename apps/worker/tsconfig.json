@@ -24,6 +24,7 @@
     { "path": "../../packages/photos" },
     { "path": "../../packages/analysis" },
     { "path": "../../packages/batches" },
+    { "path": "../../packages/retention" },
     { "path": "../../packages/automation" }
   ]
 }

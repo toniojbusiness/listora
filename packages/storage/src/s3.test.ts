@@ -169,6 +169,24 @@ describe('S3Storage', () => {
     expect(await s3.head('uploads/acct/file')).toEqual({ byteSize: BODY.byteLength });
   });
 
+  it('lists the keys under a prefix with ListObjectsV2', async () => {
+    const { storage: s3 } = storage();
+    for (const key of [
+      'automation/acct-1/b.png',
+      'automation/acct-1/a.png',
+      'automation/acct-2/c.png',
+    ]) {
+      await s3.put(key, BODY, { contentType: 'image/png' });
+    }
+    expect(await s3.list('automation/acct-1/')).toEqual([
+      'automation/acct-1/a.png',
+      'automation/acct-1/b.png',
+    ]);
+    expect(await s3.list('automation/acct-1/', 1)).toEqual(['automation/acct-1/a.png']);
+    expect(await s3.list('automation/acct-9/')).toEqual([]);
+    await expect(s3.list('automation')).rejects.toThrow(/invalid storage key/);
+  });
+
   it('surfaces S3 failures instead of treating them as a missing object', async () => {
     const { fake, storage: s3 } = storage();
     fake.failWith = 503;
@@ -177,6 +195,7 @@ describe('S3Storage', () => {
     await expect(
       s3.put('uploads/acct/file', BODY, { contentType: 'image/jpeg' }),
     ).rejects.toThrow();
+    await expect(s3.list('uploads/acct/')).rejects.toThrow();
   });
 
   it('serves only public keys at the CloudFront URL, whose origin path is /public', () => {

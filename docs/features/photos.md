@@ -32,7 +32,7 @@
   hash sorts the sha256s, so reordering the photos or choosing another cover keeps the
   analysis; only adding or removing photos makes a new photo set. The display order reaches
   only the prompt.
-- Deleting a photo, its item, or the whole account deletes its stored objects after the transaction commits.
+- Deleting a photo, its item, or the whole account deletes its stored objects after the transaction commits. For the account, its deletion job deletes them again and checks each is gone ([privacy.md](privacy.md)); no stored derivative carries GPS or other metadata, which the tests check down to the bytes.
 
 ## Data
 

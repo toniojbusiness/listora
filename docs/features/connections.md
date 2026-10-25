@@ -65,7 +65,17 @@ official OAuth 2.0 authorization code grant; Listora never sees a marketplace pa
   deletes the tokens; a notice older than the current grant changes nothing. eBay's notice
   arrives at `/webhooks/ebay`, which verifies it and records it at once
   ([ebay-notifications.md](ebay-notifications.md)). Account deletion revokes grants through the
-  marketplace's revocation endpoint (`OAuthGrantRevoker`).
+  marketplace's revocation endpoint (`OAuthGrantRevoker`). A connection still revoked 30 days
+  later, never reconnected, has the rest of its data deleted as if it were unlinked
+  ([privacy.md](privacy.md)).
+- **Unlinking.** `disconnectConnection` (`DELETE /v1/connections/{marketplace}`) deletes the
+  connection and the marketplace data that came through it at once (`startConnectionDeletion`
+  in `deletion.ts`: the tokens or session, the marketplace's user id and name, its automation
+  runs, session checks, and sale-check schedule, its listings' read-backs, and marketplace events
+  about the seller) and answers with the marketplace `not_connected`; `404` when none is linked.
+  Items, listings, and sales stay. The `connection_deletion` job then revokes an OAuth grant
+  through the marketplace's revocation endpoint (for up to 7 days), deletes the runs'
+  screenshots, checks, and records the deletion ([privacy.md](privacy.md)).
 
 ## Health dashboard
 

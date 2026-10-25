@@ -5,10 +5,11 @@ import {
   findAuthorization,
   requestHealthCheck,
   startAuthorization,
+  startConnectionDeletion,
   type CompleteAuthorizationDependencies,
   type TokenSealer,
 } from '@listora/connections';
-import { addJob, MARKETPLACES, type Marketplace } from '@listora/db';
+import { addJob, inTransaction, MARKETPLACES, type Marketplace } from '@listora/db';
 import {
   isMarketplace,
   MARKETPLACE_NAMES,
@@ -47,7 +48,8 @@ export interface ConnectionRouteDependencies extends RouteDependencies, Connecti
 
 /**
  * Marketplace connections: `listConnections`, `getConnection`, the health summary
- * `getConnectionHealth`, `requestConnectionCheck` (Retry check), `startConnectionAuthorization`,
+ * `getConnectionHealth`, `requestConnectionCheck` (Retry check), `disconnectConnection` (unlink),
+ * `startConnectionAuthorization`,
  * `getConnectionAuthorization`, and the marketplace's OAuth redirect,
  * `handleConnectionCallback` (docs/features/connections.md; the flow is in
  * `@listora/connections`).
@@ -78,6 +80,47 @@ export function registerConnectionRoutes(
     return {
       status: 200,
       body: connectionView(params.marketplace, connections.get(params.marketplace), context()),
+    };
+  });
+
+  /**
+   * Unlinking: deletes the connection and the marketplace data that came through it at once
+   * (`startConnectionDeletion`), and leaves the job that asks the marketplace to revoke the
+   * grant, deletes the connection's screenshots, and records the checked deletion
+   * (docs/features/privacy.md). Listings stay on the marketplace.
+   */
+  contractRoute(app, deps, 'disconnectConnection', async ({ tenant, db, params, request }) => {
+    const connection = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
+    const started =
+      connection === undefined
+        ? undefined
+        : await inTransaction(db, (trx) =>
+            startConnectionDeletion(trx, {
+              accountId: tenant.accountId,
+              connectionId: connection.id,
+              reason: 'unlinked',
+            }),
+          );
+    if (started === undefined) {
+      throw new ApiError(
+        'not_found',
+        `No ${MARKETPLACE_NAMES[params.marketplace]} account is linked to Listora.`,
+      );
+    }
+    request.log.info(
+      {
+        connectionDeletionId: started.deletionId,
+        marketplace: params.marketplace,
+        listings: started.deleted.listings,
+        inboundEvents: started.deleted.inboundEvents,
+        automationRuns: started.deleted.automationRuns,
+        revokeGrant: started.deleted.grantCiphertext !== null,
+      },
+      'marketplace connection unlinked; its data was deleted',
+    );
+    return {
+      status: 200,
+      body: connectionView(params.marketplace, undefined, context()),
     };
   });
 

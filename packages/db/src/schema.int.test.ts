@@ -447,6 +447,10 @@ const COLUMNS = {
     'requested_at',
     'identity_deleted_at',
     'attempts',
+    'account_id',
+    'user_id',
+    'storage_prefixes',
+    'objects_deleted_at',
   ],
   account_deletion_grant: [
     'deletion_id',
@@ -454,6 +458,27 @@ const COLUMNS = {
     'marketplace',
     'token_ciphertext',
     'outcome',
+  ],
+  account_deletion_object: ['deletion_id', 'storage_key'],
+  connection_deletion: [
+    'id',
+    'connection_id',
+    'marketplace',
+    'reason',
+    'token_ciphertext',
+    'revocation',
+    'requested_at',
+    'attempts',
+  ],
+  connection_deletion_object: ['deletion_id', 'storage_key'],
+  deletion_record: [
+    'id',
+    'kind',
+    'reason',
+    'marketplace',
+    'requested_at',
+    'completed_at',
+    'summary',
   ],
   automation_run: [
     'id',
@@ -549,6 +574,9 @@ const CHECKED_VALUES: readonly [table: string, column: string, allowed: readonly
   ['deleted_identity', 'auth_provider', values.AUTH_PROVIDERS],
   ['account_deletion', 'auth_provider', values.AUTH_PROVIDERS],
   ['account_deletion_grant', 'outcome', values.ACCOUNT_DELETION_GRANT_OUTCOMES],
+  ['connection_deletion', 'reason', values.CONNECTION_DELETION_REASONS],
+  ['connection_deletion', 'revocation', values.CONNECTION_DELETION_REVOCATIONS],
+  ['deletion_record', 'kind', values.DELETION_RECORD_KINDS],
   ['membership', 'role', values.MEMBERSHIP_ROLES],
   ['inventory_item', 'status', values.ITEM_STATUSES],
   ['inventory_item', 'pre_archive_status', values.PRE_ARCHIVE_ITEM_STATUSES],
@@ -684,7 +712,8 @@ describe('schema types and values match the database', () => {
         and t.table_name not like 'kysely_migration%'
         and t.table_name not in (
           'account', 'app_user', 'deleted_identity', 'account_deletion', 'account_deletion_grant',
-          'ai_kill_switch', 'ai_control_audit'
+          'account_deletion_object', 'connection_deletion', 'connection_deletion_object',
+          'deletion_record', 'ai_kill_switch', 'ai_control_audit'
         )
         and not exists (
           select 1 from information_schema.columns c

@@ -212,7 +212,8 @@ describe('scripts/deploy-personal.sh', () => {
       'cloudformation list-stack-resources': { stdout: `${OWNER}\n` },
     });
     expect(owned.synth).toContain('--context ownerEmailIdentity=create');
-  });
+    // Three runs of the whole script: past Vitest's 5-second default on a busy machine.
+  }, 20_000);
 
   it("refuses Listora's bootstrap when it is not the restricted one, changing nothing", () => {
     const run = deploy(

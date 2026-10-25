@@ -24,6 +24,26 @@ export {
 } from './config.ts';
 export type { MarketplaceConfig, TokenVaultConfig } from './config.ts';
 export { ConnectionTokens, DEFAULT_REFRESH_MARGIN_MS } from './credentials.ts';
+export {
+  completeConnectionDeletion,
+  CONNECTION_DELETION_TASK,
+  connectionDeletionJobKey,
+  connectionDeletionTask,
+  DEFAULT_CONNECTION_DELETION_POLICY,
+  deleteConnectionData,
+  purgeMarketplaceConnections,
+  scheduleConnectionDeletionJob,
+  startConnectionDeletion,
+} from './deletion.ts';
+export type {
+  ConnectionDeletionDependencies,
+  ConnectionDeletionJobPayload,
+  ConnectionDeletionOutcome,
+  ConnectionDeletionPolicy,
+  DeletedConnectionData,
+  GrantRevoker,
+  StartedConnectionDeletion,
+} from './deletion.ts';
 export { ConnectionSeller } from './ebay-seller.ts';
 export type { AccessTokenResult, ConnectionTokensDependencies } from './credentials.ts';
 export {

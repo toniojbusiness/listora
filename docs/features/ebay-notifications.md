@@ -123,9 +123,14 @@ notification adds one `ebay_user_deletion` job per eBay user, whether or not Lis
 and stores nothing about them first. `purgeEbayUser` then deletes, in one transaction:
 
 - every `marketplace_connection` to that eBay user, in every account (tokens, eBay user id, user
-  name);
-- the eBay listing snapshots read back under those connections, and the listings' link to them;
-- every eBay `inbound_event` about them.
+  name), with the same deletion as unlinking (`deleteConnectionData`,
+  [privacy.md](privacy.md)): the eBay listing snapshots read back under those connections, the
+  listings' link to them, and the connection's runs and checks;
+- every eBay `inbound_event` about them, in every account.
+
+In the same transaction it checks that no connection or event names them any more and writes a
+`deletion_record` with the counts (never their id). Their grant needs no revocation, since eBay
+deleted the user.
 
 The Listora account's own items, listing history, and sales stay: they are the Listora user's
 records, and sales are kept for tax. Listora stores no buyer data, so a buyer's deletion finds

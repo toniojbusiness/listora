@@ -225,6 +225,25 @@ export type DelistRunListingSource = (typeof DELIST_RUN_LISTING_SOURCES)[number]
 export const ACCOUNT_DELETION_GRANT_OUTCOMES = ['pending', 'revoked', 'manual'] as const;
 export type AccountDeletionGrantOutcome = (typeof ACCOUNT_DELETION_GRANT_OUTCOMES)[number];
 
+/**
+ * Why a connection's data was deleted: the seller unlinked it, its access stayed revoked past
+ * the retention period, or the marketplace ended Listora's access (an operator's purge).
+ */
+export const CONNECTION_DELETION_REASONS = [
+  'unlinked',
+  'revoked',
+  'marketplace_terminated',
+] as const;
+export type ConnectionDeletionReason = (typeof CONNECTION_DELETION_REASONS)[number];
+
+/** A deleted connection's grant: nothing to revoke, still to revoke, confirmed, or given up. */
+export const CONNECTION_DELETION_REVOCATIONS = ['none', 'pending', 'revoked', 'manual'] as const;
+export type ConnectionDeletionRevocation = (typeof CONNECTION_DELETION_REVOCATIONS)[number];
+
+/** What a `deletion_record` completed: an account, a connection, or an eBay user's data. */
+export const DELETION_RECORD_KINDS = ['account', 'connection', 'ebay_user'] as const;
+export type DeletionRecordKind = (typeof DELETION_RECORD_KINDS)[number];
+
 /** What a browser automation run was for (`automation_run.purpose`). */
 export const AUTOMATION_RUN_PURPOSES = ['operation', 'sale_check', 'health'] as const;
 export type AutomationRunPurpose = (typeof AUTOMATION_RUN_PURPOSES)[number];

@@ -2,7 +2,8 @@
  * Test-only helpers for this workspace's integration tests.
  */
 import { CURRENT_PRICE_TABLE } from '@listora/ai';
-import { createDatabase, SchemaMigrator, type Db } from '@listora/db';
+import { createDatabase, migrateJobQueue, SchemaMigrator, type Db } from '@listora/db';
+import { createLogger } from '@listora/shared';
 import { createScratchDatabase } from '@listora/testing';
 
 export interface TestDatabase {
@@ -11,11 +12,15 @@ export interface TestDatabase {
   close(): Promise<void>;
 }
 
-/** A scratch database with every migration applied. */
+/** A scratch database with every migration applied, and the job queue (purges add jobs). */
 export async function migratedDatabase(prefix: string): Promise<TestDatabase> {
   const scratch = await createScratchDatabase(prefix);
   const db = createDatabase({ connectionString: scratch.url, max: 3 });
   await new SchemaMigrator(db).migrateToLatest();
+  await migrateJobQueue({
+    connectionString: scratch.url,
+    logger: createLogger({ service: 'test', level: 'silent' }),
+  });
   return {
     db,
     url: scratch.url,

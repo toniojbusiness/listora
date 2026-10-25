@@ -1077,6 +1077,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           'delist-failed',
           'ai-daily-cost',
           'connection-needs-relink',
+          'deletion-overdue',
           ...MARKETPLACES.map((marketplace) => `delist-latency-${marketplace}`),
           ...MARKETPLACES.map((marketplace) => `verified-success-${marketplace}`),
           'database-cpu',
@@ -1095,9 +1096,9 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
 
     if (environment === 'personal') {
       it('has the alarm count docs/features/costs.md prices', () => {
-        // Ten beyond the always-free ten standard alarms, at $0.10 each a month.
+        // Eleven beyond the always-free ten standard alarms, at $0.10 each a month.
         const count = resources(t, 'AWS::CloudWatch::Alarm').length;
-        expect(count).toBe(20);
+        expect(count).toBe(21);
         const costs = readFileSync(
           new URL('../../docs/features/costs.md', import.meta.url),
           'utf8',
@@ -1191,6 +1192,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         'delist-failed': ['DelistFailed', 'Sum', 1],
         'ai-daily-cost': ['AiDailyCostUsd', 'Maximum', settings.aiDailyCostAlarmUsd],
         'connection-needs-relink': ['ConnectionsNeedingRelink', 'Maximum', 1],
+        'deletion-overdue': ['OverdueDeletions', 'Maximum', 1],
       } as const;
       for (const [name, [metricName, statistic, threshold]] of Object.entries(expected)) {
         const alarm = alarmNamed(name);
