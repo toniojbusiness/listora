@@ -15,6 +15,7 @@ describe('loadWorkerConfig', () => {
       taskConcurrency: 2,
       fakeMarketplaceUrl: undefined,
       cognitoUserPool: undefined,
+      ebay: undefined,
       storage: { driver: 'local' },
       ai: { provider: 'fake', fakeFixturesDir: DEFAULT_FAKE_FIXTURES_DIR },
       analysis: { autoEscalate: true },
@@ -127,6 +128,15 @@ describe('loadWorkerConfig', () => {
     const error = captureConfigError({ DATABASE_URL: 'mysql://root:hunter2@db/x' });
     expect(error.issues).toEqual(['DATABASE_URL must be a postgres:// URL']);
     expect(error.message).not.toContain('hunter2');
+  });
+
+  it('reads the eBay settings, and reports a bad one with the rest', () => {
+    expect(loadWorkerConfig({ DATABASE_URL, EBAY_ENV: 'fake' }).ebay).toMatchObject({
+      environment: 'fake',
+    });
+    expect(() =>
+      loadWorkerConfig({ DATABASE_URL, EBAY_ENV: 'sandbox', LOG_LEVEL: 'loud' }),
+    ).toThrow(/LOG_LEVEL[\s\S]*EBAY_CLIENT_ID is required when EBAY_ENV is sandbox/);
   });
 });
 

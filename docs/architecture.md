@@ -124,8 +124,8 @@ packages/
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
                 the photo processing job, an item's photo-set hash (@listora/photos)
   marketplaces/ Marketplace adapter framework: interface, capabilities, registry, listing content,
-                assisted adapters, conformance suite; fake marketplace with fault injection
-                (@listora/marketplaces)
+                assisted adapters, conformance suite; the eBay adapter (ebay/); fake marketplace
+                and fake eBay with fault injection (@listora/marketplaces)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
@@ -378,6 +378,54 @@ unreachable), failing reads that throw, health checks, and, for assisted kinds, 
 never touch the network and never confirm themselves. A new marketplace fake must be able to
 produce each failure mode the suite asks for (`ConformanceMarketplace`).
 
+**The eBay adapter** (`ebay/`, `createEbayAdapter` from `EBAY_ENV` and the other `EBAY_*` keys)
+lists through the Trading API (AddFixedPriceItem, ReviseFixedPriceItem, EndFixedPriceItem,
+RelistFixedPriceItem, GetItem), so listings stay editable in Seller Hub, with photos copied into
+eBay Picture Services by the Media API. Its rules:
+
+- **Payload** (`payload.ts`, golden-tested): the variant's keyword title (at most 80
+  characters) and its description as HTML (`description.ts`, which reads eBay's HTML back to the
+  same text); the category from the variant's `categoryRef`, else the canonical category map
+  (`categories.ts`, eBay US leaf ids from eBay's published category structure); the condition
+  id for the category (`conditions.ts`: apparel has 2990/3000/3010 for the three pre-owned
+  grades); and item specifics (Brand, Department, the standard size from `sizes.ts`, Color,
+  Material, Pattern, MPN), with the variant's own aspects winning by name. Validation refuses
+  what eBay would (no category, condition, or standard size for clothing and shoes; titles with
+  HTML or edge spaces; eBay's length and count limits).
+- **Preparing** a listing (`prepareListing`, for the API to call before publishing): the
+  category is the best Taxonomy suggestion inside the mapped category's branch (the map is the
+  input; the sandbox's suggestions are boilerplate, so there the map alone decides), the item
+  specifics are matched to the values eBay allows for it (eBay blocks non-standard sizes since
+  August 2026), and VerifyAddFixedPriceItem checks the result without listing anything.
+- **Duplicate protection.** A create or relist carries `Item.UUID`, derived from the operation's
+  idempotency key; eBay answers a repeat with error 488 naming the listing, which counts as
+  accepted. Listings are tracked by SKU (`externalSku`, else the listing id), so eBay also refuses
+  a second active listing with that SKU, and a create whose answer was lost is found by SKU.
+- **Read-back.** GetItem by id, or by SKU before eBay's id is known. **eBay's reads carry no
+  revision or last-modified time** (only a "revised" flag), so the adapter declares
+  `readFreshness: 'none'` and the engine confirms after two matching reads a delay apart
+  (section 6). Error 17 for an id ("the listing has been deleted") is the only authoritative
+  absence; an empty SKU lookup never is. A sold-out listing reads as `sold`. eBay marks its own
+  sales sold, so `markSold` is `not_needed`.
+- **Errors.** 429s, 5xx, eBay `SystemError`s (10007), and expired access tokens are transient;
+  error 518 (the daily limit) waits for the reset; 931, 932, 16110, and refused refresh tokens
+  are `reauth_required`; ending an ended listing (1047) is `confirmed` for a read-back to decide;
+  other refusals are `rejected` with eBay's message. A REST 401 refreshes the token and tries
+  once more (only reads and photo uploads, which change no listing).
+- **Daily-call budget** (`budget.ts`): every Trading call takes one call from the application's
+  daily budget (5,000 by default), which keeps a reserve for ends and read-backs and re-reads the
+  real usage from eBay's Developer Analytics API, so several workers share one quota.
+- **Tokens.** The adapter gets the seller's user token from an `EbaySellerSource`. Until
+  per-connection tokens arrive (T-16), `RefreshTokenSeller` serves one seller from
+  `EBAY_USER_REFRESH_TOKEN` (the fake's development seller with `EBAY_ENV=fake`); without one,
+  operations fail with "Connect eBay". The health check is one Fulfillment `getOrders` call.
+
+The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth, Media, Taxonomy,
+Fulfillment, Developer Analytics, and Notification endpoints the adapter uses, signs
+notifications the way eBay does, and injects eBay's failure modes; its README cites the eBay
+documentation it follows and lists what eBay leaves undocumented. `npm run ebay:sandbox-check`
+runs the adapter against eBay's sandbox once the keys are in `.env` (README.md).
+
 **Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
 only". The marketplaces granted the product owner permission to automate where no API exists,
 Listora is for the product owner's personal use, and everything runs in the cloud. So
@@ -552,21 +600,21 @@ Nothing requires a real credential to build or test. Every external service sits
 interface with a fake or dev driver, selected by an environment variable. Each switch below
 lands with the task that introduces that dependency, and its keys are added to `.env.example`.
 
-| Dependency       | Dev/test                                                                                                     | Production                 | Switch                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------- | ------------------------------------ |
-| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                   | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`  |
-| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)              | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`               |
-| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands     | The same                   | none                                 |
-| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                             | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`           |
-| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                          | Anthropic API              | `AI_PROVIDER=fake\|anthropic`        |
-| eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production` |
-| Depop            | `fake-depop` generated from Depop's OpenAPI spec                                                             | Sandbox, then production   | `DEPOP_ENV`                          |
-| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                         | SES inbound                | `EMAIL_INGEST=folder\|ses`           |
-| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                           | Cognito                    | `AUTH_DRIVER=dev\|cognito`           |
-| Payments         | Fake Stripe client + StoreKit configuration file                                                             | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`        |
-| Push             | Recording fake                                                                                               | APNs                       | `PUSH_DRIVER`                        |
-| Token encryption | Local AES-GCM key from `.env`                                                                                | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                   |
-| iOS              | iPhone 17 simulator, photo-library fixtures                                                                  | Device / TestFlight        | xcconfig `API_BASE_URL`              |
+| Dependency       | Dev/test                                                                                                                              | Production                 | Switch                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------ |
+| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                            | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`  |
+| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                       | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`               |
+| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                              | The same                   | none                                 |
+| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                      | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`           |
+| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                   | Anthropic API              | `AI_PROVIDER=fake\|anthropic`        |
+| eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production` |
+| Depop            | `fake-depop` generated from Depop's OpenAPI spec                                                                                      | Sandbox, then production   | `DEPOP_ENV`                          |
+| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                  | SES inbound                | `EMAIL_INGEST=folder\|ses`           |
+| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                    | Cognito                    | `AUTH_DRIVER=dev\|cognito`           |
+| Payments         | Fake Stripe client + StoreKit configuration file                                                                                      | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`        |
+| Push             | Recording fake                                                                                                                        | APNs                       | `PUSH_DRIVER`                        |
+| Token encryption | Local AES-GCM key from `.env`                                                                                                         | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                   |
+| iOS              | iPhone 17 simulator, photo-library fixtures                                                                                           | Device / TestFlight        | xcconfig `API_BASE_URL`              |
 
 Live smoke tests for real providers skip automatically when their credential is absent. Fakes
 must stay true to the real contract: shapes, error codes, and failure modes.

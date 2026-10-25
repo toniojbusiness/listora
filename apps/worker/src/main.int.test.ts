@@ -17,7 +17,7 @@ import {
 } from '@listora/analysis';
 import { createInventoryItem, inTransaction, type Marketplace } from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
-import { FakeMarketplace } from '@listora/marketplaces';
+import { FakeEbay, FakeMarketplace } from '@listora/marketplaces';
 import { contentWith } from '@listora/marketplaces/testing';
 import { enqueueOperation, LIVENESS_APPLICATION_PREFIX } from '@listora/operations';
 import { graphilePhotoJobs, itemPhotoSet, storageKeys } from '@listora/photos';
@@ -210,6 +210,23 @@ describe('worker process (real Postgres)', () => {
     const done = await waitForOperation(operation.id, 'succeeded');
     expect(done.success_evidence).toBe('read_back');
     expect(fake.listings('ebay', listing.id)).toHaveLength(1);
+  });
+
+  it('lists eBay operations on the fake eBay with EBAY_ENV=fake', async () => {
+    const ebay = await FakeEbay.start();
+    try {
+      await startWorker({ EBAY_ENV: 'fake', EBAY_FAKE_URL: ebay.url });
+      const { listing, operation } = await createOperation();
+      // eBay's reads carry no freshness marker, so a matching read waits for a second one.
+      const waiting = await waitForOperation(operation.id, 'verifying');
+      expect(waiting.error_code).toBe('confirming');
+      expect(ebay.listings(listing.id)).toMatchObject([
+        { title: 'Process test jacket', price: '55.0', status: 'Active', trackedBySku: true },
+      ]);
+      expect(fake.listings('ebay', listing.id)).toEqual([]);
+    } finally {
+      await ebay.close();
+    }
   });
 
   // Recovery waits for the surviving worker's next check (5 s) after the lock's grace (5 s).

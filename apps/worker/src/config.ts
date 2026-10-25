@@ -7,6 +7,7 @@ import {
   type AiConfig,
 } from '@listora/ai';
 import { AnalysisConfigError, loadAnalysisConfig, type AnalysisConfig } from '@listora/analysis';
+import { EbayConfigError, loadEbayConfig, type EbayConfig } from '@listora/marketplaces';
 import { isLogLevel, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -19,6 +20,8 @@ export interface WorkerConfig {
   taskConcurrency: number;
   /** Base URL of the fake marketplace every adapter uses (development and tests only). */
   fakeMarketplaceUrl: string | undefined;
+  /** EBAY_* keys, read by @listora/marketplaces; `undefined` when EBAY_ENV is unset. */
+  ebay: EbayConfig | undefined;
   /** STORAGE_* keys, read by @listora/storage: where photo processing and analysis read. */
   storage: StorageConfig;
   /** AI_* keys, read by @listora/ai: the provider and guards item analysis calls through. */
@@ -83,6 +86,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const ai = collect(issues, AiConfigError, () => loadAiConfig(env));
   const analysis = collect(issues, AnalysisConfigError, () => loadAnalysisConfig(env));
   const aiAlerts = collect(issues, AiConfigError, () => loadAiAlertConfig(env));
+  const ebay = collect(issues, EbayConfigError, () => loadEbayConfig(env));
 
   if (
     issues.length > 0 ||
@@ -100,6 +104,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     concurrency,
     taskConcurrency,
     fakeMarketplaceUrl,
+    ebay,
     storage,
     ai,
     analysis,

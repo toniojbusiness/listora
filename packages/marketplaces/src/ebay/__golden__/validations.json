@@ -1,0 +1,93 @@
+{
+  "blankTitle": [
+    {
+      "field": "variant.title",
+      "code": "required",
+      "message": "eBay needs a title."
+    }
+  ],
+  "untrimmedTitle": [
+    {
+      "field": "variant.title",
+      "code": "untrimmed",
+      "message": "eBay titles can't start or end with a space."
+    }
+  ],
+  "htmlTitle": [
+    {
+      "field": "variant.title",
+      "code": "invalid",
+      "message": "eBay titles can't contain HTML."
+    }
+  ],
+  "blankDescription": [
+    {
+      "field": "variant.description",
+      "code": "required",
+      "message": "eBay needs a description."
+    }
+  ],
+  "untrimmedDescription": [
+    {
+      "field": "variant.description",
+      "code": "untrimmed",
+      "message": "eBay descriptions can't start or end with a space or a blank line."
+    }
+  ],
+  "tooManyPhotos": [
+    {
+      "field": "item.photos",
+      "code": "too_many",
+      "message": "eBay takes at most 24 photos."
+    }
+  ],
+  "noCategory": [
+    {
+      "field": "variant.categoryRef",
+      "code": "required",
+      "message": "eBay needs a category for this item."
+    }
+  ],
+  "noCondition": [
+    {
+      "field": "item.condition",
+      "code": "required",
+      "message": "eBay needs the item's condition."
+    }
+  ],
+  "nonStandardSize": [
+    {
+      "field": "item.sizeLabel",
+      "code": "not_standard",
+      "message": "eBay needs a standard size for clothing, for example M or 32."
+    }
+  ],
+  "noShoeSize": [
+    {
+      "field": "item.sizeLabel",
+      "code": "not_standard",
+      "message": "eBay needs the US shoe size, for example 9 or 10.5."
+    }
+  ],
+  "longConditionNotes": [
+    {
+      "field": "item.conditionNotes",
+      "code": "too_long",
+      "message": "eBay condition notes can be at most 1000 characters, flaws included."
+    }
+  ],
+  "longAspectValue": [
+    {
+      "field": "variant.aspects",
+      "code": "too_long",
+      "message": "eBay values for Style can be at most 65 characters."
+    }
+  ],
+  "tooManyAspects": [
+    {
+      "field": "variant.aspects",
+      "code": "too_many",
+      "message": "eBay takes at most 45 item specifics."
+    }
+  ]
+}
