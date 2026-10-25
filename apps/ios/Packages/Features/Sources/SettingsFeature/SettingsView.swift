@@ -16,14 +16,17 @@ public struct SettingsContent: Equatable, Sendable {
 }
 
 /// Account, marketplace connections, and app information. Dev builds also have a developer
-/// sign-in; the real account (T-28, T-31) and connection (T-16, T-25) sections come later.
-public struct SettingsView: View {
+/// sign-in; the real account (T-28, T-31) and API connection (T-16, T-25) sections come later.
+/// `linkAccounts` is the Link accounts screen, which `AppFeature` composes in.
+public struct SettingsView<LinkAccounts: View>: View {
     private let content: SettingsContent
     private let devSignIn: DevSignInModel?
+    private let linkAccounts: LinkAccounts?
 
-    public init(content: SettingsContent, devSignIn: DevSignInModel? = nil) {
+    public init(content: SettingsContent, devSignIn: DevSignInModel? = nil, linkAccounts: LinkAccounts) {
         self.content = content
         self.devSignIn = devSignIn
+        self.linkAccounts = linkAccounts
     }
 
     public var body: some View {
@@ -32,6 +35,17 @@ public struct SettingsView: View {
                 if let devSignIn {
                     DevSignInSection(model: devSignIn)
                         .listRowBackground(Palette.surface.color)
+                }
+                if let linkAccounts {
+                    Section("Marketplaces") {
+                        NavigationLink {
+                            linkAccounts
+                        } label: {
+                            Label("Link accounts", systemImage: "link")
+                        }
+                        .accessibilityIdentifier("settings.linkAccounts")
+                    }
+                    .listRowBackground(Palette.surface.color)
                 }
                 Section("About") {
                     row("Version", content.version, id: "settings.version")
@@ -56,6 +70,15 @@ public struct SettingsView: View {
         } label: {
             Text(title)
         }
+    }
+}
+
+extension SettingsView where LinkAccounts == EmptyView {
+    /// Settings without the Link accounts screen.
+    public init(content: SettingsContent, devSignIn: DevSignInModel? = nil) {
+        self.content = content
+        self.devSignIn = devSignIn
+        linkAccounts = nil
     }
 }
 

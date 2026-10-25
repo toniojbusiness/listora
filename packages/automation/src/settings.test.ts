@@ -79,6 +79,7 @@ describe('loadAutomationSettings', () => {
     expect(settings.profiles.mercari).toMatchObject({
       origins: ['http://127.0.0.1:4400'],
       cookieDomains: ['127.0.0.1'],
+      loginUrl: 'http://127.0.0.1:4400/login',
     });
     expect(() =>
       loadAutomationSettings({ FAKE_AUTOMATION_SITE_URL: 'https://poshmark.com' }),

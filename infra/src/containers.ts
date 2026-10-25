@@ -97,7 +97,14 @@ export function containerEnvironment(
     case 'api':
       // Deployed APIs switch to `cognito` (with COGNITO_USER_POOL_ID and COGNITO_CLIENT_IDS) once
       // the user pool exists; docs/auth.md lists what it needs.
-      return { API_HOST: '0.0.0.0', API_PORT: String(API_PORT), AUTH_DRIVER: 'dev', ...services() };
+      // The API seals the marketplace sessions the app links (it never decrypts one).
+      return {
+        API_HOST: '0.0.0.0',
+        API_PORT: String(API_PORT),
+        AUTH_DRIVER: 'dev',
+        ...services(),
+        TOKEN_KMS_KEY_ID: deployed().tokenKeyArn,
+      };
     // The worker gets COGNITO_USER_POOL_ID (and its task role cognito-idp:AdminGetUser and AdminDeleteUser) with
     // the user pool, so account deletions can delete Cognito users.
     case 'worker':

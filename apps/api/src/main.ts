@@ -9,6 +9,7 @@ import { createDatabase, createPool } from '@listora/db';
 import { graphilePhotoJobs } from '@listora/photos';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
+import { createTokenCipher, SessionVault } from '@listora/vault';
 
 import { buildApp } from './app.ts';
 import { createAuthDriver } from './auth/create-driver.ts';
@@ -33,6 +34,10 @@ const app = buildApp({
     logger,
   }),
   analysisJobs: graphileAnalysisJobs,
+  marketplaceSessions: {
+    vault: new SessionVault({ cipher: createTokenCipher(config.tokenCipher), logger }),
+    profiles: config.automation.profiles,
+  },
   pingDatabase: () => pingDatabase(pool),
 });
 

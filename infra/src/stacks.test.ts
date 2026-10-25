@@ -535,8 +535,11 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(env.map((entry) => entry.Name)).toEqual(
           Object.keys(containerEnvironment(service, 'postgres://', ANY_DEPLOYMENT)),
         );
-        // Nothing secret-looking travels as plain environment.
-        for (const { Name } of env) expect(Name).not.toMatch(/PASSWORD|SECRET|KEY/);
+        // Nothing secret-looking travels as plain environment. TOKEN_KMS_KEY_ID is the KMS
+        // key's ARN, not key material.
+        for (const { Name } of env) {
+          if (Name !== 'TOKEN_KMS_KEY_ID') expect(Name).not.toMatch(/PASSWORD|SECRET|KEY/);
+        }
       }
     });
 

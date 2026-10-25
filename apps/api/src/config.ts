@@ -2,8 +2,18 @@ import { z } from 'zod';
 
 import { USER_POOL_ID_PATTERN, userPoolRegion } from '@listora/accounts';
 import { AiConfigError, loadAiConfig, type AiConfig } from '@listora/ai';
+import {
+  AutomationConfigError,
+  loadAutomationSettings,
+  type AutomationSettings,
+} from '@listora/automation';
 import { assertNever, LOG_LEVELS, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
+import {
+  loadTokenCipherConfig,
+  TokenCipherConfigError,
+  type TokenCipherConfig,
+} from '@listora/vault';
 
 /** Auth drivers this build can run (`AUTH_DRIVER`). */
 export const AUTH_DRIVERS = ['dev', 'cognito'] as const;
@@ -41,6 +51,16 @@ export interface ApiConfig {
   storage: StorageConfig;
   /** AI_* keys, read by @listora/ai: the guards analysis requests are checked against. */
   ai: AiConfig;
+  /**
+   * TOKEN_KMS_KEY_ID or TOKEN_LOCAL_KEY (@listora/vault): the key linked marketplace sessions
+   * are sealed with. The API only encrypts them; only the browser runner decrypts.
+   */
+  tokenCipher: TokenCipherConfig;
+  /**
+   * AUTOMATION_* and FAKE_AUTOMATION_SITE_URL (@listora/automation): each automated
+   * marketplace's sign-in page and cookie domains, the same the worker and the runner use.
+   */
+  automation: AutomationSettings;
 }
 
 export class ConfigError extends Error {
@@ -143,7 +163,27 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     if (!(error instanceof AiConfigError)) throw error;
     issues.push(...error.issues);
   }
-  if (!parsed.success || storage === undefined || ai === undefined) {
+  let tokenCipher: TokenCipherConfig | undefined;
+  try {
+    tokenCipher = loadTokenCipherConfig(env);
+  } catch (error) {
+    if (!(error instanceof TokenCipherConfigError)) throw error;
+    issues.push(...error.issues);
+  }
+  let automation: AutomationSettings | undefined;
+  try {
+    automation = loadAutomationSettings(env);
+  } catch (error) {
+    if (!(error instanceof AutomationConfigError)) throw error;
+    issues.push(...error.issues);
+  }
+  if (
+    !parsed.success ||
+    storage === undefined ||
+    ai === undefined ||
+    tokenCipher === undefined ||
+    automation === undefined
+  ) {
     throw new ConfigError(issues);
   }
   const values = parsed.data;
@@ -157,5 +197,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     auth,
     storage,
     ai,
+    tokenCipher,
+    automation,
   };
 }

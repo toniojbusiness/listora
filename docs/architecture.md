@@ -153,7 +153,8 @@ scripts/
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
   ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
 Dockerfile      Application image; the API and the worker run from the same image
-docs/           This overview, the roadmap, and the personal environment's cost estimate
+docs/           This overview, the roadmap, the personal environment's cost estimate, and one
+                file per feature in docs/features/
 Makefile        iOS commands (make ios-test, ios-lint, ...)
 ```
 
@@ -184,6 +185,8 @@ src/
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
   listings/      Listing views (honest statusDisplay) and shared-listing links
+  marketplace-sessions/  Linking marketplaces by signing in: stores the session the app hands
+                 over and reports its check (docs/features/marketplace-linking.md)
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -559,9 +562,10 @@ the headless-Chromium browser runner acts on sessions the user logs into from th
   assisted task.
 - Every action is still confirmed by read-back (section 6), never reported as a false success.
 
-The runner, the automation mode, the session vault, and sale-check scheduling are built
-(below); the automation adapters for Poshmark, Mercari, and Depop, which write each site's
-scripts, and the app's linking screen are their own tasks. Until a marketplace's adapter lands
+The runner, the automation mode, the session vault, sale-check scheduling, and linking from the
+app ([features/marketplace-linking.md](features/marketplace-linking.md)) are built (below); the
+automation adapters for Poshmark, Mercari, and Depop, which write each site's scripts, are
+their own tasks. Until a marketplace's adapter lands
 it runs assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
 
 Assisted adapters implement `execute` by creating a `user_task` (deep link plus copy-assist
@@ -612,7 +616,7 @@ session vault.
   such a step to the runner's task on the same listing queue (section 6) and starts the runner
   (`launcher.ts`): locally as a child process, in AWS by setting the runner's ECS service to one
   task. A runner holds a Postgres session named `listora-browser-runner:<id>`, takes only
-  automated steps and sale checks, one at a time, and exits after `RUNNER_IDLE_EXIT_SECONDS` with
+  automated steps, sale checks, and session checks (`RUNNER_TASKS`), one at a time, and exits after `RUNNER_IDLE_EXIT_SECONDS` with
   nothing to do, scaling its service back to zero. The worker's `automation_dispatch` task runs
   every minute: it queues due sale checks, starts the runner when its work waits and none is
   alive, and prunes old run records and screenshots.
@@ -624,9 +628,13 @@ session vault.
   days the seller's sales on that marketplace usually happen and while items are hot, later when
   idle, within `SALE_CHECK_MIN_HOURS` and `SALE_CHECK_MAX_HOURS`. A forwarded sale email asks for
   a check at once (`requestSaleCheck`). A check that met a check waits for the relink.
-- **Linking** (`linkAutomationSession`) stores the cookies the app captured (on the
-  marketplace's domains only), revives the connection, moves the marketplace's unconnected
-  listings to it, and makes a first sale check due at once; relinking takes the same way.
+- **Linking** (`linkAutomationSession`, called by the API's `linkMarketplaceSession`) stores the
+  cookies the app captured (on the marketplace's domains only), revives the connection, moves the
+  marketplace's unconnected listings to it, asks the runner for a read-only **session check**
+  (`session-checks/`), and makes a first sale check due at once; relinking takes the same way.
+  The app shows a marketplace as linked only after its session check passed. The flow, from the
+  app's sign-in web view to the check, is in
+  [features/marketplace-linking.md](features/marketplace-linking.md).
 
 ## 5. Pricing data rules
 
@@ -1025,8 +1033,9 @@ Tables by area:
   a create, revise, or relist publishes), and the append-only `operation_event`.
 - **Browser automation:** `automation_run` (one browser session the runner opened: purpose,
   script, outcome, the check it met, the failed step, the screenshot key; the rate limits'
-  count) and `sale_check_schedule` (when each automation connection is next checked for sales,
-  and why).
+  count), `sale_check_schedule` (when each automation connection is next checked for sales,
+  and why), and `session_check` (whether the newest session linked on each automation
+  connection works: pending, passed, or failed with a reason).
 - **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
   provider event id, so an id that repeats in another account or on another marketplace is
   never dropped as a duplicate). `sale` is one marketplace order (unique per account,

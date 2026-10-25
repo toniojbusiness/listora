@@ -3,7 +3,7 @@
  * freshly migrated scratch database, dev sign-in, and a `call` that drives one contract
  * operation and fails the test when the response does not match the contract.
  */
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -51,9 +51,11 @@ import {
   type PhotoProcessingDependencies,
   type PhotoProcessingOutcome,
 } from '@listora/photos';
-import { createLogger, sha256Hex } from '@listora/shared';
+import { createLogger, sha256Hex, type Logger } from '@listora/shared';
 import { LocalDiskStorage } from '@listora/storage';
 import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
+import { LocalTokenCipher, SessionVault } from '@listora/vault';
+import { loadAutomationSettings } from '@listora/automation';
 import type { ApiError, ErrorResponse } from '@listora/api-contract';
 import type { FastifyInstance } from 'fastify';
 
@@ -206,9 +208,12 @@ export class TestUploads {
 /** Storage, AI, and job queues for unit tests that build the app but never use them. */
 export function offlineDependencies(): Pick<
   AppDependencies,
-  'storage' | 'photoJobs' | 'ai' | 'analysisJobs'
+  'storage' | 'photoJobs' | 'ai' | 'analysisJobs' | 'marketplaceSessions'
 > {
   return {
+    marketplaceSessions: testMarketplaceSessions(
+      createLogger({ service: 'api-test', level: 'silent' }),
+    ),
     ai: testAiClient({
       usageStore: { record: unused, spentTodayMicros: unused, monthlyUsage: unused },
       fixtures: {},
@@ -220,6 +225,14 @@ export function offlineDependencies(): Pick<
       signingSecret: TEST_AUTH_SECRET,
     }),
     photoJobs: { enqueue: () => Promise.resolve() },
+  };
+}
+
+/** The session vault under a random key, and the marketplaces' real profiles. */
+function testMarketplaceSessions(logger: Logger): AppDependencies['marketplaceSessions'] {
+  return {
+    vault: new SessionVault({ cipher: new LocalTokenCipher(randomBytes(32)), logger }),
+    profiles: loadAutomationSettings({}).profiles,
   };
 }
 
@@ -296,6 +309,10 @@ export interface TestApi {
   aiControls: TestAiControls;
   /** The AI client the API and the jobs share. */
   ai: AiClient;
+  /** The session vault `linkMarketplaceSession` stores sessions in (a random local key). */
+  vault: SessionVault;
+  /** Every line the API logged, parsed. */
+  logLines: readonly Record<string, unknown>[];
   /** The clock for dev sign-in and upload sessions, in milliseconds; move it to expire them. */
   clock: { now: number };
   /** Signs in through the dev endpoints and returns the bearer token. */
@@ -369,6 +386,7 @@ export async function createTestApi(
     jobs: () => accountDeletionJobs(db),
     runAll: () => runAccountDeletionJobs(deletionDeps),
   };
+  const marketplaceSessions = testMarketplaceSessions(logger);
   const app = buildApp({
     db,
     auth: options.auth ?? devAuth,
@@ -376,6 +394,7 @@ export async function createTestApi(
     photoJobs,
     ai,
     analysisJobs,
+    marketplaceSessions,
     now: () => new Date(clock.now),
     pingDatabase: () => Promise.resolve(),
   });
@@ -472,6 +491,8 @@ export async function createTestApi(
     analysisJobs,
     aiControls,
     ai,
+    vault: marketplaceSessions.vault,
+    logLines,
     clock,
     signIn,
     tenantOf,

@@ -56,6 +56,7 @@ const MIGRATIONS = [
   '0012_listing_links',
   '0013_trust_metric_indexes',
   '0014_browser_automation',
+  '0015_session_checks',
 ];
 
 describe('schema migrations (real Postgres)', () => {

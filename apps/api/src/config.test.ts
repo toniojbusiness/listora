@@ -1,5 +1,7 @@
 import { loadAiConfig } from '@listora/ai';
+import { loadAutomationSettings } from '@listora/automation';
 import { DEFAULT_LOCAL_STORAGE_BASE_URL, DEFAULT_LOCAL_STORAGE_DIR } from '@listora/storage';
+import { loadTokenCipherConfig } from '@listora/vault';
 import { describe, expect, it } from 'vitest';
 
 import { ConfigError, loadApiConfig } from './config.ts';
@@ -22,7 +24,26 @@ describe('loadApiConfig', () => {
         signingSecret: undefined,
       },
       ai: loadAiConfig({}),
+      tokenCipher: loadTokenCipherConfig({}),
+      automation: loadAutomationSettings({}),
     });
+  });
+
+  it('reads the session key and the automation settings, refusing bad ones', () => {
+    expect(
+      loadApiConfig({ ...REQUIRED, FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4300' }),
+    ).toMatchObject({
+      automation: { profiles: { poshmark: { loginUrl: 'http://127.0.0.1:4300/login' } } },
+    });
+    expect(() => loadApiConfig({ ...REQUIRED, TOKEN_LOCAL_KEY: 'short' })).toThrow(
+      'TOKEN_LOCAL_KEY must be 32 bytes',
+    );
+    expect(() => loadApiConfig({ ...REQUIRED, NODE_ENV: 'production' })).toThrow(
+      'TOKEN_KMS_KEY_ID is required in production',
+    );
+    expect(() =>
+      loadApiConfig({ ...REQUIRED, FAKE_AUTOMATION_SITE_URL: 'https://poshmark.com' }),
+    ).toThrow('FAKE_AUTOMATION_SITE_URL');
   });
 
   it('reads explicit values', () => {

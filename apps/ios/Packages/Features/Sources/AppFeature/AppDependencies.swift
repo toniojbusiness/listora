@@ -2,6 +2,7 @@ import AddItemFeature
 import APIClient
 import Core
 import Foundation
+import MarketplaceLinkingFeature
 import SettingsFeature
 import TagReadingFeature
 
@@ -20,6 +21,8 @@ public struct AppDependencies {
     public let addItem: AddItemEnvironment
     /// Dev builds only: sign in against the local API's dev auth driver.
     public let devSignIn: DevSignInModel?
+    /// Link accounts: sign in on Poshmark, Mercari, and Depop for Listora to automate them.
+    public let linkAccounts: LinkAccountsModel
 
     public init(
         configuration: AppConfiguration,
@@ -59,6 +62,7 @@ public struct AppDependencies {
             tagReader: tagReader,
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
         )
+        linkAccounts = LinkAccountsModel(service: APIMarketplaceSessionService(api: apiClient))
         devSignIn = configuration.environment == .dev
             ? DevSignInModel(client: DevSignInClient(baseURL: configuration.apiBaseURL), tokens: accessTokens)
             : nil

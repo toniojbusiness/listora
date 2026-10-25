@@ -14,6 +14,10 @@ import { registerErrorHandling } from './errors.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
 import { registerItemRoutes } from './items/routes.ts';
 import { registerListingRoutes } from './listings/routes.ts';
+import {
+  registerMarketplaceSessionRoutes,
+  type MarketplaceSessionDependencies,
+} from './marketplace-sessions/routes.ts';
 import { registerPhotoRoutes } from './photos/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
 import { registerPricingRoutes } from './pricing/routes.ts';
@@ -32,6 +36,8 @@ export interface AppDependencies extends HealthDependencies {
   ai: AiClient;
   /** Where starting or escalating an analysis adds its job. */
   analysisJobs: AnalysisJobQueue;
+  /** Linking marketplaces by signing in: the session vault and each marketplace's profile. */
+  marketplaceSessions: Pick<MarketplaceSessionDependencies, 'vault' | 'profiles'>;
   /** Where attached photo files come from; defaults to upload sessions in `storage`. */
   uploads?: PhotoUploads;
   /** The clock upload sessions expire by. */
@@ -83,6 +89,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     photoJobs: deps.photoJobs,
   });
   registerPricingRoutes(app, routeDeps);
+  registerMarketplaceSessionRoutes(app, { ...routeDeps, ...deps.marketplaceSessions });
   registerAnalysisRoutes(app, {
     ...routeDeps,
     ai: deps.ai,

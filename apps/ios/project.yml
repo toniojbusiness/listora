@@ -198,6 +198,7 @@ schemes:
         - package: Features/SettingsFeatureTests
         - package: Features/TagReadingFeatureTests
         - package: Features/ShareLinkFeatureTests
+        - package: Features/MarketplaceLinkingFeatureTests
     profile:
       config: Prod-Release
     analyze:
