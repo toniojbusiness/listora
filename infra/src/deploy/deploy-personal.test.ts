@@ -175,6 +175,9 @@ describe('scripts/deploy-personal.sh --dry-run with the real cdk', () => {
       `--cloudformation-execution-policies ${POLICY_ARN} --termination-protection`,
       'listora-personal-data: 6 resources',
       'scripts/run-migrations.sh personal',
+      // Both images the stacks run, as the Deploy workflow builds them.
+      '--target app --tag 976033325938.dkr.ecr.us-east-1.amazonaws.com/listora/app:',
+      '--target runner --tag 976033325938.dkr.ecr.us-east-1.amazonaws.com/listora/runner:',
       'node infra/src/deploy/smoke.ts --api-url <ApiUrl> --auth dev --log-group /listora/personal/api',
       'dry run ok; nothing was sent to AWS',
     ]) {

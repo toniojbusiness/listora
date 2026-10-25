@@ -105,7 +105,6 @@ if [[ -n "$dirty" ]]; then
 fi
 image_tag=$(git rev-parse HEAD)
 readonly image_tag
-readonly image="$registry/listora/app:$image_tag"
 info "commit $image_tag, region $region, profile ${profile:-(none)}"
 
 [[ -r "$anthropic_env" ]] || fail "no Anthropic key file at $anthropic_env"
@@ -269,19 +268,27 @@ deploy_stacks() {
 step "Deploy the image repository"
 deploy_stacks registry
 
-step "Build and push the application image"
-if [[ "$dry_run" == true ]]; then
-  would "aws ecr describe-images --repository-name listora/app --image-ids imageTag=$image_tag  (skip the build when it exists)"
-  would "$container_cli build --platform linux/amd64 --tag $image ."
-  would "$container_cli push $image"
-elif aws_ ecr describe-images --repository-name listora/app --image-ids "imageTag=$image_tag" >/dev/null 2>&1; then
-  info "$image already exists; reusing it"
-else
-  aws_ ecr get-login-password | "$container_cli" login --username AWS --password-stdin "$registry" >/dev/null
-  # ECS runs the tasks on X86_64 (infra/src/stacks/compute-stack.ts), whatever this machine is.
-  "$container_cli" build --platform linux/amd64 --tag "$image" . || fail "the image build failed"
-  "$container_cli" push "$image" || fail "the image push failed"
-fi
+step "Build and push the application and browser runner images"
+# The Dockerfile's `app` stage (api, worker, migrations) and `runner` stage (the same sources with
+# headless Chromium), each in its own repository, as .github/workflows/deploy.yml builds them.
+# ECS runs the tasks on X86_64 (infra/src/stacks/compute-stack.ts), whatever this machine is.
+[[ "$dry_run" == true ]] || aws_ ecr get-login-password |
+  "$container_cli" login --username AWS --password-stdin "$registry" >/dev/null ||
+  fail "cannot log in to $registry"
+for target in app runner; do
+  target_image="$registry/listora/$target:$image_tag"
+  if [[ "$dry_run" == true ]]; then
+    would "aws ecr describe-images --repository-name listora/$target --image-ids imageTag=$image_tag  (skip the build when it exists)"
+    would "$container_cli build --platform linux/amd64 --target $target --tag $target_image ."
+    would "$container_cli push $target_image"
+  elif aws_ ecr describe-images --repository-name "listora/$target" --image-ids "imageTag=$image_tag" >/dev/null 2>&1; then
+    info "$target_image already exists; reusing it"
+  else
+    "$container_cli" build --platform linux/amd64 --target "$target" --tag "$target_image" . ||
+      fail "the $target image build failed"
+    "$container_cli" push "$target_image" || fail "the $target image push failed"
+  fi
+done
 
 # --- 7. State stacks, the Anthropic key, and migrations --------------------------------------
 step "Deploy the state stacks and the migration task"
