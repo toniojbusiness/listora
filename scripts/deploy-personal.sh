@@ -83,7 +83,13 @@ fail() {
 
 # Every AWS call names the profile and region; nothing is exported.
 aws_() { aws --profile "$profile" --region "$region" "$@"; }
+# An SSO sign-in lasts much longer than its cached access token (about an hour), and only the
+# AWS CLI renews that token; cdk reads it as cached and fails once it is stale. So every cdk
+# command is preceded by a cheap CLI call, which renews the token from the sign-in's refresh
+# token. Nothing is exported: the CLI only rewrites its own cache.
 cdk_() {
+  aws_ sts get-caller-identity >/dev/null ||
+    fail "the sign-in of profile $profile has expired; run aws sso login --profile $profile and run this again"
   (cd infra && npx cdk "$@" --profile "$profile" --no-notices --no-version-reporting)
 }
 

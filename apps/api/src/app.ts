@@ -8,7 +8,13 @@ import type { Db } from '@listora/db';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
 import type { PhotoJobQueue } from '@listora/photos';
 import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
-import { fastify, LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import {
+  errorCodes,
+  fastify,
+  LogController,
+  type FastifyBaseLogger,
+  type FastifyInstance,
+} from 'fastify';
 
 import type { AuthDriver } from './auth/driver.ts';
 import type { ConnectionsDependencies } from './connections/routes.ts';
@@ -74,6 +80,16 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   });
   // Every body is JSON; without this, Fastify would hand a text/plain body to validation.
   app.removeContentTypeParser('text/plain');
+  // Any other content type is refused, except an empty body with none at all: API Gateway's HTTP
+  // API (the personal environment's ingress) forwards a bodyless DELETE with
+  // `transfer-encoding: chunked` and no content type, which must reach the route as no body.
+  app.addContentTypeParser('*', { parseAs: 'string' }, (request, body, done) => {
+    if (request.headers['content-type'] === undefined && body === '') {
+      done(null, undefined);
+      return;
+    }
+    done(new errorCodes.FST_ERR_CTP_INVALID_MEDIA_TYPE());
+  });
   app.decorateRequest('tenant', null);
   app.decorateRequest('identity', null);
   app.addHook('onRequest', async (request, reply) => {
