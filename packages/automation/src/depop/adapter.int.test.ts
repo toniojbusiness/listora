@@ -143,6 +143,27 @@ describe('Depop automation adapter on the fake Depop site', () => {
   const posts = (since: number) =>
     site.requests.slice(since).filter((entry) => entry.method === 'POST');
 
+  it('signs a seller in by hand, as the app does when linking in development', async () => {
+    const login = `${site.url}/login/`;
+    const signedIn = await fetch(login, {
+      method: 'POST',
+      body: new URLSearchParams({ username: 'vintage_finds', password: 'anything' }),
+      redirect: 'manual',
+    });
+    expect(signedIn.status).toBe(303);
+    expect(signedIn.headers.get('location')).toBe('/sellinghub/');
+    const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const hub = await fetch(`${site.url}/sellinghub/`, { headers: { cookie }, redirect: 'manual' });
+    expect(hub.status).toBe(200);
+    const refused = await fetch(login, {
+      method: 'POST',
+      body: new URLSearchParams({ username: 'vintage_finds' }),
+      redirect: 'manual',
+    });
+    expect(refused.status).toBe(200);
+    expect(refused.headers.get('set-cookie')).toBeNull();
+  });
+
   it('fills every field of the sell form, uploads photos in posting order, and reads the listing back', async () => {
     const content = sampleListingContent({ variant: { hashtags: ['vintage', 'denim'] } });
     const { ref, outcome } = await create(content);

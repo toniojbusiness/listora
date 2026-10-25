@@ -22,10 +22,11 @@ sessions the user logs into from the iPhone app.
 - Every action is still confirmed by read-back ([operations.md](operations.md)), never reported
   as a false success.
 
-The runner, the `automation` mode, the session vault, sale-check scheduling, and the Poshmark,
+The runner, the `automation` mode, the session vault, sale-check scheduling, the Poshmark,
 Mercari, and Depop automation adapters ([poshmark.md](poshmark.md), [mercari.md](mercari.md),
-[depop-automation.md](depop-automation.md)) are built. The app's linking screen is its own task. [costs.md](costs.md#browser-automation) sizes
-and prices the runner.
+[depop-automation.md](depop-automation.md)), and linking from the app
+([marketplace-linking.md](marketplace-linking.md)) are built.
+[costs.md](costs.md#browser-automation) sizes and prices the runner.
 
 ## How it works
 
@@ -86,7 +87,7 @@ and prices the runner.
   such a step to the runner's task on the same listing queue ([operations.md](operations.md))
   and starts the runner (`launcher.ts`): locally as a child process, in AWS by setting the
   runner's ECS service to one task. A runner holds a Postgres session named
-  `listora-browser-runner:<id>`, takes only automated steps and sale checks, one at a time, and
+  `listora-browser-runner:<id>`, takes only automated steps, sale checks, and session checks (`RUNNER_TASKS`), one at a time, and
   exits after `RUNNER_IDLE_EXIT_SECONDS` with nothing to do, scaling its service back to zero.
   The worker's `automation_dispatch` task runs every minute: it queues due sale checks, starts
   the runner when its work waits and none is alive, and prunes old run records and
@@ -106,9 +107,12 @@ and prices the runner.
   a check at once (`requestSaleCheck`). A check that met a check waits for the relink. A
   marketplace whose adapter reads no orders yet is checked at the longest interval, without
   starting the runner.
-- **Linking** (`linkAutomationSession`) stores the cookies the app captured (on the
-  marketplace's domains only), revives the connection, moves the marketplace's unconnected
-  listings to it, and makes a first sale check due at once; relinking takes the same way.
+- **Linking** (`linkAutomationSession`, called by the API's `linkMarketplaceSession`) stores the
+  cookies the app captured (on the marketplace's domains only), revives the connection, moves the
+  marketplace's unconnected listings to it, asks the runner for a read-only **session check**
+  (`session-checks/`), and makes a first sale check due at once; relinking takes the same way.
+  The app shows a marketplace as linked only after its session check passed. The flow, from the
+  app's sign-in web view to the check, is in [marketplace-linking.md](marketplace-linking.md).
 - **Hosting.** The runner is the compute stack's `runner` service, from the Dockerfile's
   `runner` stage (the application's files on top of headless Chromium, its own ECR repository),
   with no task while idle and never two at once ([infra.md](infra.md)).
@@ -158,3 +162,5 @@ never skips them.
 - **`sale_check_schedule`**: when each automation connection is next checked for sales and why
   (`scheduled`, `email`, `retry`, or `linked`), the last check's time and outcome, and the
   newest order time it has seen.
+- **`session_check`**: whether the newest session linked on each automation connection works:
+  pending, passed, or failed with a reason ([marketplace-linking.md](marketplace-linking.md)).

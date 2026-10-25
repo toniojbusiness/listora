@@ -3,6 +3,7 @@ import APIClient
 import Core
 import DesignSystem
 import InventoryFeature
+import MarketplaceLinkingFeature
 import MarketplacesFeature
 import SalesFeature
 import SettingsFeature
@@ -88,6 +89,8 @@ public struct RootView: View {
                 marketplacesAttention: dependencies.marketplaces.attention == nil ? nil : "Needs attention",
             ) {
                 MarketplacesView(model: dependencies.marketplaces)
+            } linkAccounts: {
+                LinkAccountsView(model: dependencies.linkAccounts)
             }
         }
     }

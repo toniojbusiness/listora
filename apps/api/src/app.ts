@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { AiClient } from '@listora/ai';
 import type { AnalysisJobQueue } from '@listora/analysis';
+import { loadAutomationSettings } from '@listora/automation';
 import type { Db } from '@listora/db';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
 import type { PhotoJobQueue } from '@listora/photos';
@@ -13,6 +14,7 @@ import type { ConnectionsDependencies } from './connections/routes.ts';
 import { registerErrorHandling } from './errors.ts';
 import { API_FEATURES, type ApiRouteContext } from './features.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
+import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
 import { registerLocalStorageRoutes } from './storage/local-routes.ts';
 import { SessionPhotoUploads } from './uploads/uploads.ts';
@@ -34,6 +36,11 @@ export interface AppDependencies extends HealthDependencies {
    * marketplaces only, with nothing that can be connected.
    */
   connections?: ConnectionsDependencies;
+  /**
+   * Linking marketplaces by signing in: the session vault and each marketplace's profile.
+   * Defaults to the marketplaces' own profiles with no vault, so nothing can be linked.
+   */
+  marketplaceSessions?: MarketplaceSessionsDependencies;
   /** eBay's notification endpoint (`/webhooks/ebay`); not served without it. */
   ebayWebhook?: EbayWebhookDependencies;
   /** Where attached photo files come from; defaults to upload sessions in `storage`. */
@@ -92,6 +99,10 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
       }),
       oauth: {},
       sealer: undefined,
+    },
+    marketplaceSessions: deps.marketplaceSessions ?? {
+      vault: undefined,
+      profiles: loadAutomationSettings({}).profiles,
     },
     ...(deps.ebayWebhook === undefined ? {} : { ebayWebhook: deps.ebayWebhook }),
     now,

@@ -1008,6 +1008,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/marketplace-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the marketplaces linked by signing in
+         * @description One entry per marketplace whose connection is a browser session (`connect: session`):
+         *     Poshmark, Mercari, and Depop. Each says whether it is linked, where the app opens the
+         *     marketplace's sign-in page, and which cookies to hand over. Not paginated.
+         */
+        get: operations["listMarketplaceSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace-sessions/{marketplace}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get one marketplace's sign-in link
+         * @description The app polls this after `linkMarketplaceSession` until `status` is no longer
+         *     `checking`. `404` for a marketplace that is not linked by signing in (eBay).
+         */
+        get: operations["getMarketplaceSession"];
+        put?: never;
+        /**
+         * Link a marketplace with the session the user signed into in the app
+         * @description The user signed into the marketplace's own sign-in page (`login.url`) inside the app,
+         *     in a web view with its own data store, including any two-step check. The app sends
+         *     that site's cookies (only those on `login.cookieDomains`), never the password, which
+         *     Listora never sees. The server stores them encrypted with the token key (KMS envelope
+         *     encryption) on the account's automation connection for the marketplace, and asks the
+         *     browser runner for one read-only check that the marketplace accepts them. The reply is
+         *     `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
+         *     takes the same way and replaces the earlier session. Cookie values are never logged
+         *     or returned.
+         *
+         *     `404` for a marketplace that is not linked by signing in. `409
+         *     marketplace_action_unavailable` when the marketplace is connected through its API.
+         *     `422 validation_failed` (field `cookies`) when a cookie is on another site's domain,
+         *     every cookie has expired, or there are none.
+         */
+        post: operations["linkMarketplaceSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sales": {
         parameters: {
             query?: never;
@@ -2437,6 +2499,84 @@ export interface components {
             lastCheckedAt?: components["schemas"]["Timestamp"];
         };
         /**
+         * @description A `KnownMarketplaceSessionStatus`, or a status added after this client was built.
+         *     Clients show `statusDisplay` for an unknown status and offer to link again.
+         */
+        MarketplaceSessionStatus: components["schemas"]["KnownMarketplaceSessionStatus"];
+        /**
+         * @description `not_linked`: no session. `checking`: a session was just linked and the browser runner
+         *     is checking it. `linked`: the check passed, and Listora automates the marketplace in
+         *     that session. `needs_relink`: the marketplace rejected the session, or showed a check
+         *     automation must not pass; the user signs in again. `check_failed`: Listora could not
+         *     confirm the session works (see `issue`); linking again checks again. `api_connected`:
+         *     the marketplace is connected through its API, so there is nothing to sign in to.
+         * @enum {string}
+         */
+        KnownMarketplaceSessionStatus: "not_linked" | "checking" | "linked" | "needs_relink" | "check_failed" | "api_connected";
+        /** @description Where the app signs the user in, and which of that site's cookies it hands over. */
+        MarketplaceSessionLogin: {
+            /**
+             * Format: uri
+             * @description The marketplace's own sign-in page.
+             */
+            url: string;
+            /**
+             * @description The marketplace's own domains (`poshmark.com`). The app sends only cookies whose
+             *     domain is one of these or a subdomain of one; the server refuses any other.
+             */
+            cookieDomains: string[];
+        };
+        /**
+         * @description A marketplace linked by signing in (`connect: session`). It is shown as linked only
+         *     after the browser runner confirmed the marketplace accepts the session.
+         */
+        MarketplaceSession: {
+            marketplace: components["schemas"]["Marketplace"];
+            status: components["schemas"]["MarketplaceSessionStatus"];
+            statusDisplay: components["schemas"]["StatusDisplay"];
+            login: components["schemas"]["MarketplaceSessionLogin"];
+            /** @description The seller's name on the marketplace, when the app or the check knows it. */
+            displayName?: string;
+            /** @description When the current session was linked. */
+            linkedAt?: components["schemas"]["Timestamp"];
+            /** @description When the current session's check finished. */
+            checkedAt?: components["schemas"]["Timestamp"];
+            /** @description Why the session needs relinking, or why its check failed. */
+            issue?: components["schemas"]["ConnectionIssue"];
+        };
+        MarketplaceSessionList: {
+            data: components["schemas"]["MarketplaceSession"][];
+        };
+        /**
+         * @description One cookie as the app's web view holds it (`HTTPCookie`), in the browser runner's
+         *     terms. A name plus value of at most 4096 bytes, as browsers allow.
+         */
+        SessionCookie: {
+            name: string;
+            value: string;
+            /** @description A host (`www.poshmark.com`) or a domain cookie (`.poshmark.com`). */
+            domain: string;
+            path: string;
+            /**
+             * Format: int64
+             * @description Unix time in whole seconds; `-1` for a cookie that lasts as long as the browser session.
+             */
+            expires: number;
+            httpOnly: boolean;
+            secure: boolean;
+            /**
+             * @description `lax` when the site set none.
+             * @enum {string}
+             */
+            sameSite: "strict" | "lax" | "none";
+        };
+        MarketplaceSessionLink: {
+            /** @description The marketplace's cookies after the user signed in, and no other site's. */
+            cookies: components["schemas"]["SessionCookie"][];
+            /** @description The seller's name on the marketplace, when the app knows it. */
+            displayName?: string;
+        };
+        /**
          * @description A `KnownSaleStatus`, or a status added after this client was built. Clients show an
          *     unknown status generically.
          */
@@ -3120,6 +3260,13 @@ export type SaleForwardingStatus = components['schemas']['SaleForwardingStatus']
 export type KnownSaleForwardingStatus = components['schemas']['KnownSaleForwardingStatus'];
 export type SaleForwarding = components['schemas']['SaleForwarding'];
 export type ConnectionHealthSummary = components['schemas']['ConnectionHealthSummary'];
+export type MarketplaceSessionStatus = components['schemas']['MarketplaceSessionStatus'];
+export type KnownMarketplaceSessionStatus = components['schemas']['KnownMarketplaceSessionStatus'];
+export type MarketplaceSessionLogin = components['schemas']['MarketplaceSessionLogin'];
+export type MarketplaceSession = components['schemas']['MarketplaceSession'];
+export type MarketplaceSessionList = components['schemas']['MarketplaceSessionList'];
+export type SessionCookie = components['schemas']['SessionCookie'];
+export type MarketplaceSessionLink = components['schemas']['MarketplaceSessionLink'];
 export type SaleStatus = components['schemas']['SaleStatus'];
 export type KnownSaleStatus = components['schemas']['KnownSaleStatus'];
 export type SaleDetectionSource = components['schemas']['SaleDetectionSource'];
@@ -4614,6 +4761,92 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    listMarketplaceSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every marketplace linked by signing in, and its state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceSessionList"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getMarketplaceSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The marketplace's state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceSession"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    linkMarketplaceSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarketplaceSessionLink"];
+            };
+        };
+        responses: {
+            /** @description Stored; the session is being checked. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceSession"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     listSales: {
         parameters: {
             query?: {
@@ -5083,6 +5316,8 @@ export const knownConnectionActionValues: ReadonlyArray<FlattenedDeepRequired<co
 export const connectionAuthorizationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ConnectionAuthorizationStatus"]> = ["pending", "completed", "failed", "expired"];
 export const knownConnectionAttentionReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAttentionReason"]> = ["reconnect", "access_removed", "connection_problem", "expiring"];
 export const knownSaleForwardingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleForwardingStatus"]> = ["needs_domain"];
+export const knownMarketplaceSessionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceSessionStatus"]> = ["not_linked", "checking", "linked", "needs_relink", "check_failed", "api_connected"];
+export const sessionCookieSameSiteValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SessionCookie"]["sameSite"]> = ["strict", "lax", "none"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];

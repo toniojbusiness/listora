@@ -119,6 +119,27 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     site.inject({ action, fault });
   }
 
+  it('signs a seller in by hand, as the app does when linking in development', async () => {
+    const login = `${site.url}/login/`;
+    const signedIn = await fetch(login, {
+      method: 'POST',
+      body: new URLSearchParams({ email: 'seller@example.com', password: 'anything' }),
+      redirect: 'manual',
+    });
+    expect(signedIn.status).toBe(303);
+    expect(signedIn.headers.get('location')).toBe('/mypage/');
+    const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const account = await fetch(`${site.url}/mypage/`, { headers: { cookie }, redirect: 'manual' });
+    expect(account.status).toBe(200);
+    const refused = await fetch(login, {
+      method: 'POST',
+      body: new URLSearchParams({ email: 'seller@example.com' }),
+      redirect: 'manual',
+    });
+    expect(refused.status).toBe(200);
+    expect(refused.headers.get('set-cookie')).toBeNull();
+  });
+
   it('fills every field of the sell form, uploads photos in posting order, and reads the listing back', async () => {
     const content = sampleListingContent();
     const { ref, outcome } = await create(content);
