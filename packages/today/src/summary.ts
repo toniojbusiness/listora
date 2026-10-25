@@ -171,6 +171,12 @@ async function connectionFacts(executor: DbExecutor, accountId: string): Promise
  * Listed items whose oldest live listing went live at least `staleListedDays` ago and that had
  * no listing change for `staleQuietDays`, longest listed first. The rules in cards.ts decide
  * again from the same facts, so these thresholds only keep the read small.
+ *
+ * The subqueries name the account as a parameter, not as `item.account_id`. Correlated through
+ * the outer row, Postgres either hashed the `not exists` over every account's recent operations
+ * and listings (sequential scans of both tables) or ran it once per listed item; with the
+ * account bound it hashes only this seller's recent changes, two to three times faster
+ * (docs/features/performance.md).
  */
 async function staleCandidates(
   executor: DbExecutor,
@@ -200,8 +206,8 @@ async function staleCandidates(
         from marketplace_operation op
         join marketplace_listing changed
           on changed.account_id = op.account_id and changed.id = op.listing_id
-        where op.account_id = item.account_id and changed.item_id = item.id
-          and op.kind in ('create', 'revise', 'price', 'relist')
+        where op.account_id = ${accountId} and changed.account_id = ${accountId}
+          and changed.item_id = item.id and op.kind in ('create', 'revise', 'price', 'relist')
       ) as last_change_at
     from inventory_item item
     join marketplace_listing listing
@@ -217,8 +223,8 @@ async function staleCandidates(
         from marketplace_operation op
         join marketplace_listing changed
           on changed.account_id = op.account_id and changed.id = op.listing_id
-        where op.account_id = item.account_id and changed.item_id = item.id
-          and op.kind in ('create', 'revise', 'price', 'relist')
+        where op.account_id = ${accountId} and changed.account_id = ${accountId}
+          and changed.item_id = item.id and op.kind in ('create', 'revise', 'price', 'relist')
           and op.created_at > ${quietSince}
       )
     order by min(listing.listed_at), item.id

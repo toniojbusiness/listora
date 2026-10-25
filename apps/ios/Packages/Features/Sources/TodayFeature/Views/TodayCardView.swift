@@ -63,14 +63,10 @@ struct TodayCardView: View {
     @ViewBuilder
     private var leading: some View {
         if let url = card.thumbnailURL {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().scaledToFill()
-                } else {
-                    Image(systemName: card.systemImage)
-                        .font(Typography.title3)
-                        .foregroundStyle(Palette.textSecondary)
-                }
+            RemoteImage(url: url) {
+                Image(systemName: card.systemImage)
+                    .font(Typography.title3)
+                    .foregroundStyle(Palette.textSecondary)
             }
             .frame(width: 56, height: 56)
             .background(Palette.surfaceSecondary.color)

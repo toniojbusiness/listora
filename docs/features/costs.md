@@ -12,6 +12,9 @@ Free Tier credit, deployed as it starts: without a domain
 added (its Route 53 hosted zone and SES inbound sale email), plus the domain's registration.
 A copy of the staging layout (NAT gateway, load balancer, two services) would cost about $100.
 
+Rechecked on 2026-10-25 after the efficiency pass ([performance.md](performance.md)): it added
+or removed no billed resource and changed no task size, so the estimate stands.
+
 Prices were read on 2026-10-24 for US East (N. Virginia), on demand, from the AWS pricing
 pages linked below (the price data behind their tables). A month is 730 hours. Taxes, the
 domain registration, and the Anthropic API bill are not included.

@@ -42,6 +42,20 @@ export function scaledRetryPolicy(scale: number): RetryPolicy {
   };
 }
 
+/**
+ * How often an idle worker asks the queue for jobs that became due: a sixth of the shortest
+ * retry delay, between 2 s and 5 s (5 s with the default schedule; 2 s, as before, with the
+ * local stack's shortened one). New jobs never wait for
+ * it (Graphile Worker hears of them through LISTEN/NOTIFY); only future-dated ones do (retries,
+ * read-backs, rechecks), and those are at least 30 s away in production, so a 5 s poll delays
+ * them by under a sixth. Each worker slot polls on its own, so this is most of an idle worker's
+ * database traffic (docs/features/performance.md).
+ */
+export function queuePollIntervalMs(policy: RetryPolicy): number {
+  const shortest = Math.min(...policy.delaysMs);
+  return Math.min(5_000, Math.max(2_000, Math.round(shortest / 6)));
+}
+
 /** Attempts an operation gets before it fails (7 with the default schedule). */
 export function maxAttempts(policy: RetryPolicy): number {
   return policy.delaysMs.length + 1;

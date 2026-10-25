@@ -194,12 +194,8 @@ private struct PhotosStep: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.xs) {
                     ForEach(Array(model.photos.enumerated()), id: \.element.id) { index, photo in
-                        AsyncImage(url: (photo.urls?.thumbnail).flatMap(URL.init(string:))) { phase in
-                            if let image = phase.image {
-                                image.resizable().scaledToFill()
-                            } else {
-                                Palette.surfaceSecondary.color
-                            }
+                        RemoteImage(url: (photo.urls?.thumbnail).flatMap(URL.init(string:))) {
+                            Palette.surfaceSecondary.color
                         }
                         .frame(width: 64, height: 64)
                         .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
