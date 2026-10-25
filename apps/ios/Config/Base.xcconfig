@@ -15,3 +15,9 @@ BASE_BUNDLE_IDENTIFIER = com.listora.app
 // `make ios-archive` need no team, and `make ios-testflight` passes APPLE_TEAM_ID on the command
 // line. Set it in Config/Local.xcconfig to run Dev on a physical device.
 DEVELOPMENT_TEAM =
+
+// The App Group the app shares with its Share Extension: the signed-in session lives in its
+// keychain access group, so signing in to the app signs the extension in too. Each environment
+// has its own group, like its own bundle id. Placeholder until the Apple Developer Program
+// account registers the groups (gate G-Apple); simulator builds need no team.
+APP_GROUP_IDENTIFIER = group.$(BASE_BUNDLE_IDENTIFIER)$(BUNDLE_ID_SUFFIX)

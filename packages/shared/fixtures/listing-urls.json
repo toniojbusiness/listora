@@ -1,0 +1,227 @@
+{
+  "description": "Marketplace listing URL shapes, shared by the server parser (packages/shared/src/listing-url.test.ts) and the iOS parser (apps/ios/Packages/Core/Tests/CoreTests/ListingURLTests.swift). Each listing case gives the marketplace, the listing id read from the URL (null for a short link, whose id only the marketplace knows), and the canonical URL that is stored. Hand-written from the marketplaces' public URL formats; no marketplace page was fetched.",
+  "listings": [
+    {
+      "note": "eBay item page",
+      "url": "https://www.ebay.com/itm/266512345678",
+      "marketplace": "ebay",
+      "listingId": "266512345678",
+      "canonicalUrl": "https://www.ebay.com/itm/266512345678"
+    },
+    {
+      "note": "eBay item page with a title slug, tracking query, and fragment",
+      "url": "https://www.ebay.com/itm/Levis-501-Jeans-W32-L30/266512345678?hash=item3e0d2c4f4e:g:abcAAOSw&var=0#rpdCntId",
+      "marketplace": "ebay",
+      "listingId": "266512345678",
+      "canonicalUrl": "https://www.ebay.com/itm/266512345678"
+    },
+    {
+      "note": "eBay mobile web host, plain http, trailing slash",
+      "url": "http://m.ebay.com/itm/123456789012/",
+      "marketplace": "ebay",
+      "listingId": "123456789012",
+      "canonicalUrl": "https://www.ebay.com/itm/123456789012"
+    },
+    {
+      "note": "eBay host without www, upper-case host",
+      "url": "https://EBAY.com/itm/987654321098",
+      "marketplace": "ebay",
+      "listingId": "987654321098",
+      "canonicalUrl": "https://www.ebay.com/itm/987654321098"
+    },
+    {
+      "note": "eBay app share short link",
+      "url": "https://ebay.us/m/Ab3dE9",
+      "marketplace": "ebay",
+      "listingId": null,
+      "canonicalUrl": "https://ebay.us/m/Ab3dE9"
+    },
+    {
+      "note": "eBay short link without the /m prefix",
+      "url": "https://ebay.us/xY7kQ2?cmpid=share",
+      "marketplace": "ebay",
+      "listingId": null,
+      "canonicalUrl": "https://ebay.us/xY7kQ2"
+    },
+    {
+      "note": "Poshmark listing page with a title slug",
+      "url": "https://poshmark.com/listing/Lululemon-Align-Pant-25-64f1a2b3c4d5e6f7a8b9c0d1",
+      "marketplace": "poshmark",
+      "listingId": "64f1a2b3c4d5e6f7a8b9c0d1",
+      "canonicalUrl": "https://poshmark.com/listing/Lululemon-Align-Pant-25-64f1a2b3c4d5e6f7a8b9c0d1"
+    },
+    {
+      "note": "Poshmark www host, upper-case hex id, share query",
+      "url": "https://www.poshmark.com/listing/Vintage-Levis-Trucker-Jacket-64F1A2B3C4D5E6F7A8B9C0D2?utm_source=pm_share&utm_medium=ios",
+      "marketplace": "poshmark",
+      "listingId": "64f1a2b3c4d5e6f7a8b9c0d2",
+      "canonicalUrl": "https://poshmark.com/listing/Vintage-Levis-Trucker-Jacket-64F1A2B3C4D5E6F7A8B9C0D2"
+    },
+    {
+      "note": "Poshmark listing page with only the id",
+      "url": "https://poshmark.com/listing/64f1a2b3c4d5e6f7a8b9c0d3/",
+      "marketplace": "poshmark",
+      "listingId": "64f1a2b3c4d5e6f7a8b9c0d3",
+      "canonicalUrl": "https://poshmark.com/listing/64f1a2b3c4d5e6f7a8b9c0d3"
+    },
+    {
+      "note": "Poshmark app share short link (the code is case-sensitive)",
+      "url": "https://posh.mk/aBc12XyZ",
+      "marketplace": "poshmark",
+      "listingId": null,
+      "canonicalUrl": "https://posh.mk/aBc12XyZ"
+    },
+    {
+      "note": "Mercari US item page",
+      "url": "https://www.mercari.com/us/item/m12345678901/",
+      "marketplace": "mercari",
+      "listingId": "m12345678901",
+      "canonicalUrl": "https://www.mercari.com/us/item/m12345678901/"
+    },
+    {
+      "note": "Mercari item page without the /us prefix or trailing slash, with a referrer query",
+      "url": "https://mercari.com/item/m98765432109?ref=share",
+      "marketplace": "mercari",
+      "listingId": "m98765432109",
+      "canonicalUrl": "https://www.mercari.com/us/item/m98765432109/"
+    },
+    {
+      "note": "Mercari app share short link",
+      "url": "https://merc.li/Qw8rT5uV",
+      "marketplace": "mercari",
+      "listingId": null,
+      "canonicalUrl": "https://merc.li/Qw8rT5uV"
+    },
+    {
+      "note": "Depop product page (the slug is Depop's public listing id)",
+      "url": "https://www.depop.com/products/janedoe-vintage-nike-windbreaker-90s/",
+      "marketplace": "depop",
+      "listingId": "janedoe-vintage-nike-windbreaker-90s",
+      "canonicalUrl": "https://www.depop.com/products/janedoe-vintage-nike-windbreaker-90s/"
+    },
+    {
+      "note": "Depop host without www, no trailing slash, tracking query",
+      "url": "https://depop.com/products/thriftqueen-levis-501-w30-a1b2?utm_source=depop_ios",
+      "marketplace": "depop",
+      "listingId": "thriftqueen-levis-501-w30-a1b2",
+      "canonicalUrl": "https://www.depop.com/products/thriftqueen-levis-501-w30-a1b2/"
+    },
+    {
+      "note": "Depop app share short link",
+      "url": "https://depop.app.link/Zx9Yw8Vu7",
+      "marketplace": "depop",
+      "listingId": null,
+      "canonicalUrl": "https://depop.app.link/Zx9Yw8Vu7"
+    },
+    {
+      "note": "Surrounding whitespace is ignored",
+      "url": "  https://www.ebay.com/itm/266512345679 \n",
+      "marketplace": "ebay",
+      "listingId": "266512345679",
+      "canonicalUrl": "https://www.ebay.com/itm/266512345679"
+    }
+  ],
+  "notListings": [
+    {
+      "note": "eBay search results",
+      "url": "https://www.ebay.com/sch/i.html?_nkw=levis+501",
+      "marketplace": "ebay"
+    },
+    {
+      "note": "eBay seller page",
+      "url": "https://www.ebay.com/usr/janedoe",
+      "marketplace": "ebay"
+    },
+    {
+      "note": "eBay item path whose id is not a number",
+      "url": "https://www.ebay.com/itm/not-a-number",
+      "marketplace": "ebay"
+    },
+    {
+      "note": "Poshmark closet",
+      "url": "https://poshmark.com/closet/janedoe",
+      "marketplace": "poshmark"
+    },
+    {
+      "note": "Poshmark listing path without a 24-character id",
+      "url": "https://poshmark.com/listing/Lululemon-Align-Pant-1234",
+      "marketplace": "poshmark"
+    },
+    {
+      "note": "Poshmark home page",
+      "url": "https://poshmark.com/",
+      "marketplace": "poshmark"
+    },
+    {
+      "note": "Mercari search",
+      "url": "https://www.mercari.com/search/?keyword=levis",
+      "marketplace": "mercari"
+    },
+    {
+      "note": "Mercari seller profile",
+      "url": "https://www.mercari.com/u/123456789/",
+      "marketplace": "mercari"
+    },
+    {
+      "note": "Depop shop page",
+      "url": "https://www.depop.com/janedoe/",
+      "marketplace": "depop"
+    },
+    {
+      "note": "Depop products path with nested segments",
+      "url": "https://www.depop.com/products/janedoe-jacket/reviews/",
+      "marketplace": "depop"
+    },
+    {
+      "note": "Short link host without a code",
+      "url": "https://posh.mk/",
+      "marketplace": "poshmark"
+    }
+  ],
+  "unsupported": [
+    {
+      "note": "Not a marketplace",
+      "url": "https://example.com/itm/266512345678"
+    },
+    {
+      "note": "Look-alike host that only ends in a marketplace name",
+      "url": "https://notebay.com/itm/266512345678"
+    },
+    {
+      "note": "Marketplace name as a subdomain of another host",
+      "url": "https://ebay.com.example.net/itm/266512345678"
+    },
+    {
+      "note": "Another country's eBay site (Listora launches US-only)",
+      "url": "https://www.ebay.co.uk/itm/266512345678"
+    },
+    {
+      "note": "Mercari Japan is a different marketplace",
+      "url": "https://jp.mercari.com/item/m12345678901"
+    },
+    {
+      "note": "Credentials in the URL",
+      "url": "https://user:pass@www.ebay.com/itm/266512345678"
+    },
+    {
+      "note": "Non-default port",
+      "url": "https://www.ebay.com:8443/itm/266512345678"
+    },
+    {
+      "note": "Not an http(s) URL",
+      "url": "ftp://www.ebay.com/itm/266512345678"
+    },
+    {
+      "note": "App URL scheme",
+      "url": "poshmark://listing/64f1a2b3c4d5e6f7a8b9c0d1"
+    },
+    {
+      "note": "Plain text",
+      "url": "Levi's 501 jeans"
+    },
+    {
+      "note": "Empty",
+      "url": ""
+    }
+  ]
+}

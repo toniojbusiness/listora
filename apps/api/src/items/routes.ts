@@ -19,6 +19,7 @@ import { writeAudit } from '../audit.ts';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { isPgError, PG_ERROR } from '../db-errors.ts';
 import { ApiError, notFound, validationFailed } from '../errors.ts';
+import { itemListingRows } from '../listings/repository.ts';
 import { decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor } from '../pagination.ts';
 import { listPhotoRows } from '../photos/repository.ts';
 import { deletePhotoObjects } from '../photos/stored-objects.ts';
@@ -65,16 +66,18 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
       limit,
     });
     const page = rows.slice(0, limit);
-    const covers = await coverPhotoRows(
-      db,
-      tenant,
-      page.map((row) => row.id),
-    );
+    const ids = page.map((row) => row.id);
+    const [covers, listings] = await Promise.all([
+      coverPhotoRows(db, tenant, ids),
+      itemListingRows(db, tenant, ids),
+    ]);
     const last = page.at(-1);
     return {
       status: 200,
       body: {
-        data: page.map((row) => itemSummaryView(row, covers.get(row.id), deps.storage)),
+        data: page.map((row) =>
+          itemSummaryView(row, covers.get(row.id), deps.storage, listings.get(row.id)),
+        ),
         ...(rows.length > limit && last ? { nextCursor: encodeCursor(last.id) } : {}),
       },
     };

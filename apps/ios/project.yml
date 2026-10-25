@@ -9,11 +9,14 @@ options:
   developmentLanguage: en
   createIntermediateGroups: true
   groupSortPosition: top
-  # Dev reaches the API on the developer's Mac over plain HTTP, so only the Dev Info.plist carries
-  # the ATS local-networking exception. It is derived from the shared plist after generation.
+  # Dev reaches the API on the developer's Mac over plain HTTP, so only the Dev Info.plists (the
+  # app's and the Share Extension's) carry the ATS local-networking exception. They are derived
+  # from the shared plists after generation.
   postGenCommand: >-
     plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}'
-    -o Generated/Listora-Dev-Info.plist Generated/Listora-Info.plist
+    -o Generated/Listora-Dev-Info.plist Generated/Listora-Info.plist &&
+    plutil -insert NSAppTransportSecurity -json '{"NSAllowsLocalNetworking":true}'
+    -o Generated/ShareExtension-Dev-Info.plist Generated/ShareExtension-Info.plist
 
 # One configuration per environment. The build type is part of the name because Xcode builds
 # Swift packages with debug settings (testability, no optimization, active arch only) only for
@@ -60,6 +63,11 @@ targets:
       - package: Features
         product: AppFeature
       - target: ShareExtension
+    entitlements:
+      path: Generated/Listora.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(APP_GROUP_IDENTIFIER)
     info:
       path: Generated/Listora-Info.plist
       properties:
@@ -68,6 +76,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ListoraEnvironment: $(LISTORA_ENVIRONMENT)
         ListoraAPIBaseURL: $(API_BASE_URL)
+        ListoraAppGroup: $(APP_GROUP_IDENTIFIER)
         ITSAppUsesNonExemptEncryption: false
         NSCameraUsageDescription: Listora uses the camera to photograph the items you sell.
         LSRequiresIPhoneOS: true
@@ -92,29 +101,49 @@ targets:
         Dev-Debug:
           INFOPLIST_FILE: Generated/Listora-Dev-Info.plist
 
+  # Links a marketplace listing shared from Safari or a marketplace app to an item. It shares
+  # the signed-in session with the app through the App Group (see Base.xcconfig).
   ShareExtension:
     type: app-extension
     platform: iOS
     sources:
       - ShareExtension
     dependencies:
+      - package: Core
       - package: DesignSystem
+      - package: APIClient
+      - package: Features
+        product: ShareLinkFeature
+    entitlements:
+      path: Generated/ShareExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(APP_GROUP_IDENTIFIER)
     info:
       path: Generated/ShareExtension-Info.plist
       properties:
         CFBundleDisplayName: $(APP_DISPLAY_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ListoraEnvironment: $(LISTORA_ENVIRONMENT)
+        ListoraAPIBaseURL: $(API_BASE_URL)
+        ListoraAppGroup: $(APP_GROUP_IDENTIFIER)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
           NSExtensionAttributes:
+            # A listing page from Safari, or a marketplace app's share, which may be a link
+            # or text with a link in it.
             NSExtensionActivationRule:
               NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(BASE_BUNDLE_IDENTIFIER)$(BUNDLE_ID_SUFFIX).share
         APPLICATION_EXTENSION_API_ONLY: YES
+      configs:
+        Dev-Debug:
+          INFOPLIST_FILE: Generated/ShareExtension-Dev-Info.plist
 
   ListoraTests:
     type: bundle.unit-test
@@ -168,6 +197,7 @@ schemes:
         - package: Features/AddItemFeatureTests
         - package: Features/SettingsFeatureTests
         - package: Features/TagReadingFeatureTests
+        - package: Features/ShareLinkFeatureTests
     profile:
       config: Prod-Release
     analyze:

@@ -12,3 +12,7 @@
 --self remove
 --importgrouping testable-last
 --extensionacl on-declarations
+
+# SwiftLint's modifier_order wants isolation modifiers before access control (for example
+# `nonisolated(unsafe) private let`); this is SwiftFormat's default order with them moved up.
+--modifier-order override,isolated,nonisolated,nonisolated(unsafe),private,fileprivate,internal,package,public,open,private(set),fileprivate(set),internal(set),package(set),public(set),open(set),final,dynamic,optional,required,indirect,lazy,weak,unowned,unowned(safe),unowned(unsafe),static,class,borrowing,consuming,mutating,nonmutating,prefix,infix,postfix,async,convenience

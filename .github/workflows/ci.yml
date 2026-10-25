@@ -39,6 +39,7 @@ jobs:
             ios:
               - 'apps/ios/**'
               - 'packages/api-contract/**'
+              - 'packages/shared/fixtures/listing-urls.json'
               - 'Makefile'
               - '.github/workflows/ci.yml'
 

@@ -53,6 +53,7 @@ const MIGRATIONS = [
   '0009_listing_content',
   '0010_deleted_identity',
   '0011_ai_controls',
+  '0012_listing_links',
 ];
 
 describe('schema migrations (real Postgres)', () => {

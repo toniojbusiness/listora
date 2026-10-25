@@ -370,6 +370,8 @@ export interface MarketplaceListingTable {
   pending_external_listing_id: Nullable<string>;
   /** The newest revision seen of the marketplace listing `pending_external_listing_id` names. */
   pending_remote_revision: Nullable<number>;
+  /** When the user last confirmed the listing's state (an assisted listing); never a read-back. */
+  user_confirmed_at: NullableTimestamp;
 }
 
 export interface MarketplaceOperationTable {

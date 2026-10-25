@@ -205,6 +205,7 @@ const COLUMNS = {
     'remote_revision',
     'pending_external_listing_id',
     'pending_remote_revision',
+    'user_confirmed_at',
   ],
   marketplace_operation: [
     'id',

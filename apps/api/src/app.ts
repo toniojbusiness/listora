@@ -13,6 +13,7 @@ import type { AuthDriver } from './auth/driver.ts';
 import { registerErrorHandling } from './errors.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
 import { registerItemRoutes } from './items/routes.ts';
+import { registerListingRoutes } from './listings/routes.ts';
 import { registerPhotoRoutes } from './photos/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
 import { registerPricingRoutes } from './pricing/routes.ts';
@@ -74,6 +75,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   const routeDeps = { db: deps.db, auth: deps.auth, storage: deps.storage };
   registerAccountRoutes(app, routeDeps);
   registerItemRoutes(app, routeDeps);
+  registerListingRoutes(app, routeDeps);
   registerUploadRoutes(app, { ...routeDeps, now });
   registerPhotoRoutes(app, {
     ...routeDeps,

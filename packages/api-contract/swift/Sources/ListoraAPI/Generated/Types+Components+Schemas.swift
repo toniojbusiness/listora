@@ -3142,6 +3142,80 @@ extension Components {
                 case variant
             }
         }
+        /// A marketplace listing URL as the user shared it. Accepted: listing pages on
+        /// `ebay.com` (`/itm/<item id>`), `poshmark.com` (`/listing/<title>-<id>`),
+        /// `mercari.com` (`/us/item/<id>/`), and `depop.com` (`/products/<slug>/`), and the
+        /// marketplaces' share short links (`ebay.us`, `posh.mk`, `merc.li`, `depop.app.link`).
+        /// The server keeps the canonical form (https, no query or fragment) as the listing's
+        /// `externalUrl`, and the listing id as `externalListingId`; a short link has no
+        /// listing id, because only the marketplace can resolve it and Listora never fetches it.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SharedListingUrl`.
+        public typealias SharedListingUrl = Swift.String
+        /// - Remark: Generated from `#/components/schemas/ListingLinkCreate`.
+        public struct ListingLinkCreate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingLinkCreate/url`.
+            public var url: Components.Schemas.SharedListingUrl
+            /// Creates a new `ListingLinkCreate`.
+            ///
+            /// - Parameters:
+            ///   - url:
+            public init(url: Components.Schemas.SharedListingUrl) {
+                self.url = url
+            }
+            public enum CodingKeys: String, CodingKey {
+                case url
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SharedListingImport`.
+        public struct SharedListingImport: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SharedListingImport/url`.
+            public var url: Components.Schemas.SharedListingUrl
+            /// The new item's title, entered or confirmed by the user.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SharedListingImport/title`.
+            public var title: Swift.String
+            /// Creates a new `SharedListingImport`.
+            ///
+            /// - Parameters:
+            ///   - url:
+            ///   - title: The new item's title, entered or confirmed by the user.
+            public init(
+                url: Components.Schemas.SharedListingUrl,
+                title: Swift.String
+            ) {
+                self.url = url
+                self.title = title
+            }
+            public enum CodingKeys: String, CodingKey {
+                case url
+                case title
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SharedListingImportResult`.
+        public struct SharedListingImportResult: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SharedListingImportResult/item`.
+            public var item: Components.Schemas.Item
+            /// - Remark: Generated from `#/components/schemas/SharedListingImportResult/listing`.
+            public var listing: Components.Schemas.Listing
+            /// Creates a new `SharedListingImportResult`.
+            ///
+            /// - Parameters:
+            ///   - item:
+            ///   - listing:
+            public init(
+                item: Components.Schemas.Item,
+                listing: Components.Schemas.Listing
+            ) {
+                self.item = item
+                self.listing = listing
+            }
+            public enum CodingKeys: String, CodingKey {
+                case item
+                case listing
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ListingVariantReplace`.
         public struct ListingVariantReplace: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ListingVariantReplace/variant`.
@@ -3193,6 +3267,11 @@ extension Components {
                 case reason
             }
         }
+        /// One item's listing on one marketplace. `variant` is Listora's version of the listing;
+        /// it is absent for a listing the user linked from a share (`linkItemListing`), because
+        /// Listora never read that listing's title or price.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/Listing`.
         public struct Listing: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/Listing/id`.
@@ -3216,7 +3295,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/Listing/externalUrl`.
             public var externalUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Listing/variant`.
-            public var variant: Components.Schemas.ListingVariant
+            public var variant: Components.Schemas.ListingVariant?
             /// - Remark: Generated from `#/components/schemas/Listing/latestOperation`.
             public var latestOperation: Components.Schemas.Operation?
             /// - Remark: Generated from `#/components/schemas/Listing/availableActions`.
@@ -3263,7 +3342,7 @@ extension Components {
                 externalListingId: Swift.String? = nil,
                 externalSku: Swift.String? = nil,
                 externalUrl: Swift.String? = nil,
-                variant: Components.Schemas.ListingVariant,
+                variant: Components.Schemas.ListingVariant? = nil,
                 latestOperation: Components.Schemas.Operation? = nil,
                 availableActions: [Components.Schemas.ListingActionAvailability],
                 listedAt: Components.Schemas.Timestamp? = nil,

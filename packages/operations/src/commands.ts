@@ -284,13 +284,14 @@ export async function confirmOperationByUser(
       .where('status', '=', 'open')
       .execute();
 
-    // The user's word, not the marketplace's: the status changes, but `last_verified_at` and
-    // `remote_snapshot` stay as they were.
+    // The user's word, not the marketplace's: the status changes and `user_confirmed_at`
+    // records the confirmation, but `last_verified_at` and `remote_snapshot` (read-backs only)
+    // stay as they were.
     const status = validateDesiredState(op.kind, op.desired).status;
     if (status !== undefined) {
       await trx
         .updateTable('marketplace_listing')
-        .set({ status })
+        .set({ status, user_confirmed_at: sql<Date>`now()` })
         .where('account_id', '=', op.account_id)
         .where('id', '=', op.listing_id)
         .execute();

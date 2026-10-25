@@ -3,10 +3,15 @@ import Foundation
 import Testing
 
 struct AppConfigurationTests {
-    private func info(environment: String? = "dev", url: String? = "http://127.0.0.1:3000") -> [String: Any] {
+    private func info(
+        environment: String? = "dev",
+        url: String? = "http://127.0.0.1:3000",
+        appGroup: String? = "group.com.listora.app.dev",
+    ) -> [String: Any] {
         var info: [String: Any] = [:]
         info[AppConfiguration.InfoKey.environment] = environment
         info[AppConfiguration.InfoKey.apiBaseURL] = url
+        info[AppConfiguration.InfoKey.appGroup] = appGroup
         return info
     }
 
@@ -15,6 +20,26 @@ struct AppConfigurationTests {
         let config = try AppConfiguration(infoDictionary: info())
         #expect(config.environment == .dev)
         #expect(config.apiBaseURL == URL(string: "http://127.0.0.1:3000"))
+        #expect(config.appGroupIdentifier == "group.com.listora.app.dev")
+    }
+
+    @Test
+    func `requires the App Group the app shares with its Share Extension`() {
+        #expect(throws: ConfigurationError.missing(key: "ListoraAppGroup")) {
+            try AppConfiguration(infoDictionary: info(appGroup: nil))
+        }
+        // An unexpanded xcconfig variable is as good as missing.
+        #expect(throws: ConfigurationError.missing(key: "ListoraAppGroup")) {
+            try AppConfiguration(infoDictionary: info(appGroup: "$(APP_GROUP_IDENTIFIER)"))
+        }
+        for value in ["com.listora.app.dev", "group."] {
+            #expect(throws: ConfigurationError.invalid(
+                key: "ListoraAppGroup",
+                reason: "must be an App Group identifier starting with group.",
+            )) {
+                try AppConfiguration(infoDictionary: info(appGroup: value))
+            }
+        }
     }
 
     @Test(arguments: ["staging", "prod"])

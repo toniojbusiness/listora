@@ -8,15 +8,26 @@ public struct AppConfiguration: Equatable, Sendable {
     public enum InfoKey {
         public static let environment = "ListoraEnvironment"
         public static let apiBaseURL = "ListoraAPIBaseURL"
+        public static let appGroup = "ListoraAppGroup"
     }
 
     public let environment: AppEnvironment
     public let apiBaseURL: URL
+    /// The App Group the app shares with its Share Extension (the session keychain item).
+    public let appGroupIdentifier: String
 
-    public init(environment: AppEnvironment, apiBaseURL: URL) throws(ConfigurationError) {
+    public init(
+        environment: AppEnvironment,
+        apiBaseURL: URL,
+        appGroupIdentifier: String,
+    ) throws(ConfigurationError) {
         try Self.validate(apiBaseURL, key: InfoKey.apiBaseURL, for: environment)
+        guard appGroupIdentifier.hasPrefix("group."), appGroupIdentifier.count > "group.".count else {
+            throw .invalid(key: InfoKey.appGroup, reason: "must be an App Group identifier starting with group.")
+        }
         self.environment = environment
         self.apiBaseURL = apiBaseURL
+        self.appGroupIdentifier = appGroupIdentifier
     }
 
     /// Parses and validates the configuration. Errors name the bad key but never echo its value.
@@ -29,7 +40,8 @@ public struct AppConfiguration: Equatable, Sendable {
         guard let url = URL(string: rawURL) else {
             throw .invalid(key: InfoKey.apiBaseURL, reason: Self.notAnHTTPURL)
         }
-        try self.init(environment: environment, apiBaseURL: url)
+        let appGroup = try Self.string(for: InfoKey.appGroup, in: infoDictionary)
+        try self.init(environment: environment, apiBaseURL: url, appGroupIdentifier: appGroup)
     }
 
     public init(bundle: Bundle) throws(ConfigurationError) {

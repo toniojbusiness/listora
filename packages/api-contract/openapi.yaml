@@ -681,6 +681,86 @@ paths:
         default:
           $ref: '#/components/responses/DefaultError'
 
+  /v1/items/{itemId}/listing-links:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    post:
+      tags: [listings]
+      operationId: linkItemListing
+      summary: Link a listing the user already has on a marketplace
+      description: |
+        Records a listing the user created on a marketplace themselves, from the URL they
+        shared from Safari or the marketplace app. The server reads the marketplace and the
+        listing id from the URL (see `ListingLinkCreate`) and never fetches it. The listing is
+        `assisted` and `active`, and its `verification` is `user_confirmation`: it is the
+        user's word, never shown as confirmed by the marketplace. A `draft` or `ready` item
+        becomes `listed`.
+
+        `409 already_exists` when this listing is already linked to an item (the message
+        names that item's SKU) or the item already has a live listing on that marketplace.
+        `409 invalid_state_transition` when the item is sold, shipped, archived, or being
+        delisted after a sale. `422 validation_failed` (field `url`) when the URL is not a
+        listing on a supported marketplace.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingLinkCreate'
+      responses:
+        '201':
+          description: Linked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Listing'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/listing-imports:
+    post:
+      tags: [listings]
+      operationId: importSharedListing
+      summary: Create an item for a shared listing and link the listing to it
+      description: |
+        For a listing the user shared that has no item in Listora yet. Creates an import
+        placeholder item, with the account's next SKU and the given title as its only detail
+        (the user adds the rest later), and links the listing to it exactly as
+        `linkItemListing` does, in one transaction. The item is `listed`.
+
+        `409 already_exists` when this listing is already linked to an item (the message
+        names that item's SKU). `422 validation_failed` (field `url`) when the URL is not a
+        listing on a supported marketplace.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SharedListingImport'
+      responses:
+        '201':
+          description: Created and linked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedListingImportResult'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
   /v1/listings:
     get:
       tags: [listings]
@@ -2872,6 +2952,43 @@ components:
           $ref: '#/components/schemas/KnownMarketplace'
         variant:
           $ref: '#/components/schemas/ListingVariant'
+    SharedListingUrl:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: |
+        A marketplace listing URL as the user shared it. Accepted: listing pages on
+        `ebay.com` (`/itm/<item id>`), `poshmark.com` (`/listing/<title>-<id>`),
+        `mercari.com` (`/us/item/<id>/`), and `depop.com` (`/products/<slug>/`), and the
+        marketplaces' share short links (`ebay.us`, `posh.mk`, `merc.li`, `depop.app.link`).
+        The server keeps the canonical form (https, no query or fragment) as the listing's
+        `externalUrl`, and the listing id as `externalListingId`; a short link has no
+        listing id, because only the marketplace can resolve it and Listora never fetches it.
+    ListingLinkCreate:
+      type: object
+      required: [url]
+      properties:
+        url:
+          $ref: '#/components/schemas/SharedListingUrl'
+    SharedListingImport:
+      type: object
+      required: [url, title]
+      properties:
+        url:
+          $ref: '#/components/schemas/SharedListingUrl'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: The new item's title, entered or confirmed by the user.
+    SharedListingImportResult:
+      type: object
+      required: [item, listing]
+      properties:
+        item:
+          $ref: '#/components/schemas/Item'
+        listing:
+          $ref: '#/components/schemas/Listing'
     ListingVariantReplace:
       type: object
       required: [variant]
@@ -2895,6 +3012,10 @@ components:
           $ref: '#/components/schemas/ListingEndReason'
     Listing:
       type: object
+      description: |
+        One item's listing on one marketplace. `variant` is Listora's version of the listing;
+        it is absent for a listing the user linked from a share (`linkItemListing`), because
+        Listora never read that listing's title or price.
       required:
         [
           id,
@@ -2903,7 +3024,6 @@ components:
           mode,
           status,
           statusDisplay,
-          variant,
           availableActions,
           createdAt,
           updatedAt,

@@ -812,6 +812,8 @@ describe('operation engine (real Postgres, fake marketplace)', () => {
       last_verified_at: null,
       remote_snapshot: null,
     });
+    // The user's confirmation is recorded as theirs, apart from any read-back.
+    expect(updated.user_confirmed_at).toBeInstanceOf(Date);
   });
 
   it('lets a newer operation run only after the older one on its listing finishes', async () => {

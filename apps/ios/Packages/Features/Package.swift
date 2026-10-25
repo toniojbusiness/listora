@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "TasksFeature", targets: ["TasksFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
         .library(name: "TagReadingFeature", targets: ["TagReadingFeature"]),
+        .library(name: "ShareLinkFeature", targets: ["ShareLinkFeature"]),
     ],
     dependencies: [
         .package(path: "../Core"),
@@ -51,6 +52,16 @@ let package = Package(
         .target(name: "TasksFeature", dependencies: ["DesignSystem"]),
         .target(name: "SettingsFeature", dependencies: ["Core", "DesignSystem", "APIClient"]),
         .target(name: "TagReadingFeature", dependencies: ["Core"]),
+        // The Share Extension's UI; the app target does not link it.
+        .target(
+            name: "ShareLinkFeature",
+            dependencies: [
+                "Core",
+                "DesignSystem",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+            ],
+        ),
         .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient"]),
         .testTarget(
             name: "AddItemFeatureTests",
@@ -68,6 +79,15 @@ let package = Package(
             name: "TagReadingFeatureTests",
             dependencies: ["TagReadingFeature", "Core"],
             resources: [.copy("Fixtures")],
+        ),
+        .testTarget(
+            name: "ShareLinkFeatureTests",
+            dependencies: [
+                "ShareLinkFeature",
+                "Core",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+            ],
         ),
     ],
 )
