@@ -36,6 +36,7 @@
     "e2e:stack": "npm run stack --workspace @listora/e2e --",
     "dev:fake-site": "npm run fake-site --workspace @listora/automation",
     "dev:fake-poshmark": "npm run fake-poshmark --workspace @listora/automation",
+    "dev:fake-mercari": "npm run fake-mercari --workspace @listora/automation",
     "db:migrate": "npm run migrate --workspace @listora/db --",
     "admin": "npm run admin --workspace @listora/admin --",
     "eval": "npm run eval --workspace @listora/eval --",

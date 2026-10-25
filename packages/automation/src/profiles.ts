@@ -9,6 +9,8 @@
 import type { Marketplace } from '@listora/db';
 import type { AutomatedMarketplace } from '@listora/marketplaces';
 
+import { MERCARI_CHALLENGE_SIGNS, MERCARI_PRIVATE_SELECTORS } from './mercari/site.ts';
+
 /** A closed range of milliseconds; each wait picks uniformly inside it. */
 export type DelayRange = readonly [min: number, max: number];
 
@@ -96,8 +98,8 @@ const PROFILES: Readonly<Record<Exclude<Marketplace, 'ebay'>, AutomationProfile>
     cookieDomains: ['mercari.com'],
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
-    challenges: COMMON_SIGNS,
-    privateSelectors: [],
+    challenges: MERCARI_CHALLENGE_SIGNS,
+    privateSelectors: MERCARI_PRIVATE_SELECTORS,
   },
   depop: {
     marketplace: 'depop',

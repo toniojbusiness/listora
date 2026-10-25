@@ -110,8 +110,9 @@ packages/
                 for OAuth tokens and browser sessions, the session vault, use-time credentials
                 with single-flight refresh, health checks, revocation (@listora/connections)
   automation/   Browser automation (decision D1): the Playwright runner, its safety rules, the
-                automation adapter base, sale-check scheduling, the runner launcher, and the
-                fake marketplace site (@listora/automation)
+                automation adapter base, sale-check scheduling, the runner launcher, the
+                fake marketplace site, and the Mercari adapter with its fake Mercari site
+                (mercari/) (@listora/automation)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
                 drift resync (@listora/operations)
   sales/        Sale intake: inbound events, recording sales (which starts their auto-delist);
@@ -381,6 +382,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/depop.md](features/depop.md)                           | Depop: assisted today, the partner API adapter to come                        |
 | [features/automation.md](features/automation.md)                 | Browser automation for marketplaces without an API (decision D1)              |
 | [features/poshmark.md](features/poshmark.md)                     | The Poshmark automation adapter, its mapping tables, and the fake Poshmark    |
+| [features/mercari.md](features/mercari.md)                       | The Mercari automation adapter, its mappings, the fake Mercari site           |
 | [features/ai.md](features/ai.md)                                 | The AI pipeline, item analysis, cost metering and controls                    |
 | [features/pricing.md](features/pricing.md)                       | Pricing data rules, floors, fee tables, tiers, the label guard                |
 | [features/photos.md](features/photos.md)                         | Uploads, storage drivers, photo processing                                    |

@@ -18,6 +18,7 @@ describe('loadAutomationSettings', () => {
       },
       fakeSiteUrl: undefined,
       fakePoshmarkUrl: undefined,
+      fakeMercariSiteUrl: undefined,
     });
     for (const profile of Object.values(settings.profiles)) {
       expect(profile.pacing).toEqual(DEFAULT_PACING);
@@ -102,5 +103,22 @@ describe('loadAutomationSettings', () => {
     expect(() => loadAutomationSettings({ FAKE_POSHMARK_URL: 'https://poshmark.com' })).toThrow(
       'FAKE_POSHMARK_URL',
     );
+  });
+
+  it('points Mercari at the fake Mercari site, which wins over the fake site, local only', () => {
+    const settings = loadAutomationSettings({
+      FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400',
+      FAKE_MERCARI_SITE_URL: 'http://127.0.0.1:4600',
+    });
+    expect(settings.fakeMercariSiteUrl).toBe('http://127.0.0.1:4600');
+    expect(settings.profiles.mercari.origins).toEqual(['http://127.0.0.1:4600']);
+    expect(settings.profiles.poshmark.origins).toEqual(['http://127.0.0.1:4400']);
+    expect(loadAutomationSettings({}).profiles.mercari.origins).toEqual([
+      'https://www.mercari.com',
+      'https://mercari.com',
+    ]);
+    expect(() =>
+      loadAutomationSettings({ FAKE_MERCARI_SITE_URL: 'https://www.mercari.com' }),
+    ).toThrow('FAKE_MERCARI_SITE_URL');
   });
 });
