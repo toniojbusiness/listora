@@ -33,6 +33,7 @@ import type {
 import type { Logger } from '@listora/shared';
 
 import { remoteSnapshot } from './evidence.ts';
+import { syncItemListedStatus } from './item-status.ts';
 import { listingQueueName } from './jobs.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
 
@@ -238,6 +239,7 @@ async function record(db: Db, listing: ListingRow, observed: Observation): Promi
       .where('account_id', '=', listing.account_id)
       .where('id', '=', listing.id)
       .execute();
+    await syncItemListedStatus(trx, listing.account_id, listing.item_id);
     return true;
   });
 }

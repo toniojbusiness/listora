@@ -5,6 +5,7 @@ import {
   delayAfterAttempt,
   maxAttempts,
   RETRY_DELAYS_MS,
+  scaledRetryPolicy,
   type RetryPolicy,
 } from './policy.ts';
 
@@ -46,5 +47,15 @@ describe('retry policy', () => {
     expect(delayAfterAttempt(exact(0.5), 1, 90_000)).toBe(90_000);
     expect(delayAfterAttempt(exact(0.5), 1, 1_000)).toBe(30_000);
     expect(delayAfterAttempt(exact(0.5), 1, 7 * 24 * 3_600_000)).toBe(6 * 3_600_000);
+  });
+
+  it('scales every delay for local stacks, keeping the number of attempts', () => {
+    const scaled = scaledRetryPolicy(0.1);
+    expect(scaled.delaysMs).toEqual(RETRY_DELAYS_MS.map((delay) => delay / 10));
+    expect(maxAttempts(scaled)).toBe(maxAttempts(DEFAULT_RETRY_POLICY));
+    expect(scaledRetryPolicy(1).delaysMs).toEqual(RETRY_DELAYS_MS);
+    for (const scale of [0, -1, 1.5, Number.NaN]) {
+      expect(() => scaledRetryPolicy(scale)).toThrow(RangeError);
+    }
   });
 });

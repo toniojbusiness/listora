@@ -17,8 +17,8 @@ public struct ListingCopy: Codable, Equatable, Sendable {
 
 /// The marketplace copy a seller edited during review, kept on this iPhone per item and
 /// marketplace (the contract's marketplace id, for example `ebay`). The analysis's own variants
-/// stay on the server; this holds only the seller's changes to them until the item's draft
-/// listings exist (createListing, plan task T-19), which then carry the copy.
+/// stay on the server; this holds only the seller's changes to them. The List flow starts a
+/// marketplace's draft listing (createListing) from them; the listing then carries the copy.
 ///
 /// One JSON file per item, written atomically, so a crash never leaves half an edit.
 public struct ListingCopyStore: Sendable {

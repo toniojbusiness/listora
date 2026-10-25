@@ -82,6 +82,7 @@ import {
 import type { OperationJobPayload } from './jobs.ts';
 import { removeOperationJob, scheduleOperationJob } from './jobs.ts';
 import { createdBefore } from './ordering.ts';
+import { syncItemListedStatus } from './item-status.ts';
 import { delayAfterAttempt, maxAttempts, type RetryPolicy } from './policy.ts';
 import { dismissOpenTasks } from './commands.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
@@ -1404,6 +1405,7 @@ async function applyVerifiedListing(
     .where('account_id', '=', listing.account_id)
     .where('id', '=', listing.id)
     .execute();
+  await syncItemListedStatus(trx, listing.account_id, listing.item_id);
 }
 
 /**

@@ -25,7 +25,7 @@ import {
   type ListingIdentity,
   type ListingRow,
 } from './repository.ts';
-import { listingView, marketplaceName } from './views.ts';
+import { listingView, marketplaceName, type ListingViewContext } from './views.ts';
 
 /** Item statuses a shared listing can be linked to; the item's status then follows its listings. */
 const LINKABLE_ITEM_STATUSES = new Set(['draft', 'ready', 'listed']);
@@ -38,13 +38,14 @@ const LINKABLE_ITEM_STATUSES = new Set(['draft', 'ready', 'listed']);
  * marketplace's.
  */
 export function registerListingRoutes(app: FastifyInstance, deps: ItemRouteDependencies): void {
+  const views: ListingViewContext = { adapters: deps.connections.adapters };
   contractRoute(app, deps, 'linkItemListing', async ({ tenant, db, params, body }) =>
     inTransaction(db, async (trx) => {
       const identity = identityFromUrl(body.url);
       const item = await lockItem(trx, tenant, params.itemId);
       if (!item) throw notFound('Item');
       const listing = await linkListing(trx, tenant, item, identity);
-      return { status: 201, body: listingView(listing) };
+      return { status: 201, body: listingView({ row: listing, operation: undefined }, views) };
     }),
   );
 
@@ -71,8 +72,8 @@ export function registerListingRoutes(app: FastifyInstance, deps: ItemRouteDepen
       return {
         status: 201,
         body: {
-          item: await itemView(trx, tenant, linked, deps.storage),
-          listing: listingView(listing),
+          item: await itemView(trx, tenant, linked, deps),
+          listing: listingView({ row: listing, operation: undefined }, views),
         },
       };
     }),

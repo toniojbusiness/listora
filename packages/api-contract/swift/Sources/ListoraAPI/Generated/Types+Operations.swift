@@ -509,6 +509,16 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/q`.
                 public var q: Swift.String?
+                /// Only items with a listing on this marketplace that is not ended or sold (a draft
+                /// listing, or one being published, counts).
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/GET/query/marketplace`.
+                public var marketplace: Components.Schemas.KnownMarketplace?
+                /// Only items of this brand (exact, ignoring case).
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/GET/query/brand`.
+                public var brand: Swift.String?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/cursor`.
@@ -522,16 +532,22 @@ public enum Operations {
                 /// - Parameters:
                 ///   - status: Only items in one of these statuses.
                 ///   - q: Free-text search over SKU, title, brand, and keywords.
+                ///   - marketplace: Only items with a listing on this marketplace that is not ended or sold (a draft
+                ///   - brand: Only items of this brand (exact, ignoring case).
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
                     status: [Components.Schemas.KnownItemStatus]? = nil,
                     q: Swift.String? = nil,
+                    marketplace: Components.Schemas.KnownMarketplace? = nil,
+                    brand: Swift.String? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
                     self.status = status
                     self.q = q
+                    self.marketplace = marketplace
+                    self.brand = brand
                     self.cursor = cursor
                     self.limit = limit
                 }
@@ -7478,9 +7494,11 @@ public enum Operations {
     }
     /// Retry a failed operation
     ///
-    /// Only for `failed` operations. Creates a new operation with the same desired state
-    /// (`retryOfOperationId` points at the failed one); the failed operation and its history
-    /// stay unchanged.
+    /// Only for `failed` operations. Queues the same operation again with a fresh set of
+    /// attempts; its history keeps the failure. Its first step reads the listing back before
+    /// sending anything, because an earlier attempt may have been applied.
+    /// `409 invalid_state_transition` when the operation has not failed, or when a newer
+    /// operation on the listing exists (retrying would undo it).
     ///
     ///
     /// - Remark: HTTP `POST /v1/operations/{operationId}/retry`.
@@ -7571,7 +7589,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// The new operation.
+            /// The queued operation.
             ///
             /// - Remark: Generated from `#/paths//v1/operations/{operationId}/retry/post(retryOperation)/responses/202`.
             ///

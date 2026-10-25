@@ -33,7 +33,8 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
      outcome for it (`confirmed`, `unknown`) fails as unconfirmed; an API operation that answers
      with a user task fails the same way.
 3. **Attempts.** Every step, a send or a read-back, uses one attempt, and an operation gets
-   seven. A step whose result is unknown is always followed by a read-back, even after the
+   seven. The delays are the worker's `OPERATION_RETRY_DELAY_SCALE` times the schedule above (1
+   in production; the local stack for UI tests uses 0.1). A step whose result is unknown is always followed by a read-back, even after the
    last attempt. Retry (`retryOperation`) gives a failed operation a fresh set of attempts; it
    is refused once a newer operation exists on the listing, since it would undo that one.
 4. **Idempotent re-execution.** An operation that was sent before is read back before every
@@ -78,7 +79,9 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    A user confirmation changes only the status. Between operations, a **drift resync**
    (`runListingResync`, when the marketplace reports a change or a sale) records what a read
    shows the same way, in the listing's queue and never under an unfinished operation; without
-   read revisions it records a change only after two matching reads a delay apart.
+   read revisions it records a change only after two matching reads a delay apart. Either way
+   the item's status follows: a `draft` or `ready` item is `listed` once a listing of it is
+   confirmed active, and a `listed` item is `ready` again once none is (`syncItemListedStatus`).
 8. **History.** Every transition appends an `operation_event` with a redacted request/response
    excerpt (`redactForStorage` in `@listora/shared`), error code, and attempt number.
 9. **Invariant, enforced in code and tests:** no code path sets `succeeded` without a verified
@@ -111,7 +114,10 @@ minutes it escalates the alert. A second sale opens a double-sale incident. Toda
 `describeListingStatus` (`status-display.ts`) renders these labels from the listing's newest
 operation: "confirmed by <marketplace>" only for a read-back's evidence, "you confirmed" only
 for the user's confirmation, and a listing without a successful operation is never shown as
-confirmed. The API serves them as `statusDisplay` (T-19).
+confirmed. The API serves them as `statusDisplay` on every listing, from its newest operation
+that was not canceled; `describeOperation` labels one operation in a listing's history by what
+it did ("Price changed (confirmed by eBay)"). The listing actions and the app that shows them are
+in [inventory.md](inventory.md).
 
 ## Data
 

@@ -39,7 +39,7 @@ public struct RootView: View {
     private func screen(for tab: AppTab) -> some View {
         switch tab {
         case .inventory:
-            InventoryView { selection = .addItem }
+            InventoryView(environment: dependencies.inventory) { selection = .addItem }
         case .addItem:
             AddItemView(environment: dependencies.addItem)
         case .tasks:

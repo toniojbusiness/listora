@@ -24,6 +24,7 @@ import {
 import { lockItem, updateItem } from '../items/repository.ts';
 import { assertValidDetails, translateWriteError, versionConflict } from '../items/routes.ts';
 import { itemView } from '../items/views.ts';
+import type { ListingViewContext } from '../listings/views.ts';
 import { listPhotoRows } from '../photos/repository.ts';
 import { assertAnalysisAllowed } from './guards.ts';
 import { analysisView } from './views.ts';
@@ -33,6 +34,8 @@ export interface AnalysisRouteDependencies extends RouteDependencies {
   analysisJobs: AnalysisJobQueue;
   /** Photo URLs in the item an applied analysis returns. */
   storage: ObjectStorage;
+  /** Each marketplace's capabilities, for the item's listings. */
+  connections: ListingViewContext;
   now: () => Date;
 }
 
@@ -168,7 +171,7 @@ export function registerAnalysisRoutes(
       const columns = columnsFromDetails(applied.details);
       const changes = changedDetails(before, detailsFromRow({ ...row, ...columns }));
       if (Object.keys(changes).length === 0 && sameProvenance(row, applied.provenance)) {
-        return { status: 200, body: await itemView(trx, tenant, row, deps.storage) };
+        return { status: 200, body: await itemView(trx, tenant, row, deps) };
       }
 
       let updated: InventoryItem | undefined;
@@ -193,7 +196,7 @@ export function registerAnalysisRoutes(
           ...changes,
         },
       });
-      return { status: 200, body: await itemView(trx, tenant, updated, deps.storage) };
+      return { status: 200, body: await itemView(trx, tenant, updated, deps) };
     }),
   );
 }

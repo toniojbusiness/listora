@@ -37,6 +37,13 @@ final class ReviewFlowUITests: XCTestCase {
         app.buttons["saved.done"].tap()
         XCTAssertTrue(app.staticTexts["Take photos once"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["draft.row"].exists)
+
+        // The saved item is in the inventory right away, ready to list.
+        app.tabBars.buttons["Inventory"].tap()
+        let row = app.buttons["inventory.row.\(sku)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "the saved item is not in the inventory")
+        XCTAssertFalse(app.staticTexts["No items yet"].exists)
+        keepScreenshot("Inventory")
     }
 
     // MARK: Steps
@@ -173,49 +180,4 @@ final class ReviewFlowUITests: XCTestCase {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
-}
-
-/// The local stack's API and signed-in session, from xcodebuild's `TEST_RUNNER_` variables.
-private struct E2EStack {
-    let apiURL: URL
-    let token: String
-    let email: String
-
-    static func fromEnvironment() throws -> E2EStack {
-        let environment = ProcessInfo.processInfo.environment
-        guard let url = environment["LISTORA_E2E_API_BASE_URL"].flatMap(URL.init(string:)),
-              let token = environment["LISTORA_E2E_ACCESS_TOKEN"]
-        else {
-            throw XCTSkip("Needs the local stack. Run `make ios-test`, which starts it.")
-        }
-        return E2EStack(apiURL: url, token: token, email: environment["LISTORA_E2E_EMAIL"] ?? "e2e@listora.test")
-    }
-
-    /// The item as the API has it (`getItemBySku`).
-    func item(sku: String) async throws -> SavedItem {
-        var request = URLRequest(url: apiURL.appending(path: "v1/skus/\(sku)"))
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await URLSession.shared.data(for: request)
-        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
-        return try JSONDecoder().decode(SavedItem.self, from: data)
-    }
-}
-
-/// The parts of the contract's `Item` the test checks.
-private struct SavedItem: Decodable {
-    let status: String
-    let details: SavedDetails
-    let fieldProvenance: [String: String]
-}
-
-private struct SavedDetails: Decodable {
-    let listPrice: SavedMoney?
-    let floorPrice: SavedMoney?
-    let cost: SavedMoney?
-    let purchaseSource: String?
-    let colors: [String]?
-}
-
-private struct SavedMoney: Decodable {
-    let amountCents: Int
 }

@@ -226,6 +226,8 @@ const COLUMNS = {
     'pending_external_listing_id',
     'pending_remote_revision',
     'user_confirmed_at',
+    'condition',
+    'hashtags',
   ],
   marketplace_operation: [
     'id',

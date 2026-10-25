@@ -42,7 +42,10 @@ let package = Package(
                 "TagReadingFeature",
             ],
         ),
-        .target(name: "InventoryFeature", dependencies: ["DesignSystem"]),
+        .target(
+            name: "InventoryFeature",
+            dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
         .target(
             name: "AddItemFeature",
             dependencies: [
@@ -81,6 +84,10 @@ let package = Package(
             ],
         ),
         .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient"]),
+        .testTarget(
+            name: "InventoryFeatureTests",
+            dependencies: ["InventoryFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
         .testTarget(
             name: "AddItemFeatureTests",
             dependencies: [

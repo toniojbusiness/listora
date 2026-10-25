@@ -35,6 +35,7 @@ import {
   OperationNotFoundError,
   SupersededOperationError,
 } from './errors.ts';
+import { syncItemListedStatus } from './item-status.ts';
 import { removeOperationJob, scheduleOperationJob } from './jobs.ts';
 import { createdAfter } from './ordering.ts';
 import {
@@ -295,6 +296,13 @@ export async function confirmOperationByUser(
         .where('account_id', '=', op.account_id)
         .where('id', '=', op.listing_id)
         .execute();
+      const { item_id: itemId } = await trx
+        .selectFrom('marketplace_listing')
+        .select('item_id')
+        .where('account_id', '=', op.account_id)
+        .where('id', '=', op.listing_id)
+        .executeTakeFirstOrThrow();
+      await syncItemListedStatus(trx, op.account_id, itemId);
     }
     return succeeded;
   });

@@ -8,7 +8,11 @@ import {
   SUCCESS_EVIDENCE,
 } from '@listora/db';
 
-import { describeListingStatus, type ListingStatusInput } from './status-display.ts';
+import {
+  describeListingStatus,
+  describeOperation,
+  type ListingStatusInput,
+} from './status-display.ts';
 
 function operation(
   overrides: Partial<NonNullable<ListingStatusInput['operation']>>,
@@ -164,6 +168,51 @@ describe('describeListingStatus', () => {
       });
       expect(display.label).not.toMatch(/confirmed/);
       expect(display.tone).not.toBe('success');
+    }
+  });
+});
+
+describe('describeOperation', () => {
+  it.each([
+    ['create', 'Published (confirmed by eBay)'],
+    ['price', 'Price changed (confirmed by eBay)'],
+    ['end', 'Delisted (confirmed by eBay)'],
+    ['relist', 'Relisted (confirmed by eBay)'],
+  ] as const)('names what a confirmed %s did, whatever the listing is now', (kind, label) => {
+    expect(describeOperation({ marketplace: 'ebay', operation: operation({ kind }) })).toEqual({
+      tone: 'success',
+      label,
+    });
+  });
+
+  it('shows unfinished and failed operations as the listing does', () => {
+    const failed = operation({ status: 'failed', errorMessage: 'eBay refused it.' });
+    expect(describeOperation({ marketplace: 'ebay', operation: failed })).toEqual({
+      tone: 'failed',
+      label: 'Delist failed - Retry',
+      detail: 'eBay refused it.',
+    });
+    expect(
+      describeOperation({ marketplace: 'ebay', operation: operation({ status: 'canceled' }) }),
+    ).toEqual({ tone: 'neutral', label: 'Canceled' });
+  });
+
+  it('says "confirmed by" only for a read-back, and "you confirmed" only for the user', () => {
+    for (const kind of OPERATION_KINDS) {
+      for (const status of OPERATION_STATUSES) {
+        for (const successEvidence of [...SUCCESS_EVIDENCE, null]) {
+          const display = describeOperation({
+            marketplace: 'mercari',
+            operation: operation({ kind, status, successEvidence }),
+          });
+          const verified = status === 'succeeded' && successEvidence === 'read_back';
+          const confirmedByUser = status === 'succeeded' && successEvidence === 'user_confirmation';
+          const where = `${kind} ${status} ${String(successEvidence)}`;
+          expect(display.label.includes('confirmed by'), where).toBe(verified);
+          expect(display.label.includes('you confirmed'), where).toBe(confirmedByUser);
+          expect(display.tone === 'success', where).toBe(verified || confirmedByUser);
+        }
+      }
     }
   });
 });

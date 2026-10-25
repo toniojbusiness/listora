@@ -20,6 +20,7 @@ import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { isPgError, PG_ERROR } from '../db-errors.ts';
 import { ApiError, notFound, validationFailed } from '../errors.ts';
 import { itemListingRows } from '../listings/repository.ts';
+import { listingStates, type ListingViewContext } from '../listings/views.ts';
 import { decodeCursor, DEFAULT_PAGE_SIZE, encodeCursor } from '../pagination.ts';
 import { listPhotoRows } from '../photos/repository.ts';
 import { deletePhotoObjects } from '../photos/stored-objects.ts';
@@ -53,6 +54,8 @@ import { itemSummaryView, itemView } from './views.ts';
 export interface ItemRouteDependencies extends RouteDependencies {
   /** Photo URLs, and deleting a deleted item's photo objects. */
   storage: ObjectStorage;
+  /** Each marketplace's capabilities, for the actions a listing allows. */
+  connections: ListingViewContext;
 }
 
 /** Items CRUD: `listItems`, `createItem`, `getItem`, `replaceItem`, `deleteItem`, `getItemBySku`. */
@@ -62,15 +65,19 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
     const rows = await listItemRows(db, tenant, {
       statuses: query.status,
       search: query.q,
+      marketplace: query.marketplace,
+      brand: query.brand,
       beforeId: query.cursor === undefined ? undefined : decodeCursor(query.cursor),
       limit,
     });
     const page = rows.slice(0, limit);
     const ids = page.map((row) => row.id);
-    const [covers, listings] = await Promise.all([
+    const [covers, listingRows] = await Promise.all([
       coverPhotoRows(db, tenant, ids),
       itemListingRows(db, tenant, ids),
     ]);
+    const states = await listingStates(db, tenant, [...listingRows.values()].flat());
+    const listings = Map.groupBy(states, (state) => state.row.item_id);
     const last = page.at(-1);
     return {
       status: 200,
@@ -103,20 +110,20 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
         action: 'item.created',
         changes: { sku: row.sku, ...changedDetails({}, detailsFromRow(row)) },
       });
-      return { status: 201, body: await itemView(trx, tenant, row, deps.storage) };
+      return { status: 201, body: await itemView(trx, tenant, row, deps) };
     }),
   );
 
   contractRoute(app, deps, 'getItem', async ({ tenant, db, params }) => {
     const row = await findItem(db, tenant, params.itemId);
     if (!row) throw notFound('Item');
-    return { status: 200, body: await itemView(db, tenant, row, deps.storage) };
+    return { status: 200, body: await itemView(db, tenant, row, deps) };
   });
 
   contractRoute(app, deps, 'getItemBySku', async ({ tenant, db, params }) => {
     const row = await findItemBySku(db, tenant, params.sku);
     if (!row) throw notFound('Item');
-    return { status: 200, body: await itemView(db, tenant, row, deps.storage) };
+    return { status: 200, body: await itemView(db, tenant, row, deps) };
   });
 
   contractRoute(app, deps, 'replaceItem', async ({ tenant, db, params, body }) =>
@@ -135,7 +142,7 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
       if (status !== row.status) changes['status'] = { from: row.status, to: status };
       // Nothing to change: no new version, no history entry.
       if (Object.keys(changes).length === 0) {
-        return { status: 200, body: await itemView(trx, tenant, row, deps.storage) };
+        return { status: 200, body: await itemView(trx, tenant, row, deps) };
       }
 
       let updated: InventoryItem | undefined;
@@ -159,7 +166,7 @@ export function registerItemRoutes(app: FastifyInstance, deps: ItemRouteDependen
         action: 'item.updated',
         changes: { fromVersion: row.version, toVersion: updated.version, ...changes },
       });
-      return { status: 200, body: await itemView(trx, tenant, updated, deps.storage) };
+      return { status: 200, body: await itemView(trx, tenant, updated, deps) };
     }),
   );
 

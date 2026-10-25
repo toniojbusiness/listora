@@ -163,6 +163,20 @@ paths:
           schema:
             type: string
             maxLength: 200
+        - name: marketplace
+          in: query
+          description: |
+            Only items with a listing on this marketplace that is not ended or sold (a draft
+            listing, or one being published, counts).
+          schema:
+            $ref: '#/components/schemas/KnownMarketplace'
+        - name: brand
+          in: query
+          description: Only items of this brand (exact, ignoring case).
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1118,14 +1132,16 @@ paths:
       operationId: retryOperation
       summary: Retry a failed operation
       description: |
-        Only for `failed` operations. Creates a new operation with the same desired state
-        (`retryOfOperationId` points at the failed one); the failed operation and its history
-        stay unchanged.
+        Only for `failed` operations. Queues the same operation again with a fresh set of
+        attempts; its history keeps the failure. Its first step reads the listing back before
+        sending anything, because an earlier attempt may have been applied.
+        `409 invalid_state_transition` when the operation has not failed, or when a newer
+        operation on the listing exists (retrying would undo it).
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '202':
-          description: The new operation.
+          description: The queued operation.
           content:
             application/json:
               schema:

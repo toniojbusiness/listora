@@ -23,6 +23,11 @@ export interface WorkerConfig {
   /** Photo processing and item analysis jobs run at the same time, in their own pool. */
   taskConcurrency: number;
   /**
+   * OPERATION_RETRY_DELAY_SCALE: the operation engine's retry and confirmation delays,
+   * multiplied by this (1 in production; local stacks and tests shorten them).
+   */
+  operationRetryDelayScale: number;
+  /**
    * FAKE_MARKETPLACE_URL, EBAY_*, and TOKEN_* keys, read by @listora/connections: the adapters,
    * the marketplaces whose connections the worker refreshes and checks, and the token vault.
    */
@@ -73,6 +78,11 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
 
   const concurrency = poolSize(issues, env, 'WORKER_CONCURRENCY', '5');
   const taskConcurrency = poolSize(issues, env, 'WORKER_TASK_CONCURRENCY', '2');
+  const rawScale = env['OPERATION_RETRY_DELAY_SCALE'] ?? '';
+  const operationRetryDelayScale = rawScale === '' ? 1 : Number(rawScale);
+  if (!(operationRetryDelayScale >= 0.001 && operationRetryDelayScale <= 1)) {
+    issues.push('OPERATION_RETRY_DELAY_SCALE must be a number from 0.001 to 1');
+  }
 
   // Empty means unset, as `FAKE_MARKETPLACE_URL=` in an env file.
   const marketplaces = collect(issues, MarketplaceConfigError, () => loadMarketplaceConfig(env));
@@ -104,6 +114,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     logLevel,
     concurrency,
     taskConcurrency,
+    operationRetryDelayScale,
     marketplaces,
     storage,
     ai,

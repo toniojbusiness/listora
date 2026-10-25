@@ -1,18 +1,29 @@
 import type { Item, ItemSummary } from '@listora/api-contract';
 import type { DbExecutor, InventoryItem } from '@listora/db';
 
-import type { ListingRow } from '../listings/repository.ts';
 import { itemListingRows } from '../listings/repository.ts';
-import { listingSummaryView, listingView } from '../listings/views.ts';
+import {
+  listingStates,
+  listingSummaryView,
+  listingView,
+  type ListingState,
+  type ListingViewContext,
+} from '../listings/views.ts';
 import { photoFromRow, type PhotoRow, type PublicUrls } from '../photos/mapping.ts';
 import { listPhotoRows } from '../photos/repository.ts';
 import type { Tenant } from '../tenancy.ts';
 import { detailsFromRow, provenanceFromRow } from './details.ts';
 import { storageLocationSummary } from './repository.ts';
 
+/** What item views need besides the rows: photo URLs and each marketplace's capabilities. */
+export interface ItemViewContext {
+  storage: PublicUrls;
+  connections: ListingViewContext;
+}
+
 /**
  * The full `Item` for a row: details, provenance, photos, storage location, and its newest
- * listing on each marketplace with its honest `statusDisplay`.
+ * listing on each marketplace with its honest `statusDisplay` and the actions it allows.
  *
  * `saleSummary` is absent because nothing records sales yet (T-20, T-26).
  */
@@ -20,11 +31,13 @@ export async function itemView(
   db: DbExecutor,
   tenant: Tenant,
   row: InventoryItem,
-  urls: PublicUrls,
+  context: ItemViewContext,
 ): Promise<Item> {
   const [photos, listings, location] = await Promise.all([
     listPhotoRows(db, tenant, row.id),
-    itemListingRows(db, tenant, [row.id]),
+    itemListingRows(db, tenant, [row.id]).then((rows) =>
+      listingStates(db, tenant, rows.get(row.id) ?? []),
+    ),
     row.storage_location_id === null
       ? undefined
       : storageLocationSummary(db, tenant, row.storage_location_id),
@@ -47,8 +60,8 @@ export async function itemView(
           },
         }
       : {}),
-    photos: photos.map((photo) => photoFromRow(photo, urls)),
-    listings: (listings.get(row.id) ?? []).map(listingView),
+    photos: photos.map((photo) => photoFromRow(photo, context.storage)),
+    listings: listings.map((state) => listingView(state, context.connections)),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -58,7 +71,7 @@ export function itemSummaryView(
   row: InventoryItem,
   cover: PhotoRow | undefined,
   urls: PublicUrls,
-  listings: readonly ListingRow[] = [],
+  listings: readonly ListingState[] = [],
 ): ItemSummary {
   return {
     id: row.id,

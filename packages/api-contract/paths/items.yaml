@@ -20,6 +20,20 @@
         schema:
           type: string
           maxLength: 200
+      - name: marketplace
+        in: query
+        description: |
+          Only items with a listing on this marketplace that is not ended or sold (a draft
+          listing, or one being published, counts).
+        schema:
+          $ref: '../components/schemas/common.yaml#/KnownMarketplace'
+      - name: brand
+        in: query
+        description: Only items of this brand (exact, ignoring case).
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 120
       - $ref: '../components/parameters.yaml#/Cursor'
       - $ref: '../components/parameters.yaml#/Limit'
     responses:
