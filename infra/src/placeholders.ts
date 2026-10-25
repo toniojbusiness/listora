@@ -27,6 +27,7 @@ export const PLACEHOLDER_CONTEXT: Readonly<Record<EnvironmentName, Record<string
     account: '333333333333',
     region: 'us-east-1',
     imageTag: 'synth-check',
+    ownerEmail: 'owner@example.com',
   },
 };
 

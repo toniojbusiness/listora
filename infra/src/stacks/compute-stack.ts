@@ -1,6 +1,7 @@
 import { assertNever } from '@listora/shared';
 import { CfnOutput, Duration } from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import type * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -23,6 +24,7 @@ import {
   containerEnvironment,
   RUNNER_COMMAND,
   SERVICE_COMMANDS,
+  signInResources,
   type ServiceResources,
 } from '../containers.ts';
 import { ListoraStack, removalPolicyFor, taskPlacement, type ListoraStackProps } from './common.ts';
@@ -44,6 +46,11 @@ export interface ComputeStackProps extends ListoraStackProps {
   readonly photoCdnDomain: string;
   readonly inboundMailBucket: s3.IBucket;
   readonly tokenKey: kms.IKey;
+  /** The auth stack's user pool and the iPhone app's client, where the environment has one. */
+  readonly userPool?: {
+    readonly pool: cognito.IUserPool;
+    readonly appClient: cognito.IUserPoolClient;
+  };
 }
 
 /** Label under the environment's domain that serves the API. */
@@ -140,6 +147,13 @@ export class ComputeStack extends ListoraStack {
         region: target.region,
         publicBaseUrl: `https://${props.photoCdnDomain}`,
       },
+      signIn: signInResources(
+        settings.signIn,
+        props.userPool && {
+          userPoolId: props.userPool.pool.userPoolId,
+          clientIds: [props.userPool.appClient.userPoolClientId],
+        },
+      ),
       runner: {
         cluster: `listora-${environment}`,
         service: RUNNER_SERVICE_NAME,
@@ -167,11 +181,13 @@ export class ComputeStack extends ListoraStack {
     // emails for the worker only, and envelope encryption of marketplace credentials: the API
     // only seals (GenerateDataKey), the worker opens OAuth tokens and only those, and the
     // browser runner opens sellers' browser sessions and only those (the KMS encryption
-    // context's `purpose` tells them apart). The worker also starts the browser runner. A
-    // combined task's role holds the union, since its two containers share it.
+    // context's `purpose` tells them apart). The worker also starts the browser runner, and
+    // deletes the Cognito users of deleted accounts. A combined task's role holds the union,
+    // since its two containers share it.
     const grant = (role: iam.IRole, containers: readonly ServiceName[]): void => {
       props.photoBucket.grantReadWrite(role);
       if (containers.includes('worker')) {
+        props.userPool?.pool.grant(role, 'cognito-idp:AdminGetUser', 'cognito-idp:AdminDeleteUser');
         props.inboundMailBucket.grantRead(role, `${INBOUND_MAIL_PREFIX}*`);
         role.addToPrincipalPolicy(startRunner(this.runnerServiceArn(environment)));
         role.addToPrincipalPolicy(

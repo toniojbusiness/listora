@@ -77,6 +77,8 @@ targets:
         ListoraEnvironment: $(LISTORA_ENVIRONMENT)
         ListoraAPIBaseURL: $(API_BASE_URL)
         ListoraAppGroup: $(APP_GROUP_IDENTIFIER)
+        ListoraCognitoRegion: $(COGNITO_REGION)
+        ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
         ITSAppUsesNonExemptEncryption: false
         NSCameraUsageDescription: Listora uses the camera to photograph the items you sell.
         # Assisted tasks save an item's photos to the camera roll, in posting order, for the
@@ -133,6 +135,8 @@ targets:
         ListoraEnvironment: $(LISTORA_ENVIRONMENT)
         ListoraAPIBaseURL: $(API_BASE_URL)
         ListoraAppGroup: $(APP_GROUP_IDENTIFIER)
+        ListoraCognitoRegion: $(COGNITO_REGION)
+        ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController

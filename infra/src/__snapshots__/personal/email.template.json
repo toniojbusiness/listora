@@ -1,6 +1,12 @@
 {
   "Description": "Listora personal: SES inbound sale email",
   "Resources": {
+    "OwnerAddressE38AED87": {
+      "Type": "AWS::SES::EmailIdentity",
+      "Properties": {
+        "EmailIdentity": "owner@example.com"
+      }
+    },
     "InboundMailDA244C94": {
       "Type": "AWS::S3::Bucket",
       "Properties": {

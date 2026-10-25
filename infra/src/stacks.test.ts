@@ -14,6 +14,7 @@ import {
   containerSecretNames,
   MIGRATE_COMMAND,
   RUNNER_COMMAND,
+  signInResources,
   type ServiceResources,
 } from './containers.ts';
 import type { ListoraStacks } from './app.ts';
@@ -40,7 +41,9 @@ function synthesizedShape(shape: string): ReturnType<typeof synthesize> {
 }
 
 function template(shape: string, stack: keyof ListoraStacks) {
-  return Template.fromStack(synthesizedShape(shape).stacks[stack]);
+  const defined = synthesizedShape(shape).stacks[stack];
+  if (defined === undefined) throw new Error(`${shape} has no ${stack} stack`);
+  return Template.fromStack(defined);
 }
 
 function resources(t: Template, type: string): Resource[] {
@@ -62,6 +65,7 @@ function asList(value: unknown): unknown[] {
 /** Any resources, for the names of the variables a container gets. */
 const ANY_RESOURCES: ServiceResources = {
   photoStorage: { bucket: '', region: '', publicBaseUrl: '' },
+  signIn: { driver: 'dev' },
   runner: { cluster: '', service: '', region: '' },
   tokenKeyArn: '',
 };
@@ -353,9 +357,13 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         });
       });
     } else {
-      it('receives no email without a domain: no SES identity, MX record, or receipt rule', () => {
+      it('receives no email without a domain: no domain identity, MX record, or receipt rule', () => {
+        expect(
+          resources(t, 'AWS::SES::EmailIdentity').map(
+            (identity) => identity.Properties?.['EmailIdentity'],
+          ),
+        ).toEqual(target.ownerEmail === undefined ? [] : [target.ownerEmail]);
         for (const type of [
-          'AWS::SES::EmailIdentity',
           'AWS::SES::ReceiptRuleSet',
           'AWS::SES::ReceiptRule',
           'AWS::Route53::RecordSet',
@@ -366,7 +374,106 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(Object.keys(t.findOutputs('*'))).not.toContain('InboundMailDomain');
       });
     }
+
+    if (target.ownerEmail !== undefined) {
+      const owner = target.ownerEmail;
+      it("holds the owner's address as an SES identity, for the user pool to email the sign-in codes", () => {
+        t.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: owner });
+      });
+    }
   });
+
+  if (settings.signIn.via === 'owner-pool') {
+    describe('auth', () => {
+      const t = template(shape, 'auth');
+      const owner = target.ownerEmail ?? '';
+
+      it('signs in with emailed one-time codes, with no sign-up, no password reset, and no MFA', () => {
+        t.resourceCountIs('AWS::Cognito::UserPool', 1);
+        t.hasResource('AWS::Cognito::UserPool', {
+          DeletionPolicy: settings.protectData ? 'Retain' : 'Delete',
+          Properties: Match.objectLike({
+            UserPoolName: `listora-${environment}`,
+            UserPoolTier: 'ESSENTIALS',
+            AdminCreateUserConfig: { AllowAdminCreateUserOnly: true },
+            UsernameAttributes: ['email'],
+            UsernameConfiguration: { CaseSensitive: false },
+            AutoVerifiedAttributes: ['email'],
+            Policies: Match.objectLike({
+              SignInPolicy: { AllowedFirstAuthFactors: ['PASSWORD', 'EMAIL_OTP'] },
+            }),
+            MfaConfiguration: 'OFF',
+            AccountRecoverySetting: { RecoveryMechanisms: [{ Name: 'admin_only', Priority: 1 }] },
+            DeletionProtection: settings.protectData ? 'ACTIVE' : 'INACTIVE',
+          }),
+        });
+      });
+
+      it('emails the codes through SES, from no-reply@<domain> or else from the owner', () => {
+        const from = dns === undefined ? owner : `no-reply@${dns.domain}`;
+        const identity = dns === undefined ? owner : dns.domain;
+        t.hasResourceProperties('AWS::Cognito::UserPool', {
+          EmailConfiguration: {
+            EmailSendingAccount: 'DEVELOPER',
+            From: `Listora <${from}>`,
+            SourceArn: Match.anyValue(),
+          },
+        });
+        const config = (resources(t, 'AWS::Cognito::UserPool')[0]?.Properties?.[
+          'EmailConfiguration'
+        ] ?? {}) as Record<string, unknown>;
+        expect(JSON.stringify(config['SourceArn'])).toContain(`:identity/${identity}`);
+      });
+
+      it('has one user, the owner, verified, with no password and no invitation', () => {
+        t.resourceCountIs('AWS::Cognito::UserPoolUser', 1);
+        t.hasResourceProperties('AWS::Cognito::UserPoolUser', {
+          Username: owner,
+          UserAttributes: [
+            { Name: 'email', Value: owner },
+            { Name: 'email_verified', Value: 'true' },
+          ],
+          MessageAction: 'SUPPRESS',
+        });
+      });
+
+      it('gives the iPhone app a public client that signs in with USER_AUTH only, without a hosted UI', () => {
+        t.resourceCountIs('AWS::Cognito::UserPoolClient', 1);
+        const client = resources(t, 'AWS::Cognito::UserPoolClient')[0]?.Properties ?? {};
+        expect(client).toMatchObject({
+          ClientName: 'iphone-app',
+          GenerateSecret: false,
+          ExplicitAuthFlows: ['ALLOW_USER_AUTH', 'ALLOW_REFRESH_TOKEN_AUTH'],
+          AllowedOAuthFlowsUserPoolClient: false,
+          PreventUserExistenceErrors: 'ENABLED',
+          EnableTokenRevocation: true,
+          AuthSessionValidity: 10,
+        });
+        expect(client).not.toHaveProperty('CallbackURLs');
+        // Cognito's own users only: no Sign in with Apple or other provider yet.
+        expect(client['SupportedIdentityProviders']).toEqual(['COGNITO']);
+        // The API refuses tokens older than a day (docs/features/auth.md).
+        expect(client).toMatchObject({
+          IdTokenValidity: 60,
+          AccessTokenValidity: 60,
+          RefreshTokenValidity: 43_200,
+          TokenValidityUnits: {
+            IdToken: 'minutes',
+            AccessToken: 'minutes',
+            RefreshToken: 'minutes',
+          },
+        });
+        // The deploy prints them for the iPhone app's Prod configuration.
+        expect(Object.keys(t.findOutputs('*'))).toEqual(
+          expect.arrayContaining(['AppClientId', 'UserPoolId']),
+        );
+      });
+    });
+  } else {
+    it('has no user pool, so the API runs the dev driver until the environment gets one', () => {
+      expect(stacks.auth).toBeUndefined();
+    });
+  }
 
   describe('secrets', () => {
     const t = template(shape, 'secrets');
@@ -545,7 +652,17 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         );
         expect(secrets.map((secret) => secret.Name)).toEqual(containerSecretNames(service));
         expect(env.map((entry) => entry.Name)).toEqual(
-          Object.keys(containerEnvironment(service, 'postgres://', ANY_RESOURCES)),
+          Object.keys(
+            containerEnvironment(service, 'postgres://', {
+              ...ANY_RESOURCES,
+              signIn: signInResources(
+                settings.signIn,
+                settings.signIn.via === 'owner-pool'
+                  ? { userPoolId: '', clientIds: [''] }
+                  : undefined,
+              ),
+            }),
+          ),
         );
         // Nothing secret-looking travels as plain environment (a KMS key's id is not a secret).
         for (const { Name } of env) expect(Name).not.toMatch(/PASSWORD|SECRET|KEY(?!_ID$)/);
@@ -572,6 +689,39 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(JSON.stringify(env['STORAGE_PUBLIC_BASE_URL'])).toContain('https://');
         expect(JSON.stringify(env['STORAGE_PUBLIC_BASE_URL'])).toContain('PhotoCdn');
         expect(containerSecretNames(service)).toContain('ANTHROPIC_API_KEY');
+      }
+    });
+
+    it('signs in with the user pool where there is one, and never with the dev driver there', () => {
+      const env = (name: string) =>
+        Object.fromEntries(
+          (container(name)['Environment'] as { Name: string; Value: unknown }[]).map((entry) => [
+            entry.Name,
+            JSON.stringify(entry.Value),
+          ]),
+        );
+      const api = env('api');
+      const worker = env('worker');
+      const cognitoGrant = statements(t).filter((statement) =>
+        asList(statement['Action']).some((action) => String(action).startsWith('cognito-idp:')),
+      );
+      if (settings.signIn.via === 'owner-pool') {
+        expect(api['AUTH_DRIVER']).toBe('"cognito"');
+        expect(api['COGNITO_USER_POOL_ID']).toContain('UserPool');
+        expect(api['COGNITO_CLIENT_IDS']).toContain('IPhoneApp');
+        expect(worker['COGNITO_USER_POOL_ID']).toBe(api['COGNITO_USER_POOL_ID']);
+        // Only the worker deletes users, and only these two calls on this pool.
+        expect(cognitoGrant).toHaveLength(1);
+        expect(cognitoGrant[0]).toMatchObject({
+          Effect: 'Allow',
+          Action: ['cognito-idp:AdminDeleteUser', 'cognito-idp:AdminGetUser'],
+        });
+        expect(JSON.stringify(cognitoGrant[0]?.['Resource'])).toContain('UserPool');
+      } else {
+        expect(api['AUTH_DRIVER']).toBe('"dev"');
+        expect(api).not.toHaveProperty('COGNITO_USER_POOL_ID');
+        expect(worker).not.toHaveProperty('COGNITO_USER_POOL_ID');
+        expect(cognitoGrant).toEqual([]);
       }
     });
 
