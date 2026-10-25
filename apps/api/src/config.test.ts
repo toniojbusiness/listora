@@ -1,4 +1,5 @@
 import { loadAiConfig } from '@listora/ai';
+import { loadAutomationSettings } from '@listora/automation';
 import { DEFAULT_LOCAL_STORAGE_BASE_URL, DEFAULT_LOCAL_STORAGE_DIR } from '@listora/storage';
 import { describe, expect, it } from 'vitest';
 
@@ -28,7 +29,19 @@ describe('loadApiConfig', () => {
         depop: undefined,
         tokenVault: undefined,
       },
+      automation: loadAutomationSettings({}),
     });
+  });
+
+  it('reads the automation settings, refusing a fake site on a real marketplace', () => {
+    expect(
+      loadApiConfig({ ...REQUIRED, FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4300' }),
+    ).toMatchObject({
+      automation: { profiles: { poshmark: { loginUrl: 'http://127.0.0.1:4300/login' } } },
+    });
+    expect(() =>
+      loadApiConfig({ ...REQUIRED, FAKE_AUTOMATION_SITE_URL: 'https://poshmark.com' }),
+    ).toThrow('FAKE_AUTOMATION_SITE_URL');
   });
 
   it('reads the eBay keyset and the token vault, without echoing a secret', () => {

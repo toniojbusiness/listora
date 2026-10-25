@@ -16,38 +16,55 @@ public struct SettingsContent: Equatable, Sendable {
 }
 
 /// Account, marketplace connections, and app information. Dev builds also have a developer
-/// sign-in; the real account section (T-28, T-31) comes later. The Marketplaces screen comes from
-/// the caller (AppFeature), since a feature never imports another.
-public struct SettingsView<Marketplaces: View>: View {
+/// sign-in; the real account section (T-28, T-31) comes later. The Marketplaces and Link accounts
+/// screens come from the caller (AppFeature), since a feature never imports another.
+public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
     private let content: SettingsContent
     private let devSignIn: DevSignInModel?
     private let marketplaces: Marketplaces?
+    private let linkAccounts: LinkAccounts?
 
     public init(
         content: SettingsContent,
         devSignIn: DevSignInModel? = nil,
         @ViewBuilder marketplaces: () -> Marketplaces,
+        @ViewBuilder linkAccounts: () -> LinkAccounts,
     ) {
         self.content = content
         self.devSignIn = devSignIn
         self.marketplaces = marketplaces()
+        self.linkAccounts = linkAccounts()
     }
 
     public var body: some View {
         NavigationStack {
             List {
-                if let marketplaces {
+                if marketplaces != nil || linkAccounts != nil {
                     Section {
-                        NavigationLink {
-                            marketplaces
-                        } label: {
-                            ListRow(
-                                "Marketplaces",
-                                subtitle: "Connect eBay, and see how Listora works with each marketplace.",
-                                systemImage: "link",
-                            )
+                        if let marketplaces {
+                            NavigationLink {
+                                marketplaces
+                            } label: {
+                                ListRow(
+                                    "Marketplaces",
+                                    subtitle: "Connect eBay, and see how Listora works with each marketplace.",
+                                    systemImage: "link",
+                                )
+                            }
+                            .accessibilityIdentifier("settings.marketplaces")
                         }
-                        .accessibilityIdentifier("settings.marketplaces")
+                        if let linkAccounts {
+                            NavigationLink {
+                                linkAccounts
+                            } label: {
+                                ListRow(
+                                    "Link accounts",
+                                    subtitle: "Sign in on Poshmark, Mercari, and Depop for Listora to automate them.",
+                                    systemImage: "person.badge.key",
+                                )
+                            }
+                            .accessibilityIdentifier("settings.linkAccounts")
+                        }
                     }
                     .listRowBackground(Palette.surface.color)
                 }
@@ -102,12 +119,13 @@ public struct SettingsView<Marketplaces: View>: View {
     }
 }
 
-extension SettingsView where Marketplaces == EmptyView {
-    /// Settings without a Marketplaces screen.
+extension SettingsView where Marketplaces == EmptyView, LinkAccounts == EmptyView {
+    /// Settings without the Marketplaces and Link accounts screens.
     public init(content: SettingsContent, devSignIn: DevSignInModel? = nil) {
         self.content = content
         self.devSignIn = devSignIn
         marketplaces = nil
+        linkAccounts = nil
     }
 }
 

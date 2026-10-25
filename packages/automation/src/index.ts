@@ -120,5 +120,14 @@ export {
   scheduleSaleCheck,
 } from './sale-checks/schedule.ts';
 export type { SaleCheckJobPayload, ScheduledCheck } from './sale-checks/schedule.ts';
+export { runSessionCheck, SESSION_CHECK_ATTEMPTS } from './session-checks/job.ts';
+export type { SessionCheckDependencies } from './session-checks/job.ts';
+export {
+  isSessionCheckJobPayload,
+  requestSessionCheck,
+  SESSION_CHECK_TASK,
+  sessionCheckJobKey,
+} from './session-checks/schedule.ts';
+export type { SessionCheckJobPayload, SessionCheckTarget } from './session-checks/schedule.ts';
 export { AutomationConfigError, loadAutomationSettings } from './settings.ts';
 export type { AutomationSettings, SaleCheckSettings } from './settings.ts';

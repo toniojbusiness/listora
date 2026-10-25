@@ -446,6 +446,46 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/connections/{marketplace}/callback`.
     /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/callback/get(handleConnectionCallback)`.
     func handleConnectionCallback(_ input: Operations.HandleConnectionCallback.Input) async throws -> Operations.HandleConnectionCallback.Output
+    /// List the marketplaces linked by signing in
+    ///
+    /// One entry per marketplace whose connection is a browser session (`connect: session`):
+    /// Poshmark, Mercari, and Depop. Each says whether it is linked, where the app opens the
+    /// marketplace's sign-in page, and which cookies to hand over. Not paginated.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-sessions`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/get(listMarketplaceSessions)`.
+    func listMarketplaceSessions(_ input: Operations.ListMarketplaceSessions.Input) async throws -> Operations.ListMarketplaceSessions.Output
+    /// Get one marketplace's sign-in link
+    ///
+    /// The app polls this after `linkMarketplaceSession` until `status` is no longer
+    /// `checking`. `404` for a marketplace that is not linked by signing in (eBay).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-sessions/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/{marketplace}/get(getMarketplaceSession)`.
+    func getMarketplaceSession(_ input: Operations.GetMarketplaceSession.Input) async throws -> Operations.GetMarketplaceSession.Output
+    /// Link a marketplace with the session the user signed into in the app
+    ///
+    /// The user signed into the marketplace's own sign-in page (`login.url`) inside the app,
+    /// in a web view with its own data store, including any two-step check. The app sends
+    /// that site's cookies (only those on `login.cookieDomains`), never the password, which
+    /// Listora never sees. The server stores them encrypted with the token key (KMS envelope
+    /// encryption) on the account's automation connection for the marketplace, and asks the
+    /// browser runner for one read-only check that the marketplace accepts them. The reply is
+    /// `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
+    /// takes the same way and replaces the earlier session. Cookie values are never logged
+    /// or returned.
+    ///
+    /// `404` for a marketplace that is not linked by signing in. `409
+    /// marketplace_action_unavailable` when the marketplace is connected through its API.
+    /// `422 validation_failed` (field `cookies`) when a cookie is on another site's domain,
+    /// every cookie has expired, or there are none.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/marketplace-sessions/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/{marketplace}/post(linkMarketplaceSession)`.
+    func linkMarketplaceSession(_ input: Operations.LinkMarketplaceSession.Input) async throws -> Operations.LinkMarketplaceSession.Output
     /// List sales
     ///
     /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
@@ -1302,6 +1342,66 @@ extension APIProtocol {
             path: path,
             query: query,
             headers: headers
+        ))
+    }
+    /// List the marketplaces linked by signing in
+    ///
+    /// One entry per marketplace whose connection is a browser session (`connect: session`):
+    /// Poshmark, Mercari, and Depop. Each says whether it is linked, where the app opens the
+    /// marketplace's sign-in page, and which cookies to hand over. Not paginated.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-sessions`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/get(listMarketplaceSessions)`.
+    public func listMarketplaceSessions(headers: Operations.ListMarketplaceSessions.Input.Headers = .init()) async throws -> Operations.ListMarketplaceSessions.Output {
+        try await listMarketplaceSessions(Operations.ListMarketplaceSessions.Input(headers: headers))
+    }
+    /// Get one marketplace's sign-in link
+    ///
+    /// The app polls this after `linkMarketplaceSession` until `status` is no longer
+    /// `checking`. `404` for a marketplace that is not linked by signing in (eBay).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-sessions/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/{marketplace}/get(getMarketplaceSession)`.
+    public func getMarketplaceSession(
+        path: Operations.GetMarketplaceSession.Input.Path,
+        headers: Operations.GetMarketplaceSession.Input.Headers = .init()
+    ) async throws -> Operations.GetMarketplaceSession.Output {
+        try await getMarketplaceSession(Operations.GetMarketplaceSession.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Link a marketplace with the session the user signed into in the app
+    ///
+    /// The user signed into the marketplace's own sign-in page (`login.url`) inside the app,
+    /// in a web view with its own data store, including any two-step check. The app sends
+    /// that site's cookies (only those on `login.cookieDomains`), never the password, which
+    /// Listora never sees. The server stores them encrypted with the token key (KMS envelope
+    /// encryption) on the account's automation connection for the marketplace, and asks the
+    /// browser runner for one read-only check that the marketplace accepts them. The reply is
+    /// `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
+    /// takes the same way and replaces the earlier session. Cookie values are never logged
+    /// or returned.
+    ///
+    /// `404` for a marketplace that is not linked by signing in. `409
+    /// marketplace_action_unavailable` when the marketplace is connected through its API.
+    /// `422 validation_failed` (field `cookies`) when a cookie is on another site's domain,
+    /// every cookie has expired, or there are none.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/marketplace-sessions/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/{marketplace}/post(linkMarketplaceSession)`.
+    public func linkMarketplaceSession(
+        path: Operations.LinkMarketplaceSession.Input.Path,
+        headers: Operations.LinkMarketplaceSession.Input.Headers,
+        body: Operations.LinkMarketplaceSession.Input.Body
+    ) async throws -> Operations.LinkMarketplaceSession.Output {
+        try await linkMarketplaceSession(Operations.LinkMarketplaceSession.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// List sales

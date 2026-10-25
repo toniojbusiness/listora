@@ -1341,6 +1341,90 @@ paths:
                 format: uri
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/marketplace-sessions:
+    get:
+      tags:
+        - connections
+      operationId: listMarketplaceSessions
+      summary: List the marketplaces linked by signing in
+      description: |
+        One entry per marketplace whose connection is a browser session (`connect: session`):
+        Poshmark, Mercari, and Depop. Each says whether it is linked, where the app opens the
+        marketplace's sign-in page, and which cookies to hand over. Not paginated.
+      responses:
+        '200':
+          description: Every marketplace linked by signing in, and its state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketplaceSessionList'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/marketplace-sessions/{marketplace}:
+    parameters:
+      - $ref: '#/components/parameters/MarketplacePath'
+    get:
+      tags:
+        - connections
+      operationId: getMarketplaceSession
+      summary: Get one marketplace's sign-in link
+      description: |
+        The app polls this after `linkMarketplaceSession` until `status` is no longer
+        `checking`. `404` for a marketplace that is not linked by signing in (eBay).
+      responses:
+        '200':
+          description: The marketplace's state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketplaceSession'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+        - connections
+      operationId: linkMarketplaceSession
+      summary: Link a marketplace with the session the user signed into in the app
+      description: |
+        The user signed into the marketplace's own sign-in page (`login.url`) inside the app,
+        in a web view with its own data store, including any two-step check. The app sends
+        that site's cookies (only those on `login.cookieDomains`), never the password, which
+        Listora never sees. The server stores them encrypted with the token key (KMS envelope
+        encryption) on the account's automation connection for the marketplace, and asks the
+        browser runner for one read-only check that the marketplace accepts them. The reply is
+        `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
+        takes the same way and replaces the earlier session. Cookie values are never logged
+        or returned.
+
+        `404` for a marketplace that is not linked by signing in. `409
+        marketplace_action_unavailable` when the marketplace is connected through its API.
+        `422 validation_failed` (field `cookies`) when a cookie is on another site's domain,
+        every cookie has expired, or there are none.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarketplaceSessionLink'
+      responses:
+        '201':
+          description: Stored; the session is being checked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketplaceSession'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/sales:
     get:
       tags:
@@ -3971,6 +4055,161 @@ components:
           $ref: '#/components/schemas/Timestamp'
         completedAt:
           $ref: '#/components/schemas/Timestamp'
+    MarketplaceSessionStatus:
+      description: |
+        A `KnownMarketplaceSessionStatus`, or a status added after this client was built.
+        Clients show `statusDisplay` for an unknown status and offer to link again.
+      anyOf:
+        - $ref: '#/components/schemas/KnownMarketplaceSessionStatus'
+        - type: string
+          maxLength: 64
+    KnownMarketplaceSessionStatus:
+      type: string
+      description: |
+        `not_linked`: no session. `checking`: a session was just linked and the browser runner
+        is checking it. `linked`: the check passed, and Listora automates the marketplace in
+        that session. `needs_relink`: the marketplace rejected the session, or showed a check
+        automation must not pass; the user signs in again. `check_failed`: Listora could not
+        confirm the session works (see `issue`); linking again checks again. `api_connected`:
+        the marketplace is connected through its API, so there is nothing to sign in to.
+      enum:
+        - not_linked
+        - checking
+        - linked
+        - needs_relink
+        - check_failed
+        - api_connected
+    MarketplaceSessionLogin:
+      type: object
+      description: Where the app signs the user in, and which of that site's cookies it hands over.
+      required:
+        - url
+        - cookieDomains
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: The marketplace's own sign-in page.
+        cookieDomains:
+          type: array
+          description: |
+            The marketplace's own domains (`poshmark.com`). The app sends only cookies whose
+            domain is one of these or a subdomain of one; the server refuses any other.
+          minItems: 1
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 253
+    MarketplaceSession:
+      type: object
+      description: |
+        A marketplace linked by signing in (`connect: session`). It is shown as linked only
+        after the browser runner confirmed the marketplace accepts the session.
+      required:
+        - marketplace
+        - status
+        - statusDisplay
+        - login
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        status:
+          $ref: '#/components/schemas/MarketplaceSessionStatus'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+        login:
+          $ref: '#/components/schemas/MarketplaceSessionLogin'
+        displayName:
+          type: string
+          maxLength: 200
+          description: The seller's name on the marketplace, when the app or the check knows it.
+        linkedAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When the current session was linked.
+        checkedAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When the current session's check finished.
+        issue:
+          $ref: '#/components/schemas/ConnectionIssue'
+          description: Why the session needs relinking, or why its check failed.
+    MarketplaceSessionList:
+      type: object
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketplaceSession'
+    SessionCookie:
+      type: object
+      description: |
+        One cookie as the app's web view holds it (`HTTPCookie`), in the browser runner's
+        terms. A name plus value of at most 4096 bytes, as browsers allow.
+      additionalProperties: false
+      required:
+        - name
+        - value
+        - domain
+        - path
+        - expires
+        - httpOnly
+        - secure
+        - sameSite
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        value:
+          type: string
+          maxLength: 4096
+        domain:
+          type: string
+          description: A host (`www.poshmark.com`) or a domain cookie (`.poshmark.com`).
+          minLength: 1
+          maxLength: 253
+          pattern: ^\.?[A-Za-z0-9.-]+$
+        path:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          pattern: ^/
+        expires:
+          type: integer
+          format: int64
+          description: Unix time in whole seconds; `-1` for a cookie that lasts as long as the browser session.
+          minimum: -1
+        httpOnly:
+          type: boolean
+        secure:
+          type: boolean
+        sameSite:
+          type: string
+          description: '`lax` when the site set none.'
+          enum:
+            - strict
+            - lax
+            - none
+    MarketplaceSessionLink:
+      type: object
+      additionalProperties: false
+      required:
+        - cookies
+      properties:
+        cookies:
+          type: array
+          description: The marketplace's cookies after the user signed in, and no other site's.
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/SessionCookie'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: The seller's name on the marketplace, when the app knows it.
     SaleStatus:
       description: |
         A `KnownSaleStatus`, or a status added after this client was built. Clients show an

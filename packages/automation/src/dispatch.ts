@@ -3,7 +3,8 @@
  *
  * 1. adds the job of every sale check that is due (sale-checks/schedule.ts);
  * 2. starts the browser runner when automated work waits and no runner is alive (an automated
- *    operation step the worker handed over, or a sale check);
+ *    operation step the worker handed over, a sale check, or the check of a session the seller
+ *    just linked);
  * 3. keeps the run history short: screenshots go after `SCREENSHOT_RETENTION_DAYS`, run
  *    records after `RUN_RETENTION_DAYS`.
  *
@@ -27,6 +28,7 @@ import {
   scheduleSaleCheck,
   type ScheduledCheck,
 } from './sale-checks/schedule.ts';
+import { SESSION_CHECK_TASK } from './session-checks/schedule.ts';
 
 /** The worker's scheduled task, every minute. */
 export const AUTOMATION_DISPATCH_TASK = 'automation_dispatch';
@@ -37,7 +39,11 @@ export const RUN_RETENTION_DAYS = 90;
 const PRUNE_BATCH = 200;
 
 /** The job queue tasks only the browser runner takes. */
-export const RUNNER_TASKS = [AUTOMATION_OPERATION_TASK, SALE_CHECK_TASK] as const;
+export const RUNNER_TASKS = [
+  AUTOMATION_OPERATION_TASK,
+  SALE_CHECK_TASK,
+  SESSION_CHECK_TASK,
+] as const;
 
 export interface DispatcherOptions {
   db: Db;

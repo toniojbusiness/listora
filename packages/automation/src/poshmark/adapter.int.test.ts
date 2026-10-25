@@ -331,6 +331,25 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     });
   });
 
+  it('signs a seller in by hand, as the app does when linking in development', async () => {
+    const body = new URLSearchParams({
+      'login_form[username_email]': 'closet_queen',
+      'login_form[password]': 'anything',
+    });
+    const response = await fetch(`${site.url}/login`, { method: 'POST', body, redirect: 'manual' });
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/closet/closet_queen');
+    const token = /_web_session=([0-9a-f]+);/.exec(response.headers.get('set-cookie') ?? '')?.[1];
+    expect(site.sessionValid(token ?? '')).toBe(true);
+    const refused = await fetch(`${site.url}/login`, {
+      method: 'POST',
+      body: new URLSearchParams({ 'login_form[username_email]': 'closet_queen' }),
+      redirect: 'manual',
+    });
+    expect(refused.status).toBe(200);
+    expect(refused.headers.get('set-cookie')).toBeNull();
+  });
+
   it('reports Poshmark refusing the form in its own words', async () => {
     site.inject({ action: 'create', fault: { type: 'reject', message: 'Please select a size.' } });
     const outcome = await adapter.execute(request('create', newRef()), ctx());

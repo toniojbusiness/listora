@@ -3,6 +3,7 @@ import APIClient
 import Core
 import DesignSystem
 import InventoryFeature
+import MarketplaceLinkingFeature
 import MarketplacesFeature
 import SettingsFeature
 import SwiftUI
@@ -50,6 +51,8 @@ public struct RootView: View {
                 devSignIn: dependencies.devSignIn,
             ) {
                 MarketplacesView(model: dependencies.marketplaces)
+            } linkAccounts: {
+                LinkAccountsView(model: dependencies.linkAccounts)
             }
         }
     }

@@ -85,6 +85,9 @@ Packages/
                       status, and connecting eBay through ASWebAuthenticationSession
     TagReadingFeature On-device tag reading with Vision (VisionTagReader); no UI
     ShareLinkFeature  The Share Extension's screen (ShareLinkView, ShareLinkModel)
+    MarketplaceLinkingFeature  Settings > Link accounts: sign in on a marketplace's own page
+                      in a web view and hand Listora its session
+                      (docs/features/marketplace-linking.md)
 ```
 
 Dependency rules:
