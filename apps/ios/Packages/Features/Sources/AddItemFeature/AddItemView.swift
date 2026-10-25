@@ -167,14 +167,14 @@ struct DraftListView: View {
         }
     }
 
-    /// A saved item's draft is done: back to the list, without it. Changing the photos goes back
-    /// to the draft.
+    /// A saved item's draft is done: back to the list, without it. Changing the photos, or leaving
+    /// the review, goes back to the draft.
     private func finishReview(_ request: ItemReviewRequest, _ outcome: ItemReviewOutcome) {
         switch outcome {
         case .saved:
             path = []
             model.completeDraft(request.sessionID)
-        case .editPhotos:
+        case .editPhotos, .back:
             if case .review = path.last {
                 path.removeLast()
             }

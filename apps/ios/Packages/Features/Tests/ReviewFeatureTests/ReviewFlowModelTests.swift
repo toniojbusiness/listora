@@ -131,11 +131,11 @@ struct ReviewFlowModelTests {
         let model = harness.model()
         await model.start()
         #expect(model.phase == .failed(.init(
-            title: "Something went wrong",
+            title: "Your plan's limit is reached",
             message: "This month's AI items in your plan are used up.",
             canRetry: false,
             suggestsEditingPhotos: false,
-        )))
+        )), "the photos are fine, so the way out is Go back, not Edit photos")
     }
 
     @Test
@@ -150,21 +150,67 @@ struct ReviewFlowModelTests {
     }
 
     @Test
-    func `reopening an item it already applied goes straight to the review`() async {
+    func `reopening an item it already applied to these photos goes straight to the review`() async {
         await harness.service.setItems([.success(Fixtures.appliedItem())])
-        await harness.service.setAnalyses(Fixtures.fastID, [
+        await harness.service.setStarts([
             .success(Fixtures.analysis(status: .completed, result: Fixtures.result())),
         ])
         let model = harness.model()
         await model.start()
         #expect(model.phase == .reviewing)
+        #expect(model.analysis?.id == Fixtures.fastID)
+        #expect(model.fastAnalysisID == Fixtures.fastID)
         #expect(await !harness.service.calls.contains {
-            if case .startAnalysis = $0 {
+            if case .apply = $0 {
                 true
             } else {
                 false
             }
-        })
+        }, "the server already has its details")
+    }
+
+    @Test
+    func `reopening an item identified with premium reviews the premium details`() async {
+        await harness.service.setItems([.success(Fixtures.appliedItem(acceptedAnalysisID: Fixtures.premiumID))])
+        await harness.service.setStarts([.success(Fixtures.analysis(
+            status: .completed,
+            result: Fixtures.result(),
+            escalation: Fixtures.premiumID,
+        ))])
+        await harness.service.setAnalyses(Fixtures.premiumID, [.success(Fixtures.analysis(
+            id: Fixtures.premiumID,
+            tier: .premium,
+            status: .completed,
+            result: Fixtures.result(needsEscalation: false),
+            escalatedFrom: Fixtures.fastID,
+        ))])
+        let model = harness.model()
+        await model.start()
+        #expect(model.phase == .reviewing)
+        #expect(model.analysis?.id == Fixtures.premiumID)
+        #expect(model.fastAnalysisID == Fixtures.fastID)
+        #expect(model.escalation == .finished)
+    }
+
+    @Test
+    func `reopening an item whose photos changed analyzes the new photos`() async {
+        await harness.service.setItems([.success(Fixtures.appliedItem())])
+        await harness.service.setStarts([.success(Fixtures.analysis(id: Fixtures.newPhotosID, status: .queued))])
+        await harness.service.setAnalyses(Fixtures.newPhotosID, [
+            .success(Fixtures.analysis(id: Fixtures.newPhotosID, status: .completed, result: Fixtures.result())),
+        ])
+        await harness.service.setApplies([.success(Fixtures.appliedItem(
+            version: 4,
+            acceptedAnalysisID: Fixtures.newPhotosID,
+        ))])
+        let model = harness.model()
+        await model.start()
+        #expect(model.phase == .reviewing)
+        #expect(model.analysis?.id == Fixtures.newPhotosID)
+        #expect(model.fastAnalysisID == Fixtures.newPhotosID, "Identify harder escalates the new photos' analysis")
+        let calls = await harness.service.calls
+        #expect(calls.contains(.apply(Fixtures.newPhotosID, version: 3)))
+        #expect(!calls.contains(.analysis(Fixtures.fastID)), "the old photos' analysis is not reviewed")
     }
 
     @Test

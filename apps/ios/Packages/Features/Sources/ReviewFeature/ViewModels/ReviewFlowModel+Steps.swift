@@ -10,6 +10,21 @@ extension ReviewFlowModel {
         form?.set(key, to: value)
     }
 
+    /// Opens `key`'s in-place editor, keeping the text of the one open before.
+    func beginEditing(_ key: ReviewFieldKey) {
+        commitEditing()
+        guard let form else { return }
+        editing = FieldDraft(key: key, text: form.field(key).value.editingText)
+    }
+
+    /// Keeps the open editor's text in the form and closes the editor; with `key`, only when the
+    /// open editor is that detail's.
+    func commitEditing(_ key: ReviewFieldKey? = nil) {
+        guard let draft = editing, key == nil || key == draft.key else { return }
+        editing = nil
+        update(draft.key, to: FieldValue.parse(draft.text, as: draft.key.kind))
+    }
+
     /// Keeps the seller's copy for a marketplace; the analysis's own copy removes the edit.
     func saveCopy(_ copy: ListingCopy, for marketplace: String) {
         guard let index = copies.firstIndex(where: { $0.marketplace == marketplace }), let item else { return }
@@ -32,10 +47,16 @@ extension ReviewFlowModel {
         QuotaPresentation.premiumLine(usage)
     }
 
+    /// The plan's premium identifications are used up, so "Identify harder" can't run.
+    var isPremiumQuotaUsedUp: Bool {
+        QuotaPresentation.isUsedUp(usage)
+    }
+
     /// "Identify harder": the premium identification of the fast analysis. The seller's edits are
     /// saved first, so the premium details never replace them.
     func startIdentifyHarder() async {
-        guard let fastAnalysisID, escalation != .running else { return }
+        guard let fastAnalysisID, escalation != .running, !isPremiumQuotaUsedUp else { return }
+        commitEditing()
         escalation = .running
         do {
             try await saveEdits()
@@ -97,6 +118,7 @@ extension ReviewFlowModel {
 
     /// Continue from the review: saves the edits, then opens the cost screen.
     func continueToCost() async {
+        commitEditing()
         await perform { () async throws(APIFailure) in
             try await saveEdits()
             showsCost = true

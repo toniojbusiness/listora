@@ -48,6 +48,7 @@ struct PriceView: View {
                 ),
                 onRetry: { Task { await model.loadPricing() } },
                 onEditPhotos: {},
+                onGoBack: {},
             )
         case let .loaded(presentation):
             ScrollView {

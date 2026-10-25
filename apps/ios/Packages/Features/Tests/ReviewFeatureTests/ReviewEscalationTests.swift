@@ -83,6 +83,19 @@ struct ReviewEscalationTests {
     }
 
     @Test
+    func `used-up premium identifications say so and Identify harder does not ask the server`() async {
+        await harness.scriptHappyPath()
+        await harness.service.setUsage([.success(Fixtures.usage(premiumUsed: 10, limit: 10))])
+        let model = harness.model()
+        await model.start()
+        #expect(model.isPremiumQuotaUsedUp)
+        #expect(model.premiumQuotaLine == "All 10 premium identifications in your plan are used this month.")
+        await model.startIdentifyHarder()
+        #expect(model.escalation == .idle)
+        #expect(await !harness.service.calls.contains(.escalate(Fixtures.fastID)))
+    }
+
+    @Test
     func `follows a premium identification the server started on its own`() async throws {
         await harness.service.setAnalyses(Fixtures.fastID, [.success(Fixtures.analysis(
             status: .completed,

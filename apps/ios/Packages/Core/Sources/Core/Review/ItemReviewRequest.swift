@@ -22,4 +22,6 @@ public enum ItemReviewOutcome: Equatable, Sendable {
     case saved(sku: String)
     /// The photos have to change before the item can be reviewed.
     case editPhotos
+    /// The seller left the review without saving; the item stays a draft.
+    case back
 }
