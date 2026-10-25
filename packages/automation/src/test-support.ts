@@ -59,23 +59,24 @@ export const stubPhotos: PhotoSource = {
     }),
 };
 
+/** A local stand-in for a marketplace's site that logs a seller in (the fake sites). */
+export interface SessionIssuer {
+  issueSession(): SessionCookie;
+}
+
 /**
- * Browser sessions on the fake site without a database: each run gets a freshly logged-in
+ * Browser sessions on a fake site without a database: each run gets a freshly logged-in
  * session (as if the seller relinked at once), and checks are only recorded.
  */
 export class FakeSiteSessions implements AutomationSessions {
   readonly challenges: string[] = [];
   readonly requests: SessionRequest[] = [];
-  readonly #site: FakeAutomationSite;
+  readonly #site: SessionIssuer;
   readonly #runner: PlaywrightBrowserRunner;
   readonly #profile: AutomationProfile;
   #runs = 0;
 
-  constructor(
-    site: FakeAutomationSite,
-    runner: PlaywrightBrowserRunner,
-    profile: AutomationProfile,
-  ) {
+  constructor(site: SessionIssuer, runner: PlaywrightBrowserRunner, profile: AutomationProfile) {
     this.#site = site;
     this.#runner = runner;
     this.#profile = profile;

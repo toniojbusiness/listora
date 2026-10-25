@@ -135,8 +135,9 @@ packages/
   vault/        Credential storage: token encryption (local AES-GCM key, KMS envelope) and the
                 session vault of browser automation connections (@listora/vault)
   automation/   Browser automation (decision D1): the Playwright runner, its safety rules, the
-                automation adapter base, sale-check scheduling, the runner launcher, and the
-                fake marketplace site (@listora/automation)
+                automation adapter base, sale-check scheduling, the runner launcher, the
+                fake marketplace site, and the Mercari adapter with its fake Mercari site
+                (mercari/) (@listora/automation)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
@@ -150,7 +151,8 @@ scripts/
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
   ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
 Dockerfile      Application image; the API and the worker run from the same image
-docs/           This overview, the roadmap, and the personal environment's cost estimate
+docs/           This overview, the roadmap, the personal environment's cost estimate, and
+                feature docs (auth.md, mercari.md)
 Makefile        iOS commands (make ios-test, ios-lint, ...)
 ```
 
@@ -311,19 +313,20 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
   readListing(ref: ListingRef, ctx: AdapterContext): Promise<RemoteListingState>;
   healthCheck(ctx: AdapterContext): Promise<Health>; // ok | degraded | reauth_required | revoked
   listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>; // sale checks
+  listListings?(ctx: AdapterContext): Promise<RemoteListingSummary[]>; // imports, drift checks
 }
 ```
 
 Imports, webhooks, emails, and credential refresh join the interface as optional members with
 the tasks that first use them (T-16, T-17, T-23, T-36); orders joined with the browser runner's
-sale checks. A `ConnectionRef` names the connection's `mode` and `status`.
+sale checks, and the seller's own listings with the Mercari automation adapter. A `ConnectionRef` names the connection's `mode` and `status`.
 
 | Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
 | ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
 | eBay        | API                                                                          | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs                          | `ORDER_CONFIRMATION` webhook + 5-minute poll                    |
 | Depop       | API after partner approval; browser automation until then, assisted fallback | `PUT` by per-attempt external SKU, `PATCH`, `DELETE`/mark-as-sold; verify with `GET`                                                       | `v1:order.*` webhooks + poll                                    |
 | Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms | DKIM-verified forwarded emails, scheduled browser check, manual |
-| Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark                                                                                                                           | Forwarded emails, scheduled browser check, manual               |
+| Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark ([mercari.md](mercari.md)); ends by deactivating, relists by activating                                                   | Forwarded emails, scheduled browser check, manual               |
 
 **Capabilities route every operation.** `operationMode(capabilities, kind)` (`capabilities.ts`)
 reads the flag for the kind (`create`, `updateDetails` for a revise, `updatePrice`, `delist` for
@@ -480,10 +483,10 @@ the headless-Chromium browser runner acts on sessions the user logs into from th
   assisted task.
 - Every action is still confirmed by read-back (section 6), never reported as a false success.
 
-The runner, the automation mode, the session vault, and sale-check scheduling are built
-(below); the automation adapters for Poshmark, Mercari, and Depop, which write each site's
-scripts, and the app's linking screen are their own tasks. Until a marketplace's adapter lands
-it runs assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
+The runner, the automation mode, the session vault, sale-check scheduling, and Mercari's
+automation adapter ([mercari.md](mercari.md)) are built (below); the automation adapters for
+Poshmark and Depop, which write each site's scripts, and the app's linking screen are their own
+tasks. Until a marketplace's adapter lands it runs assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
 
 Assisted adapters implement `execute` by creating a `user_task` (deep link plus copy-assist
 payload) and returning `pendingUser`. An assisted operation can finish only through a user
@@ -527,7 +530,8 @@ session vault.
   `automation`. It maps every way a run ends onto an outcome and never claims more than it
   knows: only an applied script is `confirmed`, a failure after a mutating step is `unknown`,
   one before it `transient`, a marketplace validation message `rejected`, and a check, a missing
-  session, or a page the script no longer understands the assisted task. The fake site's adapter
+  session, or a page the script no longer understands (an element that never came, or a page
+  module's `PageChangedError`) the assisted task. The fake site's adapter
   (`fake-site/`) is the reference and passes the shared conformance suite in a real browser.
 - **Where it runs.** Automated steps need a browser, which only the runner has. The worker hands
   such a step to the runner's task on the same listing queue (section 6) and starts the runner
@@ -716,6 +720,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                       | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`               |
 | Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until a seller links a session (D1) or Depop's API                              | The same                   | none                                 |
 | Automation       | Fake marketplace site (`FakeAutomationSite`, `npm run dev:fake-site`) in local headless Chromium                                      | Per-marketplace adapters   | `FAKE_AUTOMATION_SITE_URL`           |
+| Mercari          | Fake Mercari site (`FakeMercariSite`, `npm run dev:fake-mercari`) with the Mercari adapter's own scripts                              | Mercari itself             | `FAKE_MERCARI_SITE_URL`              |
 | Browser runner   | A child process of the worker (`npm run dev:runner` by hand)                                                                          | ECS service, 0 to 1 tasks  | `BROWSER_RUNNER_LAUNCH`              |
 | Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                      | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`           |
 | AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                   | Anthropic API              | `AI_PROVIDER=fake\|anthropic`        |

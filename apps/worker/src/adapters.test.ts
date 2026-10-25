@@ -88,6 +88,32 @@ describe('createAdapters', () => {
     expect(adapters.capabilities('depop', api)?.verifyRead).toBe('api');
   });
 
+  it('automates Mercari itself for linked sessions; Poshmark and Depop stay assisted until their adapters land', () => {
+    const automation = createAutomationAdapters({
+      settings: loadAutomationSettings({}),
+      sessions: NoBrowserSessions,
+      photos: new HttpPhotoSource(),
+      logger: createLogger({ service: 'test', level: 'silent' }),
+    });
+    const adapters = createAdapters({ fakeMarketplaceUrl: undefined, ebay: undefined }, automation);
+    expect(adapters.capabilities('mercari', automated)).toMatchObject({
+      connect: 'session',
+      create: 'automation',
+      updatePrice: 'automation',
+      updateDetails: 'automation',
+      delist: 'automation',
+      relist: 'automation',
+      markSold: 'not_needed',
+      verifyRead: 'automation',
+      readFreshness: 'revision',
+      saleDetection: ['poll', 'email', 'manual'],
+    });
+    expect(adapters.capabilities('mercari', null)?.create).toBe('assisted');
+    for (const marketplace of ['poshmark', 'depop'] as const) {
+      expect(adapters.capabilities(marketplace, automated)?.create, marketplace).toBe('assisted');
+    }
+  });
+
   it('routes eBay to the eBay adapter when EBAY_ENV is set, whatever FAKE_MARKETPLACE_URL says', () => {
     const ebay = loadEbayConfig({ EBAY_ENV: 'fake', EBAY_USER_CONNECTION_ID: api.id });
     for (const fakeMarketplaceUrl of [undefined, 'http://127.0.0.1:4100']) {

@@ -58,6 +58,11 @@ describe('ConnectionAwareAdapter', () => {
     await expect(depop.listOrdersSince(null, ctx)).rejects.toThrow('reads no orders');
   });
 
+  it('reads the seller listings through the serving adapter, and refuses where it reads none', async () => {
+    const ctx = { signal: new AbortController().signal, connection: automated };
+    await expect(depop.listListings(ctx)).rejects.toThrow('reads no listings');
+  });
+
   it('refuses adapters for two different marketplaces', () => {
     expect(
       () => new ConnectionAwareAdapter({ assisted: createPoshmarkAdapter(), api: fake }),

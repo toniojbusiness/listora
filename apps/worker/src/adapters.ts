@@ -23,9 +23,9 @@ import type { WorkerConfig } from './config.ts';
  *
  * - Poshmark, Mercari, and Depop are assisted (every step is a user task that only the user's
  *   confirmation finishes) until a seller links a browser session, when their automation
- *   adapter serves them (decision D1). The per-marketplace automation adapters are their own
- *   tasks; until each lands, `automation` has none for it, except the fake site's for all three
- *   in development and tests (FAKE_AUTOMATION_SITE_URL).
+ *   adapter serves them (decision D1). Mercari's is built (docs/mercari.md); Poshmark's and
+ *   Depop's are their own tasks, and until each lands `automation` has none for it, except the
+ *   fake site's for all three in development and tests (FAKE_AUTOMATION_SITE_URL).
  * - Depop also switches to its API once a seller's connection does; its API adapter (T-24) is
  *   the fake marketplace for now, when FAKE_MARKETPLACE_URL is set.
  * - eBay goes through its adapter with EBAY_ENV set (`fake` for the fake eBay server, or the
