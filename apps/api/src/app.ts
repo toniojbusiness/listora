@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AiClient } from '@listora/ai';
 import type { AnalysisJobQueue } from '@listora/analysis';
 import { loadAutomationSettings } from '@listora/automation';
+import { graphileBatchJobs, type BatchJobQueue } from '@listora/batches';
 import type { Db } from '@listora/db';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
 import type { PhotoJobQueue } from '@listora/photos';
@@ -31,6 +32,8 @@ export interface AppDependencies extends HealthDependencies {
   ai: AiClient;
   /** Where starting or escalating an analysis adds its job. */
   analysisJobs: AnalysisJobQueue;
+  /** Where submitting a batch item adds its job; defaults to the Graphile Worker queue. */
+  batchJobs?: BatchJobQueue;
   /**
    * Marketplace adapters, OAuth clients, and the token sealer. Defaults to the assisted
    * marketplaces only, with nothing that can be connected.
@@ -91,6 +94,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     photoJobs: deps.photoJobs,
     ai: deps.ai,
     analysisJobs: deps.analysisJobs,
+    batchJobs: deps.batchJobs ?? graphileBatchJobs,
     connections: deps.connections ?? {
       adapters: createMarketplaceAdapters({
         fakeMarketplaceUrl: undefined,

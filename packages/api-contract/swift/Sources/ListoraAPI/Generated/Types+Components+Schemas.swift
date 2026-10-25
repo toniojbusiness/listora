@@ -2455,6 +2455,414 @@ extension Components {
                 case expectedVersion
             }
         }
+        /// A `KnownItemBatchItemState`, or a state added after this client was built. Clients show
+        /// an unknown state's `statusDisplay` as given and never treat it as saved.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItemState`.
+        public struct ItemBatchItemState: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemState/value1`.
+            public var value1: Components.Schemas.KnownItemBatchItemState?
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemState/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ItemBatchItemState`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownItemBatchItemState? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Where a batch item is: `uploading` (the app has not submitted it yet), `preparing_photos`
+        /// (the server is processing its photos), `analyzing`, `ready_for_review` (analyzed, waiting
+        /// for the seller), `saved` (the seller saved it; its status is no longer `draft`), or
+        /// `failed` (see `problem`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownItemBatchItemState`.
+        @frozen public enum KnownItemBatchItemState: String, Codable, Hashable, Sendable, CaseIterable {
+            case uploading = "uploading"
+            case preparingPhotos = "preparing_photos"
+            case analyzing = "analyzing"
+            case readyForReview = "ready_for_review"
+            case saved = "saved"
+            case failed = "failed"
+        }
+        /// Why a batch item stopped. `retryable` says whether submitting it again may help as it is.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItemProblem`.
+        public struct ItemBatchItemProblem: Codable, Hashable, Sendable {
+            /// Stable snake_case, for example `photo_failed`, `photos_not_ready`, `no_photos`,
+            /// `ai_budget_exceeded`, `quota_exceeded`, or an analysis failure's code.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemProblem/code`.
+            public var code: Swift.String
+            /// Safe to show to the user.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemProblem/message`.
+            public var message: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemProblem/retryable`.
+            public var retryable: Swift.Bool
+            /// Creates a new `ItemBatchItemProblem`.
+            ///
+            /// - Parameters:
+            ///   - code: Stable snake_case, for example `photo_failed`, `photos_not_ready`, `no_photos`,
+            ///   - message: Safe to show to the user.
+            ///   - retryable:
+            public init(
+                code: Swift.String,
+                message: Swift.String,
+                retryable: Swift.Bool
+            ) {
+                self.code = code
+                self.message = message
+                self.retryable = retryable
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case message
+                case retryable
+            }
+        }
+        /// The seller's interaction as the app measured it: time a screen of the flow was in front of
+        /// them with nothing to wait for (`activeMs`), the time spent waiting on Listora meanwhile
+        /// (`waitingMs`), and taps.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/InteractionTotals`.
+        public struct InteractionTotals: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InteractionTotals/activeMs`.
+            public var activeMs: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/InteractionTotals/waitingMs`.
+            public var waitingMs: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/InteractionTotals/taps`.
+            public var taps: Swift.Int32
+            /// Creates a new `InteractionTotals`.
+            ///
+            /// - Parameters:
+            ///   - activeMs:
+            ///   - waitingMs:
+            ///   - taps:
+            public init(
+                activeMs: Swift.Int64,
+                waitingMs: Swift.Int64,
+                taps: Swift.Int32
+            ) {
+                self.activeMs = activeMs
+                self.waitingMs = waitingMs
+                self.taps = taps
+            }
+            public enum CodingKeys: String, CodingKey {
+                case activeMs
+                case waitingMs
+                case taps
+            }
+        }
+        /// How many of the item's photos the server has, and how many are processed.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemBatchPhotoProgress`.
+        public struct ItemBatchPhotoProgress: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatchPhotoProgress/total`.
+            public var total: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchPhotoProgress/ready`.
+            public var ready: Swift.Int32
+            /// Creates a new `ItemBatchPhotoProgress`.
+            ///
+            /// - Parameters:
+            ///   - total:
+            ///   - ready:
+            public init(
+                total: Swift.Int32,
+                ready: Swift.Int32
+            ) {
+                self.total = total
+                self.ready = ready
+            }
+            public enum CodingKeys: String, CodingKey {
+                case total
+                case ready
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItem`.
+        public struct ItemBatchItem: Codable, Hashable, Sendable {
+            /// The item's place in the haul, 0 first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/position`.
+            public var position: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/item`.
+            public var item: Components.Schemas.ItemSummary
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/state`.
+            public var state: Components.Schemas.ItemBatchItemState
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/photos`.
+            public var photos: Components.Schemas.ItemBatchPhotoProgress
+            /// Present exactly when `state` is `failed`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/problem`.
+            public var problem: Components.Schemas.ItemBatchItemProblem?
+            /// This item's share of the batch's interaction, once the app reported it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/interaction`.
+            public var interaction: Components.Schemas.InteractionTotals?
+            /// Creates a new `ItemBatchItem`.
+            ///
+            /// - Parameters:
+            ///   - position: The item's place in the haul, 0 first.
+            ///   - item:
+            ///   - state:
+            ///   - statusDisplay:
+            ///   - photos:
+            ///   - problem: Present exactly when `state` is `failed`.
+            ///   - interaction: This item's share of the batch's interaction, once the app reported it.
+            public init(
+                position: Swift.Int32,
+                item: Components.Schemas.ItemSummary,
+                state: Components.Schemas.ItemBatchItemState,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                photos: Components.Schemas.ItemBatchPhotoProgress,
+                problem: Components.Schemas.ItemBatchItemProblem? = nil,
+                interaction: Components.Schemas.InteractionTotals? = nil
+            ) {
+                self.position = position
+                self.item = item
+                self.state = state
+                self.statusDisplay = statusDisplay
+                self.photos = photos
+                self.problem = problem
+                self.interaction = interaction
+            }
+            public enum CodingKeys: String, CodingKey {
+                case position
+                case item
+                case state
+                case statusDisplay
+                case photos
+                case problem
+                case interaction
+            }
+        }
+        /// How many of the batch's items are in each state.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemBatchProgress`.
+        public struct ItemBatchProgress: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/total`.
+            public var total: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/uploading`.
+            public var uploading: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/preparingPhotos`.
+            public var preparingPhotos: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/analyzing`.
+            public var analyzing: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/readyForReview`.
+            public var readyForReview: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/saved`.
+            public var saved: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/failed`.
+            public var failed: Swift.Int32
+            /// Creates a new `ItemBatchProgress`.
+            ///
+            /// - Parameters:
+            ///   - total:
+            ///   - uploading:
+            ///   - preparingPhotos:
+            ///   - analyzing:
+            ///   - readyForReview:
+            ///   - saved:
+            ///   - failed:
+            public init(
+                total: Swift.Int32,
+                uploading: Swift.Int32,
+                preparingPhotos: Swift.Int32,
+                analyzing: Swift.Int32,
+                readyForReview: Swift.Int32,
+                saved: Swift.Int32,
+                failed: Swift.Int32
+            ) {
+                self.total = total
+                self.uploading = uploading
+                self.preparingPhotos = preparingPhotos
+                self.analyzing = analyzing
+                self.readyForReview = readyForReview
+                self.saved = saved
+                self.failed = failed
+            }
+            public enum CodingKeys: String, CodingKey {
+                case total
+                case uploading
+                case preparingPhotos
+                case analyzing
+                case readyForReview
+                case saved
+                case failed
+            }
+        }
+        /// The items of one haul, photographed in one session, in haul order.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemBatch`.
+        public struct ItemBatch: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/items`.
+            public var items: [Components.Schemas.ItemBatchItem]
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/progress`.
+            public var progress: Components.Schemas.ItemBatchProgress
+            /// The batch's interaction from its first photo, once the app reported it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/interaction`.
+            public var interaction: Components.Schemas.InteractionTotals?
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/createdAt`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/updatedAt`.
+            public var updatedAt: Components.Schemas.Timestamp
+            /// Creates a new `ItemBatch`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - items:
+            ///   - progress:
+            ///   - interaction: The batch's interaction from its first photo, once the app reported it.
+            ///   - createdAt:
+            ///   - updatedAt:
+            public init(
+                id: Components.Schemas.Id,
+                items: [Components.Schemas.ItemBatchItem],
+                progress: Components.Schemas.ItemBatchProgress,
+                interaction: Components.Schemas.InteractionTotals? = nil,
+                createdAt: Components.Schemas.Timestamp,
+                updatedAt: Components.Schemas.Timestamp
+            ) {
+                self.id = id
+                self.items = items
+                self.progress = progress
+                self.interaction = interaction
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case items
+                case progress
+                case interaction
+                case createdAt
+                case updatedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItemCreate`.
+        public struct ItemBatchItemCreate: Codable, Hashable, Sendable {
+            /// The item's place in the haul, 0 first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemCreate/position`.
+            public var position: Swift.Int32
+            /// Creates a new `ItemBatchItemCreate`.
+            ///
+            /// - Parameters:
+            ///   - position: The item's place in the haul, 0 first.
+            public init(position: Swift.Int32) {
+                self.position = position
+            }
+            public enum CodingKeys: String, CodingKey {
+                case position
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItemSubmit`.
+        public struct ItemBatchItemSubmit: Codable, Hashable, Sendable {
+            /// How many photos the app attached; the item must have exactly these many.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemSubmit/photoCount`.
+            public var photoCount: Swift.Int32
+            /// Creates a new `ItemBatchItemSubmit`.
+            ///
+            /// - Parameters:
+            ///   - photoCount: How many photos the app attached; the item must have exactly these many.
+            public init(photoCount: Swift.Int32) {
+                self.photoCount = photoCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case photoCount
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItemInteraction`.
+        public struct ItemBatchItemInteraction: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemInteraction/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemInteraction/interaction`.
+            public var interaction: Components.Schemas.InteractionTotals
+            /// Creates a new `ItemBatchItemInteraction`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - interaction:
+            public init(
+                itemId: Components.Schemas.Id,
+                interaction: Components.Schemas.InteractionTotals
+            ) {
+                self.itemId = itemId
+                self.interaction = interaction
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case interaction
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemBatchInteractionReplace`.
+        public struct ItemBatchInteractionReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatchInteractionReplace/batch`.
+            public var batch: Components.Schemas.InteractionTotals
+            /// - Remark: Generated from `#/components/schemas/ItemBatchInteractionReplace/items`.
+            public var items: [Components.Schemas.ItemBatchItemInteraction]
+            /// Creates a new `ItemBatchInteractionReplace`.
+            ///
+            /// - Parameters:
+            ///   - batch:
+            ///   - items:
+            public init(
+                batch: Components.Schemas.InteractionTotals,
+                items: [Components.Schemas.ItemBatchItemInteraction]
+            ) {
+                self.batch = batch
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case batch
+                case items
+            }
+        }
         /// A model's guess, not market data. `label` is always
         /// "AI estimate - not based on sold listings"; clients show it next to the numbers.
         ///
