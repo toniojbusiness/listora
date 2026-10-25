@@ -202,7 +202,9 @@ involved. It deploys only to the captain's account `976033325938` (pinned in the
 other account is refused) and runs the same steps in the same order as the workflow.
 
 **Before the first run:** sign in to the account's AWS CLI profile (for example
-`aws sso login --profile prequal-main`), start Docker (`LISTORA_CONTAINER_CLI=finch` uses Finch
+`aws sso login --profile prequal-main`; one sign-in covers the whole deploy, since `cdk` gets
+the profile's credentials from the AWS CLI through `credential_process` in a private config the
+script removes on exit, instead of the hour-long SSO token `cdk` cannot renew), start Docker (`LISTORA_CONTAINER_CLI=finch` uses Finch
 instead), and put the Anthropic key in `~/.config/listora/anthropic.env` as one
 `ANTHROPIC_API_KEY=...` line. Optional settings (`LISTORA_AWS_REGION`,
 `LISTORA_AVAILABILITY_ZONES`, `LISTORA_ALARM_EMAIL`, `LISTORA_DOMAIN` with
