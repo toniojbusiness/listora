@@ -30,7 +30,7 @@ import {
   type RemoteListingState,
   type WriteOperationKind,
 } from '../adapter.ts';
-import { checkCapabilities, operationMode } from '../capabilities.ts';
+import { checkCapabilities, operationMode, readBackState } from '../capabilities.ts';
 import {
   desiredStateForContent,
   isContentKind,
@@ -38,7 +38,10 @@ import {
   type ContentKind,
   type ListingContent,
 } from '../content.ts';
-import { sampleListingContent } from '../testing.ts';
+import {
+  sampleListingContent as baseSampleContent,
+  type SampleContentOverrides,
+} from '../testing.ts';
 
 /** Marketplace requests the suite can make fail. */
 export type ConformanceAction =
@@ -68,8 +71,11 @@ export interface ConformanceMarketplace {
    * marketplace never says so; the suite then checks that no absence is authoritative.
    */
   remove?(externalListingId: string): void;
-  /** How many listings the marketplace holds for a seller SKU. */
-  countListings(sku: string): number;
+  /**
+   * How many listings the marketplace holds for the seller SKU a request for this listing sends
+   * (its external SKU, or the id Listora named the listing with).
+   */
+  countListings(listing: ListingRef): number;
   /** Clears every pending failure. */
   reset(): void;
 }
@@ -82,6 +88,11 @@ export interface AdapterConformanceOptions {
   connection: ConnectionRef | null;
   /** Absolute directory of this adapter's golden files for this connection mode. */
   goldenDir: string;
+  /**
+   * Changes to the sample listing for this marketplace (Depop: an item in a category its
+   * taxonomy maps), applied under every change a check makes.
+   */
+  content?: SampleContentOverrides;
   /** Required when any capability is `api`. */
   marketplace?: ConformanceMarketplace;
   /** The same adapter pointed at an address where nothing listens. Required with `api`. */
@@ -102,6 +113,8 @@ const TASK_KINDS = {
 } as const satisfies Record<WriteOperationKind, string>;
 
 let sequence = 0;
+/** Every id an adapter that names its listings gave out in this run, as the engine keeps them. */
+const namedIds: string[] = [];
 
 export function describeAdapterConformance(options: AdapterConformanceOptions): void {
   const { adapter, connection } = options;
@@ -110,6 +123,16 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
   const usesApi = OPERATION_KINDS.some((kind) => modeOf(kind) === 'api');
   const name = MARKETPLACE_NAMES[adapter.id];
   const golden = (file: string): string => `${options.goldenDir.replace(/\/+$/, '')}/${file}`;
+  /** What a read-back of this desired state must show (no title where listings have none). */
+  const shown = (desired: DesiredListingState) => readBackState(desired, capabilities);
+
+  function sampleListingContent(overrides: SampleContentOverrides = {}): ListingContent {
+    const base = options.content ?? {};
+    return baseSampleContent({
+      item: { ...base.item, ...overrides.item },
+      variant: { ...base.variant, ...overrides.variant },
+    });
+  }
 
   const ctx = (): AdapterContext => ({ signal: new AbortController().signal, connection });
 
@@ -119,18 +142,31 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
     return { listingId: id, externalListingId: null, externalSku: `SKU-${id}`, externalUrl: null };
   }
 
+  /**
+   * One attempt of an operation. A create or relist on a marketplace whose listings Listora
+   * names gets its new listing's id first, as the engine assigns it before sending: the request's
+   * `listing` carries it.
+   */
   function request(
     kind: WriteOperationKind,
     listing: ListingRef,
     change: { content?: ListingContent; desired?: DesiredListingState } = {},
   ): OperationRequest {
     const content = change.content ?? sampleListingContent();
+    const named =
+      (kind === 'create' && listing.externalListingId === null) ||
+      (kind === 'relist' && listing.externalListingId !== null)
+        ? adapter.newListingId?.(content.item, namedIds, connection)
+        : undefined;
+    if (named !== undefined && named !== null) namedIds.push(named);
+    const target =
+      named === undefined || named === null ? listing : { ...listing, externalListingId: named };
     const base = {
       operationId: `op-${listing.listingId}-${kind}`,
       kind,
       idempotencyKey: `key-${listing.listingId}-${kind}`,
       attempt: 1,
-      listing,
+      listing: target,
     };
     if (!isContentKind(kind))
       return { ...base, desired: change.desired ?? desiredFor(kind), payload: null };
@@ -298,14 +334,16 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
         market().reset();
       });
 
+      /** Creates a listing; `sent` is the listing as the create addressed it. */
       async function create(ref = newRef(), content = sampleListingContent()) {
-        const outcome = await adapter.execute(request('create', ref, { content }), ctx());
+        const op = request('create', ref, { content });
+        const outcome = await adapter.execute(op, ctx());
         expect(outcome).toMatchObject({ type: 'confirmed' });
         const learned = outcome.type === 'confirmed' ? outcome.externalListingId : undefined;
-        const remote = await adapter.readListing(ref, ctx());
+        const remote = await adapter.readListing(op.listing, ctx());
         const externalListingId = learned ?? (remote.found ? remote.externalListingId : null);
         expect(externalListingId).toEqual(expect.any(String));
-        return { ref: { ...ref, externalListingId }, outcome, content };
+        return { ref: { ...op.listing, externalListingId }, sent: op.listing, outcome, content };
       }
 
       async function read(ref: ListingRef): Promise<Extract<RemoteListingState, { found: true }>> {
@@ -324,10 +362,9 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
       });
 
       it('creates a listing and reads it back by SKU and by id, with freshness', async () => {
-        const ref = newRef();
-        const { ref: listed, outcome, content } = await create(ref);
-        const desired = desiredStateForContent('create', content);
-        const bySku = await read(ref);
+        const { ref: listed, sent, outcome, content } = await create();
+        const desired = shown(desiredStateForContent('create', content));
+        const bySku = await read(sent);
         const byId = await read(listed);
         expect(byId).toMatchObject({ ...desired, externalListingId: listed.externalListingId });
         expect(byId).toEqual(bySku);
@@ -338,13 +375,12 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
       });
 
       it('applies a create sent again with the same idempotency key once', async () => {
-        const ref = newRef();
-        const op = request('create', ref);
+        const op = request('create', newRef());
         expect(await adapter.execute(op, ctx())).toMatchObject({ type: 'confirmed' });
         expect(await adapter.execute({ ...op, attempt: 2 }, ctx())).toMatchObject({
           type: 'confirmed',
         });
-        expect(market().countListings(ref.externalSku ?? '')).toBe(1);
+        expect(market().countListings(op.listing)).toBe(1);
       });
 
       if (isApi('price')) {
@@ -390,7 +426,7 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
           });
           const outcome = await adapter.execute(request('revise', ref, { content }), ctx());
           expect(outcome).toMatchObject({ type: 'confirmed' });
-          expect(await read(ref)).toMatchObject(desiredStateForContent('revise', content));
+          expect(await read(ref)).toMatchObject(shown(desiredStateForContent('revise', content)));
         });
       }
 
@@ -413,12 +449,13 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
           expect(await adapter.execute(request('end', ref), ctx())).toMatchObject({
             type: 'confirmed',
           });
-          const outcome = await adapter.execute(request('relist', ref), ctx());
+          const relist = request('relist', ref);
+          const outcome = await adapter.execute(relist, ctx());
           expect(outcome).toMatchObject({ type: 'confirmed' });
           const relisted =
             outcome.type === 'confirmed' && outcome.externalListingId !== undefined
               ? { ...ref, externalListingId: outcome.externalListingId }
-              : ref;
+              : relist.listing;
           expect(await read(relisted)).toMatchObject({ status: 'active' });
         });
       }
@@ -464,12 +501,12 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
 
       describe('error mapping', () => {
         it('maps 429 to a transient outcome and honors Retry-After', async () => {
-          const ref = newRef();
           market().failNext('create', { type: 'rate_limited', retryAfterSeconds: 3 });
-          const limited = await adapter.execute(request('create', ref), ctx());
+          const op = request('create', newRef());
+          const limited = await adapter.execute(op, ctx());
           expect(limited).toMatchObject({ type: 'transient', retryAfterMs: 3_000 });
           expectNamed(limited, name);
-          expect(market().countListings(ref.externalSku ?? '')).toBe(0);
+          expect(market().countListings(op.listing)).toBe(0);
 
           market().failNext('create', { type: 'rate_limited' });
           const plain = await adapter.execute(request('create', newRef()), ctx());
@@ -478,19 +515,15 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
         });
 
         it('maps 5xx to a transient outcome, whether or not the change was applied', async () => {
-          const before = newRef();
+          const before = request('create', newRef());
           market().failNext('create', { type: 'server_error', afterApply: false });
-          expect(await adapter.execute(request('create', before), ctx())).toMatchObject({
-            type: 'transient',
-          });
-          expect(market().countListings(before.externalSku ?? '')).toBe(0);
+          expect(await adapter.execute(before, ctx())).toMatchObject({ type: 'transient' });
+          expect(market().countListings(before.listing)).toBe(0);
 
-          const after = newRef();
+          const after = request('create', newRef());
           market().failNext('create', { type: 'server_error', afterApply: true });
-          expect(await adapter.execute(request('create', after), ctx())).toMatchObject({
-            type: 'transient',
-          });
-          expect(market().countListings(after.externalSku ?? '')).toBe(1);
+          expect(await adapter.execute(after, ctx())).toMatchObject({ type: 'transient' });
+          expect(market().countListings(after.listing)).toBe(1);
         });
 
         it('maps a validation error to a rejected outcome with the reason', async () => {
@@ -509,13 +542,13 @@ export function describeAdapterConformance(options: AdapterConformanceOptions): 
         });
 
         it('maps a timeout after sending to an unknown outcome, never a failure', async () => {
-          const ref = newRef();
           market().failNext('create', { type: 'timeout_after_send' });
-          const outcome = await adapter.execute(request('create', ref), ctx());
+          const op = request('create', newRef());
+          const outcome = await adapter.execute(op, ctx());
           expect(outcome).toMatchObject({ type: 'unknown' });
           expectNamed(outcome, name);
-          // The change landed, and a read-back finds it by SKU.
-          expect(await adapter.readListing(ref, ctx())).toMatchObject({ found: true });
+          // The change landed, and a read-back finds it by SKU (or the id Listora named it with).
+          expect(await adapter.readListing(op.listing, ctx())).toMatchObject({ found: true });
         });
 
         it('maps an unreachable marketplace to a transient outcome', async () => {

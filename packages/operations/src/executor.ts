@@ -53,6 +53,7 @@ import {
   MARKETPLACE_NAMES,
   operationMode,
   parseListingContent,
+  readBackState,
   unsupportedMessage,
   type AdapterLookup,
   type ConnectionRef,
@@ -112,6 +113,13 @@ interface StepContext {
   adapter: MarketplaceAdapter;
   connection: ConnectionRef | null;
   desired: DesiredListingState;
+  /** The part of `desired` a read-back can show (`readBackState`): what read-backs compare. */
+  checked: DesiredListingState;
+  /**
+   * The id this step named the new listing with (`nameNewListing`), now the listing's pending
+   * id; `null` when the step named none.
+   */
+  namedListingId: string | null;
   /** The listing content a create, revise, or relist publishes; `null` for other kinds. */
   content: ListingContent | null;
   /** How the operation runs under the connection; an `unsupported` one is never sent. */
@@ -163,6 +171,8 @@ interface StepResult {
   resolution: Resolution;
   /** A listing id the marketplace returned, kept even when the result is not yet verified. */
   externalListingId?: string;
+  /** Nothing reached the marketplace listing: the send was refused, or never made. */
+  nothingApplied?: true;
   detail: Record<string, unknown>;
 }
 
@@ -266,6 +276,8 @@ async function claimStep(
       adapter,
       connection,
       desired,
+      checked: readBackState(desired, capabilities),
+      namedListingId: null,
       content,
       mode,
       canReadBack,
@@ -360,14 +372,32 @@ async function claimStep(
       return null;
     }
 
+    const named = await nameNewListing(trx, op, base);
+    if (named.type === 'taken') {
+      await transitionOperation(trx, op, { to: 'failed', error: linkedElsewhere(name) });
+      return null;
+    }
+    const naming =
+      named.type === 'named'
+        ? {
+            listing: named.listing,
+            namedListingId: named.id,
+            targets: listingTargets(named.listing, desired),
+          }
+        : {};
     const precheck = op.kind !== 'verify' && canReadBack && (await wasSentBefore(trx, op));
     const running = await transitionOperation(
       trx,
       op,
       { to: 'running' },
-      { step: op.kind === 'verify' ? 'check' : 'send', precheck, mode },
+      {
+        step: op.kind === 'verify' ? 'check' : 'send',
+        precheck,
+        mode,
+        ...(named.type === 'named' ? { [NAMED_LISTING_KEY]: named.id } : {}),
+      },
     );
-    const ctx = { op: running, ...base };
+    const ctx = { op: running, ...base, ...naming };
     return op.kind === 'verify'
       ? { type: 'check', ctx, attempt: running.attempts }
       : { type: 'send', ctx, precheck, attempt: running.attempts };
@@ -386,6 +416,103 @@ async function loadConnection(
     .where('id', '=', listing.connection_id)
     .executeTakeFirst();
   return connection ?? null;
+}
+
+/** The `running` event detail key that records the id a step named a new listing with. */
+const NAMED_LISTING_KEY = 'namedListingId';
+
+type Naming =
+  | { type: 'none' }
+  | { type: 'named'; id: string; listing: ListingRow }
+  /** Another of the account's listings already has the id. */
+  | { type: 'taken' };
+
+/**
+ * Names the new marketplace listing of a create or relist, for an adapter whose marketplace
+ * lets Listora name listings (`newListingId`: Depop's SKUs), before anything is sent. The id
+ * becomes the listing's pending id in the claim's transaction, so every later step, a
+ * read-back after a lost answer included, reaches it. The operation keeps the id it was given
+ * first (its `running` events record it), so every attempt and every Retry sends the same one.
+ * A listing that already has a pending id keeps it, since an earlier create or relist may have
+ * made that listing, and naming another could leave two live. A create names only a listing
+ * that has no marketplace listing yet; a relist one that has.
+ */
+async function nameNewListing(
+  trx: DbTransaction,
+  op: OperationRow,
+  ctx: Pick<StepContext, 'listing' | 'adapter' | 'connection' | 'content' | 'mode'>,
+): Promise<Naming> {
+  const { listing, adapter, content } = ctx;
+  if (ctx.mode !== 'api' || content === null || adapter.newListingId === undefined) {
+    return { type: 'none' };
+  }
+  if (op.kind !== 'create' && op.kind !== 'relist') return { type: 'none' };
+  if (listing.pending_external_listing_id !== null) return { type: 'none' };
+  if ((op.kind === 'create') !== (listing.external_listing_id === null)) return { type: 'none' };
+  const id =
+    (await namedBefore(trx, op)) ??
+    adapter.newListingId(content.item, await usedListingIds(trx, listing), ctx.connection);
+  if (id === null || id === listing.external_listing_id) return { type: 'none' };
+  if (await externalIdTaken(trx, listing, id)) return { type: 'taken' };
+  await trx
+    .updateTable('marketplace_listing')
+    .set({ pending_external_listing_id: id, pending_remote_revision: null })
+    .where('account_id', '=', listing.account_id)
+    .where('id', '=', listing.id)
+    .execute();
+  return {
+    type: 'named',
+    id,
+    listing: { ...listing, pending_external_listing_id: id, pending_remote_revision: null },
+  };
+}
+
+/** The id an earlier step of this operation named its new listing with, if any. */
+async function namedBefore(trx: DbTransaction, op: OperationRow): Promise<string | null> {
+  const event = await trx
+    .selectFrom('operation_event')
+    .select(sql<string>`detail->>${NAMED_LISTING_KEY}`.as('named'))
+    .where('account_id', '=', op.account_id)
+    .where('operation_id', '=', op.id)
+    .where('to_status', '=', 'running')
+    .where(sql<boolean>`detail ? ${NAMED_LISTING_KEY}`)
+    .orderBy('id', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+  return event?.named ?? null;
+}
+
+/**
+ * Every id the listing's item has had on the listing's marketplace: the ids of its listings
+ * there, and every id an operation on them named, so a name is never given twice.
+ */
+async function usedListingIds(trx: DbTransaction, listing: ListingRow): Promise<string[]> {
+  const listings = await trx
+    .selectFrom('marketplace_listing')
+    .select(['id', 'external_listing_id', 'pending_external_listing_id'])
+    .where('account_id', '=', listing.account_id)
+    .where('item_id', '=', listing.item_id)
+    .where('marketplace', '=', listing.marketplace)
+    .execute();
+  const named = await trx
+    .selectFrom('operation_event as e')
+    .innerJoin('marketplace_operation as o', (join) =>
+      join.onRef('o.account_id', '=', 'e.account_id').onRef('o.id', '=', 'e.operation_id'),
+    )
+    .select(sql<string>`e.detail->>${NAMED_LISTING_KEY}`.as('named'))
+    .where('e.account_id', '=', listing.account_id)
+    .where(
+      'o.listing_id',
+      'in',
+      listings.map((row) => row.id),
+    )
+    .where(sql<boolean>`e.detail ? ${NAMED_LISTING_KEY}`)
+    .execute();
+  const ids = [
+    ...listings.flatMap((row) => [row.external_listing_id, row.pending_external_listing_id]),
+    ...named.map((row) => row.named),
+  ];
+  return [...new Set(ids.filter((id): id is string => id !== null))];
 }
 
 /**
@@ -570,6 +697,7 @@ async function sendTo(
   if (!prepared.ok) {
     return {
       resolution: { type: 'failed', error: prepared.error },
+      nothingApplied: true,
       detail: { step: 'send', sent: false, ...prepared.detail },
     };
   }
@@ -656,7 +784,9 @@ async function sendTo(
           }
         }
       }
-      return { resolution: { type: 'failed', error }, detail };
+      // A refusal applied nothing (an end or mark-sold the read-back above could not settle
+      // keeps its targets, since they may be live).
+      return { resolution: { type: 'failed', error }, nothingApplied: true, detail };
     }
     case 'transient':
       return {
@@ -883,7 +1013,7 @@ function compareReadBack(
           newestSeen: remote.found ? (seen.get(remote.externalListingId) ?? null) : null,
         }
       : { kind: 'repeat', previousReadMatched };
-  const comparison = confirmByReadBack(ctx.desired, remote, freshness);
+  const comparison = confirmByReadBack(ctx.checked, remote, freshness);
   if (ctx.freshness === 'revision' && remote.found) {
     noteRevision(seen, remote.externalListingId, remote.revision);
   }
@@ -1037,10 +1167,24 @@ async function recordResult(
       return;
     }
 
+    // An id this step named a new listing with, whose send was refused or never made, names
+    // nothing on the marketplace: the listing forgets it, so it can't keep a delist waiting for
+    // a listing that was never made. The operation keeps it for its Retry.
+    let pendingId = ctx.listing.pending_external_listing_id;
+    if (ctx.namedListingId !== null && result.nothingApplied === true) {
+      await trx
+        .updateTable('marketplace_listing')
+        .set({ pending_external_listing_id: null, pending_remote_revision: null })
+        .where('account_id', '=', op.account_id)
+        .where('id', '=', op.listing_id)
+        .where('pending_external_listing_id', '=', ctx.namedListingId)
+        .execute();
+      pendingId = null;
+    }
+
     // A listing id the marketplace returned becomes the listing's pending id at once, so every
     // later step and operation on the listing reaches it, verified or not.
     const learned = result.externalListingId;
-    let pendingId = ctx.listing.pending_external_listing_id;
     if (
       learned !== undefined &&
       learned !== ctx.listing.external_listing_id &&

@@ -1,0 +1,100 @@
+{
+  "ninePhotos": [
+    {
+      "field": "item.photos",
+      "code": "too_many",
+      "message": "Depop listings can have at most 8 photos."
+    }
+  ],
+  "ninetyNineCents": [
+    {
+      "field": "variant.price",
+      "code": "out_of_range",
+      "message": "Depop prices must be at least $1.00."
+    }
+  ],
+  "tooLongWithHashtags": [
+    {
+      "field": "variant.description",
+      "code": "too_long",
+      "message": "Depop descriptions, hashtags included, can be at most 1000 characters."
+    }
+  ],
+  "emailAddress": [
+    {
+      "field": "variant.description",
+      "code": "invalid",
+      "message": "Depop doesn't allow email addresses in descriptions."
+    }
+  ],
+  "hashtagLineInCopy": [
+    {
+      "field": "variant.description",
+      "code": "invalid",
+      "message": "Put Depop hashtags in the hashtag list, not on the last line of the description."
+    }
+  ],
+  "sixHashtags": [
+    {
+      "field": "variant.hashtags",
+      "code": "too_many",
+      "message": "Depop listings can have at most 5 hashtags, the description's own included."
+    }
+  ],
+  "badHashtag": [
+    {
+      "field": "variant.hashtags",
+      "code": "invalid",
+      "message": "Depop hashtags are up to 30 letters and numbers each."
+    }
+  ],
+  "blankDescription": [
+    {
+      "field": "variant.description",
+      "code": "required",
+      "message": "Depop listings need a description."
+    }
+  ],
+  "unisex": [
+    {
+      "field": "item.department",
+      "code": "required",
+      "message": "Depop needs to know whether the item is menswear, womenswear, or kidswear."
+    }
+  ],
+  "unmappedCategory": [
+    {
+      "field": "variant.categoryRef",
+      "code": "required",
+      "message": "Depop needs a category for this item."
+    }
+  ],
+  "notATaxonomyId": [
+    {
+      "field": "variant.categoryRef",
+      "code": "invalid",
+      "message": "\"Denim Jackets\" isn't a Depop category."
+    }
+  ],
+  "halfASize": [
+    {
+      "field": "variant.aspects",
+      "code": "incomplete",
+      "message": "Depop sizes need both size_set_id and size_id."
+    }
+  ],
+  "sizeNotANumber": [
+    {
+      "field": "variant.aspects",
+      "code": "invalid",
+      "message": "Depop's size_id is one whole number."
+    }
+  ],
+  "noCondition": [
+    {
+      "field": "item.condition",
+      "code": "required",
+      "message": "Depop needs the item's condition."
+    }
+  ]
+}

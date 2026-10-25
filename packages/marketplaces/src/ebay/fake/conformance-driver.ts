@@ -65,7 +65,7 @@ export function fakeEbayConformanceMarketplace(
     remove(externalListingId) {
       fake.remove(externalListingId);
     },
-    countListings: (sku) => fake.listings(sku).length,
+    countListings: (listing) => fake.listings(listing.externalSku ?? listing.listingId).length,
     reset() {
       fake.clearFaults();
     },

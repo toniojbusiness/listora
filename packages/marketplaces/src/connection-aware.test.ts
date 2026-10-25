@@ -34,6 +34,21 @@ describe('ConnectionAwareAdapter', () => {
     expect(unapproved.capabilities(api).create).toBe('assisted');
   });
 
+  it('asks only the api adapter for the id of a new listing, under an api connection', () => {
+    const { item } = sampleListingContent();
+    const named = new ConnectionAwareAdapter({
+      assisted,
+      api: Object.assign(Object.create(fake) as FakeMarketplaceAdapter, {
+        newListingId: (_item: unknown, used: readonly string[]) => `SKU-${String(used.length)}`,
+      }),
+    });
+    expect(named.newListingId(item, ['a', 'b'], api)).toBe('SKU-2');
+    expect(named.newListingId(item, ['a', 'b'], assistedConnection)).toBeNull();
+    expect(named.newListingId(item, [], null)).toBeNull();
+    // An api adapter that names nothing itself leaves the id to the marketplace.
+    expect(depop.newListingId(item, [], api)).toBeNull();
+  });
+
   it('refuses adapters for two different marketplaces', () => {
     expect(
       () => new ConnectionAwareAdapter({ assisted: createPoshmarkAdapter(), api: fake }),

@@ -4,6 +4,7 @@
  * rejects copy that is not, so a variant never needs cutting before it is listed.
  */
 import type { KnownMarketplace } from '@listora/api-contract';
+import { DEPOP_EMAIL_ADDRESS } from '@listora/shared';
 
 export interface MarketplaceCopyLimits {
   /** Characters in the title. */
@@ -59,12 +60,8 @@ export const MARKETPLACE_COPY_LIMITS = {
 /** Hashtags as the model writes them: lowercase letters and digits, without the `#`. */
 export const HASHTAG = /^[a-z0-9]{1,30}$/;
 
-/** What Depop's description field gets: the copy, then its hashtags on their own line. */
-export function depopDescription(description: string, hashtags: readonly string[]): string {
-  return hashtags.length === 0
-    ? description
-    : `${description}\n\n${hashtags.map((tag) => `#${tag}`).join(' ')}`;
-}
+// Depop's listing text rules are shared with the Depop adapter (`@listora/shared`).
+export { depopDescription } from '@listora/shared';
 
 /** Text that looks like an email address, which Depop refuses in descriptions. */
-export const EMAIL_ADDRESS = /[^\s@]+@[^\s@]+\.[^\s@]+/;
+export const EMAIL_ADDRESS = DEPOP_EMAIL_ADDRESS;

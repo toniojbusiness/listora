@@ -34,6 +34,7 @@ export {
   CAPABILITY_FOR_KIND,
   checkCapabilities,
   operationMode,
+  readBackState,
   unsupportedMessage,
 } from './capabilities.ts';
 export type { OperationMode } from './capabilities.ts';
@@ -64,6 +65,76 @@ export {
   InvalidDesiredStateError,
   parseDesiredListingState,
 } from './desired-state.ts';
+export { DepopAdapter, productBody } from './depop/adapter.ts';
+export type { DepopAdapterOptions } from './depop/adapter.ts';
+export { DepopApi } from './depop/client.ts';
+export {
+  DEFAULT_DEPOP_FAKE_URL,
+  DEPOP_ENVIRONMENTS,
+  DepopConfigError,
+  depopEndpoints,
+  loadDepopConfig,
+} from './depop/config.ts';
+export type { DepopConfig, DepopEndpoints, DepopEnvironment } from './depop/config.ts';
+export { createDepopAdapter } from './depop/create.ts';
+export type { CreateDepopAdapterOptions } from './depop/create.ts';
+export {
+  FAKE_DEPOP_ADDRESS_ID,
+  FAKE_DEPOP_CLIENT_ID,
+  FAKE_DEPOP_CLIENT_SECRET,
+  FAKE_DEPOP_REFRESH_TOKEN,
+} from './depop/fake/constants.ts';
+export { FakeDepop } from './depop/fake/fake-depop.ts';
+export type {
+  FakeDepopAction,
+  FakeDepopFault,
+  FakeDepopFaultPicker,
+  FakeDepopFaultRule,
+  FakeDepopOptions,
+  FakeDepopOrder,
+  FakeDepopProduct,
+  FakeDepopRequest,
+  SignedDepopWebhook,
+} from './depop/fake/fake-depop.ts';
+export {
+  createPkcePair,
+  DEPOP_GRANT_LIFETIME_MS,
+  DEPOP_SCOPES,
+  DepopOAuthClient,
+  DepopReauthRequiredError,
+  DepopTokenUnavailableError,
+  pkceChallenge,
+} from './depop/oauth.ts';
+export type { DepopOAuthClientOptions, DepopTokens, PkcePair } from './depop/oauth.ts';
+export { DEPOP_ORDER_STATUSES, parseDepopOrdersPage } from './depop/orders.ts';
+export type {
+  DepopOrder,
+  DepopOrderLine,
+  DepopOrdersPage,
+  DepopOrderStatus,
+} from './depop/orders.ts';
+export { buildDepopPayload, DEPOP_LIMITS, validateDepopPayload } from './depop/payload.ts';
+export type { DepopListingPayload } from './depop/payload.ts';
+export { DEPOP_RATE_LIMITS, DepopRateLimiter } from './depop/rate-limits.ts';
+export type { DepopRateGroup, DepopRateLimiterOptions } from './depop/rate-limits.ts';
+export type { DepopListingSettings, DepopSellerSource } from './depop/seller.ts';
+export { depopSku, nextDepopSku } from './depop/sku.ts';
+export { DepopSellerTokens, MemoryDepopTokenStore } from './depop/tokens.ts';
+export type { DepopSellerTokensOptions, DepopTokenStore } from './depop/tokens.ts';
+export {
+  DEPOP_SIGNATURE_HEADER,
+  DEPOP_TIMESTAMP_HEADER,
+  DepopWebhookError,
+  depopWebhookSignature,
+  parseDepopWebhook,
+  receiveDepopWebhook,
+  verifyDepopWebhook,
+} from './depop/webhooks.ts';
+export type {
+  DepopSignatureCheck,
+  DepopWebhookEvent,
+  DepopWebhookReceipt,
+} from './depop/webhooks.ts';
 export {
   chooseEbayCategory,
   EBAY_VERIFY_PICTURE_URL,

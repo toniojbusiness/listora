@@ -72,6 +72,7 @@ const ASSISTED_CAPABILITIES: MarketplaceCapabilities = {
   markSold: 'not_needed',
   verifyRead: 'user_confirm',
   readFreshness: 'none',
+  title: 'field',
   importListings: 'share_sheet',
   saleDetection: ['email', 'manual'],
   imageTransport: 'user_saves_photos',

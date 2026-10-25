@@ -8,6 +8,7 @@ import { assertNever } from '@listora/shared';
 
 import {
   MARKETPLACE_NAMES,
+  type DesiredListingState,
   type MarketplaceCapabilities,
   type WriteOperationKind,
 } from './adapter.ts';
@@ -50,6 +51,20 @@ export function operationMode(
     default:
       return assertNever(mode, 'capability mode');
   }
+}
+
+/**
+ * The part of a desired state a read-back can show under these capabilities: everything but
+ * the title on a marketplace whose listings have none (Depop), which reads never carry.
+ */
+export function readBackState(
+  desired: DesiredListingState,
+  capabilities: MarketplaceCapabilities,
+): DesiredListingState {
+  if (capabilities.title === 'field' || desired.title === undefined) return desired;
+  const shown = { ...desired };
+  delete shown.title;
+  return shown;
 }
 
 /** "Listora can't <phrase> on Poshmark." */

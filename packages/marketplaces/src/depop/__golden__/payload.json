@@ -1,0 +1,21 @@
+{
+  "description": "Classic trucker jacket in medium wash. Light fading at the cuffs.",
+  "hashtags": [],
+  "priceCents": 4500,
+  "currency": "USD",
+  "department": "menswear",
+  "productType": "tshirts",
+  "sizeSetId": null,
+  "sizeId": null,
+  "condition": "used_excellent",
+  "brand": "Levi's",
+  "colours": [
+    "blue"
+  ],
+  "attributes": {},
+  "pictureUrls": [
+    "https://media.listora.test/p/front.jpg",
+    "https://media.listora.test/p/back.jpg",
+    "https://media.listora.test/p/tag.jpg"
+  ]
+}

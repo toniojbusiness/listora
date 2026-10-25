@@ -127,8 +127,9 @@ packages/
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
                 the photo processing job, an item's photo-set hash (@listora/photos)
   marketplaces/ Marketplace adapter framework: interface, capabilities, registry, listing content,
-                assisted adapters, conformance suite; the eBay adapter (ebay/); fake marketplace
-                and fake eBay with fault injection (@listora/marketplaces)
+                assisted adapters, conformance suite; the eBay adapter (ebay/) and the Depop
+                adapter (depop/); fake marketplace, fake eBay, and fake Depop with fault injection
+                (@listora/marketplaces)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
@@ -287,6 +288,7 @@ interface MarketplaceCapabilities {
   markSold: Mode | 'not_needed'; // not_needed: the marketplace marks its own sales sold
   verifyRead: 'api' | 'user_confirm'; // how success is established
   readFreshness: 'revision' | 'none'; // whether reads carry a revision (see section 6)
+  title: 'field' | 'none'; // Depop: none (listings have no title; read-backs never check one)
   importListings: 'api' | 'share_sheet' | 'bulk_file' | 'none';
   saleDetection: Array<'webhook' | 'poll' | 'email' | 'manual'>;
   imageTransport: 'url_fetch' | 'upload' | 'user_saves_photos';
@@ -304,6 +306,11 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
   // Outcome: confirmed | rejected | transient | unknown | pendingUser
   readListing(ref: ListingRef, ctx: AdapterContext): Promise<RemoteListingState>;
   healthCheck(ctx: AdapterContext): Promise<Health>; // ok | degraded | reauth_required | revoked
+  newListingId?(
+    item: ItemSnapshot,
+    usedIds: readonly string[],
+    connection: ConnectionRef | null,
+  ): string | null;
 }
 ```
 
@@ -313,7 +320,7 @@ members with the tasks that first use them (T-16, T-17, T-23, T-36).
 | Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
 | ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
 | eBay        | API                                                                          | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs                          | `ORDER_CONFIRMATION` webhook + 5-minute poll                    |
-| Depop       | API after partner approval; browser automation until then, assisted fallback | `PUT` by per-attempt external SKU, `PATCH`, `DELETE`/mark-as-sold; verify with `GET`                                                       | `v1:order.*` webhooks + poll                                    |
+| Depop       | API after partner approval; browser automation until then, assisted fallback | `PUT` by a SKU Listora names per listing (`AJ-000184-D1`, `-D2` after a relist), `PATCH`, `DELETE`/mark-as-sold; verify with `GET`         | `v1:order.*` webhooks (`X-Depop-Signature`) + orders poll       |
 | Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms | DKIM-verified forwarded emails, scheduled browser check, manual |
 | Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark                                                                                                                           | Forwarded emails, scheduled browser check, manual               |
 
@@ -324,6 +331,22 @@ read-back decides), `assisted` (only the user's confirmation finishes it), or `u
 (`none`, `bulk_file`, `not_needed`, or an API write without API reads), which fails without
 being sent. `checkCapabilities` rejects contradictory flags, such as an API write with
 `verifyRead: 'user_confirm'`.
+
+**Titles.** `readBackState(desired, capabilities)` is the part of a desired state a read-back
+can show: on a marketplace whose listings have no title (`title: 'none'`, Depop) the engine and
+the conformance suite never compare one. The variant's title stays Listora's own headline there.
+
+**Listings Listora names.** An adapter whose marketplace addresses listings by an id the seller's
+tool chooses (Depop's SKUs) implements `newListingId`. Before a create or relist is sent, in
+the transaction that marks the step `running`, the engine names the new listing with it, stores
+the id as the listing's pending id, and records it in the `running` event (`namedListingId`), so
+a read-back finds the listing even when the send's answer is lost. The id passes `usedIds`
+(every id the item has had on the marketplace, from its listings and their operations'
+history), so no name is given twice. An operation keeps its name on every attempt and Retry; a
+listing that already has a pending id keeps it (an earlier create or relist may have made that
+listing); a create names only a listing with no marketplace listing yet, a relist only one that
+has one. When the send that named an id was refused or never made, the listing forgets the
+pending id, so a delist never waits on a listing that was never made.
 
 **Registry.** `createAdapterRegistry` (`registry.ts`) holds one adapter per marketplace and
 refuses, at startup, a duplicate or an adapter whose capabilities are incoherent without a
@@ -448,6 +471,60 @@ eBay Picture Services by the Media API. Its rules:
   read-back, health check, preparing). Token refreshes are single-flight, and the shared
   refresh runs under the OAuth client's own timeout, so one caller's deadline never fails the
   others. The health check is one Fulfillment `getOrders` call.
+
+**The Depop adapter** (`depop/`, `createDepopAdapter` from `DEPOP_ENV` and the other `DEPOP_*`
+keys) lists through Depop's Selling API. It stays dormant until Listora's partner access is
+granted: `ConnectionAwareAdapter` serves it only to connections whose mode is `api`, and every
+other Depop listing runs assisted. Its rules:
+
+- **SKUs are listing ids.** Depop creates and addresses a product by the SKU sent
+  (`PUT /api/v1/products/by-sku/{sku}/` creates or updates) and never reuses a SKU, so each
+  Depop listing gets a SKU of its own (`sku.ts`): the item's SKU and the listing's generation,
+  `AJ-000184-D1`, and `-D2` for the relist, which is a new product. The engine names it before
+  sending (`newListingId`, above). A listing the user linked from a share is known by its product
+  slug and addressed through the `by-slug` endpoints; a relist of it gets a Listora SKU.
+- **Payload** (`payload.ts`, golden-tested): Depop listings have no title, so the description is
+  the listing text, with the hashtags on their own last line (`depopDescription` in
+  `@listora/shared`, shared with the item analysis) and read back without them. Validation
+  refuses what Depop refuses (1 to 8 photos, at least $1.00, 1,000 characters and 5 hashtags,
+  no email addresses) and needs a department and product type. Depop's full taxonomy is behind
+  bot detection (Listora never works around it), so `taxonomy.ts` maps only the product types
+  Depop's documentation names; any other item names its Depop product type in the variant's
+  `categoryRef` and its size in the aspects `size_set_id` and `size_id`, until a taxonomy
+  snapshot arrives with partner access. The seller's address and shipping (Depop Shipping, or a
+  national cost) are added when sending.
+- **Writes and read-back.** Edits are `PUT` (the whole listing) or `PATCH` (the price); an end
+  is `DELETE`, which answers 200 even for a missing product, and a sale elsewhere is
+  `mark-as-sold`, which succeeds for a product that isn't on sale: their 200 is only `confirmed`,
+  and the `GET` read-back decides. A product Depop can't find is never authoritative ("a newly
+  created listing can take a short time to become retrievable"), and reads carry no revision
+  (`updated_at` has whole seconds), so `readFreshness` is `none`. Deleted and banned products
+  read as `ended`, bought or marked-sold ones as `sold`.
+- **Errors.** 429s, 5xx, and failures before sending are transient; a timeout after sending is
+  unknown; a token Depop refuses is refreshed and the call sent once more (nothing was done);
+  a refused grant or a missing scope is `reauth_required`; Depop's other refusals
+  (`duplicate_sku`, `product_not_on_sale`, validation) are `rejected` with Depop's reason.
+- **Tokens** (`oauth.ts`, `tokens.ts`). Sellers connect with the authorization code flow and PKCE
+  (S256). Depop rotates refresh tokens and invalidates the old ones at once, so refreshes are
+  single-flight per connection (ten callers, one refresh), the new tokens are kept in memory
+  before they are stored, a failed write keeps them in use and is stored on the next call
+  (clearing a "reconnect" mark another process set meanwhile), and a refused refresh token is
+  checked against the store first, since another process may have refreshed. The tokens live in
+  a `DepopTokenStore`; until the token vault (T-16) implements it, `MemoryDepopTokenStore` holds
+  the one development or sandbox seller (`DEPOP_USER_REFRESH_TOKEN`, refused in production).
+- **Rate limits** (`rate-limits.ts`): Depop's per-seller allowances (creates and full updates 200
+  per 10 seconds, everything else 6,000 a minute) and its application-wide 30,000 a minute
+  (`DEPOP_APP_REQUESTS_PER_MINUTE` is this process's share), as sliding windows a little longer
+  than Depop's. A call waits up to 2 seconds for room, else it is held back as transient.
+- **Sales.** `listOrders` reads the orders poll; `receiveDepopWebhook` verifies
+  `X-Depop-Signature` (HMAC-SHA256 of `<timestamp>.<raw body>`, five minutes' tolerance) and
+  reads `v1:order.*` and `v1:product.*` events, keyed for deduplication by id, type, and time.
+  The inbound endpoint and the auto-delist that use them are later tasks (T-17, T-23).
+
+The fake Depop (`depop/fake`, `npm run dev:fake-depop`) checks every request and response against
+a byte-for-byte copy of Depop's published `openapi.yaml`, follows Depop's documented rules, OAuth
+(PKCE, rotation), rate limits, and signed webhooks, and injects Depop's failure modes; its README
+cites the Depop pages it follows and what they leave open.
 
 The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth, Media, Taxonomy,
 Fulfillment, Developer Analytics, and Notification endpoints the adapter uses, signs
@@ -610,8 +687,8 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    stale reads, and a worker killed mid-operation, over listings that are ended and relisted
    more than once.
 10. **Concurrency (T-16, T-24).** Token refresh is single-flight per connection; Depop rotates
-    refresh tokens, so a lost write disconnects the seller. Rate limits use per-seller and
-    app-wide token buckets.
+    refresh tokens, so rotated tokens are kept in memory until they are stored (the Depop
+    adapter's tokens, section 4). Rate limits use per-seller and app-wide sliding windows.
 
 **Auto-delist.** A sale event (webhook, poll, email, or manual entry) is deduplicated by
 its order (see `sale` in section 9). Then, in one transaction, Listora records the sale, sets
@@ -634,21 +711,21 @@ Nothing requires a real credential to build or test. Every external service sits
 interface with a fake or dev driver, selected by an environment variable. Each switch below
 lands with the task that introduces that dependency, and its keys are added to `.env.example`.
 
-| Dependency       | Dev/test                                                                                                                              | Production                 | Switch                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------ |
-| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                            | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`  |
-| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                       | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`               |
-| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                              | The same                   | none                                 |
-| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                      | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`           |
-| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                   | Anthropic API              | `AI_PROVIDER=fake\|anthropic`        |
-| eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production` |
-| Depop            | `fake-depop` generated from Depop's OpenAPI spec                                                                                      | Sandbox, then production   | `DEPOP_ENV`                          |
-| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                  | SES inbound                | `EMAIL_INGEST=folder\|ses`           |
-| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                    | Cognito                    | `AUTH_DRIVER=dev\|cognito`           |
-| Payments         | Fake Stripe client + StoreKit configuration file                                                                                      | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`        |
-| Push             | Recording fake                                                                                                                        | APNs                       | `PUSH_DRIVER`                        |
-| Token encryption | Local AES-GCM key from `.env`                                                                                                         | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                   |
-| iOS              | iPhone 17 simulator, photo-library fixtures                                                                                           | Device / TestFlight        | xcconfig `API_BASE_URL`              |
+| Dependency       | Dev/test                                                                                                                                                   | Production                 | Switch                                |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
+| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                                                 | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`   |
+| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                            | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                |
+| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                                                   | The same                   | none                                  |
+| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                           | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`            |
+| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                                        | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
+| eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`)                      | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`  |
+| Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`) | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production` |
+| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                                       | SES inbound                | `EMAIL_INGEST=folder\|ses`            |
+| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                         | Cognito                    | `AUTH_DRIVER=dev\|cognito`            |
+| Payments         | Fake Stripe client + StoreKit configuration file                                                                                                           | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`         |
+| Push             | Recording fake                                                                                                                                             | APNs                       | `PUSH_DRIVER`                         |
+| Token encryption | Local AES-GCM key from `.env`                                                                                                                              | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                    |
+| iOS              | iPhone 17 simulator, photo-library fixtures                                                                                                                | Device / TestFlight        | xcconfig `API_BASE_URL`               |
 
 Live smoke tests for real providers skip automatically when their credential is absent. Fakes
 must stay true to the real contract: shapes, error codes, and failure modes.

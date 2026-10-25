@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { OPERATION_KINDS } from '@listora/db';
 
 import type { MarketplaceCapabilities } from './adapter.ts';
-import { checkCapabilities, operationMode } from './capabilities.ts';
+import { checkCapabilities, operationMode, readBackState } from './capabilities.ts';
 
 const API: MarketplaceCapabilities = {
   connect: 'oauth',
@@ -15,6 +15,7 @@ const API: MarketplaceCapabilities = {
   markSold: 'api',
   verifyRead: 'api',
   readFreshness: 'revision',
+  title: 'field',
   importListings: 'api',
   saleDetection: ['webhook', 'poll'],
   imageTransport: 'url_fetch',
@@ -98,5 +99,26 @@ describe('checkCapabilities', () => {
       'limits.appPerMin must be a positive integer',
       'limits.perSellerPerMin must be a positive integer',
     ]);
+  });
+});
+
+describe('readBackState', () => {
+  const desired = {
+    status: 'active',
+    title: 'Headline',
+    description: 'Copy',
+    priceCents: 4500,
+    currency: 'USD',
+  } as const;
+
+  it('checks every desired field where listings have titles', () => {
+    expect(readBackState(desired, API)).toEqual(desired);
+  });
+
+  it('never checks a title where listings have none', () => {
+    const { title, ...shown } = desired;
+    expect(readBackState(desired, { ...API, title: 'none' })).toEqual(shown);
+    // The desired state itself keeps its title.
+    expect(desired.title).toBe(title);
   });
 });
