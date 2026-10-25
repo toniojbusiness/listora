@@ -236,6 +236,9 @@ describe('scripts/deploy-personal.sh', () => {
       'listora-personal-cdk-execution updated to the committed document',
     );
     expect(run.calls.some((call) => call.startsWith('npx cdk bootstrap'))).toBe(false);
+    // Every cdk command that talks to AWS first renews the sign-in through the CLI.
+    const deployCall = run.calls.findIndex((call) => call.startsWith('npx cdk deploy'));
+    expect(run.calls[deployCall - 1]).toMatch(/sts get-caller-identity$/);
     // Next it deploys the registry, which the fake npx refuses.
     expect(run.calls).toContainEqual(
       expect.stringMatching(
