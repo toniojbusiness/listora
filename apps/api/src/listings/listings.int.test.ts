@@ -66,7 +66,11 @@ describe('shared listing links (real Postgres)', () => {
         externalListingId: '64f1a2b3c4d5e6f7a8b9c0d1',
         // The canonical URL: no tracking query.
         externalUrl: POSHMARK,
-        availableActions: [],
+        availableActions: [
+          { action: 'change_price', mode: 'assisted' },
+          { action: 'revise', mode: 'assisted' },
+          { action: 'end', mode: 'assisted' },
+        ],
       });
       // Listora never read the listing, so it has no title or price of its own, and no
       // read-back time.

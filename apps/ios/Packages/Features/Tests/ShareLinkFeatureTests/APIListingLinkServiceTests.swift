@@ -63,7 +63,8 @@ struct APIListingLinkServiceTests {
         #expect(found.map(\.sku) == ["AJ-000184", "AJ-000185", "AJ-000186"])
         #expect(found[0].liveMarketplaces == ["poshmark"])
         #expect(found[0].acceptsLinks)
-        // An ended listing is history, and a listing on a marketplace added later still counts.
+        // An ended listing is history, a listing waiting for the user to post it takes the link
+        // (sharing it finishes its task), and a listing on a marketplace added later still counts.
         #expect(found[1].liveMarketplaces == ["vinted"])
         #expect(!found[2].acceptsLinks)
     }
@@ -147,7 +148,9 @@ private let itemPageJSON = """
      {"listingId":"6a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d","marketplace":"ebay","mode":"api","status":"ended",
       "statusDisplay":{"tone":"success","label":"Ended (confirmed by eBay)"}},
      {"listingId":"7a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d","marketplace":"vinted","mode":"partner_api",
-      "status":"paused","statusDisplay":{"tone":"paused","label":"Paused on Vinted"}}],
+      "status":"paused","statusDisplay":{"tone":"paused","label":"Paused on Vinted"}},
+     {"listingId":"8a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d","marketplace":"mercari","mode":"assisted",
+      "status":"draft","statusDisplay":{"tone":"action_needed","label":"Action needed - list on Mercari"}}],
    "createdAt":"2026-10-24T12:00:00Z","updatedAt":"2026-10-24T12:00:00Z"},
   {"id":"2b9d4e8a-1c2f-4a5b-8c7d-6e5f4a3b2c1d","sku":"AJ-000186","status":"sold","listings":[],
    "createdAt":"2026-10-24T12:00:00Z","updatedAt":"2026-10-24T12:00:00Z"}
