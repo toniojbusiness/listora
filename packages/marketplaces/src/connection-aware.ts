@@ -24,6 +24,7 @@ import type {
   OperationRequest,
   Outcome,
   RemoteListingState,
+  RemoteListingSummary,
   RemoteOrder,
   ValidationIssue,
 } from './adapter.ts';
@@ -133,5 +134,16 @@ export class ConnectionAwareAdapter implements MarketplaceAdapter {
       );
     }
     return adapter.listOrdersSince(since, ctx);
+  }
+
+  /** The serving adapter's listings; throws when it can't read them (an assisted one never can). */
+  listListings(ctx: AdapterContext): Promise<RemoteListingSummary[]> {
+    const adapter = this.adapterFor(ctx.connection);
+    if (adapter.listListings === undefined) {
+      return Promise.reject(
+        new Error(`the ${adapter.id} adapter for this connection reads no listings`),
+      );
+    }
+    return adapter.listListings(ctx);
   }
 }

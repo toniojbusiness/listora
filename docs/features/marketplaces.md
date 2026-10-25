@@ -49,12 +49,15 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
     connection: ConnectionRef | null,
   ): string | null;
   listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>; // sale checks
+  listListings?(ctx: AdapterContext): Promise<RemoteListingSummary[]>; // imports, drift checks
 }
 ```
 
 Imports and emails join the interface as optional members with the tasks that first use them
 (T-23, T-36); orders joined with the browser runner's sale checks
-([automation.md](automation.md), `listOrdersSince`). eBay's notifications and order sync follow
+([automation.md](automation.md), `listOrdersSince`), and the seller's own listings with the
+Mercari automation adapter ([mercari.md](mercari.md), `listListings`, for imports and drift
+checks). eBay's notifications and order sync follow
 eBay's own contracts and live in `@listora/sales`, outside the interface
 ([ebay-notifications.md](ebay-notifications.md)). A `ConnectionRef` names the connection's
 `mode` and `status`. Credentials are not part of the interface: an adapter gets a connection's
@@ -67,7 +70,7 @@ browser runner's session vault).
 | eBay        | API                                                                          | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs                          | `ORDER_CONFIRMATION` webhook + 5-minute poll                    |
 | Depop       | API after partner approval; browser automation until then, assisted fallback | `PUT` by a SKU Listora names per listing (`AJ-000184-D1`, `-D2` after a relist), `PATCH`, `DELETE`/mark-as-sold; verify with `GET`         | `v1:order.*` webhooks (`X-Depop-Signature`) + orders poll       |
 | Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms | DKIM-verified forwarded emails, scheduled browser check, manual |
-| Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark                                                                                                                           | Forwarded emails, scheduled browser check, manual               |
+| Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark ([mercari.md](mercari.md)); ends by deactivating, relists by activating                                                   | Forwarded emails, scheduled browser check, manual               |
 
 **Capabilities route every operation.** `operationMode(capabilities, kind)` (`capabilities.ts`)
 reads the flag for the kind (`create`, `updateDetails` for a revise, `updatePrice`, `delist` for

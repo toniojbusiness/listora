@@ -17,9 +17,11 @@
  *
  * Imports, webhooks, and emails join this interface with the tasks that first use them (T-17,
  * T-23, T-36), as optional members; orders joined with the browser runner's sale checks
- * (`listOrdersSince`). Credentials are not members: an adapter gets a connection's tokens or
- * browser session at use time from its own source (eBay's `EbaySellerSource`, which
- * `@listora/connections` implements over the token vault; the browser runner's session vault).
+ * (`listOrdersSince`), and the seller's own listings with the first automation adapter that
+ * reads them (`listListings`, for imports and drift checks). Credentials are not members: an
+ * adapter gets a connection's tokens or browser session at use time from its own source (eBay's
+ * `EbaySellerSource`, which `@listora/connections` implements over the token vault; the browser
+ * runner's session vault).
  */
 import type {
   ConnectionMode,
@@ -312,6 +314,25 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
    * be read, like `readListing`; an empty list means it showed no order.
    */
   listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>;
+  /**
+   * The seller's listings on the marketplace as its own listing pages show them, active and
+   * ended (not sold), for importing them into Listora and for drift checks. Only adapters that
+   * can read them have it. Throws when the marketplace cannot be read, like `readListing`.
+   */
+  listListings?(ctx: AdapterContext): Promise<RemoteListingSummary[]>;
+}
+
+/**
+ * One of the seller's listings as a marketplace's listing pages show it: less than a read-back
+ * (no description, no revision), so it never confirms an operation; `readListing` does.
+ */
+export interface RemoteListingSummary {
+  externalListingId: string;
+  externalUrl: string | null;
+  status: Exclude<RemoteListingStatus, 'sold'>;
+  title: string | null;
+  priceCents: number | null;
+  currency: CurrencyCode | null;
 }
 
 /** One item of a marketplace order, as a sale check reads it. */

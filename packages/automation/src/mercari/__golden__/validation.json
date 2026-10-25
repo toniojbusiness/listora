@@ -1,0 +1,23 @@
+{
+  "withoutPhotos": [
+    {
+      "field": "item.photos",
+      "code": "required",
+      "message": "Mercari needs at least one photo."
+    }
+  ],
+  "freeOfCharge": [
+    {
+      "field": "variant.price",
+      "code": "out_of_range",
+      "message": "Mercari needs a price above $0."
+    }
+  ],
+  "longestTitle": [
+    {
+      "field": "variant.title",
+      "code": "too_long",
+      "message": "Mercari titles can be at most 80 characters."
+    }
+  ]
+}

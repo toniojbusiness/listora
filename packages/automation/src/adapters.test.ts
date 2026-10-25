@@ -42,20 +42,35 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
     expect(adapters.capabilities('depop', api)?.verifyRead).toBe('api');
   });
 
-  it('builds none without the fake site, until each marketplace has its own adapter', () => {
+  it('automates Mercari itself for linked sessions; Poshmark and Depop stay assisted until their adapters land', () => {
     const automation = createAutomationAdapters({
       settings: loadAutomationSettings({}),
       sessions: NoBrowserSessions,
       photos: new HttpPhotoSource(),
       logger: createLogger({ service: 'test', level: 'silent' }),
     });
-    expect(automation).toEqual({});
+    expect(Object.keys(automation)).toEqual(['mercari']);
     const adapters = createMarketplaceAdapters({
       fakeMarketplaceUrl: undefined,
       ebay: undefined,
       depop: undefined,
       automation,
     });
-    expect(adapters.capabilities('poshmark', automated)?.create).toBe('assisted');
+    expect(adapters.capabilities('mercari', automated)).toMatchObject({
+      connect: 'session',
+      create: 'automation',
+      updatePrice: 'automation',
+      updateDetails: 'automation',
+      delist: 'automation',
+      relist: 'automation',
+      markSold: 'not_needed',
+      verifyRead: 'automation',
+      readFreshness: 'revision',
+      saleDetection: ['poll', 'email', 'manual'],
+    });
+    expect(adapters.capabilities('mercari', null)?.create).toBe('assisted');
+    for (const marketplace of ['poshmark', 'depop'] as const) {
+      expect(adapters.capabilities(marketplace, automated)?.create, marketplace).toBe('assisted');
+    }
   });
 });

@@ -68,6 +68,7 @@ export type {
   RunLimits,
 } from './profiles.ts';
 export { PlaywrightBrowserRunner } from './runner/browser-runner.ts';
+export { PageChangedError } from './runner/errors.ts';
 export type { PlaywrightBrowserRunnerOptions } from './runner/browser-runner.ts';
 export { DEFAULT_BROWSERS_PATH, loadChromium } from './runner/playwright.ts';
 export {

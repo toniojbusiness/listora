@@ -48,9 +48,9 @@ export type AutomatedMarketplace = Exclude<Marketplace, 'ebay'>;
  *
  * - Poshmark, Mercari, and Depop are assisted (every step is a user task that only the user's
  *   confirmation finishes) until a seller links a browser session, when their automation
- *   adapter serves them (decision D1). The per-marketplace automation adapters are their own
- *   tasks; until each lands, `config.automation` has none for it, except the fake site's for all
- *   three in development and tests (FAKE_AUTOMATION_SITE_URL).
+ *   adapter serves them (decision D1). Mercari's is built (docs/features/mercari.md); Poshmark's
+ *   and Depop's are their own tasks, and until each lands `config.automation` has none for it,
+ *   except the fake site's for all three in development and tests (FAKE_AUTOMATION_SITE_URL).
  * - Depop also switches to its API once a seller's connection does. Its API adapter is the
  *   Depop adapter with DEPOP_ENV set (`fake` for the fake Depop, or Depop's sandbox or
  *   production once Listora's partner access is granted); without DEPOP_ENV, the generic fake
