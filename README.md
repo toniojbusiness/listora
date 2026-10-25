@@ -34,8 +34,10 @@ npm run check          # format, lint, type check, unit + integration tests
 run the API or the worker, or to change a port, copy `.env.example` to `.env` and edit it.
 Every configuration key is documented there. Never commit `.env`. The worker processes
 photos and runs item analyses for the API, so run `npm run dev:worker` next to
-`npm run dev:api`; both use the same `STORAGE_LOCAL_DIR`. To watch the worker run marketplace
-operations locally, also set `FAKE_MARKETPLACE_URL` and start `npm run dev:fake-marketplace`.
+`npm run dev:api`; both use the same `STORAGE_LOCAL_DIR`. With `EBAY_ENV=fake` (the
+`.env.example` setting) the worker lists on the fake eBay, so also start `npm run dev:fake-ebay`.
+To watch the worker run Depop API operations locally, set `FAKE_MARKETPLACE_URL` and start
+`npm run dev:fake-marketplace`.
 
 ### Signing in locally
 
@@ -75,6 +77,9 @@ the user pool settings, and in-app account deletion (`DELETE /v1/account`).
 | `npm run dev:api`              | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                                                         |
 | `npm run dev:worker`           | Run the worker with reload on change                                                                                                             |
 | `npm run dev:fake-marketplace` | Run the fake marketplace at `FAKE_MARKETPLACE_URL`, for the worker in development                                                                |
+| `npm run dev:fake-ebay`        | Run the fake eBay at `EBAY_FAKE_URL`, which the worker lists on with `EBAY_ENV=fake`                                                             |
+| `npm run ebay:sandbox-token`   | Sign a sandbox test seller in on eBay and save their refresh token in `.env` (see [eBay sandbox check](#ebay-sandbox-check))                     |
+| `npm run ebay:sandbox-check`   | Run the eBay adapter end to end against eBay's sandbox; fails with what to set when keys are missing                                             |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
 | `npm run admin -- --help`      | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail)                                   |
 | `npm run eval`                 | Score the tag parsers, AI tag reading, and the full item analysis on the synthetic corpus (fake AI); `-- --provider anthropic` uses the real API |
@@ -99,6 +104,32 @@ The cluster listens only on `127.0.0.1`, on port `LISTORA_PG_PORT` (default 5543
 worktree has its own cluster. Give each worktree a different port in its `.env` if more than
 one runs at the same time.
 
+## eBay sandbox check
+
+Everything builds and tests against the fake eBay (`packages/marketplaces/src/ebay/fake`). Once
+the eBay developer keys exist, one command checks the adapter against eBay's real sandbox:
+
+1. On [developer.ebay.com](https://developer.ebay.com) (My Account > Application Keys), take the
+   **sandbox** keyset's App ID and Cert ID. Under User Tokens, add an eBay Redirect URL (RuName)
+   and note its name. Create a sandbox test user
+   ([sandbox user registration](https://developer.ebay.com/sandbox/register)).
+2. Put `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, and `EBAY_RUNAME` in `.env`.
+3. `npm run ebay:sandbox-token`: open the URL it prints, sign in as the sandbox test user, agree,
+   and paste the address of the page eBay shows. It saves `EBAY_USER_REFRESH_TOKEN` in `.env`.
+4. `npm run ebay:sandbox-check`. The check binds the test user to its own connection. To have a
+   sandbox worker list for that user, also set `EBAY_USER_CONNECTION_ID` to the id of the
+   Listora eBay connection (`marketplace_connection` row) it lists for. Listings on any other
+   connection, or on none, get "Connect eBay". Production refuses both keys: there, every
+   eBay connection gets its own token with eBay connect.
+
+The check uses about 15 Trading calls. It tests both OAuth grants, that every category Listora
+maps to is still an eBay leaf, the health check, preparing a listing (item specifics and eBay's
+dry run), and one listing's whole life (create, duplicate protection, read-back, price change,
+end, relist), and it ends every listing it creates. It writes eBay's real size lists for the
+mapped categories to `.local/ebay-sandbox-check.json`, to refresh the fake's fixtures. If eBay
+refuses listings without business policies for the test seller, set the three
+`EBAY_*_POLICY_ID` keys. Without the keys, `npm run check` skips the sandbox test.
+
 ## Repository layout
 
 ```text
@@ -113,7 +144,7 @@ packages/api-contract/  OpenAPI v1 contract + generated TS and Swift code (@list
 packages/db/            SQL migrations, migration runner, Kysely types (@listora/db)
 packages/storage/       Object storage drivers: local disk (.local/storage) and S3 (@listora/storage)
 packages/photos/        Image pipeline: derivatives, metadata stripping, hashes, processing job (@listora/photos)
-packages/marketplaces/  Marketplace adapter framework, assisted adapters, and the fake marketplace (@listora/marketplaces)
+packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay adapter, the fake marketplace and fake eBay (@listora/marketplaces)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)

@@ -78,6 +78,7 @@ try {
       poolId: worker.poolId,
       taskPoolId: worker.taskPoolId,
       fakeMarketplace: config.fakeMarketplaceUrl !== undefined,
+      ebay: config.ebay?.environment ?? null,
       aiProvider: config.ai.provider,
       cognitoUserPool: config.cognitoUserPool?.userPoolId,
     },

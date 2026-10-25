@@ -1,6 +1,7 @@
 /**
- * JSON over HTTP for adapters, with the one distinction the operation engine depends on: was
- * the request possibly received? A failure while connecting means it was not sent, so trying
+ * HTTP for adapters (JSON, or encoded text such as eBay's XML), with the one distinction the
+ * operation engine depends on: was the request possibly received? A failure while connecting
+ * means it was not sent, so trying
  * again is safe. Any later failure (timeout, reset, abort) means it may have been applied, so
  * the engine must read the listing back before sending it again.
  */
@@ -22,6 +23,11 @@ export type HttpResult =
   /** The request may have been received and applied. */
   | { type: 'maybe_sent'; code: 'timeout' | 'aborted' | 'connection_lost' };
 
+/** `HttpResult` with the response body as text, for APIs that do not speak JSON (eBay XML). */
+export type HttpTextResult =
+  | { type: 'response'; status: number; headers: Headers; text: string }
+  | Exclude<HttpResult, { type: 'response' }>;
+
 export interface JsonRequest {
   method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   url: string;
@@ -32,27 +38,39 @@ export interface JsonRequest {
   timeoutMs: number;
 }
 
+/** A request whose body is already encoded; `headers` must name its content type. */
+export interface TextRequest extends Omit<JsonRequest, 'body'> {
+  body?: string;
+}
+
 export async function requestJson(request: JsonRequest): Promise<HttpResult> {
+  const { body, headers, ...rest } = request;
+  const result = await requestText({
+    ...rest,
+    headers: {
+      accept: 'application/json',
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...headers,
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (result.type !== 'response') return result;
+  const { text, ...response } = result;
+  return { ...response, body: parse(text) };
+}
+
+export async function requestText(request: TextRequest): Promise<HttpTextResult> {
   const timeout = AbortSignal.timeout(request.timeoutMs);
   const signal = AbortSignal.any([request.signal, timeout]);
   try {
     const response = await fetch(request.url, {
       method: request.method,
-      headers: {
-        accept: 'application/json',
-        ...(request.body === undefined ? {} : { 'content-type': 'application/json' }),
-        ...request.headers,
-      },
-      ...(request.body === undefined ? {} : { body: JSON.stringify(request.body) }),
+      ...(request.headers === undefined ? {} : { headers: request.headers }),
+      ...(request.body === undefined ? {} : { body: request.body }),
       signal,
     });
     const text = await response.text();
-    return {
-      type: 'response',
-      status: response.status,
-      headers: response.headers,
-      body: parse(text),
-    };
+    return { type: 'response', status: response.status, headers: response.headers, text };
   } catch (error) {
     if (timeout.aborted) return { type: 'maybe_sent', code: 'timeout' };
     if (request.signal.aborted) return { type: 'maybe_sent', code: 'aborted' };

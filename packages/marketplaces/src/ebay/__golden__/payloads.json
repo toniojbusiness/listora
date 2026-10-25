@@ -1,0 +1,397 @@
+{
+  "mensJacket": {
+    "title": "Levi's Trucker Denim Jacket Men's M Blue",
+    "descriptionHtml": "Classic trucker jacket in medium wash. Light fading at the cuffs.",
+    "categoryId": "57988",
+    "conditionId": 2990,
+    "conditionDescription": "Light fading at the cuffs.",
+    "priceCents": 4500,
+    "currency": "USD",
+    "photoUrls": [
+      "https://media.listora.test/p/front.jpg",
+      "https://media.listora.test/p/back.jpg",
+      "https://media.listora.test/p/tag.jpg"
+    ],
+    "itemSpecifics": [
+      {
+        "name": "Brand",
+        "values": [
+          "Levi's"
+        ]
+      },
+      {
+        "name": "Department",
+        "values": [
+          "Men"
+        ]
+      },
+      {
+        "name": "Size",
+        "values": [
+          "M"
+        ]
+      },
+      {
+        "name": "Size Type",
+        "values": [
+          "Regular"
+        ]
+      },
+      {
+        "name": "Color",
+        "values": [
+          "Blue"
+        ]
+      },
+      {
+        "name": "Material",
+        "values": [
+          "Cotton"
+        ]
+      },
+      {
+        "name": "MPN",
+        "values": [
+          "72334-0130"
+        ]
+      }
+    ]
+  },
+  "womensJeansWaistInseam": {
+    "title": "Levi's Trucker Denim Jacket Men's M Blue",
+    "descriptionHtml": "Classic trucker jacket in medium wash. Light fading at the cuffs.",
+    "categoryId": "11554",
+    "conditionId": 3000,
+    "conditionDescription": "Flaws: small mark on the back pocket.",
+    "priceCents": 4500,
+    "currency": "USD",
+    "photoUrls": [
+      "https://media.listora.test/p/front.jpg",
+      "https://media.listora.test/p/back.jpg",
+      "https://media.listora.test/p/tag.jpg"
+    ],
+    "itemSpecifics": [
+      {
+        "name": "Brand",
+        "values": [
+          "Madewell"
+        ]
+      },
+      {
+        "name": "Department",
+        "values": [
+          "Women"
+        ]
+      },
+      {
+        "name": "Size",
+        "values": [
+          "27"
+        ]
+      },
+      {
+        "name": "Size Type",
+        "values": [
+          "Regular"
+        ]
+      },
+      {
+        "name": "Inseam",
+        "values": [
+          "30 in"
+        ]
+      },
+      {
+        "name": "Color",
+        "values": [
+          "Blue"
+        ]
+      },
+      {
+        "name": "Material",
+        "values": [
+          "Cotton",
+          "Elastane"
+        ]
+      },
+      {
+        "name": "Pattern",
+        "values": [
+          "Solid"
+        ]
+      }
+    ]
+  },
+  "womensPlusTop": {
+    "title": "Levi's Trucker Denim Jacket Men's M Blue",
+    "descriptionHtml": "Classic trucker jacket in medium wash. Light fading at the cuffs.",
+    "categoryId": "53159",
+    "conditionId": 2990,
+    "conditionDescription": "Light fading at the cuffs.",
+    "priceCents": 4500,
+    "currency": "USD",
+    "photoUrls": [
+      "https://media.listora.test/p/front.jpg",
+      "https://media.listora.test/p/back.jpg",
+      "https://media.listora.test/p/tag.jpg"
+    ],
+    "itemSpecifics": [
+      {
+        "name": "Brand",
+        "values": [
+          "Levi's"
+        ]
+      },
+      {
+        "name": "Department",
+        "values": [
+          "Women"
+        ]
+      },
+      {
+        "name": "Size",
+        "values": [
+          "2X"
+        ]
+      },
+      {
+        "name": "Size Type",
+        "values": [
+          "Plus"
+        ]
+      },
+      {
+        "name": "Color",
+        "values": [
+          "Ivory"
+        ]
+      },
+      {
+        "name": "Material",
+        "values": [
+          "Cotton"
+        ]
+      },
+      {
+        "name": "MPN",
+        "values": [
+          "72334-0130"
+        ]
+      }
+    ]
+  },
+  "mensSneakersHalfSize": {
+    "title": "Levi's Trucker Denim Jacket Men's M Blue",
+    "descriptionHtml": "Classic trucker jacket in medium wash. Light fading at the cuffs.",
+    "categoryId": "15709",
+    "conditionId": 1000,
+    "conditionDescription": null,
+    "priceCents": 4500,
+    "currency": "USD",
+    "photoUrls": [
+      "https://media.listora.test/p/front.jpg",
+      "https://media.listora.test/p/back.jpg",
+      "https://media.listora.test/p/tag.jpg"
+    ],
+    "itemSpecifics": [
+      {
+        "name": "Brand",
+        "values": [
+          "Nike"
+        ]
+      },
+      {
+        "name": "Department",
+        "values": [
+          "Men"
+        ]
+      },
+      {
+        "name": "US Shoe Size",
+        "values": [
+          "10.5"
+        ]
+      },
+      {
+        "name": "Color",
+        "values": [
+          "White"
+        ]
+      },
+      {
+        "name": "Material",
+        "values": [
+          "Leather"
+        ]
+      },
+      {
+        "name": "MPN",
+        "values": [
+          "72334-0130"
+        ]
+      }
+    ]
+  },
+  "unbrandedHandbag": {
+    "title": "Levi's Trucker Denim Jacket Men's M Blue",
+    "descriptionHtml": "Classic trucker jacket in medium wash. Light fading at the cuffs.",
+    "categoryId": "169291",
+    "conditionId": 3000,
+    "conditionDescription": "Light fading at the cuffs.",
+    "priceCents": 4500,
+    "currency": "USD",
+    "photoUrls": [
+      "https://media.listora.test/p/front.jpg",
+      "https://media.listora.test/p/back.jpg",
+      "https://media.listora.test/p/tag.jpg"
+    ],
+    "itemSpecifics": [
+      {
+        "name": "Brand",
+        "values": [
+          "Unbranded"
+        ]
+      },
+      {
+        "name": "Department",
+        "values": [
+          "Women"
+        ]
+      },
+      {
+        "name": "Color",
+        "values": [
+          "Blue"
+        ]
+      },
+      {
+        "name": "Material",
+        "values": [
+          "Cotton"
+        ]
+      }
+    ]
+  },
+  "variantCategoryAndAspects": {
+    "title": "Levi's Trucker Denim Jacket Men's M Blue",
+    "descriptionHtml": "Classic trucker jacket in medium wash. Light fading at the cuffs.",
+    "categoryId": "15687",
+    "conditionId": 3010,
+    "conditionDescription": "Light fading at the cuffs.",
+    "priceCents": 4500,
+    "currency": "USD",
+    "photoUrls": [
+      "https://media.listora.test/p/front.jpg",
+      "https://media.listora.test/p/back.jpg",
+      "https://media.listora.test/p/tag.jpg"
+    ],
+    "itemSpecifics": [
+      {
+        "name": "Brand",
+        "values": [
+          "Levi's"
+        ]
+      },
+      {
+        "name": "Department",
+        "values": [
+          "Men"
+        ]
+      },
+      {
+        "name": "size",
+        "values": [
+          "L"
+        ]
+      },
+      {
+        "name": "Size Type",
+        "values": [
+          "Regular"
+        ]
+      },
+      {
+        "name": "Color",
+        "values": [
+          "Blue"
+        ]
+      },
+      {
+        "name": "Material",
+        "values": [
+          "Cotton"
+        ]
+      },
+      {
+        "name": "MPN",
+        "values": [
+          "72334-0130"
+        ]
+      },
+      {
+        "name": "Style",
+        "values": [
+          "Trucker"
+        ]
+      }
+    ]
+  },
+  "multilineDescription": {
+    "title": "Levi's Trucker Denim Jacket Men's M Blue",
+    "descriptionHtml": "Line one &amp; more.<br>Line &quot;two&quot; &lt;b&gt;not bold&lt;/b&gt;.",
+    "categoryId": "57988",
+    "conditionId": 2990,
+    "conditionDescription": "Light fading at the cuffs.",
+    "priceCents": 4500,
+    "currency": "USD",
+    "photoUrls": [
+      "https://media.listora.test/p/front.jpg",
+      "https://media.listora.test/p/back.jpg",
+      "https://media.listora.test/p/tag.jpg"
+    ],
+    "itemSpecifics": [
+      {
+        "name": "Brand",
+        "values": [
+          "Levi's"
+        ]
+      },
+      {
+        "name": "Department",
+        "values": [
+          "Men"
+        ]
+      },
+      {
+        "name": "Size",
+        "values": [
+          "M"
+        ]
+      },
+      {
+        "name": "Size Type",
+        "values": [
+          "Regular"
+        ]
+      },
+      {
+        "name": "Color",
+        "values": [
+          "Blue"
+        ]
+      },
+      {
+        "name": "Material",
+        "values": [
+          "Cotton"
+        ]
+      },
+      {
+        "name": "MPN",
+        "values": [
+          "72334-0130"
+        ]
+      }
+    ]
+  }
+}

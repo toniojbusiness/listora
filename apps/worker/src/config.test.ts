@@ -15,6 +15,7 @@ describe('loadWorkerConfig', () => {
       taskConcurrency: 2,
       fakeMarketplaceUrl: undefined,
       cognitoUserPool: undefined,
+      ebay: undefined,
       storage: { driver: 'local' },
       ai: { provider: 'fake', fakeFixturesDir: DEFAULT_FAKE_FIXTURES_DIR },
       analysis: { autoEscalate: true },
@@ -127,6 +128,25 @@ describe('loadWorkerConfig', () => {
     const error = captureConfigError({ DATABASE_URL: 'mysql://root:hunter2@db/x' });
     expect(error.issues).toEqual(['DATABASE_URL must be a postgres:// URL']);
     expect(error.message).not.toContain('hunter2');
+  });
+
+  it('reads the eBay settings, and reports a bad one with the rest', () => {
+    expect(
+      loadWorkerConfig({ DATABASE_URL, EBAY_ENV: 'fake', EBAY_USER_CONNECTION_ID: 'connection-1' })
+        .ebay,
+    ).toMatchObject({ environment: 'fake', seller: { connectionId: 'connection-1' } });
+    expect(() =>
+      loadWorkerConfig({ DATABASE_URL, EBAY_ENV: 'sandbox', LOG_LEVEL: 'loud' }),
+    ).toThrow(/LOG_LEVEL[\s\S]*EBAY_CLIENT_ID is required when EBAY_ENV is sandbox/);
+    expect(() =>
+      loadWorkerConfig({
+        DATABASE_URL,
+        EBAY_ENV: 'production',
+        EBAY_CLIENT_ID: 'id',
+        EBAY_CLIENT_SECRET: 'secret',
+        EBAY_USER_REFRESH_TOKEN: 'v^1.1#secret-refresh',
+      }),
+    ).toThrow(/EBAY_USER_REFRESH_TOKEN is not allowed when EBAY_ENV is production/);
   });
 });
 

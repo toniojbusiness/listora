@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   AssistedAdapter,
   ConnectionAwareAdapter,
+  EbayAdapter,
   FakeMarketplaceAdapter,
+  loadEbayConfig,
 } from '@listora/marketplaces';
 
 import { createAdapters } from './adapters.ts';
@@ -12,7 +14,7 @@ const api = { id: 'connection-1', mode: 'api' } as const;
 
 describe('createAdapters', () => {
   it('serves the assisted marketplaces, and no eBay, without FAKE_MARKETPLACE_URL', () => {
-    const adapters = createAdapters({ fakeMarketplaceUrl: undefined });
+    const adapters = createAdapters({ fakeMarketplaceUrl: undefined, ebay: undefined });
     expect(adapters.marketplaces).toEqual(['depop', 'poshmark', 'mercari']);
     expect(adapters.get('ebay')).toBeUndefined();
     expect(adapters.get('poshmark')).toBeInstanceOf(AssistedAdapter);
@@ -22,7 +24,10 @@ describe('createAdapters', () => {
   });
 
   it('routes eBay and api-connected Depop listings to the fake marketplace when configured', () => {
-    const adapters = createAdapters({ fakeMarketplaceUrl: 'http://127.0.0.1:4100' });
+    const adapters = createAdapters({
+      fakeMarketplaceUrl: 'http://127.0.0.1:4100',
+      ebay: undefined,
+    });
     expect(adapters.marketplaces).toEqual(['ebay', 'depop', 'poshmark', 'mercari']);
     expect(adapters.get('ebay')).toBeInstanceOf(FakeMarketplaceAdapter);
     const depop = adapters.get('depop');
@@ -38,6 +43,20 @@ describe('createAdapters', () => {
       expect(adapters.capabilities(marketplace, api)).toMatchObject({
         create: 'assisted',
         verifyRead: 'user_confirm',
+      });
+    }
+  });
+
+  it('routes eBay to the eBay adapter when EBAY_ENV is set, whatever FAKE_MARKETPLACE_URL says', () => {
+    const ebay = loadEbayConfig({ EBAY_ENV: 'fake', EBAY_USER_CONNECTION_ID: api.id });
+    for (const fakeMarketplaceUrl of [undefined, 'http://127.0.0.1:4100']) {
+      const adapters = createAdapters({ fakeMarketplaceUrl, ebay });
+      expect(adapters.get('ebay')).toBeInstanceOf(EbayAdapter);
+      expect(adapters.capabilities('ebay', api)).toMatchObject({
+        verifyRead: 'api',
+        readFreshness: 'none',
+        markSold: 'not_needed',
+        imageTransport: 'upload',
       });
     }
   });
