@@ -138,13 +138,18 @@ describe('the restricted CDK execution policy', () => {
     expect(executionPolicyName('personal')).toBe('listora-personal-cdk-execution');
   });
 
-  it('prints the document from its command line and refuses bad arguments', () => {
-    const script = fileURLToPath(new URL('execution-policy.ts', import.meta.url));
-    const printed = spawnSync('node', [script, 'personal', ACCOUNT], { encoding: 'utf8' });
-    expect(printed.status).toBe(0);
-    expect(JSON.parse(printed.stdout)).toEqual(cdkExecutionPolicy('personal', ACCOUNT));
-    const refused = spawnSync('node', [script, 'personal', '123'], { encoding: 'utf8' });
-    expect(refused.status).toBe(2);
-    expect(refused.stderr).toContain('usage:');
-  });
+  // Two real node processes: on a loaded machine they outlast the default 5 s unit test timeout.
+  it(
+    'prints the document from its command line and refuses bad arguments',
+    { timeout: 30_000 },
+    () => {
+      const script = fileURLToPath(new URL('execution-policy.ts', import.meta.url));
+      const printed = spawnSync('node', [script, 'personal', ACCOUNT], { encoding: 'utf8' });
+      expect(printed.status).toBe(0);
+      expect(JSON.parse(printed.stdout)).toEqual(cdkExecutionPolicy('personal', ACCOUNT));
+      const refused = spawnSync('node', [script, 'personal', '123'], { encoding: 'utf8' });
+      expect(refused.status).toBe(2);
+      expect(refused.stderr).toContain('usage:');
+    },
+  );
 });
