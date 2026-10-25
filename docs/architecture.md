@@ -23,19 +23,20 @@ These two rules from the product owner override every other design choice.
 
 ## 2. Stack
 
-| Area       | Choice                                                                                          | Why                                                                                       |
-| ---------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| iPhone app | Native Swift 6 / SwiftUI, iOS 18+, XcodeGen, local SPM modules, GRDB                            | Camera, Vision OCR, barcodes, background upload, Share Extension, and StoreKit are native |
-| Backend    | TypeScript on Node 26: Fastify API plus a worker process                                        | One language for the API, worker, infra (CDK), and the later web app                      |
-| Contract   | OpenAPI 3.1 in `packages/api-contract` → generated TS types and Swift client; CI fails on drift | Client and server cannot drift apart                                                      |
-| Database   | PostgreSQL 18 (Homebrew locally, RDS in prod), Kysely, plain SQL migrations                     | Relational inventory, strong constraints, JSONB for marketplace payloads                  |
-| Jobs       | Graphile Worker (Postgres-backed), enqueued in the same transaction as the operation row        | No second datastore; an operation can't be recorded without its job, or the reverse       |
-| Photos     | Client sends JPEG without GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives  | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
-| Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                  | Managed and in the same AWS account                                                       |
-| Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                  | App Store rule 3.1.3(b)                                                                   |
-| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK (`infra`) | Standard, robust, one security boundary                                                   |
-| Push       | APNs (token-based key); fake driver in dev                                                      | Delist alerts and assisted tasks                                                          |
-| Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                      | No extra package manager or build system                                                  |
+| Area       | Choice                                                                                            | Why                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| iPhone app | Native Swift 6 / SwiftUI, iOS 18+, XcodeGen, local SPM modules, GRDB                              | Camera, Vision OCR, barcodes, background upload, Share Extension, and StoreKit are native |
+| Backend    | TypeScript on Node 26: Fastify API plus a worker process                                          | One language for the API, worker, infra (CDK), and the later web app                      |
+| Contract   | OpenAPI 3.1 in `packages/api-contract` → generated TS types and Swift client; CI fails on drift   | Client and server cannot drift apart                                                      |
+| Database   | PostgreSQL 18 (Homebrew locally, RDS in prod), Kysely, plain SQL migrations                       | Relational inventory, strong constraints, JSONB for marketplace payloads                  |
+| Jobs       | Graphile Worker (Postgres-backed), enqueued in the same transaction as the operation row          | No second datastore; an operation can't be recorded without its job, or the reverse       |
+| Photos     | Client sends JPEG without GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives    | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
+| Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                    | Managed and in the same AWS account                                                       |
+| Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                    | App Store rule 3.1.3(b)                                                                   |
+| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK (`infra`)   | Standard, robust, one security boundary                                                   |
+| Push       | APNs (token-based key); fake driver in dev                                                        | Delist alerts and assisted tasks                                                          |
+| Automation | Playwright's headless Chromium in the on-demand browser runner (Fargate; a child process locally) | Poshmark, Mercari, and Depop without an API (decision D1, section 4)                      |
+| Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                        | No extra package manager or build system                                                  |
 
 ### TypeScript conventions
 
@@ -106,7 +107,8 @@ The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
 apps/
   api/          Fastify HTTP API (@listora/api)
   worker/       Background worker: operation engine, account deletion, polls, health jobs,
-                photo processing, item analysis (@listora/worker)
+                photo processing, item analysis; and the on-demand browser runner
+                (src/runner/main.ts) (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
                 and account blocks (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
@@ -130,6 +132,11 @@ packages/
                 assisted adapters, conformance suite; the eBay adapter (ebay/); fake marketplace
                 and fake eBay with fault injection (@listora/marketplaces)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
+  vault/        Credential storage: token encryption (local AES-GCM key, KMS envelope) and the
+                session vault of browser automation connections (@listora/vault)
+  automation/   Browser automation (decision D1): the Playwright runner, its safety rules, the
+                automation adapter base, sale-check scheduling, the runner launcher, and the
+                fake marketplace site (@listora/automation)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
@@ -139,6 +146,7 @@ packages/
 infra/          AWS CDK v2 app: one environment per synth, stacks per lifecycle (@listora/infra)
 scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
+  dev-browser.sh  The browser runner's headless Chromium, in .local/playwright
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
   ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
 Dockerfile      Application image; the API and the worker run from the same image
@@ -274,16 +282,16 @@ All marketplace logic lives behind one `MarketplaceAdapter` interface in `@listo
 assisted until its partner API is connected, then through the API.
 
 ```ts
-type Mode = 'api' | 'assisted' | 'bulk_file' | 'none';
+type Mode = 'api' | 'automation' | 'assisted' | 'bulk_file' | 'none';
 interface MarketplaceCapabilities {
-  connect: 'oauth' | 'none';
+  connect: 'oauth' | 'session' | 'none'; // session: the seller logs in, Listora keeps the cookies
   create: Mode;
   updatePrice: Mode;
   updateDetails: Mode;
   delist: Mode;
   relist: Mode;
   markSold: Mode | 'not_needed'; // not_needed: the marketplace marks its own sales sold
-  verifyRead: 'api' | 'user_confirm'; // how success is established
+  verifyRead: 'api' | 'automation' | 'user_confirm'; // how success is established
   readFreshness: 'revision' | 'none'; // whether reads carry a revision (see section 6)
   importListings: 'api' | 'share_sheet' | 'bulk_file' | 'none';
   saleDetection: Array<'webhook' | 'poll' | 'email' | 'manual'>;
@@ -302,11 +310,13 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
   // Outcome: confirmed | rejected | transient | unknown | pendingUser
   readListing(ref: ListingRef, ctx: AdapterContext): Promise<RemoteListingState>;
   healthCheck(ctx: AdapterContext): Promise<Health>; // ok | degraded | reauth_required | revoked
+  listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>; // sale checks
 }
 ```
 
-Imports, orders, webhooks, emails, and credential refresh join the interface as optional
-members with the tasks that first use them (T-16, T-17, T-23, T-36).
+Imports, webhooks, emails, and credential refresh join the interface as optional members with
+the tasks that first use them (T-16, T-17, T-23, T-36); orders joined with the browser runner's
+sale checks. A `ConnectionRef` names the connection's `mode` and `status`.
 
 | Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
 | ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
@@ -318,15 +328,18 @@ members with the tasks that first use them (T-16, T-17, T-23, T-36).
 **Capabilities route every operation.** `operationMode(capabilities, kind)` (`capabilities.ts`)
 reads the flag for the kind (`create`, `updateDetails` for a revise, `updatePrice`, `delist` for
 an end, `relist`, `markSold`) under the listing's connection: `api` (Listora sends it and a
-read-back decides), `assisted` (only the user's confirmation finishes it), or `unsupported`
-(`none`, `bulk_file`, `not_needed`, or an API write without API reads), which fails without
-being sent. `checkCapabilities` rejects contradictory flags, such as an API write with
-`verifyRead: 'user_confirm'`.
+read-back decides), `automation` (the browser runner does it in the seller's session, and a
+read-back through the same session decides), `assisted` (only the user's confirmation finishes
+it), or `unsupported` (`none`, `bulk_file`, `not_needed`, or a write without reads through its
+own channel), which fails without being sent. `checkCapabilities` rejects contradictory flags,
+such as an API write with `verifyRead: 'user_confirm'`, an automated write with `verifyRead:
+'api'`, or automated reads without `connect: 'session'`.
 
 **Registry.** `createAdapterRegistry` (`registry.ts`) holds one adapter per marketplace and
 refuses, at startup, a duplicate or an adapter whose capabilities are incoherent without a
-connection or under either connection mode. The worker passes its `lookup` to the engine
-(`apps/worker/src/adapters.ts`), and the API asks it for capabilities under a connection.
+connection or under any mode and status of connection. The worker and the browser runner build
+the same registry (`apps/worker/src/adapters.ts`) and pass its `lookup` to the engine, so both
+route each operation to the same mode; the API asks it for capabilities under a connection.
 
 **Listing content and payloads.** A create, revise, or relist publishes listing content
 (`content.ts`): an `ItemSnapshot` (canonical attributes and photos with their listing URLs) and
@@ -379,11 +392,12 @@ links and the Poshmark and Mercari text limits are not verified yet (plan RF15),
 enforces only a positive price and at least one photo for them.
 
 **Connection-aware capabilities.** `ConnectionAwareAdapter` serves one marketplace in more than
-one mode: its assisted adapter without a connection or under an assisted one, and its API adapter
-under an `api` connection (still assisted when no API adapter is configured). Every mode reads
-and writes the same `marketplace_listing` rows, so switching Depop to the API is a change to the
-connection's `mode` and needs no data migration. The browser runner's mode joins it the same way
-when that task lands.
+one mode: its assisted adapter without a connection or under an assisted one, its API adapter
+under an `api` connection, and its automation adapter under an `automation` connection whose
+session works (`connected` or `degraded`); each falls back to assisted when no adapter is
+configured for the mode, and an automation connection that waits for a relink is served assisted.
+Every mode reads and writes the same `marketplace_listing` rows, so switching a marketplace
+between modes is a change to the connection and needs no data migration.
 
 **Conformance.** Every adapter passes the shared suite in `conformance/suite.ts`
 (`describeAdapterConformance`), once per connection mode it serves, against its own fake
@@ -457,23 +471,83 @@ runs the adapter against eBay's sandbox once the keys are in `.env` (README.md).
 only". The marketplaces granted the product owner permission to automate where no API exists,
 Listora is for the product owner's personal use, and everything runs in the cloud. So
 Poshmark, Mercari, and Depop (until its partner API is granted) use cloud browser automation:
-the headless-Chromium browser runner (`browserRunner` in `infra/src/config.ts`) acts on
-sessions the user logs into from the iPhone app.
+the headless-Chromium browser runner acts on sessions the user logs into from the iPhone app.
 
 - Session cookies are stored encrypted with the token key, by the same KMS envelope
   encryption as OAuth tokens. Passwords never are.
 - Actions are human-paced.
-- The runner never solves or bypasses a CAPTCHA or bot check: it pauses and falls back to an
+- The runner never solves or bypasses a CAPTCHA or bot check: it stops and falls back to an
   assisted task.
 - Every action is still confirmed by read-back (section 6), never reported as a false success.
 
-The runner, its adapter mode, and session storage are later tasks; until they land, these
-marketplaces run assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
+The runner, the automation mode, the session vault, and sale-check scheduling are built
+(below); the automation adapters for Poshmark, Mercari, and Depop, which write each site's
+scripts, and the app's linking screen are their own tasks. Until a marketplace's adapter lands
+it runs assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
+
 Assisted adapters implement `execute` by creating a `user_task` (deep link plus copy-assist
 payload) and returning `pendingUser`. An assisted operation can finish only through a user
 confirmation event. A listing the user posted themselves is linked to its item by sharing it to
 the Listora Share Extension (`importListings: 'share_sheet'`), which records it as confirmed by
 the user, never by the marketplace.
+
+### Browser automation (decision D1)
+
+`@listora/automation` holds the runner and everything around it; `@listora/vault` holds the
+session vault.
+
+- **The runner** (`runner/`) drives Playwright's headless Chromium, one seller session at a time.
+  A session is a fresh browser context with that seller's cookies on that marketplace's domains
+  only. Adapters run **scripts**: named steps, each with its own timeout, where only the step
+  that submits a change `mutates`. Scripts reach the page only through `PageDriver`, which paces
+  every action and inspects the page after it, so the safety rules hold whatever a script does.
+  `read` runs a script that may not mutate (form input refuses). A failed run leaves one
+  screenshot of the viewport with every form field and the profile's private elements blacked
+  out, in private storage under `automation/<account>/`, deleted after 14 days or with the
+  account. The browser is honest about what it is: Playwright's own headless Chromium and user
+  agent, no stealth, no fingerprint changes.
+- **Safety rules** (`safety/`, `profiles.ts`). Pacing: a random delay before every action and
+  keystroke, and between a seller's sessions, per marketplace (`AUTOMATION_<MARKETPLACE>_*`),
+  never below the floors in `profiles.ts`. Rate limits: runs per hour and per day per seller,
+  counted in `automation_run` across every runner. Checks: a CAPTCHA widget, a bot-check page
+  (titles, wording, a 403), a verification-code step, a login page or password field, or a page
+  off the marketplace's own origins (`challenges.ts`) stops the run at once; nothing after it
+  runs, the session is discarded, the connection becomes `reauth_required` with one `reconnect`
+  task, and the step falls back to its assisted task. A 429 or 5xx page stops the run as
+  retryable. Logs and history name scripts, steps, and origins only, and error messages never
+  repeat what was typed.
+- **Sessions** (`RunnerSessions`): for each run, a per-seller advisory lock (no two runners in one
+  account), the vault's session (decrypted only here; in AWS only the runner's role may decrypt
+  the `marketplace_session` purpose), the rate limit and pause, an `automation_run` record, then
+  the cookies the marketplace refreshed (`vault.rotate`) or, after a check, `markNeedsRelink`.
+  Every vault write bumps `credential_version` and names the version it read, so an older
+  session never overwrites or discards a newer link.
+- **The adapter base** (`AutomationAdapter`) turns a marketplace's scripts into a
+  `MarketplaceAdapter`: kinds with a script are `automation`, the rest assisted, reads are
+  `automation`. It maps every way a run ends onto an outcome and never claims more than it
+  knows: only an applied script is `confirmed`, a failure after a mutating step is `unknown`,
+  one before it `transient`, a marketplace validation message `rejected`, and a check, a missing
+  session, or a page the script no longer understands the assisted task. The fake site's adapter
+  (`fake-site/`) is the reference and passes the shared conformance suite in a real browser.
+- **Where it runs.** Automated steps need a browser, which only the runner has. The worker hands
+  such a step to the runner's task on the same listing queue (section 6) and starts the runner
+  (`launcher.ts`): locally as a child process, in AWS by setting the runner's ECS service to one
+  task. A runner holds a Postgres session named `listora-browser-runner:<id>`, takes only
+  automated steps and sale checks, one at a time, and exits after `RUNNER_IDLE_EXIT_SECONDS` with
+  nothing to do, scaling its service back to zero. The worker's `automation_dispatch` task runs
+  every minute: it queues due sale checks, starts the runner when its work waits and none is
+  alive, and prunes old run records and screenshots.
+- **Sale checks** (`sale-checks/`). Each automation connection has a `sale_check_schedule` row.
+  A check reads the seller's sold orders through their session and records each new one as an
+  `inbound_event` (source `poll`, one per order) for the sale intake, which delists everywhere
+  else (T-20). The next check is due when the expected sales since now reach what an average
+  default interval holds (`interval.ts`): every 12 hours by default, sooner over the hours and
+  days the seller's sales on that marketplace usually happen and while items are hot, later when
+  idle, within `SALE_CHECK_MIN_HOURS` and `SALE_CHECK_MAX_HOURS`. A forwarded sale email asks for
+  a check at once (`requestSaleCheck`). A check that met a check waits for the relink.
+- **Linking** (`linkAutomationSession`) stores the cookies the app captured (on the
+  marketplace's domains only), revives the connection, moves the marketplace's unconnected
+  listings to it, and makes a first sale check due at once; relinking takes the same way.
 
 ## 5. Pricing data rules
 
@@ -539,10 +613,14 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    daily job deletes listing queues that have no jobs left. Each step runs in the operation's
    capability mode under the listing's connection (`operationMode`, section 4): an
    `unsupported` operation fails without being sent, and a send builds its payload from the
-   stored content and fails without sending when the adapter's validation refuses it. The
-   adapter outcome determines the next state:
-   - `confirmed`: the API succeeded **and** `readListing` shows the desired state → `succeeded`.
-     A read-back that disagrees or fails → `verifying`.
+   stored content and fails without sending when the adapter's validation refuses it. An
+   `automation` step needs a browser: the worker hands its job over, unchanged and without an
+   attempt, to the browser runner's task (`AUTOMATION_OPERATION_TASK`, same job key and listing
+   queue), which runs it by the same rules, and its next steps come back to the worker first.
+   Automated and API operations are decided the same way. The adapter outcome determines the
+   next state:
+   - `confirmed`: the API (or the browser session) took the change **and** `readListing` shows
+     the desired state → `succeeded`. A read-back that disagrees or fails → `verifying`.
    - `rejected` (validation or permanent error) → `failed`, with a user-readable reason and fix.
    - `transient` (429, 5xx, network failure before send) → `retrying` with backoff and jitter
      (30 s, 2 m, 10 m, 30 m, 2 h, 6 h, ±20%, at least the marketplace's `Retry-After`), then
@@ -550,10 +628,10 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    - `unknown` (timeout after the request may have been sent, a lost connection, an adapter that
      throws or misses its deadline) → `verifying`. `readListing` decides: the desired state
      holds → `succeeded`; it does not → `retrying`. The request is never re-sent blindly.
-   - `pendingUser` (assisted) → `needs_user_action` until the user confirms
-     (`confirmOperationByUser`). An assisted operation is never read back, and any other
-     outcome for it (`confirmed`, `unknown`) fails as unconfirmed; an API operation that answers
-     with a user task fails the same way.
+   - `pendingUser` (assisted, or an automated step that met a check automation must not pass)
+     → `needs_user_action` until the user confirms (`confirmOperationByUser`). An assisted
+     operation is never read back, and any other outcome for it (`confirmed`, `unknown`) fails
+     as unconfirmed; an API operation that answers with a user task fails the same way.
 3. **Attempts.** Every step, a send or a read-back, uses one attempt, and an operation gets
    seven. A step whose result is unknown is always followed by a read-back, even after the
    last attempt. Retry (`retryOperation`) gives a failed operation a fresh set of attempts; it
@@ -636,7 +714,9 @@ lands with the task that introduces that dependency, and its keys are added to `
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------ |
 | Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                            | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`  |
 | Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                       | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`               |
-| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                              | The same                   | none                                 |
+| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until a seller links a session (D1) or Depop's API                              | The same                   | none                                 |
+| Automation       | Fake marketplace site (`FakeAutomationSite`, `npm run dev:fake-site`) in local headless Chromium                                      | Per-marketplace adapters   | `FAKE_AUTOMATION_SITE_URL`           |
+| Browser runner   | A child process of the worker (`npm run dev:runner` by hand)                                                                          | ECS service, 0 to 1 tasks  | `BROWSER_RUNNER_LAUNCH`              |
 | Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                      | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`           |
 | AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                   | Anthropic API              | `AI_PROVIDER=fake\|anthropic`        |
 | eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production` |
@@ -645,7 +725,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                    | Cognito                    | `AUTH_DRIVER=dev\|cognito`           |
 | Payments         | Fake Stripe client + StoreKit configuration file                                                                                      | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`        |
 | Push             | Recording fake                                                                                                                        | APNs                       | `PUSH_DRIVER`                        |
-| Token encryption | Local AES-GCM key from `.env`                                                                                                         | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                   |
+| Token encryption | Local AES-GCM key: `TOKEN_LOCAL_KEY`, else `.local/token.key`                                                                         | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                   |
 | iOS              | iPhone 17 simulator, photo-library fixtures                                                                                           | Device / TestFlight        | xcconfig `API_BASE_URL`              |
 
 Live smoke tests for real providers skip automatically when their credential is absent. Fakes
@@ -831,7 +911,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
 - **Invariants in the schema.** An operation can be `succeeded` only with `success_evidence`
   (`read_back` or `user_confirmation`), and `failed` only with a user-readable error. A create,
   revise, or relist has listing `content`, and no other kind does. Assisted connections can
-  never hold credentials. `inventory_item.version` is bumped by a trigger on
+  never hold credentials; a working automation connection holds a session, and one waiting
+  for a relink holds none. `inventory_item.version` is bumped by a trigger on
   every update, for optimistic locking.
 
 Tables by area:
@@ -856,12 +937,17 @@ Tables by area:
   `ai_usage_daily`, which a trigger on `ai_usage_event` keeps in step per account and UTC day.
   Monthly totals come from `UsageStore.monthlyUsage` (section 8). The operator controls are
   `ai_kill_switch`, `ai_account_block`, and the append-only `ai_control_audit`.
-- **Marketplaces:** `marketplace_connection` (mode, encrypted tokens, expiry, status),
-  `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot and
-  newest seen revision, desired/applied version, `last_verified_at` for a read-back and
-  `user_confirmed_at` for the user's confirmation; a listing known only by a share short link
-  is unique by its URL), `marketplace_operation` (with the listing `content` a create, revise,
-  or relist publishes), and the append-only `operation_event`.
+- **Marketplaces:** `marketplace_connection` (mode `api`, `assisted`, or `automation`; the
+  encrypted credential, OAuth tokens or a browser session, with its `credential_version`;
+  expiry; status), `marketplace_listing` (per-marketplace variant, external ids, status,
+  remote snapshot and newest seen revision, desired/applied version, `last_verified_at` for a
+  read-back and `user_confirmed_at` for the user's confirmation; a listing known only by a
+  share short link is unique by its URL), `marketplace_operation` (with the listing `content`
+  a create, revise, or relist publishes), and the append-only `operation_event`.
+- **Browser automation:** `automation_run` (one browser session the runner opened: purpose,
+  script, outcome, the check it met, the failed step, the screenshot key; the rate limits'
+  count) and `sale_check_schedule` (when each automation connection is next checked for sales,
+  and why).
 - **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
   provider event id, so an id that repeats in another account or on another marketplace is
   never dropped as a duplicate). `sale` is one marketplace order (unique per account,
@@ -906,20 +992,26 @@ Each environment (`staging`, `prod`, and `personal`, the low-cost layout for one
 their own account, priced in [costs.md](costs.md)) is its own AWS account, defined by the CDK
 app in `infra/` and documented in [infra/README.md](../infra/README.md). In short:
 
-- **One image, two services.** The root `Dockerfile` installs production dependencies and
-  the sources; ECS runs `node apps/api/src/main.ts` or `node apps/worker/src/main.ts` from it,
-  on Fargate in private subnets, with a read-only root file system. The API is behind an
+- **One image, two services, and the runner.** The root `Dockerfile` installs production
+  dependencies and the sources; ECS runs `node apps/api/src/main.ts` or
+  `node apps/worker/src/main.ts` from it, on Fargate in private subnets, with a read-only root
+  file system. The API is behind an
   HTTPS load balancer at `api.<domain>` that health-checks `/health/live`. ECS replaces
   tasks that fail it, so it checks no dependency: a database failover must not restart every
   task. `/health/ready` (database reachable) is for deploy checks and operators. `personal`
   runs both containers in one task in public subnets (no NAT) behind an API Gateway HTTP API
   instead of the load balancer, and ECS runs the same `/health/live` check in the container.
   Personal can also run without a domain: the API then answers at the HTTP API's default
-  `execute-api` URL, and no sale email is received until a domain is added.
+  `execute-api` URL, and no sale email is received until a domain is added. The browser runner
+  is a third service (`runner`, sized by `browserRunner`) from the Dockerfile's `runner` stage
+  (the same sources with headless Chromium, its own repository), with no task while idle: the
+  worker sets its desired count to 1 and the runner back to 0 (section 4). It never runs two
+  tasks at once, and its role alone may decrypt sellers' sessions.
 - **Configuration.** Containers get exactly the environment in `infra/src/containers.ts`, and
-  a test runs the API's and worker's config loaders on it. A task that adds a required config
-  key adds it there (and, for a secret, to `APP_SECRETS` in `infra/src/config.ts`). The
-  database password reaches the processes only as `PGPASSWORD` from the RDS secret.
+  a test runs the API's, the worker's, and the runner's config loaders on it. A task that adds
+  a required config key adds it there (and, for a secret, to `APP_SECRETS` in
+  `infra/src/config.ts`). The database password reaches the processes only as `PGPASSWORD`
+  from the RDS secret.
 - **Data.** RDS PostgreSQL 18 (Multi-AZ in prod; deletion protection in prod and personal), a
   private photo bucket whose `public/` prefix CloudFront serves by exact key (at its
   `*.cloudfront.net` domain), SES inbound mail for `in.<domain>` stored in a private bucket,
@@ -956,6 +1048,10 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   entry points with `node src/main.ts` (see `startNodeProcess` in `@listora/testing`).
 - Every marketplace adapter passes the shared conformance suite against its fake, and its
   payloads, validation results, and assisted tasks are pinned by golden files (section 4).
+  Adapters in other workspaces import the suite as `@listora/marketplaces/conformance`.
+- Browser automation tests drive a real headless Chromium (`scripts/dev-browser.sh` installs it
+  in `.local/playwright`) against the fake marketplace site, never a real marketplace. Like the
+  database, a missing browser fails them; it never skips them.
   Sample listing content for tests in any workspace comes from `@listora/marketplaces/testing`.
 - **API contract.** `packages/api-contract/openapi.yaml` is the only place an endpoint or
   payload shape is defined. The server imports its types from `@listora/api-contract` and
@@ -964,7 +1060,7 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   Its conventions (error model, idempotency keys, pagination, Money) are in
   [packages/api-contract/README.md](../packages/api-contract/README.md).
 - CI runs the same fresh-clone path as local development; see the CI section of the
-  [README](../README.md#ci). A Linux job builds the application image and smoke-tests it
-  (`scripts/container-smoke.sh`). A macOS job runs `make ios-lint` and `make ios-test`, but
-  only when a file the iOS build reads changed (macOS minutes cost 10 times Linux minutes);
-  the Linux backend check runs on every pull request.
+  [README](../README.md#ci). A Linux job builds the application and runner images and
+  smoke-tests them (`scripts/container-smoke.sh`). A macOS job runs `make ios-lint` and
+  `make ios-test`, but only when a file the iOS build reads changed (macOS minutes cost 10
+  times Linux minutes); the Linux backend check runs on every pull request.

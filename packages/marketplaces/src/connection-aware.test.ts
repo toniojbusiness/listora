@@ -6,8 +6,13 @@ import { ConnectionAwareAdapter } from './connection-aware.ts';
 import { FakeMarketplaceAdapter } from './fake/fake-adapter.ts';
 import { sampleListingContent } from './testing.ts';
 
-const api: ConnectionRef = { id: 'connection-1', mode: 'api' };
-const assistedConnection: ConnectionRef = { id: 'connection-1', mode: 'assisted' };
+const api: ConnectionRef = { id: 'connection-1', mode: 'api', status: 'connected' };
+const assistedConnection: ConnectionRef = {
+  id: 'connection-1',
+  mode: 'assisted',
+  status: 'connected',
+};
+const automated: ConnectionRef = { id: 'connection-2', mode: 'automation', status: 'connected' };
 
 describe('ConnectionAwareAdapter', () => {
   const assisted = createDepopAssistedAdapter();
@@ -34,9 +39,31 @@ describe('ConnectionAwareAdapter', () => {
     expect(unapproved.capabilities(api).create).toBe('assisted');
   });
 
+  it('serves a linked browser session automated, and assisted while it waits for a relink', () => {
+    const automation = new FakeMarketplaceAdapter({
+      marketplace: 'depop',
+      baseUrl: 'http://127.0.0.1:1',
+    });
+    const linked = new ConnectionAwareAdapter({ assisted, api: fake, automation });
+    expect(linked.adapterFor(automated)).toBe(automation);
+    expect(linked.adapterFor({ ...automated, status: 'degraded' })).toBe(automation);
+    expect(linked.adapterFor({ ...automated, status: 'reauth_required' })).toBe(assisted);
+    expect(linked.adapterFor({ ...automated, status: 'revoked' })).toBe(assisted);
+    expect(linked.adapterFor(api)).toBe(fake);
+    expect(depop.adapterFor(automated)).toBe(assisted);
+  });
+
+  it('reads orders through the serving adapter, and refuses where it reads none', async () => {
+    const ctx = { signal: new AbortController().signal, connection: automated };
+    await expect(depop.listOrdersSince(null, ctx)).rejects.toThrow('reads no orders');
+  });
+
   it('refuses adapters for two different marketplaces', () => {
     expect(
       () => new ConnectionAwareAdapter({ assisted: createPoshmarkAdapter(), api: fake }),
     ).toThrow('api adapter is for depop, assisted adapter for poshmark');
+    expect(
+      () => new ConnectionAwareAdapter({ assisted: createPoshmarkAdapter(), automation: fake }),
+    ).toThrow('automation adapter is for depop, assisted adapter for poshmark');
   });
 });

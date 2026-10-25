@@ -54,6 +54,7 @@ const MIGRATIONS = [
   '0010_deleted_identity',
   '0011_ai_controls',
   '0012_listing_links',
+  '0014_browser_automation',
 ];
 
 describe('schema migrations (real Postgres)', () => {

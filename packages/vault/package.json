@@ -1,0 +1,20 @@
+{
+  "name": "@listora/vault",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Marketplace credential storage: token encryption (local AES-GCM key or KMS envelope encryption) and the session vault for browser automation connections.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-kms": "^3.1156.0",
+    "@listora/db": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

@@ -801,6 +801,42 @@ describe('schema constraints (real Postgres)', () => {
       );
     });
 
+    it('keeps a session on a working automation connection, and none once it needs relinking', async () => {
+      const connection = {
+        account_id: a.accountId,
+        marketplace: 'mercari' as const,
+        mode: 'automation' as const,
+      };
+      await expectPgError(
+        db.insertInto('marketplace_connection').values(connection).execute(),
+        PG_ERROR.checkViolation,
+        'marketplace_connection_automation_session',
+      );
+      await expectPgError(
+        db
+          .insertInto('marketplace_connection')
+          .values({
+            ...connection,
+            status: 'reauth_required',
+            token_ciphertext: Buffer.from('rejected-session'),
+          })
+          .execute(),
+        PG_ERROR.checkViolation,
+        'marketplace_connection_automation_session',
+      );
+      const linked = await db
+        .insertInto('marketplace_connection')
+        .values({ ...connection, token_ciphertext: Buffer.from('session') })
+        .returning(['id', 'credential_version'])
+        .executeTakeFirstOrThrow();
+      expect(linked.credential_version).toBe(0);
+      await db
+        .updateTable('marketplace_connection')
+        .set({ status: 'reauth_required', token_ciphertext: null })
+        .where('id', '=', linked.id)
+        .execute();
+    });
+
     it('links auto-delist operations to their delist run', async () => {
       await expectPgError(
         db

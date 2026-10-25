@@ -2,7 +2,7 @@
  * The adapters a process runs with, keyed by marketplace. The worker hands `lookup` to the
  * operation engine; the API asks it for each marketplace's capabilities under a connection.
  */
-import { CONNECTION_MODES, type Marketplace } from '@listora/db';
+import { CONNECTION_MODES, CONNECTION_STATUSES, type Marketplace } from '@listora/db';
 
 import type {
   AdapterLookup,
@@ -34,8 +34,8 @@ export class AdapterRegistryError extends Error {
 
 /**
  * Registers one adapter per marketplace. Throws when a marketplace is registered twice or an
- * adapter's capabilities contradict each other, without a connection or under either kind of
- * connection, so a misconfigured process fails at startup rather than mid-operation.
+ * adapter's capabilities contradict each other, without a connection or under any kind and
+ * status of connection, so a misconfigured process fails at startup rather than mid-operation.
  */
 export function createAdapterRegistry(adapters: readonly MarketplaceAdapter[]): AdapterRegistry {
   const byMarketplace = new Map<Marketplace, MarketplaceAdapter>();
@@ -45,13 +45,17 @@ export function createAdapterRegistry(adapters: readonly MarketplaceAdapter[]): 
     }
     const probes: (ConnectionRef | null)[] = [
       null,
-      ...CONNECTION_MODES.map((mode) => ({ id: `probe-${mode}`, mode })),
+      ...CONNECTION_MODES.flatMap((mode) =>
+        CONNECTION_STATUSES.map((status) => ({ id: `probe-${mode}-${status}`, mode, status })),
+      ),
     ];
     for (const connection of probes) {
       const problems = checkCapabilities(adapter.capabilities(connection));
       if (problems.length > 0) {
         const under =
-          connection === null ? 'without a connection' : `with an ${connection.mode} connection`;
+          connection === null
+            ? 'without a connection'
+            : `with an ${connection.mode} connection (${connection.status})`;
         throw new AdapterRegistryError(
           `${adapter.id} capabilities ${under} are incoherent: ${problems.join('; ')}`,
         );

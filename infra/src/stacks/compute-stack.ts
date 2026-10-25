@@ -7,7 +7,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import type * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import type * as iam from 'aws-cdk-lib/aws-iam';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import type * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import type * as rds from 'aws-cdk-lib/aws-rds';
@@ -18,9 +18,16 @@ import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import type { Construct } from 'constructs';
 
 import type { DnsTarget, ServiceName, ServiceSize } from '../config.ts';
-import { API_PORT, containerEnvironment, SERVICE_COMMANDS } from '../containers.ts';
+import {
+  API_PORT,
+  containerEnvironment,
+  RUNNER_COMMAND,
+  SERVICE_COMMANDS,
+  type Deployment,
+} from '../containers.ts';
 import { ListoraStack, removalPolicyFor, taskPlacement, type ListoraStackProps } from './common.ts';
 import { INBOUND_MAIL_PREFIX } from './email-stack.ts';
+import { AUTOMATION_SCREENSHOT_PREFIX } from './storage-stack.ts';
 import { containerSecrets, databaseUrl } from './task-config.ts';
 
 export interface ComputeStackProps extends ListoraStackProps {
@@ -30,6 +37,8 @@ export interface ComputeStackProps extends ListoraStackProps {
   readonly workerSecurityGroup: ec2.ISecurityGroup;
   readonly database: rds.DatabaseInstance;
   readonly repository: ecr.IRepository;
+  /** The browser runner's image (the Dockerfile's `runner` stage). */
+  readonly runnerRepository: ecr.IRepository;
   readonly photoBucket: s3.IBucket;
   /** The photo CloudFront distribution's domain name; it serves the bucket's `public/` keys. */
   readonly photoCdnDomain: string;
@@ -39,6 +48,15 @@ export interface ComputeStackProps extends ListoraStackProps {
 
 /** Label under the environment's domain that serves the API. */
 export const API_SUBDOMAIN = 'api';
+
+/** The browser runner's ECS service, in the environment's cluster. */
+export const RUNNER_SERVICE_NAME = 'runner';
+
+/**
+ * The encryption context purpose of a seller's browser session (`SESSION_PURPOSE` in
+ * @listora/vault): only the browser runner may decrypt one.
+ */
+export const SESSION_PURPOSE = 'marketplace_session';
 
 /** Target CPU utilization for service autoscaling. */
 const TARGET_CPU_PERCENT = 60;
@@ -83,6 +101,12 @@ export interface ListoraService {
  *
  * The services set no desired count: CloudFormation would reset the running count to it on
  * every deploy. Autoscaling owns the count, between `minTasks` and `maxTasks`.
+ *
+ * The browser runner (decision D1) is a third service, from its own image, with no task while
+ * idle: its desired count is 0, the worker sets it to 1 when automated work waits, and the
+ * runner sets it back to 0 as it exits (packages/automation/src/launcher.ts). A deploy resets
+ * it to 0; work still waiting then starts a runner of the new release within a minute. At
+ * most one runner task ever runs: a replacement starts only after the old one stopped.
  */
 export class ComputeStack extends ListoraStack {
   readonly cluster: ecs.Cluster;
@@ -106,14 +130,23 @@ export class ComputeStack extends ListoraStack {
 
     const image = ecs.ContainerImage.fromEcrRepository(props.repository, target.imageTag);
     const url = databaseUrl(props.database);
-    this.containerOptions = (service) => ({
-      image,
-      command: [...SERVICE_COMMANDS[service]],
-      environment: containerEnvironment(service, url, {
+    const deployment: Deployment = {
+      photoStorage: {
         bucket: props.photoBucket.bucketName,
         region: target.region,
         publicBaseUrl: `https://${props.photoCdnDomain}`,
-      }),
+      },
+      runner: {
+        cluster: `listora-${environment}`,
+        service: RUNNER_SERVICE_NAME,
+        region: target.region,
+      },
+      tokenKeyArn: props.tokenKey.keyArn,
+    };
+    this.containerOptions = (service) => ({
+      image,
+      command: [...SERVICE_COMMANDS[service]],
+      environment: containerEnvironment(service, url, deployment),
       secrets: containerSecrets(this, environment, service, props.database),
       portMappings: service === 'api' ? [{ containerPort: API_PORT }] : [],
       // Without a load balancer, ECS itself checks the API (the same liveness path) and
@@ -127,14 +160,27 @@ export class ComputeStack extends ListoraStack {
     });
 
     // Designed access, least privilege: photos for both (uploads, derivatives), raw sale
-    // emails for the worker only, and envelope encryption of marketplace tokens for both. A
-    // combined task's role holds the union, since its two containers share it.
+    // emails for the worker only, envelope encryption of marketplace tokens for both (but never
+    // decrypting a seller's browser session, which only the runner may), and starting the
+    // browser runner for the worker. A combined task's role holds the union, since its two
+    // containers share it.
     const grant = (role: iam.IRole, containers: readonly ServiceName[]): void => {
       props.photoBucket.grantReadWrite(role);
       if (containers.includes('worker')) {
         props.inboundMailBucket.grantRead(role, `${INBOUND_MAIL_PREFIX}*`);
+        role.addToPrincipalPolicy(startRunner(this.runnerServiceArn(environment)));
       }
-      props.tokenKey.grant(role, 'kms:GenerateDataKey', 'kms:Decrypt');
+      props.tokenKey.grant(role, 'kms:GenerateDataKey');
+      role.addToPrincipalPolicy(
+        new iam.PolicyStatement({
+          sid: 'DecryptTokensButNotSessions',
+          actions: ['kms:Decrypt'],
+          resources: [props.tokenKey.keyArn],
+          conditions: {
+            StringNotEquals: { 'kms:EncryptionContext:purpose': SESSION_PURPOSE },
+          },
+        }),
+      );
     };
 
     const layout = settings.services;
@@ -169,6 +215,8 @@ export class ComputeStack extends ListoraStack {
       default:
         assertNever(layout);
     }
+
+    const runner = this.runner(props, deployment, url);
 
     const apiDomain = target.dns === undefined ? undefined : this.apiDomain(target.dns);
     let apiUrl: string;
@@ -290,6 +338,95 @@ export class ComputeStack extends ListoraStack {
 
     new CfnOutput(this, 'ApiUrl', { value: apiUrl });
     new CfnOutput(this, 'ClusterName', { value: this.cluster.clusterName });
+    new CfnOutput(this, 'RunnerServiceName', { value: runner.serviceName });
+  }
+
+  /**
+   * The browser runner: a task of the configured size (`browserRunner`) from the runner image,
+   * with a writable `/tmp` for Chromium on an otherwise read-only file system, in the worker's
+   * network place and security group (database access, internet egress, no ingress), and a
+   * role that may decrypt sellers' sessions (and only those), store the screenshots of failed
+   * runs, and scale its own service to zero.
+   */
+  private runner(
+    {
+      settings,
+      target,
+      runnerRepository,
+      database,
+      tokenKey,
+      photoBucket,
+      workerSecurityGroup,
+    }: ComputeStackProps,
+    deployment: Deployment,
+    url: string,
+  ): ecs.FargateService {
+    const environment = target.environment;
+    const size = settings.browserRunner;
+    const taskDefinition = new ecs.FargateTaskDefinition(this, 'runner-task', {
+      family: `listora-${environment}-runner`,
+      cpu: size.cpu,
+      memoryLimitMiB: size.memoryMiB,
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.X86_64,
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+      },
+      volumes: [{ name: 'tmp' }],
+    });
+    const logGroup = new logs.LogGroup(this, 'runner-logs', {
+      logGroupName: `/listora/${environment}/runner`,
+      retention: settings.logRetention,
+      removalPolicy: removalPolicyFor(settings),
+    });
+    const container = taskDefinition.addContainer('runner', {
+      image: ecs.ContainerImage.fromEcrRepository(runnerRepository, target.imageTag),
+      command: [...RUNNER_COMMAND],
+      environment: containerEnvironment('runner', url, deployment),
+      secrets: containerSecrets(this, environment, 'runner', database),
+      readonlyRootFilesystem: true,
+      // A step cut short by the stop is read back by the engine, never trusted.
+      stopTimeout: Duration.seconds(30),
+      logging: ecs.LogDrivers.awsLogs({ logGroup, streamPrefix: 'runner' }),
+    });
+    container.addMountPoints({ containerPath: '/tmp', sourceVolume: 'tmp', readOnly: false });
+
+    const placement = taskPlacement(settings);
+    const service = new ecs.FargateService(this, 'runner-service', {
+      serviceName: RUNNER_SERVICE_NAME,
+      cluster: this.cluster,
+      taskDefinition,
+      vpcSubnets: placement.subnets,
+      securityGroups: [workerSecurityGroup],
+      assignPublicIp: placement.assignPublicIp,
+      desiredCount: 0,
+      // Never two runners at once: the old task stops before a new one starts.
+      minHealthyPercent: 0,
+      maxHealthyPercent: 100,
+      circuitBreaker: { enable: true, rollback: true },
+      propagateTags: ecs.PropagatedTagSource.SERVICE,
+    });
+
+    const role = taskDefinition.taskRole;
+    role.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        sid: 'SealAndOpenSessions',
+        actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+        resources: [tokenKey.keyArn],
+        conditions: { StringEquals: { 'kms:EncryptionContext:purpose': SESSION_PURPOSE } },
+      }),
+    );
+    photoBucket.grantPut(role, `${AUTOMATION_SCREENSHOT_PREFIX}*`);
+    role.addToPrincipalPolicy(startRunner(this.runnerServiceArn(environment)));
+    return service;
+  }
+
+  /** Built from its names: the runner's own role cannot reference the service it runs in. */
+  private runnerServiceArn(environment: string): string {
+    return this.formatArn({
+      service: 'ecs',
+      resource: 'service',
+      resourceName: `listora-${environment}/${RUNNER_SERVICE_NAME}`,
+    });
   }
 
   /**
@@ -411,4 +548,13 @@ function apiHealthCheck(): ecs.HealthCheck {
     retries: 3,
     startPeriod: Duration.seconds(30),
   };
+}
+
+/** Changing the runner service's desired count: the worker starts it, the runner stops it. */
+function startRunner(runnerServiceArn: string): iam.PolicyStatement {
+  return new iam.PolicyStatement({
+    sid: 'ScaleBrowserRunner',
+    actions: ['ecs:UpdateService'],
+    resources: [runnerServiceArn],
+  });
 }

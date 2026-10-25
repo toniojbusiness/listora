@@ -2,14 +2,22 @@
  * Marketplace listing queries. Like every repository, each function takes the request's
  * `Tenant` and filters on its account.
  */
-import type { DbExecutor, DbTransaction, Marketplace, MarketplaceListingTable } from '@listora/db';
+import type {
+  ConnectionMode,
+  ConnectionStatus,
+  DbExecutor,
+  DbTransaction,
+  Marketplace,
+  MarketplaceListingTable,
+} from '@listora/db';
 import { sql, type Selectable } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
 
-/** A listing with the mode of its connection (null when it has none). */
+/** A listing with the mode and status of its connection (null when it has none). */
 export type ListingRow = Selectable<MarketplaceListingTable> & {
-  connection_mode: 'api' | 'assisted' | null;
+  connection_mode: ConnectionMode | null;
+  connection_status: ConnectionStatus | null;
 };
 
 function listingQuery(db: DbExecutor, tenant: Tenant) {
@@ -21,7 +29,7 @@ function listingQuery(db: DbExecutor, tenant: Tenant) {
         .onRef('connection.id', '=', 'listing.connection_id'),
     )
     .selectAll('listing')
-    .select('connection.mode as connection_mode')
+    .select(['connection.mode as connection_mode', 'connection.status as connection_status'])
     .where('listing.account_id', '=', tenant.accountId);
 }
 

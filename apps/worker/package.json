@@ -3,21 +3,24 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Listora background worker: the operation engine, photo processing, item analysis, and account deletion.",
+  "description": "Listora background processes: the worker (the operation engine, photo processing, item analysis, account deletion, and starting the browser runner) and the on-demand browser runner (automated marketplace steps and sale checks).",
   "scripts": {
     "start": "node src/main.ts",
-    "dev": "node --watch --env-file-if-exists=../../.env src/main.ts"
+    "dev": "node --watch --env-file-if-exists=../../.env src/main.ts",
+    "runner": "node --env-file-if-exists=../../.env src/runner/main.ts"
   },
   "dependencies": {
     "@listora/accounts": "*",
     "@listora/ai": "*",
     "@listora/analysis": "*",
+    "@listora/automation": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",
     "@listora/operations": "*",
     "@listora/photos": "*",
     "@listora/shared": "*",
-    "@listora/storage": "*"
+    "@listora/storage": "*",
+    "@listora/vault": "*"
   },
   "devDependencies": {
     "@listora/testing": "*",

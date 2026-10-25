@@ -18,17 +18,19 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AccountRouteDe
    *    tokens issued before now stop working, and leave the deletion's tombstone (with the
    *    marketplace grants still to revoke) and its `account_deletion` job. A failure rolls all
    *    of it back, so nothing is deleted and a retry with the same token starts over.
-   * 2. After the commit, delete the account's stored photo and upload objects. A failure is
-   *    logged, not returned: the rows are gone, so leftover objects are unreferenced.
+   * 2. After the commit, delete the account's stored photo, upload, and automation screenshot
+   *    objects. A failure is logged, not returned: the rows are gone, so leftover objects are
+   *    unreferenced.
    * The worker's job then deletes the person at the identity provider and revokes the
    * marketplace grants, retrying until done (`@listora/accounts`).
    */
   contractRoute(app, deps, 'deleteAccount', async ({ tenant, identity, db, request }) => {
-    const { deletedAt, connections, photos, uploadKeys } = await inTransaction(db, (trx) =>
-      deleteUserData(trx, tenant, identity),
+    const { deletedAt, connections, photos, uploadKeys, screenshotKeys } = await inTransaction(
+      db,
+      (trx) => deleteUserData(trx, tenant, identity),
     );
     await deletePhotoObjects(deps.storage, photos, request.log);
-    await deleteUploadObjects(deps.storage, uploadKeys, request.log);
+    await deleteStoredObjects(deps.storage, [...uploadKeys, ...screenshotKeys], request.log);
     request.log.info(
       {
         accountId: tenant.accountId,
@@ -51,8 +53,11 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AccountRouteDe
   });
 }
 
-/** Deletes the stored objects of uploads that no photo used; failures are only logged. */
-async function deleteUploadObjects(
+/**
+ * Deletes stored objects no row references any more (uploads that no photo used, automation
+ * screenshots); failures are only logged.
+ */
+async function deleteStoredObjects(
   storage: ObjectStorage,
   keys: readonly string[],
   log: FastifyBaseLogger,
@@ -62,7 +67,7 @@ async function deleteUploadObjects(
   if (failures.length > 0) {
     log.warn(
       { err: failures[0]?.reason, failed: failures.length },
-      'could not delete some stored uploads of a deleted account',
+      'could not delete some stored objects of a deleted account',
     );
   }
 }

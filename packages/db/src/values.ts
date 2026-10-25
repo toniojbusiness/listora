@@ -74,7 +74,11 @@ export const AI_CONTROL_ACTIONS = [
 ] as const;
 export type AiControlAction = (typeof AI_CONTROL_ACTIONS)[number];
 
-export const CONNECTION_MODES = ['api', 'assisted'] as const;
+/**
+ * How a connection reaches the marketplace: its official API, browser automation in the
+ * seller's own session (decision D1), or not at all (assisted: the user does each step).
+ */
+export const CONNECTION_MODES = ['api', 'assisted', 'automation'] as const;
 export type ConnectionMode = (typeof CONNECTION_MODES)[number];
 
 export const CONNECTION_STATUSES = ['connected', 'degraded', 'reauth_required', 'revoked'] as const;
@@ -211,3 +215,37 @@ export type DelistRunListingSource = (typeof DELIST_RUN_LISTING_SOURCES)[number]
  */
 export const ACCOUNT_DELETION_GRANT_OUTCOMES = ['pending', 'revoked', 'manual'] as const;
 export type AccountDeletionGrantOutcome = (typeof ACCOUNT_DELETION_GRANT_OUTCOMES)[number];
+
+/** What a browser automation run was for (`automation_run.purpose`). */
+export const AUTOMATION_RUN_PURPOSES = ['operation', 'sale_check', 'health'] as const;
+export type AutomationRunPurpose = (typeof AUTOMATION_RUN_PURPOSES)[number];
+
+export const AUTOMATION_RUN_OUTCOMES = [
+  'succeeded',
+  'failed',
+  'timeout',
+  'challenge',
+  'canceled',
+] as const;
+export type AutomationRunOutcome = (typeof AUTOMATION_RUN_OUTCOMES)[number];
+
+/**
+ * A page browser automation must never pass (docs/architecture.md section 1): it stops at once
+ * and the user takes over. `session_rejected`: the marketplace logged the session out or asks
+ * for a password; `unexpected_page`: the session landed outside the marketplace's own site.
+ */
+export const CHALLENGE_KINDS = [
+  'captcha',
+  'bot_check',
+  'login_challenge',
+  'session_rejected',
+  'unexpected_page',
+] as const;
+export type ChallengeKind = (typeof CHALLENGE_KINDS)[number];
+
+/** Why a connection's next sale check is due when it is (`sale_check_schedule.next_reason`). */
+export const SALE_CHECK_REASONS = ['scheduled', 'email', 'retry', 'linked'] as const;
+export type SaleCheckReason = (typeof SALE_CHECK_REASONS)[number];
+
+export const SALE_CHECK_OUTCOMES = ['succeeded', 'failed', 'challenge'] as const;
+export type SaleCheckOutcome = (typeof SALE_CHECK_OUTCOMES)[number];

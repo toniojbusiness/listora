@@ -14,6 +14,7 @@ function row(overrides: Partial<ListingRow> = {}): ListingRow {
     marketplace: 'ebay',
     connection_id: null,
     connection_mode: null,
+    connection_status: null,
     status: 'active',
     external_listing_id: null,
     external_sku: null,
@@ -55,6 +56,25 @@ describe('listing views', () => {
       tone: 'checking',
       label: 'Checking...',
     });
+  });
+
+  it('confirms an automated listing by its read-back, and only while its session works', () => {
+    const automated = {
+      marketplace: 'poshmark' as const,
+      connection_id: 'c',
+      connection_mode: 'automation' as const,
+      connection_status: 'connected' as const,
+      last_verified_at: AT,
+    };
+    expect(listingView(row(automated))).toMatchObject({
+      mode: 'automation',
+      verification: { method: 'marketplace_api' },
+      statusDisplay: { tone: 'success', label: 'Active (confirmed by Poshmark)' },
+    });
+    // Waiting for a relink, the listing is the user's again, and no read-back speaks for it.
+    const relink = row({ ...automated, connection_status: 'reauth_required' });
+    expect(listingView(relink)).toMatchObject({ mode: 'assisted' });
+    expect(listingStatusDisplay(relink).label).not.toMatch(/confirmed by/i);
   });
 
   it('never says an assisted listing was confirmed by the marketplace', () => {

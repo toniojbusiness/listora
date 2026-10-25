@@ -5,6 +5,11 @@
  * smaller pool and its own liveness session, so slow AI calls and image work never hold the
  * slots an urgent delist needs. `apps/worker` starts it; tests start it in process with a short
  * retry schedule.
+ *
+ * The browser runner (`apps/runner`) starts it in the `automation` role: one runner that takes
+ * only automated operation steps (`AUTOMATION_OPERATION_TASK`) and its own `tasks` (sale checks),
+ * one job at a time, so a browser session never waits behind another while its deadline runs.
+ * It runs no scheduled tasks and no queue maintenance; the always-on worker does those.
  */
 import { EventEmitter } from 'node:events';
 
@@ -15,7 +20,12 @@ import type { AdapterLookup } from '@listora/marketplaces';
 import type { Logger } from '@listora/shared';
 
 import { runOperationStep, type StepDependencies } from './executor.ts';
-import { isOperationJobPayload, OPERATION_TASK } from './jobs.ts';
+import {
+  AUTOMATION_OPERATION_TASK,
+  isOperationJobPayload,
+  OPERATION_TASK,
+  type OperationTask,
+} from './jobs.ts';
 import { MAINTENANCE_CRONTAB, MAINTENANCE_TASK, runJobQueueMaintenance } from './maintenance.ts';
 import { DEFAULT_RETRY_POLICY, type RetryPolicy } from './policy.ts';
 import { reapStoppedWorkers, WorkerLiveness } from './recovery.ts';
@@ -41,6 +51,11 @@ export interface ScheduledTask {
 }
 
 export interface OperationWorkerOptions {
+  /**
+   * `worker` (default): operation steps, with automated ones handed to the browser runner.
+   * `automation`: the browser runner, which takes only automated steps and `tasks`, one at a time.
+   */
+  role?: 'worker' | 'automation';
   /** The database for the job queue's own connections and the liveness session. */
   connectionString: string;
   /** The engine's database handle (operations, listings, history). */
@@ -64,8 +79,10 @@ export interface OperationWorkerOptions {
   recoveryGraceMs?: number;
   /** Recheck interval for an operation waiting behind an older one (default 5 min). */
   blockedRecheckMs?: number;
-  /** Recurring jobs, run on the same runner as `tasks`. */
+  /** Recurring jobs, run on the same runner as `tasks`. Not in the `automation` role. */
   scheduledTasks?: readonly ScheduledTask[];
+  /** A worker handed an automated step to the browser runner (see executor.ts). */
+  onAutomationHandover?: () => void;
   /**
    * The worker can no longer run safely (its liveness session or the job runner failed). The
    * process must exit at once; other workers then recover its jobs.
@@ -86,12 +103,16 @@ export async function startOperationWorker(
   options: OperationWorkerOptions,
 ): Promise<OperationWorker> {
   const { logger } = options;
+  const role = options.role ?? 'worker';
   const tasks = options.tasks ?? {};
-  for (const name of [OPERATION_TASK, MAINTENANCE_TASK]) {
+  for (const name of RESERVED_TASKS) {
     if (Object.hasOwn(tasks, name)) throw new Error(`task ${name} is the worker's own`);
   }
   const scheduledTasks = options.scheduledTasks ?? [];
   validScheduledTasks(scheduledTasks, tasks);
+  if (role === 'automation' && scheduledTasks.length > 0) {
+    throw new Error('the browser runner runs no scheduled tasks; the worker schedules its work');
+  }
   const deps: StepDependencies = {
     db: options.db,
     adapters: options.adapters,
@@ -99,6 +120,10 @@ export async function startOperationWorker(
     policy: options.policy ?? DEFAULT_RETRY_POLICY,
     callTimeoutMs: options.callTimeoutMs ?? 60_000,
     blockedRecheckMs: options.blockedRecheckMs ?? 5 * 60_000,
+    runsAutomation: role === 'automation',
+    ...(options.onAutomationHandover === undefined
+      ? {}
+      : { onAutomationHandover: options.onAutomationHandover }),
   };
   let stopping = false;
   const fatal = (error: Error): void => {
@@ -112,23 +137,40 @@ export async function startOperationWorker(
     isStopping: () => stopping,
   };
 
-  const operations = await startRunner(
-    { ...runnerOptions, concurrency: options.concurrency ?? 5, crontab: MAINTENANCE_CRONTAB },
-    {
-      [OPERATION_TASK]: async (payload, helpers) => {
-        if (!isOperationJobPayload(payload)) {
-          helpers.logger.error('operation job with an invalid payload; dropping it');
-          return;
-        }
-        await runOperationStep(deps, payload, helpers.abortSignal);
-      },
-      [MAINTENANCE_TASK]: async () => {
-        await runJobQueueMaintenance(options.connectionString, logger);
-      },
-    },
-  );
+  const operationStep =
+    (task: OperationTask): JobHandler =>
+    async (payload, helpers) => {
+      if (!isOperationJobPayload(payload)) {
+        helpers.logger.error(`${task} job with an invalid payload; dropping it`);
+        return;
+      }
+      await runOperationStep(deps, payload, helpers.abortSignal);
+    };
+  const taskHandlers = Object.entries(tasks).map(([name, task]): [string, JobHandler] => [
+    name,
+    (payload, helpers) => task(payload, helpers.abortSignal),
+  ]);
+
+  const operations =
+    role === 'automation'
+      ? await startRunner(
+          { ...runnerOptions, concurrency: options.concurrency ?? 1 },
+          Object.fromEntries([
+            [AUTOMATION_OPERATION_TASK, operationStep(AUTOMATION_OPERATION_TASK)],
+            ...taskHandlers,
+          ]),
+        )
+      : await startRunner(
+          { ...runnerOptions, concurrency: options.concurrency ?? 5, crontab: MAINTENANCE_CRONTAB },
+          {
+            [OPERATION_TASK]: operationStep(OPERATION_TASK),
+            [MAINTENANCE_TASK]: async () => {
+              await runJobQueueMaintenance(options.connectionString, logger);
+            },
+          },
+        );
   let background: StartedRunner | undefined;
-  if (Object.keys(tasks).length > 0 || scheduledTasks.length > 0) {
+  if (role === 'worker' && (taskHandlers.length > 0 || scheduledTasks.length > 0)) {
     try {
       background = await startRunner(
         {
@@ -145,10 +187,7 @@ export async function startOperationWorker(
               }),
         },
         Object.fromEntries([
-          ...Object.entries(tasks).map(([name, task]): [string, JobHandler] => [
-            name,
-            (payload, helpers) => task(payload, helpers.abortSignal),
-          ]),
+          ...taskHandlers,
           ...scheduledTasks.map((task): [string, JobHandler] => [
             task.name,
             (_payload, helpers) => task.run(helpers.abortSignal),
@@ -301,7 +340,11 @@ async function startRunner(
   };
 }
 
-const RESERVED_TASKS: ReadonlySet<string> = new Set([OPERATION_TASK, MAINTENANCE_TASK]);
+const RESERVED_TASKS: ReadonlySet<string> = new Set([
+  OPERATION_TASK,
+  AUTOMATION_OPERATION_TASK,
+  MAINTENANCE_TASK,
+]);
 
 function validScheduledTasks(
   tasks: readonly ScheduledTask[],

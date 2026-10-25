@@ -4,12 +4,24 @@ import {
   AwsCognitoUserAdmin,
   noMarketplaceAccessRevocation,
 } from '@listora/accounts';
+import { fileURLToPath } from 'node:url';
+
 import {
   createAiClient,
   PostgresAiControls,
   PostgresQuotaPolicy,
   PostgresUsageStore,
 } from '@listora/ai';
+import {
+  AUTOMATION_DISPATCH_SCHEDULE,
+  AUTOMATION_DISPATCH_TASK,
+  AutomationDispatcher,
+  createAutomationAdapters,
+  createRunnerLauncher,
+  HttpPhotoSource,
+  NoBrowserSessions,
+  ProcessRunnerLauncher,
+} from '@listora/automation';
 import { createDatabase } from '@listora/db';
 import { startOperationWorker } from '@listora/operations';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
@@ -27,15 +39,37 @@ const db = createDatabase({
   max: config.concurrency + config.taskConcurrency + 5,
 });
 
+const storage = createStorage(config.storage);
+// Automated steps run on the browser runner, which the worker starts when they wait for it.
+const launcher = createRunnerLauncher(config.runnerLaunch, {
+  logger,
+  runnerEntry: fileURLToPath(new URL('runner/main.ts', import.meta.url)),
+});
+const automation = createAutomationAdapters({
+  settings: config.automation,
+  sessions: NoBrowserSessions,
+  photos: new HttpPhotoSource(),
+  logger,
+});
+const adapters = createAdapters(config, automation);
+const dispatcher = new AutomationDispatcher({
+  db,
+  launcher,
+  storage,
+  logger,
+  adapters: adapters.lookup,
+  deferUnsupportedMs: config.automation.saleChecks.maxIntervalMs,
+});
+
 try {
   const worker = await startOperationWorker({
     connectionString: config.databaseUrl,
     db,
-    adapters: createAdapters(config).lookup,
+    adapters: adapters.lookup,
     tasks: {
       ...createWorkerTasks({
         db,
-        storage: createStorage(config.storage),
+        storage,
         ai: createAiClient(config.ai, {
           usageStore: new PostgresUsageStore(db),
           controls: new PostgresAiControls(db),
@@ -56,7 +90,17 @@ try {
     logger,
     concurrency: config.concurrency,
     taskConcurrency: config.taskConcurrency,
-    scheduledTasks: [aiSpendCheckTask(db, config.aiAlerts, logger)],
+    scheduledTasks: [
+      aiSpendCheckTask(db, config.aiAlerts, logger),
+      {
+        name: AUTOMATION_DISPATCH_TASK,
+        schedule: AUTOMATION_DISPATCH_SCHEDULE,
+        run: () => dispatcher.dispatch(),
+      },
+    ],
+    onAutomationHandover: () => {
+      dispatcher.nudge();
+    },
     onFatalError: (error) => {
       // Other workers recover this worker's jobs once its process is gone; exiting at once
       // is what keeps two workers from running the same step.
@@ -69,6 +113,7 @@ try {
     logger,
     shutdown: async () => {
       await worker.stop();
+      if (launcher instanceof ProcessRunnerLauncher) launcher.stop();
       await db.destroy();
     },
   });
@@ -81,6 +126,8 @@ try {
       ebay: config.ebay?.environment ?? null,
       aiProvider: config.ai.provider,
       cognitoUserPool: config.cognitoUserPool?.userPoolId,
+      automated: Object.keys(automation),
+      runnerLaunch: launcher.kind,
     },
     'worker ready',
   );
