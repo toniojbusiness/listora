@@ -18,6 +18,10 @@ protocol ReviewService: Sendable {
     func replace(itemID: String, with replace: ItemReplace) async throws(APIFailure) -> Item
     func pricing(itemID: String) async throws(APIFailure) -> PricingSuggestion
     func usage() async throws(APIFailure) -> Usage
+    /// The server's text model's reading of the phrases of a spoken correction this app could
+    /// not parse. A proposal only: it changes nothing on the item.
+    func interpretVoiceCorrection(itemID: String, transcript: String, idempotencyKey: String)
+        async throws(APIFailure) -> VoiceCorrection
 }
 
 /// ``ReviewService`` over the generated client.
@@ -117,6 +121,26 @@ struct APIReviewService: ReviewService {
     func usage() async throws(APIFailure) -> Usage {
         switch try await call({ try await client.getUsage() }) {
         case let .ok(response): try body { try response.body.json }
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func interpretVoiceCorrection(itemID: String, transcript: String, idempotencyKey: String)
+        async throws(APIFailure) -> VoiceCorrection
+    {
+        let output = try await call {
+            try await client.interpretVoiceCorrection(
+                path: .init(itemId: itemID),
+                headers: .init(idempotencyKey: idempotencyKey),
+                body: .json(.init(transcript: transcript)),
+            )
+        }
+        switch output {
+        case let .ok(response): return try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
+        case let .tooManyRequests(response): throw APIFailure(statusCode: 429, response: response)
+        case let .serviceUnavailable(response): throw APIFailure(statusCode: 503, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }
     }

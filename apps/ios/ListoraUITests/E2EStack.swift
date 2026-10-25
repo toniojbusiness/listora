@@ -94,6 +94,10 @@ struct SavedDetails: Decodable {
     let cost: SavedMoney?
     let purchaseSource: String?
     let colors: [String]?
+    let sizeLabel: String?
+    let pattern: String?
+    let flaws: [String]?
+    let keywords: [String]?
 }
 
 struct SavedMoney: Decodable {

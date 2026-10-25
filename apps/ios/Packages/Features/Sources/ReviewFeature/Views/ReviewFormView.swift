@@ -3,23 +3,34 @@ import DesignSystem
 import SwiftUI
 
 /// The confidence-first review: the details that need a look first, then the rest by section,
-/// each editable in place, then the listing copy per marketplace.
+/// each editable in place, then the listing copy per marketplace. The bottom bar holds the talk
+/// button for spoken corrections and "Next to check".
 struct ReviewFormView: View {
     @Bindable var model: ReviewFlowModel
+    let voice: VoiceCorrectionModel
     @State private var editingCopy: MarketplaceCopy?
 
     var body: some View {
         if let form = model.form {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: Spacing.lg) {
-                    ReviewHeader(model: model)
-                    identifyHarder
-                    ForEach(form.sections, id: \.section) { entry in
-                        section(entry.section, keys: entry.keys, form: form)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    // Not lazy: "Next" scrolls to rows anywhere in the review, loaded or not.
+                    VStack(alignment: .leading, spacing: Spacing.lg) {
+                        ReviewHeader(model: model)
+                        identifyHarder
+                        ForEach(form.sections, id: \.section) { entry in
+                            section(entry.section, keys: entry.keys, form: form)
+                        }
+                        copySection
                     }
-                    copySection
+                    .padding(Spacing.md)
                 }
-                .padding(Spacing.md)
+                .accessibilityIdentifier("review.scroll")
+                .onChange(of: model.focusedField) { _, key in
+                    if let key {
+                        withAnimation { proxy.scrollTo(key, anchor: .center) }
+                    }
+                }
             }
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) { continueBar(form) }
@@ -70,10 +81,23 @@ struct ReviewFormView: View {
                     FieldRow(
                         field: form.field(key),
                         draftText: draftText(key),
-                        onEdit: { model.beginEditing(key) },
-                        onSelect: { value in model.update(key, to: value) },
+                        isFocused: model.focusedField == key,
+                        onEdit: {
+                            model.focusedField = nil
+                            model.beginEditing(key)
+                        },
+                        onSelect: { value in
+                            model.focusedField = nil
+                            model.update(key, to: value)
+                        },
                         onCommit: { model.commitEditing(key) },
+                        onQuickPick: { option in
+                            model.focusedField = nil
+                            model.choose(option)
+                        },
+                        onNext: { model.advanceToNextCheck(after: key) },
                     )
+                    .id(key)
                 }
             }
             .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.large, style: .continuous))
@@ -126,7 +150,31 @@ struct ReviewFormView: View {
 
     private func continueBar(_ form: ReviewForm) -> some View {
         let missing = form.missing
+        let toCheck = model.fieldsToCheck.count
         return VStack(spacing: Spacing.xs) {
+            if voice.hasContent || voice.isListening {
+                VoiceTray(voice: voice)
+            }
+            HStack(spacing: Spacing.xs) {
+                TalkButton(voice: voice)
+                Button("Type", systemImage: "keyboard") {
+                    voice.showsTyping.toggle()
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.listora(.tertiary, size: .compact))
+                .accessibilityLabel(voice.showsTyping ? "Hide the typing field" : "Type a correction")
+                .accessibilityIdentifier("voice.type")
+                Spacer(minLength: 0)
+                if toCheck > 0 {
+                    Button("Next (\(toCheck))", systemImage: "arrow.right.circle") {
+                        model.advanceToNextCheck()
+                    }
+                    .buttonStyle(.listora(.tertiary, size: .compact))
+                    .lineLimit(1)
+                    .accessibilityLabel("Next to check, \(toCheck) left")
+                    .accessibilityIdentifier("review.nextToCheck")
+                }
+            }
             if !missing.isEmpty {
                 Text("Add \(missing.map { $0.title.lowercased() }.formatted(.list(type: .and))) to continue.")
                     .font(Typography.caption)
@@ -143,7 +191,10 @@ struct ReviewFormView: View {
                 }
             }
             .buttonStyle(.listoraPrimary)
-            .disabled(!missing.isEmpty || model.isWorking || model.escalation == .running)
+            .disabled(
+                !missing.isEmpty || model.isWorking || model.escalation == .running || voice.isListening
+                    || voice.phase == .interpreting,
+            )
             .accessibilityIdentifier("review.continue")
         }
         .bottomBar()

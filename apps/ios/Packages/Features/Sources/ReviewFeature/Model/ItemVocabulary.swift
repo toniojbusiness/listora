@@ -19,6 +19,9 @@ struct ItemVocabulary: Decodable, Sendable {
     let categories: [Category]
     let departments: [String]
     let sizeSystems: [String]
+    let colors: [String]
+    let patterns: [String]
+    let materials: [String]
     let conditions: [String]
     let copyLimits: [String: CopyLimits]
 

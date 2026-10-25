@@ -55,6 +55,8 @@ tags:
     description: Assisted-mode tasks the user completes in a marketplace app.
   - name: usage
     description: How much of the plan's quotas the account has used this period.
+  - name: voice
+    description: Spoken corrections on the review screen that the app could not parse itself.
 paths:
   /health/live:
     get:
@@ -622,6 +624,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Usage'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/items/{itemId}/voice-corrections:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    post:
+      tags:
+        - voice
+      operationId: interpretVoiceCorrection
+      summary: Interpret a spoken correction the app could not parse
+      description: |
+        Maps the short text of a spoken correction on the review screen ("the pattern is
+        houndstooth, it's from the nineties") to proposed detail changes, with the cheap text
+        model. The app transcribes speech on the device and parses routine phrases itself, so
+        it sends only the phrases its own parser could not map, and only their text, never
+        audio. The answer is a proposal: nothing is changed on the item, and the app shows each
+        change for the seller to accept or undo before it saves anything (`replaceItem`).
+        Canonical details (category, department, size type, colors, pattern, materials,
+        condition) hold canonical values only, and `cost` and `listPrice` carry an `amount`;
+        every other change carries a `value`. A phrase the model could not map is left out, so
+        `changes` may be empty. The call is metered and counted in the account's daily AI
+        budget like every AI call, but uses no plan quota: `429 ai_budget_exceeded` when the
+        budget is used up, `503 service_unavailable` while AI is switched off or the model
+        could not answer (retryable), and `403 forbidden` when AI is turned off for the account.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoiceCorrectionRequest'
+      responses:
+        '200':
+          description: The proposed changes, possibly none.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoiceCorrection'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         default:
           $ref: '#/components/responses/DefaultError'
   /v1/items/{itemId}/pricing:
@@ -3404,6 +3453,80 @@ components:
           description: One per `KnownUsageMetric`, in that order.
           items:
             $ref: '#/components/schemas/QuotaUsage'
+    VoiceCorrectionRequest:
+      type: object
+      required:
+        - transcript
+      properties:
+        transcript:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: |
+            The phrases of the seller's spoken correction that the app's own parser could not
+            map, as text (on-device speech recognition). Never audio.
+    VoiceCorrection:
+      type: object
+      required:
+        - changes
+      properties:
+        changes:
+          type: array
+          maxItems: 20
+          description: The proposed changes in the order they were said; empty when nothing mapped.
+          items:
+            $ref: '#/components/schemas/VoiceCorrectionChange'
+    VoiceCorrectionChange:
+      type: object
+      description: |
+        One proposed change. `cost` (what the seller paid) and `listPrice` carry `amount`; every
+        other field carries `value`: a canonical value for category (`<category>/<subcategory>`),
+        department, sizeSystem, colors, pattern, materials, and condition, otherwise text. A list
+        detail gets one change per entry: the colors (or materials) of one answer together
+        replace the item's, and each keyword or flaw is added to the item's.
+      required:
+        - field
+      properties:
+        field:
+          $ref: '#/components/schemas/VoiceCorrectionField'
+        value:
+          type: string
+          minLength: 1
+          maxLength: 200
+        amount:
+          $ref: '#/components/schemas/Money'
+    VoiceCorrectionField:
+      description: |
+        A `KnownVoiceCorrectionField`, or a field added after this client was built. Clients
+        ignore a change to a field they do not know.
+      anyOf:
+        - $ref: '#/components/schemas/KnownVoiceCorrectionField'
+        - type: string
+          maxLength: 64
+    KnownVoiceCorrectionField:
+      type: string
+      description: |
+        The item detail a change is for, named like `ItemDetails`; `cost` is what the seller paid
+        and `purchaseSource` where they bought it.
+      enum:
+        - title
+        - brand
+        - productName
+        - category
+        - department
+        - sizeLabel
+        - sizeSystem
+        - colors
+        - pattern
+        - materials
+        - keywords
+        - styleNumber
+        - condition
+        - conditionNotes
+        - flaws
+        - cost
+        - purchaseSource
+        - listPrice
     ListingStatus:
       description: |
         A `KnownListingStatus`, or a status added after this client was built. Clients show

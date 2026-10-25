@@ -82,6 +82,8 @@ targets:
         # Assisted tasks save an item's photos to the camera roll, in posting order, for the
         # marketplace's app to pick up (add-only access).
         NSPhotoLibraryAddUsageDescription: Listora saves your item's photos so you can post them in a marketplace's app.
+        NSMicrophoneUsageDescription: Listora listens only while you hold the talk button on the review screen, so you can correct an item's details by voice.
+        NSSpeechRecognitionUsageDescription: Listora turns what you say into text to fill in an item's details. Your voice recording is never sent to Listora.
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UIApplicationSceneManifest:
@@ -207,6 +209,7 @@ schemes:
         - package: Features/SettingsFeatureTests
         - package: Features/MarketplacesFeatureTests
         - package: Features/TagReadingFeatureTests
+        - package: Features/VoiceInputFeatureTests
         - package: Features/ShareLinkFeatureTests
     profile:
       config: Prod-Release

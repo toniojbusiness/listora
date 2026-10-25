@@ -41,6 +41,7 @@ describe('API feature discovery', () => {
       'tasks',
       'uploads',
       'usage',
+      'voice',
       'webhooks',
     ]);
   });

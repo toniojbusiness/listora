@@ -7,6 +7,7 @@ import SwiftUI
 struct ReviewFlowView: View {
     let onFinished: @MainActor (ItemReviewOutcome) -> Void
     @State private var model: ReviewFlowModel
+    @State private var voice: VoiceCorrectionModel
 
     init(
         environment: ReviewEnvironment,
@@ -14,7 +15,9 @@ struct ReviewFlowView: View {
         onFinished: @escaping @MainActor (ItemReviewOutcome) -> Void,
     ) {
         self.onFinished = onFinished
-        _model = State(initialValue: environment.makeModel(for: request))
+        let model = environment.makeModel(for: request)
+        _model = State(initialValue: model)
+        _voice = State(initialValue: VoiceCorrectionModel(target: model, transcriber: environment.transcriber))
     }
 
     var body: some View {
@@ -43,7 +46,7 @@ struct ReviewFlowView: View {
                 onGoBack: { onFinished(.back) },
             )
         case .reviewing:
-            ReviewFormView(model: model)
+            ReviewFormView(model: model, voice: voice)
         case .alreadySaved:
             if let saved = model.saved {
                 SavedItemView(saved: saved, onDone: { onFinished(.saved(sku: saved.sku)) })
