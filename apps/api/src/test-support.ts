@@ -39,6 +39,13 @@ import {
 import { loadAutomationSettings } from '@listora/automation';
 import { LocalTokenVault, SessionVault } from '@listora/connections';
 import {
+  startBatchItemAnalysis,
+  type BatchJobDependencies,
+  type BatchJobOutcome,
+  type BatchJobPayload,
+  type BatchJobQueue,
+} from '@listora/batches';
+import {
   createDatabase,
   migrateJobQueue,
   SchemaMigrator,
@@ -145,6 +152,39 @@ export class RecordingAnalysisJobs implements AnalysisJobQueue {
     const outcomes: AnalysisJobOutcome[] = [];
     for (let job = this.jobs.shift(); job !== undefined; job = this.jobs.shift()) {
       outcomes.push(await runItemAnalysis(this.#deps(), job));
+    }
+    return outcomes;
+  }
+}
+
+/** A BatchJobQueue that records jobs; `runAll` runs them the way the worker will. */
+export class RecordingBatchJobs implements BatchJobQueue {
+  readonly jobs: (BatchJobPayload & { runAt?: Date })[] = [];
+  readonly #deps: () => BatchJobDependencies;
+
+  constructor(deps: () => BatchJobDependencies) {
+    this.#deps = deps;
+  }
+
+  enqueue(_executor: DbExecutor, job: BatchJobPayload, runAt?: Date): Promise<void> {
+    this.jobs.push({ ...job, ...(runAt === undefined ? {} : { runAt }) });
+    return Promise.resolve();
+  }
+
+  /**
+   * Runs every recorded job once, in order, and forgets them. A job that queues itself again
+   * (its photos are still processing) waits for the next `runAll`.
+   */
+  async runAll(): Promise<BatchJobOutcome[]> {
+    const outcomes: BatchJobOutcome[] = [];
+    for (const job of this.jobs.splice(0)) {
+      outcomes.push(
+        await startBatchItemAnalysis(this.#deps(), {
+          accountId: job.accountId,
+          batchId: job.batchId,
+          itemId: job.itemId,
+        }),
+      );
     }
     return outcomes;
   }
@@ -314,6 +354,8 @@ export interface TestApi {
   photoJobs: RecordingPhotoJobs;
   /** Jobs analysis requests added; `analysisJobs.runAll()` runs them with the fake provider. */
   analysisJobs: RecordingAnalysisJobs;
+  /** Jobs batch item submits added; `batchJobs.runAll()` runs them as the worker does. */
+  batchJobs: RecordingBatchJobs;
   aiControls: TestAiControls;
   /** The AI client the API and the jobs share. */
   ai: AiClient;
@@ -385,6 +427,14 @@ export async function createTestApi(
     logger,
     autoEscalate: aiControls.autoEscalate,
   }));
+  const batchJobs: RecordingBatchJobs = new RecordingBatchJobs(() => ({
+    db,
+    ai,
+    analysisJobs,
+    batchJobs,
+    logger,
+    now: () => new Date(clock.now),
+  }));
   const cognito = new FakeCognitoUserAdmin();
   const marketplaceAccess = new FakeMarketplaceAccess();
   const deletionDeps: AccountDeletionDependencies = { db, cognito, marketplaceAccess, logger };
@@ -406,6 +456,7 @@ export async function createTestApi(
     ai,
     analysisJobs,
     marketplaceSessions: options.marketplaceSessions ?? marketplaceSessions,
+    batchJobs,
     now: () => new Date(clock.now),
     pingDatabase: () => Promise.resolve(),
   });
@@ -500,6 +551,7 @@ export async function createTestApi(
     storageDir,
     photoJobs,
     analysisJobs,
+    batchJobs,
     aiControls,
     ai,
     vault: marketplaceSessions.vault,

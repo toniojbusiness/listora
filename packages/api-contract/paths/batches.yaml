@@ -1,0 +1,150 @@
+/v1/item-batches:
+  post:
+    tags: [batches]
+    operationId: createItemBatch
+    summary: Start a batch
+    description: |
+      Starts an empty batch: the items of one haul, photographed in one session. Add one item
+      per physical item with `addItemBatchItem`, attach its photos as for any item, then
+      `submitItemBatchItem`: the server starts its analysis once the photos are processed.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/batches.yaml#/ItemBatch'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/item-batches/{batchId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/BatchId'
+  get:
+    tags: [batches]
+    operationId: getItemBatch
+    summary: Get a batch
+    description: |
+      The batch's items in haul order, each with where it is (`state` and the server's
+      `statusDisplay`), and how many are in each state. Poll it while items upload and
+      analyze; every state comes from the items, photos, and analyses themselves.
+    responses:
+      '200':
+        description: The batch.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/batches.yaml#/ItemBatch'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/item-batches/{batchId}/items:
+  parameters:
+    - $ref: '../components/parameters.yaml#/BatchId'
+  post:
+    tags: [batches]
+    operationId: addItemBatchItem
+    summary: Add an item to a batch
+    description: |
+      Creates a `draft` item (with its SKU) at `position` in the batch. A position the batch
+      already has answers `200` with that item instead of creating another, so an app that
+      submits its batch again, even after the Idempotency-Key has expired, never creates an
+      item twice.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/batches.yaml#/ItemBatchItemCreate'
+    responses:
+      '200':
+        description: The item already at that position.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/batches.yaml#/ItemBatchItem'
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/batches.yaml#/ItemBatchItem'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/item-batches/{batchId}/items/{itemId}/submit:
+  parameters:
+    - $ref: '../components/parameters.yaml#/BatchId'
+    - $ref: '../components/parameters.yaml#/ItemId'
+  post:
+    tags: [batches]
+    operationId: submitItemBatchItem
+    summary: Analyze a batch item once its photos are ready
+    description: |
+      Says the app has attached all `photoCount` photos of the item. The server starts the
+      item's analysis as soon as they are processed, under the same rules as
+      `startItemAnalysis`: an existing analysis of the photo set is kept, a failed one is
+      queued again, and the AI guards are checked first. A refusal (the daily AI budget, the
+      plan's quota, AI switched off) shows on the item as a `failed` state with its reason
+      instead of an error here. Submitting again is the item's Retry. `409
+      invalid_state_transition` when the item does not have `photoCount` photos yet.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/batches.yaml#/ItemBatchItemSubmit'
+    responses:
+      '202':
+        description: The item, as it is now.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/batches.yaml#/ItemBatchItem'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/item-batches/{batchId}/interaction:
+  parameters:
+    - $ref: '../components/parameters.yaml#/BatchId'
+  put:
+    tags: [batches]
+    operationId: replaceItemBatchInteraction
+    summary: Record the seller's interaction with a batch
+    description: |
+      Replaces the interaction the app measured for the batch (from its first photo to its
+      last saved item) and each item's share of it. An item left out has none. `422` when an
+      `itemId` is not an item of the batch.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/batches.yaml#/ItemBatchInteractionReplace'
+    responses:
+      '200':
+        description: The batch.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/batches.yaml#/ItemBatch'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

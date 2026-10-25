@@ -49,6 +49,12 @@ SessionId:
   required: true
   schema:
     $ref: './schemas/common.yaml#/Id'
+BatchId:
+  name: batchId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
 AnalysisId:
   name: analysisId
   in: path

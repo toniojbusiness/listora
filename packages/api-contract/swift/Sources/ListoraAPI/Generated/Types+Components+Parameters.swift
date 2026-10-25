@@ -33,6 +33,8 @@ extension Components {
         public typealias PhotoId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/SessionId`.
         public typealias SessionId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/BatchId`.
+        public typealias BatchId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/AnalysisId`.
         public typealias AnalysisId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/ListingId`.
