@@ -1,8 +1,9 @@
 import XCTest
 
 /// Runs Xcode's accessibility audit (hit regions, element labels, traits, actions) on the
-/// main screens. Issues in system-drawn chrome (the tab bar, navigation bar, and keyboard) and in
-/// the fixture photos themselves are Apple's or the photo's, not the app's, so they are ignored.
+/// main screens. Issues in system-drawn chrome (the tab bar, navigation bar, keyboard, and system
+/// banners) and in the fixture photos themselves are Apple's or the photo's, not the app's, so
+/// they are ignored.
 @MainActor
 final class AccessibilityAuditUITests: XCTestCase {
     private let app = XCUIApplication()
@@ -16,9 +17,20 @@ final class AccessibilityAuditUITests: XCTestCase {
         server?.stop()
     }
 
+    /// A system notification over the app. A fresh simulator shows "Ready for Apple Intelligence"
+    /// about a minute after its first boot, and the audit flags the banner's text as the app's.
+    private var systemBanner: XCUIElement {
+        XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            .descendants(matching: .any)["NotificationShortLookView"]
+    }
+
     private func audit(_ screen: String) throws {
         // Let transitions finish: the audit samples the screen.
         RunLoop.current.run(until: Date(timeIntervalSinceNow: 1.5))
+        if systemBanner.exists {
+            systemBanner.swipeUp()
+            XCTAssertTrue(systemBanner.waitForNonExistence(timeout: 5), "a system banner covers the app")
+        }
         // System chrome (tab bar, navigation bars, and their buttons) is drawn by UIKit.
         let chrome = (app.navigationBars.allElementsBoundByIndex + app.tabBars.allElementsBoundByIndex).map(\.frame)
         // Contrast and text size are left to deterministic checks: `PaletteTests` checks every token
@@ -27,8 +39,10 @@ final class AccessibilityAuditUITests: XCTestCase {
         // sample the rendered screen and flag secondary text that measures 7:1, rows that scroll
         // under the tab bar, and list row titles that are shown whole.
         let types = XCUIAccessibilityAuditType.all.subtracting([.contrast, .dynamicType, .textClipped])
+        let banner = systemBanner
         try app.performAccessibilityAudit(for: types) { issue in
-            guard let element = issue.element else { return false }
+            // A banner that arrived during the audit: its text is SpringBoard's, not the app's.
+            guard let element = issue.element else { return banner.exists }
             let center = CGPoint(x: element.frame.midX, y: element.frame.midY)
             // A photo's pixels can have any contrast or size.
             if element.elementType == .image || chrome.contains(where: { $0.contains(center) }) {
