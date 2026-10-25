@@ -55,12 +55,12 @@ final class TodayUITests: XCTestCase {
         XCTAssertEqual(lower.label, "Lower to $40")
         XCTAssertTrue(card(StubAPIServer.staleCardID).staticTexts["Listed 45 days"].exists)
 
-        // The drafts card opens the drafts, in the Add Item tab.
+        // The drafts card opens the drafts: this iPhone has none, so the server's, in Inventory.
         let drafts = action(StubAPIServer.draftsCardID)
         scroll(to: drafts)
         drafts.tap()
-        XCTAssertTrue(app.navigationBars["Add Item"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.tabBars.buttons["Add"].isSelected)
+        XCTAssertTrue(app.navigationBars["Inventory"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.tabBars.buttons["Inventory"].isSelected)
 
         // The money summary: this week next to last week, and the profit the server knows.
         app.tabBars.buttons["Today"].tap()

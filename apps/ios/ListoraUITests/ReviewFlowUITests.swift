@@ -214,7 +214,8 @@ final class ReviewFlowUITests: XCTestCase {
             category.label,
         )
 
-        colors.tap()
+        // The size the tag lacks leads the list now, which can push the color under the bottom bar.
+        clearOfBottomBar(colors).tap()
         let editor = app.textFields["review.editor.colors"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         editor.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "navy")
@@ -334,4 +335,18 @@ extension ReviewFlowUITests {
         XCTAssertTrue(waitForLabel(of: edited, prefix: "Size, M, From You"), edited.label)
         XCTAssertFalse(app.staticTexts["review.missing"].exists)
     }
+
+    /// Scrolls the review up a little at a time until `element` sits above the bottom bar.
+    private func clearOfBottomBar(_ element: XCUIElement) -> XCUIElement {
+        let scrollView = app.scrollViews["review.scroll"]
+        let start = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+        let barTop = app.descendants(matching: .any)["voice.talk"].frame.minY
+        for _ in 0 ..< 6 where element.frame.maxY > barTop - Self.barMargin {
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        return element
+    }
+
+    private static let barMargin: CGFloat = 8
 }
