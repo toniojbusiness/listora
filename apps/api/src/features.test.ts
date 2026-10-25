@@ -31,6 +31,7 @@ describe('API feature discovery', () => {
     expect(API_FEATURES.map(({ name }) => name)).toEqual([
       'account',
       'analyses',
+      'batches',
       'connections',
       'items',
       'listings',

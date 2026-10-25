@@ -13,6 +13,7 @@
     "@listora/accounts": "*",
     "@listora/ai": "*",
     "@listora/analysis": "*",
+    "@listora/batches": "*",
     "@listora/api-contract": "*",
     "@listora/auto-delist": "*",
     "@listora/connections": "*",

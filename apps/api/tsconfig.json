@@ -10,6 +10,7 @@
     { "path": "../../packages/accounts" },
     { "path": "../../packages/ai" },
     { "path": "../../packages/analysis" },
+    { "path": "../../packages/batches" },
     { "path": "../../packages/api-contract" },
     { "path": "../../packages/auto-delist" },
     { "path": "../../packages/connections" },

@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 
 import type { AiClient } from '@listora/ai';
 import type { AnalysisJobQueue } from '@listora/analysis';
+import type { BatchJobQueue } from '@listora/batches';
 import type { PhotoJobQueue } from '@listora/photos';
 import type { ObjectStorage } from '@listora/storage';
 import type { FastifyInstance } from 'fastify';
@@ -31,6 +32,8 @@ export interface ApiRouteContext extends RouteDependencies {
   ai: AiClient;
   /** Where starting or escalating an analysis adds its job. */
   analysisJobs: AnalysisJobQueue;
+  /** Where submitting a batch item adds the job that starts its analysis. */
+  batchJobs: BatchJobQueue;
   /** Marketplace adapters, OAuth clients, and the token sealer of connections. */
   connections: ConnectionsDependencies;
   /** eBay's notification endpoint settings; the endpoint is not served without them. */

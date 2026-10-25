@@ -41,6 +41,8 @@ tags:
     description: Upload sessions and item photos.
   - name: analysis
     description: AI analysis of an item's photos (run once per photo set).
+  - name: batches
+    description: Batches of items photographed in one session, and where each item is.
   - name: pricing
     description: Price suggestions with honest source labels.
   - name: listings
@@ -87,6 +89,16 @@ paths:
     $ref: './paths/analysis.yaml#/~1v1~1analyses~1{analysisId}~1escalate'
   /v1/analyses/{analysisId}/apply:
     $ref: './paths/analysis.yaml#/~1v1~1analyses~1{analysisId}~1apply'
+  /v1/item-batches:
+    $ref: './paths/batches.yaml#/~1v1~1item-batches'
+  /v1/item-batches/{batchId}:
+    $ref: './paths/batches.yaml#/~1v1~1item-batches~1{batchId}'
+  /v1/item-batches/{batchId}/items:
+    $ref: './paths/batches.yaml#/~1v1~1item-batches~1{batchId}~1items'
+  /v1/item-batches/{batchId}/items/{itemId}/submit:
+    $ref: './paths/batches.yaml#/~1v1~1item-batches~1{batchId}~1items~1{itemId}~1submit'
+  /v1/item-batches/{batchId}/interaction:
+    $ref: './paths/batches.yaml#/~1v1~1item-batches~1{batchId}~1interaction'
   /v1/usage:
     $ref: './paths/usage.yaml#/~1v1~1usage'
   /v1/items/{itemId}/pricing:
@@ -186,6 +198,8 @@ components:
       $ref: './components/parameters.yaml#/PhotoId'
     SessionId:
       $ref: './components/parameters.yaml#/SessionId'
+    BatchId:
+      $ref: './components/parameters.yaml#/BatchId'
     AnalysisId:
       $ref: './components/parameters.yaml#/AnalysisId'
     ListingId:
@@ -379,6 +393,31 @@ components:
       $ref: './components/schemas/analysis.yaml#/Analysis'
     AnalysisApply:
       $ref: './components/schemas/analysis.yaml#/AnalysisApply'
+    # ---------------------------------------------------------------- batches
+    ItemBatchItemState:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItemState'
+    KnownItemBatchItemState:
+      $ref: './components/schemas/batches.yaml#/KnownItemBatchItemState'
+    ItemBatchItemProblem:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItemProblem'
+    InteractionTotals:
+      $ref: './components/schemas/batches.yaml#/InteractionTotals'
+    ItemBatchPhotoProgress:
+      $ref: './components/schemas/batches.yaml#/ItemBatchPhotoProgress'
+    ItemBatchItem:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItem'
+    ItemBatchProgress:
+      $ref: './components/schemas/batches.yaml#/ItemBatchProgress'
+    ItemBatch:
+      $ref: './components/schemas/batches.yaml#/ItemBatch'
+    ItemBatchItemCreate:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItemCreate'
+    ItemBatchItemSubmit:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItemSubmit'
+    ItemBatchItemInteraction:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItemInteraction'
+    ItemBatchInteractionReplace:
+      $ref: './components/schemas/batches.yaml#/ItemBatchInteractionReplace'
     # ---------------------------------------------------------------- pricing
     AiPriceEstimate:
       $ref: './components/schemas/pricing.yaml#/AiPriceEstimate'

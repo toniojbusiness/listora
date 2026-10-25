@@ -486,6 +486,32 @@ const COLUMNS = {
     'created_at',
     'updated_at',
   ],
+  item_batch: [
+    'id',
+    'account_id',
+    'created_by_user_id',
+    'active_ms',
+    'waiting_ms',
+    'taps',
+    'created_at',
+    'updated_at',
+  ],
+  item_batch_item: [
+    'account_id',
+    'batch_id',
+    'item_id',
+    'position',
+    'submitted_at',
+    'photo_count',
+    'start_error_code',
+    'start_error_message',
+    'start_error_retryable',
+    'active_ms',
+    'waiting_ms',
+    'taps',
+    'created_at',
+    'updated_at',
+  ],
 } as const satisfies { [Table in keyof Database]: readonly (keyof Database[Table])[] };
 
 type MissingColumns = {

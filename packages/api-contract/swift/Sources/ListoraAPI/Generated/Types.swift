@@ -200,6 +200,61 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/analyses/{analysisId}/apply`.
     /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)`.
     func applyAnalysis(_ input: Operations.ApplyAnalysis.Input) async throws -> Operations.ApplyAnalysis.Output
+    /// Start a batch
+    ///
+    /// Starts an empty batch: the items of one haul, photographed in one session. Add one item
+    /// per physical item with `addItemBatchItem`, attach its photos as for any item, then
+    /// `submitItemBatchItem`: the server starts its analysis once the photos are processed.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/post(createItemBatch)`.
+    func createItemBatch(_ input: Operations.CreateItemBatch.Input) async throws -> Operations.CreateItemBatch.Output
+    /// Get a batch
+    ///
+    /// The batch's items in haul order, each with where it is (`state` and the server's
+    /// `statusDisplay`), and how many are in each state. Poll it while items upload and
+    /// analyze; every state comes from the items, photos, and analyses themselves.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/item-batches/{batchId}`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/get(getItemBatch)`.
+    func getItemBatch(_ input: Operations.GetItemBatch.Input) async throws -> Operations.GetItemBatch.Output
+    /// Add an item to a batch
+    ///
+    /// Creates a `draft` item (with its SKU) at `position` in the batch. A position the batch
+    /// already has answers `200` with that item instead of creating another, so an app that
+    /// submits its batch again, even after the Idempotency-Key has expired, never creates an
+    /// item twice.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches/{batchId}/items`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/items/post(addItemBatchItem)`.
+    func addItemBatchItem(_ input: Operations.AddItemBatchItem.Input) async throws -> Operations.AddItemBatchItem.Output
+    /// Analyze a batch item once its photos are ready
+    ///
+    /// Says the app has attached all `photoCount` photos of the item. The server starts the
+    /// item's analysis as soon as they are processed, under the same rules as
+    /// `startItemAnalysis`: an existing analysis of the photo set is kept, a failed one is
+    /// queued again, and the AI guards are checked first. A refusal (the daily AI budget, the
+    /// plan's quota, AI switched off) shows on the item as a `failed` state with its reason
+    /// instead of an error here. Submitting again is the item's Retry. `409
+    /// invalid_state_transition` when the item does not have `photoCount` photos yet.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches/{batchId}/items/{itemId}/submit`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/items/{itemId}/submit/post(submitItemBatchItem)`.
+    func submitItemBatchItem(_ input: Operations.SubmitItemBatchItem.Input) async throws -> Operations.SubmitItemBatchItem.Output
+    /// Record the seller's interaction with a batch
+    ///
+    /// Replaces the interaction the app measured for the batch (from its first photo to its
+    /// last saved item) and each item's share of it. An item left out has none. `422` when an
+    /// `itemId` is not an item of the batch.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/item-batches/{batchId}/interaction`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/interaction/put(replaceItemBatchInteraction)`.
+    func replaceItemBatchInteraction(_ input: Operations.ReplaceItemBatchInteraction.Input) async throws -> Operations.ReplaceItemBatchInteraction.Output
     /// Get the plan's quota use
     ///
     /// The account's use of each plan quota in the current period (the UTC calendar month
@@ -914,6 +969,101 @@ extension APIProtocol {
         body: Operations.ApplyAnalysis.Input.Body
     ) async throws -> Operations.ApplyAnalysis.Output {
         try await applyAnalysis(Operations.ApplyAnalysis.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Start a batch
+    ///
+    /// Starts an empty batch: the items of one haul, photographed in one session. Add one item
+    /// per physical item with `addItemBatchItem`, attach its photos as for any item, then
+    /// `submitItemBatchItem`: the server starts its analysis once the photos are processed.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/post(createItemBatch)`.
+    public func createItemBatch(headers: Operations.CreateItemBatch.Input.Headers) async throws -> Operations.CreateItemBatch.Output {
+        try await createItemBatch(Operations.CreateItemBatch.Input(headers: headers))
+    }
+    /// Get a batch
+    ///
+    /// The batch's items in haul order, each with where it is (`state` and the server's
+    /// `statusDisplay`), and how many are in each state. Poll it while items upload and
+    /// analyze; every state comes from the items, photos, and analyses themselves.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/item-batches/{batchId}`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/get(getItemBatch)`.
+    public func getItemBatch(
+        path: Operations.GetItemBatch.Input.Path,
+        headers: Operations.GetItemBatch.Input.Headers = .init()
+    ) async throws -> Operations.GetItemBatch.Output {
+        try await getItemBatch(Operations.GetItemBatch.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Add an item to a batch
+    ///
+    /// Creates a `draft` item (with its SKU) at `position` in the batch. A position the batch
+    /// already has answers `200` with that item instead of creating another, so an app that
+    /// submits its batch again, even after the Idempotency-Key has expired, never creates an
+    /// item twice.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches/{batchId}/items`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/items/post(addItemBatchItem)`.
+    public func addItemBatchItem(
+        path: Operations.AddItemBatchItem.Input.Path,
+        headers: Operations.AddItemBatchItem.Input.Headers,
+        body: Operations.AddItemBatchItem.Input.Body
+    ) async throws -> Operations.AddItemBatchItem.Output {
+        try await addItemBatchItem(Operations.AddItemBatchItem.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Analyze a batch item once its photos are ready
+    ///
+    /// Says the app has attached all `photoCount` photos of the item. The server starts the
+    /// item's analysis as soon as they are processed, under the same rules as
+    /// `startItemAnalysis`: an existing analysis of the photo set is kept, a failed one is
+    /// queued again, and the AI guards are checked first. A refusal (the daily AI budget, the
+    /// plan's quota, AI switched off) shows on the item as a `failed` state with its reason
+    /// instead of an error here. Submitting again is the item's Retry. `409
+    /// invalid_state_transition` when the item does not have `photoCount` photos yet.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches/{batchId}/items/{itemId}/submit`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/items/{itemId}/submit/post(submitItemBatchItem)`.
+    public func submitItemBatchItem(
+        path: Operations.SubmitItemBatchItem.Input.Path,
+        headers: Operations.SubmitItemBatchItem.Input.Headers,
+        body: Operations.SubmitItemBatchItem.Input.Body
+    ) async throws -> Operations.SubmitItemBatchItem.Output {
+        try await submitItemBatchItem(Operations.SubmitItemBatchItem.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Record the seller's interaction with a batch
+    ///
+    /// Replaces the interaction the app measured for the batch (from its first photo to its
+    /// last saved item) and each item's share of it. An item left out has none. `422` when an
+    /// `itemId` is not an item of the batch.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/item-batches/{batchId}/interaction`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/interaction/put(replaceItemBatchInteraction)`.
+    public func replaceItemBatchInteraction(
+        path: Operations.ReplaceItemBatchInteraction.Input.Path,
+        headers: Operations.ReplaceItemBatchInteraction.Input.Headers = .init(),
+        body: Operations.ReplaceItemBatchInteraction.Input.Body
+    ) async throws -> Operations.ReplaceItemBatchInteraction.Output {
+        try await replaceItemBatchInteraction(Operations.ReplaceItemBatchInteraction.Input(
             path: path,
             headers: headers,
             body: body

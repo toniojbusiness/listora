@@ -41,6 +41,8 @@ tags:
     description: Upload sessions and item photos.
   - name: analysis
     description: AI analysis of an item's photos (run once per photo set).
+  - name: batches
+    description: Batches of items photographed in one session, and where each item is.
   - name: pricing
     description: Price suggestions with honest source labels.
   - name: listings
@@ -600,6 +602,161 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/item-batches:
+    post:
+      tags:
+        - batches
+      operationId: createItemBatch
+      summary: Start a batch
+      description: |
+        Starts an empty batch: the items of one haul, photographed in one session. Add one item
+        per physical item with `addItemBatchItem`, attach its photos as for any item, then
+        `submitItemBatchItem`: the server starts its analysis once the photos are processed.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemBatch'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/item-batches/{batchId}:
+    parameters:
+      - $ref: '#/components/parameters/BatchId'
+    get:
+      tags:
+        - batches
+      operationId: getItemBatch
+      summary: Get a batch
+      description: |
+        The batch's items in haul order, each with where it is (`state` and the server's
+        `statusDisplay`), and how many are in each state. Poll it while items upload and
+        analyze; every state comes from the items, photos, and analyses themselves.
+      responses:
+        '200':
+          description: The batch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemBatch'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/item-batches/{batchId}/items:
+    parameters:
+      - $ref: '#/components/parameters/BatchId'
+    post:
+      tags:
+        - batches
+      operationId: addItemBatchItem
+      summary: Add an item to a batch
+      description: |
+        Creates a `draft` item (with its SKU) at `position` in the batch. A position the batch
+        already has answers `200` with that item instead of creating another, so an app that
+        submits its batch again, even after the Idempotency-Key has expired, never creates an
+        item twice.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemBatchItemCreate'
+      responses:
+        '200':
+          description: The item already at that position.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemBatchItem'
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemBatchItem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/item-batches/{batchId}/items/{itemId}/submit:
+    parameters:
+      - $ref: '#/components/parameters/BatchId'
+      - $ref: '#/components/parameters/ItemId'
+    post:
+      tags:
+        - batches
+      operationId: submitItemBatchItem
+      summary: Analyze a batch item once its photos are ready
+      description: |
+        Says the app has attached all `photoCount` photos of the item. The server starts the
+        item's analysis as soon as they are processed, under the same rules as
+        `startItemAnalysis`: an existing analysis of the photo set is kept, a failed one is
+        queued again, and the AI guards are checked first. A refusal (the daily AI budget, the
+        plan's quota, AI switched off) shows on the item as a `failed` state with its reason
+        instead of an error here. Submitting again is the item's Retry. `409
+        invalid_state_transition` when the item does not have `photoCount` photos yet.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemBatchItemSubmit'
+      responses:
+        '202':
+          description: The item, as it is now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemBatchItem'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/item-batches/{batchId}/interaction:
+    parameters:
+      - $ref: '#/components/parameters/BatchId'
+    put:
+      tags:
+        - batches
+      operationId: replaceItemBatchInteraction
+      summary: Record the seller's interaction with a batch
+      description: |
+        Replaces the interaction the app measured for the batch (from its first photo to its
+        last saved item) and each item's share of it. An item left out has none. `422` when an
+        `itemId` is not an item of the batch.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemBatchInteractionReplace'
+      responses:
+        '200':
+          description: The batch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemBatch'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationFailed'
         default:
@@ -1814,6 +1971,12 @@ components:
         $ref: '#/components/schemas/Id'
     SessionId:
       name: sessionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    BatchId:
+      name: batchId
       in: path
       required: true
       schema:
@@ -3130,6 +3293,230 @@ components:
           format: int64
           minimum: 1
           description: The item `version` the client last read (optimistic lock).
+    ItemBatchItemState:
+      description: |
+        A `KnownItemBatchItemState`, or a state added after this client was built. Clients show
+        an unknown state's `statusDisplay` as given and never treat it as saved.
+      anyOf:
+        - $ref: '#/components/schemas/KnownItemBatchItemState'
+        - type: string
+          maxLength: 64
+    KnownItemBatchItemState:
+      type: string
+      description: |
+        Where a batch item is: `uploading` (the app has not submitted it yet), `preparing_photos`
+        (the server is processing its photos), `analyzing`, `ready_for_review` (analyzed, waiting
+        for the seller), `saved` (the seller saved it; its status is no longer `draft`), or
+        `failed` (see `problem`).
+      enum:
+        - uploading
+        - preparing_photos
+        - analyzing
+        - ready_for_review
+        - saved
+        - failed
+    ItemBatchItemProblem:
+      type: object
+      description: |
+        Why a batch item stopped. `retryable` says whether submitting it again may help as it is.
+      required:
+        - code
+        - message
+        - retryable
+      properties:
+        code:
+          type: string
+          maxLength: 100
+          description: |
+            Stable snake_case, for example `photo_failed`, `photos_not_ready`, `no_photos`,
+            `ai_budget_exceeded`, `quota_exceeded`, or an analysis failure's code.
+        message:
+          type: string
+          maxLength: 1000
+          description: Safe to show to the user.
+        retryable:
+          type: boolean
+    InteractionTotals:
+      type: object
+      description: |
+        The seller's interaction as the app measured it: time a screen of the flow was in front of
+        them with nothing to wait for (`activeMs`), the time spent waiting on Listora meanwhile
+        (`waitingMs`), and taps.
+      required:
+        - activeMs
+        - waitingMs
+        - taps
+      properties:
+        activeMs:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 604800000
+        waitingMs:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 604800000
+        taps:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 1000000
+    ItemBatchPhotoProgress:
+      type: object
+      description: How many of the item's photos the server has, and how many are processed.
+      required:
+        - total
+        - ready
+      properties:
+        total:
+          type: integer
+          format: int32
+          minimum: 0
+        ready:
+          type: integer
+          format: int32
+          minimum: 0
+    ItemBatchItem:
+      type: object
+      required:
+        - position
+        - item
+        - state
+        - statusDisplay
+        - photos
+      properties:
+        position:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 999
+          description: The item's place in the haul, 0 first.
+        item:
+          $ref: '#/components/schemas/ItemSummary'
+        state:
+          $ref: '#/components/schemas/ItemBatchItemState'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+        photos:
+          $ref: '#/components/schemas/ItemBatchPhotoProgress'
+        problem:
+          $ref: '#/components/schemas/ItemBatchItemProblem'
+          description: Present exactly when `state` is `failed`.
+        interaction:
+          $ref: '#/components/schemas/InteractionTotals'
+          description: This item's share of the batch's interaction, once the app reported it.
+    ItemBatchProgress:
+      type: object
+      description: How many of the batch's items are in each state.
+      required:
+        - total
+        - uploading
+        - preparingPhotos
+        - analyzing
+        - readyForReview
+        - saved
+        - failed
+      properties:
+        total:
+          type: integer
+          format: int32
+          minimum: 0
+        uploading:
+          type: integer
+          format: int32
+          minimum: 0
+        preparingPhotos:
+          type: integer
+          format: int32
+          minimum: 0
+        analyzing:
+          type: integer
+          format: int32
+          minimum: 0
+        readyForReview:
+          type: integer
+          format: int32
+          minimum: 0
+        saved:
+          type: integer
+          format: int32
+          minimum: 0
+        failed:
+          type: integer
+          format: int32
+          minimum: 0
+    ItemBatch:
+      type: object
+      description: The items of one haul, photographed in one session, in haul order.
+      required:
+        - id
+        - items
+        - progress
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        items:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/ItemBatchItem'
+        progress:
+          $ref: '#/components/schemas/ItemBatchProgress'
+        interaction:
+          $ref: '#/components/schemas/InteractionTotals'
+          description: The batch's interaction from its first photo, once the app reported it.
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
+    ItemBatchItemCreate:
+      type: object
+      required:
+        - position
+      properties:
+        position:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 999
+          description: The item's place in the haul, 0 first.
+    ItemBatchItemSubmit:
+      type: object
+      required:
+        - photoCount
+      properties:
+        photoCount:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 24
+          description: How many photos the app attached; the item must have exactly these many.
+    ItemBatchItemInteraction:
+      type: object
+      required:
+        - itemId
+        - interaction
+      properties:
+        itemId:
+          $ref: '#/components/schemas/Id'
+        interaction:
+          $ref: '#/components/schemas/InteractionTotals'
+    ItemBatchInteractionReplace:
+      type: object
+      required:
+        - batch
+        - items
+      properties:
+        batch:
+          $ref: '#/components/schemas/InteractionTotals'
+        items:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/ItemBatchItemInteraction'
     AiPriceEstimate:
       type: object
       description: |

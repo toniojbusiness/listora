@@ -388,6 +388,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/item-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a batch
+         * @description Starts an empty batch: the items of one haul, photographed in one session. Add one item
+         *     per physical item with `addItemBatchItem`, attach its photos as for any item, then
+         *     `submitItemBatchItem`: the server starts its analysis once the photos are processed.
+         */
+        post: operations["createItemBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/item-batches/{batchId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a batch
+         * @description The batch's items in haul order, each with where it is (`state` and the server's
+         *     `statusDisplay`), and how many are in each state. Poll it while items upload and
+         *     analyze; every state comes from the items, photos, and analyses themselves.
+         */
+        get: operations["getItemBatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/item-batches/{batchId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an item to a batch
+         * @description Creates a `draft` item (with its SKU) at `position` in the batch. A position the batch
+         *     already has answers `200` with that item instead of creating another, so an app that
+         *     submits its batch again, even after the Idempotency-Key has expired, never creates an
+         *     item twice.
+         */
+        post: operations["addItemBatchItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/item-batches/{batchId}/items/{itemId}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze a batch item once its photos are ready
+         * @description Says the app has attached all `photoCount` photos of the item. The server starts the
+         *     item's analysis as soon as they are processed, under the same rules as
+         *     `startItemAnalysis`: an existing analysis of the photo set is kept, a failed one is
+         *     queued again, and the AI guards are checked first. A refusal (the daily AI budget, the
+         *     plan's quota, AI switched off) shows on the item as a `failed` state with its reason
+         *     instead of an error here. Submitting again is the item's Retry. `409
+         *     invalid_state_transition` when the item does not have `photoCount` photos yet.
+         */
+        post: operations["submitItemBatchItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/item-batches/{batchId}/interaction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Record the seller's interaction with a batch
+         * @description Replaces the interaction the app measured for the batch (from its first photo to its
+         *     last saved item) and each item's share of it. An item left out has none. `422` when an
+         *     `itemId` is not an item of the batch.
+         */
+        put: operations["replaceItemBatchInteraction"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/usage": {
         parameters: {
             query?: never;
@@ -1872,6 +1996,114 @@ export interface components {
             expectedVersion: number;
         };
         /**
+         * @description A `KnownItemBatchItemState`, or a state added after this client was built. Clients show
+         *     an unknown state's `statusDisplay` as given and never treat it as saved.
+         */
+        ItemBatchItemState: components["schemas"]["KnownItemBatchItemState"];
+        /**
+         * @description Where a batch item is: `uploading` (the app has not submitted it yet), `preparing_photos`
+         *     (the server is processing its photos), `analyzing`, `ready_for_review` (analyzed, waiting
+         *     for the seller), `saved` (the seller saved it; its status is no longer `draft`), or
+         *     `failed` (see `problem`).
+         * @enum {string}
+         */
+        KnownItemBatchItemState: "uploading" | "preparing_photos" | "analyzing" | "ready_for_review" | "saved" | "failed";
+        /** @description Why a batch item stopped. `retryable` says whether submitting it again may help as it is. */
+        ItemBatchItemProblem: {
+            /**
+             * @description Stable snake_case, for example `photo_failed`, `photos_not_ready`, `no_photos`,
+             *     `ai_budget_exceeded`, `quota_exceeded`, or an analysis failure's code.
+             */
+            code: string;
+            /** @description Safe to show to the user. */
+            message: string;
+            retryable: boolean;
+        };
+        /**
+         * @description The seller's interaction as the app measured it: time a screen of the flow was in front of
+         *     them with nothing to wait for (`activeMs`), the time spent waiting on Listora meanwhile
+         *     (`waitingMs`), and taps.
+         */
+        InteractionTotals: {
+            /** Format: int64 */
+            activeMs: number;
+            /** Format: int64 */
+            waitingMs: number;
+            /** Format: int32 */
+            taps: number;
+        };
+        /** @description How many of the item's photos the server has, and how many are processed. */
+        ItemBatchPhotoProgress: {
+            /** Format: int32 */
+            total: number;
+            /** Format: int32 */
+            ready: number;
+        };
+        ItemBatchItem: {
+            /**
+             * Format: int32
+             * @description The item's place in the haul, 0 first.
+             */
+            position: number;
+            item: components["schemas"]["ItemSummary"];
+            state: components["schemas"]["ItemBatchItemState"];
+            statusDisplay: components["schemas"]["StatusDisplay"];
+            photos: components["schemas"]["ItemBatchPhotoProgress"];
+            /** @description Present exactly when `state` is `failed`. */
+            problem?: components["schemas"]["ItemBatchItemProblem"];
+            /** @description This item's share of the batch's interaction, once the app reported it. */
+            interaction?: components["schemas"]["InteractionTotals"];
+        };
+        /** @description How many of the batch's items are in each state. */
+        ItemBatchProgress: {
+            /** Format: int32 */
+            total: number;
+            /** Format: int32 */
+            uploading: number;
+            /** Format: int32 */
+            preparingPhotos: number;
+            /** Format: int32 */
+            analyzing: number;
+            /** Format: int32 */
+            readyForReview: number;
+            /** Format: int32 */
+            saved: number;
+            /** Format: int32 */
+            failed: number;
+        };
+        /** @description The items of one haul, photographed in one session, in haul order. */
+        ItemBatch: {
+            id: components["schemas"]["Id"];
+            items: components["schemas"]["ItemBatchItem"][];
+            progress: components["schemas"]["ItemBatchProgress"];
+            /** @description The batch's interaction from its first photo, once the app reported it. */
+            interaction?: components["schemas"]["InteractionTotals"];
+            createdAt: components["schemas"]["Timestamp"];
+            updatedAt: components["schemas"]["Timestamp"];
+        };
+        ItemBatchItemCreate: {
+            /**
+             * Format: int32
+             * @description The item's place in the haul, 0 first.
+             */
+            position: number;
+        };
+        ItemBatchItemSubmit: {
+            /**
+             * Format: int32
+             * @description How many photos the app attached; the item must have exactly these many.
+             */
+            photoCount: number;
+        };
+        ItemBatchItemInteraction: {
+            itemId: components["schemas"]["Id"];
+            interaction: components["schemas"]["InteractionTotals"];
+        };
+        ItemBatchInteractionReplace: {
+            batch: components["schemas"]["InteractionTotals"];
+            items: components["schemas"]["ItemBatchItemInteraction"][];
+        };
+        /**
          * @description A model's guess, not market data. `label` is always
          *     "AI estimate - not based on sold listings"; clients show it next to the numbers.
          */
@@ -2954,6 +3186,7 @@ export interface components {
         ItemId: components["schemas"]["Id"];
         PhotoId: components["schemas"]["Id"];
         SessionId: components["schemas"]["Id"];
+        BatchId: components["schemas"]["Id"];
         AnalysisId: components["schemas"]["Id"];
         ListingId: components["schemas"]["Id"];
         OperationId: components["schemas"]["Id"];
@@ -3040,6 +3273,18 @@ export type AnalysisResult = components['schemas']['AnalysisResult'];
 export type AnalysisFailure = components['schemas']['AnalysisFailure'];
 export type Analysis = components['schemas']['Analysis'];
 export type AnalysisApply = components['schemas']['AnalysisApply'];
+export type ItemBatchItemState = components['schemas']['ItemBatchItemState'];
+export type KnownItemBatchItemState = components['schemas']['KnownItemBatchItemState'];
+export type ItemBatchItemProblem = components['schemas']['ItemBatchItemProblem'];
+export type InteractionTotals = components['schemas']['InteractionTotals'];
+export type ItemBatchPhotoProgress = components['schemas']['ItemBatchPhotoProgress'];
+export type ItemBatchItem = components['schemas']['ItemBatchItem'];
+export type ItemBatchProgress = components['schemas']['ItemBatchProgress'];
+export type ItemBatch = components['schemas']['ItemBatch'];
+export type ItemBatchItemCreate = components['schemas']['ItemBatchItemCreate'];
+export type ItemBatchItemSubmit = components['schemas']['ItemBatchItemSubmit'];
+export type ItemBatchItemInteraction = components['schemas']['ItemBatchItemInteraction'];
+export type ItemBatchInteractionReplace = components['schemas']['ItemBatchInteractionReplace'];
 export type AiPriceEstimate = components['schemas']['AiPriceEstimate'];
 export type SoldDataSource = components['schemas']['SoldDataSource'];
 export type KnownSoldDataSource = components['schemas']['KnownSoldDataSource'];
@@ -3175,6 +3420,7 @@ export type ParameterLimit = components['parameters']['Limit'];
 export type ParameterItemId = components['parameters']['ItemId'];
 export type ParameterPhotoId = components['parameters']['PhotoId'];
 export type ParameterSessionId = components['parameters']['SessionId'];
+export type ParameterBatchId = components['parameters']['BatchId'];
 export type ParameterAnalysisId = components['parameters']['AnalysisId'];
 export type ParameterListingId = components['parameters']['ListingId'];
 export type ParameterOperationId = components['parameters']['OperationId'];
@@ -3767,6 +4013,182 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    createItemBatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatch"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getItemBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The batch. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatch"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    addItemBatchItem: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBatchItemCreate"];
+            };
+        };
+        responses: {
+            /** @description The item already at that position. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatchItem"];
+                };
+            };
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatchItem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    submitItemBatchItem: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                batchId: components["parameters"]["BatchId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBatchItemSubmit"];
+            };
+        };
+        responses: {
+            /** @description The item, as it is now. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatchItem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceItemBatchInteraction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBatchInteractionReplace"];
+            };
+        };
+        responses: {
+            /** @description The batch. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatch"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
@@ -5061,6 +5483,7 @@ export const uploadTargetMethodValues: ReadonlyArray<FlattenedDeepRequired<compo
 export const analysisTierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnalysisTier"]> = ["fast", "premium"];
 export const analysisStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnalysisStatus"]> = ["queued", "running", "completed", "failed"];
 export const knownAnalysisProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownAnalysisProvenance"]> = ["ai", "ocr", "barcode"];
+export const knownItemBatchItemStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownItemBatchItemState"]> = ["uploading", "preparing_photos", "analyzing", "ready_for_review", "saved", "failed"];
 export const knownSoldDataSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSoldDataSource"]> = ["depop_inspiration", "ebay_mi", "own_history"];
 export const priceTierNameValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PriceTierName"]> = ["quick_sale", "recommended", "higher_profit"];
 export const knownPriceBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPriceBasis"]> = ["sold_data", "ai_estimate", "cost_floor"];

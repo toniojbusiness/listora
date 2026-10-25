@@ -747,6 +747,41 @@ export interface SaleCheckScheduleTable {
   updated_at: UpdatedAt;
 }
 
+// Batch listing -------------------------------------------------------------------------------
+
+/** A haul photographed in one session (docs/features/batch.md). */
+export interface ItemBatchTable {
+  id: Id;
+  account_id: string;
+  created_by_user_id: Nullable<string>;
+  /** The seller's measured interaction: all three set, or none until the app reports them. */
+  active_ms: Nullable<number>;
+  waiting_ms: Nullable<number>;
+  taps: Nullable<number>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** One item of a batch, at its place in the haul. */
+export interface ItemBatchItemTable {
+  account_id: string;
+  batch_id: string;
+  item_id: string;
+  position: number;
+  /** When the app had attached every photo (`photo_count` of them). */
+  submitted_at: NullableTimestamp;
+  photo_count: Nullable<number>;
+  /** Why the worker did not start the analysis; all three set, or none. */
+  start_error_code: Nullable<string>;
+  start_error_message: Nullable<string>;
+  start_error_retryable: Nullable<boolean>;
+  active_ms: Nullable<number>;
+  waiting_ms: Nullable<number>;
+  taps: Nullable<number>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 /** Every table and view in the schema, keyed by name. */
 export interface Database {
   account: AccountTable;
@@ -788,4 +823,6 @@ export interface Database {
   account_deletion_grant: AccountDeletionGrantTable;
   automation_run: AutomationRunTable;
   sale_check_schedule: SaleCheckScheduleTable;
+  item_batch: ItemBatchTable;
+  item_batch_item: ItemBatchItemTable;
 }

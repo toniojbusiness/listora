@@ -6,6 +6,7 @@ import { ACCOUNT_DELETION_TASK } from '@listora/accounts';
 import { ITEM_ANALYSIS_TASK } from '@listora/analysis';
 import { AUTO_DELIST_SLA_TASK } from '@listora/auto-delist';
 import { SALE_ORDER_TASK } from '@listora/automation';
+import { BATCH_ITEM_ANALYSIS_TASK } from '@listora/batches';
 import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observability';
 import { LISTING_RESYNC_TASK } from '@listora/operations';
 import { PHOTO_PROCESSING_TASK } from '@listora/photos';
@@ -67,6 +68,7 @@ describe('worker feature discovery', () => {
       'analysis',
       'auto-delist',
       'automation-sales',
+      'batches',
       'connection-health',
       'ebay-sync',
       'photos',
@@ -81,6 +83,7 @@ describe('worker feature discovery', () => {
     expect(Object.keys(tasks).sort()).toEqual(
       [
         ACCOUNT_DELETION_TASK,
+        BATCH_ITEM_ANALYSIS_TASK,
         ITEM_ANALYSIS_TASK,
         LISTING_RESYNC_TASK,
         PHOTO_PROCESSING_TASK,
