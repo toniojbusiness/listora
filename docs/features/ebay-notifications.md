@@ -56,8 +56,10 @@ found only through sales and operations.
 - `POST` reads the body as the exact text eBay sent and checks `X-EBAY-SIGNATURE`: the
   base64 JSON header names the key (`kid`); `getPublicKey` (application token) returns the PEM
   key; the signature is ECDSA over the body with the key's digest (SHA1). Keys are cached for an
-  hour, as eBay asks, and an unknown key id for ten minutes (a bounded cache), so forged headers
-  cannot run up the Notification API's call limit. Answers:
+  hour, as eBay asks, and an unknown key id for ten minutes. Unknown ids have their own bounded
+  cache, so they never push eBay's real key out. Key ids that were never a real key are fetched
+  at most 30 times a minute; past that the answer is `503`, and eBay delivers again. So forged
+  headers cannot run up the Notification API's call limit. Answers:
 
 | Status | When                                                                                            |
 | ------ | ----------------------------------------------------------------------------------------------- |

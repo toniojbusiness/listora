@@ -24,6 +24,7 @@ import { sameCookies, type LoadedSession, type SessionVault } from '@listora/con
 import { isAutomatedMarketplace, type AutomationProfile } from '../profiles.ts';
 import { challengeMessage } from '../safety/challenges.ts';
 import { Pacing, type PacingOptions } from '../safety/pacing.ts';
+import { sanitizedError } from '../safety/redaction.ts';
 import type { AutomationSession, BrowserRunner, ScriptResult } from '../runner/types.ts';
 import type { AutomationSessions, SessionRequest, SessionRun } from './sessions.ts';
 
@@ -127,7 +128,7 @@ export class RunnerSessions implements AutomationSessions {
         cookies = await session.close();
       }
     } catch (error) {
-      log.error({ err: error }, 'the browser session could not run');
+      log.error({ err: sanitizedError(error) }, 'the browser session could not run');
       result = {
         ok: false,
         mutated: false,

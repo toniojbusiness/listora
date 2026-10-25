@@ -35,8 +35,15 @@ curl -X POST localhost:3000/dev/auth/sessions -H 'content-type: application/json
 Send the token as `Authorization: Bearer <accessToken>` on every `/v1` request, and an
 `Idempotency-Key` header (a new UUID per action) on every POST.
 
+Guessing is limited, because the personal environment runs this driver on the internet until
+the iPhone app signs in with Cognito (T-31). An email gets 10 wrong codes an hour, and all
+emails together get 100. Asking for a new code does not reset either limit. Past a limit,
+both endpoints answer `429 rate_limited` with `retryAfterSeconds`, even for the right code.
+The limits live in memory, so they reset when the API restarts.
+
 Staging and production use `AUTH_DRIVER=cognito`, where the app signs in with the Cognito user
-pool (Sign in with Apple or an emailed code). The rest of this file covers both drivers,
+pool (Sign in with Apple or an emailed code). The Deploy workflow refuses to deploy staging or
+prod while the API container's `AUTH_DRIVER` is anything else. The rest of this file covers both drivers,
 the user pool settings, and in-app account deletion (`DELETE /v1/account`).
 
 ## How the API verifies a Cognito token
@@ -124,7 +131,7 @@ and G-Apple).
   tokens older than a day, so ID and access tokens must stay at or below one day.
 
 **API configuration**: `AUTH_DRIVER=cognito` (`containerEnvironment` in `infra/src/containers.ts`
-still sets `dev` until the pool exists), `COGNITO_USER_POOL_ID`, and
+still sets `dev` until the pool exists, so only the personal environment deploys today), `COGNITO_USER_POOL_ID`, and
 `COGNITO_CLIENT_IDS` (the app client's id; a later web client is added to the list). The API
 needs outbound HTTPS to `cognito-idp.<region>.amazonaws.com` for the JWKS.
 
