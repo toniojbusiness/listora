@@ -15,10 +15,11 @@
  * - The shared conformance suite (conformance/suite.ts) checks each of these rules against the
  *   adapter's own fake marketplace.
  *
- * Imports, orders, webhooks, and emails join this interface with the tasks that first use them
- * (T-17, T-23, T-36), as optional members. Credentials are not members: an adapter gets a
- * connection's tokens at use time from its own token source (eBay's `EbaySellerSource`, which
- * `@listora/connections` implements over the token vault).
+ * Imports, webhooks, and emails join this interface with the tasks that first use them (T-17,
+ * T-23, T-36), as optional members; orders joined with the browser runner's sale checks
+ * (`listOrdersSince`). Credentials are not members: an adapter gets a connection's tokens or
+ * browser session at use time from its own source (eBay's `EbaySellerSource`, which
+ * `@listora/connections` implements over the token vault; the browser runner's session vault).
  */
 import type {
   ConnectionMode,
@@ -32,8 +33,13 @@ import type { CurrencyCode } from '@listora/shared';
 
 import type { ItemSnapshot, ListingVariant } from './content.ts';
 
-/** How a marketplace supports a capability. */
-export type Mode = 'api' | 'assisted' | 'bulk_file' | 'none';
+/**
+ * How a marketplace supports a capability: through its official API, by browser automation in
+ * the seller's own session (decision D1, `automation`), by the user (`assisted`), by a bulk file,
+ * or not at all. `api` and `automation` writes are confirmed only by a read-back through the same
+ * channel; `assisted` ones only by the user.
+ */
+export type Mode = 'api' | 'automation' | 'assisted' | 'bulk_file' | 'none';
 
 /**
  * Capability flags; they may change for one connection (Depop: assisted until approved). The
@@ -41,7 +47,8 @@ export type Mode = 'api' | 'assisted' | 'bulk_file' | 'none';
  * and `verifyRead` and `readFreshness` to decide how success is established.
  */
 export interface MarketplaceCapabilities {
-  connect: 'oauth' | 'none';
+  /** `session`: the seller logs into the marketplace in the app, and Listora keeps the cookies. */
+  connect: 'oauth' | 'session' | 'none';
   create: Mode;
   updatePrice: Mode;
   updateDetails: Mode;
@@ -49,8 +56,11 @@ export interface MarketplaceCapabilities {
   relist: Mode;
   /** `not_needed`: the marketplace marks its own sales sold; Listora never asks. */
   markSold: Mode | 'not_needed';
-  /** How success is established: an API read-back, or the user's confirmation. */
-  verifyRead: 'api' | 'user_confirm';
+  /**
+   * How success is established: a read-back through the API, a read-back through the automated
+   * browser session, or the user's confirmation.
+   */
+  verifyRead: 'api' | 'automation' | 'user_confirm';
   /**
    * How a read-back shows it is current. `revision`: every read carries the listing's
    * `revision`. `none`: the marketplace has no such marker, so the engine confirms a change only
@@ -119,14 +129,24 @@ export interface ListingRef {
 /** The connection an operation runs under, without credentials (adapters fetch those at use time). */
 export interface ConnectionRef {
   id: string;
-  /** `api` once the seller connected an official API; capabilities follow it. */
+  /**
+   * `api` once the seller connected an official API, `automation` once they linked a browser
+   * session; capabilities follow it.
+   */
   mode: ConnectionMode;
+  /**
+   * An automation connection waiting to be relinked (`reauth_required`, `revoked`) holds no
+   * session, so its marketplace is served assisted until the seller logs in again.
+   */
+  status: ConnectionStatus;
 }
 
 export interface AdapterContext {
   /** Aborted when the engine's deadline for the call passes or the worker shuts down. */
   signal: AbortSignal;
   connection: ConnectionRef | null;
+  /** The operation the call is a step of, when it is one (for the adapter's own records). */
+  operationId?: string;
 }
 
 /**
@@ -286,6 +306,31 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
     usedIds: readonly string[],
     connection: ConnectionRef | null,
   ): string | null;
+  /**
+   * The seller's orders sold at or after `since` (all recent ones when `null`), for a scheduled
+   * sale check. Only adapters that can read orders have it. Throws when the marketplace cannot
+   * be read, like `readListing`; an empty list means it showed no order.
+   */
+  listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>;
+}
+
+/** One item of a marketplace order, as a sale check reads it. */
+export interface RemoteOrderItem {
+  /** The marketplace's id of the listing that sold, when the order shows it. */
+  externalListingId: string | null;
+  title: string | null;
+  priceCents: number;
+  currency: CurrencyCode;
+}
+
+/**
+ * A marketplace order found by a sale check, for the sale intake (an `inbound_event`). It holds
+ * the order's identity, time, and items only: never the buyer's name, address, or messages.
+ */
+export interface RemoteOrder {
+  externalOrderId: string;
+  soldAt: Date;
+  items: RemoteOrderItem[];
 }
 
 /** Finds the adapter for a marketplace; `undefined` when Listora has none configured. */

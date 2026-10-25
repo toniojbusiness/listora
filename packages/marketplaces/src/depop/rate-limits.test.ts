@@ -165,7 +165,7 @@ describe('a burst of Depop listings under the fake Depop limits', () => {
         },
         payload: depop.buildPayload(content.item, content.variant),
       },
-      { signal, connection: { id: 'c', mode: 'api' } },
+      { signal, connection: { id: 'c', mode: 'api', status: 'connected' } },
     );
   };
 

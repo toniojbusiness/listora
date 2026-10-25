@@ -67,18 +67,22 @@ jobs:
       - name: Deploy the image repository
         working-directory: infra
         run: npx cdk deploy "listora-$LISTORA_ENV-registry" --require-approval never --no-notices
+      # The application image (the Dockerfile's default `app` stage) and the browser runner's
+      # (`runner`: the same sources with headless Chromium), both tagged with the commit.
       - name: Build and push the application image
         run: |
           registry="$LISTORA_AWS_ACCOUNT_ID.dkr.ecr.$LISTORA_AWS_REGION.amazonaws.com"
-          image="$registry/listora/app:$LISTORA_IMAGE_TAG"
-          if aws ecr describe-images --repository-name listora/app \
-            --image-ids "imageTag=$LISTORA_IMAGE_TAG" >/dev/null 2>&1; then
-            echo "$image already exists; reusing it"
-            exit 0
-          fi
           aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
-          docker build --tag "$image" .
-          docker push "$image"
+          for target in app runner; do
+            image="$registry/listora/$target:$LISTORA_IMAGE_TAG"
+            if aws ecr describe-images --repository-name "listora/$target" \
+              --image-ids "imageTag=$LISTORA_IMAGE_TAG" >/dev/null 2>&1; then
+              echo "$image already exists; reusing it"
+              continue
+            fi
+            docker build --target "$target" --tag "$image" .
+            docker push "$image"
+          done
       # The deploy role cannot deploy deploy-access by convention only: through the CDK bootstrap
       # roles it can change anything the bootstrap's CloudFormation execution policy allows
       # (AdministratorAccess by default), its own trust policy included. What bounds a deploy

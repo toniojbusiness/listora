@@ -95,6 +95,15 @@ describe('deploy workflow', () => {
     expect([...deployed].sort()).toEqual(expected.sort());
   });
 
+  it('builds and pushes both images, application and browser runner, tagged with the commit', () => {
+    const run = job.steps[stepIndex('Build and push the application image')]?.run ?? '';
+    expect(run).toContain('for target in app runner; do');
+    expect(run).toContain('image="$registry/listora/$target:$LISTORA_IMAGE_TAG"');
+    expect(run).toContain('docker build --target "$target" --tag "$image" .');
+    // Tags are immutable: an image pushed before is reused, never pushed again.
+    expect(run).toContain('continue');
+  });
+
   it('migrates the schema after the image push and before any service deploys', () => {
     const migrate = stepIndex('Run schema migrations');
     expect(stepIndex('Build and push the application image')).toBeLessThan(deployIndex('migrate'));

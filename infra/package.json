@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@listora/api": "*",
+    "@listora/connections": "*",
     "@listora/db": "*",
     "@listora/observability": "*",
     "@listora/shared": "*",

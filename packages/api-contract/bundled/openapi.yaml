@@ -1754,10 +1754,13 @@ components:
       type: string
       description: |
         `api`: Listora acts through the marketplace's official API and verifies by read-back.
-        `assisted`: Listora prepares the work and the user does the final step in the
+        `automation`: Listora's browser runner acts in the seller's own marketplace session
+        (where the marketplace permits it and has no API) and verifies by read-back through that
+        session. `assisted`: Listora prepares the work and the user does the final step in the
         marketplace app, then confirms.
       enum:
         - api
+        - automation
         - assisted
     StatusTone:
       description: |
@@ -1801,7 +1804,7 @@ components:
           description: Extra context, for example the marketplace's error text.
     VerificationMethod:
       type: string
-      description: '`marketplace_api`: confirmed by an API read-back. `user_confirmation`: the user confirmed an assisted task.'
+      description: '`marketplace_api`: confirmed by a read-back from the marketplace (its API, or the automated browser session). `user_confirmation`: the user confirmed an assisted task.'
       enum:
         - marketplace_api
         - user_confirmation
@@ -3673,8 +3676,13 @@ components:
           maxLength: 64
     KnownCapabilityMode:
       type: string
+      description: |
+        `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
+        seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+        `none`: not offered.
       enum:
         - api
+        - automation
         - assisted
         - bulk_file
         - none
@@ -3690,6 +3698,7 @@ components:
       type: string
       enum:
         - api
+        - automation
         - assisted
         - bulk_file
         - none
@@ -3704,8 +3713,13 @@ components:
           maxLength: 64
     KnownConnectMethod:
       type: string
+      description: |
+        `oauth`: the seller authorizes Listora on the marketplace. `session`: the seller logs into
+        the marketplace in the app, and Listora keeps the session's cookies (never the password)
+        for its browser runner. `none`: nothing to connect.
       enum:
         - oauth
+        - session
         - none
     VerifyReadMode:
       description: |
@@ -3717,9 +3731,12 @@ components:
           maxLength: 64
     KnownVerifyReadMode:
       type: string
-      description: How success is established.
+      description: |
+        How success is established: a read-back through the API, a read-back through the
+        automated browser session, or the user's confirmation.
       enum:
         - api
+        - automation
         - user_confirm
     ImportListingsMode:
       description: |

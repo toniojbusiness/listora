@@ -36,10 +36,14 @@ describe('createAdapterRegistry', () => {
       create: 'assisted',
       verifyRead: 'user_confirm',
     });
-    expect(registry.capabilities('depop', { id: 'c1', mode: 'assisted' })).toMatchObject({
+    expect(
+      registry.capabilities('depop', { id: 'c1', mode: 'assisted', status: 'connected' }),
+    ).toMatchObject({
       create: 'assisted',
     });
-    expect(registry.capabilities('depop', { id: 'c1', mode: 'api' })).toMatchObject({
+    expect(
+      registry.capabilities('depop', { id: 'c1', mode: 'api', status: 'connected' }),
+    ).toMatchObject({
       create: 'api',
       verifyRead: 'api',
     });
@@ -63,7 +67,7 @@ describe('createAdapterRegistry', () => {
       siteUrl: 'https://poshmark.com/',
     });
     expect(() => createAdapterRegistry([incoherent])).toThrow(
-      /poshmark capabilities with an api connection are incoherent: delist is api/,
+      /poshmark capabilities with an api connection \(connected\) are incoherent: delist is api/,
     );
   });
 });

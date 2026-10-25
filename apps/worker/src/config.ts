@@ -8,6 +8,14 @@ import {
 } from '@listora/ai';
 import { AnalysisConfigError, loadAnalysisConfig, type AnalysisConfig } from '@listora/analysis';
 import {
+  AutomationConfigError,
+  loadAutomationSettings,
+  loadRunnerLaunchConfig,
+  RunnerLaunchConfigError,
+  type AutomationSettings,
+  type RunnerLaunchConfig,
+} from '@listora/automation';
+import {
   loadMarketplaceConfig,
   MarketplaceConfigError,
   type MarketplaceConfig,
@@ -40,6 +48,10 @@ export interface WorkerConfig {
   cognitoUserPool: { region: string; userPoolId: string } | undefined;
   /** Thresholds of the hourly AI spend check; the daily budget is the guard's own. */
   aiAlerts: AiAlertThresholds;
+  /** AUTOMATION_*, SALE_CHECK_*, FAKE_AUTOMATION_SITE_URL: which marketplaces are automated. */
+  automation: AutomationSettings;
+  /** BROWSER_RUNNER_*: how the worker starts the browser runner when automated work waits. */
+  runnerLaunch: RunnerLaunchConfig;
 }
 
 export class ConfigError extends Error {
@@ -87,6 +99,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const ai = collect(issues, AiConfigError, () => loadAiConfig(env));
   const analysis = collect(issues, AnalysisConfigError, () => loadAnalysisConfig(env));
   const aiAlerts = collect(issues, AiConfigError, () => loadAiAlertConfig(env));
+  const automation = collect(issues, AutomationConfigError, () => loadAutomationSettings(env));
+  const runnerLaunch = collect(issues, RunnerLaunchConfigError, () => loadRunnerLaunchConfig(env));
 
   if (
     issues.length > 0 ||
@@ -95,7 +109,9 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     ai === undefined ||
     analysis === undefined ||
     aiAlerts === undefined ||
-    marketplaces === undefined
+    marketplaces === undefined ||
+    automation === undefined ||
+    runnerLaunch === undefined
   ) {
     throw new ConfigError(issues);
   }
@@ -111,11 +127,18 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     cognitoUserPool:
       userPoolId === undefined ? undefined : { region: userPoolRegion(userPoolId), userPoolId },
     aiAlerts,
+    automation,
+    runnerLaunch,
   };
 }
 
 /** A job pool's size from `key`: an integer from 1 to 100. */
-function poolSize(issues: string[], env: NodeJS.ProcessEnv, key: string, fallback: string): number {
+export function poolSize(
+  issues: string[],
+  env: NodeJS.ProcessEnv,
+  key: string,
+  fallback: string,
+): number {
   const raw = env[key] ?? fallback;
   const size = Number(raw);
   if (!/^\d+$/.test(raw) || size < 1 || size > 100) {
@@ -125,7 +148,7 @@ function poolSize(issues: string[], env: NodeJS.ProcessEnv, key: string, fallbac
 }
 
 /** A package's own configuration, or undefined with its problems added to `issues`. */
-function collect<T>(
+export function collect<T>(
   issues: string[],
   type: new (...args: never[]) => Error & { readonly issues: readonly string[] },
   load: () => T,

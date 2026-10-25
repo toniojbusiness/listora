@@ -61,7 +61,16 @@ describe('createLogger', () => {
   it('redacts every sensitive field at every supported depth', () => {
     const { stream, lines } = memoryStream();
     const logger = createLogger({ service: 'api', level: 'info', destination: stream });
-    const fields = ['password', 'token', 'accessToken', 'refreshToken', 'clientSecret', 'apiKey'];
+    const fields = [
+      'password',
+      'token',
+      'accessToken',
+      'refreshToken',
+      'clientSecret',
+      'apiKey',
+      'cookie',
+      'cookies',
+    ];
     for (let depth = 0; depth <= MAX_REDACTED_FIELD_DEPTH; depth++) {
       let payload: Record<string, unknown> = Object.fromEntries(
         fields.map((field) => [field, `${field}-secret`]),

@@ -14,16 +14,16 @@ All marketplace logic lives behind one `MarketplaceAdapter` interface in `@listo
 assisted until its partner API is connected, then through the API.
 
 ```ts
-type Mode = 'api' | 'assisted' | 'bulk_file' | 'none';
+type Mode = 'api' | 'automation' | 'assisted' | 'bulk_file' | 'none';
 interface MarketplaceCapabilities {
-  connect: 'oauth' | 'none';
+  connect: 'oauth' | 'session' | 'none'; // session: the seller logs in, Listora keeps the cookies
   create: Mode;
   updatePrice: Mode;
   updateDetails: Mode;
   delist: Mode;
   relist: Mode;
   markSold: Mode | 'not_needed'; // not_needed: the marketplace marks its own sales sold
-  verifyRead: 'api' | 'user_confirm'; // how success is established
+  verifyRead: 'api' | 'automation' | 'user_confirm'; // how success is established
   readFreshness: 'revision' | 'none'; // whether reads carry a revision (see operations.md)
   title: 'field' | 'none'; // Depop: none (listings have no title; read-backs never check one)
   importListings: 'api' | 'share_sheet' | 'bulk_file' | 'none';
@@ -48,14 +48,19 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
     usedIds: readonly string[],
     connection: ConnectionRef | null,
   ): string | null;
+  listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>; // sale checks
 }
 ```
 
 Imports and emails join the interface as optional members with the tasks that first use them
-(T-23, T-36). eBay's notifications and order sync follow eBay's own contracts and live in
-`@listora/sales`, outside the interface ([ebay-notifications.md](ebay-notifications.md)). Credentials are not part of the interface: an adapter
-gets a connection's tokens at use time from its own token source (eBay's `EbaySellerSource`,
-which `@listora/connections` implements over the token vault, [connections.md](connections.md)).
+(T-23, T-36); orders joined with the browser runner's sale checks
+([automation.md](automation.md), `listOrdersSince`). eBay's notifications and order sync follow
+eBay's own contracts and live in `@listora/sales`, outside the interface
+([ebay-notifications.md](ebay-notifications.md)). A `ConnectionRef` names the connection's
+`mode` and `status`. Credentials are not part of the interface: an adapter gets a connection's
+tokens or browser session at use time from its own source (eBay's `EbaySellerSource`, which
+`@listora/connections` implements over the token vault, [connections.md](connections.md); the
+browser runner's session vault).
 
 | Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
 | ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
@@ -67,10 +72,12 @@ which `@listora/connections` implements over the token vault, [connections.md](c
 **Capabilities route every operation.** `operationMode(capabilities, kind)` (`capabilities.ts`)
 reads the flag for the kind (`create`, `updateDetails` for a revise, `updatePrice`, `delist` for
 an end, `relist`, `markSold`) under the listing's connection: `api` (Listora sends it and a
-read-back decides), `assisted` (only the user's confirmation finishes it), or `unsupported`
-(`none`, `bulk_file`, `not_needed`, or an API write without API reads), which fails without
-being sent. `checkCapabilities` rejects contradictory flags, such as an API write with
-`verifyRead: 'user_confirm'`.
+read-back decides), `automation` (the browser runner does it in the seller's session, and a
+read-back through the same session decides), `assisted` (only the user's confirmation finishes
+it), or `unsupported` (`none`, `bulk_file`, `not_needed`, or a write without reads through its
+own channel), which fails without being sent. `checkCapabilities` rejects contradictory flags,
+such as an API write with `verifyRead: 'user_confirm'`, an automated write with
+`verifyRead: 'api'`, or automated reads without `connect: 'session'`.
 
 **Titles.** `readBackState(desired, capabilities)` is the part of a desired state a read-back
 can show: on a marketplace whose listings have no title (`title: 'none'`, Depop) the engine and
@@ -90,9 +97,11 @@ pending id, so a delist never waits on a listing that was never made.
 
 **Registry.** `createAdapterRegistry` (`registry.ts`) holds one adapter per marketplace and
 refuses, at startup, a duplicate or an adapter whose capabilities are incoherent without a
-connection or under either connection mode. `createMarketplaceAdapters` (`default-adapters.ts`)
-builds the registry both processes run with: the worker passes its `lookup` to the engine, and
-the API asks it for capabilities under a connection.
+connection or under any mode and status of connection. `createMarketplaceAdapters`
+(`default-adapters.ts`) builds the registry every process runs with: the worker and the browser
+runner pass its `lookup` to the engine (with the same automation adapters, its `automation`
+setting, so both route each operation to the same mode), and the API asks it for capabilities
+under a connection.
 
 **Listing content and payloads.** A create, revise, or relist publishes listing content
 (`content.ts`): an `ItemSnapshot` (canonical attributes and photos with their listing URLs) and
@@ -145,11 +154,12 @@ Mercari text limits are not verified yet (plan RF15), so the base enforces only 
 at least one photo for them.
 
 **Connection-aware capabilities.** `ConnectionAwareAdapter` serves one marketplace in more than
-one mode: its assisted adapter without a connection or under an assisted one, and its API adapter
-under an `api` connection (still assisted when no API adapter is configured). Every mode reads
-and writes the same `marketplace_listing` rows, so switching Depop to the API is a change to the
-connection's `mode` and needs no data migration. The browser runner's mode joins it the same way
-when that task lands.
+one mode: its assisted adapter without a connection or under an assisted one, its API adapter
+under an `api` connection, and its automation adapter under an `automation` connection whose
+session works (`connected` or `degraded`). Each falls back to assisted when no adapter is
+configured for the mode, and an automation connection that waits for a relink is served
+assisted. Every mode reads and writes the same `marketplace_listing` rows, so switching a
+marketplace between modes is a change to the connection and needs no data migration.
 
 **Conformance.** Every adapter passes the shared suite in `conformance/suite.ts`
 (`describeAdapterConformance`), once per connection mode it serves, against its own fake
@@ -165,7 +175,8 @@ produce each failure mode the suite asks for (`ConformanceMarketplace`).
 
 - **Listings.** An item's `listings` (and `ItemSummary.listings`) are its newest listing per
   marketplace, each with a server-rendered `statusDisplay` (`listings/views.ts`). A listing is
-  `api` only while it is on an API connection, otherwise `assisted`. Only an API listing can be
+  `api` only while it is on an API connection, `automation` only while it is on an automation
+  connection whose session works, otherwise `assisted`. Only an API or automated listing can be
   verified by a read-back (`last_verified_at`, "confirmed by eBay") and only an assisted one by
   the user (`user_confirmed_at`, "you confirmed"), so an assisted listing can never claim the
   marketplace confirmed it.

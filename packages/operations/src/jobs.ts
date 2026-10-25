@@ -3,6 +3,10 @@
  * caller's own connection, so a job is committed or rolled back together with the operation
  * change that needs it.
  *
+ * - Every step is scheduled as `marketplace_operation`, which the always-on worker runs. A step
+ *   whose mode is `automation` needs a browser, so the worker hands it over as
+ *   `marketplace_operation_automation`, which only the browser runner takes (executor.ts).
+ *
  * - One job key per operation (`operation:<id>`): adding the job again replaces the pending one,
  *   so an operation never has two pending jobs. If its job is running, Graphile retires the
  *   running job's key and adds a new job for the next step.
@@ -15,6 +19,11 @@ import type { DbExecutor } from '@listora/db';
 
 /** The Graphile Worker task that runs one step of an operation (executor.ts). */
 export const OPERATION_TASK = 'marketplace_operation';
+
+/** The same step, handed to the browser runner because it acts in a browser session. */
+export const AUTOMATION_OPERATION_TASK = 'marketplace_operation_automation';
+
+export type OperationTask = typeof OPERATION_TASK | typeof AUTOMATION_OPERATION_TASK;
 
 /**
  * Graphile retries a job whose handler throws (a database outage, a bug) with its own backoff,
@@ -52,6 +61,8 @@ export interface ScheduleOptions {
   priority: number;
   /** When the job runs; `null` runs it now. */
   runAt: Date | null;
+  /** Which process runs it (default: the worker). */
+  task?: OperationTask;
 }
 
 /** Adds (or replaces) the operation's job. */
@@ -65,7 +76,7 @@ export async function scheduleOperationJob(
   };
   await sql`
     select graphile_worker.add_job(
-      identifier => ${OPERATION_TASK},
+      identifier => ${options.task ?? OPERATION_TASK},
       payload => ${JSON.stringify(payload)}::json,
       queue_name => ${listingQueueName(options.listingId)},
       run_at => ${options.runAt}::timestamptz,

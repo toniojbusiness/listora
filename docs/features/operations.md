@@ -18,9 +18,14 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    Each step runs in the operation's capability mode under the listing's connection
    (`operationMode`, [marketplaces.md](marketplaces.md#adapter-model)): an `unsupported` operation
    fails without being sent, and a send builds its payload from the stored content and fails without
-   sending when the adapter's validation refuses it. The adapter outcome determines the next state:
-   - `confirmed`: the API succeeded **and** `readListing` shows the desired state → `succeeded`.
-     A read-back that disagrees or fails → `verifying`.
+   sending when the adapter's validation refuses it. An `automation` step needs a browser: the
+   worker hands its job over, unchanged and without using an attempt, to the browser runner's
+   task (`AUTOMATION_OPERATION_TASK`, the same job key and listing queue), which runs it by the
+   same rules ([automation.md](automation.md)); its next steps come back to the worker first.
+   Automated and API operations are decided the same way. The adapter outcome determines the
+   next state:
+   - `confirmed`: the API (or the browser session) took the change **and** `readListing` shows
+     the desired state → `succeeded`. A read-back that disagrees or fails → `verifying`.
    - `rejected` (validation or permanent error) → `failed`, with a user-readable reason and fix.
    - `transient` (429, 5xx, network failure before send) → `retrying` with backoff and jitter
      (30 s, 2 m, 10 m, 30 m, 2 h, 6 h, ±20%, at least the marketplace's `Retry-After`), then
@@ -28,8 +33,8 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    - `unknown` (timeout after the request may have been sent, a lost connection, an adapter that
      throws or misses its deadline) → `verifying`. `readListing` decides: the desired state
      holds → `succeeded`; it does not → `retrying`. The request is never re-sent blindly.
-   - `pendingUser` (assisted) → `needs_user_action` until the user confirms
-     (`confirmOperationByUser`). An assisted operation is never read back, and any other
+   - `pendingUser` (assisted, or an automated step that met a check automation must not pass)
+     → `needs_user_action` until the user confirms (`confirmOperationByUser`). An assisted operation is never read back, and any other
      outcome for it (`confirmed`, `unknown`) fails as unconfirmed; an API operation that answers
      with a user task fails the same way.
 3. **Attempts.** Every step, a send or a read-back, uses one attempt, and an operation gets

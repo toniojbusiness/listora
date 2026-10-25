@@ -6,7 +6,8 @@
   "description": "Marketplace adapter framework: the adapter interface, capability flags, registry, listing content, the assisted adapter base, the eBay and Depop adapters, eBay's OAuth connect client, and the fake marketplace, fake eBay, and fake Depop (with fault injection) used in development and tests.",
   "exports": {
     ".": "./src/index.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./conformance": "./src/conformance/suite.ts"
   },
   "scripts": {
     "fake": "node --env-file-if-exists=../../.env src/fake/cli.ts",
