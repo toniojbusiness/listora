@@ -106,7 +106,10 @@ packages/
   connections/  Marketplace account connections: OAuth connect, the token vault (local key or KMS),
                 use-time credentials with single-flight refresh, health checks, revocation
                 (@listora/connections)
-  operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
+  operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
+                drift resync (@listora/operations)
+  sales/        Sale intake: inbound events, recording sales for auto-delist; eBay notifications,
+                the order poll, eBay account deletion (@listora/sales)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
@@ -174,6 +177,7 @@ src/
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
   listings/      Listing views (honest statusDisplay) and shared-listing links
   connections/   Marketplace connections, connect attempts, and the public OAuth callback
+  webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -339,22 +343,23 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 
 ## 8. Feature docs
 
-| File                                                   | Covers                                                                        |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| [features/operations.md](features/operations.md)       | The operation engine, auto-delist, the honest status vocabulary               |
-| [features/marketplaces.md](features/marketplaces.md)   | The adapter interface, capabilities, assisted adapters, conformance, listings |
-| [features/ebay.md](features/ebay.md)                   | The eBay adapter, the fake eBay, the sandbox check                            |
-| [features/depop.md](features/depop.md)                 | Depop: assisted today, the partner API adapter to come                        |
-| [features/automation.md](features/automation.md)       | Browser automation for marketplaces without an API (decision D1)              |
-| [features/ai.md](features/ai.md)                       | The AI pipeline, item analysis, cost metering and controls                    |
-| [features/pricing.md](features/pricing.md)             | Pricing data rules, floors, fee tables, tiers, the label guard                |
-| [features/photos.md](features/photos.md)               | Uploads, storage drivers, photo processing                                    |
-| [features/items.md](features/items.md)                 | Inventory items, item status, the audit log                                   |
-| [features/auth.md](features/auth.md)                   | Sign-in drivers, the Cognito user pool, account deletion                      |
-| [features/infra.md](features/infra.md)                 | Hosting and deploys                                                           |
-| [features/costs.md](features/costs.md)                 | The personal environment's monthly cost                                       |
-| [features/observability.md](features/observability.md) | Logs, request ids, the signals alarms key on                                  |
-| [features/ios.md](features/ios.md)                     | iOS app conventions                                                           |
+| File                                                             | Covers                                                                        |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [features/operations.md](features/operations.md)                 | The operation engine, auto-delist, the honest status vocabulary               |
+| [features/marketplaces.md](features/marketplaces.md)             | The adapter interface, capabilities, assisted adapters, conformance, listings |
+| [features/ebay.md](features/ebay.md)                             | The eBay adapter, the fake eBay, the sandbox check                            |
+| [features/ebay-notifications.md](features/ebay-notifications.md) | eBay notifications, the order poll, eBay account deletion                     |
+| [features/depop.md](features/depop.md)                           | Depop: assisted today, the partner API adapter to come                        |
+| [features/automation.md](features/automation.md)                 | Browser automation for marketplaces without an API (decision D1)              |
+| [features/ai.md](features/ai.md)                                 | The AI pipeline, item analysis, cost metering and controls                    |
+| [features/pricing.md](features/pricing.md)                       | Pricing data rules, floors, fee tables, tiers, the label guard                |
+| [features/photos.md](features/photos.md)                         | Uploads, storage drivers, photo processing                                    |
+| [features/items.md](features/items.md)                           | Inventory items, item status, the audit log                                   |
+| [features/auth.md](features/auth.md)                             | Sign-in drivers, the Cognito user pool, account deletion                      |
+| [features/infra.md](features/infra.md)                           | Hosting and deploys                                                           |
+| [features/costs.md](features/costs.md)                           | The personal environment's monthly cost                                       |
+| [features/observability.md](features/observability.md)           | Logs, request ids, the signals alarms key on                                  |
+| [features/ios.md](features/ios.md)                               | iOS app conventions                                                           |
 
 ### Former section numbers
 

@@ -32,9 +32,17 @@ const connections = createConnectionWork({
   logger,
 });
 
+const adapters = createMarketplaceAdapters(
+  {
+    ...config.marketplaces,
+    ...(connections.ebaySeller === undefined ? {} : { ebaySeller: connections.ebaySeller }),
+  },
+  logger,
+).lookup;
+
 try {
   // Every feature's jobs (features.ts), so a new feature never edits this file.
-  const { tasks, scheduledTasks, crontab } = collectWorkerJobs(WORKER_FEATURES, {
+  const { tasks, scheduledTasks, crontab, starts } = collectWorkerJobs(WORKER_FEATURES, {
     config,
     db,
     storage: createStorage(config.storage),
@@ -45,18 +53,13 @@ try {
       logger,
     }),
     connections,
+    adapters,
     logger,
   });
   const worker = await startOperationWorker({
     connectionString: config.databaseUrl,
     db,
-    adapters: createMarketplaceAdapters(
-      {
-        ...config.marketplaces,
-        ...(connections.ebaySeller === undefined ? {} : { ebaySeller: connections.ebaySeller }),
-      },
-      logger,
-    ).lookup,
+    adapters,
     tasks,
     logger,
     concurrency: config.concurrency,
@@ -70,6 +73,8 @@ try {
       process.exit(1);
     },
   });
+
+  for (const start of starts) await start();
 
   handleShutdownSignals({
     logger,
@@ -86,6 +91,7 @@ try {
       fakeMarketplace: config.marketplaces.fakeMarketplaceUrl !== undefined,
       ebay: config.marketplaces.ebay?.environment ?? null,
       tokenVault: config.marketplaces.tokenVault?.driver ?? null,
+      ebayNotifications: config.marketplaces.ebay?.notifications !== undefined,
       aiProvider: config.ai.provider,
       cognitoUserPool: config.cognitoUserPool?.userPoolId,
     },

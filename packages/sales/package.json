@@ -1,0 +1,21 @@
+{
+  "name": "@listora/sales",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sale intake: inbound events, recording sales for auto-delist, and eBay notifications, the order poll backstop, and eBay account deletion.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/connections": "*",
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/operations": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 
 import type { AiClient } from '@listora/ai';
 import type { Db } from '@listora/db';
+import type { AdapterLookup } from '@listora/marketplaces';
 import type { ScheduledTask, WorkerTask } from '@listora/operations';
 import type { Logger } from '@listora/shared';
 import type { ObjectStorage } from '@listora/storage';
@@ -26,6 +27,8 @@ export interface WorkerContext {
   ai: AiClient;
   /** Marketplace connections: per-connection tokens, the health check, grant revocation. */
   connections: ConnectionWork;
+  /** The marketplace adapters the operation engine runs with (listing read-backs). */
+  adapters: AdapterLookup;
   logger: Logger;
 }
 
@@ -36,6 +39,8 @@ export interface WorkerJobs {
   scheduledTasks?: readonly ScheduledTask[];
   /** Graphile crontab lines that schedule this feature's `tasks` (one job per tick). */
   crontab?: readonly string[];
+  /** Runs once the worker has started (for example to queue a job at every start). */
+  start?: () => Promise<void>;
 }
 
 /** What a file in `features/` exports as `feature`. */
@@ -75,11 +80,18 @@ export async function discoverWorkerFeatures(
 export function collectWorkerJobs(
   features: readonly DiscoveredWorkerFeature[],
   context: WorkerContext,
-): { tasks: Record<string, WorkerTask>; scheduledTasks: ScheduledTask[]; crontab: string[] } {
+): {
+  tasks: Record<string, WorkerTask>;
+  scheduledTasks: ScheduledTask[];
+  crontab: string[];
+  /** Every feature's `start`, in feature order. */
+  starts: (() => Promise<void>)[];
+} {
   const owners = new Map<string, string>();
   const tasks: Record<string, WorkerTask> = {};
   const scheduledTasks: ScheduledTask[] = [];
   const crontab: string[] = [];
+  const starts: (() => Promise<void>)[] = [];
   const claim = (task: string, feature: string): void => {
     const owner = owners.get(task);
     if (owner !== undefined) {
@@ -98,8 +110,9 @@ export function collectWorkerJobs(
       scheduledTasks.push(scheduled);
     }
     crontab.push(...(jobs.crontab ?? []));
+    if (jobs.start !== undefined) starts.push(jobs.start);
   }
-  return { tasks, scheduledTasks, crontab };
+  return { tasks, scheduledTasks, crontab, starts };
 }
 
 /** The features of this worker, found once when the module loads. */

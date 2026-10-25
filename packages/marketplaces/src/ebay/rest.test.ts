@@ -12,7 +12,7 @@ import {
 } from './fake/constants.ts';
 import { FakeEbay } from './fake/fake-ebay.ts';
 import { ApplicationToken, EbayOAuthClient } from './oauth.ts';
-import { AnalyticsTradingUsage, getOrders, tradingUsage } from './rest.ts';
+import { AnalyticsTradingUsage, getOrder, getOrders, tradingUsage } from './rest.ts';
 import { TradingClient } from './trading.ts';
 import { el } from './xml.ts';
 
@@ -101,6 +101,27 @@ describe('eBay REST and Trading clients against the fake eBay', () => {
       options(),
     );
     expect(later).toMatchObject({ type: 'ok', value: { total: 0 } });
+
+    const orderId = first.value.orders[0]?.orderId ?? '';
+    const one = await getOrder(endpoints(), orderId, options());
+    expect(one).toMatchObject({
+      type: 'ok',
+      value: {
+        orderId,
+        deliveryCost: { value: '0.0', currency: 'USD' },
+        lineItems: [
+          {
+            lineItemCost: { value: '20.0', currency: 'USD' },
+            shipByDate: expect.any(String) as string,
+          },
+        ],
+      },
+    });
+    expect(JSON.stringify(one)).not.toContain('fake_buyer');
+    expect(await getOrder(endpoints(), '99-99999-99999', options())).toEqual({
+      type: 'ok',
+      value: null,
+    });
   });
 
   it("reads the application's Trading usage, and eBay refuses calls past the limit", async () => {

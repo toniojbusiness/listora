@@ -24,6 +24,7 @@ function row(overrides: Partial<ConnectionRow> = {}): ConnectionRow {
     last_error_code: null,
     last_error_at: null,
     granted_at: new Date(NOW.getTime() - 10 * DAY),
+    orders_polled_through: null,
     created_at: NOW,
     updated_at: NOW,
     ...overrides,

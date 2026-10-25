@@ -34,14 +34,18 @@ export interface RestEndpoints {
   media: string;
 }
 
-interface RestRequestOptions {
+export interface RestRequestOptions {
   token: string;
   signal: AbortSignal;
   timeoutMs: number;
 }
 
-async function rest<T>(
-  method: 'GET' | 'POST',
+/**
+ * One REST call with a bearer token. `read` turns a 2xx answer into the value (or `undefined`
+ * for a success eBay never sends, which counts as garbled).
+ */
+export async function rest<T>(
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   url: string,
   options: RestRequestOptions,
   read: (body: unknown, headers: Headers) => T | undefined,
@@ -201,20 +205,37 @@ export function getItemAspectsForCategory(
 
 // Fulfillment ------------------------------------------------------------------------------
 
+/** An eBay amount as eBay sends it: a decimal string and its currency. */
+export interface EbayAmount {
+  value: string;
+  currency: string;
+}
+
+/**
+ * An order as Listora reads it. It never holds the buyer: Listora keeps no buyer data, so a
+ * buyer's account deletion has nothing to purge.
+ */
 export interface EbayOrder {
   orderId: string;
   creationDate: string;
   lastModifiedDate: string;
   orderFulfillmentStatus: string;
+  /** `PAID` once payment cleared; also `PENDING`, `FAILED`, `PARTIALLY_REFUNDED`, `FULLY_REFUNDED`. */
   orderPaymentStatus: string;
   cancelState: string | null;
-  total: { value: string; currency: string } | null;
+  total: EbayAmount | null;
+  /** What the buyer paid for shipping (`pricingSummary.deliveryCost`). */
+  deliveryCost: EbayAmount | null;
   lineItems: {
     lineItemId: string;
     legacyItemId: string;
     sku: string | null;
     quantity: number;
     title: string;
+    /** The line's price times its quantity, before shipping and tax (`lineItemCost`). */
+    lineItemCost: EbayAmount | null;
+    /** The latest day to ship the line by (`lineItemFulfillmentInstructions.shipByDate`). */
+    shipByDate: string | null;
   }[];
 }
 
@@ -230,7 +251,7 @@ export interface OrdersPage {
  * `next`. `modifiedSince` filters on `lastmodifieddate` (the backstop poll, T-17).
  */
 export function getOrders(
-  endpoints: RestEndpoints,
+  endpoints: Pick<RestEndpoints, 'api'>,
   query: { modifiedSince?: Date; limit?: number; offset?: number; pageUrl?: string },
   options: RestRequestOptions,
 ): Promise<RestResult<OrdersPage>> {
@@ -255,9 +276,7 @@ export function getOrders(
 function readOrder(entry: unknown): EbayOrder[] {
   const order = (entry ?? {}) as Record<string, unknown>;
   if (typeof order['orderId'] !== 'string') return [];
-  const total = (
-    order['pricingSummary'] as { total?: { value?: unknown; currency?: unknown } } | undefined
-  )?.total;
+  const pricing = (order['pricingSummary'] ?? {}) as Record<string, unknown>;
   const lineItems = Array.isArray(order['lineItems']) ? (order['lineItems'] as unknown[]) : [];
   const string = (value: unknown): string => (typeof value === 'string' ? value : '');
   return [
@@ -272,10 +291,8 @@ function readOrder(entry: unknown): EbayOrder[] {
         'string'
           ? (order['cancelStatus'] as { cancelState: string }).cancelState
           : null,
-      total:
-        typeof total?.value === 'string' && typeof total.currency === 'string'
-          ? { value: total.value, currency: total.currency }
-          : null,
+      total: amountOf(pricing['total']),
+      deliveryCost: amountOf(pricing['deliveryCost']),
       lineItems: lineItems.map((line) => {
         const item = (line ?? {}) as Record<string, unknown>;
         return {
@@ -284,10 +301,42 @@ function readOrder(entry: unknown): EbayOrder[] {
           sku: typeof item['sku'] === 'string' ? item['sku'] : null,
           quantity: typeof item['quantity'] === 'number' ? item['quantity'] : 1,
           title: string(item['title']),
+          lineItemCost: amountOf(item['lineItemCost']),
+          shipByDate: stringOrNull(
+            (item['lineItemFulfillmentInstructions'] as { shipByDate?: unknown } | undefined)
+              ?.shipByDate,
+          ),
         };
       }),
     },
   ];
+}
+
+/** One order by id (`getOrder`); `null` when eBay does not know it for this seller (404). */
+export async function getOrder(
+  endpoints: Pick<RestEndpoints, 'api'>,
+  orderId: string,
+  options: RestRequestOptions,
+): Promise<RestResult<EbayOrder | null>> {
+  const result = await rest(
+    'GET',
+    `${endpoints.api}/sell/fulfillment/v1/order/${encodeURIComponent(orderId)}`,
+    options,
+    (body) => readOrder(body)[0],
+  );
+  if (result.type === 'error' && result.status === 404) return { type: 'ok', value: null };
+  return result;
+}
+
+function amountOf(value: unknown): EbayAmount | null {
+  const amount = (value ?? {}) as { value?: unknown; currency?: unknown };
+  return typeof amount.value === 'string' && typeof amount.currency === 'string'
+    ? { value: amount.value, currency: amount.currency }
+    : null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value : null;
 }
 
 // Developer Analytics ----------------------------------------------------------------------

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { ACCOUNT_DELETION_TASK } from '@listora/accounts';
 import { ITEM_ANALYSIS_TASK } from '@listora/analysis';
 import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observability';
+import { LISTING_RESYNC_TASK } from '@listora/operations';
 import { PHOTO_PROCESSING_TASK } from '@listora/photos';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -32,8 +33,8 @@ afterEach(async () => {
 
 /** Features' `jobs` only build closures, so they never touch the context's services. */
 const context = {
-  config: { aiAlerts: {}, analysis: { autoEscalate: false } },
-  connections: { ebaySeller: undefined, scheduledTasks: [], revoker: undefined },
+  config: { aiAlerts: {}, analysis: { autoEscalate: false }, marketplaces: { ebay: undefined } },
+  connections: { tokens: undefined, ebaySeller: undefined, scheduledTasks: [], revoker: undefined },
 } as unknown as WorkerContext;
 
 const feature = (
@@ -48,6 +49,7 @@ describe('worker feature discovery', () => {
       'ai-spend-check',
       'analysis',
       'connection-health',
+      'ebay-sync',
       'photos',
       'trust-metrics',
     ]);
@@ -56,7 +58,13 @@ describe('worker feature discovery', () => {
   it('registers every feature job under its task name', () => {
     const { tasks, scheduledTasks, crontab } = collectWorkerJobs(WORKER_FEATURES, context);
     expect(Object.keys(tasks).sort()).toEqual(
-      [ACCOUNT_DELETION_TASK, ITEM_ANALYSIS_TASK, PHOTO_PROCESSING_TASK, TRUST_METRICS_TASK].sort(),
+      [
+        ACCOUNT_DELETION_TASK,
+        ITEM_ANALYSIS_TASK,
+        LISTING_RESYNC_TASK,
+        PHOTO_PROCESSING_TASK,
+        TRUST_METRICS_TASK,
+      ].sort(),
     );
     expect(scheduledTasks.map(({ name }) => name)).toEqual([AI_SPEND_CHECK_TASK]);
     expect(crontab).toEqual([TRUST_METRICS_CRONTAB]);

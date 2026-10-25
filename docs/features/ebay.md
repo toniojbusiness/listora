@@ -62,8 +62,9 @@ eBay Picture Services by the Media API. Its rules:
 
 The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth (with the consent
 page and token revocation), Commerce Identity, Media, Taxonomy, Fulfillment, Developer
-Analytics, and Notification endpoints the adapter and eBay connect use, signs
-notifications the way eBay does, and injects eBay's failure modes; its README cites the eBay
+Analytics, and Notification endpoints (subscriptions with eBay's endpoint challenge) the
+adapter, eBay connect, and the notifications use, signs notifications the way eBay does and
+delivers its own events to subscribed endpoints ([ebay-notifications.md](ebay-notifications.md)), and injects eBay's failure modes; its README cites the eBay
 documentation it follows and lists what eBay leaves undocumented. `npm run ebay:sandbox-check`
 runs the adapter against eBay's sandbox once the keys are in `.env`
 ([Sandbox check](#sandbox-check)).

@@ -30,6 +30,13 @@ export { DEFAULT_RETRY_POLICY, delayAfterAttempt, maxAttempts, RETRY_DELAYS_MS }
 export type { RetryPolicy } from './policy.ts';
 export { LIVENESS_APPLICATION_PREFIX, reapStoppedWorkers } from './recovery.ts';
 export {
+  enqueueListingResync,
+  isListingResyncPayload,
+  LISTING_RESYNC_TASK,
+  runListingResync,
+} from './resync.ts';
+export type { ListingResyncDependencies, ListingResyncPayload, ResyncOutcome } from './resync.ts';
+export {
   canTransition,
   OPERATION_TRANSITIONS,
   SCHEDULED_STATUSES,

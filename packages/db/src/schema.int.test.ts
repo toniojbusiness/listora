@@ -180,6 +180,7 @@ const COLUMNS = {
     'granted_at',
     'last_error_code',
     'last_error_at',
+    'orders_polled_through',
   ],
   connection_authorization: [
     'id',
@@ -269,6 +270,7 @@ const COLUMNS = {
     'error_message',
     'created_at',
     'updated_at',
+    'external_user_id',
   ],
   sale: [
     'id',

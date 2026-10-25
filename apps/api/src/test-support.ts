@@ -64,6 +64,7 @@ import type { ConnectionsDependencies } from './connections/routes.ts';
 import { operationSpec, responseContractErrors } from './contract/contract.ts';
 import type { ContractReply, OperationId } from './contract/routes.ts';
 import { resolveTenant, type Tenant } from './tenancy.ts';
+import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
 export const TEST_AUTH_SECRET = 'test-secret-that-is-at-least-32-characters-long';
 /** The origin `app.inject` requests use; local storage URLs start with it. */
@@ -278,6 +279,8 @@ export interface TestApiOptions {
   auth?: AuthDriver;
   /** Marketplace adapters, OAuth clients, and the token sealer (default: nothing connects). */
   connections?: ConnectionsDependencies;
+  /** eBay's notification endpoint (default: not served). */
+  ebayWebhook?: EbayWebhookDependencies;
 }
 
 export interface TestApi {
@@ -379,6 +382,7 @@ export async function createTestApi(
     db,
     auth: options.auth ?? devAuth,
     ...(options.connections === undefined ? {} : { connections: options.connections }),
+    ...(options.ebayWebhook === undefined ? {} : { ebayWebhook: options.ebayWebhook }),
     storage,
     photoJobs,
     ai,
