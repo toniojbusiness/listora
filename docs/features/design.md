@@ -6,7 +6,7 @@ every screen follows, and the UI audit behind design system v2. The code convent
 
 ## Principles
 
-1. **Honest status first.** A status is shown in the server's words with one of six tones. Only
+1. **Honest status first.** A status is shown in the server's words, in full, with one of six tones. Only
    `success` looks done (green, a check), and it is used only for what a marketplace read-back
    or the user confirmed. Work in progress is blue, a step that only the user can move on is
    amber, a failure is red and always comes with Retry or a way forward.
@@ -26,28 +26,40 @@ every screen follows, and the UI audit behind design system v2. The code convent
 All of it is in `apps/ios/Packages/DesignSystem`. Views use these names, never raw colors, fonts,
 or numbers.
 
-### Color (`Palette`)
+### Color (`Palette`, `PaletteTheme`)
 
-| Token                                   | Light                         | Dark                              | Use                                       |
-| --------------------------------------- | ----------------------------- | --------------------------------- | ----------------------------------------- |
-| `background`                            | `#F4F5F7`                     | `#0B0D10`                         | Behind everything                         |
-| `surface`                               | `#FFFFFF`                     | `#16191D`                         | Cards, rows, sheets                       |
-| `surfaceSecondary`                      | `#EBEDF0`                     | `#22262C`                         | Wells inside a card: fields, placeholders |
-| `separator`                             | `#DCDFE4`                     | `#2C3138`                         | Hairlines and card borders                |
-| `textPrimary` / `textSecondary`         | `#111418` / `#4B5361`         | `#F3F5F7` / `#A3ABB7`             | Text                                      |
-| `brand` / `brandSoft` / `onBrand`       | `#0B7268` / `#DDF3EF` / white | `#2DD4BF` / `#0D3532` / `#032B28` | Primary actions, selection                |
-| `success` / `successSoft`               | `#157A3E` / `#E2F5E9`         | `#4ADE80` / `#0E3220`             | Confirmed                                 |
-| `info` / `infoSoft`                     | `#1D5FC2` / `#E6EFFC`         | `#7CB4FF` / `#12294A`             | Running, checking                         |
-| `warning` / `warningSoft`               | `#9A4806` / `#FDF0DF`         | `#FBBF24` / `#372807`             | Needs the user                            |
-| `danger` / `dangerSoft` / `onDanger`    | `#B42318` / `#FDE9E7` / white | `#FF8A80` / `#3D1513` / `#2B0806` | Failed, destructive                       |
-| `mediaBackground` / `onMedia` / `scrim` | black / white / black         | same                              | Camera and crop, always dark              |
+`Palette` names the roles; the values come from the active `PaletteTheme`. Three directions are
+in the running, for an audience that is mostly women and also men: refined rather than pastel,
+and no generic tech blue. Every other build uses the standard one (Blush and plum) until one is
+chosen; [design/palettes/](design/palettes/) compares them on Inventory, an item, Add Item, Review, and Price. Dev builds switch between them in Settings > Palette (kept across launches) or with
+`LISTORA_PALETTE=<key>` at launch, and the whole app redraws.
 
-`PaletteTests` checks every text color on every background, every strong color on its soft
-background, and the labels on `brand` and `danger`, in both modes.
+| Token                                   | Blush and plum (`blushPlum`), light / dark | Sage and sand (`sageSand`), light / dark | Terracotta and cream (`terracottaCream`), light / dark | Use                                       |
+| --------------------------------------- | ------------------------------------------ | ---------------------------------------- | ------------------------------------------------------ | ----------------------------------------- |
+| `background`                            | `#FBF7F4` / `#161013`                      | `#F6F2EA` / `#14130F`                    | `#FAF5EF` / `#151311`                                  | Behind everything                         |
+| `surface`                               | `#FFFDFB` / `#211A1E`                      | `#FFFDF8` / `#1F1D18`                    | `#FFFCF8` / `#201D1A`                                  | Cards, rows, sheets                       |
+| `surfaceSecondary`                      | `#F5ECEA` / `#2D2429`                      | `#EDE6D9` / `#2A2721`                    | `#F2E9DF` / `#2B2723`                                  | Wells inside a card: fields, placeholders |
+| `separator`                             | `#EADCD8` / `#3A2F35`                      | `#E0D7C6` / `#38342C`                    | `#E6D9CB` / `#3A342E`                                  | Hairlines and card borders                |
+| `textPrimary`                           | `#2A1B26` / `#F7EEF2`                      | `#2B2118` / `#F4EFE6`                    | `#262321` / `#F6F0EA`                                  | Text                                      |
+| `textSecondary`                         | `#6B5864` / `#C4B3BD`                      | `#65574A` / `#BDB3A4`                    | `#5F5852` / `#C0B6AC`                                  | Supporting text                           |
+| `brand`                                 | `#6E2A5C` / `#E7A3C9`                      | `#4A6650` / `#A9C6A3`                    | `#A4492F` / `#F0A487`                                  | Primary actions, selection                |
+| `brandSoft`                             | `#F6E3EC` / `#43213A`                      | `#E3EBDF` / `#26332A`                    | `#F6E2D8` / `#45261B`                                  | Tiles, chips, selected rows               |
+| `success`                               | `#2E6B4A` / `#86D3A6`                      | `#1F6640` / `#8FD4A8`                    | `#2F6A47` / `#8ED2A6`                                  | Confirmed                                 |
+| `info`                                  | `#3D5585` / `#A9BCF0`                      | `#3E5C7A` / `#A8C2DC`                    | `#3E5A78` / `#A9C0DA`                                  | Running, checking                         |
+| `warning`                               | `#8F4A12` / `#F2C27A`                      | `#8A4B10` / `#EDC27E`                    | `#8A5100` / `#F0C276`                                  | Needs the user                            |
+| `danger`                                | `#A8243B` / `#FF8A7A`                      | `#A3352A` / `#F4A193`                    | `#A61E3A` / `#FF9BAE`                                  | Failed, destructive                       |
+| Headings                                | New York (serif)                           | New York (serif)                         | SF Pro                                                 | `largeTitle`, `title`, `title3`           |
+| `mediaBackground` / `onMedia` / `scrim` | black / white / black                      | same                                     | same                                                   | Camera and crop, always dark, every theme |
+
+The soft status colors, `onBrand`, and `onDanger` are in `Theme.swift`. `PaletteTests` checks,
+for every theme and in both modes, every text color on every background, every strong color and
+`textPrimary` on its soft background, the labels on `brand` and `danger`, and that the brand and
+status colors differ from each other.
 
 ### Type (`Typography`)
 
-SF Pro on Dynamic Type text styles: `largeTitle`, `title`, `title3`, `headline`, `body`,
+SF Pro on Dynamic Type text styles (the three title styles in the theme's heading design):
+`largeTitle`, `title`, `title3`, `headline`, `body`,
 `callout`, `subheadline`, `footnote`, `caption`, `label` (badges and chips), `eyebrow` (section
 headers, in capitals), `price` and `priceLarge` (tabular digits). The table with each style's
 use is in `Typography.swift`.
@@ -86,20 +98,28 @@ use is in `Typography.swift`.
 | `SkeletonBlock`, `SkeletonRow`             | Loading placeholders with a shimmer (a pulse with Reduce Motion)                                                                                  |
 | `Banner`, `toast(_:)`                      | Inline status message with Retry or dismiss; a passing confirmation                                                                               |
 | `BottomActionBar`, `bottomActionBar(_:)`   | The pinned bar for a screen's main actions                                                                                                        |
+| `solidBarEdges()`                          | A hard edge under the navigation bar (iOS 26), so content never shows through; set once at the root                                               |
 
-`PriceField`, `ChoiceChip`, `ListoraTextField`, and `SectionHeader` are ready for the review and
-price screens (T-18), which adopt them after they merge.
+The review flow enters amounts on its own keypad (`KeypadView` in `ReviewFeature`) rather than
+`PriceField`, so the system keyboard never covers the bottom bar; `PriceField` is for amount
+fields inside forms.
 
 ## Screenshots
 
 `make ios-screenshots` (with `IOS_SIMULATOR=<your simulator>`) runs `ScreenshotTourUITests`,
 which visits every screen, in light and dark mode at the default and the largest accessibility
-text size. The PNGs land in `.build/ios/screenshots/<variant>/`. The tour uses the stub API and
-the debug fake camera (`LISTORA_FAKE_CAMERA`), so it needs no backend and runs in the simulator.
+text size. The PNGs land in `.build/ios/screenshots/<variant>/`. Most of the tour uses the stub
+API and the debug fake camera (`LISTORA_FAKE_CAMERA`); the review flow (`testReviewTour`,
+screens 15 to 26) and the inventory and item screens (`testInventoryTour`, 27 to 34) go through
+the local stack with the fake AI and fake eBay, as `ReviewFlowUITests` and `ListingFlowUITests`
+do, so the target starts it like `ios-test`. `IOS_SCREENSHOT_TESTS` narrows the tour to one test.
 The before and after sheets of design system v2 are in [design/](design/), one per screen
 (light, dark, and both at the largest text size). Some "before" cells at the largest text size
 are empty: on the old screens at that size the tour could not reach every screen. The camera
-had no "before": the simulator could not show it.
+had no "before": the simulator could not show it. Sheets 15 to 34 are the second pass, over the
+review flow and the inventory (below). The analysis progress (15) shows only when the analysis is slow enough to catch, so
+some of its cells are empty too, and the "before" custom price (24, 25) was $269 rather than a
+price under the floors.
 
 ## UI audit (before design system v2)
 
@@ -122,3 +142,22 @@ Taken on the iPhone 17 simulator from `main` at `c30276e`, in the four variants 
 
 Contrast held up before (the palette test already enforced AA), but the old palette had no soft
 backgrounds or info color, so every non-success status fell back to gray or orange text.
+
+## UI audit of the review flow and the inventory
+
+Taken on the iPhone 17 simulator, in the same four variants: the review flow from `main` at
+`e5c60f9` (T-18 had only picked up the v2 tokens), through `testReviewTour`, and the inventory and
+item screens from `main` at `750df99` (T-19, built on v2), through `testInventoryTour`.
+
+| Screen    | What looked off                                                                                                                                                                                                                                                                                                               | What changed                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Flow      | In the review flow, the tab bar stayed up under each screen's own bottom bar, so the main action sat high and the content had less room; each screen drew its own bar and button spinner.                                                                                                                                     | The tab bar hides for the flow and comes back when it ends; every action bar is `bottomActionBar`, and buttons show `.loading`.                                                                                                                                                                                                                                                                            |
+| Analysis  | A gray circle icon, and a second spinner under the steps card that repeated the running step.                                                                                                                                                                                                                                 | A brand hero tile and the steps card alone, the running step in bold with an info-tinted spinner. Failures use a danger tile, with Try again and Edit photos in the bottom bar.                                                                                                                                                                                                                            |
+| Review    | The attention rows' warning stripe ran past the card's rounded corners; empty details ("Add size") looked like values; "Identify harder" was a second primary button next to Continue; the title truncated at the largest text size.                                                                                          | A warning-bordered card without the stripe; empty details read as a brand "+ Add size" action, acronyms kept ("Add UPC"); Identify harder is secondary in a card with an icon tile; section headers; monogram tiles on each marketplace's copy; the whole title wraps.                                                                                                                                     |
+| Cost      | At the largest text size the keypad grew so tall that the date and place sat far below it; recent places were hand-drawn capsules; the place field had no label well.                                                                                                                                                         | The keypad stops growing at the first accessibility size; recent places are choice chips; the place is a labeled text field; "Continue to price".                                                                                                                                                                                                                                                          |
+| Price     | Floors sat below the options with nothing linking them, so a price under a floor showed only in the bottom bar; "Set my own price" was a bare link; at the largest text size prices broke across lines ("$18." / "00"); the custom price had its Use button at the top and a half-empty sheet; a plain spinner while loading. | Each option says when it is below a marketplace's floor, and each floor says when the chosen price is under it, prices in one tabular column; the selected option is brand filled; "Set my own price" is a secondary button; at accessibility sizes the price goes under the label; the custom price keeps the keypad and "Use $9.00" at the bottom with the highest floor above; skeletons while loading. |
+| Saved     | The SKU, title, and price floated in the middle of the screen.                                                                                                                                                                                                                                                                | A success hero tile, the SKU and price on a card (the SKU to write on the tag), the time and taps as a pill, Done in the bottom bar, and a success haptic.                                                                                                                                                                                                                                                 |
+| Inventory | The price column took a third of the card, squeezing the title; a marketplace status chip wider than the row (Poshmark's) was cut off; at the largest text size the title and price broke mid-word ("Levi' s Tr...", "$4 5.0 0").                                                                                             | The title gets the full width and the price ends the SKU line; `FlowLayout` wraps a chip wider than its row instead of cutting it; at accessibility sizes the photo goes above and the price under the SKU.                                                                                                                                                                                                |
+| Bars      | Content scrolling under the navigation bar showed through it (iOS 26's soft edge).                                                                                                                                                                                                                                            | `solidBarEdges()` at the root: a hard scroll edge under every bar. An opaque `UINavigationBarAppearance` was tried first; on iOS 26 it hides large titles.                                                                                                                                                                                                                                                 |
+| Item      | At the largest text size the header and each marketplace card put the price beside the name ("$45.0 0", "eBa y"), and a status pill cut the server's label short ("Active (confirmed b..."); the labeled rows squeezed their values.                                                                                          | The price goes under the name at accessibility sizes; `StatusBadge` never truncates, so the honest status always reads in full; labeled rows stack their value under the label.                                                                                                                                                                                                                            |
+| Listing   | At the largest text size each marketplace's text was squeezed between its tile and the switch.                                                                                                                                                                                                                                | The tile goes above the text at accessibility sizes.                                                                                                                                                                                                                                                                                                                                                       |

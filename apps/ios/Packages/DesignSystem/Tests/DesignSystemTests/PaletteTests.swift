@@ -1,25 +1,31 @@
 import Testing
 @testable import DesignSystem
 
+/// Every theme's colors meet the same rules, so the Dev palette switch can never ship a pair
+/// that fails WCAG AA.
 struct PaletteTests {
     /// WCAG AA minimum for normal-size text.
     private static let minimumTextContrast = 4.5
 
-    private static let backgrounds: [(String, ColorToken)] = [
-        ("background", Palette.background),
-        ("surface", Palette.surface),
-        ("surfaceSecondary", Palette.surfaceSecondary),
-    ]
+    private static func backgrounds(_ theme: PaletteTheme) -> [(String, ColorToken)] {
+        [
+            ("background", theme.background),
+            ("surface", theme.surface),
+            ("surfaceSecondary", theme.surfaceSecondary),
+        ]
+    }
 
-    private static let foregrounds: [(String, ColorToken)] = [
-        ("textPrimary", Palette.textPrimary),
-        ("textSecondary", Palette.textSecondary),
-        ("brand", Palette.brand),
-        ("success", Palette.success),
-        ("warning", Palette.warning),
-        ("danger", Palette.danger),
-        ("info", Palette.info),
-    ]
+    private static func foregrounds(_ theme: PaletteTheme) -> [(String, ColorToken)] {
+        [
+            ("textPrimary", theme.textPrimary),
+            ("textSecondary", theme.textSecondary),
+            ("brand", theme.brand),
+            ("success", theme.success),
+            ("warning", theme.warning),
+            ("danger", theme.danger),
+            ("info", theme.info),
+        ]
+    }
 
     /// A tone's strong color and the soft background it sits on.
     private struct SoftPair {
@@ -28,13 +34,27 @@ struct PaletteTests {
         let soft: ColorToken
     }
 
-    private static let softPairs = [
-        SoftPair(name: "brand", strong: Palette.brand, soft: Palette.brandSoft),
-        SoftPair(name: "success", strong: Palette.success, soft: Palette.successSoft),
-        SoftPair(name: "warning", strong: Palette.warning, soft: Palette.warningSoft),
-        SoftPair(name: "danger", strong: Palette.danger, soft: Palette.dangerSoft),
-        SoftPair(name: "info", strong: Palette.info, soft: Palette.infoSoft),
-    ]
+    private static func softPairs(_ theme: PaletteTheme) -> [SoftPair] {
+        [
+            SoftPair(name: "brand", strong: theme.brand, soft: theme.brandSoft),
+            SoftPair(name: "success", strong: theme.success, soft: theme.successSoft),
+            SoftPair(name: "warning", strong: theme.warning, soft: theme.warningSoft),
+            SoftPair(name: "danger", strong: theme.danger, soft: theme.dangerSoft),
+            SoftPair(name: "info", strong: theme.info, soft: theme.infoSoft),
+        ]
+    }
+
+    private func expectReadable(
+        _ text: ColorToken,
+        on background: ColorToken,
+        _ description: String,
+        theme: PaletteTheme,
+    ) {
+        let light = text.light.contrastRatio(with: background.light)
+        let dark = text.dark.contrastRatio(with: background.dark)
+        #expect(light >= Self.minimumTextContrast, "\(theme.name): \(description) (light) is \(light):1")
+        #expect(dark >= Self.minimumTextContrast, "\(theme.name): \(description) (dark) is \(dark):1")
+    }
 
     @Test
     func `controls on photos are readable on the media background`() {
@@ -61,55 +81,53 @@ struct PaletteTests {
         #expect(abs(RGB(hex: 0x767676).contrastRatio(with: white) - 4.54) < 0.01)
     }
 
-    @Test
-    func `every foreground is readable on every background in light and dark mode`() {
-        for (backgroundName, background) in Self.backgrounds {
-            for (foregroundName, foreground) in Self.foregrounds {
-                let light = foreground.light.contrastRatio(with: background.light)
-                let dark = foreground.dark.contrastRatio(with: background.dark)
-                #expect(
-                    light >= Self.minimumTextContrast,
-                    "\(foregroundName) on \(backgroundName) (light) is \(light):1",
-                )
-                #expect(
-                    dark >= Self.minimumTextContrast,
-                    "\(foregroundName) on \(backgroundName) (dark) is \(dark):1",
-                )
+    @Test(arguments: PaletteTheme.all)
+    func `every foreground is readable on every background in light and dark mode`(theme: PaletteTheme) {
+        for (backgroundName, background) in Self.backgrounds(theme) {
+            for (foregroundName, foreground) in Self.foregrounds(theme) {
+                expectReadable(foreground, on: background, "\(foregroundName) on \(backgroundName)", theme: theme)
             }
         }
     }
 
-    @Test
-    func `button labels are readable on the brand color`() {
-        #expect(Palette.onBrand.light.contrastRatio(with: Palette.brand.light) >= Self.minimumTextContrast)
-        #expect(Palette.onBrand.dark.contrastRatio(with: Palette.brand.dark) >= Self.minimumTextContrast)
+    @Test(arguments: PaletteTheme.all)
+    func `button labels are readable on the brand and danger colors`(theme: PaletteTheme) {
+        expectReadable(theme.onBrand, on: theme.brand, "onBrand on brand", theme: theme)
+        expectReadable(theme.onDanger, on: theme.danger, "onDanger on danger", theme: theme)
     }
 
-    @Test
-    func `badge and banner text is readable on its soft background`() {
-        for pair in Self.softPairs {
-            for (label, text) in [(pair.name, pair.strong), ("textPrimary", Palette.textPrimary)] {
-                let light = text.light.contrastRatio(with: pair.soft.light)
-                let dark = text.dark.contrastRatio(with: pair.soft.dark)
-                #expect(light >= Self.minimumTextContrast, "\(label) on \(pair.name)Soft (light) is \(light):1")
-                #expect(dark >= Self.minimumTextContrast, "\(label) on \(pair.name)Soft (dark) is \(dark):1")
-            }
+    @Test(arguments: PaletteTheme.all)
+    func `badge and banner text is readable on its soft background`(theme: PaletteTheme) {
+        for pair in Self.softPairs(theme) {
+            expectReadable(pair.strong, on: pair.soft, "\(pair.name) on \(pair.name)Soft", theme: theme)
+            expectReadable(theme.textPrimary, on: pair.soft, "textPrimary on \(pair.name)Soft", theme: theme)
         }
     }
 
-    @Test
-    func `destructive button labels are readable on the danger color`() {
-        #expect(Palette.onDanger.light.contrastRatio(with: Palette.danger.light) >= Self.minimumTextContrast)
-        #expect(Palette.onDanger.dark.contrastRatio(with: Palette.danger.dark) >= Self.minimumTextContrast)
+    @Test(arguments: PaletteTheme.all)
+    func `every token changes between light and dark mode`(theme: PaletteTheme) {
+        let soft = Self.softPairs(theme).map { ("\($0.name)Soft", $0.soft) }
+        let labels = [("onBrand", theme.onBrand), ("onDanger", theme.onDanger)]
+        for (name, token) in Self.backgrounds(theme) + Self.foregrounds(theme) + soft + labels {
+            #expect(token.light != token.dark, "\(theme.name): \(name) is the same in light and dark mode")
+        }
+    }
+
+    @Test(arguments: PaletteTheme.all)
+    func `the status colors and the brand look different from each other`(theme: PaletteTheme) {
+        let colors = [theme.brand, theme.success, theme.warning, theme.danger, theme.info, theme.textSecondary]
+        #expect(Set(colors.map { "\($0.light)" }).count == colors.count, "\(theme.name) (light)")
+        #expect(Set(colors.map { "\($0.dark)" }).count == colors.count, "\(theme.name) (dark)")
     }
 
     @Test
-    func `every token changes between light and dark mode`() {
-        let soft = Self.softPairs.map { ("\($0.name)Soft", $0.soft) }
-        let labels = [("onBrand", Palette.onBrand), ("onDanger", Palette.onDanger)]
-        for (name, token) in Self.backgrounds + Self.foregrounds + soft + labels {
-            #expect(token.light != token.dark, "\(name) is the same in light and dark mode")
+    func `themes are found by id, and the standard one is blush and plum`() {
+        #expect(PaletteTheme.all.map(\.id) == PaletteTheme.Key.allCases)
+        for id in PaletteTheme.Key.allCases {
+            #expect(PaletteTheme.with(id: id).id == id)
         }
+        #expect(PaletteTheme.standard.id == .blushPlum)
+        #expect(Palette.theme.id == .blushPlum)
     }
 }
 

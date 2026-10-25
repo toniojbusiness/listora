@@ -101,13 +101,20 @@ ios-e2e-ready:
 
 ## Screenshot every screen in light and dark mode, at the default and the largest text size, into
 ## IOS_SCREENSHOT_DIR/<variant>/ (ScreenshotTourUITests). It switches the simulator's appearance
-## and text size, then puts them back to light and the default size.
+## and text size, then puts them back to light and the default size. The review screens go
+## through the local stack, like `ios-test`. IOS_SCREENSHOT_TESTS narrows the tour, for example to
+## ListoraUITests/ScreenshotTourUITests/testReviewTour.
 IOS_SCREENSHOT_DIR ?= $(IOS_BUILD_DIR)/screenshots
+IOS_SCREENSHOT_TESTS ?= ListoraUITests/ScreenshotTourUITests
+# A palette theme to draw the app in (PaletteTheme.Key: blushPlum, sageSand, terracottaCream).
+IOS_SCREENSHOT_PALETTE ?= blushPlum
 IOS_SCREENSHOT_VARIANTS := light:large dark:large light:accessibility-extra-extra-extra-large \
 	dark:accessibility-extra-extra-extra-large
 
-ios-screenshots: ios-generate ios-simulator
+ios-screenshots: ios-generate ios-simulator ios-e2e-ready
 	$(XCODEBUILD) build-for-testing
+	@# Appearance and text size can only be set on a booted simulator.
+	xcrun simctl bootstatus "$(IOS_SIMULATOR)" -b >/dev/null
 	@trap 'xcrun simctl ui "$(IOS_SIMULATOR)" appearance light; xcrun simctl ui "$(IOS_SIMULATOR)" content_size large' EXIT; \
 	for variant in $(IOS_SCREENSHOT_VARIANTS); do \
 		appearance=$${variant%%:*}; size=$${variant#*:}; \
@@ -115,7 +122,8 @@ ios-screenshots: ios-generate ios-simulator
 		xcrun simctl ui "$(IOS_SIMULATOR)" content_size $$size && \
 		TEST_RUNNER_LISTORA_SCREENSHOT_DIR='$(IOS_SCREENSHOT_DIR)' \
 		TEST_RUNNER_LISTORA_SCREENSHOT_VARIANT="$$appearance-$$size" \
-			$(XCODEBUILD) test-without-building -only-testing:ListoraUITests/ScreenshotTourUITests \
+		TEST_RUNNER_LISTORA_SCREENSHOT_PALETTE='$(IOS_SCREENSHOT_PALETTE)' \
+			$(E2E_STACK) -- $(XCODEBUILD) test-without-building -only-testing:$(IOS_SCREENSHOT_TESTS) \
 			-test-timeouts-enabled YES -default-test-execution-time-allowance 900 -collect-test-diagnostics never \
 			|| exit 1; \
 	done

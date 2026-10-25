@@ -29,17 +29,20 @@ public enum SettingsDestination: Hashable, Sendable {
 public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
     private let content: SettingsContent
     private let devSignIn: DevSignInModel?
+    private let devPalette: Binding<PaletteTheme.Key>?
     private let marketplaces: Marketplaces?
     private let linkAccounts: LinkAccounts?
     /// The server's words for a connection that needs attention, shown on the Marketplaces row.
     private let marketplacesAttention: String?
     @Binding private var path: [SettingsDestination]
 
+    /// `devPalette`: Dev builds only, the palette theme the app draws in.
     public init(
         content: SettingsContent,
         devSignIn: DevSignInModel? = nil,
         path: Binding<[SettingsDestination]>,
         marketplacesAttention: String? = nil,
+        devPalette: Binding<PaletteTheme.Key>? = nil,
         @ViewBuilder marketplaces: () -> Marketplaces,
         @ViewBuilder linkAccounts: () -> LinkAccounts,
     ) {
@@ -47,6 +50,7 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
         self.devSignIn = devSignIn
         _path = path
         self.marketplacesAttention = marketplacesAttention
+        self.devPalette = devPalette
         self.marketplaces = marketplaces()
         self.linkAccounts = linkAccounts()
     }
@@ -102,6 +106,11 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
                     SectionHeader("About")
                 }
                 .listRowBackground(Palette.surface.color)
+                // Last, so the About rows stay where they were.
+                if let devPalette {
+                    DevPaletteSection(selection: devPalette)
+                        .listRowBackground(Palette.surface.color)
+                }
             }
             .scrollContentBackground(.hidden)
             .background(Palette.background)
@@ -148,6 +157,7 @@ extension SettingsView where Marketplaces == EmptyView, LinkAccounts == EmptyVie
     public init(content: SettingsContent, devSignIn: DevSignInModel? = nil) {
         self.content = content
         self.devSignIn = devSignIn
+        devPalette = nil
         marketplaces = nil
         linkAccounts = nil
         marketplacesAttention = nil

@@ -33,7 +33,10 @@ public struct RootView: View {
                 .badge(badgeCount(for: tab))
             }
         }
+        // A new palette theme (Dev) redraws every screen in it.
+        .id(dependencies.paletteSwitch?.selection)
         .tint(Palette.brand.color)
+        .solidBarEdges()
         .background { WindowTapCounter { [meter = dependencies.interactionMeter] in meter.recordTap() } }
         .onChange(of: scenePhase, initial: true) { _, phase in
             dependencies.interactionMeter.setAppActive(phase == .active)
@@ -87,6 +90,9 @@ public struct RootView: View {
                 devSignIn: dependencies.devSignIn,
                 path: $settingsPath,
                 marketplacesAttention: dependencies.marketplaces.attention == nil ? nil : "Needs attention",
+                devPalette: dependencies.paletteSwitch.map { palette in
+                    Binding(get: { palette.selection }, set: { palette.select($0) })
+                },
             ) {
                 MarketplacesView(model: dependencies.marketplaces)
             } linkAccounts: {

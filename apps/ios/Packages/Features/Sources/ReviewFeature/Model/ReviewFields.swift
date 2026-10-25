@@ -59,6 +59,13 @@ enum ReviewFieldKey: String, CaseIterable, Hashable, Sendable {
         }
     }
 
+    /// The title inside a sentence ("Add size type", "Add UPC"): lowercased, except a leading
+    /// acronym such as UPC or RN.
+    var inlineTitle: String {
+        let first = title.prefix { $0 != " " }
+        return first.count > 1 && first.allSatisfy(\.isUppercase) ? title : title.lowercased()
+    }
+
     var kind: Kind {
         switch self {
         case .description, .conditionNotes: .multiline

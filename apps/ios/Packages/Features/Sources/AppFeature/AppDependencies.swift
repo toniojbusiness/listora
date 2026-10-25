@@ -1,6 +1,7 @@
 import AddItemFeature
 import APIClient
 import Core
+import DesignSystem
 import Foundation
 import InventoryFeature
 import MarketplaceLinkingFeature
@@ -38,6 +39,8 @@ public struct AppDependencies {
     public let tasks: TasksEnvironment
     /// Dev builds only: sign in against the local API's dev auth driver.
     public let devSignIn: DevSignInModel?
+    /// Dev builds only: switch between the candidate palette themes.
+    public let paletteSwitch: PaletteSwitch?
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
     public let marketplaces: MarketplacesModel
     /// Link accounts: sign in on Poshmark, Mercari, and Depop for Listora to automate them.
@@ -58,6 +61,10 @@ public struct AppDependencies {
         #endif
         self.configuration = configuration
         self.version = version
+        // First, so every view draws in the chosen theme.
+        paletteSwitch = configuration.environment == .dev
+            ? PaletteSwitch(defaults: defaults, launchChoice: launchOptions.paletteTheme)
+            : nil
         let accessGrantStorage = accessGrantStorage
             ?? KeychainAccessGrantStorage.session(appGroup: configuration.appGroupIdentifier)
         let interactionStorage = UserDefaultsInteractionStorage(defaults: defaults)
@@ -175,6 +182,9 @@ public struct DebugLaunchOptions: Equatable, Sendable {
     /// `LISTORA_DEV_ACCESS_TOKEN=<token>` (with `LISTORA_DEV_ACCESS_EMAIL`): start signed in with
     /// this session, which the UI tests' local stack signed in through the dev auth driver (Dev only).
     public var accessGrant: AccessGrant?
+    /// `LISTORA_PALETTE=<id>` (`blushPlum`, `sageSand`, `terracottaCream`): draw in this palette
+    /// theme (Dev only; ``PaletteSwitch``).
+    public var paletteTheme: PaletteTheme.Key?
 
     public static let none = DebugLaunchOptions()
 
@@ -184,7 +194,9 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         fakeCameraDirectory: URL? = nil,
         apiBaseURL: URL? = nil,
         accessGrant: AccessGrant? = nil,
+        paletteTheme: PaletteTheme.Key? = nil,
     ) {
+        self.paletteTheme = paletteTheme
         self.resetLocalData = resetLocalData
         self.fixturePhotosDirectory = fixturePhotosDirectory
         self.fakeCameraDirectory = fakeCameraDirectory
@@ -221,6 +233,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
                     email: environment["LISTORA_DEV_ACCESS_EMAIL"] ?? "ui-test@listora.test",
                 )
             },
+            paletteTheme: environment["LISTORA_PALETTE"].flatMap(PaletteTheme.Key.init(rawValue:)),
         )
     }
 }
