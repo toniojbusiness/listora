@@ -41,7 +41,7 @@ final class AssistedTasksUITests: XCTestCase {
         // confirmed".
         XCTAssertTrue(waitForAbsence(of: row, timeout: 15), "the done task is still in the inbox")
         keepScreenshot("Task done")
-        app.tabBars.buttons["Inventory"].tap()
+        showItem(sku: item.sku, status: status)
         XCTAssertTrue(waitForLabel(of: status, "Done (you confirmed)", timeout: 20), status.label)
         XCTAssertFalse(status.label.localizedCaseInsensitiveContains("confirmed by"))
 
@@ -81,6 +81,23 @@ final class AssistedTasksUITests: XCTestCase {
         let status = app.descendants(matching: .any)["marketplace.poshmark.status"]
         XCTAssertTrue(waitForLabel(of: status, "Not listed", timeout: 15), status.label)
         return status
+    }
+
+    /// Back to the item screen in the Inventory tab. On CI a tap on the tab once did not switch
+    /// tabs while the done task's confirmation was still on screen, so the tab is tapped until it
+    /// is selected, and the item opened from the list if the tab is back at its list.
+    private func showItem(sku: String, status: XCUIElement) {
+        let inventory = app.tabBars.buttons["Inventory"]
+        for _ in 0 ..< 3 where !inventory.isSelected {
+            inventory.tap()
+            _ = status.waitForExistence(timeout: 2)
+        }
+        XCTAssertTrue(inventory.isSelected, "the Inventory tab did not open")
+        guard !status.waitForExistence(timeout: 3) else { return }
+        let row = app.buttons["inventory.row.\(sku)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15), "the item is not in the inventory")
+        row.tap()
+        XCTAssertTrue(status.waitForExistence(timeout: 15), "the item screen did not open")
     }
 
     /// List on the Poshmark row: Poshmark is chosen, its version reviewed, and a task created.
