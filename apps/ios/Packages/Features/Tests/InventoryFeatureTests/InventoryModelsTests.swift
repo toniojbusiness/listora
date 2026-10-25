@@ -97,10 +97,14 @@ struct InventoryModelsTests {
             listingCopy: store,
         )
         await fromAnalysis.prepare()
+        #expect(fromAnalysis.selected == ["ebay"])
+        // eBay through its API; the others assisted, through a task.
+        #expect(fromAnalysis.choices.filter(\.isAvailable).map(\.id) == ["ebay", "depop", "poshmark", "mercari"])
+        #expect(fromAnalysis.choices.filter(\.isAssisted).map(\.id) == ["depop", "poshmark", "mercari"])
+        await fromAnalysis.next()
         #expect(fromAnalysis.title == "Analysis title")
         #expect(fromAnalysis.price == "45")
-        #expect(fromAnalysis.selected == ["ebay"])
-        #expect(fromAnalysis.choices.filter(\.isAvailable).map(\.id) == ["ebay"])
+        #expect(fromAnalysis.sendTitle == "Publish to eBay")
 
         try store.save(
             ListingCopy(title: "My title", description: "Mine."),
@@ -113,6 +117,7 @@ struct InventoryModelsTests {
             listingCopy: store,
         )
         await fromEdit.prepare()
+        await fromEdit.next()
         #expect(fromEdit.title == "My title")
 
         let plain = ListingFlowModel(
@@ -121,6 +126,7 @@ struct InventoryModelsTests {
             listingCopy: ListingCopyStore(directory: directory.appending(path: "x")),
         )
         await plain.prepare()
+        await plain.next()
         #expect(plain.title == "Levi's Trucker Denim Jacket")
     }
 
@@ -130,7 +136,7 @@ struct InventoryModelsTests {
         let store = ListingCopyStore(directory: URL.temporaryDirectory.appending(path: UUID().uuidString))
         let model = ListingFlowModel(item: Fixtures.item(), service: service, listingCopy: store)
         await model.prepare()
-        model.next()
+        await model.next()
         #expect(model.step == .review)
 
         model.title = String(repeating: "A", count: 81)
@@ -155,6 +161,62 @@ struct InventoryModelsTests {
         #expect(Set(service.requests.map(\.1)).count == 2)
         #expect(service.variantsSent.last?.price.amountCents == 4500)
         #expect(service.variantsSent.last?.condition == .preOwnedExcellent)
+    }
+
+    @Test
+    func `lists on an assisted marketplace through a task, after eBay, each reviewed in turn`() async {
+        let service = FakeInventoryService()
+        let store = ListingCopyStore(directory: URL.temporaryDirectory.appending(path: UUID().uuidString))
+        try? store.save(
+            ListingCopy(title: "Posh title", description: "Posh copy."),
+            marketplace: "poshmark",
+            itemID: Fixtures.itemID,
+        )
+        let model = ListingFlowModel(
+            item: Fixtures.item(),
+            service: service,
+            listingCopy: store,
+            marketplace: "poshmark",
+        )
+        await model.prepare()
+        #expect(model.selected == ["poshmark"])
+        model.selected.insert("ebay")
+        await model.next()
+
+        #expect(model.queue.map(\.id) == ["ebay", "poshmark"])
+        #expect(model.current?.id == "ebay")
+        #expect(model.titleLimit == 80)
+        #expect(await model.publish() == false)
+        #expect(model.step == .review)
+        #expect(model.current?.id == "poshmark")
+        #expect(model.sendTitle == "Create Poshmark task")
+        #expect(model.titleLimit == nil)
+        #expect(model.title == "Posh title")
+
+        model.title = String(repeating: "A", count: 120)
+        #expect(await model.publish())
+        #expect(service.createdOn == ["ebay", "poshmark"])
+        #expect(service.calls == ["create", "perform", "create", "perform"])
+    }
+
+    @Test
+    func `does not offer a marketplace the item is already on, or eBay without its connection`() async {
+        let service = FakeInventoryService()
+        service.connectionList = []
+        var posh = Fixtures.listing(label: "Done (you confirmed)", actions: [.end])
+        posh.marketplace = Fixtures.marketplace(.poshmark)
+        let model = ListingFlowModel(
+            item: Fixtures.item(listings: [posh]),
+            service: service,
+            listingCopy: ListingCopyStore(directory: URL.temporaryDirectory.appending(path: UUID().uuidString)),
+        )
+        await model.prepare()
+        #expect(model.choices.filter(\.isAvailable).map(\.id) == ["depop", "mercari"])
+        #expect(model.choices.first { $0.id == "ebay" }?.detail == "Connect eBay in Settings > Marketplaces first")
+        #expect(model.choices.first { $0.id == "poshmark" }?
+            .detail == "Already on Poshmark. Change it from the item screen.")
+        #expect(model.selected.isEmpty)
+        #expect(!model.canContinue)
     }
 }
 

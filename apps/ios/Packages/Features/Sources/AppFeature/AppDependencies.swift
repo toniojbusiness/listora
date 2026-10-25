@@ -8,6 +8,7 @@ import ReviewFeature
 import SettingsFeature
 import SwiftUI
 import TagReadingFeature
+import TasksFeature
 
 /// Everything the app's features need, built once at launch.
 @MainActor
@@ -29,6 +30,8 @@ public struct AppDependencies {
     public let addItem: AddItemEnvironment
     /// The inventory, item, and listing screens.
     public let inventory: InventoryEnvironment
+    /// The task inbox, its badge, and the urgent tasks' reminders.
+    public let tasks: TasksEnvironment
     /// Dev builds only: sign in against the local API's dev auth driver.
     public let devSignIn: DevSignInModel?
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
@@ -53,11 +56,7 @@ public struct AppDependencies {
             ?? KeychainAccessGrantStorage.session(appGroup: configuration.appGroupIdentifier)
         let interactionStorage = UserDefaultsInteractionStorage(defaults: defaults)
         if launchOptions.resetLocalData {
-            try? FileManager.default.removeItem(at: dataDirectory)
-            try? FileManager.default.removeItem(at: listingCopyDirectory)
-            interactionStorage.reset()
-            ReviewEnvironment.resetLocalData(defaults: defaults)
-            accessGrantStorage.save(nil)
+            Self.resetLocalData([dataDirectory, listingCopyDirectory], interactionStorage, defaults, accessGrantStorage)
         }
         let accessTokens = AccessTokenStore(storage: accessGrantStorage)
         if let grant = launchOptions.accessGrant, configuration.environment == .dev {
@@ -70,13 +69,14 @@ public struct AppDependencies {
         let meter = InteractionMeter(storage: interactionStorage)
         interactionMeter = meter
         let listingCopy = ListingCopyStore(directory: listingCopyDirectory)
-        let review = ReviewEnvironment(
+        let review = ReviewEnvironment(apiClient: apiClient, meter: meter, listingCopy: listingCopy, defaults: defaults)
+        tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens)
+        inventory = InventoryEnvironment(
             apiClient: apiClient,
-            meter: meter,
+            accessTokens: accessTokens,
             listingCopy: listingCopy,
-            defaults: defaults,
+            taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
         )
-        inventory = InventoryEnvironment(apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy)
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory,
@@ -96,12 +96,29 @@ public struct AppDependencies {
             : nil
     }
 
+    /// `LISTORA_RESET_LOCAL_DATA`: no drafts, no saved copy or interaction times, signed out.
+    private static func resetLocalData(
+        _ directories: [URL],
+        _ interactionStorage: UserDefaultsInteractionStorage,
+        _ defaults: UserDefaults,
+        _ accessGrantStorage: any AccessGrantStorage,
+    ) {
+        for directory in directories {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        interactionStorage.reset()
+        ReviewEnvironment.resetLocalData(defaults: defaults)
+        accessGrantStorage.save(nil)
+    }
+
     /// The background URLSession that photo uploads use; the app scene handles its events.
     public static let backgroundUploadSessionIdentifier = AddItemEnvironment.backgroundSessionIdentifier
 
-    /// Starts work that runs whether or not a screen is visible: the photo upload queue.
+    /// Starts work that runs whether or not a screen is visible: the photo upload queue, and
+    /// opening the Tasks tab from a tapped task reminder.
     public func startBackgroundWork() {
         addItem.start()
+        tasks.startNotifications()
     }
 
     /// Call when the system wakes the app for the upload session's events.

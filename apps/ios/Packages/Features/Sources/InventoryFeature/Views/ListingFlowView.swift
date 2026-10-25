@@ -70,16 +70,23 @@ struct ListingFlowView: View {
                 ProgressView()
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            Button("Review eBay listing") { model.next() }
-                .buttonStyle(.listoraPrimary)
-                .disabled(!model.canContinue)
-                .padding(Spacing.md)
-                .background(Palette.background)
-                .accessibilityIdentifier("listing.next")
+        .bottomActionBar {
+            Button(model.selected.count > 1 ? "Review \(model.selected.count) listings" : "Review listing") {
+                Task { await model.next() }
+            }
+            .buttonStyle(.listoraPrimary)
+            .disabled(!model.canContinue)
+            .accessibilityIdentifier("listing.next")
         }
         .navigationTitle("List on")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// "eBay listing", or "Poshmark listing (2 of 2)" when several are reviewed in turn.
+    private var reviewTitle: String {
+        let name = model.current?.name ?? "Listing"
+        guard model.queue.count > 1 else { return "\(name) listing" }
+        return "\(name) listing (\(model.position + 1) of \(model.queue.count))"
     }
 
     private var review: some View {
@@ -88,13 +95,24 @@ struct ListingFlowView: View {
                 TextField("Title", text: $model.title, axis: .vertical)
                     .font(Typography.body)
                     .accessibilityIdentifier("listing.title")
-                Text("\(model.titleCount) of \(ListingFlowModel.ebayTitleLimit) characters")
-                    .font(Typography.caption)
-                    .foregroundStyle(model.titleCount > ListingFlowModel.ebayTitleLimit ? Palette.danger : Palette
-                        .textSecondary)
-                    .accessibilityIdentifier("listing.titleCount")
+                if let limit = model.titleLimit {
+                    Text("\(model.titleCount) of \(limit) characters")
+                        .font(Typography.caption)
+                        .foregroundStyle(model.titleCount > limit ? Palette.danger : Palette.textSecondary)
+                        .accessibilityIdentifier("listing.titleCount")
+                }
             } header: {
                 Text("Title")
+            } footer: {
+                if let current = model.current, current.isAssisted {
+                    Text(
+                        "Listora puts this in a task in the Tasks tab, with the photos in order and a link to "
+                            + "\(current.name). You post it in the \(current.name) app, then tap Done.",
+                    )
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("listing.assistedNote")
+                }
             }
             .listRowBackground(Palette.surface.color)
             Section("Description") {
@@ -125,33 +143,25 @@ struct ListingFlowView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .safeAreaInset(edge: .bottom) {
-            Button {
+        .bottomActionBar {
+            Button(model.sendTitle) {
                 Task {
                     if await model.publish() {
                         onDone()
                     }
                 }
-            } label: {
-                HStack(spacing: Spacing.xs) {
-                    if model.isPublishing {
-                        ProgressView().tint(Palette.onBrand.color)
-                    }
-                    Text(model.isPublishing ? "Publishing..." : "Publish to eBay")
-                }
             }
             .buttonStyle(.listoraPrimary)
-            .disabled(model.isPublishing)
-            .padding(Spacing.md)
-            .background(Palette.background)
+            .loading(model.isPublishing)
             .accessibilityIdentifier("listing.publish")
         }
-        .navigationTitle("eBay listing")
+        .navigationTitle(reviewTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
+                // Once one marketplace is sent, the rest follow in turn.
                 Button("Back") { model.back() }
-                    .disabled(model.isPublishing)
+                    .disabled(model.isPublishing || model.position > 0)
             }
         }
     }

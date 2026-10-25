@@ -171,8 +171,10 @@ export function actionsForState(state: ListingState): KnownListingAction[] {
 
 /**
  * The actions the user can take now, each in the mode the marketplace's capabilities give it
- * under the listing's connection. Only API actions for now: assisted ones join with the task
- * inbox that lets the user finish them (T-21).
+ * under the listing's connection: `api` (Listora does it and reads it back) or `assisted` (the
+ * action creates a task in the user's task inbox, and only their confirmation finishes it).
+ * An action the marketplace cannot do in either mode, such as checking an assisted listing, is
+ * not offered.
  */
 export function availableActions(
   state: ListingState,
@@ -184,9 +186,10 @@ export function availableActions(
       : { id: state.row.connection_id, mode: state.row.connection_mode };
   const capabilities = context.adapters.capabilities(state.row.marketplace, connection);
   if (capabilities === undefined) return [];
-  return actionsForState(state).flatMap((action) =>
-    operationMode(capabilities, ACTION_KIND[action]) === 'api' ? [{ action, mode: 'api' }] : [],
-  );
+  return actionsForState(state).flatMap((action) => {
+    const mode = operationMode(capabilities, ACTION_KIND[action]);
+    return mode === 'unsupported' ? [] : [{ action, mode }];
+  });
 }
 
 /** The listing's variant as the contract shows it; absent for a listing Listora never wrote. */

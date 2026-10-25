@@ -11,6 +11,16 @@ struct ItemDetailView: View {
     @State private var listingFlow: ListingFlowModel?
     @State private var priceChange: PriceChange?
     @State private var ending: MarketplaceRowState?
+    @State private var openTask: OpenTask?
+
+    /// The assisted step whose task is open.
+    private struct OpenTask: Identifiable {
+        let operationID: String
+
+        var id: String {
+            operationID
+        }
+    }
 
     init(environment: InventoryEnvironment, itemID: String) {
         self.environment = environment
@@ -32,6 +42,11 @@ struct ItemDetailView: View {
                 onDismiss: { Task { await model.refresh() } },
                 content: { flow in ListingFlowView(model: flow) { listingFlow = nil } },
             )
+            .sheet(item: $openTask, onDismiss: { Task { await model.refresh() } }, content: { task in
+                if let destination = environment.taskDestination {
+                    destination(model.itemID, task.operationID) { openTask = nil }
+                }
+            })
             .sheet(item: $priceChange) { change in
                 PriceChangeView(change: change) { price in
                     priceChange = nil
@@ -59,7 +74,11 @@ struct ItemDetailView: View {
                 }
                 Button("Keep it listed", role: .cancel) {}
             } message: { row in
-                Text("Listora ends it on \(row.name) and shows it as delisted once \(row.name) confirms.")
+                if row.listing?.mode.value1 == .api {
+                    Text("Listora ends it on \(row.name) and shows it as delisted once \(row.name) confirms.")
+                } else {
+                    Text("You end it in the \(row.name) app: Listora adds a task with a link to the listing.")
+                }
             }
     }
 
@@ -111,7 +130,7 @@ struct ItemDetailView: View {
         switch action {
         case .list:
             guard let item = model.item else { return }
-            listingFlow = environment.makeListingFlow(item: item)
+            listingFlow = environment.makeListingFlow(item: item, marketplace: row.id)
         case .changePrice:
             guard let listing = row.listing else { return }
             priceChange = PriceChange(
@@ -122,14 +141,16 @@ struct ItemDetailView: View {
             )
         case .end:
             ending = row
-        case .relist:
+        case .relist, .check:
             guard let listing = row.listing else { return }
-            Task { await model.perform(.relist(listingID: listing.id), marketplace: row.id) }
-        case .check:
-            guard let listing = row.listing else { return }
-            Task { await model.perform(.verify(listingID: listing.id), marketplace: row.id) }
+            let request: ListingRequest = action == .relist
+                ? .relist(listingID: listing.id)
+                : .verify(listingID: listing.id)
+            Task { await model.perform(request, marketplace: row.id) }
         case let .retry(operationID):
             Task { await model.retry(operationID: operationID, marketplace: row.id) }
+        case let .openTask(operationID):
+            openTask = OpenTask(operationID: operationID)
         }
     }
 

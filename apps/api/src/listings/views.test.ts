@@ -176,7 +176,7 @@ describe('listing views', () => {
     }
   });
 
-  it('offers API actions under an API connection, and none for an assisted listing yet', () => {
+  it('offers API actions under an API connection, and assisted ones without a check otherwise', () => {
     const ebay = view(row({ status: 'active', connection_id: 'c', connection_mode: 'api' }));
     expect(ebay.availableActions).toEqual([
       { action: 'change_price', mode: 'api' },
@@ -184,7 +184,15 @@ describe('listing views', () => {
       { action: 'end', mode: 'api' },
       { action: 'verify', mode: 'api' },
     ]);
-    expect(view(row({ marketplace: 'poshmark', status: 'active' })).availableActions).toEqual([]);
+    // Listora cannot read an assisted listing, so it never offers to check one.
+    expect(view(row({ marketplace: 'poshmark', status: 'active' })).availableActions).toEqual([
+      { action: 'change_price', mode: 'assisted' },
+      { action: 'revise', mode: 'assisted' },
+      { action: 'end', mode: 'assisted' },
+    ]);
+    expect(view(row({ marketplace: 'mercari', status: 'ended' })).availableActions).toEqual([
+      { action: 'relist', mode: 'assisted' },
+    ]);
   });
 
   it('includes the newest operation with its own label', () => {

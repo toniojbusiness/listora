@@ -27,7 +27,7 @@ final class TabShellUITests: XCTestCase {
         XCTAssertTrue(tabBar.waitForExistence(timeout: 10))
         let expected: [(tab: String, text: String)] = [
             ("Add Item", "Take photos once"),
-            ("Tasks", "You're all caught up"),
+            ("Tasks", "Sign in to see your tasks"),
             ("Settings", "Environment"),
             ("Inventory", "Sign in to see your inventory"),
         ]
