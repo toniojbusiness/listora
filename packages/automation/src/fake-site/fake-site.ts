@@ -28,6 +28,16 @@ import type { AddressInfo } from 'node:net';
 
 import type { SessionCookie } from '@listora/connections';
 
+import {
+  cookieValue,
+  delay,
+  escape,
+  readForm,
+  redirect,
+  type Reply,
+  type SubmittedForm,
+} from './http.ts';
+
 export type FakeSiteAction =
   'create' | 'update' | 'end' | 'relist' | 'read' | 'search' | 'health' | 'orders' | 'form';
 
@@ -383,13 +393,7 @@ export class FakeAutomationSite {
     }
     if (fault?.type === 'slow') {
       const early = fault.afterApply ? apply() : undefined;
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(() => {
-          this.#timers.delete(timer);
-          resolve();
-        }, fault.delayMs);
-        this.#timers.add(timer);
-      });
+      await delay(fault.delayMs, this.#timers);
       return early ?? apply();
     }
     return apply();
@@ -573,63 +577,6 @@ function matchRoute(method: string, path: string): Route | null {
   return null;
 }
 
-interface Reply {
-  status: number;
-  headers?: Record<string, string>;
-  body?: string;
-}
-
-function redirect(location: string): Reply {
-  return { status: 303, headers: { location } };
-}
-
-/** A submitted form: its text fields, and how many bytes each file field brought. */
-interface SubmittedForm {
-  text(name: string): string;
-  /** The sizes of the non-empty files sent in `name`. */
-  files(name: string): number[];
-}
-
-async function readForm(request: IncomingMessage): Promise<SubmittedForm> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of request) chunks.push(chunk as Buffer);
-  const body = Buffer.concat(chunks);
-  const type = request.headers['content-type'] ?? '';
-  const boundary = /^multipart\/form-data;.*boundary=("?)([^";]+)\1/i.exec(type)?.[2];
-  const fields = new Map<string, string>();
-  const files = new Map<string, number[]>();
-  if (boundary === undefined) {
-    for (const [name, value] of new URLSearchParams(body.toString('utf8'))) fields.set(name, value);
-  } else {
-    // The parts between the boundary lines: headers, a blank line, then the content.
-    const delimiter = Buffer.from(`--${boundary}`);
-    let start = body.indexOf(delimiter);
-    while (start !== -1) {
-      const next = body.indexOf(delimiter, start + delimiter.length);
-      if (next === -1) break;
-      const part = body.subarray(start + delimiter.length + 2, next - 2);
-      const split = part.indexOf('\r\n\r\n');
-      if (split !== -1) {
-        const headers = part.subarray(0, split).toString('utf8');
-        const content = part.subarray(split + 4);
-        const name = /name="([^"]*)"/.exec(headers)?.[1];
-        if (name !== undefined) {
-          if (headers.includes('filename="')) {
-            if (content.length > 0) files.set(name, [...(files.get(name) ?? []), content.length]);
-          } else {
-            fields.set(name, content.toString('utf8'));
-          }
-        }
-      }
-      start = next;
-    }
-  }
-  return {
-    text: (name) => fields.get(name)?.trim() ?? '',
-    files: (name) => files.get(name) ?? [],
-  };
-}
-
 function listingFields(form: SubmittedForm | null): ListingFields {
   const text = (name: string): string => form?.text(name) ?? '';
   const dollars = Number(text('price'));
@@ -697,21 +644,4 @@ function listingPage(listing: FakeSiteListing): string {
 <span data-field="photos" data-count="${String(listing.photoCount)}"></span>
 ${actions}
 </article>`;
-}
-
-function escape(text: string): string {
-  return text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function cookieValue(header: string | undefined, name: string): string | undefined {
-  for (const part of (header ?? '').split(';')) {
-    const [key, ...rest] = part.trim().split('=');
-    if (key === name) return rest.join('=');
-  }
-  return undefined;
 }

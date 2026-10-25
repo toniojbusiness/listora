@@ -67,7 +67,19 @@ export type {
   PacingSettings,
   RunLimits,
 } from './profiles.ts';
+export { createPoshmarkAutomationAdapter } from './poshmark/adapter.ts';
+export type { PoshmarkAdapterOptions } from './poshmark/adapter.ts';
+export { FakePoshmark } from './poshmark/fake/fake-poshmark.ts';
+export type {
+  FakePoshmarkAction,
+  FakePoshmarkFault,
+  FakePoshmarkFaultRule,
+  FakePoshmarkListing,
+  FakePoshmarkOptions,
+} from './poshmark/fake/fake-poshmark.ts';
+export type { PoshmarkListingPayload } from './poshmark/payload.ts';
 export { PlaywrightBrowserRunner } from './runner/browser-runner.ts';
+export { PageChangedError } from './runner/errors.ts';
 export type { PlaywrightBrowserRunnerOptions } from './runner/browser-runner.ts';
 export { DEFAULT_BROWSERS_PATH, loadChromium } from './runner/playwright.ts';
 export {

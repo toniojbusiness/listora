@@ -1,0 +1,23 @@
+{
+  "withoutPhotos": [
+    {
+      "field": "item.photos",
+      "code": "required",
+      "message": "Poshmark needs at least one photo."
+    }
+  ],
+  "freeOfCharge": [
+    {
+      "field": "variant.price",
+      "code": "out_of_range",
+      "message": "Poshmark needs a price above $0."
+    }
+  ],
+  "longestTitle": [
+    {
+      "field": "variant.title",
+      "code": "too_long",
+      "message": "Poshmark titles can be at most 80 characters."
+    }
+  ]
+}

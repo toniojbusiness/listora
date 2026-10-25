@@ -49,7 +49,9 @@ To watch browser automation (decision D1,
 [docs/features/automation.md](docs/features/automation.md)), set `FAKE_AUTOMATION_SITE_URL` and
 start `npm run dev:fake-site`: Poshmark, Mercari, and Depop connections that hold a linked
 session are then automated against that local site, and the worker starts the browser runner
-as a child process whenever automated work waits.
+as a child process whenever automated work waits. To watch the Poshmark adapter itself, also
+set `FAKE_POSHMARK_URL` and start `npm run dev:fake-poshmark`
+([docs/features/poshmark.md](docs/features/poshmark.md)).
 
 ### Signing in locally
 
@@ -87,6 +89,7 @@ has the steps.
 | `npm run ebay:sandbox-check`   | Run the eBay adapter end to end against eBay's sandbox; fails with what to set when keys are missing                                             |
 | `npm run e2e:stack`            | Start the local end-to-end stack (API, worker, fakes, scratch database, signed-in user); `make ios-test` runs the iOS tests inside it            |
 | `npm run dev:fake-site`        | Run the fake marketplace site at `FAKE_AUTOMATION_SITE_URL`, which browser automation drives in development                                      |
+| `npm run dev:fake-poshmark`    | Run the fake Poshmark at `FAKE_POSHMARK_URL`, which the Poshmark automation adapter drives in development                                        |
 | `npm run dev:runner`           | Run the browser runner by hand (the worker starts it on demand otherwise)                                                                        |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
 | `npm run admin -- --help`      | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail)                                   |
@@ -129,7 +132,7 @@ packages/storage/       Object storage drivers: local disk (.local/storage) and 
 packages/photos/        Image pipeline: derivatives, metadata stripping, hashes, processing job (@listora/photos)
 packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay and Depop adapters, eBay's connect client, the fake marketplace, fake eBay, and fake Depop (@listora/marketplaces)
 packages/connections/   Marketplace connections: OAuth connect, token vault, browser session vault, credentials, health (@listora/connections)
-packages/automation/    Browser automation: Playwright runner, safety rules, automation adapter base, sale checks, fake site (@listora/automation)
+packages/automation/    Browser automation: Playwright runner, safety rules, automation adapter base, the Poshmark adapter, sale checks, fake site, fake Poshmark (@listora/automation)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker metrics job (@listora/observability)
 packages/sales/         Sale intake, eBay notifications, the order poll, eBay account deletion (@listora/sales)

@@ -48,7 +48,10 @@ export interface WorkerConfig {
   cognitoUserPool: { region: string; userPoolId: string } | undefined;
   /** Thresholds of the hourly AI spend check; the daily budget is the guard's own. */
   aiAlerts: AiAlertThresholds;
-  /** AUTOMATION_*, SALE_CHECK_*, FAKE_AUTOMATION_SITE_URL: which marketplaces are automated. */
+  /**
+   * AUTOMATION_*, SALE_CHECK_*, FAKE_AUTOMATION_SITE_URL, FAKE_POSHMARK_URL: which marketplaces
+   * are automated, and where.
+   */
   automation: AutomationSettings;
   /** BROWSER_RUNNER_*: how the worker starts the browser runner when automated work waits. */
   runnerLaunch: RunnerLaunchConfig;

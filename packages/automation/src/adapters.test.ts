@@ -42,20 +42,37 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
     expect(adapters.capabilities('depop', api)?.verifyRead).toBe('api');
   });
 
-  it('builds none without the fake site, until each marketplace has its own adapter', () => {
-    const automation = createAutomationAdapters({
-      settings: loadAutomationSettings({}),
-      sessions: NoBrowserSessions,
-      photos: new HttpPhotoSource(),
-      logger: createLogger({ service: 'test', level: 'silent' }),
+  it('automates Poshmark on poshmark.com in production, and never a real site in development', () => {
+    const logger = createLogger({ service: 'test', level: 'silent' });
+    const build = (env: NodeJS.ProcessEnv) =>
+      createMarketplaceAdapters({
+        fakeMarketplaceUrl: undefined,
+        ebay: undefined,
+        depop: undefined,
+        automation: createAutomationAdapters({
+          settings: loadAutomationSettings(env),
+          sessions: NoBrowserSessions,
+          photos: new HttpPhotoSource(),
+          logger,
+        }),
+      });
+    // Production: Poshmark's own adapter; Mercari and Depop wait for theirs.
+    const production = build({});
+    expect(production.capabilities('poshmark', automated)).toMatchObject({
+      create: 'automation',
+      delist: 'automation',
+      relist: 'automation',
+      markSold: 'not_needed',
+      verifyRead: 'automation',
+      readFreshness: 'revision',
+      saleDetection: ['poll', 'email', 'manual'],
     });
-    expect(automation).toEqual({});
-    const adapters = createMarketplaceAdapters({
-      fakeMarketplaceUrl: undefined,
-      ebay: undefined,
-      depop: undefined,
-      automation,
-    });
-    expect(adapters.capabilities('poshmark', automated)?.create).toBe('assisted');
+    expect(production.capabilities('poshmark', null)?.create).toBe('assisted');
+    for (const marketplace of ['mercari', 'depop'] as const) {
+      expect(production.capabilities(marketplace, automated)?.create, marketplace).toBe('assisted');
+    }
+    // The fake Poshmark serves the same adapter in development.
+    const development = build({ FAKE_POSHMARK_URL: 'http://127.0.0.1:4500' });
+    expect(development.capabilities('poshmark', automated)?.readFreshness).toBe('revision');
   });
 });

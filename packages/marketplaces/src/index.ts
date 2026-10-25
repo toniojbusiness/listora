@@ -15,6 +15,8 @@ export type {
   Outcome,
   RemoteListingState,
   RemoteListingStatus,
+  RemoteListing,
+  RemoteListings,
   RemoteOrder,
   RemoteOrderItem,
   UserTaskSpec,
