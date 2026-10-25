@@ -65,24 +65,7 @@ struct ReviewFormView: View {
         let isAttention = section == .attention
         let shape = RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
         return VStack(alignment: .leading, spacing: Spacing.sm) {
-            if isAttention {
-                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Label {
-                        Text("\(section.title) (\(keys.count))")
-                            .accessibilityIdentifier("review.section.attention")
-                    } icon: {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.warning)
-                    }
-                    .font(Typography.title3)
-                    .foregroundStyle(Palette.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                    Text("Listora is less sure about these, or they're missing. Fix them and the rest is done.")
-                        .font(Typography.footnote)
-                        .foregroundStyle(Palette.textSecondary)
-                }
-            } else {
-                SectionHeader(section.title)
-            }
+            sectionHeader(section, count: keys.count)
             VStack(spacing: 0) {
                 ForEach(Array(keys.enumerated()), id: \.element) { index, key in
                     if index > 0 {
@@ -115,6 +98,29 @@ struct ReviewFormView: View {
             .overlay(
                 shape.strokeBorder(isAttention ? Palette.warning : Palette.separator, lineWidth: isAttention ? 1.5 : 1),
             )
+        }
+    }
+
+    /// "Check these (2)" with what it means, or the section's small-capitals title.
+    @ViewBuilder
+    private func sectionHeader(_ section: ReviewSection, count: Int) -> some View {
+        if section == .attention {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Label {
+                    Text("\(section.title) (\(count))")
+                        .accessibilityIdentifier("review.section.attention")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.warning)
+                }
+                .font(Typography.title3)
+                .foregroundStyle(Palette.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+                Text("Listora is less sure about these, or they're missing. Fix them and the rest is done.")
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        } else {
+            SectionHeader(section.title)
         }
     }
 
