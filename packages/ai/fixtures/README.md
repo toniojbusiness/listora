@@ -6,7 +6,11 @@
 of each uploaded photo, sorted so the display order does not change it (`itemPhotoSet()` in
 `@listora/photos` computes it).
 It is not a hash of the image bytes in the request, which are usually the smaller `ai`
-derivatives. Point `AI_FAKE_FIXTURES_DIR` at another directory to use a different set.
+derivatives. Point `AI_FAKE_FIXTURES_DIR` at another directory to use a different set. A
+`default.json` in that directory, when present, answers every photo set that has no file of its
+own; end-to-end runs use it because their photo sets are not known in advance (the iOS UI tests'
+directory is `apps/ios/ListoraUITests/FakeAI`). This directory has none, so an unknown photo set
+fails with `fixture_missing` here.
 
 ```json
 {

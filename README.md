@@ -18,8 +18,8 @@ tasks and how they depend on each other.
   client. It comes with Xcode on macOS (on Linux, install Swift 6 from swift.org).
 - Docker is not needed.
 - For the iOS app only: **Xcode 26.3** with the iPhone 17 simulator, plus XcodeGen, SwiftLint,
-  and SwiftFormat (`brew install xcodegen swiftlint swiftformat`). See
-  [apps/ios/README.md](apps/ios/README.md).
+  and SwiftFormat (`brew install xcodegen swiftlint swiftformat`). `make ios-test` also runs
+  the backend (the setup below). See [apps/ios/README.md](apps/ios/README.md).
 
 ## Setup
 
@@ -80,6 +80,7 @@ the user pool settings, and in-app account deletion (`DELETE /v1/account`).
 | `npm run dev:fake-ebay`        | Run the fake eBay at `EBAY_FAKE_URL`, which the worker lists on with `EBAY_ENV=fake`                                                             |
 | `npm run ebay:sandbox-token`   | Sign a sandbox test seller in on eBay and save their refresh token in `.env` (see [eBay sandbox check](#ebay-sandbox-check))                     |
 | `npm run ebay:sandbox-check`   | Run the eBay adapter end to end against eBay's sandbox; fails with what to set when keys are missing                                             |
+| `npm run e2e:stack`            | Start the local end-to-end stack (API, worker, fakes, scratch database, signed-in user); `make ios-test` runs the iOS tests inside it            |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
 | `npm run admin -- --help`      | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail)                                   |
 | `npm run eval`                 | Score the tag parsers, AI tag reading, and the full item analysis on the synthetic corpus (fake AI); `-- --provider anthropic` uses the real API |
@@ -94,11 +95,11 @@ the user pool settings, and in-app account deletion (`DELETE /v1/account`).
 The iOS app has its own `make` targets, run from the repository root. The full list is in
 [apps/ios/README.md](apps/ios/README.md#commands).
 
-| Command         | What it does                                                         |
-| --------------- | -------------------------------------------------------------------- |
-| `make ios-test` | Generate the Xcode project, then run every iOS test on the simulator |
-| `make ios-lint` | SwiftLint (strict) and the SwiftFormat check                         |
-| `make ios-open` | Generate the Xcode project and open it in Xcode                      |
+| Command         | What it does                                                                          |
+| --------------- | ------------------------------------------------------------------------------------- |
+| `make ios-test` | Run every iOS test on the simulator, the backend UI tests against `npm run e2e:stack` |
+| `make ios-lint` | SwiftLint (strict) and the SwiftFormat check                                          |
+| `make ios-open` | Generate the Xcode project and open it in Xcode                                       |
 
 The cluster listens only on `127.0.0.1`, on port `LISTORA_PG_PORT` (default 55432). Each
 worktree has its own cluster. Give each worktree a different port in its `.env` if more than
@@ -150,6 +151,7 @@ packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)
 packages/tag-parse/     Deterministic tag-text parsers (@listora/tag-parse)
 packages/eval/          Synthetic tag corpus and eval harness CLI (@listora/eval)
+packages/e2e/           Local end-to-end stack for the iOS UI tests: API and worker with fakes (@listora/e2e)
 infra/                  AWS CDK stacks and deploy setup (@listora/infra; see infra/README.md)
 scripts/                dev-db.sh (local PostgreSQL 18 cluster), container-smoke.sh (image smoke test),
                         ios-release.sh (iOS archive and TestFlight upload)
@@ -180,16 +182,20 @@ The image job runs `scripts/container-smoke.sh`: it builds the application image
 schema migrations, and starts the API and the worker from it, configured as in AWS, against
 a PostgreSQL container.
 
-The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, and SwiftFormat
-from Homebrew, then runs `make ios-lint` and `make ios-test`. It caches the app's SwiftPM
-checkouts but not DerivedData, because a fresh checkout resets the file timestamps Xcode's
-incremental build relies on.
+The iOS job, on a macOS runner with Xcode 26.3, installs XcodeGen, SwiftLint, SwiftFormat,
+and PostgreSQL 18 from Homebrew and Node with `npm ci`, then runs `make ios-lint` and
+`make ios-test`, whose UI tests that go through the backend run against the local stack
+(`packages/e2e`). It caches the app's SwiftPM checkouts but not DerivedData, because a fresh
+checkout resets the file timestamps Xcode's incremental build relies on. A failed run uploads
+the test results and the stack's API and worker logs.
 
 **Cost rule.** macOS runner minutes bill at 10 times Linux minutes, so the iOS job builds
 only when the pull request (or the pushed `main` commit) changes a file the iOS build reads:
 `apps/ios/**`, `packages/api-contract/**` (the OpenAPI spec and the generated `ListoraAPI`
 Swift package), `packages/shared/fixtures/listing-urls.json` (the listing URL fixtures the iOS
-parser is tested against), `Makefile`, or `.github/workflows/ci.yml`. Otherwise it runs on Linux and
+parser is tested against), `packages/e2e/**` (the local stack), `Makefile`, or
+`.github/workflows/ci.yml`. Other backend changes do not run it: the backend job covers them,
+and the contract keeps the API and the app in step. Otherwise it runs on Linux and
 succeeds in seconds without building, so it still reports a result and can be a required
 check. It fails, rather than passing, when change detection fails. When the iOS build starts
 reading a new file outside these paths, add it to the `ios` filter in the `changes` job.

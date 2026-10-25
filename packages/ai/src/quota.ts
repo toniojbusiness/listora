@@ -2,7 +2,13 @@ import { sql } from 'kysely';
 
 import type { DbExecutor } from '@listora/db';
 
-import type { QuotaContext, QuotaDecision, QuotaPolicy } from './guards.ts';
+import {
+  QUOTA_METRICS,
+  type QuotaContext,
+  type QuotaDecision,
+  type QuotaMetric,
+  type QuotaPolicy,
+} from './guards.ts';
 
 /** The quota period a moment falls in: `[start, end)` as `YYYY-MM-DD` dates. */
 export interface QuotaPeriod {
@@ -17,6 +23,19 @@ export function utcMonthPeriod(now: Date): QuotaPeriod {
     start: day(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))),
     end: day(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))),
   };
+}
+
+/** One quota's use in a period; `limit` null means unlimited. */
+export interface QuotaUse {
+  readonly metric: QuotaMetric;
+  readonly used: number;
+  readonly limit: number | null;
+}
+
+/** Every quota's use in the current period, in `QUOTA_METRICS` order. */
+export interface AccountQuotaUsage {
+  readonly period: QuotaPeriod;
+  readonly quotas: readonly QuotaUse[];
 }
 
 export interface PostgresQuotaPolicyOptions {
@@ -91,5 +110,25 @@ export class PostgresQuotaPolicy implements QuotaPolicy {
       .where('period_start', '=', period.start)
       .executeTakeFirst();
     return row?.used ?? 0;
+  }
+
+  /** Every quota's use in the current period; a metric with no row is unused and unlimited. */
+  async usage(accountId: string): Promise<AccountQuotaUsage> {
+    const period = this.#period(this.#now());
+    const rows = await this.#db
+      .selectFrom('usage_counter')
+      .select(['metric', 'used', 'quota'])
+      .where('account_id', '=', accountId)
+      .where('metric', 'in', QUOTA_METRICS)
+      .where('period_start', '=', period.start)
+      .execute();
+    const byMetric = new Map(rows.map((row) => [row.metric, row]));
+    return {
+      period,
+      quotas: QUOTA_METRICS.map((metric) => {
+        const row = byMetric.get(metric);
+        return { metric, used: row?.used ?? 0, limit: row?.quota ?? null };
+      }),
+    };
   }
 }

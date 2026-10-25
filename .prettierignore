@@ -18,3 +18,5 @@ infra/cdk.out/
 infra/src/__snapshots__/
 # Golden payloads and validation results, written by the conformance suite (`vitest -u`)
 **/__golden__/
+# Written by packages/analysis/src/ios-vocabulary.test.ts, which keeps it equal to the vocabulary
+apps/ios/Packages/Features/Sources/ReviewFeature/Resources/vocabulary.json

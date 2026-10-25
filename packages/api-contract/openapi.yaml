@@ -53,6 +53,8 @@ tags:
     description: Sales and the automatic delist run each sale starts.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
+  - name: usage
+    description: How much of the plan's quotas the account has used this period.
 
 paths:
   /health/live:
@@ -582,6 +584,26 @@ paths:
           $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+
+  /v1/usage:
+    get:
+      tags: [usage]
+      operationId: getUsage
+      summary: Get the plan's quota use
+      description: |
+        The account's use of each plan quota in the current period (the UTC calendar month
+        until billing periods exist): AI items analyzed and premium identifications ("Identify
+        harder"). A quota without `limit` is unlimited. Units are counted when a call succeeds,
+        so a request that is still running is not counted yet.
+      responses:
+        '200':
+          description: Quota use for the current period.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usage'
         default:
           $ref: '#/components/responses/DefaultError'
 
@@ -2858,6 +2880,55 @@ components:
             $ref: '#/components/schemas/ResearchLink'
         generatedAt:
           $ref: '#/components/schemas/Timestamp'
+
+    # ---------------------------------------------------------------- usage
+    UsageMetric:
+      description: |
+        A `KnownUsageMetric`, or a quota added after this client was built. Clients show an
+        unknown metric generically or not at all.
+      anyOf:
+        - $ref: '#/components/schemas/KnownUsageMetric'
+        - type: string
+          maxLength: 64
+    KnownUsageMetric:
+      type: string
+      description: |
+        Plan quotas in reseller units. `ai_items`: items analyzed (one per fast analysis).
+        `premium_identifications`: premium analyses ("Identify harder").
+      enum: [ai_items, premium_identifications]
+    QuotaUsage:
+      type: object
+      required: [metric, used]
+      properties:
+        metric:
+          $ref: '#/components/schemas/UsageMetric'
+        used:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Units used in the period.
+        limit:
+          type: integer
+          format: int32
+          minimum: 0
+          description: The plan's limit for the period. Absent means unlimited.
+    Usage:
+      type: object
+      required: [periodStart, periodEnd, quotas]
+      properties:
+        periodStart:
+          type: string
+          format: date
+          description: First day of the period (UTC).
+        periodEnd:
+          type: string
+          format: date
+          description: The day after the period's last day (UTC); quotas reset then.
+        quotas:
+          type: array
+          description: One per `KnownUsageMetric`, in that order.
+          items:
+            $ref: '#/components/schemas/QuotaUsage'
 
     # ---------------------------------------------------------------- listings
     ListingStatus:

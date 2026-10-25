@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "AppFeature", targets: ["AppFeature"]),
         .library(name: "InventoryFeature", targets: ["InventoryFeature"]),
         .library(name: "AddItemFeature", targets: ["AddItemFeature"]),
+        .library(name: "ReviewFeature", targets: ["ReviewFeature"]),
         .library(name: "TasksFeature", targets: ["TasksFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
         .library(name: "TagReadingFeature", targets: ["TagReadingFeature"]),
@@ -33,6 +34,7 @@ let package = Package(
                 "APIClient",
                 "InventoryFeature",
                 "AddItemFeature",
+                "ReviewFeature",
                 "TasksFeature",
                 "SettingsFeature",
                 "TagReadingFeature",
@@ -48,6 +50,16 @@ let package = Package(
                 .product(name: "ListoraAPI", package: "swift"),
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
+        ),
+        .target(
+            name: "ReviewFeature",
+            dependencies: [
+                "Core",
+                "DesignSystem",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+            ],
+            resources: [.copy("Resources/vocabulary.json")],
         ),
         .target(name: "TasksFeature", dependencies: ["DesignSystem"]),
         .target(name: "SettingsFeature", dependencies: ["Core", "DesignSystem", "APIClient"]),
@@ -73,6 +85,15 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
             resources: [.copy("Fixtures")],
+        ),
+        .testTarget(
+            name: "ReviewFeatureTests",
+            dependencies: [
+                "ReviewFeature",
+                "Core",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+            ],
         ),
         .testTarget(name: "SettingsFeatureTests", dependencies: ["SettingsFeature", "Core", "APIClient"]),
         .testTarget(

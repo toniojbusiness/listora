@@ -23,23 +23,25 @@ The app talks to the backend only through the generated `ListoraAPI` Swift packa
 
 Run these from the repository root.
 
-| Command                 | What it does                                                   |
-| ----------------------- | -------------------------------------------------------------- |
-| `make ios-generate`     | Generate `apps/ios/Listora.xcodeproj` from `project.yml`       |
-| `make ios-open`         | Generate the project and open it in Xcode                      |
-| `make ios-build`        | Build the app, Share Extension, and packages for the simulator |
-| `make ios-test`         | Run package, unit, and UI tests on the iPhone 17 simulator     |
-| `make ios-lint`         | SwiftLint (strict) and the SwiftFormat check                   |
-| `make ios-format`       | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes |
-| `make ios-clean`        | Delete the generated project and `.build/ios`                  |
-| `make ios-tag-fixtures` | Re-render the tag-reading test photos (see Tag reading)        |
-| `make ios-app-icon`     | Re-render the placeholder app icon (see App icon)              |
-| `make ios-archive`      | Unsigned release archive; needs no Apple account (Releases)    |
-| `make ios-testflight`   | Signed release archive uploaded to TestFlight (Releases)       |
+| Command                 | What it does                                                         |
+| ----------------------- | -------------------------------------------------------------------- |
+| `make ios-generate`     | Generate `apps/ios/Listora.xcodeproj` from `project.yml`             |
+| `make ios-open`         | Generate the project and open it in Xcode                            |
+| `make ios-build`        | Build the app, Share Extension, and packages for the simulator       |
+| `make ios-test`         | Run package, unit, and UI tests on the simulator, in the local stack |
+| `make ios-lint`         | SwiftLint (strict) and the SwiftFormat check                         |
+| `make ios-format`       | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes       |
+| `make ios-clean`        | Delete the generated project and `.build/ios`                        |
+| `make ios-tag-fixtures` | Re-render the tag-reading test photos (see Tag reading)              |
+| `make ios-app-icon`     | Re-render the placeholder app icon (see App icon)                    |
+| `make ios-archive`      | Unsigned release archive; needs no Apple account (Releases)          |
+| `make ios-testflight`   | Signed release archive uploaded to TestFlight (Releases)             |
 
 `make ios-test` writes DerivedData, SwiftPM caches, and the result bundle
 (`.build/ios/Test.xcresult`) to `.build/ios` in this checkout, never to `~/Library`. To use a
-different simulator, pass its name: `make ios-test IOS_SIMULATOR='iPhone 17 Pro'`.
+different simulator, pass its name: `make ios-test IOS_SIMULATOR='iPhone 17 Pro'`. It also needs
+the backend's dependencies (`npm ci` at the repository root); see
+[Testing against the API](#testing-against-the-api).
 
 ## The Xcode project
 
@@ -73,6 +75,7 @@ Packages/
     AppFeature        Root tab shell and AppDependencies (composes the features)
     InventoryFeature  Inventory tab
     AddItemFeature    Add Item tab: guided capture, library import, drafts (GRDB), upload queue
+    ReviewFeature     Analysis progress, confidence-first review, cost, price, and the saved item
     TasksFeature      Tasks tab
     SettingsFeature   Settings tab, with the developer sign-in in Dev builds
     TagReadingFeature On-device tag reading with Vision (VisionTagReader); no UI
@@ -94,6 +97,9 @@ Dependency rules:
 - A feature that other features use without UI (such as `TagReadingFeature`) implements a
   protocol from `Core`. `AppDependencies` builds the implementation and the features that need
   it receive the protocol, so no feature imports another.
+- A feature whose screens another feature opens (`ReviewFeature`, opened from Add Item) is
+  handed over as a view builder (`ItemReviewDestination`), with the request and outcome as value
+  types in `Core` (`ItemReviewRequest`, `ItemReviewOutcome`).
 
 ## Tag reading
 
@@ -205,12 +211,74 @@ the names, or update `Contents.json`), delete the tool and the `ios-app-icon` ta
 - **Status.** Each photo shows Waiting to upload, Reading tag, Uploading, Retrying (n of 8), Sign
   in to upload, Upload failed, or Uploaded; "Uploaded" means the server attached the photo with
   its current role. The draft says "Saved to Listora" only when every photo is attached in order.
+- **Review item** opens the review once the draft is saved to Listora. Tapped earlier, it waits
+  for the upload, then opens it. When the item is saved, the draft leaves this iPhone (its server
+  item stays: `DraftStore.completeDraft`).
 
 The queue's tests (`AddItemFeatureTests`) run the real generated client and URLSession transport
 against `FakeListoraServer` through a `URLProtocol` stub, including resume after a relaunch,
 retries, and failures that stop. The UI tests import the photos in `ListoraUITests/Fixtures`
-through two debug-only launch variables: `LISTORA_FIXTURE_PHOTOS=<folder>` makes "Import photos"
+through debug-only launch variables: `LISTORA_FIXTURE_PHOTOS=<folder>` makes "Import photos"
 add that folder's JPEGs, and `LISTORA_RESET_LOCAL_DATA=1` starts with no drafts, signed out.
+
+### Testing against the API
+
+`make ios-test` runs every test inside the local stack (`packages/e2e`): the API and the worker
+from this checkout with the fake drivers (dev sign-in, local photo storage, the fake AI
+provider answering from `ListoraUITests/FakeAI/default.json`), on a scratch database of this
+checkout's `scripts/dev-db.sh` cluster and a port of its own, with a signed-in test user. It
+hands the API's URL and the session to the UI tests through xcodebuild's `TEST_RUNNER_`
+variables, and the tests pass them to the app with the Dev-only launch variables above:
+`LISTORA_DEV_API_BASE_URL=<url>` and `LISTORA_DEV_ACCESS_TOKEN=<token>` (with
+`LISTORA_DEV_ACCESS_EMAIL`).
+`ReviewFlowUITests` takes a fixture item from a draft through review and price to a saved item
+with a SKU, then reads it back from the API. The stack's logs are in `.build/ios/e2e-logs`.
+
+To run those UI tests from Xcode, start the stack with
+`npm run e2e:stack -- --fake-ai-fixtures apps/ios/ListoraUITests/FakeAI`, which prints the
+`LISTORA_E2E_*` values, and set them in the test action's environment. Without them the tests
+skip.
+
+## Review and price
+
+`ReviewFeature` takes a draft's server item from analysis to a saved inventory item. Each step
+saves to the server before the next screen opens, so after a relaunch the flow picks up where
+the server is (an item already analyzed reopens in review; a saved one shows as saved).
+
+- **Analysis progress.** It waits for the server to process every photo, starts the analysis
+  (`startItemAnalysis`, which returns the existing one for the photo set), and polls it. Every
+  wait has a deadline (`ReviewTiming`) and ends in a failure with Try again, never an endless
+  spinner. A photo the server could not process, or an analysis that needs other photos, says so
+  and offers Edit photos.
+- **Review, confidence first.** Every detail with its value, its source (AI, Tag, Barcode, or
+  You), and the analysis's confidence. Details proposed below 0.6 (the analysis prompt's own
+  "a person should check it" line) and empty details every marketplace needs (title, category,
+  condition) come first under "Check these", lowest confidence first. The order is fixed while
+  the seller edits, so rows never jump. Each detail edits in place; canonical ones (category,
+  department, size type, condition) are menus of the vocabulary in `Resources/vocabulary.json`,
+  a copy of @listora/analysis's that `packages/analysis/src/ios-vocabulary.test.ts` keeps equal.
+  The canonical title and description are details too; each marketplace's copy opens in an
+  editor that counts its limits. The seller's copy edits stay on this iPhone
+  (`ListingCopyStore` in `Core`) until the item's listings exist (plan task T-19).
+- **Identify harder** is prominent when the brand is missing or below 0.6, or the analysis asks
+  for it, and shows the plan's premium identifications (`getUsage`). It saves the seller's edits
+  first, so the premium details never replace them (`applyAnalysis` keeps `user` details).
+- **Cost** on an in-app number pad (whole dollars or cents; no keyboard to open or dismiss), the
+  purchase date, and where it was bought, with recent places as one-tap choices.
+- **Price.** "Don't sell below" per marketplace (tap for the breakdown), the quick sale,
+  recommended, and higher profit tiers, the AI estimate with its confidence, and research links
+  that open in Safari. Every source label is the server's, shown as sent. Sold data bound to one
+  marketplace (Depop Pricing Inspiration) is not shown here, since this is no listing context.
+- **Save** stores the price, the highest floor, and status `ready`, and shows the SKU.
+
+### Interaction time
+
+`InteractionMeter` (in `Core`) measures each new item from its first photo (the camera opening,
+or picked photos) to the saved item: the time a screen of the flow shows with the app in the
+foreground, minus the time spent waiting on Listora, and the taps in the app window
+(`WindowTapCounter` in `AppFeature`; the system keyboard and photo picker are other windows).
+The saved screen shows it, the log records it (`metrics` category), and the device keeps the
+latest 50. The API has no event for it yet.
 
 ### Signing in (Dev)
 
