@@ -315,11 +315,11 @@ Each build configuration reads one xcconfig file in `Config/`, and `AppConfigura
 values from Info.plist at launch. A missing or invalid value stops the app at launch with an
 error that names the key.
 
-| Configuration     | xcconfig                  | `API_BASE_URL`                                                                           | Sign-in                                                     | Bundle id suffix |
-| ----------------- | ------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------- |
-| `Dev-Debug`       | `Config/Dev.xcconfig`     | `http://127.0.0.1:3000` (local API)                                                      | the local API's dev driver                                  | `.dev`           |
-| `Staging-Release` | `Config/Staging.xcconfig` | placeholder `.invalid` host                                                              | none until staging has a user pool                          | `.staging`       |
-| `Prod-Release`    | `Config/Prod.xcconfig`    | the personal environment's `ApiUrl` (placeholder `.invalid` host until its first deploy) | its user pool (`COGNITO_CLIENT_ID` empty until that deploy) | none             |
+| Configuration     | xcconfig                  | `API_BASE_URL`                                              | Sign-in                            | Bundle id suffix |
+| ----------------- | ------------------------- | ----------------------------------------------------------- | ---------------------------------- | ---------------- |
+| `Dev-Debug`       | `Config/Dev.xcconfig`     | `http://127.0.0.1:3000` (local API)                         | the local API's dev driver         | `.dev`           |
+| `Staging-Release` | `Config/Staging.xcconfig` | placeholder `.invalid` host                                 | none until staging has a user pool | `.staging`       |
+| `Prod-Release`    | `Config/Prod.xcconfig`    | the personal environment's `ApiUrl` (its `execute-api` URL) | its user pool's iPhone app client  | none             |
 
 - Run and test use `Dev-Debug`; archive uses `Prod-Release`. The build type is part of each
   name because Xcode gives Swift packages debug settings only for configurations whose name
@@ -329,12 +329,11 @@ error that names the key.
 - Only the Dev Info.plists (the app's and the Share Extension's) carry the ATS local-networking
   exception (`NSAllowsLocalNetworking`). XcodeGen derives them from the shared plists, and
   `make ios-check-ats` (part of `make ios-test`) fails if Staging or Prod would ship it.
-- The Staging and Prod hosts end in `.invalid` and never resolve until they are set. Prod
-  points at the personal environment, which is production for now (there is no separate
-  Personal configuration): at that environment's first deploy, set its `API_BASE_URL` to the
-  compute stack's `ApiUrl` output: the HTTP API's `execute-api` URL until the environment has
-  a domain, then `https://api.<domain>`, so update it and ship a build when the domain is
-  added, before the `execute-api` URL is turned off
+- The Staging host ends in `.invalid` and never resolves until it is set. Prod points at the
+  personal environment, which is production for now (there is no separate Personal
+  configuration): its `API_BASE_URL` is the compute stack's `ApiUrl` output, the HTTP API's
+  `execute-api` URL until the environment has a domain, then `https://api.<domain>`, so update
+  it and ship a build when the domain is added, before the `execute-api` URL is turned off
   ([infra/README.md](../../infra/README.md#without-a-domain)). Staging's domain arrives
   with the staging AWS account (gate G-AWS, T-30).
 - Sign-in outside Dev needs `COGNITO_REGION` and `COGNITO_CLIENT_ID`, the user pool's region
