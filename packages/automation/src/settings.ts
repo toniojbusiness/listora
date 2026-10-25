@@ -32,7 +32,8 @@ export interface AutomationSettings {
   readonly saleChecks: SaleCheckSettings;
   /**
    * Development and tests only: the fake marketplace site that stands in for Poshmark,
-   * Mercari, and Depop, whose automation connections then run against it.
+   * Mercari, and Depop without a fake of their own, whose automation connections then run
+   * against it.
    */
   readonly fakeSiteUrl: string | undefined;
   /**
@@ -46,6 +47,12 @@ export interface AutomationSettings {
    * `fakeSiteUrl` for Mercari).
    */
   readonly fakeMercariSiteUrl: string | undefined;
+  /**
+   * Development and tests only: the fake Depop site (`npm run dev:fake-depop-site`), which the
+   * Depop automation adapter then drives instead of depop.com (it takes precedence over
+   * `fakeSiteUrl` for Depop).
+   */
+  readonly fakeDepopSiteUrl: string | undefined;
 }
 
 export class AutomationConfigError extends Error {
@@ -81,6 +88,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
   const fakeSiteUrl = localUrl(issues, env, 'FAKE_AUTOMATION_SITE_URL');
   const fakePoshmarkUrl = localUrl(issues, env, 'FAKE_POSHMARK_URL');
   const fakeMercariSiteUrl = localUrl(issues, env, 'FAKE_MERCARI_SITE_URL');
+  const fakeDepopSiteUrl = localUrl(issues, env, 'FAKE_DEPOP_SITE_URL');
 
   const profiles = Object.fromEntries(
     AUTOMATED_MARKETPLACES.map((marketplace) => {
@@ -124,12 +132,11 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
         limits: { runsPerHour, runsPerDay },
       };
       // In development, a marketplace's stand-in replaces its real site, never the reverse.
-      const ownFake =
-        marketplace === 'poshmark'
-          ? fakePoshmarkUrl
-          : marketplace === 'mercari'
-            ? fakeMercariSiteUrl
-            : undefined;
+      const ownFake = {
+        poshmark: fakePoshmarkUrl,
+        mercari: fakeMercariSiteUrl,
+        depop: fakeDepopSiteUrl,
+      }[marketplace];
       const standIn = ownFake ?? fakeSiteUrl;
       return [marketplace, standIn === undefined ? profile : standInProfile(profile, standIn)];
     }),
@@ -160,6 +167,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
     fakeSiteUrl,
     fakePoshmarkUrl,
     fakeMercariSiteUrl,
+    fakeDepopSiteUrl,
   };
 }
 

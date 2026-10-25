@@ -19,6 +19,7 @@ describe('loadAutomationSettings', () => {
       fakeSiteUrl: undefined,
       fakePoshmarkUrl: undefined,
       fakeMercariSiteUrl: undefined,
+      fakeDepopSiteUrl: undefined,
     });
     for (const profile of Object.values(settings.profiles)) {
       expect(profile.pacing).toEqual(DEFAULT_PACING);
@@ -120,5 +121,22 @@ describe('loadAutomationSettings', () => {
     expect(() =>
       loadAutomationSettings({ FAKE_MERCARI_SITE_URL: 'https://www.mercari.com' }),
     ).toThrow('FAKE_MERCARI_SITE_URL');
+  });
+
+  it('points Depop at the fake Depop site, which wins over the fake site, local only', () => {
+    const settings = loadAutomationSettings({
+      FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400',
+      FAKE_DEPOP_SITE_URL: 'http://127.0.0.1:4700',
+    });
+    expect(settings.fakeDepopSiteUrl).toBe('http://127.0.0.1:4700');
+    expect(settings.profiles.depop.origins).toEqual(['http://127.0.0.1:4700']);
+    expect(settings.profiles.mercari.origins).toEqual(['http://127.0.0.1:4400']);
+    expect(loadAutomationSettings({}).profiles.depop).toMatchObject({
+      origins: ['https://www.depop.com', 'https://depop.com'],
+      cookieDomains: ['depop.com'],
+    });
+    expect(() => loadAutomationSettings({ FAKE_DEPOP_SITE_URL: 'https://www.depop.com' })).toThrow(
+      'FAKE_DEPOP_SITE_URL',
+    );
   });
 });
