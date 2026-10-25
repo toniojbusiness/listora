@@ -193,6 +193,8 @@ final class ListingFlowModel {
             name: name,
             detail: assisted
                 ? "Assisted - Listora makes a task with everything to copy; you post it in the \(name) app."
+                : connection?.mode.value1 == .automation
+                ? "Automated in your \(name) session"
                 : "Through \(name)'s API",
             isAvailable: true,
             isAssisted: assisted,
