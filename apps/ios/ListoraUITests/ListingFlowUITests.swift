@@ -53,13 +53,19 @@ final class ListingFlowUITests: XCTestCase {
         price.tap()
         price.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6) + "39")
         app.buttons["price.save"].tap()
-        XCTAssertTrue(waitForLabel(of: status, "Active (confirmed by eBay)", timeout: 60), status.label)
+        // The label reads "Active (confirmed by eBay)" before the change is queued too, so wait
+        // for the change in the history and its actions coming back, which happens only once it
+        // is settled; then the label must still be the confirmed one.
         let history = app.descendants(matching: .any)["marketplace.ebay.history"]
-        XCTAssertTrue(history.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForLabel(of: history, "History (2)", timeout: 30), history.label)
+        let end = app.buttons["marketplace.ebay.action.end"]
+        XCTAssertTrue(end.waitForExistence(timeout: 60), "the price change never settled: \(status.label)")
+        XCTAssertEqual(status.label, "Active (confirmed by eBay)")
+        XCTAssertEqual(app.descendants(matching: .any)["marketplace.ebay.price"].label, "Listed at $39.00")
 
         // eBay refuses the delist: the failure is shown, with Retry.
         try await stack.injectEbayFault(action: "end", type: "reject", message: "The listing cannot be ended now.")
-        app.buttons["marketplace.ebay.action.end"].tap()
+        end.tap()
         let endButton = app.buttons["End: no longer available"].firstMatch
         XCTAssertTrue(endButton.waitForExistence(timeout: 5))
         endButton.tap()
