@@ -194,6 +194,7 @@ src/
   listings/      Draft listings, the listing actions (publish, price, revise, end, relist,
                  verify) queued on the operation engine, honest views, shared-listing links
   operations/    Operations, their history, Retry, and Cancel
+  tasks/         The task inbox: assisted steps, and the user's confirmation or dismissal
   connections/   Marketplace connections, the health summary and Retry check, connect attempts,
                  and the public OAuth callback
   sales/         The sales feed (listSales, getSale) with each sale's money, delist runs, and
@@ -401,6 +402,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/design.md](features/design.md)                         | The iPhone app's design system, screenshots, and UI audit                     |
 | [features/inventory.md](features/inventory.md)                   | The Inventory tab, the item screen, the listing flow and its API              |
 | [features/sales.md](features/sales.md)                           | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI   |
+| [features/tasks.md](features/tasks.md)                           | Assisted mode: the task inbox, copy-assist, confirmations, reminders          |
 
 ### Former section numbers
 

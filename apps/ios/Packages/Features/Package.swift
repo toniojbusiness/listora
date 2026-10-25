@@ -72,7 +72,10 @@ let package = Package(
             ],
             resources: [.copy("Resources/vocabulary.json")],
         ),
-        .target(name: "TasksFeature", dependencies: ["DesignSystem"]),
+        .target(
+            name: "TasksFeature",
+            dependencies: ["DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
         .target(name: "SettingsFeature", dependencies: ["Core", "DesignSystem", "APIClient"]),
         .target(
             name: "MarketplacesFeature",
@@ -117,6 +120,10 @@ let package = Package(
                 "APIClient",
                 .product(name: "ListoraAPI", package: "swift"),
             ],
+        ),
+        .testTarget(
+            name: "TasksFeatureTests",
+            dependencies: ["TasksFeature", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .testTarget(name: "SettingsFeatureTests", dependencies: ["SettingsFeature", "Core", "APIClient"]),
         .testTarget(

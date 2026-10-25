@@ -20,7 +20,7 @@ import {
 } from '@listora/marketplaces';
 import { contentWith, sampleListingContent } from '@listora/marketplaces/testing';
 
-import { confirmOperationByUser } from './commands.ts';
+import { confirmOperationByUser, dismissOperationByUser, retryOperation } from './commands.ts';
 import { describeListingStatus } from './status-display.ts';
 import {
   createEngineHarness,
@@ -182,6 +182,38 @@ describe('assisted operations and connection-aware capabilities (real Postgres)'
       status: 'failed',
       error_code: 'cannot_verify',
     });
+    expect(poshmark.reads).toBe(0);
+  });
+
+  it('fails a dismissed task, never succeeds it, and Retry gives the user a new task', async () => {
+    const poshmark = new TemptingPoshmark();
+    await startWith({ poshmark });
+    const listing = await activePoshmarkListing();
+    const op = await harness.enqueue(listing, 'end', { status: 'ended' });
+    expect(await harness.waitForStatus(op.id, SETTLED)).toMatchObject({
+      status: 'needs_user_action',
+    });
+
+    await dismissOperationByUser(harness.db, { accountId: harness.accountId, operationId: op.id });
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'failed',
+      success_evidence: null,
+      error_code: 'dismissed_by_user',
+    });
+    expect(await tasksOf(op.id)).toEqual([expect.objectContaining({ status: 'dismissed' })]);
+    expect(await statusOf(listing, op)).toBe('Delist failed - Retry');
+    expect(await harness.listing(listing.id)).toMatchObject({ status: 'active' });
+    // A dismissed step cannot be dismissed or confirmed again.
+    await expect(
+      dismissOperationByUser(harness.db, { accountId: harness.accountId, operationId: op.id }),
+    ).rejects.toThrow(/failed/);
+
+    await retryOperation(harness.db, { accountId: harness.accountId, operationId: op.id });
+    expect(await harness.waitForStatus(op.id, SETTLED)).toMatchObject({
+      status: 'needs_user_action',
+    });
+    const tasks = await tasksOf(op.id);
+    expect(tasks.map((task) => task.status).sort()).toEqual(['dismissed', 'open']);
     expect(poshmark.reads).toBe(0);
   });
 

@@ -405,6 +405,37 @@ export async function confirmOperationByUser(
   });
 }
 
+/**
+ * The user dismisses an assisted step without doing it. Dismissing never counts as doing the
+ * work: the operation fails, so the listing shows the failure and its Retry, which gives the
+ * user a new task.
+ */
+export async function dismissOperationByUser(
+  executor: DbExecutor,
+  target: OperationTarget,
+): Promise<OperationRow> {
+  return inTransaction(executor, async (trx) => {
+    const op = await lockOperation(trx, target);
+    if (op.status !== 'needs_user_action') {
+      throw new InvalidTransitionError(op.id, op.status, 'failed');
+    }
+    const failed = await transitionOperation(
+      trx,
+      op,
+      {
+        to: 'failed',
+        error: {
+          code: 'dismissed_by_user',
+          message: "You dismissed this step, so it wasn't done. Retry to get a new task.",
+        },
+      },
+      { action: 'dismiss' },
+    );
+    await dismissOpenTasks(trx, op);
+    return failed;
+  });
+}
+
 export async function lockOperation(
   trx: DbTransaction,
   target: OperationTarget,

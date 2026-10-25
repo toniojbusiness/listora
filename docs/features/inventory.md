@@ -25,15 +25,19 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   sold, and the details with the storage location. A sold item shows its sale (profit, ROI, the
   delist run), and after a canceled or returned sale, "Relist it?" ([sales.md](sales.md)). Relist
   is offered only while the item is not sold or archived.
-- **List flow**: List opens the marketplace choice. eBay is offered when the account's eBay
-  connection is usable; the other marketplaces show their mode (assisted, finished in the
-  marketplace's app; listing them from here comes with the task inbox, T-21). The eBay review
-  starts from the seller's own eBay copy from the review screen (`ListingCopyStore`), else the
-  accepted analysis's eBay variant, else the item's title and description, with the item's list
-  price, and counts the title against eBay's 80 characters. Publish creates the draft listing
-  (`createListing`, or `replaceListingDraft` for a draft a refused publish left) and publishes it
-  (`publishListing`); a refusal (`422`, for example "eBay needs at least one photo.") stays on the
-  review with the message.
+- **List flow**: List opens the marketplace choice, with the row's marketplace selected. eBay is
+  offered when the account's eBay connection is usable; Poshmark, Mercari, and Depop (without an
+  API connection) are offered as assisted: listing them creates a task the seller finishes in the
+  marketplace's app ([tasks.md](tasks.md)). A marketplace the item is already on is not offered.
+  Each chosen marketplace's version is reviewed in turn ("Poshmark listing (2 of 2)"), starting
+  from the seller's own copy for it from the review screen (`ListingCopyStore`), else the
+  accepted analysis's variant for it, else the item's title and description, with the item's
+  list price; eBay's title is counted against its 80 characters. Publish (or "Create Poshmark
+  task") creates the draft listing (`createListing`, or `replaceListingDraft` for a draft a
+  refused publish left) and publishes it (`publishListing`); a refusal (`422`, for example "eBay
+  needs at least one photo.") stays on the review with the message.
+- **Assisted listings**: a listing waiting on the seller ("Action needed - list on Poshmark") has
+  "Open task", which opens its task; Retry after a dismissed task makes a new one.
 - **Changes**: Change price, End listing (sold elsewhere, or no longer available), Relist, and
   Check status each queue one operation. Retry re-queues the failed operation
   (`retryOperation`).
@@ -67,8 +71,9 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   publish is retried, never published twice, since it may have been applied), price, revise,
   end, and check for an active listing, relist and check for an ended one. A failed operation
   never blocks the others (a failed price change still lets the seller delist). The same rule
-  computes `availableActions`, under the marketplace's capabilities and only for API actions
-  until assisted ones have their task inbox.
+  computes `availableActions`, each in the mode the marketplace's capabilities give it: `api`,
+  or `assisted` (the action makes a task, [tasks.md](tasks.md)); an assisted listing is never
+  offered a check, since Listora cannot read it.
 - **Listing views** show the newest operation that was not canceled as `latestOperation` and
   derive `statusDisplay` from it (`describeListingStatus`); an operation's own `statusDisplay`
   names what it did ("Price changed (confirmed by eBay)", `describeOperation`), so the history
