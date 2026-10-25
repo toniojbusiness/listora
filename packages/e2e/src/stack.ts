@@ -6,7 +6,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createMigratedDatabase } from '@listora/db/testing';
+import { FakeEbay } from '@listora/marketplaces';
 import { startNodeProcess, type StartedProcess } from '@listora/testing';
+
+import { startStackControl } from './control.ts';
+import { connectEbay } from './seed.ts';
 
 const API_ENTRY = fileURLToPath(new URL('../../../apps/api/src/main.ts', import.meta.url));
 const WORKER_ENTRY = fileURLToPath(new URL('../../../apps/worker/src/main.ts', import.meta.url));
@@ -29,26 +33,33 @@ export interface LocalStack {
   readonly email: string;
   /** A dev session token for ``email``, valid for a day. */
   readonly accessToken: string;
+  /** The stack's control endpoint for UI tests (eBay faults, ready items; control.ts). */
+  readonly controlUrl: string;
   /** Stops both processes, writes their logs, and drops the database and the stored files. */
   stop(): Promise<void>;
 }
 
 /**
  * The API and the worker as `npm run dev:api` and `npm run dev:worker` run them, with the fakes
- * of docs/architecture.md section 5: dev sign-in, local photo storage, and the fake AI provider.
- * Each stack has a scratch database on the test cluster (`scripts/dev-db.sh`), a storage
- * directory, and a port of its own, so it never touches the developer's dev data or a running
- * dev API. The worker never escalates on its own (`AI_AUTO_ESCALATE=off`), so a test decides
- * when "Identify harder" runs.
+ * of docs/architecture.md section 5: dev sign-in, local photo storage, the fake AI provider, and
+ * the fake eBay (in this process, with a token vault key of the stack's own), with the user's
+ * eBay account connected through its consent page. Each stack has a scratch database on the
+ * test cluster (`scripts/dev-db.sh`), a storage directory, and ports of its own, so it never
+ * touches the developer's dev data or a running dev API. The worker never escalates on its own
+ * (`AI_AUTO_ESCALATE=off`), so a test decides when "Identify harder" runs, and its operation
+ * delays are a tenth of production's (`OPERATION_RETRY_DELAY_SCALE`), so an eBay change is
+ * confirmed in seconds.
  */
 export async function startLocalStack(options: LocalStackOptions): Promise<LocalStack> {
   const startTimeoutMs = options.startTimeoutMs ?? 30_000;
   const database = await createMigratedDatabase('e2e', { jobQueue: true });
   const storageDir = await mkdtemp(join(tmpdir(), 'listora-e2e-storage-'));
   const processes: { name: string; process: StartedProcess }[] = [];
+  const closers: (() => Promise<void>)[] = [];
 
   const stop = async (): Promise<void> => {
     for (const { process } of processes.toReversed()) await process.stop();
+    for (const close of closers.toReversed()) await close();
     if (options.logDir !== undefined) await writeLogs(options.logDir, processes);
     await database.close();
     await rm(storageDir, { recursive: true, force: true });
@@ -57,6 +68,12 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
   try {
     const port = await freePort();
     const apiUrl = `http://127.0.0.1:${String(port)}`;
+    // Local storage serves photos over http, which only a development fake eBay accepts.
+    const fakeEbay = await FakeEbay.start({
+      allowHttpPictures: true,
+      consentRedirect: { acceptUrl: `${apiUrl}/v1/connections/ebay/callback` },
+    });
+    closers.push(() => fakeEbay.close());
     const shared = {
       PATH: process.env['PATH'],
       DATABASE_URL: database.scratch.url,
@@ -67,6 +84,9 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       STORAGE_LOCAL_SIGNING_SECRET: randomBytes(32).toString('base64'),
       AI_PROVIDER: 'fake',
       AI_FAKE_FIXTURES_DIR: options.fakeAiFixturesDir,
+      EBAY_ENV: 'fake',
+      EBAY_FAKE_URL: fakeEbay.url,
+      TOKEN_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
     };
 
     const api = startNodeProcess(API_ENTRY, {
@@ -82,12 +102,19 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       startTimeoutMs,
     );
 
-    const worker = startNodeProcess(WORKER_ENTRY, { ...shared, AI_AUTO_ESCALATE: 'off' });
+    const worker = startNodeProcess(WORKER_ENTRY, {
+      ...shared,
+      AI_AUTO_ESCALATE: 'off',
+      OPERATION_RETRY_DELAY_SCALE: '0.1',
+    });
     processes.push({ name: 'worker', process: worker });
     await worker.waitForLog((line) => line['msg'] === 'worker ready', startTimeoutMs);
 
     const accessToken = await signIn(api, apiUrl, E2E_EMAIL);
-    return { apiUrl, email: E2E_EMAIL, accessToken, stop };
+    await connectEbay({ apiUrl, accessToken }, fakeEbay);
+    const control = await startStackControl({ api: { apiUrl, accessToken }, fakeEbay });
+    closers.push(() => control.close());
+    return { apiUrl, email: E2E_EMAIL, accessToken, controlUrl: control.url, stop };
   } catch (error) {
     await stop();
     throw error;
@@ -143,12 +170,13 @@ async function writeLogs(
 
 /** The stack's settings as environment variables, also with xcodebuild's `TEST_RUNNER_` prefix. */
 export function stackEnvironment(
-  stack: Pick<LocalStack, 'apiUrl' | 'accessToken' | 'email'>,
+  stack: Pick<LocalStack, 'apiUrl' | 'accessToken' | 'email' | 'controlUrl'>,
 ): Record<string, string> {
   const settings = {
     LISTORA_E2E_API_BASE_URL: stack.apiUrl,
     LISTORA_E2E_ACCESS_TOKEN: stack.accessToken,
     LISTORA_E2E_EMAIL: stack.email,
+    LISTORA_E2E_CONTROL_URL: stack.controlUrl,
   };
   // xcodebuild passes TEST_RUNNER_<name> to the test runner as <name>.
   const forwarded = Object.fromEntries(

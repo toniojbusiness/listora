@@ -126,6 +126,8 @@ final class StubAPIServer: @unchecked Sendable {
             return Self.http(status: "200 OK", body: Self.itemPage)
         case ("POST", "/v1/items/\(Self.itemId)/listing-links"):
             return Self.http(status: "201 Created", body: Self.linkedListing)
+        case ("GET", "/v1/connections"):
+            return Self.http(status: "200 OK", body: Self.connections)
         default:
             return Self.http(
                 status: "404 Not Found",
@@ -144,14 +146,26 @@ final class StubAPIServer: @unchecked Sendable {
 
     static let itemId = "0b9d4e8a-1c2f-4a5b-8c7d-6e5f4a3b2c1d"
 
+    /// The page Safari shares the listing from. It shows how its last share ended ("Sharing",
+    /// "Shared", or "Share failed: <error>"), so the element tree of a test that saw no share sheet
+    /// tells a share that is still pending from one Safari refused.
     private static let sharePage = """
     <!doctype html>
     <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Share test</title></head>
     <body style="font: 20px -apple-system; padding: 40px">
-    <button id="share" style="font-size: 28px; padding: 24px"
-      onclick="navigator.share({url: '\(sharedListingURL)', title: 'Lululemon Align Pant 25 | Poshmark'})">
-      Share listing</button>
+    <button id="share" style="font-size: 28px; padding: 24px" onclick="share()">Share listing</button>
+    <p id="result"></p>
+    <script>
+    function share() {
+      const result = document.getElementById('result');
+      result.textContent = 'Sharing';
+      navigator.share({url: '\(sharedListingURL)', title: 'Lululemon Align Pant 25 | Poshmark'}).then(
+        () => { result.textContent = 'Shared'; },
+        (error) => { result.textContent = 'Share failed: ' + error.name; },
+      );
+    }
+    </script>
     </body></html>
     """
 
@@ -169,6 +183,31 @@ final class StubAPIServer: @unchecked Sendable {
     "externalUrl":"https://poshmark.com/listing/Lululemon-Align-Pant-25-64f1a2b3c4d5e6f7a8b9c0d1",
     "availableActions":[],"createdAt":"2026-10-24T12:00:00Z","updatedAt":"2026-10-24T12:00:00Z"}
     """
+
+    /// The Marketplaces screen before eBay is connected, in the words the server uses
+    /// (`packages/connections/src/status-display.ts`).
+    private static let connections: String = {
+        func capabilities(_ mode: String, connect: String) -> String {
+            let verify = mode == "api" ? "api" : "user_confirm"
+            return #"{"connect":"\#(connect)","create":"\#(mode)","updatePrice":"\#(mode)","#
+                + #""updateDetails":"\#(mode)","delist":"\#(mode)","relist":"\#(mode)","markSold":"\#(mode)","#
+                + #""verifyRead":"\#(verify)","importListings":"none","saleDetection":["manual"],"#
+                + #""imageTransport":"url_fetch"}"#
+        }
+        func assisted(_ id: String, _ name: String) -> String {
+            #"{"marketplace":"\#(id)","mode":"assisted","status":"not_connected","#
+                + #""statusDisplay":{"tone":"neutral","label":"Assisted","detail":"Listora prepares each "#
+                + #"listing and change, and you finish it in the \#(name) app, then confirm it."},"#
+                + #""capabilities":\#(capabilities("assisted", connect: "none")),"availableActions":[]}"#
+        }
+        let ebay = #"{"marketplace":"ebay","mode":"api","status":"not_connected","#
+            + #""statusDisplay":{"tone":"neutral","label":"Not connected","detail":"Connect your eBay "#
+            + #"account so Listora can list, update, and end your items there, and confirm every change "#
+            + #"with eBay."},"capabilities":\#(capabilities("api", connect: "oauth")),"#
+            + #""availableActions":["connect"]}"#
+        let all = [ebay, assisted("depop", "Depop"), assisted("poshmark", "Poshmark"), assisted("mercari", "Mercari")]
+        return #"{"data":[\#(all.joined(separator: ","))]}"#
+    }()
 }
 
 enum StubServerError: Error {

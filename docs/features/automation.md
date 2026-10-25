@@ -81,10 +81,13 @@ assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
   screenshots.
 - **Sale checks** (`sale-checks/`). Each automation connection has a `sale_check_schedule` row.
   A check reads the seller's sold orders through their session and hands each new one to the
-  sale intake the way the eBay order poll does ([ebay-notifications.md](ebay-notifications.md)):
-  in one transaction, an `inbound_event` (source `poll`, one per order) and, when a line is a
-  Listora listing, the sale (`recordSale`), whose `sale_recorded` job the auto-delist
-  orchestrator consumes to delist the item everywhere else (T-20). The next check is due when the expected sales since now reach what an average
+  sale intake: in one transaction, an `inbound_event` (source `poll`, one per order) and the
+  worker's `automation_sale_order` job (`sale-checks/orders.ts`). The worker records the sale
+  there (`recordSale`, [ebay-notifications.md](ebay-notifications.md)) when a line is a Listora
+  listing, which starts its auto-delist ([auto-delist.md](auto-delist.md)), and finishes the
+  event `processed` or `ignored`. The worker records it, not the runner, because the auto-delist
+  fan-out decides from each listing's capabilities whether it is marked sold or ended, and only
+  the worker's adapters include the API adapters. The next check is due when the expected sales since now reach what an average
   default interval holds (`interval.ts`): every 12 hours by default, sooner over the hours and
   days the seller's sales on that marketplace usually happen and while items are hot, later when
   idle, within `SALE_CHECK_MIN_HOURS` and `SALE_CHECK_MAX_HOURS`. A forwarded sale email asks for

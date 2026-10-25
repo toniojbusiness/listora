@@ -23,6 +23,7 @@ import { linkAutomationSession } from '../link.ts';
 import type { AutomationProfile } from '../profiles.ts';
 import { fakeSiteProfile, silentLogger, stubPhotos, testRunner } from '../test-support.ts';
 import { runSaleCheck } from './job.ts';
+import { recordSaleOrder, SALE_ORDER_TASK, type SaleOrderJobPayload } from './orders.ts';
 import { dueSaleChecks, requestSaleCheck, saleCheckJobKey } from './schedule.ts';
 
 const HOUR = 3_600_000;
@@ -192,16 +193,32 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
 
     await check(connectionId);
     await check(connectionId);
+    // Each new order is stored once, pending, with the worker's job that records its sale.
     expect(await events()).toEqual(
       [...orders].sort().map((id) => ({
         source: 'poll',
         marketplace: 'mercari',
         provider_event_id: `order:${id}`,
         payload: expect.objectContaining({ connectionId, externalOrderId: id }) as unknown,
-        result: id === orders[0] ? 'processed' : 'ignored',
+        result: null,
       })),
     );
-    // One sale, for Listora's listing, handed to auto-delist.
+    const { rows: queued } = await sql<{ payload: SaleOrderJobPayload }>`
+      select payload from graphile_worker._private_jobs where task_id =
+        (select id from graphile_worker._private_tasks where identifier = ${SALE_ORDER_TASK})
+    `.execute(database.db);
+    expect(queued).toHaveLength(2);
+
+    // The worker's side, run twice: the second run changes nothing.
+    for (let run = 0; run < 2; run += 1) {
+      for (const { payload } of queued) {
+        await recordSaleOrder({ db: database.db, adapters, logger: silentLogger }, payload);
+      }
+    }
+    expect((await events()).map((event) => [event.provider_event_id, event.result])).toEqual(
+      [...orders].sort().map((id) => [`order:${id}`, id === orders[0] ? 'processed' : 'ignored']),
+    );
+    // One sale, for Listora's listing, and its auto-delist started.
     const sales = await database.db
       .selectFrom('sale')
       .innerJoin('sale_item', 'sale_item.sale_id', 'sale.id')
@@ -221,11 +238,12 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
         listing_id: listing.id,
       },
     ]);
-    const { rows: delists } = await sql<{ key: string }>`
-      select key from graphile_worker._private_jobs where task_id =
-        (select id from graphile_worker._private_tasks where identifier = 'sale_recorded')
-    `.execute(database.db);
-    expect(delists.map((job) => job.key)).toEqual([`sale:${sales[0]?.id ?? ''}`]);
+    const runs = await database.db
+      .selectFrom('delist_run')
+      .select('item_id')
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(runs).toEqual([{ item_id: item.id }]);
     const row = await schedule(connectionId);
     expect(row).toMatchObject({ last_outcome: 'succeeded', next_reason: 'scheduled' });
     // Too little history to adapt: the default 12 hours.

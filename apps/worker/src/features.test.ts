@@ -4,9 +4,13 @@ import { join } from 'node:path';
 
 import { ACCOUNT_DELETION_TASK } from '@listora/accounts';
 import { ITEM_ANALYSIS_TASK } from '@listora/analysis';
+import { AUTO_DELIST_SLA_TASK } from '@listora/auto-delist';
+import { SALE_ORDER_TASK } from '@listora/automation';
 import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observability';
 import { LISTING_RESYNC_TASK } from '@listora/operations';
 import { PHOTO_PROCESSING_TASK } from '@listora/photos';
+import { PUSH_TASK } from '@listora/push';
+import { createLogger } from '@listora/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -33,8 +37,14 @@ afterEach(async () => {
 
 /** Features' `jobs` only build closures, so they never touch the context's services. */
 const context = {
-  config: { aiAlerts: {}, analysis: { autoEscalate: false }, marketplaces: { ebay: undefined } },
+  config: {
+    aiAlerts: {},
+    analysis: { autoEscalate: false },
+    marketplaces: { ebay: undefined },
+    push: { driver: 'fake' },
+  },
   connections: { tokens: undefined, ebaySeller: undefined, scheduledTasks: [], revoker: undefined },
+  logger: createLogger({ service: 'worker-test', level: 'silent' }),
 } as unknown as WorkerContext;
 
 const feature = (
@@ -48,9 +58,12 @@ describe('worker feature discovery', () => {
       'account-deletion',
       'ai-spend-check',
       'analysis',
+      'auto-delist',
+      'automation-sales',
       'connection-health',
       'ebay-sync',
       'photos',
+      'push',
       'trust-metrics',
     ]);
   });
@@ -63,10 +76,15 @@ describe('worker feature discovery', () => {
         ITEM_ANALYSIS_TASK,
         LISTING_RESYNC_TASK,
         PHOTO_PROCESSING_TASK,
+        PUSH_TASK,
+        SALE_ORDER_TASK,
         TRUST_METRICS_TASK,
       ].sort(),
     );
-    expect(scheduledTasks.map(({ name }) => name)).toEqual([AI_SPEND_CHECK_TASK]);
+    expect(scheduledTasks.map(({ name }) => name)).toEqual([
+      AI_SPEND_CHECK_TASK,
+      AUTO_DELIST_SLA_TASK,
+    ]);
     expect(crontab).toEqual([TRUST_METRICS_CRONTAB]);
   });
 

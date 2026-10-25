@@ -121,31 +121,33 @@ struct UnloadedPhotosNotice: View {
 
     var body: some View {
         if let picked, let problem = picked.problem {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 Label(problem, systemImage: "exclamationmark.icloud")
-                    .font(Typography.callout)
+                    .font(Typography.subheadline.weight(.semibold))
                     .foregroundStyle(Palette.textPrimary)
                     .accessibilityIdentifier("photos.unloaded")
-                HStack(spacing: Spacing.md) {
-                    Button("Try again") {
-                        Task { await retry(picked) }
-                    }
-                    .disabled(isLoading)
-                    Button(picked.loaded.isEmpty ? "Dismiss" : "Add the \(picked.loaded.count) that loaded") {
-                        self.picked = nil
-                        let loaded = picked.loaded
-                        if !loaded.isEmpty {
-                            Task { await onPicked(loaded) }
-                        }
-                    }
-                    .disabled(isLoading)
-                }
-                .font(Typography.headline)
-                .foregroundStyle(Palette.brand)
-                .frame(minHeight: Layout.minimumTapTarget)
+                AdaptiveStack { buttons(picked) }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle(.tinted(.actionNeeded), padding: Spacing.sm)
         }
+    }
+
+    @ViewBuilder
+    private func buttons(_ picked: PickedPhotos<PhotosPickerItem>) -> some View {
+        Button("Try again") {
+            Task { await retry(picked) }
+        }
+        .buttonStyle(.listora(.secondary, size: .compact))
+        .loading(isLoading)
+        Button(picked.loaded.isEmpty ? "Dismiss" : "Add the \(picked.loaded.count) that loaded") {
+            self.picked = nil
+            let loaded = picked.loaded
+            if !loaded.isEmpty {
+                Task { await onPicked(loaded) }
+            }
+        }
+        .buttonStyle(.listora(.tertiary, size: .compact))
+        .disabled(isLoading)
     }
 
     private func retry(_ current: PickedPhotos<PhotosPickerItem>) async {

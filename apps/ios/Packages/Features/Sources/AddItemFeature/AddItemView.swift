@@ -26,8 +26,13 @@ public struct AddItemView: View {
             DraftListView(model: model, environment: environment)
         } else if case let .unavailable(message) = environment.state {
             NavigationStack {
-                EmptyStateView(systemImage: "exclamationmark.triangle", title: "Drafts unavailable", message: message)
-                    .navigationTitle("Add Item")
+                EmptyStateView(
+                    systemImage: "externaldrive.badge.exclamationmark",
+                    tone: .failed,
+                    title: "Drafts unavailable",
+                    message: message,
+                )
+                .navigationTitle("Add Item")
             }
         }
     }
@@ -40,7 +45,8 @@ enum AddItemRoute: Hashable {
     case review(ItemReviewRequest)
 }
 
-/// New-item actions above the list of drafts.
+/// The drafts on this iPhone, with the new-item actions pinned at the bottom within thumb reach.
+/// With no drafts yet, the screen explains the guided shots instead.
 struct DraftListView: View {
     let model: AddItemModel
     let environment: AddItemEnvironment
@@ -50,37 +56,19 @@ struct DraftListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
-                Section {
-                    newItemCard
-                }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(
-                    top: Spacing.xs,
-                    leading: Spacing.md,
-                    bottom: Spacing.xs,
-                    trailing: Spacing.md,
-                ))
-                if !model.drafts.isEmpty {
-                    Section("Drafts") {
-                        ForEach(model.drafts) { draft in
-                            NavigationLink(value: AddItemRoute.draft(draft.id)) {
-                                DraftRow(draft: draft, activity: model.activity, fileURL: model.store.fileURL(for:))
-                            }
-                            .accessibilityIdentifier("draft.row")
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                model.deleteDraft(model.drafts[index].id)
-                            }
-                        }
+            Group {
+                if model.drafts.isEmpty {
+                    ScrollView {
+                        NewItemGuide(isCameraAvailable: environment.isCameraAvailable)
+                            .padding(Spacing.md)
                     }
-                    .listRowBackground(Palette.surface.color)
+                } else {
+                    draftList
                 }
             }
-            .scrollContentBackground(.hidden)
             .background(Palette.background)
             .navigationTitle("Add Item")
+            .bottomActionBar { actions }
             .navigationDestination(for: AddItemRoute.self) { route in
                 switch route {
                 case let .draft(draftID):
@@ -94,8 +82,9 @@ struct DraftListView: View {
                 }
             }
             .task { await model.observeDrafts() }
+            .motion(value: model.drafts.map(\.id))
             .fullScreenCover(isPresented: $isCapturing) {
-                CameraCaptureView { shots in
+                CameraCaptureView(camera: environment.makeCamera()) { shots in
                     isCapturing = false
                     if let id = await model.save(shots) {
                         path.append(.draft(id))
@@ -110,36 +99,47 @@ struct DraftListView: View {
         }
     }
 
-    private var newItemCard: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("Take photos once")
-                    .font(Typography.title)
-                    .foregroundStyle(Palette.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                Text("Front, back, tag, and any flaws. Listora saves the draft here and uploads it in the background.")
-                    .font(Typography.callout)
-                    .foregroundStyle(Palette.textSecondary)
-            }
-            if environment.isCameraAvailable {
-                Button {
-                    model.beginNewItem()
-                    isCapturing = true
-                } label: {
-                    Label("Take photos", systemImage: "camera.fill")
+    private var draftList: some View {
+        List {
+            Section {
+                ForEach(model.drafts) { draft in
+                    NavigationLink(value: AddItemRoute.draft(draft.id)) {
+                        DraftRow(draft: draft, activity: model.activity, fileURL: model.store.fileURL(for:))
+                    }
+                    .accessibilityIdentifier("draft.row")
                 }
-                .buttonStyle(.listoraPrimary)
-                .accessibilityIdentifier("addItem.takePhotos")
+                .onDelete { offsets in
+                    for index in offsets {
+                        model.deleteDraft(model.drafts[index].id)
+                    }
+                }
+            } header: {
+                SectionHeader(
+                    model.drafts.count == 1 ? "1 draft" : "\(model.drafts.count) drafts",
+                    subtitle: "Saved on this iPhone. Uploads keep going in the background.",
+                )
+                .padding(.bottom, Spacing.xxs)
             }
-            importButton
-            UnloadedPhotosNotice(picked: $unloadedPhotos, onPicked: importPhotos)
-            if model.isPreparingPhotos {
-                ProgressView("Preparing photos")
-                    .foregroundStyle(Palette.textSecondary)
-                    .frame(maxWidth: .infinity)
-            }
+            .listRowBackground(Palette.surface.color)
+            .listSectionSeparatorTint(Palette.separator.color)
         }
-        .cardStyle()
+        .scrollContentBackground(.hidden)
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        UnloadedPhotosNotice(picked: $unloadedPhotos, onPicked: importPhotos)
+        if environment.isCameraAvailable {
+            Button {
+                model.beginNewItem()
+                isCapturing = true
+            } label: {
+                Label("Take photos", systemImage: "camera.fill")
+            }
+            .buttonStyle(.listoraPrimary)
+            .accessibilityIdentifier("addItem.takePhotos")
+        }
+        importButton
     }
 
     @ViewBuilder
@@ -149,13 +149,14 @@ struct DraftListView: View {
             fixturePhotosDirectory: environment.fixturePhotosDirectory,
             unloaded: $unloadedPhotos,
             onPicked: importPhotos,
-            title: "Import photos",
+            title: environment.isCameraAvailable ? "Import from library" : "Import photos",
             systemImage: "photo.on.rectangle",
         )
         .disabled(model.isPreparingPhotos)
+        .loading(model.isPreparingPhotos)
         .accessibilityIdentifier("addItem.importPhotos")
         if environment.isCameraAvailable {
-            button.buttonStyle(.listoraSecondary)
+            button.buttonStyle(.listora(.tertiary, size: .large))
         } else {
             button.buttonStyle(.listoraPrimary)
         }
@@ -193,11 +194,70 @@ struct DraftListView: View {
     }
 }
 
-/// One draft in the list: cover photo, SKU once the server assigned it, and the upload summary.
+/// What a new item needs, shown before the first draft: the guided shots in order.
+struct NewItemGuide: View {
+    let isCameraAvailable: Bool
+
+    private static let cameraIntro =
+        "Listora guides you through each shot, saves the draft on this iPhone, and uploads it in the background."
+    private static let importIntro =
+        "Import the item's photos. Listora saves the draft on this iPhone and uploads it in the background."
+
+    private struct Shot {
+        let title: String
+        let detail: String
+        let systemImage: String
+    }
+
+    private static let shots = [
+        Shot(title: "Front", detail: "Lay it flat or hang it", systemImage: "tshirt"),
+        Shot(title: "Back", detail: "Turn it over", systemImage: "arrow.uturn.left"),
+        Shot(title: "Tag", detail: "Brand and care labels, up close", systemImage: "tag"),
+        Shot(title: "Flaws & details", detail: "Anything a buyer should see", systemImage: "magnifyingglass"),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.lg) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("Take photos once")
+                    .font(Typography.title)
+                    .foregroundStyle(Palette.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Text(isCameraAvailable ? Self.cameraIntro : Self.importIntro)
+                    .font(Typography.body)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+            VStack(spacing: 0) {
+                ForEach(Array(Self.shots.enumerated()), id: \.offset) { index, shot in
+                    if index > 0 {
+                        Divider().overlay(Palette.separator.color).padding(.leading, 36 + Spacing.sm)
+                    }
+                    ListRow(shot.title, subtitle: shot.detail, systemImage: shot.systemImage)
+                        .padding(.vertical, Spacing.xs)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Shot \(index + 1): \(shot.title). \(shot.detail)")
+                }
+            }
+            .cardStyle()
+            Label(
+                "Photos stay on this iPhone until you sign in, and their location is removed before upload.",
+                systemImage: "lock.shield",
+            )
+            .labelStyle(.titleAndIcon)
+            .font(Typography.footnote)
+            .foregroundStyle(Palette.textSecondary)
+        }
+        .frame(maxWidth: Layout.readableWidth, alignment: .leading)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// One draft in the list: cover photo, SKU once the server assigned it, and the upload status.
 struct DraftRow: View {
     let draft: Draft
     let activity: UploadActivity
     let fileURL: (DraftPhotoRecord) -> URL
+    @ScaledMetric(relativeTo: .headline) private var thumbnailSize: CGFloat = 64
 
     var body: some View {
         let summary = DraftUploadSummary(
@@ -208,13 +268,14 @@ struct DraftRow: View {
         HStack(spacing: Spacing.sm) {
             Group {
                 if let cover = draft.photos.first {
-                    PhotoThumbnail(url: fileURL(cover), pointSize: 56)
+                    PhotoThumbnail(url: fileURL(cover), pointSize: thumbnailSize)
                 } else {
                     Palette.surfaceSecondary.color
+                        .overlay(Image(systemName: "photo").foregroundStyle(Palette.textSecondary))
                 }
             }
-            .frame(width: 56, height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+            .frame(width: min(thumbnailSize, 96), height: min(thumbnailSize, 96))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(draft.record.sku ?? "New draft")
@@ -223,15 +284,14 @@ struct DraftRow: View {
                 Text(
                     "\(photoCount) · \(draft.record.createdAt, format: .relative(presentation: .named))",
                 )
-                .font(Typography.caption)
+                .font(Typography.subheadline)
                 .foregroundStyle(Palette.textSecondary)
-                Text(summary.text)
-                    .font(Typography.caption)
-                    .foregroundStyle(summary.tone.color)
-                    .lineLimit(2)
+                StatusBadge(summary.badge, tone: summary.tone.statusTone)
+                    .padding(.top, 2)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, Spacing.xxs)
+        .padding(.vertical, Spacing.xs)
         .accessibilityElement(children: .combine)
     }
 
@@ -241,12 +301,13 @@ struct DraftRow: View {
 }
 
 extension DraftUploadSummary.Tone {
-    var color: ColorToken {
+    var statusTone: StatusTone {
         switch self {
-        case .neutral, .empty: Palette.textSecondary
-        case .success: Palette.success
-        case .warning: Palette.warning
-        case .danger: Palette.danger
+        case .neutral: .inProgress
+        case .empty: .neutral
+        case .success: .success
+        case .warning: .actionNeeded
+        case .danger: .failed
         }
     }
 }

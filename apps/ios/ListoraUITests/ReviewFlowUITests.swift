@@ -37,6 +37,13 @@ final class ReviewFlowUITests: XCTestCase {
         app.buttons["saved.done"].tap()
         XCTAssertTrue(app.staticTexts["Take photos once"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["draft.row"].exists)
+
+        // The saved item is in the inventory right away, ready to list.
+        app.tabBars.buttons["Inventory"].tap()
+        let row = app.buttons["inventory.row.\(sku)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "the saved item is not in the inventory")
+        XCTAssertFalse(app.staticTexts["No items yet"].exists)
+        keepScreenshot("Inventory")
     }
 
     // MARK: Steps
@@ -63,9 +70,9 @@ final class ReviewFlowUITests: XCTestCase {
         let tag = app.buttons["photo.tile.2"]
         XCTAssertTrue(tag.waitForExistence(timeout: 15))
         tag.tap()
-        let role = app.segmentedControls["photo.role"]
+        let role = app.buttons["photo.role.tag"]
         XCTAssertTrue(role.waitForExistence(timeout: 5))
-        role.buttons["Tag"].tap()
+        role.tap()
         app.buttons["photo.done"].tap()
 
         let review = app.buttons["draft.review"]
@@ -80,14 +87,23 @@ final class ReviewFlowUITests: XCTestCase {
     /// The uncertain brand (read off the tag) and color lead, highlighted; fixing the color in
     /// place makes it the seller's.
     private func reviewConfidenceFirst() {
+        // Each read of `label` queries the app again, and the rows can still be settling just after
+        // the review appears, so wait for each label instead of reading it once.
         let brand = app.buttons["review.field.brand"]
-        XCTAssertTrue(brand.label.hasPrefix("Brand, Acme Outfitters, From Tag, Check this: 45% sure"), brand.label)
+        XCTAssertTrue(
+            waitForLabel(of: brand, prefix: "Brand, Acme Outfitters, From Tag, Check this: 45% sure"),
+            brand.label,
+        )
         let colors = app.buttons["review.field.colors"]
-        XCTAssertTrue(colors.label.hasPrefix("Colors, Blue, From AI, Check this: 50% sure"), colors.label)
+        XCTAssertTrue(waitForLabel(of: colors, prefix: "Colors, Blue, From AI, Check this: 50% sure"), colors.label)
         XCTAssertLessThan(brand.frame.minY, colors.frame.minY, "the least certain detail comes first")
-        XCTAssertTrue(app.buttons["review.field.rnNumber"].label.hasPrefix("RN number, 12345, From Tag"))
+        let rnNumber = app.buttons["review.field.rnNumber"]
+        XCTAssertTrue(waitForLabel(of: rnNumber, prefix: "RN number, 12345, From Tag"), rnNumber.label)
         let category = app.buttons["review.field.category"]
-        XCTAssertTrue(category.label.hasPrefix("Category, Clothing › Tops › Shirts, From AI"), category.label)
+        XCTAssertTrue(
+            waitForLabel(of: category, prefix: "Category, Clothing › Tops › Shirts, From AI"),
+            category.label,
+        )
 
         colors.tap()
         let editor = app.textFields["review.editor.colors"]
@@ -173,49 +189,4 @@ final class ReviewFlowUITests: XCTestCase {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
-}
-
-/// The local stack's API and signed-in session, from xcodebuild's `TEST_RUNNER_` variables.
-private struct E2EStack {
-    let apiURL: URL
-    let token: String
-    let email: String
-
-    static func fromEnvironment() throws -> E2EStack {
-        let environment = ProcessInfo.processInfo.environment
-        guard let url = environment["LISTORA_E2E_API_BASE_URL"].flatMap(URL.init(string:)),
-              let token = environment["LISTORA_E2E_ACCESS_TOKEN"]
-        else {
-            throw XCTSkip("Needs the local stack. Run `make ios-test`, which starts it.")
-        }
-        return E2EStack(apiURL: url, token: token, email: environment["LISTORA_E2E_EMAIL"] ?? "e2e@listora.test")
-    }
-
-    /// The item as the API has it (`getItemBySku`).
-    func item(sku: String) async throws -> SavedItem {
-        var request = URLRequest(url: apiURL.appending(path: "v1/skus/\(sku)"))
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await URLSession.shared.data(for: request)
-        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
-        return try JSONDecoder().decode(SavedItem.self, from: data)
-    }
-}
-
-/// The parts of the contract's `Item` the test checks.
-private struct SavedItem: Decodable {
-    let status: String
-    let details: SavedDetails
-    let fieldProvenance: [String: String]
-}
-
-private struct SavedDetails: Decodable {
-    let listPrice: SavedMoney?
-    let floorPrice: SavedMoney?
-    let cost: SavedMoney?
-    let purchaseSource: String?
-    let colors: [String]?
-}
-
-private struct SavedMoney: Decodable {
-    let amountCents: Int
 }

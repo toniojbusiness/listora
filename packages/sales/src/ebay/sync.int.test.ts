@@ -1,6 +1,6 @@
 /**
  * eBay order sync against the fake eBay and a real Postgres: a confirmation notification and
- * the order poll both record a sale once, hand it to auto-delist, and schedule the listing's
+ * the order poll both record a sale once, start its auto-delist, and schedule the listing's
  * read-back; duplicates change nothing; and an eBay account deletion purges the user's data.
  */
 import { sql } from 'kysely';
@@ -15,6 +15,7 @@ import {
   EbayOAuthClient,
   FakeEbay,
   loadEbayConfig,
+  type AdapterLookup,
   type MarketplaceAdapter,
 } from '@listora/marketplaces';
 import { sampleListingContent } from '@listora/marketplaces/testing';
@@ -43,7 +44,15 @@ describe('eBay order sync', () => {
     accessToken: () => tokenResult(),
     invalidate: () => Promise.resolve(),
   };
-  const deps = () => ({ db, endpoints: { api: fake.url }, tokens, logger, timeoutMs: 5_000 });
+  const adapters: AdapterLookup = (marketplace) => (marketplace === 'ebay' ? adapter : undefined);
+  const deps = () => ({
+    db,
+    adapters,
+    endpoints: { api: fake.url },
+    tokens,
+    logger,
+    timeoutMs: 5_000,
+  });
 
   beforeAll(async () => {
     database = await createMigratedDatabase('sales_ebay', { jobQueue: true });
@@ -166,7 +175,7 @@ describe('eBay order sync', () => {
   const event = (id: string) =>
     db.selectFrom('inbound_event').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
 
-  it('records a confirmed order once, hands it to auto-delist, and reads the listing back', async () => {
+  it('records a confirmed order once, starts its auto-delist, and reads the listing back', async () => {
     const { listingId, itemId, ebayId } = await listedItem();
     const order = fake.sell(ebayId, { shipping: '4.99' });
     const stored = await storeConfirmation(order.orderId, ebayId);
@@ -193,12 +202,22 @@ describe('eBay order sync', () => {
     expect(items).toMatchObject([
       { item_id: itemId, listing_id: listingId, sale_price_cents: 4500 },
     ]);
-    expect(await jobs('sale_recorded')).toEqual([
-      expect.objectContaining({
-        key: `sale:${sale?.id ?? ''}`,
-        payload: { accountId, saleId: sale?.id },
-      }),
-    ]);
+    // The same transaction started its auto-delist: nothing else lists the item, so its run is
+    // complete at once and the item is sold.
+    expect(
+      await db
+        .selectFrom('delist_run')
+        .select(['item_id', 'status'])
+        .where('sale_id', '=', sale?.id ?? '')
+        .execute(),
+    ).toEqual([{ item_id: itemId, status: 'completed' }]);
+    expect(
+      await db
+        .selectFrom('inventory_item')
+        .select('status')
+        .where('id', '=', itemId)
+        .executeTakeFirstOrThrow(),
+    ).toEqual({ status: 'sold' });
     expect(await jobs('listing_resync')).toContainEqual(
       expect.objectContaining({ queue_name: `listing:${listingId}` }),
     );

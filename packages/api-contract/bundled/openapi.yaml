@@ -163,6 +163,20 @@ paths:
           schema:
             type: string
             maxLength: 200
+        - name: marketplace
+          in: query
+          description: |
+            Only items with a listing on this marketplace that is not ended or sold (a draft
+            listing, or one being published, counts).
+          schema:
+            $ref: '#/components/schemas/KnownMarketplace'
+        - name: brand
+          in: query
+          description: Only items of this brand (exact, ignoring case).
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1118,14 +1132,16 @@ paths:
       operationId: retryOperation
       summary: Retry a failed operation
       description: |
-        Only for `failed` operations. Creates a new operation with the same desired state
-        (`retryOfOperationId` points at the failed one); the failed operation and its history
-        stay unchanged.
+        Only for `failed` operations. Queues the same operation again with a fresh set of
+        attempts; its history keeps the failure. Its first step reads the listing back before
+        sending anything, because an earlier attempt may have been applied.
+        `409 invalid_state_transition` when the operation has not failed, or when a newer
+        operation on the listing exists (retrying would undo it).
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '202':
-          description: The new operation.
+          description: The queued operation.
           content:
             application/json:
               schema:
@@ -1331,7 +1347,7 @@ paths:
         - sales
       operationId: listSales
       summary: List sales
-      description: Newest first (by `soldAt`).
+      description: The sales feed, newest first (by when Listora recorded them), each with its delist runs.
       parameters:
         - name: itemId
           in: query
@@ -1344,6 +1360,17 @@ paths:
             type: array
             items:
               $ref: '#/components/schemas/KnownSaleStatus'
+          style: form
+          explode: true
+        - name: delistStatus
+          in: query
+          description: |
+            Only sales with a delist run in one of these statuses; for example
+            `in_progress` and `needs_attention` for the home screen's banner.
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/DelistRunStatus'
           style: form
           explode: true
         - $ref: '#/components/parameters/Cursor'
@@ -1368,7 +1395,8 @@ paths:
         For sales Listora did not detect itself. One sale is one order; a bundle lists several
         items. Starts the same automatic delist run as a detected sale: every other listing
         of every item in the order gets a delist operation or an urgent assisted task. A
-        sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+        sale that contains an already-sold item is recorded with `isDoubleSale: true` and a
+        double-sale incident for that item instead of a second delist run.
         `422 validation_failed` when an item appears twice or a `listingId` does not belong
         to its item on `marketplace`.
       parameters:
@@ -2236,6 +2264,14 @@ components:
             $ref: '#/components/schemas/Listing'
         saleSummary:
           $ref: '#/components/schemas/ItemSaleSummary'
+        delistRun:
+          $ref: '#/components/schemas/DelistRun'
+          description: |
+            The delist run of the item's latest sale (the "Sold" banner and the delist results),
+            once the item has sold. Absent for an item that never sold.
+        doubleSale:
+          $ref: '#/components/schemas/DoubleSale'
+          description: The item's newest double sale that is still open; absent when there is none.
         createdAt:
           $ref: '#/components/schemas/Timestamp'
         updatedAt:
@@ -3967,7 +4003,10 @@ components:
         - manual
     DelistRunStatus:
       type: string
-      description: '`completed`: every other listing is verified ended or confirmed by the user. `needs_attention`: something failed or waits for the user.'
+      description: |
+        `completed`: every other listing is delisted (confirmed by the marketplace's read-back)
+        or done (the user confirmed). `needs_attention`: a delist failed, waits for the user, or
+        was canceled. `in_progress`: Listora is still delisting or checking.
       enum:
         - in_progress
         - completed
@@ -3982,6 +4021,13 @@ components:
           maxLength: 64
     KnownDelistResultState:
       type: string
+      description: |
+        `delisted`: a read-back of the marketplace confirmed it. `user_confirmed`: the user
+        confirmed an assisted delist. Only these two count as done. `pending`: delisting or
+        waiting to retry. `verifying`: the outcome is unknown and is being read back.
+        `needs_user_action`: the user has to delist it in the marketplace's app. `failed`: shows
+        the reason and a Retry. `canceled`: Listora stopped delisting it (the listing may still
+        be live).
       enum:
         - pending
         - verifying
@@ -3989,21 +4035,23 @@ components:
         - user_confirmed
         - needs_user_action
         - failed
+        - canceled
     DelistResult:
       type: object
+      description: One listing of the sold item on another marketplace, and its delist.
       required:
         - listingId
-        - itemId
         - marketplace
         - mode
         - state
         - statusDisplay
+        - operationId
+        - attempt
+        - maxAttempts
+        - updatedAt
       properties:
         listingId:
           $ref: '#/components/schemas/Id'
-        itemId:
-          $ref: '#/components/schemas/Id'
-          description: The sold item this listing belongs to (a bundle has several).
         marketplace:
           $ref: '#/components/schemas/Marketplace'
         mode:
@@ -4012,33 +4060,125 @@ components:
           $ref: '#/components/schemas/DelistResultState'
         statusDisplay:
           $ref: '#/components/schemas/StatusDisplay'
+          description: For example `Delisted (confirmed by eBay)`, `Delisting... retry 2 of 6`, or `Done (you confirmed)`.
         operationId:
           $ref: '#/components/schemas/Id'
+          description: The delist operation; Retry a `failed` one with `retryOperation`.
+        attempt:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Attempts made so far (shown as "retry 2 of 6").
+        maxAttempts:
+          type: integer
+          format: int32
+          minimum: 1
         userTaskId:
           $ref: '#/components/schemas/Id'
+          description: The assisted delist's task, which the user completes once they delisted it.
+        updatedAt:
+          $ref: '#/components/schemas/Timestamp'
     DelistRun:
       type: object
-      description: The automatic delist of every other listing of the sold items after a sale.
+      description: |
+        The automatic delist of one sold item's other listings after a sale (a bundle starts one
+        run per item). `results` has one entry per listing on another marketplace that may have
+        been live; a listing that was already ended, sold, or never published needs none.
       required:
         - id
+        - saleId
+        - itemId
+        - soldOn
         - status
         - statusDisplay
         - results
+        - escalated
         - startedAt
       properties:
         id:
           $ref: '#/components/schemas/Id'
+        saleId:
+          $ref: '#/components/schemas/Id'
+        itemId:
+          $ref: '#/components/schemas/Id'
+        soldOn:
+          $ref: '#/components/schemas/Marketplace'
+          description: The marketplace the item sold on.
         status:
           $ref: '#/components/schemas/DelistRunStatus'
         statusDisplay:
           $ref: '#/components/schemas/StatusDisplay'
+          description: The run in one line, for example `Delisted everywhere` or `Action needed - delist on Poshmark`.
         results:
           type: array
           items:
             $ref: '#/components/schemas/DelistResult'
+        escalated:
+          type: boolean
+          description: |
+            True while the run is not completed 30 minutes after the sale. The app shows a
+            banner on the home screen until it completes.
         startedAt:
           $ref: '#/components/schemas/Timestamp'
+        realertedAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When the user was alerted again because a listing was still not delisted or confirmed 10 minutes after the sale.
+        escalatedAt:
+          $ref: '#/components/schemas/Timestamp'
+          description: When the alert escalated, 30 minutes after the sale.
         completedAt:
+          $ref: '#/components/schemas/Timestamp'
+    DoubleSale:
+      type: object
+      description: |
+        A double sale: an item that had already sold sold again in this order. Listora cannot
+        cancel an order, so the user cancels one of them on its marketplace (`steps`, starting at
+        `cancelUrl`) and then completes the task (`taskId`).
+      required:
+        - taskId
+        - saleId
+        - itemId
+        - marketplace
+        - earlierSaleId
+        - earlierMarketplace
+        - title
+        - steps
+        - cancelUrl
+        - status
+        - createdAt
+      properties:
+        taskId:
+          $ref: '#/components/schemas/Id'
+        saleId:
+          $ref: '#/components/schemas/Id'
+          description: The later sale, whose order the steps cancel.
+        itemId:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+          description: The later sale's marketplace.
+        earlierSaleId:
+          $ref: '#/components/schemas/Id'
+        earlierMarketplace:
+          $ref: '#/components/schemas/Marketplace'
+        title:
+          type: string
+          maxLength: 200
+          description: For example "Cancel the order on Depop".
+        steps:
+          type: array
+          items:
+            type: string
+            maxLength: 500
+        cancelUrl:
+          type: string
+          format: uri
+          description: Where the marketplace shows the seller's orders.
+        status:
+          $ref: '#/components/schemas/UserTaskStatus'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+        resolvedAt:
           $ref: '#/components/schemas/Timestamp'
     SaleItem:
       type: object
@@ -4130,6 +4270,8 @@ components:
         - detectionSource
         - status
         - isDoubleSale
+        - delistRuns
+        - doubleSales
         - createdAt
         - updatedAt
       properties:
@@ -4179,9 +4321,17 @@ components:
           $ref: '#/components/schemas/Timestamp'
         isDoubleSale:
           type: boolean
-          description: True when an item of the order had already sold elsewhere; the user must cancel one sale.
-        delistRun:
-          $ref: '#/components/schemas/DelistRun'
+          description: True when an item of the order had already sold; the user must cancel one sale (`doubleSales`).
+        delistRuns:
+          type: array
+          description: One per item of the order that this sale started a delist for; none for an item that had already sold.
+          items:
+            $ref: '#/components/schemas/DelistRun'
+        doubleSales:
+          type: array
+          description: One per item of the order that had already sold.
+          items:
+            $ref: '#/components/schemas/DoubleSale'
         createdAt:
           $ref: '#/components/schemas/Timestamp'
         updatedAt:
@@ -4209,6 +4359,9 @@ components:
           maxLength: 64
     KnownUserTaskKind:
       type: string
+      description: |
+        `resolve_double_sale`: an item sold twice; the user cancels one of the orders (the
+        task's sale is the later one) and completes the task.
       enum:
         - list_manually
         - delist_manually
@@ -4216,6 +4369,7 @@ components:
         - confirm_sale
         - reconnect
         - review_match
+        - resolve_double_sale
     UserTaskStatus:
       type: string
       enum:
@@ -4292,7 +4446,7 @@ components:
           $ref: '#/components/schemas/Id'
         saleId:
           $ref: '#/components/schemas/Id'
-          description: For `confirm_sale`, the sale to confirm.
+          description: For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
         deepLink:
           type: string
           format: uri
@@ -4316,7 +4470,8 @@ components:
         - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
           `rejectMatch: true` when nothing matches. Exactly one of the two is required.
         - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
-        - `delist_manually`, `edit_manually`, `reconnect`: nothing besides `note`.
+        - `delist_manually`, `edit_manually`, `reconnect`, `resolve_double_sale`: nothing besides
+          `note`.
         - Every kind: optional `note`.
       properties:
         externalUrl:

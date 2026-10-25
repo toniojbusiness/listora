@@ -12,6 +12,8 @@
     { "path": "../db" },
     { "path": "../marketplaces" },
     { "path": "../operations" },
-    { "path": "../connections" }
+    { "path": "../connections" },
+    { "path": "../auto-delist" },
+    { "path": "../push" }
   ]
 }

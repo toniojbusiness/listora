@@ -95,6 +95,8 @@ export type { PageProblem, PageSignals } from './safety/challenges.ts';
 export { Pacing } from './safety/pacing.ts';
 export { nextSaleCheckDelay, SALE_HISTORY_DAYS } from './sale-checks/interval.ts';
 export { runSaleCheck } from './sale-checks/job.ts';
+export { isSaleOrderJobPayload, recordSaleOrder, SALE_ORDER_TASK } from './sale-checks/orders.ts';
+export type { SaleOrderDependencies, SaleOrderJobPayload } from './sale-checks/orders.ts';
 export type { SaleCheckDependencies } from './sale-checks/job.ts';
 export {
   dueSaleChecks,

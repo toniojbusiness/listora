@@ -27,8 +27,10 @@ The details and commands are in [apps/ios/README.md](../../apps/ios/README.md).
   Interactive steps (review, cost, price) save to the server before the next screen opens, so a
   relaunch resumes from the server's state; every wait on the server has a deadline and ends in
   a failure with a Retry, never an endless spinner ([review.md](review.md)).
-- Views use `DesignSystem` tokens, never raw colors or sizes, so light and dark mode stay
-  consistent. A test checks WCAG AA contrast for every text and background pair.
+- Views use `DesignSystem` tokens and components, never raw colors, sizes, or their own button
+  and card styling, so light and dark mode stay consistent. A test checks WCAG AA contrast for
+  every text and background pair. The design system and its rules are in
+  [design.md](design.md).
 - Tests use Swift Testing; UI tests use XCTest. `make ios-lint` (SwiftLint and SwiftFormat)
   must be clean.
 - Releases are plain `xcodebuild`, no fastlane: `scripts/ios-release.sh` archives

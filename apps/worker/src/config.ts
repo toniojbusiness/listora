@@ -20,6 +20,7 @@ import {
   MarketplaceConfigError,
   type MarketplaceConfig,
 } from '@listora/connections';
+import { loadPushConfig, PushConfigError, type PushConfig } from '@listora/push';
 import { isLogLevel, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -30,6 +31,11 @@ export interface WorkerConfig {
   concurrency: number;
   /** Photo processing and item analysis jobs run at the same time, in their own pool. */
   taskConcurrency: number;
+  /**
+   * OPERATION_RETRY_DELAY_SCALE: the operation engine's retry and confirmation delays,
+   * multiplied by this (1 in production; local stacks and tests shorten them).
+   */
+  operationRetryDelayScale: number;
   /**
    * FAKE_MARKETPLACE_URL, EBAY_*, and TOKEN_* keys, read by @listora/connections: the adapters,
    * the marketplaces whose connections the worker refreshes and checks, and the token vault.
@@ -48,6 +54,8 @@ export interface WorkerConfig {
   cognitoUserPool: { region: string; userPoolId: string } | undefined;
   /** Thresholds of the hourly AI spend check; the daily budget is the guard's own. */
   aiAlerts: AiAlertThresholds;
+  /** PUSH_DRIVER, read by @listora/push: how sale and delist alerts reach the seller's phone. */
+  push: PushConfig;
   /** AUTOMATION_*, SALE_CHECK_*, FAKE_AUTOMATION_SITE_URL: which marketplaces are automated. */
   automation: AutomationSettings;
   /** BROWSER_RUNNER_*: how the worker starts the browser runner when automated work waits. */
@@ -85,6 +93,11 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
 
   const concurrency = poolSize(issues, env, 'WORKER_CONCURRENCY', '5');
   const taskConcurrency = poolSize(issues, env, 'WORKER_TASK_CONCURRENCY', '2');
+  const rawScale = env['OPERATION_RETRY_DELAY_SCALE'] ?? '';
+  const operationRetryDelayScale = rawScale === '' ? 1 : Number(rawScale);
+  if (!(operationRetryDelayScale >= 0.001 && operationRetryDelayScale <= 1)) {
+    issues.push('OPERATION_RETRY_DELAY_SCALE must be a number from 0.001 to 1');
+  }
 
   // Empty means unset, as `FAKE_MARKETPLACE_URL=` in an env file.
   const marketplaces = collect(issues, MarketplaceConfigError, () => loadMarketplaceConfig(env));
@@ -99,6 +112,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const ai = collect(issues, AiConfigError, () => loadAiConfig(env));
   const analysis = collect(issues, AnalysisConfigError, () => loadAnalysisConfig(env));
   const aiAlerts = collect(issues, AiConfigError, () => loadAiAlertConfig(env));
+  const push = collect(issues, PushConfigError, () => loadPushConfig(env));
   const automation = collect(issues, AutomationConfigError, () => loadAutomationSettings(env));
   const runnerLaunch = collect(issues, RunnerLaunchConfigError, () => loadRunnerLaunchConfig(env));
 
@@ -109,6 +123,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     ai === undefined ||
     analysis === undefined ||
     aiAlerts === undefined ||
+    push === undefined ||
     marketplaces === undefined ||
     automation === undefined ||
     runnerLaunch === undefined
@@ -120,6 +135,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     logLevel,
     concurrency,
     taskConcurrency,
+    operationRetryDelayScale,
     marketplaces,
     storage,
     ai,
@@ -127,6 +143,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     cognitoUserPool:
       userPoolId === undefined ? undefined : { region: userPoolRegion(userPoolId), userPoolId },
     aiAlerts,
+    push,
     automation,
     runnerLaunch,
   };

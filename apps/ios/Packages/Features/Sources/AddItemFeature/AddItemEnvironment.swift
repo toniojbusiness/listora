@@ -35,6 +35,9 @@ public final class AddItemEnvironment {
     let activity: UploadActivity
     /// False in the simulator and on devices without a camera: the tab offers library import only.
     let isCameraAvailable: Bool
+    /// Debug builds only: a folder of photos that stands in for the camera
+    /// (`LISTORA_FAKE_CAMERA`), so the simulator can show and test the guided capture.
+    let fakeCameraDirectory: URL?
     /// Debug builds only: a folder whose JPEGs "Import photos" adds instead of opening the photo
     /// picker, so UI tests import fixture photos (`LISTORA_FIXTURE_PHOTOS`).
     let fixturePhotosDirectory: URL?
@@ -54,6 +57,7 @@ public final class AddItemEnvironment {
         meter: InteractionMeter,
         reviewDestination: ItemReviewDestination?,
         fixturePhotosDirectory: URL? = nil,
+        fakeCameraDirectory: URL? = nil,
     ) {
         self.init(
             dataDirectory: dataDirectory,
@@ -64,6 +68,7 @@ public final class AddItemEnvironment {
             transport: Self.backgroundTransport,
             isCameraAvailable: AVCaptureDevice.default(for: .video) != nil,
             fixturePhotosDirectory: fixturePhotosDirectory,
+            fakeCameraDirectory: fakeCameraDirectory,
             meter: meter,
             reviewDestination: reviewDestination,
         )
@@ -78,6 +83,7 @@ public final class AddItemEnvironment {
         transport: any UploadTransport,
         isCameraAvailable: Bool,
         fixturePhotosDirectory: URL?,
+        fakeCameraDirectory: URL? = nil,
         meter: InteractionMeter,
         reviewDestination: ItemReviewDestination?,
         policy: RetryPolicy = .standard,
@@ -86,8 +92,9 @@ public final class AddItemEnvironment {
         self.activity = activity
         self.meter = meter
         self.reviewDestination = reviewDestination
-        self.isCameraAvailable = isCameraAvailable
+        self.isCameraAvailable = isCameraAvailable || fakeCameraDirectory != nil
         self.fixturePhotosDirectory = fixturePhotosDirectory
+        self.fakeCameraDirectory = fakeCameraDirectory
         self.tokenChanges = tokenChanges
         do {
             let store = try DraftStore(database: DraftDatabase(directory: dataDirectory))
@@ -107,6 +114,16 @@ public final class AddItemEnvironment {
             state =
                 .unavailable("Drafts can't be saved on this iPhone right now. Free up some storage and reopen Listora.")
         }
+    }
+
+    /// A camera for one capture session.
+    func makeCamera() -> any CameraSource {
+        #if DEBUG
+            if let fakeCameraDirectory {
+                return FixtureCamera(directory: fakeCameraDirectory)
+            }
+        #endif
+        return DeviceCamera()
     }
 
     /// Where the app keeps drafts: Application Support, which is backed up and never purged.

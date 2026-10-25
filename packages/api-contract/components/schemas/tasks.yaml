@@ -9,7 +9,19 @@ UserTaskKind:
       maxLength: 64
 KnownUserTaskKind:
   type: string
-  enum: [list_manually, delist_manually, edit_manually, confirm_sale, reconnect, review_match]
+  description: |
+    `resolve_double_sale`: an item sold twice; the user cancels one of the orders (the
+    task's sale is the later one) and completes the task.
+  enum:
+    [
+      list_manually,
+      delist_manually,
+      edit_manually,
+      confirm_sale,
+      reconnect,
+      review_match,
+      resolve_double_sale,
+    ]
 UserTaskStatus:
   type: string
   enum: [open, completed, dismissed]
@@ -71,7 +83,7 @@ UserTask:
       $ref: './common.yaml#/Id'
     saleId:
       $ref: './common.yaml#/Id'
-      description: For `confirm_sale`, the sale to confirm.
+      description: For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
     deepLink:
       type: string
       format: uri
@@ -95,7 +107,8 @@ UserTaskCompletion:
     - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
       `rejectMatch: true` when nothing matches. Exactly one of the two is required.
     - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
-    - `delist_manually`, `edit_manually`, `reconnect`: nothing besides `note`.
+    - `delist_manually`, `edit_manually`, `reconnect`, `resolve_double_sale`: nothing besides
+      `note`.
     - Every kind: optional `note`.
   properties:
     externalUrl:

@@ -800,9 +800,11 @@ export interface paths {
         put?: never;
         /**
          * Retry a failed operation
-         * @description Only for `failed` operations. Creates a new operation with the same desired state
-         *     (`retryOfOperationId` points at the failed one); the failed operation and its history
-         *     stay unchanged.
+         * @description Only for `failed` operations. Queues the same operation again with a fresh set of
+         *     attempts; its history keeps the failure. Its first step reads the listing back before
+         *     sending anything, because an earlier attempt may have been applied.
+         *     `409 invalid_state_transition` when the operation has not failed, or when a newer
+         *     operation on the listing exists (retrying would undo it).
          */
         post: operations["retryOperation"];
         delete?: never;
@@ -966,7 +968,7 @@ export interface paths {
         };
         /**
          * List sales
-         * @description Newest first (by `soldAt`).
+         * @description The sales feed, newest first (by when Listora recorded them), each with its delist runs.
          */
         get: operations["listSales"];
         put?: never;
@@ -975,7 +977,8 @@ export interface paths {
          * @description For sales Listora did not detect itself. One sale is one order; a bundle lists several
          *     items. Starts the same automatic delist run as a detected sale: every other listing
          *     of every item in the order gets a delist operation or an urgent assisted task. A
-         *     sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+         *     sale that contains an already-sold item is recorded with `isDoubleSale: true` and a
+         *     double-sale incident for that item instead of a second delist run.
          *     `422 validation_failed` when an item appears twice or a `listingId` does not belong
          *     to its item on `marketplace`.
          */
@@ -1378,6 +1381,13 @@ export interface components {
             photos: components["schemas"]["Photo"][];
             listings: components["schemas"]["Listing"][];
             saleSummary?: components["schemas"]["ItemSaleSummary"];
+            /**
+             * @description The delist run of the item's latest sale (the "Sold" banner and the delist results),
+             *     once the item has sold. Absent for an item that never sold.
+             */
+            delistRun?: components["schemas"]["DelistRun"];
+            /** @description The item's newest double sale that is still open; absent when there is none. */
+            doubleSale?: components["schemas"]["DoubleSale"];
             createdAt: components["schemas"]["Timestamp"];
             updatedAt: components["schemas"]["Timestamp"];
         };
@@ -2201,7 +2211,9 @@ export interface components {
         /** @enum {string} */
         KnownSaleDetectionSource: "webhook" | "poll" | "email" | "manual";
         /**
-         * @description `completed`: every other listing is verified ended or confirmed by the user. `needs_attention`: something failed or waits for the user.
+         * @description `completed`: every other listing is delisted (confirmed by the marketplace's read-back)
+         *     or done (the user confirmed). `needs_attention`: a delist failed, waits for the user, or
+         *     was canceled. `in_progress`: Listora is still delisting or checking.
          * @enum {string}
          */
         DelistRunStatus: "in_progress" | "completed" | "needs_attention";
@@ -2210,27 +2222,89 @@ export interface components {
          *     show the result's `statusDisplay` for an unknown state and never treat it as delisted.
          */
         DelistResultState: components["schemas"]["KnownDelistResultState"];
-        /** @enum {string} */
-        KnownDelistResultState: "pending" | "verifying" | "delisted" | "user_confirmed" | "needs_user_action" | "failed";
+        /**
+         * @description `delisted`: a read-back of the marketplace confirmed it. `user_confirmed`: the user
+         *     confirmed an assisted delist. Only these two count as done. `pending`: delisting or
+         *     waiting to retry. `verifying`: the outcome is unknown and is being read back.
+         *     `needs_user_action`: the user has to delist it in the marketplace's app. `failed`: shows
+         *     the reason and a Retry. `canceled`: Listora stopped delisting it (the listing may still
+         *     be live).
+         * @enum {string}
+         */
+        KnownDelistResultState: "pending" | "verifying" | "delisted" | "user_confirmed" | "needs_user_action" | "failed" | "canceled";
+        /** @description One listing of the sold item on another marketplace, and its delist. */
         DelistResult: {
             listingId: components["schemas"]["Id"];
-            /** @description The sold item this listing belongs to (a bundle has several). */
-            itemId: components["schemas"]["Id"];
             marketplace: components["schemas"]["Marketplace"];
             mode: components["schemas"]["IntegrationMode"];
             state: components["schemas"]["DelistResultState"];
+            /** @description For example `Delisted (confirmed by eBay)`, `Delisting... retry 2 of 6`, or `Done (you confirmed)`. */
             statusDisplay: components["schemas"]["StatusDisplay"];
-            operationId?: components["schemas"]["Id"];
+            /** @description The delist operation; Retry a `failed` one with `retryOperation`. */
+            operationId: components["schemas"]["Id"];
+            /**
+             * Format: int32
+             * @description Attempts made so far (shown as "retry 2 of 6").
+             */
+            attempt: number;
+            /** Format: int32 */
+            maxAttempts: number;
+            /** @description The assisted delist's task, which the user completes once they delisted it. */
             userTaskId?: components["schemas"]["Id"];
+            updatedAt: components["schemas"]["Timestamp"];
         };
-        /** @description The automatic delist of every other listing of the sold items after a sale. */
+        /**
+         * @description The automatic delist of one sold item's other listings after a sale (a bundle starts one
+         *     run per item). `results` has one entry per listing on another marketplace that may have
+         *     been live; a listing that was already ended, sold, or never published needs none.
+         */
         DelistRun: {
             id: components["schemas"]["Id"];
+            saleId: components["schemas"]["Id"];
+            itemId: components["schemas"]["Id"];
+            /** @description The marketplace the item sold on. */
+            soldOn: components["schemas"]["Marketplace"];
             status: components["schemas"]["DelistRunStatus"];
+            /** @description The run in one line, for example `Delisted everywhere` or `Action needed - delist on Poshmark`. */
             statusDisplay: components["schemas"]["StatusDisplay"];
             results: components["schemas"]["DelistResult"][];
+            /**
+             * @description True while the run is not completed 30 minutes after the sale. The app shows a
+             *     banner on the home screen until it completes.
+             */
+            escalated: boolean;
             startedAt: components["schemas"]["Timestamp"];
+            /** @description When the user was alerted again because a listing was still not delisted or confirmed 10 minutes after the sale. */
+            realertedAt?: components["schemas"]["Timestamp"];
+            /** @description When the alert escalated, 30 minutes after the sale. */
+            escalatedAt?: components["schemas"]["Timestamp"];
             completedAt?: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description A double sale: an item that had already sold sold again in this order. Listora cannot
+         *     cancel an order, so the user cancels one of them on its marketplace (`steps`, starting at
+         *     `cancelUrl`) and then completes the task (`taskId`).
+         */
+        DoubleSale: {
+            taskId: components["schemas"]["Id"];
+            /** @description The later sale, whose order the steps cancel. */
+            saleId: components["schemas"]["Id"];
+            itemId: components["schemas"]["Id"];
+            /** @description The later sale's marketplace. */
+            marketplace: components["schemas"]["Marketplace"];
+            earlierSaleId: components["schemas"]["Id"];
+            earlierMarketplace: components["schemas"]["Marketplace"];
+            /** @description For example "Cancel the order on Depop". */
+            title: string;
+            steps: string[];
+            /**
+             * Format: uri
+             * @description Where the marketplace shows the seller's orders.
+             */
+            cancelUrl: string;
+            status: components["schemas"]["UserTaskStatus"];
+            createdAt: components["schemas"]["Timestamp"];
+            resolvedAt?: components["schemas"]["Timestamp"];
         };
         /** @description One item of an order. */
         SaleItem: {
@@ -2299,9 +2373,12 @@ export interface components {
             detectionSource: components["schemas"]["SaleDetectionSource"];
             status: components["schemas"]["SaleStatus"];
             shipBy?: components["schemas"]["Timestamp"];
-            /** @description True when an item of the order had already sold elsewhere; the user must cancel one sale. */
+            /** @description True when an item of the order had already sold; the user must cancel one sale (`doubleSales`). */
             isDoubleSale: boolean;
-            delistRun?: components["schemas"]["DelistRun"];
+            /** @description One per item of the order that this sale started a delist for; none for an item that had already sold. */
+            delistRuns: components["schemas"]["DelistRun"][];
+            /** @description One per item of the order that had already sold. */
+            doubleSales: components["schemas"]["DoubleSale"][];
             createdAt: components["schemas"]["Timestamp"];
             updatedAt: components["schemas"]["Timestamp"];
         };
@@ -2316,8 +2393,12 @@ export interface components {
          *     the app to complete it.
          */
         UserTaskKind: components["schemas"]["KnownUserTaskKind"];
-        /** @enum {string} */
-        KnownUserTaskKind: "list_manually" | "delist_manually" | "edit_manually" | "confirm_sale" | "reconnect" | "review_match";
+        /**
+         * @description `resolve_double_sale`: an item sold twice; the user cancels one of the orders (the
+         *     task's sale is the later one) and completes the task.
+         * @enum {string}
+         */
+        KnownUserTaskKind: "list_manually" | "delist_manually" | "edit_manually" | "confirm_sale" | "reconnect" | "review_match" | "resolve_double_sale";
         /** @enum {string} */
         UserTaskStatus: "open" | "completed" | "dismissed";
         /**
@@ -2348,7 +2429,7 @@ export interface components {
             itemId?: components["schemas"]["Id"];
             listingId?: components["schemas"]["Id"];
             operationId?: components["schemas"]["Id"];
-            /** @description For `confirm_sale`, the sale to confirm. */
+            /** @description For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale. */
             saleId?: components["schemas"]["Id"];
             /**
              * Format: uri
@@ -2369,7 +2450,8 @@ export interface components {
          *     - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
          *       `rejectMatch: true` when nothing matches. Exactly one of the two is required.
          *     - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
-         *     - `delist_manually`, `edit_manually`, `reconnect`: nothing besides `note`.
+         *     - `delist_manually`, `edit_manually`, `reconnect`, `resolve_double_sale`: nothing besides
+         *       `note`.
          *     - Every kind: optional `note`.
          */
         UserTaskCompletion: {
@@ -2674,6 +2756,7 @@ export type DelistResultState = components['schemas']['DelistResultState'];
 export type KnownDelistResultState = components['schemas']['KnownDelistResultState'];
 export type DelistResult = components['schemas']['DelistResult'];
 export type DelistRun = components['schemas']['DelistRun'];
+export type DoubleSale = components['schemas']['DoubleSale'];
 export type SaleItem = components['schemas']['SaleItem'];
 export type KnownFeeType = components['schemas']['KnownFeeType'];
 export type FeeType = components['schemas']['FeeType'];
@@ -2806,6 +2889,13 @@ export interface operations {
                 status?: components["schemas"]["KnownItemStatus"][];
                 /** @description Free-text search over SKU, title, brand, and keywords. */
                 q?: string;
+                /**
+                 * @description Only items with a listing on this marketplace that is not ended or sold (a draft
+                 *     listing, or one being published, counts).
+                 */
+                marketplace?: components["schemas"]["KnownMarketplace"];
+                /** @description Only items of this brand (exact, ignoring case). */
+                brand?: string;
                 /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Page size. */
@@ -3869,7 +3959,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The new operation. */
+            /** @description The queued operation. */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -4089,6 +4179,11 @@ export interface operations {
                 /** @description Only sales whose order contains this item. */
                 itemId?: components["schemas"]["Id"];
                 status?: components["schemas"]["KnownSaleStatus"][];
+                /**
+                 * @description Only sales with a delist run in one of these statuses; for example
+                 *     `in_progress` and `needs_attention` for the home screen's banner.
+                 */
+                delistStatus?: components["schemas"]["DelistRunStatus"][];
                 /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Page size. */
@@ -4358,9 +4453,9 @@ export const connectionAuthorizationStatusValues: ReadonlyArray<FlattenedDeepReq
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];
-export const knownDelistResultStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownDelistResultState"]> = ["pending", "verifying", "delisted", "user_confirmed", "needs_user_action", "failed"];
+export const knownDelistResultStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownDelistResultState"]> = ["pending", "verifying", "delisted", "user_confirmed", "needs_user_action", "failed", "canceled"];
 export const knownFeeTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeType"]> = ["marketplace", "payment", "shipping_label", "promotion", "tax", "other"];
 export const feeSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FeeSource"]> = ["actual", "estimated"];
-export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "edit_manually", "confirm_sale", "reconnect", "review_match"];
+export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "edit_manually", "confirm_sale", "reconnect", "review_match", "resolve_double_sale"];
 export const userTaskStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskStatus"]> = ["open", "completed", "dismissed"];
 export const userTaskUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskUrgency"]> = ["normal", "urgent"];

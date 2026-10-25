@@ -80,8 +80,9 @@ apps/
   api/          Fastify HTTP API (@listora/api)
   worker/       Background worker: operation engine, plus one module per feature's jobs in
                 src/features/ (account deletion, AI spend check, item analysis, photo
-                processing, trust metrics, the daily connection health check); and the
-                on-demand browser runner (src/runner/main.ts) (@listora/worker)
+                processing, trust metrics, the daily connection health check, the delist SLA,
+                push delivery); and the on-demand browser runner (src/runner/main.ts)
+                (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
                 and account blocks (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
@@ -113,8 +114,12 @@ packages/
                 fake marketplace site (@listora/automation)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
                 drift resync (@listora/operations)
-  sales/        Sale intake: inbound events, recording sales for auto-delist; eBay notifications,
-                the order poll, eBay account deletion (@listora/sales)
+  sales/        Sale intake: inbound events, recording sales (which starts their auto-delist);
+                eBay notifications, the order poll, eBay account deletion (@listora/sales)
+  auto-delist/  The auto-delist orchestrator: the fan-out after a sale, delist runs and their
+                per-marketplace truth, SLA re-alerts, double-sale incidents (@listora/auto-delist)
+  push/         Push notifications: the notification, the sender interface and its recording
+                fake, the outbox job (@listora/push)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
@@ -184,8 +189,11 @@ src/
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
   usage/         getUsage: the plan's quota use, from the counters the AI guards enforce
-  listings/      Listing views (honest statusDisplay) and shared-listing links
+  listings/      Draft listings, the listing actions (publish, price, revise, end, relist,
+                 verify) queued on the operation engine, honest views, shared-listing links
+  operations/    Operations, their history, Retry, and Cancel
   connections/   Marketplace connections, connect attempts, and the public OAuth callback
+  sales/         The sales feed (listSales, getSale) with each sale's delist runs and double sales
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
 ```
 
@@ -243,7 +251,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                                                    | SES inbound                | `EMAIL_INGEST=folder\|ses`            |
 | Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                                      | Cognito                    | `AUTH_DRIVER=dev\|cognito`            |
 | Payments         | Fake Stripe client + StoreKit configuration file                                                                                                                        | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`         |
-| Push             | Recording fake                                                                                                                                                          | APNs                       | `PUSH_DRIVER`                         |
+| Push             | Recording fake that logs each notification (`packages/push`)                                                                                                            | APNs (with device tokens)  | `PUSH_DRIVER=fake`                    |
 | Token encryption | Local AES-GCM key from `.env` (`TOKEN_ENCRYPTION_KEY`), for OAuth tokens and browser sessions                                                                           | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                    |
 | iOS              | iPhone 17 simulator, photo-library fixtures                                                                                                                             | Device / TestFlight        | xcconfig `API_BASE_URL`               |
 
@@ -294,7 +302,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   inventory, photos, and history in [items.md](features/items.md); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
   [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in
-  [operations.md](features/operations.md#data); pricing in [pricing.md](features/pricing.md#data);
+  [operations.md](features/operations.md#data) (double-sale incidents in
+  [auto-delist.md](features/auto-delist.md#data)); pricing in [pricing.md](features/pricing.md#data);
   deleted identities and account deletion in [auth.md](features/auth.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
@@ -332,7 +341,10 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
   `.build/ios`. It runs them inside the local stack (`packages/e2e`, `npm run e2e:stack`): the
   API and worker from this checkout with the fake drivers, on a scratch database of the
   `scripts/dev-db.sh` cluster, with a signed-in test user. UI tests that go through the
-  backend use it; the fake AI answers them from `apps/ios/ListoraUITests/FakeAI`.
+  backend use it; the fake AI answers them from `apps/ios/ListoraUITests/FakeAI`. It retries a
+  failing test up to twice and ends by naming the tests that failed and the ones that passed only
+  on a retry (flaky: they do not block a merge but get a follow-up fix; the
+  [README](../README.md#ci) has the rule).
 - Integration tests use a real Postgres: the local `listora_test` database from
   `scripts/dev-db.sh` (locally and in CI), or `TEST_DATABASE_URL` when set. They fail, and
   never skip, when the database is unreachable. Tests that need their own schema create a
@@ -360,7 +372,9 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 
 | File                                                             | Covers                                                                        |
 | ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [features/operations.md](features/operations.md)                 | The operation engine, auto-delist, the honest status vocabulary               |
+| [features/operations.md](features/operations.md)                 | The operation engine, the honest status vocabulary                            |
+| [features/auto-delist.md](features/auto-delist.md)               | Sale intake, the delist fan-out, delist runs, SLA re-alerts, double sales     |
+| [features/push.md](features/push.md)                             | Push notifications: the outbox job and the drivers                            |
 | [features/marketplaces.md](features/marketplaces.md)             | The adapter interface, capabilities, assisted adapters, conformance, listings |
 | [features/ebay.md](features/ebay.md)                             | The eBay adapter, the fake eBay, the sandbox check                            |
 | [features/ebay-notifications.md](features/ebay-notifications.md) | eBay notifications, the order poll, eBay account deletion                     |
@@ -376,6 +390,8 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/observability.md](features/observability.md)           | Logs, request ids, the signals alarms key on                                  |
 | [features/ios.md](features/ios.md)                               | iOS app conventions                                                           |
 | [features/review.md](features/review.md)                         | The iPhone review, cost, and price screens and the interaction-time metric    |
+| [features/design.md](features/design.md)                         | The iPhone app's design system, screenshots, and UI audit                     |
+| [features/inventory.md](features/inventory.md)                   | The Inventory tab, the item screen, the listing flow and its API              |
 
 ### Former section numbers
 

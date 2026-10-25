@@ -10,6 +10,7 @@ import {
   jsonb,
   type DbExecutor,
   type DbTransaction,
+  type JsonObject,
   type OperationKind,
   type OperationOrigin,
 } from '@listora/db';
@@ -35,6 +36,8 @@ import {
   OperationNotFoundError,
   SupersededOperationError,
 } from './errors.ts';
+import { wasSentThroughApi } from './history.ts';
+import { syncItemListedStatus } from './item-status.ts';
 import { removeOperationJob, scheduleOperationJob } from './jobs.ts';
 import { createdAfter } from './ordering.ts';
 import {
@@ -237,6 +240,61 @@ export async function cancelOperation(
   });
 }
 
+/** Edits: what they change no longer matters once the listing is delisted. */
+const EDIT_KINDS = ['revise', 'price'] as const satisfies readonly OperationKind[];
+/** Publishes: they put a listing on the marketplace. */
+const PUBLISH_KINDS = ['create', 'relist'] as const satisfies readonly OperationKind[];
+
+/**
+ * Before the delist that follows a sale (the auto-delist orchestrator), cancels the listing's
+ * operations that the sale made moot and that can be canceled without losing track of what is on
+ * the marketplace:
+ *
+ * - edits (revise, price) waiting to run or to retry, whatever an earlier attempt did: the delist
+ *   ends the listing, and its own read-back decides;
+ * - publishes (create, relist) waiting to run or to retry that never went through the API, so
+ *   nothing of them reached the marketplace and a sold item is never published.
+ *
+ * Running and verifying operations, and publishes that may have reached the marketplace, are
+ * left to finish: their read-backs may find a live listing the delist must end. Operations that
+ * wait for the user are left to the delist, which supersedes them when it runs. Each canceled
+ * operation records `reason` in its history, and its open tasks are dismissed. Returns the
+ * canceled operations' ids, oldest first.
+ */
+export async function cancelMootOperations(
+  executor: DbExecutor,
+  target: { accountId: string; listingId: string; reason: string; detail?: JsonObject },
+): Promise<string[]> {
+  return inTransaction(executor, async (trx) => {
+    const waiting = await trx
+      .selectFrom('marketplace_operation')
+      .selectAll()
+      .where('account_id', '=', target.accountId)
+      .where('listing_id', '=', target.listingId)
+      .where('status', 'in', ['queued', 'retrying'])
+      .where('kind', 'in', [...EDIT_KINDS, ...PUBLISH_KINDS])
+      .orderBy('created_at')
+      .orderBy('id')
+      .forUpdate()
+      .execute();
+    const canceled: string[] = [];
+    for (const op of waiting) {
+      const publish = (PUBLISH_KINDS as readonly OperationKind[]).includes(op.kind);
+      if (publish && (await wasSentThroughApi(trx, op))) continue;
+      await transitionOperation(
+        trx,
+        op,
+        { to: 'canceled' },
+        { ...target.detail, action: 'supersede', reason: target.reason },
+      );
+      await removeOperationJob(trx, op.id);
+      await dismissOpenTasks(trx, op);
+      canceled.push(op.id);
+    }
+    return canceled;
+  });
+}
+
 /** Dismisses an operation's open user tasks, which no longer finish it. */
 export async function dismissOpenTasks(
   trx: DbTransaction,
@@ -295,6 +353,13 @@ export async function confirmOperationByUser(
         .where('account_id', '=', op.account_id)
         .where('id', '=', op.listing_id)
         .execute();
+      const { item_id: itemId } = await trx
+        .selectFrom('marketplace_listing')
+        .select('item_id')
+        .where('account_id', '=', op.account_id)
+        .where('id', '=', op.listing_id)
+        .executeTakeFirstOrThrow();
+      await syncItemListedStatus(trx, op.account_id, itemId);
     }
     return succeeded;
   });

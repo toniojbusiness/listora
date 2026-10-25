@@ -460,6 +460,7 @@ describe('vocabulary', () => {
         'confirm_sale',
         'reconnect',
         'review_match',
+        'resolve_double_sale',
       ],
     ],
     ['KnownSaleStatus', ['detected', 'confirmed', 'canceled', 'returned']],

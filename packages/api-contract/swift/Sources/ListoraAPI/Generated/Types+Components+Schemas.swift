@@ -1100,6 +1100,16 @@ extension Components {
             public var listings: [Components.Schemas.Listing]
             /// - Remark: Generated from `#/components/schemas/Item/saleSummary`.
             public var saleSummary: Components.Schemas.ItemSaleSummary?
+            /// The delist run of the item's latest sale (the "Sold" banner and the delist results),
+            /// once the item has sold. Absent for an item that never sold.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/delistRun`.
+            public var delistRun: Components.Schemas.DelistRun?
+            /// The item's newest double sale that is still open; absent when there is none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/doubleSale`.
+            public var doubleSale: Components.Schemas.DoubleSale?
             /// - Remark: Generated from `#/components/schemas/Item/createdAt`.
             public var createdAt: Components.Schemas.Timestamp
             /// - Remark: Generated from `#/components/schemas/Item/updatedAt`.
@@ -1117,6 +1127,8 @@ extension Components {
             ///   - photos: In display order; the first is the cover.
             ///   - listings:
             ///   - saleSummary:
+            ///   - delistRun: The delist run of the item's latest sale (the "Sold" banner and the delist results),
+            ///   - doubleSale: The item's newest double sale that is still open; absent when there is none.
             ///   - createdAt:
             ///   - updatedAt:
             public init(
@@ -1130,6 +1142,8 @@ extension Components {
                 photos: [Components.Schemas.Photo],
                 listings: [Components.Schemas.Listing],
                 saleSummary: Components.Schemas.ItemSaleSummary? = nil,
+                delistRun: Components.Schemas.DelistRun? = nil,
+                doubleSale: Components.Schemas.DoubleSale? = nil,
                 createdAt: Components.Schemas.Timestamp,
                 updatedAt: Components.Schemas.Timestamp
             ) {
@@ -1143,6 +1157,8 @@ extension Components {
                 self.photos = photos
                 self.listings = listings
                 self.saleSummary = saleSummary
+                self.delistRun = delistRun
+                self.doubleSale = doubleSale
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
             }
@@ -1157,6 +1173,8 @@ extension Components {
                 case photos
                 case listings
                 case saleSummary
+                case delistRun
+                case doubleSale
                 case createdAt
                 case updatedAt
             }
@@ -5065,7 +5083,10 @@ extension Components {
             case email = "email"
             case manual = "manual"
         }
-        /// `completed`: every other listing is verified ended or confirmed by the user. `needs_attention`: something failed or waits for the user.
+        /// `completed`: every other listing is delisted (confirmed by the marketplace's read-back)
+        /// or done (the user confirmed). `needs_attention`: a delist failed, waits for the user, or
+        /// was canceled. `in_progress`: Listora is still delisting or checking.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/DelistRunStatus`.
         @frozen public enum DelistRunStatus: String, Codable, Hashable, Sendable, CaseIterable {
@@ -5124,6 +5145,14 @@ extension Components {
                 ])
             }
         }
+        /// `delisted`: a read-back of the marketplace confirmed it. `user_confirmed`: the user
+        /// confirmed an assisted delist. Only these two count as done. `pending`: delisting or
+        /// waiting to retry. `verifying`: the outcome is unknown and is being read back.
+        /// `needs_user_action`: the user has to delist it in the marketplace's app. `failed`: shows
+        /// the reason and a Retry. `canceled`: Listora stopped delisting it (the listing may still
+        /// be live).
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/KnownDelistResultState`.
         @frozen public enum KnownDelistResultState: String, Codable, Hashable, Sendable, CaseIterable {
             case pending = "pending"
@@ -5132,115 +5161,283 @@ extension Components {
             case userConfirmed = "user_confirmed"
             case needsUserAction = "needs_user_action"
             case failed = "failed"
+            case canceled = "canceled"
         }
+        /// One listing of the sold item on another marketplace, and its delist.
+        ///
         /// - Remark: Generated from `#/components/schemas/DelistResult`.
         public struct DelistResult: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/DelistResult/listingId`.
             public var listingId: Components.Schemas.Id
-            /// The sold item this listing belongs to (a bundle has several).
-            ///
-            /// - Remark: Generated from `#/components/schemas/DelistResult/itemId`.
-            public var itemId: Components.Schemas.Id
             /// - Remark: Generated from `#/components/schemas/DelistResult/marketplace`.
             public var marketplace: Components.Schemas.Marketplace
             /// - Remark: Generated from `#/components/schemas/DelistResult/mode`.
             public var mode: Components.Schemas.IntegrationMode
             /// - Remark: Generated from `#/components/schemas/DelistResult/state`.
             public var state: Components.Schemas.DelistResultState
+            /// For example `Delisted (confirmed by eBay)`, `Delisting... retry 2 of 6`, or `Done (you confirmed)`.
+            ///
             /// - Remark: Generated from `#/components/schemas/DelistResult/statusDisplay`.
             public var statusDisplay: Components.Schemas.StatusDisplay
+            /// The delist operation; Retry a `failed` one with `retryOperation`.
+            ///
             /// - Remark: Generated from `#/components/schemas/DelistResult/operationId`.
-            public var operationId: Components.Schemas.Id?
+            public var operationId: Components.Schemas.Id
+            /// Attempts made so far (shown as "retry 2 of 6").
+            ///
+            /// - Remark: Generated from `#/components/schemas/DelistResult/attempt`.
+            public var attempt: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/DelistResult/maxAttempts`.
+            public var maxAttempts: Swift.Int32
+            /// The assisted delist's task, which the user completes once they delisted it.
+            ///
             /// - Remark: Generated from `#/components/schemas/DelistResult/userTaskId`.
             public var userTaskId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/DelistResult/updatedAt`.
+            public var updatedAt: Components.Schemas.Timestamp
             /// Creates a new `DelistResult`.
             ///
             /// - Parameters:
             ///   - listingId:
-            ///   - itemId: The sold item this listing belongs to (a bundle has several).
             ///   - marketplace:
             ///   - mode:
             ///   - state:
-            ///   - statusDisplay:
-            ///   - operationId:
-            ///   - userTaskId:
+            ///   - statusDisplay: For example `Delisted (confirmed by eBay)`, `Delisting... retry 2 of 6`, or `Done (you confirmed)`.
+            ///   - operationId: The delist operation; Retry a `failed` one with `retryOperation`.
+            ///   - attempt: Attempts made so far (shown as "retry 2 of 6").
+            ///   - maxAttempts:
+            ///   - userTaskId: The assisted delist's task, which the user completes once they delisted it.
+            ///   - updatedAt:
             public init(
                 listingId: Components.Schemas.Id,
-                itemId: Components.Schemas.Id,
                 marketplace: Components.Schemas.Marketplace,
                 mode: Components.Schemas.IntegrationMode,
                 state: Components.Schemas.DelistResultState,
                 statusDisplay: Components.Schemas.StatusDisplay,
-                operationId: Components.Schemas.Id? = nil,
-                userTaskId: Components.Schemas.Id? = nil
+                operationId: Components.Schemas.Id,
+                attempt: Swift.Int32,
+                maxAttempts: Swift.Int32,
+                userTaskId: Components.Schemas.Id? = nil,
+                updatedAt: Components.Schemas.Timestamp
             ) {
                 self.listingId = listingId
-                self.itemId = itemId
                 self.marketplace = marketplace
                 self.mode = mode
                 self.state = state
                 self.statusDisplay = statusDisplay
                 self.operationId = operationId
+                self.attempt = attempt
+                self.maxAttempts = maxAttempts
                 self.userTaskId = userTaskId
+                self.updatedAt = updatedAt
             }
             public enum CodingKeys: String, CodingKey {
                 case listingId
-                case itemId
                 case marketplace
                 case mode
                 case state
                 case statusDisplay
                 case operationId
+                case attempt
+                case maxAttempts
                 case userTaskId
+                case updatedAt
             }
         }
-        /// The automatic delist of every other listing of the sold items after a sale.
+        /// The automatic delist of one sold item's other listings after a sale (a bundle starts one
+        /// run per item). `results` has one entry per listing on another marketplace that may have
+        /// been live; a listing that was already ended, sold, or never published needs none.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/DelistRun`.
         public struct DelistRun: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/DelistRun/id`.
             public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/DelistRun/saleId`.
+            public var saleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/DelistRun/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// The marketplace the item sold on.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DelistRun/soldOn`.
+            public var soldOn: Components.Schemas.Marketplace
             /// - Remark: Generated from `#/components/schemas/DelistRun/status`.
             public var status: Components.Schemas.DelistRunStatus
+            /// The run in one line, for example `Delisted everywhere` or `Action needed - delist on Poshmark`.
+            ///
             /// - Remark: Generated from `#/components/schemas/DelistRun/statusDisplay`.
             public var statusDisplay: Components.Schemas.StatusDisplay
             /// - Remark: Generated from `#/components/schemas/DelistRun/results`.
             public var results: [Components.Schemas.DelistResult]
+            /// True while the run is not completed 30 minutes after the sale. The app shows a
+            /// banner on the home screen until it completes.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/DelistRun/escalated`.
+            public var escalated: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/DelistRun/startedAt`.
             public var startedAt: Components.Schemas.Timestamp
+            /// When the user was alerted again because a listing was still not delisted or confirmed 10 minutes after the sale.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DelistRun/realertedAt`.
+            public var realertedAt: Components.Schemas.Timestamp?
+            /// When the alert escalated, 30 minutes after the sale.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DelistRun/escalatedAt`.
+            public var escalatedAt: Components.Schemas.Timestamp?
             /// - Remark: Generated from `#/components/schemas/DelistRun/completedAt`.
             public var completedAt: Components.Schemas.Timestamp?
             /// Creates a new `DelistRun`.
             ///
             /// - Parameters:
             ///   - id:
+            ///   - saleId:
+            ///   - itemId:
+            ///   - soldOn: The marketplace the item sold on.
             ///   - status:
-            ///   - statusDisplay:
+            ///   - statusDisplay: The run in one line, for example `Delisted everywhere` or `Action needed - delist on Poshmark`.
             ///   - results:
+            ///   - escalated: True while the run is not completed 30 minutes after the sale. The app shows a
             ///   - startedAt:
+            ///   - realertedAt: When the user was alerted again because a listing was still not delisted or confirmed 10 minutes after the sale.
+            ///   - escalatedAt: When the alert escalated, 30 minutes after the sale.
             ///   - completedAt:
             public init(
                 id: Components.Schemas.Id,
+                saleId: Components.Schemas.Id,
+                itemId: Components.Schemas.Id,
+                soldOn: Components.Schemas.Marketplace,
                 status: Components.Schemas.DelistRunStatus,
                 statusDisplay: Components.Schemas.StatusDisplay,
                 results: [Components.Schemas.DelistResult],
+                escalated: Swift.Bool,
                 startedAt: Components.Schemas.Timestamp,
+                realertedAt: Components.Schemas.Timestamp? = nil,
+                escalatedAt: Components.Schemas.Timestamp? = nil,
                 completedAt: Components.Schemas.Timestamp? = nil
             ) {
                 self.id = id
+                self.saleId = saleId
+                self.itemId = itemId
+                self.soldOn = soldOn
                 self.status = status
                 self.statusDisplay = statusDisplay
                 self.results = results
+                self.escalated = escalated
                 self.startedAt = startedAt
+                self.realertedAt = realertedAt
+                self.escalatedAt = escalatedAt
                 self.completedAt = completedAt
             }
             public enum CodingKeys: String, CodingKey {
                 case id
+                case saleId
+                case itemId
+                case soldOn
                 case status
                 case statusDisplay
                 case results
+                case escalated
                 case startedAt
+                case realertedAt
+                case escalatedAt
                 case completedAt
+            }
+        }
+        /// A double sale: an item that had already sold sold again in this order. Listora cannot
+        /// cancel an order, so the user cancels one of them on its marketplace (`steps`, starting at
+        /// `cancelUrl`) and then completes the task (`taskId`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/DoubleSale`.
+        public struct DoubleSale: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/taskId`.
+            public var taskId: Components.Schemas.Id
+            /// The later sale, whose order the steps cancel.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/saleId`.
+            public var saleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// The later sale's marketplace.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/earlierSaleId`.
+            public var earlierSaleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/earlierMarketplace`.
+            public var earlierMarketplace: Components.Schemas.Marketplace
+            /// For example "Cancel the order on Depop".
+            ///
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/steps`.
+            public var steps: [Swift.String]
+            /// Where the marketplace shows the seller's orders.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/cancelUrl`.
+            public var cancelUrl: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/status`.
+            public var status: Components.Schemas.UserTaskStatus
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/createdAt`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/DoubleSale/resolvedAt`.
+            public var resolvedAt: Components.Schemas.Timestamp?
+            /// Creates a new `DoubleSale`.
+            ///
+            /// - Parameters:
+            ///   - taskId:
+            ///   - saleId: The later sale, whose order the steps cancel.
+            ///   - itemId:
+            ///   - marketplace: The later sale's marketplace.
+            ///   - earlierSaleId:
+            ///   - earlierMarketplace:
+            ///   - title: For example "Cancel the order on Depop".
+            ///   - steps:
+            ///   - cancelUrl: Where the marketplace shows the seller's orders.
+            ///   - status:
+            ///   - createdAt:
+            ///   - resolvedAt:
+            public init(
+                taskId: Components.Schemas.Id,
+                saleId: Components.Schemas.Id,
+                itemId: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                earlierSaleId: Components.Schemas.Id,
+                earlierMarketplace: Components.Schemas.Marketplace,
+                title: Swift.String,
+                steps: [Swift.String],
+                cancelUrl: Swift.String,
+                status: Components.Schemas.UserTaskStatus,
+                createdAt: Components.Schemas.Timestamp,
+                resolvedAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.taskId = taskId
+                self.saleId = saleId
+                self.itemId = itemId
+                self.marketplace = marketplace
+                self.earlierSaleId = earlierSaleId
+                self.earlierMarketplace = earlierMarketplace
+                self.title = title
+                self.steps = steps
+                self.cancelUrl = cancelUrl
+                self.status = status
+                self.createdAt = createdAt
+                self.resolvedAt = resolvedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case taskId
+                case saleId
+                case itemId
+                case marketplace
+                case earlierSaleId
+                case earlierMarketplace
+                case title
+                case steps
+                case cancelUrl
+                case status
+                case createdAt
+                case resolvedAt
             }
         }
         /// One item of an order.
@@ -5473,12 +5670,18 @@ extension Components {
             public var status: Components.Schemas.SaleStatus
             /// - Remark: Generated from `#/components/schemas/Sale/shipBy`.
             public var shipBy: Components.Schemas.Timestamp?
-            /// True when an item of the order had already sold elsewhere; the user must cancel one sale.
+            /// True when an item of the order had already sold; the user must cancel one sale (`doubleSales`).
             ///
             /// - Remark: Generated from `#/components/schemas/Sale/isDoubleSale`.
             public var isDoubleSale: Swift.Bool
-            /// - Remark: Generated from `#/components/schemas/Sale/delistRun`.
-            public var delistRun: Components.Schemas.DelistRun?
+            /// One per item of the order that this sale started a delist for; none for an item that had already sold.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sale/delistRuns`.
+            public var delistRuns: [Components.Schemas.DelistRun]
+            /// One per item of the order that had already sold.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sale/doubleSales`.
+            public var doubleSales: [Components.Schemas.DoubleSale]
             /// - Remark: Generated from `#/components/schemas/Sale/createdAt`.
             public var createdAt: Components.Schemas.Timestamp
             /// - Remark: Generated from `#/components/schemas/Sale/updatedAt`.
@@ -5500,8 +5703,9 @@ extension Components {
             ///   - detectionSource:
             ///   - status:
             ///   - shipBy:
-            ///   - isDoubleSale: True when an item of the order had already sold elsewhere; the user must cancel one sale.
-            ///   - delistRun:
+            ///   - isDoubleSale: True when an item of the order had already sold; the user must cancel one sale (`doubleSales`).
+            ///   - delistRuns: One per item of the order that this sale started a delist for; none for an item that had already sold.
+            ///   - doubleSales: One per item of the order that had already sold.
             ///   - createdAt:
             ///   - updatedAt:
             public init(
@@ -5520,7 +5724,8 @@ extension Components {
                 status: Components.Schemas.SaleStatus,
                 shipBy: Components.Schemas.Timestamp? = nil,
                 isDoubleSale: Swift.Bool,
-                delistRun: Components.Schemas.DelistRun? = nil,
+                delistRuns: [Components.Schemas.DelistRun],
+                doubleSales: [Components.Schemas.DoubleSale],
                 createdAt: Components.Schemas.Timestamp,
                 updatedAt: Components.Schemas.Timestamp
             ) {
@@ -5539,7 +5744,8 @@ extension Components {
                 self.status = status
                 self.shipBy = shipBy
                 self.isDoubleSale = isDoubleSale
-                self.delistRun = delistRun
+                self.delistRuns = delistRuns
+                self.doubleSales = doubleSales
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
             }
@@ -5559,7 +5765,8 @@ extension Components {
                 case status
                 case shipBy
                 case isDoubleSale
-                case delistRun
+                case delistRuns
+                case doubleSales
                 case createdAt
                 case updatedAt
             }
@@ -5641,6 +5848,10 @@ extension Components {
                 ])
             }
         }
+        /// `resolve_double_sale`: an item sold twice; the user cancels one of the orders (the
+        /// task's sale is the later one) and completes the task.
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/KnownUserTaskKind`.
         @frozen public enum KnownUserTaskKind: String, Codable, Hashable, Sendable, CaseIterable {
             case listManually = "list_manually"
@@ -5649,6 +5860,7 @@ extension Components {
             case confirmSale = "confirm_sale"
             case reconnect = "reconnect"
             case reviewMatch = "review_match"
+            case resolveDoubleSale = "resolve_double_sale"
         }
         /// - Remark: Generated from `#/components/schemas/UserTaskStatus`.
         @frozen public enum UserTaskStatus: String, Codable, Hashable, Sendable, CaseIterable {
@@ -5739,7 +5951,7 @@ extension Components {
             public var listingId: Components.Schemas.Id?
             /// - Remark: Generated from `#/components/schemas/UserTask/operationId`.
             public var operationId: Components.Schemas.Id?
-            /// For `confirm_sale`, the sale to confirm.
+            /// For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
             ///
             /// - Remark: Generated from `#/components/schemas/UserTask/saleId`.
             public var saleId: Components.Schemas.Id?
@@ -5768,7 +5980,7 @@ extension Components {
             ///   - itemId:
             ///   - listingId:
             ///   - operationId:
-            ///   - saleId: For `confirm_sale`, the sale to confirm.
+            ///   - saleId: For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
             ///   - deepLink: Opens the right screen in the marketplace app or site.
             ///   - copyAssist:
             ///   - dueAt:
@@ -5836,7 +6048,8 @@ extension Components {
         /// - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
         ///   `rejectMatch: true` when nothing matches. Exactly one of the two is required.
         /// - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
-        /// - `delist_manually`, `edit_manually`, `reconnect`: nothing besides `note`.
+        /// - `delist_manually`, `edit_manually`, `reconnect`, `resolve_double_sale`: nothing besides
+        ///   `note`.
         /// - Every kind: optional `note`.
         ///
         ///

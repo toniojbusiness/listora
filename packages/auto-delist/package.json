@@ -1,0 +1,21 @@
+{
+  "name": "@listora/auto-delist",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The auto-delist orchestrator: the delist fan-out after a sale, delist runs and their per-marketplace truth, SLA re-alerts, and double-sale incidents.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/operations": "*",
+    "@listora/push": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

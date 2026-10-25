@@ -40,7 +40,8 @@ E2E_STACK := node --env-file-if-exists=.env packages/e2e/src/cli.ts \
 # Fails with an install hint when a command-line tool is missing.
 require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Install it with: brew install $(2)" >&2; exit 1; }
 
-.PHONY: ios-generate ios-build ios-test ios-e2e-ready ios-check-ats ios-lint ios-format ios-open ios-clean ios-simulator \
+.PHONY: ios-generate ios-build ios-test ios-e2e-ready ios-check-ats ios-screenshots ios-lint ios-format ios-open ios-clean \
+	ios-simulator \
 	ios-tag-fixtures ios-app-icon ios-archive ios-testflight
 
 ## Generate Listora.xcodeproj from apps/ios/project.yml.
@@ -72,19 +73,53 @@ ios-check-ats: ios-generate
 		esac; \
 	done; done
 
+# A test that hangs (a UI test waiting on a stuck simulator) fails after 5 minutes instead of
+# blocking the run. A failing test is retried up to twice: one that passes on a retry does not fail
+# the run, but the summary lists it as flaky so it gets a follow-up fix (README, CI section).
+IOS_TEST_LIMITS := -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
+	-retry-tests-on-failure -test-iterations 3
+# Optional file the failing-test summary is also written to (CI sets $$GITHUB_STEP_SUMMARY).
+IOS_TEST_SUMMARY_FILE ?=
+
 ## Run unit, package, and UI tests on the simulator. Results: .build/ios/Test.xcresult.
 ## Parallel testing is off because it would clone the simulator. The UI tests that go through the
 ## backend run against the local stack (packages/e2e): the real API and worker with fakes, on a
 ## scratch database of this checkout's Postgres cluster. Its logs: .build/ios/e2e-logs.
+## It ends by naming the tests that failed and the ones that passed only on a retry.
 ios-test: ios-generate ios-simulator ios-check-ats ios-e2e-ready
 	rm -rf $(IOS_BUILD_DIR)/Test.xcresult $(IOS_BUILD_DIR)/e2e-logs
-	$(E2E_STACK) -- $(XCODEBUILD) test -parallel-testing-enabled NO -resultBundlePath $(IOS_BUILD_DIR)/Test.xcresult
+	@status=0; \
+	$(E2E_STACK) -- $(XCODEBUILD) test -parallel-testing-enabled NO $(IOS_TEST_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/Test.xcresult || status=$$?; \
+	scripts/ios-test-summary.sh $(IOS_BUILD_DIR)/Test.xcresult '$(IOS_TEST_SUMMARY_FILE)'; \
+	exit $$status
 
 ## Check that the local stack can start: backend dependencies installed, Postgres cluster running.
 ios-e2e-ready:
 	$(call require,node,node)
 	@[ -d node_modules/@listora/e2e ] || { echo "error: backend dependencies are missing. Run: npm ci" >&2; exit 1; }
 	scripts/dev-db.sh start
+
+## Screenshot every screen in light and dark mode, at the default and the largest text size, into
+## IOS_SCREENSHOT_DIR/<variant>/ (ScreenshotTourUITests). It switches the simulator's appearance
+## and text size, then puts them back to light and the default size.
+IOS_SCREENSHOT_DIR ?= $(IOS_BUILD_DIR)/screenshots
+IOS_SCREENSHOT_VARIANTS := light:large dark:large light:accessibility-extra-extra-extra-large \
+	dark:accessibility-extra-extra-extra-large
+
+ios-screenshots: ios-generate ios-simulator
+	$(XCODEBUILD) build-for-testing
+	@trap 'xcrun simctl ui "$(IOS_SIMULATOR)" appearance light; xcrun simctl ui "$(IOS_SIMULATOR)" content_size large' EXIT; \
+	for variant in $(IOS_SCREENSHOT_VARIANTS); do \
+		appearance=$${variant%%:*}; size=$${variant#*:}; \
+		xcrun simctl ui "$(IOS_SIMULATOR)" appearance $$appearance && \
+		xcrun simctl ui "$(IOS_SIMULATOR)" content_size $$size && \
+		TEST_RUNNER_LISTORA_SCREENSHOT_DIR='$(IOS_SCREENSHOT_DIR)' \
+		TEST_RUNNER_LISTORA_SCREENSHOT_VARIANT="$$appearance-$$size" \
+			$(XCODEBUILD) test-without-building -only-testing:ListoraUITests/ScreenshotTourUITests \
+			-test-timeouts-enabled YES -default-test-execution-time-allowance 900 -collect-test-diagnostics never \
+			|| exit 1; \
+	done
+	@echo "Screenshots: $(IOS_SCREENSHOT_DIR)"
 
 ## SwiftLint and the SwiftFormat check, both failing on any finding.
 ios-lint:

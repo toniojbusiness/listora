@@ -18,40 +18,62 @@ public struct MarketplacesView: View {
             .background(Palette.background)
             .navigationTitle("Marketplaces")
             .task { await model.load() }
+            .sensoryFeedback(trigger: model.notice) { _, notice in
+                switch notice?.tone {
+                case .success: .success
+                case .failure: .error
+                case .info, nil: nil
+                }
+            }
     }
 
     @ViewBuilder
     private var content: some View {
         switch model.phase {
         case .loading where model.rows.isEmpty:
-            ProgressView("Loading marketplaces")
-                .foregroundStyle(Palette.textSecondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            loading
         case let .failed(message) where model.rows.isEmpty:
             EmptyStateView(
                 systemImage: "link.badge.plus",
+                tone: .failed,
                 title: "Marketplaces unavailable",
                 message: message,
-                action: .init("Try again") { Task { await model.load() } },
+                action: .init("Try again", systemImage: "arrow.clockwise") { Task { await model.load() } },
             )
         default:
             list
         }
     }
 
-    private static let footer = """
-    Connected marketplaces: Listora makes each change through the marketplace's API and \
-    checks it there. Assisted marketplaces: Listora prepares each step, and you finish it in \
-    the marketplace's app.
-    """
+    private var loading: some View {
+        ScrollView {
+            VStack(spacing: Spacing.sm) {
+                ForEach(0 ..< 4, id: \.self) { _ in
+                    SkeletonRow().cardStyle()
+                }
+            }
+            .padding(Spacing.md)
+        }
+        .scrollDisabled(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading marketplaces")
+    }
 
     private var list: some View {
-        List {
-            if let notice = model.notice {
-                NoticeRow(notice: notice) { model.dismissNotice() }
-                    .listRowBackground(Palette.surface.color)
-            }
-            Section {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                if let notice = model.notice {
+                    Banner(
+                        notice.message,
+                        tone: notice.tone.statusTone,
+                        onDismiss: { model.dismissNotice() },
+                        identifier: "marketplaces.notice",
+                    )
+                    .transition(.rise)
+                }
+                HowItWorksCard()
+                SectionHeader("Your marketplaces")
+                    .padding(.top, Spacing.xs)
                 ForEach(model.rows) { row in
                     MarketplaceRowView(
                         row: row,
@@ -61,16 +83,50 @@ public struct MarketplacesView: View {
                         let authenticate = webAuthenticationSession.authenticator()
                         Task { await model.connect(row, authenticate: authenticate) }
                     }
-                    .listRowBackground(Palette.surface.color)
                 }
-            } footer: {
-                Text(Self.footer)
-                    .font(Typography.caption)
+            }
+            .padding(Spacing.md)
+            .frame(maxWidth: Layout.readableWidth)
+            .frame(maxWidth: .infinity)
+            .motion(value: model.notice)
+            .motion(value: model.rows)
+        }
+        .refreshable { await model.load() }
+    }
+}
+
+/// The two ways Listora works with a marketplace, in plain words.
+private struct HowItWorksCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            point(
+                "Connected",
+                "Listora makes each change through the marketplace's API and checks it there.",
+                systemImage: "link",
+            )
+            point(
+                "Assisted",
+                "Listora prepares each step, and you finish it in the marketplace's app.",
+                systemImage: "hand.tap",
+            )
+        }
+        .cardStyle(.outlined)
+    }
+
+    private func point(_ title: String, _ detail: String, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            IconTile(systemImage: systemImage)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(Typography.subheadline.weight(.semibold))
+                    .foregroundStyle(Palette.textPrimary)
+                Text(detail)
+                    .font(Typography.subheadline)
                     .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .scrollContentBackground(.hidden)
-        .refreshable { await model.load() }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -82,105 +138,62 @@ struct MarketplaceRowView: View {
     let connect: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(row.name)
-                .font(Typography.headline)
-                .foregroundStyle(Palette.textPrimary)
-            HStack(spacing: Spacing.xs) {
-                Image(systemName: row.tone.systemImage)
-                    .accessibilityHidden(true)
-                Text(row.statusLabel)
-                    .accessibilityIdentifier("marketplaces.\(row.id).status")
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .center, spacing: Spacing.sm) {
+                IconTile(
+                    monogram: String(row.name.prefix(1)),
+                    tone: row.tone.statusTone.looksDone ? .success : nil,
+                    size: .card,
+                )
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(row.name)
+                        .font(Typography.title3)
+                        .foregroundStyle(Palette.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                    StatusBadge(row.statusLabel, tone: row.tone.statusTone)
+                        .accessibilityIdentifier("marketplaces.\(row.id).status")
+                }
+                Spacer(minLength: 0)
             }
-            .font(Typography.callout.weight(.semibold))
-            .foregroundStyle(row.tone.color)
             if let detail = row.statusDetail {
                 Text(detail)
-                    .font(Typography.callout)
+                    .font(Typography.subheadline)
                     .foregroundStyle(Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let title = row.actionTitle {
-                Button(action: connect) {
-                    HStack(spacing: Spacing.xs) {
-                        if isConnecting {
-                            ProgressView().tint(Palette.onBrand.color)
-                        }
-                        Text(isConnecting ? "Connecting..." : title)
-                    }
-                }
-                .buttonStyle(.listoraPrimary)
-                .disabled(!isEnabled)
-                .padding(.top, Spacing.xxs)
-                .accessibilityIdentifier("marketplaces.\(row.id).connect")
+                Button(isConnecting ? "Connecting..." : title, systemImage: "arrow.up.forward.app", action: connect)
+                    .buttonStyle(.listoraPrimary)
+                    .loading(isConnecting)
+                    .disabled(!isEnabled)
+                    .padding(.top, Spacing.xxs)
+                    .accessibilityIdentifier("marketplaces.\(row.id).connect")
             }
         }
-        .padding(.vertical, Spacing.xs)
+        .cardStyle()
         .accessibilityElement(children: .contain)
     }
 }
 
-/// The last connection attempt's outcome.
-struct NoticeRow: View {
-    let notice: ConnectionNotice
-    let dismiss: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: Spacing.sm) {
-            Image(systemName: notice.tone.systemImage)
-                .foregroundStyle(notice.tone.color)
-                .accessibilityHidden(true)
-            Text(notice.message)
-                .font(Typography.callout)
-                .foregroundStyle(Palette.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("marketplaces.notice")
-            Spacer(minLength: 0)
-            Button("Dismiss", systemImage: "xmark", action: dismiss)
-                .labelStyle(.iconOnly)
-                .foregroundStyle(Palette.textSecondary)
-                .frame(minWidth: Layout.minimumTapTarget, minHeight: Layout.minimumTapTarget)
-                .buttonStyle(.borderless)
-        }
-    }
-}
-
 extension MarketplaceRow.Tone {
-    var color: ColorToken {
+    var statusTone: StatusTone {
         switch self {
-        case .success: Palette.success
-        case .failed: Palette.danger
-        case .actionNeeded, .checking: Palette.warning
-        case .inProgress, .neutral: Palette.textSecondary
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .success: "checkmark.circle.fill"
-        case .failed: "xmark.octagon.fill"
-        case .actionNeeded: "exclamationmark.triangle.fill"
-        case .checking: "arrow.triangle.2.circlepath"
-        case .inProgress: "clock"
-        case .neutral: "info.circle"
+        case .success: .success
+        case .inProgress: .inProgress
+        case .checking: .checking
+        case .failed: .failed
+        case .actionNeeded: .actionNeeded
+        case .neutral: .neutral
         }
     }
 }
 
 extension ConnectionNotice.Tone {
-    var color: ColorToken {
+    var statusTone: StatusTone {
         switch self {
-        case .success: Palette.success
-        case .info: Palette.textSecondary
-        case .failure: Palette.danger
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .success: "checkmark.circle.fill"
-        case .info: "info.circle"
-        case .failure: "exclamationmark.triangle.fill"
+        case .success: .success
+        case .info: .neutral
+        case .failure: .failed
         }
     }
 }

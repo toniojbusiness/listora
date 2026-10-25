@@ -1,7 +1,13 @@
 export { finishInboundEvent, recordInboundEvent } from './inbound.ts';
 export type { NewInboundEvent, RecordedInboundEvent } from './inbound.ts';
-export { isSaleRecordedPayload, recordSale, SALE_RECORDED_TASK } from './sales.ts';
-export type { NewSale, RecordSaleResult, SaleLine, SaleRecordedPayload } from './sales.ts';
+export { recordSale } from './sales.ts';
+export type {
+  ItemSaleLine,
+  MarketplaceSaleLine,
+  NewSale,
+  RecordSaleResult,
+  SaleLine,
+} from './sales.ts';
 export { isPaidOrder, orderSummary, recordEbayOrder, usdCents } from './ebay/orders.ts';
 export type { EbayOrderResult } from './ebay/orders.ts';
 export {

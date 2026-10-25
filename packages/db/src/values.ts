@@ -139,6 +139,7 @@ export const USER_TASK_KINDS = [
   'confirm_sale',
   'reconnect',
   'review_match',
+  'resolve_double_sale',
 ] as const;
 export type UserTaskKind = (typeof USER_TASK_KINDS)[number];
 

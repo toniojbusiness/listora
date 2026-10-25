@@ -393,7 +393,12 @@ export interface MarketplaceListingTable {
   currency: Generated<CurrencyCode>;
   price_cents: Nullable<number>;
   category_ref: Nullable<string>;
-  aspects: DefaultedJsonb<JsonObject>;
+  /** Item specifics, in order: `[{ name, values }]` (the contract's `ListingAspect`). */
+  aspects: DefaultedJsonb<JsonArray>;
+  /** The marketplace's condition when it differs from the item's (an `ItemCondition`). */
+  condition: Nullable<string>;
+  /** Without the `#`; only Depop shows them. */
+  hashtags: Generated<string[]>;
   listed_at: NullableTimestamp;
   ended_at: NullableTimestamp;
   last_verified_at: NullableTimestamp;
@@ -535,6 +540,8 @@ export interface UserTaskTable {
   completed_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  /** The sale the task is about (the later sale of a double sale). */
+  sale_id: Nullable<string>;
 }
 
 export interface FeeLineTable {

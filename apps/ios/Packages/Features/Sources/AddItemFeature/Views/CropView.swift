@@ -15,7 +15,7 @@ struct CropView: View {
     @State private var isSquare = false
 
     private static let minimumSide: CGFloat = 0.1
-    private static let handleSize: CGFloat = 28
+    private static let handleSize: CGFloat = 34
 
     var body: some View {
         NavigationStack {
@@ -29,20 +29,28 @@ struct CropView: View {
                         cropOverlay(in: frame)
                     }
                 }
-                Toggle("Square", isOn: $isSquare)
-                    .font(Typography.headline)
-                    .tint(Palette.brand.color)
-                    .padding(.horizontal, Spacing.md)
-                    .onChange(of: isSquare) { _, square in
-                        if square {
+                FlowLayout(centered: true) {
+                    ChoiceChip("Original", systemImage: "rectangle", isSelected: !isSquare) { isSquare = false }
+                        .accessibilityIdentifier("crop.original")
+                    ChoiceChip("Square", systemImage: "square", isSelected: isSquare) { isSquare = true }
+                        .accessibilityIdentifier("crop.square")
+                }
+                .onChange(of: isSquare) { _, square in
+                    if square {
+                        Motion.perform(Motion.snappy) {
                             crop = Self.squared(crop, aspectRatio: aspectRatio)
                         }
                     }
+                }
+                Text("Drag the corners to resize, or the middle to move.")
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.textSecondary)
             }
             .padding(.vertical, Spacing.md)
-            .background(Palette.background)
+            .background(Palette.mediaBackground)
             .navigationTitle("Crop")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Palette.mediaBackground.color, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { Task { await onFinish(nil) } }
@@ -54,6 +62,9 @@ struct CropView: View {
                 }
             }
         }
+        // Photos are edited on black in both modes, like the system's photo editor.
+        .environment(\.colorScheme, .dark)
+        .sensoryFeedback(.selection, trigger: isSquare)
     }
 
     /// Where the photo sits when fitted into `size`, with room for the handles.
@@ -86,15 +97,15 @@ struct CropView: View {
             .fill(Palette.scrim.color.opacity(0.55), style: FillStyle(eoFill: true))
             .allowsHitTesting(false)
             Rectangle()
-                .strokeBorder(Palette.onMedia, lineWidth: 2)
+                .strokeBorder(Palette.onMedia, lineWidth: 1.5)
+                .background(thirdsGrid.opacity(dragStart == nil ? 0 : 0.6))
                 .contentShape(Rectangle())
                 .frame(width: rect.width, height: rect.height)
                 .offset(x: rect.minX, y: rect.minY)
                 .gesture(moveGesture(in: frame))
+                .accessibilityHidden(true)
             ForEach(Corner.allCases, id: \.self) { corner in
-                Circle()
-                    .fill(Palette.onMedia)
-                    .frame(width: Self.handleSize, height: Self.handleSize)
+                CornerHandle(corner: corner)
                     .frame(width: Layout.minimumTapTarget, height: Layout.minimumTapTarget)
                     .contentShape(Rectangle())
                     .offset(
@@ -105,6 +116,24 @@ struct CropView: View {
                     .accessibilityHidden(true)
             }
         }
+    }
+
+    /// Rule-of-thirds lines, shown while the frame is being dragged.
+    private var thirdsGrid: some View {
+        GeometryReader { geometry in
+            Path { path in
+                for step in 1 ... 2 {
+                    let x = geometry.size.width * CGFloat(step) / 3
+                    let y = geometry.size.height * CGFloat(step) / 3
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x, y: geometry.size.height))
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addLine(to: CGPoint(x: geometry.size.width, y: y))
+                }
+            }
+            .stroke(Palette.onMedia, lineWidth: 0.5)
+        }
+        .allowsHitTesting(false)
     }
 
     private func moveGesture(in frame: CGRect) -> some Gesture {
@@ -135,6 +164,25 @@ struct CropView: View {
                 crop = Self.resized(start, corner: corner, by: translation, square: isSquare, aspectRatio: aspectRatio)
             }
             .onEnded { _ in dragStart = nil }
+    }
+
+    /// An L-shaped corner handle, centered on the frame's corner.
+    private struct CornerHandle: View {
+        let corner: Corner
+
+        var body: some View {
+            let length = CropView.handleSize
+            Path { path in
+                let center = CGPoint(x: Layout.minimumTapTarget / 2, y: Layout.minimumTapTarget / 2)
+                let dx: CGFloat = corner == .topLeft || corner == .bottomLeft ? 1 : -1
+                let dy: CGFloat = corner == .topLeft || corner == .topRight ? 1 : -1
+                path.move(to: CGPoint(x: center.x, y: center.y + dy * length / 2))
+                path.addLine(to: center)
+                path.addLine(to: CGPoint(x: center.x + dx * length / 2, y: center.y))
+            }
+            .stroke(Palette.onMedia, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+            .shadow(color: Palette.scrim.color.opacity(0.5), radius: 2)
+        }
     }
 
     enum Corner: CaseIterable {

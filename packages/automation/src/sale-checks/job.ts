@@ -1,9 +1,9 @@
 /**
  * The sale check (decision D1), run by the browser runner: it reads the seller's sold orders
- * on the marketplace through their browser session, hands each new one to the sale intake as an
- * `inbound_event` (`recordInboundEvent` in @listora/sales, source `poll`, deduplicated by
- * order), and schedules the next check from the seller's sales history (interval.ts). The sale
- * intake processes the events: it records the sale and delists the item everywhere else.
+ * on the marketplace through their browser session, hands each new one to the sale intake (an
+ * `inbound_event`, source `poll`, once per order, and the worker's job that records its sale and
+ * starts its auto-delist, orders.ts), and schedules the next check from the seller's sales
+ * history (interval.ts).
  *
  * Every outcome is recorded on the schedule. A check that met a check automation must not pass
  * has left the connection waiting for a relink (the dispatcher skips it until then, and the
@@ -25,11 +25,12 @@ import type {
   MarketplaceAdapter,
   RemoteOrder,
 } from '@listora/marketplaces';
-import { finishInboundEvent, recordInboundEvent, recordSale } from '@listora/sales';
+import { recordInboundEvent } from '@listora/sales';
 import type { Logger } from '@listora/shared';
 
 import type { SaleCheckSettings } from '../settings.ts';
 import { nextSaleCheckDelay, SALE_HISTORY_DAYS } from './interval.ts';
+import { orderEventPayload, queueSaleOrder } from './orders.ts';
 import type { SaleCheckJobPayload } from './schedule.ts';
 
 export interface SaleCheckDependencies {
@@ -126,11 +127,15 @@ export async function runSaleCheck(
     return;
   }
 
-  const recorded = await recordOrders(db, key, found.marketplace, orders);
-  // The sales just recorded are part of the history the next check adapts to.
+  const added = await recordOrders(db, key, found.marketplace, orders);
+  // The new orders count as sales already: the worker records them as sales right after.
   const history = await saleTimes(db, payload.accountId, found.marketplace);
   const now = new Date();
-  const next = nextSaleCheckDelay(now, history, deps.settings);
+  const next = nextSaleCheckDelay(
+    now,
+    [...history, ...added.map((order) => order.soldAt)],
+    deps.settings,
+  );
   const newest = orders.reduce<Date | null>(
     (latest, order) => (latest === null || order.soldAt > latest ? order.soldAt : latest),
     found.checked_through,
@@ -144,8 +149,7 @@ export async function runSaleCheck(
   log.info(
     {
       orders: orders.length,
-      added: recorded.added,
-      sales: recorded.sales,
+      added: added.length,
       nextInMs: next.delayMs,
       basis: next.basis,
     },
@@ -165,20 +169,17 @@ export function readsOrders(
 }
 
 /**
- * Hands each order not seen before to the sale intake, as the eBay order poll does
- * (@listora/sales): in one transaction per order, its `inbound_event` (source `poll`, once per
- * order) and, when one of its lines is a Listora listing, its sale, whose `sale_recorded` job
- * the auto-delist orchestrator consumes. The event is finished `processed` when a sale was
- * recorded and `ignored` otherwise (no line Listora knows, or the sale was recorded before).
+ * Hands each order not seen before to the sale intake: in one transaction per order, its
+ * `inbound_event` (source `poll`, once per order) and the worker's job that records its sale
+ * (orders.ts). Returns the orders that were new.
  */
 async function recordOrders(
   db: Db,
   key: { accountId: string; connectionId: string },
   marketplace: Marketplace,
   orders: readonly RemoteOrder[],
-): Promise<{ added: number; sales: number }> {
-  let added = 0;
-  let sales = 0;
+): Promise<RemoteOrder[]> {
+  const added: RemoteOrder[] = [];
   for (const order of orders) {
     await inTransaction(db, async (trx) => {
       const event = await recordInboundEvent(trx, {
@@ -187,51 +188,17 @@ async function recordOrders(
         marketplace,
         providerEventId: `order:${order.externalOrderId}`.slice(0, 255),
         signatureOk: null,
-        payload: {
-          connectionId: key.connectionId,
-          externalOrderId: order.externalOrderId,
-          soldAt: order.soldAt.toISOString(),
-          items: order.items.map((item) => ({
-            externalListingId: item.externalListingId,
-            title: item.title,
-            priceCents: item.priceCents,
-            currency: item.currency,
-          })),
-        },
+        payload: orderEventPayload(key.connectionId, order),
         // An automation connection knows its seller by the session only, not by a user id.
         externalUserId: null,
       });
-      // A check handled this order before, in a transaction that also recorded its outcome.
+      // A check handed this order over before.
       if (event.duplicate) return;
-      added += 1;
-      const sale = await recordSale(trx, {
-        accountId: key.accountId,
-        marketplace,
-        externalOrderId: order.externalOrderId,
-        soldAt: order.soldAt,
-        currency: order.items[0]?.currency ?? 'USD',
-        // The order pages a sale check reads show no shipping charge.
-        shippingChargedCents: 0,
-        detectionSource: 'poll',
-        inboundEventId: event.id,
-        shipBy: null,
-        lines: order.items.map((item) => ({
-          externalListingId: item.externalListingId,
-          externalSku: null,
-          quantity: 1,
-          priceCents: item.priceCents,
-        })),
-      });
-      if (sale.type === 'recorded') sales += 1;
-      await finishInboundEvent(
-        trx,
-        key.accountId,
-        event.id,
-        sale.type === 'recorded' ? 'processed' : 'ignored',
-      );
+      await queueSaleOrder(trx, { accountId: key.accountId, inboundEventId: event.id });
+      added.push(order);
     });
   }
-  return { added, sales };
+  return added;
 }
 
 /** When the seller's recorded sales on the marketplace happened, within the history window. */

@@ -509,6 +509,16 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/q`.
                 public var q: Swift.String?
+                /// Only items with a listing on this marketplace that is not ended or sold (a draft
+                /// listing, or one being published, counts).
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/GET/query/marketplace`.
+                public var marketplace: Components.Schemas.KnownMarketplace?
+                /// Only items of this brand (exact, ignoring case).
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/GET/query/brand`.
+                public var brand: Swift.String?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/cursor`.
@@ -522,16 +532,22 @@ public enum Operations {
                 /// - Parameters:
                 ///   - status: Only items in one of these statuses.
                 ///   - q: Free-text search over SKU, title, brand, and keywords.
+                ///   - marketplace: Only items with a listing on this marketplace that is not ended or sold (a draft
+                ///   - brand: Only items of this brand (exact, ignoring case).
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
                     status: [Components.Schemas.KnownItemStatus]? = nil,
                     q: Swift.String? = nil,
+                    marketplace: Components.Schemas.KnownMarketplace? = nil,
+                    brand: Swift.String? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
                     self.status = status
                     self.q = q
+                    self.marketplace = marketplace
+                    self.brand = brand
                     self.cursor = cursor
                     self.limit = limit
                 }
@@ -7478,9 +7494,11 @@ public enum Operations {
     }
     /// Retry a failed operation
     ///
-    /// Only for `failed` operations. Creates a new operation with the same desired state
-    /// (`retryOfOperationId` points at the failed one); the failed operation and its history
-    /// stay unchanged.
+    /// Only for `failed` operations. Queues the same operation again with a fresh set of
+    /// attempts; its history keeps the failure. Its first step reads the listing back before
+    /// sending anything, because an earlier attempt may have been applied.
+    /// `409 invalid_state_transition` when the operation has not failed, or when a newer
+    /// operation on the listing exists (retrying would undo it).
     ///
     ///
     /// - Remark: HTTP `POST /v1/operations/{operationId}/retry`.
@@ -7571,7 +7589,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// The new operation.
+            /// The queued operation.
             ///
             /// - Remark: Generated from `#/paths//v1/operations/{operationId}/retry/post(retryOperation)/responses/202`.
             ///
@@ -8978,7 +8996,7 @@ public enum Operations {
     }
     /// List sales
     ///
-    /// Newest first (by `soldAt`).
+    /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
     ///
     /// - Remark: HTTP `GET /v1/sales`.
     /// - Remark: Generated from `#/paths//v1/sales/get(listSales)`.
@@ -8993,6 +9011,12 @@ public enum Operations {
                 public var itemId: Components.Schemas.Id?
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/status`.
                 public var status: [Components.Schemas.KnownSaleStatus]?
+                /// Only sales with a delist run in one of these statuses; for example
+                /// `in_progress` and `needs_attention` for the home screen's banner.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/sales/GET/query/delistStatus`.
+                public var delistStatus: [Components.Schemas.DelistRunStatus]?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/sales/GET/query/cursor`.
@@ -9006,16 +9030,19 @@ public enum Operations {
                 /// - Parameters:
                 ///   - itemId: Only sales whose order contains this item.
                 ///   - status:
+                ///   - delistStatus: Only sales with a delist run in one of these statuses; for example
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
                     itemId: Components.Schemas.Id? = nil,
                     status: [Components.Schemas.KnownSaleStatus]? = nil,
+                    delistStatus: [Components.Schemas.DelistRunStatus]? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
                     self.itemId = itemId
                     self.status = status
+                    self.delistStatus = delistStatus
                     self.cursor = cursor
                     self.limit = limit
                 }
@@ -9176,7 +9203,8 @@ public enum Operations {
     /// For sales Listora did not detect itself. One sale is one order; a bundle lists several
     /// items. Starts the same automatic delist run as a detected sale: every other listing
     /// of every item in the order gets a delist operation or an urgent assisted task. A
-    /// sale that contains an already-sold item is recorded with `isDoubleSale: true`.
+    /// sale that contains an already-sold item is recorded with `isDoubleSale: true` and a
+    /// double-sale incident for that item instead of a second delist run.
     /// `422 validation_failed` when an item appears twice or a `listingId` does not belong
     /// to its item on `marketplace`.
     ///
