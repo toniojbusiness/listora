@@ -58,7 +58,7 @@ final class ShareExtensionUITests: XCTestCase {
             .firstMatch
         // Safari is only asked for its elements while it runs in the foreground: asking a Safari that
         // is still starting or quitting fails the test (kAXErrorServerNotFound) instead of waiting.
-        let showsListora = { safari.state == .runningForeground && listora.exists }
+        let showsListora = { [safari] in safari.state == .runningForeground && listora.exists }
         for attempt in 1 ... 5 where !showsListora() {
             if safari.state == .runningForeground, closeSheet.exists {
                 closeSheet.tap()
