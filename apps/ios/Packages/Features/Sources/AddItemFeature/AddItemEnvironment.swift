@@ -3,7 +3,15 @@ import AVFoundation
 import Core
 import Foundation
 import os
+import SwiftUI
 import Synchronization
+
+/// Builds the review flow for a draft whose photos are on the server. The review feature
+/// implements it; `AppDependencies` hands it over, so the two features never import each other.
+public typealias ItemReviewDestination = @MainActor (
+    ItemReviewRequest,
+    _ onFinished: @escaping @MainActor (ItemReviewOutcome) -> Void,
+) -> AnyView
 
 /// Everything the Add Item tab needs, built once at launch by `AppDependencies`: the on-device
 /// draft store, the upload queue, and the background upload session.
@@ -30,6 +38,10 @@ public final class AddItemEnvironment {
     /// Debug builds only: a folder whose JPEGs "Import photos" adds instead of opening the photo
     /// picker, so UI tests import fixture photos (`LISTORA_FIXTURE_PHOTOS`).
     let fixturePhotosDirectory: URL?
+    /// Measures each new item's interaction time, from its first photo to its saved item.
+    let meter: InteractionMeter
+    /// Opens the review of a draft's item; nil offers no review (previews).
+    let reviewDestination: ItemReviewDestination?
     private let tokenChanges: AsyncStream<AccessGrant?>?
     private var tokenObservation: Task<Void, Never>?
 
@@ -39,6 +51,8 @@ public final class AddItemEnvironment {
         apiClient: APIClient,
         accessTokens: AccessTokenStore,
         tagReader: any TagReader,
+        meter: InteractionMeter,
+        reviewDestination: ItemReviewDestination?,
         fixturePhotosDirectory: URL? = nil,
     ) {
         self.init(
@@ -50,6 +64,8 @@ public final class AddItemEnvironment {
             transport: Self.backgroundTransport,
             isCameraAvailable: AVCaptureDevice.default(for: .video) != nil,
             fixturePhotosDirectory: fixturePhotosDirectory,
+            meter: meter,
+            reviewDestination: reviewDestination,
         )
     }
 
@@ -62,10 +78,14 @@ public final class AddItemEnvironment {
         transport: any UploadTransport,
         isCameraAvailable: Bool,
         fixturePhotosDirectory: URL?,
+        meter: InteractionMeter,
+        reviewDestination: ItemReviewDestination?,
         policy: RetryPolicy = .standard,
     ) {
         let activity = UploadActivity()
         self.activity = activity
+        self.meter = meter
+        self.reviewDestination = reviewDestination
         self.isCameraAvailable = isCameraAvailable
         self.fixturePhotosDirectory = fixturePhotosDirectory
         self.tokenChanges = tokenChanges

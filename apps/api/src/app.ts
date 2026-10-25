@@ -20,6 +20,7 @@ import { registerPricingRoutes } from './pricing/routes.ts';
 import { registerLocalStorageRoutes } from './storage/local-routes.ts';
 import { registerUploadRoutes } from './uploads/routes.ts';
 import { SessionPhotoUploads } from './uploads/uploads.ts';
+import { registerUsageRoutes } from './usage/routes.ts';
 
 export interface AppDependencies extends HealthDependencies {
   db: Db;
@@ -89,6 +90,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     analysisJobs: deps.analysisJobs,
     now,
   });
+  registerUsageRoutes(app, { ...routeDeps, now });
   return app;
 }
 

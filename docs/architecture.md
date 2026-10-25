@@ -80,7 +80,10 @@ The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
   OpenAPI contract, with the session's bearer token and the error model), and `Features` (one
   library per feature). A feature never imports another
   feature; `AppFeature` composes them into the tab shell. The app target only starts
-  `AppFeature`; the Share Extension target only starts `ShareLinkFeature`.
+  `AppFeature`; the Share Extension target only starts `ShareLinkFeature`. When one feature
+  opens another's screens (Add Item opens the review), it gets a view builder from
+  `AppDependencies` and talks through a value type in `Core` (`ItemReviewRequest`,
+  `ItemReviewOutcome`).
 - The app and the Share Extension share the signed-in session through an App Group
   (`APP_GROUP_IDENTIFIER` in `Base.xcconfig`): the session is a keychain item in the group's
   access group (`KeychainAccessGrantStorage.session(appGroup:)`).
@@ -91,6 +94,12 @@ The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
   first, and work against the server goes through a persistent queue whose every request has a
   stored `Idempotency-Key`, so it resumes after a relaunch without duplicates and shows each
   failure with a Retry. The Add Item upload queue is the model (`apps/ios/README.md`).
+  Interactive steps (review, cost, price) save to the server before the next screen opens, so a
+  relaunch resumes from the server's state; every wait on the server has a deadline and ends in
+  a failure with a Retry, never an endless spinner.
+- The app measures each new item's active interaction time and taps, from the first photo to
+  the saved item (`InteractionMeter` in `Core`), toward the goal of about 30 seconds an item.
+  The metric is kept on the device and logged; the API has no event for it yet.
 - Views use `DesignSystem` tokens, never raw colors or sizes, so light and dark mode stay
   consistent. A test checks WCAG AA contrast for every text and background pair.
 - Tests use Swift Testing; UI tests use XCTest. `make ios-lint` (SwiftLint and SwiftFormat)
@@ -139,6 +148,8 @@ packages/
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
   eval/         Synthetic tag corpus (corpus/) and the eval harness CLI (@listora/eval)
+  e2e/          Local end-to-end stack: the API and worker with fakes on a scratch database and
+                a signed-in user, which the iOS UI tests run against (@listora/e2e)
 infra/          AWS CDK v2 app: one environment per synth, stacks per lifecycle (@listora/infra)
 scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
@@ -176,6 +187,7 @@ src/
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
   listings/      Listing views (honest statusDisplay) and shared-listing links
+  usage/         getUsage: the plan's quota use, from the counters the AI guards enforce
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -717,7 +729,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                            | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                |
 | Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until the browser runner (D1) or Depop's API lands                                                   | The same                   | none                                  |
 | Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                           | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`            |
-| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash)                                                                                                        | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
+| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash, `default.json` for any other photo set)                                                                | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
 | eBay             | `fake-ebay` server (Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`)                      | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`  |
 | Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`) | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production` |
 | Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                                       | SES inbound                | `EMAIL_INGEST=folder\|ses`            |
@@ -810,7 +822,8 @@ AI cost is a product constraint, so each item is analyzed once, as cheaply as po
 - **Quotas.** A standard call uses one `ai_items` unit and a premium call one
   `premium_identifications` unit when it succeeds. `PostgresQuotaPolicy` counts them in
   `usage_counter` per UTC month and enforces the row's `quota` (null means unlimited until
-  billing, T-28, sets plan limits).
+  billing, T-28, sets plan limits). `GET /v1/usage` reports the same counters, so the app shows
+  what "Identify harder" uses and what is left.
 - **Applying.** `applyAnalysis` copies the proposals into the item with their provenance and
   sets `acceptedAnalysisId`, never overwriting a detail whose provenance is `user`. A later
   `replaceItem` value equal to the accepted analysis's proposal keeps the analysis's source.
@@ -1052,7 +1065,10 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   tests. It must pass before merge. When iOS code
   is touched, `make ios-lint` and `make ios-test` must pass too. `make ios-test` runs the
   package, unit, and UI tests on an existing iPhone 17 simulator and keeps DerivedData in
-  `.build/ios`.
+  `.build/ios`. It runs them inside the local stack (`packages/e2e`, `npm run e2e:stack`): the
+  API and worker from this checkout with the fake drivers, on a scratch database of the
+  `scripts/dev-db.sh` cluster, with a signed-in test user. UI tests that go through the
+  backend use it; the fake AI answers them from `apps/ios/ListoraUITests/FakeAI`.
 - Integration tests use a real Postgres: the local `listora_test` database from
   `scripts/dev-db.sh` (locally and in CI), or `TEST_DATABASE_URL` when set. They fail, and
   never skip, when the database is unreachable. Tests that need their own schema create a

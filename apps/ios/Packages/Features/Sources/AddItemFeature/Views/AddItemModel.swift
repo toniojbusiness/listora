@@ -1,3 +1,4 @@
+import Core
 import Foundation
 import Observation
 import os
@@ -10,17 +11,50 @@ final class AddItemModel {
     let store: DraftStore
     let uploader: PhotoUploader
     let activity: UploadActivity
+    /// Measures each new item's interaction time from its first photo.
+    let meter: InteractionMeter
     private(set) var drafts: [Draft] = []
     /// A problem to show in an alert.
     var errorMessage: String?
     /// Photos being prepared for a new or existing draft.
     private(set) var isPreparingPhotos = false
     private let log = Logger(subsystem: "com.listora.app", category: "drafts")
+    /// The measurement of a new item whose draft does not exist yet (the camera is open, or the
+    /// photos are being prepared).
+    private var pendingSession: String?
 
-    init(store: DraftStore, uploader: PhotoUploader, activity: UploadActivity) {
+    init(store: DraftStore, uploader: PhotoUploader, activity: UploadActivity, meter: InteractionMeter) {
         self.store = store
         self.uploader = uploader
         self.activity = activity
+        self.meter = meter
+    }
+
+    /// The seller started a new item (opened the camera, or picked photos): its measurement starts
+    /// now and becomes the draft's once the draft is saved.
+    func beginNewItem() {
+        if let pendingSession {
+            meter.leave(pendingSession)
+            meter.discard(pendingSession)
+        }
+        let session = "pending-\(UUID().uuidString.lowercased())"
+        meter.begin(session)
+        meter.enter(session)
+        pendingSession = session
+    }
+
+    /// Hands the pending measurement to the new draft, or drops it when nothing was saved.
+    private func endPendingSession(draftID: String?) {
+        guard let pendingSession else { return }
+        self.pendingSession = nil
+        meter.setWaiting(false, for: pendingSession)
+        if let draftID {
+            meter.rename(pendingSession, to: draftID)
+            meter.leave(draftID)
+        } else {
+            meter.leave(pendingSession)
+            meter.discard(pendingSession)
+        }
     }
 
     /// Keeps ``drafts`` current until the calling task is cancelled.
@@ -39,6 +73,14 @@ final class AddItemModel {
     /// or nil when nothing was saved.
     func addPhotos(_ images: [Data], to draftID: String? = nil) async -> String? {
         guard !images.isEmpty else { return nil }
+        if draftID == nil {
+            if pendingSession == nil {
+                beginNewItem()
+            }
+            if let pendingSession {
+                meter.setWaiting(true, for: pendingSession)
+            }
+        }
         isPreparingPhotos = true
         defer { isPreparingPhotos = false }
         let offset = draftID.flatMap { id in drafts.first { $0.id == id }?.photos.count } ?? 0
@@ -57,6 +99,9 @@ final class AddItemModel {
             return await save(photos, to: draftID)
         case let .failure(error):
             show(error)
+            if draftID == nil {
+                endPendingSession(draftID: nil)
+            }
             return nil
         }
     }
@@ -64,7 +109,12 @@ final class AddItemModel {
     /// Saves prepared photos (from the camera, with their roles) as a new draft, or adds them to
     /// `draftID`. Returns the draft's id, or nil when nothing was saved.
     func save(_ photos: [(PreparedPhoto, PhotoRole)], to draftID: String? = nil) async -> String? {
-        guard !photos.isEmpty else { return nil }
+        guard !photos.isEmpty else {
+            if draftID == nil {
+                endPendingSession(draftID: nil)
+            }
+            return nil
+        }
         let store = store
         let result = await Task.detached(priority: .userInitiated) {
             Result {
@@ -77,10 +127,16 @@ final class AddItemModel {
         }.value
         switch result {
         case let .success(id):
+            if draftID == nil {
+                endPendingSession(draftID: id)
+            }
             await uploader.wake()
             return id
         case let .failure(error):
             show(error)
+            if draftID == nil {
+                endPendingSession(draftID: nil)
+            }
             return nil
         }
     }
@@ -104,6 +160,14 @@ final class AddItemModel {
     func deleteDraft(_ draftID: String) {
         perform { store in
             try cancelTransfers(of: store.deleteDraft(draftID).map(\.id))
+        }
+        meter.discard(draftID)
+    }
+
+    /// The draft's item was saved in review: only this iPhone's copy of the draft goes.
+    func completeDraft(_ draftID: String) {
+        perform { store in
+            try cancelTransfers(of: store.completeDraft(draftID).map(\.id))
         }
     }
 
