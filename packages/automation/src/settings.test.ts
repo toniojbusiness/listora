@@ -17,6 +17,7 @@ describe('loadAutomationSettings', () => {
         maxIntervalMs: 24 * HOUR,
       },
       fakeSiteUrl: undefined,
+      fakePoshmarkUrl: undefined,
     });
     for (const profile of Object.values(settings.profiles)) {
       expect(profile.pacing).toEqual(DEFAULT_PACING);
@@ -83,5 +84,23 @@ describe('loadAutomationSettings', () => {
     expect(() =>
       loadAutomationSettings({ FAKE_AUTOMATION_SITE_URL: 'https://poshmark.com' }),
     ).toThrow('FAKE_AUTOMATION_SITE_URL');
+  });
+
+  it('points Poshmark at the fake Poshmark ahead of the fake site, local only', () => {
+    const settings = loadAutomationSettings({
+      FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400',
+      FAKE_POSHMARK_URL: 'http://127.0.0.1:4500',
+    });
+    expect(settings.fakePoshmarkUrl).toBe('http://127.0.0.1:4500');
+    expect(settings.profiles.poshmark.origins).toEqual(['http://127.0.0.1:4500']);
+    expect(settings.profiles.mercari.origins).toEqual(['http://127.0.0.1:4400']);
+    // Without its own fake, Poshmark stands in on the fake site in development.
+    expect(
+      loadAutomationSettings({ FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400' }).profiles
+        .poshmark.origins,
+    ).toEqual(['http://127.0.0.1:4400']);
+    expect(() => loadAutomationSettings({ FAKE_POSHMARK_URL: 'https://poshmark.com' })).toThrow(
+      'FAKE_POSHMARK_URL',
+    );
   });
 });

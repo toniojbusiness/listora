@@ -380,6 +380,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/ebay-notifications.md](features/ebay-notifications.md) | eBay notifications, the order poll, eBay account deletion                     |
 | [features/depop.md](features/depop.md)                           | Depop: assisted today, the partner API adapter to come                        |
 | [features/automation.md](features/automation.md)                 | Browser automation for marketplaces without an API (decision D1)              |
+| [features/poshmark.md](features/poshmark.md)                     | The Poshmark automation adapter, its mapping tables, and the fake Poshmark    |
 | [features/ai.md](features/ai.md)                                 | The AI pipeline, item analysis, cost metering and controls                    |
 | [features/pricing.md](features/pricing.md)                       | Pricing data rules, floors, fee tables, tiers, the label guard                |
 | [features/photos.md](features/photos.md)                         | Uploads, storage drivers, photo processing                                    |

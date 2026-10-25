@@ -56,7 +56,10 @@ export interface WorkerConfig {
   aiAlerts: AiAlertThresholds;
   /** PUSH_DRIVER, read by @listora/push: how sale and delist alerts reach the seller's phone. */
   push: PushConfig;
-  /** AUTOMATION_*, SALE_CHECK_*, FAKE_AUTOMATION_SITE_URL: which marketplaces are automated. */
+  /**
+   * AUTOMATION_*, SALE_CHECK_*, FAKE_AUTOMATION_SITE_URL, FAKE_POSHMARK_URL: which marketplaces
+   * are automated, and where.
+   */
   automation: AutomationSettings;
   /** BROWSER_RUNNER_*: how the worker starts the browser runner when automated work waits. */
   runnerLaunch: RunnerLaunchConfig;
