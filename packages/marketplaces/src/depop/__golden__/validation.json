@@ -1,0 +1,17 @@
+{
+  "withoutPhotos": [
+    {
+      "field": "item.photos",
+      "code": "required",
+      "message": "Depop listings need at least one photo."
+    }
+  ],
+  "freeOfCharge": [
+    {
+      "field": "variant.price",
+      "code": "out_of_range",
+      "message": "Depop prices must be at least $1.00."
+    }
+  ],
+  "longestTitle": []
+}

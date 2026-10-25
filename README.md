@@ -36,8 +36,9 @@ Every configuration key is documented there. Never commit `.env`. The worker pro
 photos and runs item analyses for the API, so run `npm run dev:worker` next to
 `npm run dev:api`; both use the same `STORAGE_LOCAL_DIR`. With `EBAY_ENV=fake` (the
 `.env.example` setting) the worker lists on the fake eBay, so also start `npm run dev:fake-ebay`.
-To watch the worker run Depop API operations locally, set `FAKE_MARKETPLACE_URL` and start
-`npm run dev:fake-marketplace`.
+Depop runs assisted until Listora's Depop partner access is granted. To watch the worker run
+Depop API operations locally (listings on a connection whose mode is `api`), set
+`DEPOP_ENV=fake` and `DEPOP_USER_CONNECTION_ID` and start `npm run dev:fake-depop`.
 
 ### Signing in locally
 
@@ -78,6 +79,7 @@ the user pool settings, and in-app account deletion (`DELETE /v1/account`).
 | `npm run dev:worker`           | Run the worker with reload on change                                                                                                             |
 | `npm run dev:fake-marketplace` | Run the fake marketplace at `FAKE_MARKETPLACE_URL`, for the worker in development                                                                |
 | `npm run dev:fake-ebay`        | Run the fake eBay at `EBAY_FAKE_URL`, which the worker lists on with `EBAY_ENV=fake`                                                             |
+| `npm run dev:fake-depop`       | Run the fake Depop at `DEPOP_FAKE_URL`, which api-connected Depop listings use with `DEPOP_ENV=fake`                                             |
 | `npm run ebay:sandbox-token`   | Sign a sandbox test seller in on eBay and save their refresh token in `.env` (see [eBay sandbox check](#ebay-sandbox-check))                     |
 | `npm run ebay:sandbox-check`   | Run the eBay adapter end to end against eBay's sandbox; fails with what to set when keys are missing                                             |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
@@ -144,7 +146,7 @@ packages/api-contract/  OpenAPI v1 contract + generated TS and Swift code (@list
 packages/db/            SQL migrations, migration runner, Kysely types (@listora/db)
 packages/storage/       Object storage drivers: local disk (.local/storage) and S3 (@listora/storage)
 packages/photos/        Image pipeline: derivatives, metadata stripping, hashes, processing job (@listora/photos)
-packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay adapter, the fake marketplace and fake eBay (@listora/marketplaces)
+packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay and Depop adapters, the fake marketplace, fake eBay, and fake Depop (@listora/marketplaces)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker metrics job (@listora/observability)
 packages/shared/        Shared types and utilities (@listora/shared)

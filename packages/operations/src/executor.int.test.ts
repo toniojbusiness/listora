@@ -34,6 +34,7 @@ const CAPABILITIES: MarketplaceCapabilities = {
   markSold: 'api',
   verifyRead: 'api',
   readFreshness: 'revision',
+  title: 'field',
   importListings: 'none',
   saleDetection: ['poll'],
   imageTransport: 'url_fetch',

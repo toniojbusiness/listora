@@ -38,7 +38,7 @@ try {
   const worker = await startOperationWorker({
     connectionString: config.databaseUrl,
     db,
-    adapters: createAdapters(config).lookup,
+    adapters: createAdapters(config, logger).lookup,
     tasks: {
       ...createWorkerTasks({
         db,

@@ -18,3 +18,5 @@ infra/cdk.out/
 infra/src/__snapshots__/
 # Golden payloads and validation results, written by the conformance suite (`vitest -u`)
 **/__golden__/
+# Depop's published OpenAPI spec, vendored byte for byte (packages/marketplaces/src/depop/fake/README.md)
+packages/marketplaces/src/depop/fake/openapi.yaml

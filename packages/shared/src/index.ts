@@ -1,4 +1,10 @@
 export { assertNever } from './assert.ts';
+export {
+  DEPOP_EMAIL_ADDRESS,
+  depopDescription,
+  endsWithHashtagLine,
+  splitDepopDescription,
+} from './depop-text.ts';
 export { handleShutdownSignals } from './lifecycle.ts';
 export type { ShutdownOptions } from './lifecycle.ts';
 export { createLogger, isLogLevel, LOG_LEVELS, REDACTED_LOG_PATHS } from './logging.ts';

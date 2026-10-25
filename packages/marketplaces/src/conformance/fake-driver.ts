@@ -34,7 +34,8 @@ export function fakeConformanceMarketplace(
     remove(externalListingId) {
       fake.remove(marketplace, externalListingId);
     },
-    countListings: (sku) => fake.listings(marketplace, sku).length,
+    countListings: (listing) =>
+      fake.listings(marketplace, listing.externalSku ?? listing.listingId).length,
     reset() {
       fake.clearFaults();
     },

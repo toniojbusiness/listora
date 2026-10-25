@@ -3,19 +3,23 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Marketplace adapter framework: the adapter interface, capability flags, registry, listing content, the assisted adapter base, the eBay adapter, and the fake marketplace and fake eBay (with fault injection) used in development and tests.",
+  "description": "Marketplace adapter framework: the adapter interface, capability flags, registry, listing content, the assisted adapter base, the eBay and Depop adapters, and the fake marketplace, fake eBay, and fake Depop (with fault injection) used in development and tests.",
   "exports": {
     ".": "./src/index.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {
     "fake": "node --env-file-if-exists=../../.env src/fake/cli.ts",
-    "fake:ebay": "node --env-file-if-exists=../../.env src/ebay/fake/cli.ts"
+    "fake:ebay": "node --env-file-if-exists=../../.env src/ebay/fake/cli.ts",
+    "fake:depop": "node --env-file-if-exists=../../.env src/depop/fake/cli.ts"
   },
   "dependencies": {
     "@listora/db": "*",
     "@listora/shared": "*",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "fast-xml-parser": "^5.11.2",
+    "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {

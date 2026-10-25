@@ -16,6 +16,7 @@ describe('loadWorkerConfig', () => {
       fakeMarketplaceUrl: undefined,
       cognitoUserPool: undefined,
       ebay: undefined,
+      depop: undefined,
       storage: { driver: 'local' },
       ai: { provider: 'fake', fakeFixturesDir: DEFAULT_FAKE_FIXTURES_DIR },
       analysis: { autoEscalate: true },
@@ -128,6 +129,20 @@ describe('loadWorkerConfig', () => {
     const error = captureConfigError({ DATABASE_URL: 'mysql://root:hunter2@db/x' });
     expect(error.issues).toEqual(['DATABASE_URL must be a postgres:// URL']);
     expect(error.message).not.toContain('hunter2');
+  });
+
+  it('reads the Depop settings, and reports a bad one with the rest', () => {
+    expect(loadWorkerConfig({ DATABASE_URL }).depop).toBeUndefined();
+    expect(
+      loadWorkerConfig({
+        DATABASE_URL,
+        DEPOP_ENV: 'fake',
+        DEPOP_USER_CONNECTION_ID: 'connection-1',
+      }).depop,
+    ).toMatchObject({ environment: 'fake', seller: { connectionId: 'connection-1' } });
+    expect(() =>
+      loadWorkerConfig({ DATABASE_URL, DEPOP_ENV: 'production', LOG_LEVEL: 'loud' }),
+    ).toThrow(/LOG_LEVEL[\s\S]*DEPOP_CLIENT_ID is required when DEPOP_ENV is production/);
   });
 
   it('reads the eBay settings, and reports a bad one with the rest', () => {

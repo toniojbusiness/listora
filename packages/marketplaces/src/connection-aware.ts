@@ -79,4 +79,12 @@ export class ConnectionAwareAdapter implements MarketplaceAdapter {
   healthCheck(ctx: AdapterContext): Promise<Health> {
     return this.adapterFor(ctx.connection).healthCheck(ctx);
   }
+
+  newListingId(
+    item: ItemSnapshot,
+    usedIds: readonly string[],
+    connection: ConnectionRef | null,
+  ): string | null {
+    return this.adapterFor(connection).newListingId?.(item, usedIds, connection) ?? null;
+  }
 }

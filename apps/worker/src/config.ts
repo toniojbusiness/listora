@@ -7,7 +7,14 @@ import {
   type AiConfig,
 } from '@listora/ai';
 import { AnalysisConfigError, loadAnalysisConfig, type AnalysisConfig } from '@listora/analysis';
-import { EbayConfigError, loadEbayConfig, type EbayConfig } from '@listora/marketplaces';
+import {
+  DepopConfigError,
+  EbayConfigError,
+  loadDepopConfig,
+  loadEbayConfig,
+  type DepopConfig,
+  type EbayConfig,
+} from '@listora/marketplaces';
 import { isLogLevel, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -22,6 +29,11 @@ export interface WorkerConfig {
   fakeMarketplaceUrl: string | undefined;
   /** EBAY_* keys, read by @listora/marketplaces; `undefined` when EBAY_ENV is unset. */
   ebay: EbayConfig | undefined;
+  /**
+   * DEPOP_* keys, read by @listora/marketplaces; `undefined` when DEPOP_ENV is unset (Depop
+   * runs assisted, as it must until Listora's partner access is granted).
+   */
+  depop: DepopConfig | undefined;
   /** STORAGE_* keys, read by @listora/storage: where photo processing and analysis read. */
   storage: StorageConfig;
   /** AI_* keys, read by @listora/ai: the provider and guards item analysis calls through. */
@@ -87,6 +99,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const analysis = collect(issues, AnalysisConfigError, () => loadAnalysisConfig(env));
   const aiAlerts = collect(issues, AiConfigError, () => loadAiAlertConfig(env));
   const ebay = collect(issues, EbayConfigError, () => loadEbayConfig(env));
+  const depop = collect(issues, DepopConfigError, () => loadDepopConfig(env));
 
   if (
     issues.length > 0 ||
@@ -105,6 +118,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     taskConcurrency,
     fakeMarketplaceUrl,
     ebay,
+    depop,
     storage,
     ai,
     analysis,

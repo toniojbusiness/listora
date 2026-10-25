@@ -149,6 +149,7 @@ export class EbayAdapter implements MarketplaceAdapter<EbayListingPayload> {
       markSold: 'not_needed',
       verifyRead: 'api',
       readFreshness: 'none',
+      title: 'field',
       importListings: 'api',
       saleDetection: ['webhook', 'poll'],
       imageTransport: 'upload',

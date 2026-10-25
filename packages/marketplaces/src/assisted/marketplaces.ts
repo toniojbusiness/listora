@@ -20,12 +20,12 @@ export function createMercariAdapter(): AssistedAdapter {
 
 /**
  * Depop before its API is connected. The flags still describe Depop itself, which never reuses
- * an external SKU, whichever mode serves it.
+ * an external SKU and has no listing titles, whichever mode serves it.
  */
 export function createDepopAssistedAdapter(): AssistedAdapter {
   return new AssistedAdapter({
     marketplace: 'depop',
     siteUrl: 'https://www.depop.com/',
-    capabilities: { externalSkuReusable: false },
+    capabilities: { externalSkuReusable: false, title: 'none' },
   });
 }

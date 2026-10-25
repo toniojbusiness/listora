@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   AssistedAdapter,
   ConnectionAwareAdapter,
+  DepopAdapter,
   EbayAdapter,
   FakeMarketplaceAdapter,
+  loadDepopConfig,
   loadEbayConfig,
 } from '@listora/marketplaces';
 
@@ -14,7 +16,11 @@ const api = { id: 'connection-1', mode: 'api' } as const;
 
 describe('createAdapters', () => {
   it('serves the assisted marketplaces, and no eBay, without FAKE_MARKETPLACE_URL', () => {
-    const adapters = createAdapters({ fakeMarketplaceUrl: undefined, ebay: undefined });
+    const adapters = createAdapters({
+      fakeMarketplaceUrl: undefined,
+      ebay: undefined,
+      depop: undefined,
+    });
     expect(adapters.marketplaces).toEqual(['depop', 'poshmark', 'mercari']);
     expect(adapters.get('ebay')).toBeUndefined();
     expect(adapters.get('poshmark')).toBeInstanceOf(AssistedAdapter);
@@ -27,6 +33,7 @@ describe('createAdapters', () => {
     const adapters = createAdapters({
       fakeMarketplaceUrl: 'http://127.0.0.1:4100',
       ebay: undefined,
+      depop: undefined,
     });
     expect(adapters.marketplaces).toEqual(['ebay', 'depop', 'poshmark', 'mercari']);
     expect(adapters.get('ebay')).toBeInstanceOf(FakeMarketplaceAdapter);
@@ -50,7 +57,7 @@ describe('createAdapters', () => {
   it('routes eBay to the eBay adapter when EBAY_ENV is set, whatever FAKE_MARKETPLACE_URL says', () => {
     const ebay = loadEbayConfig({ EBAY_ENV: 'fake', EBAY_USER_CONNECTION_ID: api.id });
     for (const fakeMarketplaceUrl of [undefined, 'http://127.0.0.1:4100']) {
-      const adapters = createAdapters({ fakeMarketplaceUrl, ebay });
+      const adapters = createAdapters({ fakeMarketplaceUrl, ebay, depop: undefined });
       expect(adapters.get('ebay')).toBeInstanceOf(EbayAdapter);
       expect(adapters.capabilities('ebay', api)).toMatchObject({
         verifyRead: 'api',
@@ -58,6 +65,29 @@ describe('createAdapters', () => {
         markSold: 'not_needed',
         imageTransport: 'upload',
       });
+    }
+  });
+
+  it('serves api-connected Depop listings through the Depop adapter when DEPOP_ENV is set', () => {
+    const depop = loadDepopConfig({ DEPOP_ENV: 'fake', DEPOP_USER_CONNECTION_ID: api.id });
+    for (const fakeMarketplaceUrl of [undefined, 'http://127.0.0.1:4100']) {
+      const adapters = createAdapters({ fakeMarketplaceUrl, ebay: undefined, depop });
+      const served = adapters.get('depop');
+      expect(served).toBeInstanceOf(ConnectionAwareAdapter);
+      if (!(served instanceof ConnectionAwareAdapter)) throw new Error('connection-aware');
+      expect(served.adapterFor(api)).toBeInstanceOf(DepopAdapter);
+      // Without an api connection Depop stays assisted: the adapter is dormant until then.
+      expect(served.adapterFor(null)).toBeInstanceOf(AssistedAdapter);
+      expect(adapters.capabilities('depop', api)).toMatchObject({
+        verifyRead: 'api',
+        readFreshness: 'none',
+        title: 'none',
+        markSold: 'api',
+        externalSkuReusable: false,
+      });
+      expect(adapters.capabilities('depop', { id: api.id, mode: 'assisted' })?.verifyRead).toBe(
+        'user_confirm',
+      );
     }
   });
 });

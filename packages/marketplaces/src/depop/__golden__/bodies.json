@@ -1,0 +1,78 @@
+{
+  "depopShipping": {
+    "address": {
+      "country_code": "US",
+      "state": "California"
+    },
+    "description": "Classic trucker jacket in medium wash. Light fading at the cuffs.\n\n#vintage #levis",
+    "price_currency": "USD",
+    "price_amount": "45.00",
+    "quantity": 1,
+    "pictures": [
+      {
+        "url": "https://media.listora.test/p/front.jpg"
+      },
+      {
+        "url": "https://media.listora.test/p/back.jpg"
+      },
+      {
+        "url": "https://media.listora.test/p/tag.jpg"
+      }
+    ],
+    "department": "menswear",
+    "product_type": "tshirts",
+    "size_set_id": 52,
+    "size_id": 10,
+    "condition": "used_excellent",
+    "colour": [
+      "blue"
+    ],
+    "brand_name": "Levi's",
+    "attributes": {
+      "material": [
+        "cotton"
+      ]
+    },
+    "depop_shipping": {
+      "address_id": 100001,
+      "shipping_provider_id": "USPS",
+      "parcel_size_id": "SMALL",
+      "payer": "buyer"
+    }
+  },
+  "manualShipping": {
+    "address": {
+      "country_code": "GB"
+    },
+    "description": "Classic trucker jacket in medium wash. Light fading at the cuffs.\n\n#vintage #levis",
+    "price_currency": "USD",
+    "price_amount": "45.00",
+    "quantity": 1,
+    "pictures": [
+      {
+        "url": "https://media.listora.test/p/front.jpg"
+      },
+      {
+        "url": "https://media.listora.test/p/back.jpg"
+      },
+      {
+        "url": "https://media.listora.test/p/tag.jpg"
+      }
+    ],
+    "department": "menswear",
+    "product_type": "tshirts",
+    "size_set_id": 52,
+    "size_id": 10,
+    "condition": "used_excellent",
+    "colour": [
+      "blue"
+    ],
+    "brand_name": "Levi's",
+    "attributes": {
+      "material": [
+        "cotton"
+      ]
+    },
+    "national_shipping_cost": "3.50"
+  }
+}

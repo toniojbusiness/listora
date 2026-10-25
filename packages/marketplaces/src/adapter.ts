@@ -55,6 +55,11 @@ export interface MarketplaceCapabilities {
    * after two matching reads separated by a delay.
    */
   readFreshness: 'revision' | 'none';
+  /**
+   * Whether listings have a title of their own. `none` (Depop): the description is the whole
+   * listing text, so reads show no title and a read-back never checks one (`readBackState`).
+   */
+  title: 'field' | 'none';
   importListings: 'api' | 'share_sheet' | 'bulk_file' | 'none';
   saleDetection: ('webhook' | 'poll' | 'email' | 'manual')[];
   imageTransport: 'url_fetch' | 'upload' | 'user_saves_photos';
@@ -266,6 +271,19 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
   readListing(ref: ListingRef, ctx: AdapterContext): Promise<RemoteListingState>;
   /** One cheap call that shows whether the connection works. Never throws. */
   healthCheck(ctx: AdapterContext): Promise<Health>;
+  /**
+   * For a marketplace whose listings Listora names itself (Depop: a product is created and
+   * addressed by the SKU Listora sends, and a SKU is never used twice): the id the next create
+   * or relist of this item gives its new listing. `usedIds` holds every id the item has had on
+   * the marketplace. The engine stores the id on the listing before it sends anything, so a
+   * read-back finds the listing even when the send's answer is lost. `null`, or no such member:
+   * the marketplace names its listings itself and the send returns the id. Pure.
+   */
+  newListingId?(
+    item: ItemSnapshot,
+    usedIds: readonly string[],
+    connection: ConnectionRef | null,
+  ): string | null;
 }
 
 /** Finds the adapter for a marketplace; `undefined` when Listora has none configured. */
