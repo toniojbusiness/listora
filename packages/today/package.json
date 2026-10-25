@@ -1,0 +1,23 @@
+{
+  "name": "@listora/today",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The Today screen: the card rules and the plain queries behind the daily summary of what needs the seller, the money summary, and the morning summary notification.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/auto-delist": "*",
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/operations": "*",
+    "@listora/push": "*",
+    "@listora/sales": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

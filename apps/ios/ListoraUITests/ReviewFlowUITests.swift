@@ -58,7 +58,7 @@ final class ReviewFlowUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        let tab = app.tabBars.buttons["Add Item"]
+        let tab = app.tabBars.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()
     }

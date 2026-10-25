@@ -14,13 +14,15 @@
  *   changed it must end with (the other tests list on eBay).
  * - `POST /items/listed` `{ details? }`: such an item published on eBay and confirmed active
  *   (`createListedItem`), answering `{ id, sku, listingId }`.
+ * - `POST /today/sold-item`: a ready item (as above) kept in bin `B-12` that sold on eBay an hour
+ *   ago and ships by tomorrow, answering `{ id, sku, saleId, saleItemId }`: a Today "ship" card.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
 import type { Db } from '@listora/db';
 import type { FakeEbay, FakeEbayAction, FakeEbayFault } from '@listora/marketplaces';
 
-import { createListedItem, createReadyItem, type StackApi } from './seed.ts';
+import { createListedItem, createReadyItem, recordSoldItem, type StackApi } from './seed.ts';
 
 const ACTIONS: readonly FakeEbayAction[] = ['add', 'revise', 'end', 'relist', 'get_item', 'media'];
 const FAULTS = ['reject', 'server_error', 'system_error', 'rate_limited'] as const;
@@ -109,6 +111,10 @@ async function handle(
       }
       await setEbayConnection(deps.db, state);
       return { status: 204 };
+    }
+    case 'POST /today/sold-item': {
+      const item = await createReadyItem(deps.api, { title: 'Wrangler Western Shirt' });
+      return { status: 201, body: await recordSoldItem(deps.db, item) };
     }
     default:
       return { status: 404, body: { error: `no control route ${route}` } };

@@ -41,6 +41,7 @@ describe('API feature discovery', () => {
       'profit',
       'sales',
       'tasks',
+      'today',
       'uploads',
       'usage',
       'webhooks',

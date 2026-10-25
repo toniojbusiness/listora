@@ -1,0 +1,59 @@
+/v1/today:
+  get:
+    tags: [today]
+    operationId: getToday
+    summary: Get what needs the seller today
+    description: |
+      The Today screen: one card per thing that needs the seller (items to ship, delists that
+      are not done, connections to reconnect, drafts to review, and old listings that could use
+      a price drop or a relist), most urgent first, and the money summary. Computed from the
+      account's own data on every request, with no AI and no marketplace call, so the app asks
+      for it each time it opens. A card is gone once its work is done.
+    responses:
+      '200':
+        description: The summary as of `generatedAt`.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/today.yaml#/Today'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/today/settings:
+  get:
+    tags: [today]
+    operationId: getTodaySettings
+    summary: Get the morning summary setting
+    description: The account's morning summary notification setting (defaults until saved).
+    responses:
+      '200':
+        description: The setting.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/today.yaml#/TodaySummarySettings'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  put:
+    tags: [today]
+    operationId: replaceTodaySettings
+    summary: Replace the morning summary setting
+    description: |
+      Turns the morning summary on or off and sets its time, in the device's time zone. A time
+      zone the server does not know is `422 validation_failed`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/today.yaml#/TodaySummarySettingsReplace'
+    responses:
+      '200':
+        description: The saved setting.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/today.yaml#/TodaySummarySettings'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

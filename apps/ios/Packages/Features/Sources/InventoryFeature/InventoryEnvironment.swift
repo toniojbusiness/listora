@@ -75,6 +75,11 @@ public final class InventoryEnvironment {
         self.taskDestination = taskDestination
     }
 
+    /// The item screen, for another tab's navigation stack (a Today card opens it).
+    public func itemDetail(itemID: String) -> some View {
+        ItemDetailView(environment: self, itemID: itemID)
+    }
+
     func makeListModel() -> InventoryListModel {
         InventoryListModel(service: service, isSignedIn: isSignedIn)
     }
