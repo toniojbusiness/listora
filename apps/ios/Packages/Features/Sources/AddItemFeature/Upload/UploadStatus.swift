@@ -67,6 +67,8 @@ struct DraftUploadSummary: Equatable, Sendable {
     }
 
     let text: String
+    /// A few words for the draft list's status badge.
+    let badge: String
     let tone: Tone
     /// True when retries stopped and the user can start them again.
     let canRetry: Bool
@@ -87,26 +89,48 @@ struct DraftUploadSummary: Equatable, Sendable {
             }
         })
         if let failure = draft.record.retry.failure {
-            self.init(text: "Couldn't save the draft to Listora: \(failure)", tone: .danger, canRetry: true)
+            self.init(
+                text: "Couldn't save the draft to Listora: \(failure)",
+                badge: "Upload failed",
+                tone: .danger,
+                canRetry: true,
+            )
         } else if total == 0 {
-            self.init(text: "No photos yet. Add photos to continue.", tone: .empty, canRetry: false)
+            self.init(text: "No photos yet. Add photos to continue.", badge: "No photos", tone: .empty, canRetry: false)
         } else if failed > 0 {
             let photos = failed == 1 ? "1 photo" : "\(failed) photos"
-            self.init(text: "\(photos) failed to upload", tone: .danger, canRetry: true)
+            self.init(text: "\(photos) failed to upload", badge: "Upload failed", tone: .danger, canRetry: true)
         } else if total > 0, uploaded == total,
                   draft.record.syncedPhotoOrder == draft.photos.compactMap(\.serverPhotoID)
         {
             let photos = total == 1 ? "1 photo" : "all \(total) photos"
-            self.init(text: "Saved to Listora with \(photos)", tone: .success, canRetry: false, isComplete: true)
+            self.init(
+                text: "Saved to Listora with \(photos)",
+                badge: "Saved to Listora",
+                tone: .success,
+                canRetry: false,
+                isComplete: true,
+            )
         } else if !isSignedIn {
-            self.init(text: "Saved on this phone. Sign in to upload.", tone: .warning, canRetry: false)
+            self.init(
+                text: "Saved on this phone. Sign in to upload.",
+                badge: "Sign in to upload",
+                tone: .warning,
+                canRetry: false,
+            )
         } else {
-            self.init(text: "Uploading photos (\(uploaded) of \(total) done)", tone: .neutral, canRetry: false)
+            self.init(
+                text: "Uploading photos (\(uploaded) of \(total) done)",
+                badge: "Uploading \(uploaded) of \(total)",
+                tone: .neutral,
+                canRetry: false,
+            )
         }
     }
 
-    private init(text: String, tone: Tone, canRetry: Bool, isComplete: Bool = false) {
+    private init(text: String, badge: String, tone: Tone, canRetry: Bool, isComplete: Bool = false) {
         self.text = text
+        self.badge = badge
         self.tone = tone
         self.canRetry = canRetry
         self.isComplete = isComplete

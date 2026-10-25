@@ -18,6 +18,22 @@ struct PaletteTests {
         ("success", Palette.success),
         ("warning", Palette.warning),
         ("danger", Palette.danger),
+        ("info", Palette.info),
+    ]
+
+    /// A tone's strong color and the soft background it sits on.
+    private struct SoftPair {
+        let name: String
+        let strong: ColorToken
+        let soft: ColorToken
+    }
+
+    private static let softPairs = [
+        SoftPair(name: "brand", strong: Palette.brand, soft: Palette.brandSoft),
+        SoftPair(name: "success", strong: Palette.success, soft: Palette.successSoft),
+        SoftPair(name: "warning", strong: Palette.warning, soft: Palette.warningSoft),
+        SoftPair(name: "danger", strong: Palette.danger, soft: Palette.dangerSoft),
+        SoftPair(name: "info", strong: Palette.info, soft: Palette.infoSoft),
     ]
 
     @Test
@@ -70,8 +86,28 @@ struct PaletteTests {
     }
 
     @Test
+    func `badge and banner text is readable on its soft background`() {
+        for pair in Self.softPairs {
+            for (label, text) in [(pair.name, pair.strong), ("textPrimary", Palette.textPrimary)] {
+                let light = text.light.contrastRatio(with: pair.soft.light)
+                let dark = text.dark.contrastRatio(with: pair.soft.dark)
+                #expect(light >= Self.minimumTextContrast, "\(label) on \(pair.name)Soft (light) is \(light):1")
+                #expect(dark >= Self.minimumTextContrast, "\(label) on \(pair.name)Soft (dark) is \(dark):1")
+            }
+        }
+    }
+
+    @Test
+    func `destructive button labels are readable on the danger color`() {
+        #expect(Palette.onDanger.light.contrastRatio(with: Palette.danger.light) >= Self.minimumTextContrast)
+        #expect(Palette.onDanger.dark.contrastRatio(with: Palette.danger.dark) >= Self.minimumTextContrast)
+    }
+
+    @Test
     func `every token changes between light and dark mode`() {
-        for (name, token) in Self.backgrounds + Self.foregrounds + [("onBrand", Palette.onBrand)] {
+        let soft = Self.softPairs.map { ("\($0.name)Soft", $0.soft) }
+        let labels = [("onBrand", Palette.onBrand), ("onDanger", Palette.onDanger)]
+        for (name, token) in Self.backgrounds + Self.foregrounds + soft + labels {
             #expect(token.light != token.dark, "\(name) is the same in light and dark mode")
         }
     }
@@ -85,7 +121,55 @@ struct MetricsTests {
     }
 
     @Test
+    func `spacing sits on the 8-point grid, with 4-point half steps`() {
+        for step in Spacing.scale {
+            #expect(step.truncatingRemainder(dividingBy: 4) == 0, "\(step) is off the grid")
+        }
+        for step in Spacing.scale where step >= Spacing.md {
+            #expect(step.truncatingRemainder(dividingBy: 8) == 0, "\(step) is not a multiple of 8")
+        }
+    }
+
+    @Test
+    func `corner radii strictly increase`() {
+        #expect(Radius.scale == Radius.scale.sorted())
+        #expect(Set(Radius.scale).count == Radius.scale.count)
+    }
+
+    @Test
     func `controls meet the minimum tap target`() {
         #expect(Layout.buttonHeight >= Layout.minimumTapTarget)
+        #expect(Layout.compactButtonHeight >= Layout.minimumTapTarget)
+        #expect(Layout.shutterSize >= Layout.minimumTapTarget)
+    }
+}
+
+struct StatusToneTests {
+    @Test
+    func `only success looks done`() {
+        #expect(StatusTone.allCases.filter(\.looksDone) == [.success])
+    }
+
+    @Test
+    func `failures, actions, and work in progress never use the success color`() {
+        for tone in StatusTone.allCases where tone != .success {
+            #expect(tone.color != Palette.success, "\(tone) uses the success color")
+            #expect(tone.softColor != Palette.successSoft, "\(tone) uses the success background")
+        }
+    }
+
+    @Test
+    func `every tone's color is readable on its own background`() {
+        for tone in StatusTone.allCases {
+            #expect(tone.color.light.contrastRatio(with: tone.softColor.light) >= 4.5, "\(tone) (light)")
+            #expect(tone.color.dark.contrastRatio(with: tone.softColor.dark) >= 4.5, "\(tone) (dark)")
+        }
+    }
+
+    @Test
+    func `the tones look different from each other`() {
+        let distinct: [StatusTone] = [.success, .inProgress, .failed, .actionNeeded, .neutral]
+        #expect(Set(distinct.map(\.systemImage)).count == distinct.count)
+        #expect(Set(distinct.map { "\($0.color.light)" }).count == distinct.count)
     }
 }

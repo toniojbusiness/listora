@@ -92,18 +92,21 @@ private struct SharedListingCard: View {
     let listing: ListingURL
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xxs) {
-            Text("\(listing.marketplace.displayName) listing")
-                .font(Typography.headline)
-                .foregroundStyle(Palette.textPrimary)
-            Text(listing.listingId.map { "Listing \($0)" } ?? "Share link")
-                .font(Typography.callout)
-                .foregroundStyle(Palette.textSecondary)
-            Text(listing.canonicalURL.absoluteString)
-                .font(Typography.caption)
-                .foregroundStyle(Palette.textSecondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            IconTile(monogram: String(listing.marketplace.displayName.prefix(1)), size: .card)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("\(listing.marketplace.displayName) listing")
+                    .font(Typography.headline)
+                    .foregroundStyle(Palette.textPrimary)
+                Text(listing.listingId.map { "Listing \($0)" } ?? "Share link")
+                    .font(Typography.subheadline)
+                    .foregroundStyle(Palette.textSecondary)
+                Text(listing.canonicalURL.absoluteString)
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("share.listing")
@@ -253,17 +256,11 @@ private struct ConfirmLinkView: View {
                         .foregroundStyle(Palette.textSecondary)
                     }
                 }
-                Button {
+                Button("Link listing", systemImage: "link") {
                     Task { await model.confirm() }
-                } label: {
-                    if isSubmitting {
-                        ProgressView().tint(Palette.onBrand.color)
-                    } else {
-                        Text("Link listing")
-                    }
                 }
                 .buttonStyle(.listoraPrimary)
-                .disabled(isSubmitting)
+                .loading(isSubmitting)
                 .accessibilityIdentifier("share.confirm")
             }
             .padding(Spacing.md)
@@ -293,10 +290,7 @@ private struct LinkedView: View {
 
     var body: some View {
         VStack(spacing: Spacing.md) {
-            Image(systemName: "link.circle.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(Palette.brand)
-                .accessibilityHidden(true)
+            IconTile(systemImage: "link", tone: linked.statusTone == .success ? .success : nil, size: .hero)
             Text("Linked to \(linked.itemSKU)")
                 .font(Typography.title)
                 .foregroundStyle(Palette.textPrimary)
@@ -307,7 +301,7 @@ private struct LinkedView: View {
                     .foregroundStyle(Palette.textSecondary)
                     .multilineTextAlignment(.center)
             }
-            StatusLabel(
+            StatusBadge(
                 [marketplace?.displayName, linked.statusLabel].compactMap(\.self).joined(separator: ": "),
                 tone: linked.statusTone,
             )
@@ -329,10 +323,7 @@ private struct FailedLinkView: View {
 
     var body: some View {
         VStack(spacing: Spacing.md) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(Palette.danger)
-                .accessibilityHidden(true)
+            IconTile(systemImage: "exclamationmark.triangle", tone: .failed, size: .hero)
             Text("Not linked")
                 .font(Typography.title)
                 .foregroundStyle(Palette.textPrimary)
@@ -347,6 +338,7 @@ private struct FailedLinkView: View {
                     .accessibilityIdentifier("share.retry")
             }
             Button("Choose another item") { model.back() }
+                .buttonStyle(.listoraTertiary)
         }
         .padding(Spacing.lg)
         .frame(maxWidth: 420)

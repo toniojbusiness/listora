@@ -35,6 +35,7 @@ Run these from the repository root.
 | `make ios-clean`        | Delete the generated project and `.build/ios`                        |
 | `make ios-tag-fixtures` | Re-render the tag-reading test photos (see Tag reading)              |
 | `make ios-app-icon`     | Re-render the placeholder app icon (see App icon)                    |
+| `make ios-screenshots`  | Screenshot every screen in four variants (see Design)                |
 | `make ios-archive`      | Unsigned release archive; needs no Apple account (Releases)          |
 | `make ios-testflight`   | Signed release archive uploaded to TestFlight (Releases)             |
 
@@ -69,7 +70,8 @@ Packages/
   Core/          Models and utilities with no UI: AppConfiguration, AppEnvironment, AppVersion,
                  the TagReader protocol with its TagReading model, the listing URL parser
                  (ListingURL, SharedContent)
-  DesignSystem/  Palette (light and dark colors), Typography, Spacing, Radius, components
+  DesignSystem/  Palette (light and dark colors), Typography, Spacing, Radius, Elevation, Motion,
+                 Haptics, and the shared components (docs/features/design.md)
   APIClient/     The generated ListoraAPI client over URLSession, the signed-in session (Keychain),
                  APIFailure (the contract's error model), and the dev sign-in client
   Features/      One library per feature:
@@ -93,9 +95,11 @@ Dependency rules:
   that imports features; the Share Extension target imports only `ShareLinkFeature`.
 - Add a feature as a new target and library product in `Packages/Features/Package.swift`, and
   its tests as a test target there. List new test targets in the scheme in `project.yml`.
-- Views use `Palette`, `Typography`, and `Spacing`, not raw colors, fonts, or numbers.
-  `PaletteTests` checks that every text color meets WCAG AA contrast on every background in
-  both light and dark mode.
+- Views use `Palette`, `Typography`, and `Spacing`, not raw colors, fonts, or numbers, and the
+  DesignSystem components (buttons, cards, badges, banners, the bottom action bar) instead of
+  styling their own. `PaletteTests` checks that every text color meets WCAG AA contrast on every
+  background in both light and dark mode; `ComponentLayoutTests` checks tap targets and wrapping
+  at the largest text size.
 - Tests use Swift Testing (`import Testing`); UI tests use XCTest.
 - A feature that other features use without UI (such as `TagReadingFeature`) implements a
   protocol from `Core`. `AppDependencies` builds the implementation and the features that need
@@ -183,6 +187,18 @@ ship a real design, export the three PNGs above from the design file, replace th
 the names, or update `Contents.json`), delete the tool and the `ios-app-icon` target, and run
 `make ios-test` and `make ios-archive`. Both check that the built app names the `AppIcon` asset.
 
+## Design
+
+The visual language (palette, type scale, spacing, motion, haptics, components) and the UI audit
+are in [docs/features/design.md](../../docs/features/design.md). `make ios-screenshots
+IOS_SIMULATOR='<name>'` runs `ScreenshotTourUITests`, which visits every screen against
+`StubAPIServer` and the fake camera, once each in light and dark mode at the default and the
+largest accessibility text size, and writes PNGs to `.build/ios/screenshots/<variant>/` (set
+`IOS_SCREENSHOT_DIR` to write elsewhere). It switches the simulator's appearance and text size
+and puts them back afterwards. `make ios-test` skips the tour, which runs only when the test
+runner has `LISTORA_SCREENSHOT_DIR`. `AccessibilityAuditUITests` runs Xcode's accessibility
+audit on the main screens as part of `make ios-test`.
+
 ## Add Item: capture, drafts, and uploads
 
 `AddItemFeature` turns photos into a draft on the phone and uploads it in the background.
@@ -191,7 +207,9 @@ the names, or update `Contents.json`), delete the tool and the `ios-app-icon` ta
 - **Capture.** On a device, "Take photos" opens a guided camera (AVFoundation): front, back,
   tag, then any number of flaws and details, each shot getting its step's role. The simulator
   has no camera, so it offers "Import photos" (PhotosPicker) only; imported photos get roles from
-  their order (front, back, then detail).
+  their order (front, back, then detail). The camera is a `CameraSource`; in debug builds
+  `LISTORA_FAKE_CAMERA=<folder>` swaps in `FixtureCamera`, which "takes" the folder's JPEGs, so
+  the guided capture runs in the simulator (`CameraCaptureUITests`, the screenshot tour).
 - **Preparation** (`PhotoPreparation`): every photo is decoded upright, resized to at most 2048
   px on the long edge, and re-encoded as JPEG without any metadata, so no GPS location leaves
   the phone. `BlurDetector` scores sharpness (variance of the Laplacian at 1024 px) and capture
@@ -218,11 +236,16 @@ the names, or update `Contents.json`), delete the tool and the `ios-app-icon` ta
   for the upload, then opens it. When the item is saved, the draft leaves this iPhone (its server
   item stays: `DraftStore.completeDraft`).
 
+- **Tag reading results.** A tag photo's screen shows what on-device reading found, as read:
+  the text lines and barcodes, or that nothing was found or reading failed. The device never
+  interprets them; the server does.
+
 The queue's tests (`AddItemFeatureTests`) run the real generated client and URLSession transport
 against `FakeListoraServer` through a `URLProtocol` stub, including resume after a relaunch,
 retries, and failures that stop. The UI tests import the photos in `ListoraUITests/Fixtures`
 through debug-only launch variables: `LISTORA_FIXTURE_PHOTOS=<folder>` makes "Import photos"
-add that folder's JPEGs, and `LISTORA_RESET_LOCAL_DATA=1` starts with no drafts, signed out.
+add that folder's JPEGs, `LISTORA_FAKE_CAMERA=<folder>` makes the camera take them, and
+`LISTORA_RESET_LOCAL_DATA=1` starts with no drafts, signed out.
 
 ### Testing against the API
 

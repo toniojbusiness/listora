@@ -367,6 +367,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/observability.md](features/observability.md)           | Logs, request ids, the signals alarms key on                                  |
 | [features/ios.md](features/ios.md)                               | iOS app conventions                                                           |
 | [features/review.md](features/review.md)                         | The iPhone review, cost, and price screens and the interaction-time metric    |
+| [features/design.md](features/design.md)                         | The iPhone app's design system, screenshots, and UI audit                     |
 
 ### Former section numbers
 

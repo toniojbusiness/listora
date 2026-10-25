@@ -1,37 +1,61 @@
 import SwiftUI
 
-/// A centered icon, title, message, and optional action for screens with nothing to show yet.
+/// A screen with nothing to show yet: an icon tile, a title, a friendly message, optional numbered
+/// steps that explain what happens next, and up to two actions, so a screen is never a dead end.
 public struct EmptyStateView: View {
     public struct Action {
         let title: String
+        let systemImage: String?
         let handler: @MainActor () -> Void
 
-        public init(_ title: String, handler: @escaping @MainActor () -> Void) {
+        public init(_ title: String, systemImage: String? = nil, handler: @escaping @MainActor () -> Void) {
             self.title = title
+            self.systemImage = systemImage
             self.handler = handler
         }
     }
 
     private let systemImage: String
+    private let tone: StatusTone?
     private let title: String
     private let message: String
+    private let steps: [String]
     private let action: Action?
+    private let secondaryAction: Action?
 
-    public init(systemImage: String, title: String, message: String, action: Action? = nil) {
+    public init(
+        systemImage: String,
+        tone: StatusTone? = nil,
+        title: String,
+        message: String,
+        steps: [String] = [],
+        action: Action? = nil,
+        secondaryAction: Action? = nil,
+    ) {
         self.systemImage = systemImage
+        self.tone = tone
         self.title = title
         self.message = message
+        self.steps = steps
         self.action = action
+        self.secondaryAction = secondaryAction
     }
 
     public var body: some View {
-        VStack(spacing: Spacing.md) {
-            Image(systemName: systemImage)
-                .font(.system(size: 44, weight: .regular))
-                .foregroundStyle(Palette.brand)
-                .frame(width: 88, height: 88)
-                .background(Palette.surfaceSecondary, in: Circle())
-                .accessibilityHidden(true)
+        // Centered when it fits; scrolls from the top when large text makes it taller than the screen.
+        GeometryReader { geometry in
+            ScrollView {
+                content
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .background(Palette.background)
+    }
+
+    private var content: some View {
+        VStack(spacing: Spacing.lg) {
+            IconTile(systemImage: systemImage, tone: tone, size: .hero)
             VStack(spacing: Spacing.xs) {
                 Text(title)
                     .font(Typography.title)
@@ -40,18 +64,60 @@ public struct EmptyStateView: View {
                 Text(message)
                     .font(Typography.body)
                     .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .multilineTextAlignment(.center)
-            if let action {
-                Button(action.title, action: action.handler)
-                    .buttonStyle(.listoraPrimary)
-                    .padding(.top, Spacing.xs)
+            if !steps.isEmpty {
+                stepList
+            }
+            if action != nil || secondaryAction != nil {
+                VStack(spacing: Spacing.sm) {
+                    if let action {
+                        button(action).buttonStyle(.listoraPrimary)
+                    }
+                    if let secondaryAction {
+                        button(secondaryAction).buttonStyle(.listoraSecondary)
+                    }
+                }
+                .padding(.top, Spacing.xs)
             }
         }
-        .padding(Spacing.lg)
-        .frame(maxWidth: 420)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Palette.background)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.vertical, Spacing.xl)
+        .frame(maxWidth: 440)
+    }
+
+    private var stepList: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                    Text("\(index + 1)")
+                        .font(Typography.label)
+                        .foregroundStyle(Palette.brand)
+                        .frame(minWidth: 24, minHeight: 24)
+                        .background(Palette.brandSoft, in: Circle())
+                        .accessibilityHidden(true)
+                    Text(step)
+                        .font(Typography.callout)
+                        .foregroundStyle(Palette.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Step \(index + 1): \(step)")
+            }
+        }
+        .cardStyle(.outlined)
+    }
+
+    private func button(_ action: Action) -> some View {
+        Button(action: action.handler) {
+            if let systemImage = action.systemImage {
+                Label(action.title, systemImage: systemImage)
+            } else {
+                Text(action.title)
+            }
+        }
     }
 }
 
@@ -59,8 +125,9 @@ public struct EmptyStateView: View {
     EmptyStateView(
         systemImage: "shippingbox",
         title: "No items yet",
-        message: "Items you add appear here with their status on every marketplace.",
-        action: .init("Add item") {},
+        message: "Create an item once, and Listora keeps it in sync everywhere you sell.",
+        steps: ["Take photos of the item", "Check the details Listora fills in", "List it on your marketplaces"],
+        action: .init("Add item", systemImage: "plus") {},
     )
 }
 

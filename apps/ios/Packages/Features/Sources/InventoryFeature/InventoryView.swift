@@ -14,8 +14,13 @@ public struct InventoryView: View {
             EmptyStateView(
                 systemImage: "shippingbox",
                 title: "No items yet",
-                message: "Create an item once and see its status on every marketplace.",
-                action: .init("Add item", handler: onAddItem),
+                message: "Create an item once, and see where it's listed and what sold on every marketplace.",
+                steps: [
+                    "Take photos of the item",
+                    "Check the details Listora suggests",
+                    "List it on your marketplaces",
+                ],
+                action: .init("Add item", systemImage: "camera.fill", handler: onAddItem),
             )
             .navigationTitle("Inventory")
         }

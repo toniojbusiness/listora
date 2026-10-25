@@ -21,7 +21,7 @@ public enum AppTab: String, CaseIterable, Identifiable, Sendable {
     public var systemImage: String {
         switch self {
         case .inventory: "shippingbox"
-        case .addItem: "plus.circle"
+        case .addItem: "camera"
         case .tasks: "checklist"
         case .settings: "gearshape"
         }

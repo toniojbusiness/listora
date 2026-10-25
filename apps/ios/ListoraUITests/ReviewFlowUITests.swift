@@ -63,9 +63,9 @@ final class ReviewFlowUITests: XCTestCase {
         let tag = app.buttons["photo.tile.2"]
         XCTAssertTrue(tag.waitForExistence(timeout: 15))
         tag.tap()
-        let role = app.segmentedControls["photo.role"]
+        let role = app.buttons["photo.role.tag"]
         XCTAssertTrue(role.waitForExistence(timeout: 5))
-        role.buttons["Tag"].tap()
+        role.tap()
         app.buttons["photo.done"].tap()
 
         let review = app.buttons["draft.review"]

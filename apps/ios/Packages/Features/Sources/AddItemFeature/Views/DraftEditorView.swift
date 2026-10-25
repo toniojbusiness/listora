@@ -5,8 +5,9 @@ import SwiftUI
 
 /// One draft's photos: their order (the first is the cover), roles, and upload status. Tap a
 /// photo to change its role, crop it, make it the cover, or remove it; drag photos to reorder.
-/// "Review item" opens the review once the server has every photo; tapped earlier, it waits for
-/// the upload and then opens it.
+/// Review item and adding photos sit at the bottom, within thumb reach. "Review item" opens the
+/// review once the server has every photo; tapped earlier, it waits for the upload and then opens
+/// it.
 struct DraftEditorView: View {
     let draftID: String
     let model: AddItemModel
@@ -20,37 +21,72 @@ struct DraftEditorView: View {
     @State private var unloadedPhotos: PickedPhotos<PhotosPickerItem>?
     /// "Review item" was tapped before the upload finished.
     @State private var isWaitingToReview = false
+    @Namespace private var photoTransition
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.xs), count: 3)
+    private var columns: [GridItem] {
+        let count = dynamicTypeSize.isAccessibilitySize ? 2 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: Spacing.xs), count: count)
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.md) {
                 if let draft {
-                    UploadSummaryBanner(
-                        summary: DraftUploadSummary(
-                            draft: draft,
-                            transferring: model.activity.transferring,
-                            isSignedIn: model.activity.isSignedIn,
-                        ),
-                        onRetry: { model.retry(draftID) },
+                    let summary = DraftUploadSummary(
+                        draft: draft,
+                        transferring: model.activity.transferring,
+                        isSignedIn: model.activity.isSignedIn,
                     )
+                    Banner(
+                        summary.text,
+                        tone: summary.tone.statusTone,
+                        systemImage: summary.tone.systemImage,
+                        action: summary.canRetry
+                            ? Banner.Action("Retry", identifier: "draft.retry") { model.retry(draftID) }
+                            : nil,
+                        identifier: "draft.uploadSummary",
+                    )
+                    .motion(value: summary)
+                    .sensoryFeedback(trigger: summary.tone) { _, tone in
+                        switch tone {
+                        case .success: .success
+                        case .danger: .error
+                        case .neutral, .empty, .warning: nil
+                        }
+                    }
                     photoGrid(draft)
-                    Text(
-                        "Tap a photo to set its role, crop, or remove it. Drag to reorder; the first is the cover.",
+                    Label(
+                        "Tap a photo to set what it shows, crop, or remove it. Drag to reorder; the first is "
+                            + "the cover.",
+                        systemImage: "hand.tap",
                     )
-                    .font(Typography.caption)
+                    .font(Typography.footnote)
                     .foregroundStyle(Palette.textSecondary)
-                    addPhotoButtons(draft)
                 }
             }
             .padding(Spacing.md)
         }
         .background(Palette.background)
-        .safeAreaInset(edge: .bottom) {
-            if let draft, !draft.photos.isEmpty, environment.reviewDestination != nil {
-                reviewBar
+        .navigationTitle(draft?.record.sku ?? "New draft")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Delete draft", systemImage: "trash", role: .destructive) { isConfirmingDelete = true }
+                } label: {
+                    Label("More", systemImage: "ellipsis")
+                }
+                .accessibilityIdentifier("draft.more")
+            }
+        }
+        .bottomActionBar {
+            if let draft {
+                if !draft.photos.isEmpty, environment.reviewDestination != nil {
+                    reviewButton
+                }
+                addPhotoButtons(draft)
             }
         }
         .onAppear { model.meter.enter(draftID) }
@@ -69,33 +105,27 @@ struct DraftEditorView: View {
                 model.meter.setWaiting(false, for: draftID)
             }
         }
-        .navigationTitle(draft?.record.sku ?? "New draft")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button("Delete draft", systemImage: "trash", role: .destructive) { isConfirmingDelete = true }
-                } label: {
-                    Label("More", systemImage: "ellipsis.circle")
-                }
-                .accessibilityIdentifier("draft.more")
-            }
-        }
         .confirmationDialog("Delete this draft?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) { model.deleteDraft(draftID) }
         } message: {
             Text("Its photos are removed from this iPhone and from Listora.")
         }
         .sheet(item: $selection) { selection in
-            if let photo = draft?.photos.first(where: { $0.id == selection.id }) {
-                PhotoDetailView(photo: photo, model: model)
-            } else {
-                // The photo was removed or replaced (cropped) while open.
-                Color.clear.onAppear { self.selection = nil }
+            Group {
+                if let photo = draft?.photos.first(where: { $0.id == selection.id }) {
+                    PhotoDetailView(photo: photo, model: model)
+                } else {
+                    // The photo was removed or replaced (cropped) while open.
+                    Color.clear.onAppear { self.selection = nil }
+                }
             }
+            .navigationTransition(.zoom(sourceID: selection.id, in: photoTransition))
         }
         .fullScreenCover(isPresented: $isCapturing) {
-            CameraCaptureView(capacity: DraftStore.maxPhotosPerDraft - (draft?.photos.count ?? 0)) { shots in
+            CameraCaptureView(
+                camera: environment.makeCamera(),
+                capacity: DraftStore.maxPhotosPerDraft - (draft?.photos.count ?? 0),
+            ) { shots in
                 isCapturing = false
                 _ = await model.save(shots, to: draftID)
             }
@@ -132,44 +162,57 @@ struct DraftEditorView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .matchedTransitionSource(id: photo.id, in: photoTransition)
                 .accessibilityIdentifier("photo.tile.\(index)")
                 .draggable(photo.id)
                 .dropDestination(for: String.self) { items, _ in
                     guard let moved = items.first, moved != photo.id else { return false }
-                    model.movePhoto(moved, to: index)
+                    Motion.perform(Motion.gentle) {
+                        model.movePhoto(moved, to: index)
+                    }
                     return true
                 }
             }
         }
+        .motion(Motion.gentle, value: draft.photos.map(\.id))
     }
 
+    @ViewBuilder
     private func addPhotoButtons(_ draft: Draft) -> some View {
         let remaining = DraftStore.maxPhotosPerDraft - draft.photos.count
-        return VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(spacing: Spacing.sm) {
-                if environment.isCameraAvailable {
-                    Button {
-                        isCapturing = true
-                    } label: {
-                        Label("Camera", systemImage: "camera")
-                    }
-                    .buttonStyle(.listoraSecondary)
-                    .disabled(remaining <= 0)
-                }
-                PhotoLibraryButton(
-                    maxCount: remaining,
-                    fixturePhotosDirectory: environment.fixturePhotosDirectory,
-                    unloaded: $unloadedPhotos,
-                    onPicked: addPhotos,
-                    title: "Add photos",
-                    systemImage: "photo.badge.plus",
-                )
-                .buttonStyle(.listoraSecondary)
-                .disabled(remaining <= 0 || model.isPreparingPhotos)
-                .accessibilityIdentifier("draft.addPhotos")
-            }
-            UnloadedPhotosNotice(picked: $unloadedPhotos, onPicked: addPhotos)
+        UnloadedPhotosNotice(picked: $unloadedPhotos, onPicked: addPhotos)
+        AdaptiveStack { addButtons(remaining: remaining) }
+        if remaining <= 0 {
+            Text("This draft has the most photos an item can have (\(DraftStore.maxPhotosPerDraft)).")
+                .font(Typography.footnote)
+                .foregroundStyle(Palette.textSecondary)
         }
+    }
+
+    @ViewBuilder
+    private func addButtons(remaining: Int) -> some View {
+        if environment.isCameraAvailable {
+            Button {
+                isCapturing = true
+            } label: {
+                Label("Camera", systemImage: "camera.fill")
+            }
+            .buttonStyle(.listoraSecondary)
+            .disabled(remaining <= 0)
+            .accessibilityIdentifier("draft.camera")
+        }
+        PhotoLibraryButton(
+            maxCount: remaining,
+            fixturePhotosDirectory: environment.fixturePhotosDirectory,
+            unloaded: $unloadedPhotos,
+            onPicked: addPhotos,
+            title: "Add photos",
+            systemImage: "photo.badge.plus",
+        )
+        .buttonStyle(.listoraSecondary)
+        .disabled(remaining <= 0 || model.isPreparingPhotos)
+        .loading(model.isPreparingPhotos)
+        .accessibilityIdentifier("draft.addPhotos")
     }
 
     private func addPhotos(_ images: [Data]) async {
@@ -203,40 +246,32 @@ struct DraftEditorView: View {
         onReview(request)
     }
 
-    private var reviewBar: some View {
-        VStack(spacing: Spacing.xs) {
-            Button {
-                if let reviewRequest {
-                    openReview(reviewRequest)
-                } else {
-                    isWaitingToReview = true
-                    model.meter.setWaiting(true, for: draftID)
-                }
-            } label: {
-                if isWaitingToReview {
-                    HStack(spacing: Spacing.xs) {
-                        ProgressView().tint(Palette.onBrand.color)
-                        Text("Uploading, then review")
-                    }
-                } else {
-                    Text("Review item")
-                }
+    @ViewBuilder
+    private var reviewButton: some View {
+        Button {
+            if let reviewRequest {
+                openReview(reviewRequest)
+            } else {
+                isWaitingToReview = true
+                model.meter.setWaiting(true, for: draftID)
             }
-            .buttonStyle(.listoraPrimary)
-            .disabled(isWaitingToReview || (reviewRequest == nil && !canWaitForUpload))
-            .accessibilityIdentifier("draft.review")
-            if reviewRequest == nil, !canWaitForUpload, !model.activity.isSignedIn {
-                Text("Sign in to upload the photos, then review the item.")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.textSecondary)
+        } label: {
+            if isWaitingToReview {
+                HStack(spacing: Spacing.xs) {
+                    ProgressView().tint(Palette.onBrand.color)
+                    Text("Uploading, then review")
+                }
+            } else {
+                Label("Review item", systemImage: "sparkles")
             }
         }
-        .padding(.horizontal, Spacing.md)
-        .padding(.vertical, Spacing.sm)
-        .frame(maxWidth: .infinity)
-        .background(Palette.background)
-        .overlay(alignment: .top) {
-            Divider().overlay(Palette.separator.color)
+        .buttonStyle(.listoraPrimary)
+        .disabled(isWaitingToReview || (reviewRequest == nil && !canWaitForUpload))
+        .accessibilityIdentifier("draft.review")
+        if reviewRequest == nil, !canWaitForUpload, !model.activity.isSignedIn {
+            Text("Sign in to upload the photos, then review the item.")
+                .font(Typography.footnote)
+                .foregroundStyle(Palette.textSecondary)
         }
     }
 }
@@ -245,126 +280,14 @@ struct PhotoSelection: Identifiable {
     let id: String
 }
 
-/// The draft's upload state in one line, with Retry when retries stopped.
-struct UploadSummaryBanner: View {
-    let summary: DraftUploadSummary
-    let onRetry: () -> Void
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
-            Image(systemName: icon)
-                .foregroundStyle(summary.tone.color)
-                .accessibilityHidden(true)
-            Text(summary.text)
-                .font(Typography.callout)
-                .foregroundStyle(Palette.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("draft.uploadSummary")
-            if summary.canRetry {
-                Button("Retry", action: onRetry)
-                    .font(Typography.headline)
-                    .foregroundStyle(Palette.brand)
-                    .frame(minHeight: Layout.minimumTapTarget)
-                    .accessibilityIdentifier("draft.retry")
-            }
-        }
-        .cardStyle()
-    }
-
-    private var icon: String {
-        switch summary.tone {
-        case .neutral: "arrow.up.circle"
+extension DraftUploadSummary.Tone {
+    var systemImage: String {
+        switch self {
+        case .neutral: "arrow.up.circle.fill"
         case .empty: "photo.badge.plus"
         case .success: "checkmark.circle.fill"
         case .warning: "person.crop.circle.badge.exclamationmark"
         case .danger: "exclamationmark.triangle.fill"
-        }
-    }
-}
-
-/// A photo in the editor grid: the image, its role, whether it is the cover, and its upload state.
-struct PhotoTile: View {
-    let photo: DraftPhotoRecord
-    let index: Int
-    let url: URL
-    let status: PhotoUploadStatus
-
-    var body: some View {
-        Color.clear
-            .aspectRatio(1, contentMode: .fit)
-            .overlay { PhotoThumbnail(url: url, pointSize: 130) }
-            .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
-            .overlay(alignment: .topLeading) {
-                if index == 0 {
-                    chip("Cover")
-                }
-            }
-            .overlay(alignment: .topTrailing) {
-                statusBadge
-            }
-            .overlay(alignment: .bottomLeading) {
-                HStack(spacing: Spacing.xxs) {
-                    chip(photo.role.title)
-                    if photo.looksBlurry {
-                        Image(systemName: "drop.triangle.fill")
-                            .font(Typography.caption)
-                            .foregroundStyle(Palette.warning)
-                            .padding(Spacing.xxs)
-                            .background(Palette.surface, in: Circle())
-                    }
-                }
-                .padding(Spacing.xxs)
-            }
-            .contentShape(Rectangle())
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(accessibilityText)
-            .accessibilityAddTraits(.isButton)
-    }
-
-    private var accessibilityText: String {
-        var parts = ["Photo \(index + 1)", photo.role.title]
-        if index == 0 {
-            parts.append("Cover")
-        }
-        if photo.looksBlurry {
-            parts.append("Looks blurry")
-        }
-        parts.append(status.label)
-        return parts.joined(separator: ", ")
-    }
-
-    private func chip(_ text: String) -> some View {
-        Text(text)
-            .font(Typography.caption.weight(.semibold))
-            .foregroundStyle(Palette.textPrimary)
-            .padding(.horizontal, Spacing.xs)
-            .padding(.vertical, Spacing.xxs)
-            .background(Palette.surface, in: Capsule())
-            .padding(Spacing.xxs)
-    }
-
-    private var statusBadge: some View {
-        Group {
-            if status == .uploading || status == .readingTag {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Image(systemName: status.systemImage)
-                    .font(Typography.caption)
-                    .foregroundStyle(statusColor)
-            }
-        }
-        .frame(width: 24, height: 24)
-        .background(Palette.surface, in: Circle())
-        .padding(Spacing.xxs)
-    }
-
-    private var statusColor: ColorToken {
-        switch status {
-        case .uploaded: Palette.success
-        case .failed: Palette.danger
-        case .waitingForSignIn, .retrying: Palette.warning
-        case .waiting, .uploading, .readingTag: Palette.textSecondary
         }
     }
 }

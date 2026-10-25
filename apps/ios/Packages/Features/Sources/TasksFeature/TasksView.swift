@@ -9,7 +9,8 @@ public struct TasksView: View {
     public var body: some View {
         NavigationStack {
             EmptyStateView(
-                systemImage: "checklist",
+                systemImage: "checkmark.circle",
+                tone: .success,
                 title: "You're all caught up",
                 message: "Marketplace steps that need you, like finishing a Poshmark listing, show up here.",
             )
