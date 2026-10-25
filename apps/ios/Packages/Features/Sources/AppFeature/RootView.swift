@@ -37,6 +37,7 @@ public struct RootView: View {
         }
         .tint(Palette.brand.color)
         .sheet(isPresented: $showsSettings) { settings }
+        .solidBarEdges()
         .background { WindowTapCounter { [meter = dependencies.interactionMeter] in meter.recordTap() } }
         .onChange(of: scenePhase, initial: true) { _, phase in
             dependencies.interactionMeter.setAppActive(phase == .active)

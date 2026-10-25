@@ -31,16 +31,24 @@ public struct FlowLayout: SwiftUI.Layout {
         for row in rows(for: subviews, width: bounds.width) {
             var x = bounds.minX + (isCentered ? max(bounds.width - row.width, 0) / 2 : 0)
             for index in row.indices {
-                let size = subviews[index].sizeThatFits(.unspecified)
-                let width = min(size.width, bounds.width)
+                let size = size(of: subviews[index], maxWidth: bounds.width)
                 subviews[index].place(
                     at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
-                    proposal: ProposedViewSize(width: width, height: size.height),
+                    proposal: ProposedViewSize(width: size.width, height: size.height),
                 )
-                x += width + spacing
+                x += size.width + spacing
             }
             y += row.height + lineSpacing
         }
+    }
+
+    /// The subview's natural size, or, when it is wider than a row, its size wrapped to the row's
+    /// width (taller), so a long label wraps instead of being cut off.
+    private func size(of subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let natural = subview.sizeThatFits(.unspecified)
+        guard natural.width > maxWidth, maxWidth.isFinite else { return natural }
+        let wrapped = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+        return CGSize(width: min(wrapped.width, maxWidth), height: wrapped.height)
     }
 
     private struct Row {
@@ -53,8 +61,8 @@ public struct FlowLayout: SwiftUI.Layout {
         var rows: [Row] = []
         var current = Row()
         for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
-            let itemWidth = min(size.width, width)
+            let size = size(of: subviews[index], maxWidth: width)
+            let itemWidth = size.width
             let needed = current.indices.isEmpty ? itemWidth : current.width + spacing + itemWidth
             if needed > width, !current.indices.isEmpty {
                 rows.append(current)

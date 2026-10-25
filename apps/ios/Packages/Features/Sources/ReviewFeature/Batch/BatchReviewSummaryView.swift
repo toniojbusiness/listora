@@ -63,11 +63,10 @@ struct BatchReviewSummaryView: View {
             .frame(maxWidth: Layout.readableWidth, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .safeAreaInset(edge: .bottom) {
+        .bottomActionBar {
             Button("Done", action: onDone)
                 .buttonStyle(.listoraPrimary)
                 .accessibilityIdentifier("batchSummary.done")
-                .bottomBar()
         }
     }
 

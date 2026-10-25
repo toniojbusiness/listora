@@ -36,10 +36,16 @@ struct PaletteTests {
         SoftPair(name: "info", strong: Palette.info, soft: Palette.infoSoft),
     ]
 
+    private func expectReadable(_ text: ColorToken, on background: ColorToken, _ description: String) {
+        let light = text.light.contrastRatio(with: background.light)
+        let dark = text.dark.contrastRatio(with: background.dark)
+        #expect(light >= Self.minimumTextContrast, "\(description) (light) is \(light):1")
+        #expect(dark >= Self.minimumTextContrast, "\(description) (dark) is \(dark):1")
+    }
+
     @Test
     func `controls on photos are readable on the media background`() {
-        #expect(Palette.onMedia.light.contrastRatio(with: Palette.mediaBackground.light) >= Self.minimumTextContrast)
-        #expect(Palette.onMedia.dark.contrastRatio(with: Palette.mediaBackground.dark) >= Self.minimumTextContrast)
+        expectReadable(Palette.onMedia, on: Palette.mediaBackground, "onMedia on mediaBackground")
     }
 
     @Test
@@ -65,42 +71,23 @@ struct PaletteTests {
     func `every foreground is readable on every background in light and dark mode`() {
         for (backgroundName, background) in Self.backgrounds {
             for (foregroundName, foreground) in Self.foregrounds {
-                let light = foreground.light.contrastRatio(with: background.light)
-                let dark = foreground.dark.contrastRatio(with: background.dark)
-                #expect(
-                    light >= Self.minimumTextContrast,
-                    "\(foregroundName) on \(backgroundName) (light) is \(light):1",
-                )
-                #expect(
-                    dark >= Self.minimumTextContrast,
-                    "\(foregroundName) on \(backgroundName) (dark) is \(dark):1",
-                )
+                expectReadable(foreground, on: background, "\(foregroundName) on \(backgroundName)")
             }
         }
     }
 
     @Test
-    func `button labels are readable on the brand color`() {
-        #expect(Palette.onBrand.light.contrastRatio(with: Palette.brand.light) >= Self.minimumTextContrast)
-        #expect(Palette.onBrand.dark.contrastRatio(with: Palette.brand.dark) >= Self.minimumTextContrast)
+    func `button labels are readable on the brand and danger colors`() {
+        expectReadable(Palette.onBrand, on: Palette.brand, "onBrand on brand")
+        expectReadable(Palette.onDanger, on: Palette.danger, "onDanger on danger")
     }
 
     @Test
     func `badge and banner text is readable on its soft background`() {
         for pair in Self.softPairs {
-            for (label, text) in [(pair.name, pair.strong), ("textPrimary", Palette.textPrimary)] {
-                let light = text.light.contrastRatio(with: pair.soft.light)
-                let dark = text.dark.contrastRatio(with: pair.soft.dark)
-                #expect(light >= Self.minimumTextContrast, "\(label) on \(pair.name)Soft (light) is \(light):1")
-                #expect(dark >= Self.minimumTextContrast, "\(label) on \(pair.name)Soft (dark) is \(dark):1")
-            }
+            expectReadable(pair.strong, on: pair.soft, "\(pair.name) on \(pair.name)Soft")
+            expectReadable(Palette.textPrimary, on: pair.soft, "textPrimary on \(pair.name)Soft")
         }
-    }
-
-    @Test
-    func `destructive button labels are readable on the danger color`() {
-        #expect(Palette.onDanger.light.contrastRatio(with: Palette.danger.light) >= Self.minimumTextContrast)
-        #expect(Palette.onDanger.dark.contrastRatio(with: Palette.danger.dark) >= Self.minimumTextContrast)
     }
 
     @Test
@@ -110,6 +97,20 @@ struct PaletteTests {
         for (name, token) in Self.backgrounds + Self.foregrounds + soft + labels {
             #expect(token.light != token.dark, "\(name) is the same in light and dark mode")
         }
+    }
+
+    @Test
+    func `the brand and status colors look different from each other`() {
+        let colors = [
+            Palette.brand,
+            Palette.success,
+            Palette.warning,
+            Palette.danger,
+            Palette.info,
+            Palette.textSecondary,
+        ]
+        #expect(Set(colors.map { "\($0.light)" }).count == colors.count, "light")
+        #expect(Set(colors.map { "\($0.dark)" }).count == colors.count, "dark")
     }
 }
 

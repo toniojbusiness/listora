@@ -24,6 +24,8 @@ struct ReviewFormView: View {
                         copySection
                     }
                     .padding(Spacing.md)
+                    .frame(maxWidth: Layout.readableWidth)
+                    .frame(maxWidth: .infinity)
                 }
                 .accessibilityIdentifier("review.scroll")
                 .onChange(of: model.focusedField) { _, key in
@@ -33,7 +35,7 @@ struct ReviewFormView: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .bottom) { continueBar(form) }
+            .bottomActionBar { continueBar(form) }
             .sheet(item: $editingCopy) { copy in
                 CopyEditorView(copy: copy) { model.saveCopy($0, for: copy.marketplace) }
             }
@@ -60,23 +62,14 @@ struct ReviewFormView: View {
     }
 
     private func section(_ section: ReviewSection, keys: [ReviewFieldKey], form: ReviewForm) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(section == .attention ? "\(section.title) (\(keys.count))" : section.title)
-                    .font(Typography.headline)
-                    .foregroundStyle(section == .attention ? Palette.warning : Palette.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                    .accessibilityIdentifier("review.section.\(section.rawValue)")
-                if section == .attention {
-                    Text("Lower confidence or missing. Fix these and the rest is done.")
-                        .font(Typography.caption)
-                        .foregroundStyle(Palette.textSecondary)
-                }
-            }
+        let isAttention = section == .attention
+        let shape = RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
+        return VStack(alignment: .leading, spacing: Spacing.sm) {
+            sectionHeader(section, count: keys.count)
             VStack(spacing: 0) {
                 ForEach(Array(keys.enumerated()), id: \.element) { index, key in
                     if index > 0 {
-                        Divider().overlay(Palette.separator.color)
+                        Divider().overlay(Palette.separator.color).padding(.leading, Spacing.md)
                     }
                     FieldRow(
                         field: form.field(key),
@@ -100,11 +93,34 @@ struct ReviewFormView: View {
                     .id(key)
                 }
             }
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.large, style: .continuous))
+            .background(Palette.surface, in: shape)
+            .clipShape(shape)
             .overlay(
-                RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
-                    .strokeBorder(section == .attention ? Palette.warning : Palette.separator, lineWidth: 1),
+                shape.strokeBorder(isAttention ? Palette.warning : Palette.separator, lineWidth: isAttention ? 1.5 : 1),
             )
+        }
+    }
+
+    /// "Check these (2)" with what it means, or the section's small-capitals title.
+    @ViewBuilder
+    private func sectionHeader(_ section: ReviewSection, count: Int) -> some View {
+        if section == .attention {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Label {
+                    Text("\(section.title) (\(count))")
+                        .accessibilityIdentifier("review.section.attention")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.warning)
+                }
+                .font(Typography.title3)
+                .foregroundStyle(Palette.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+                Text("Listora is less sure about these, or they're missing. Fix them and the rest is done.")
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        } else {
+            SectionHeader(section.title)
         }
     }
 
@@ -124,15 +140,15 @@ struct ReviewFormView: View {
     @ViewBuilder
     private var copySection: some View {
         if !model.copies.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("On each marketplace")
-                    .font(Typography.headline)
-                    .foregroundStyle(Palette.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionHeader(
+                    "On each marketplace",
+                    subtitle: "Listora wrote a title and description for each one. Tap one to change it.",
+                )
                 VStack(spacing: 0) {
                     ForEach(Array(model.copies.enumerated()), id: \.element.id) { index, copy in
                         if index > 0 {
-                            Divider().overlay(Palette.separator.color)
+                            Divider().overlay(Palette.separator.color).padding(.leading, Spacing.md)
                         }
                         Button {
                             editingCopy = copy
@@ -143,70 +159,71 @@ struct ReviewFormView: View {
                         .accessibilityIdentifier("review.copy.\(copy.marketplace)")
                     }
                 }
-                .cardBackground()
+                .cardStyle(.outlined, padding: 0)
             }
         }
     }
 
+    @ViewBuilder
     private func continueBar(_ form: ReviewForm) -> some View {
         let missing = form.missing
         let toCheck = model.fieldsToCheck.count
-        return VStack(spacing: Spacing.xs) {
-            if voice.hasContent || voice.isListening {
-                VoiceTray(voice: voice)
-            }
-            HStack(spacing: Spacing.xs) {
-                TalkButton(voice: voice)
-                Button("Type", systemImage: "keyboard") {
-                    voice.showsTyping.toggle()
-                }
-                .labelStyle(.iconOnly)
-                .buttonStyle(.listora(.tertiary, size: .compact))
-                .accessibilityLabel(voice.showsTyping ? "Hide the typing field" : "Type a correction")
-                .accessibilityIdentifier("voice.type")
-                Spacer(minLength: 0)
-                if toCheck > 0 {
-                    Button("Next (\(toCheck))", systemImage: "arrow.right.circle") {
-                        model.advanceToNextCheck()
-                    }
-                    .buttonStyle(.listora(.tertiary, size: .compact))
-                    .lineLimit(1)
-                    .accessibilityLabel("Next to check, \(toCheck) left")
-                    .accessibilityIdentifier("review.nextToCheck")
-                }
-            }
-            if !missing.isEmpty {
-                Text("Add \(missing.map { $0.title.lowercased() }.formatted(.list(type: .and))) to continue.")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.warning)
-                    .accessibilityIdentifier("review.missing")
-            }
-            Button {
-                Task { await model.continueToCost() }
-            } label: {
-                if model.isWorking {
-                    ProgressView().tint(Palette.onBrand.color)
-                } else {
-                    Text("Continue")
-                }
-            }
-            .buttonStyle(.listoraPrimary)
-            .disabled(
-                !missing.isEmpty || model.isWorking || model.escalation == .running || voice.isListening
-                    || voice.phase == .interpreting,
-            )
-            .accessibilityIdentifier("review.continue")
+        if voice.hasContent || voice.isListening {
+            VoiceTray(voice: voice)
         }
-        .bottomBar()
+        HStack(spacing: Spacing.xs) {
+            TalkButton(voice: voice)
+            Button("Type", systemImage: "keyboard") {
+                voice.showsTyping.toggle()
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.listora(.tertiary, size: .compact))
+            .accessibilityLabel(voice.showsTyping ? "Hide the typing field" : "Type a correction")
+            .accessibilityIdentifier("voice.type")
+            Spacer(minLength: 0)
+            if toCheck > 0 {
+                Button("Next (\(toCheck))", systemImage: "arrow.right.circle") {
+                    model.advanceToNextCheck()
+                }
+                .buttonStyle(.listora(.tertiary, size: .compact))
+                .lineLimit(1)
+                .accessibilityLabel("Next to check, \(toCheck) left")
+                .accessibilityIdentifier("review.nextToCheck")
+            }
+        }
+        // One row that stops growing at the first accessibility size, so Continue stays on screen.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        if !missing.isEmpty {
+            Label(
+                "Add \(missing.map(\.inlineTitle).formatted(.list(type: .and))) to continue.",
+                systemImage: "exclamationmark.triangle.fill",
+            )
+            .font(Typography.footnote.weight(.semibold))
+            .foregroundStyle(Palette.warning)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("review.missing")
+        }
+        Button("Continue to cost") {
+            Task { await model.continueToCost() }
+        }
+        .buttonStyle(.listoraPrimary)
+        .loading(model.isWorking)
+        .disabled(!missing.isEmpty || model.escalation == .running || voice.isListening || voice.phase == .interpreting)
+        .accessibilityIdentifier("review.continue")
     }
 }
 
 /// The cover photo and title at the top of the review.
 struct ReviewHeader: View {
     let model: ReviewFlowModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(spacing: Spacing.sm) {
+        // Side by side, or the photo above the title at accessibility sizes.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.sm))
+            : AnyLayout(HStackLayout(spacing: Spacing.sm))
+        layout {
             Group {
                 if let url = model.item?.photos.first?.urls.flatMap({ URL(string: $0.thumbnail) }) {
                     RemoteImage(url: url) {
@@ -216,14 +233,18 @@ struct ReviewHeader: View {
                     Palette.surfaceSecondary.color
                 }
             }
-            .frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+            .frame(width: 72, height: 72)
+            .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
+                    .strokeBorder(Palette.separator, lineWidth: 1),
+            )
             .accessibilityHidden(true)
             // The SKU is the screen's title.
             Text(model.form?.field(.title).displayValue ?? "")
-                .font(Typography.headline)
+                .font(Typography.title3)
                 .foregroundStyle(Palette.textPrimary)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
@@ -238,18 +259,29 @@ struct IdentifyHarderView: View {
     let quotaLine: String
     let isUsedUp: Bool
     let onStart: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         switch emphasis {
         case let .prominent(reason):
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.sm))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: Spacing.sm))
             VStack(alignment: .leading, spacing: Spacing.sm) {
-                Label(reason, systemImage: "questionmark.circle.fill")
-                    .font(Typography.headline)
-                    .foregroundStyle(Palette.textPrimary)
-                Text("A premium identification takes a closer look at the brand, product, and era.")
-                    .font(Typography.callout)
-                    .foregroundStyle(Palette.textSecondary)
-                button.buttonStyle(.listoraPrimary)
+                layout {
+                    IconTile(systemImage: "sparkle.magnifyingglass", size: .card)
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text(reason)
+                            .font(Typography.headline)
+                            .foregroundStyle(Palette.textPrimary)
+                        Text("A premium identification takes a closer look at the brand, product, and era.")
+                            .font(Typography.subheadline)
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                // Continue is the screen's one primary action.
+                button.buttonStyle(.listoraSecondary)
                 status
             }
             .cardStyle()
@@ -265,7 +297,7 @@ struct IdentifyHarderView: View {
         Button(action: onStart) {
             if escalation == .running {
                 HStack(spacing: Spacing.xs) {
-                    ProgressView()
+                    ProgressView().tint(Palette.brand.color)
                     Text("Identifying harder")
                 }
             } else {
@@ -280,13 +312,16 @@ struct IdentifyHarderView: View {
     private var status: some View {
         switch escalation {
         case let .failed(message, canRetry):
-            Text(canRetry && !isUsedUp ? "\(message) Tap Identify harder to try again." : message)
-                .font(Typography.caption)
-                .foregroundStyle(Palette.danger)
-                .accessibilityIdentifier("review.identifyHarderProblem")
+            Label(
+                canRetry && !isUsedUp ? "\(message) Tap Identify harder to try again." : message,
+                systemImage: StatusTone.failed.systemImage,
+            )
+            .font(Typography.footnote)
+            .foregroundStyle(Palette.danger)
+            .accessibilityIdentifier("review.identifyHarderProblem")
         default:
             Text(quotaLine)
-                .font(Typography.caption)
+                .font(Typography.footnote)
                 .foregroundStyle(Palette.textSecondary)
                 .accessibilityIdentifier("review.premiumQuota")
         }
@@ -298,58 +333,39 @@ struct CopyRow: View {
     let copy: MarketplaceCopy
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            IconTile(monogram: String(copy.name.prefix(1)))
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 HStack(spacing: Spacing.xs) {
                     Text(copy.name)
                         .font(Typography.headline)
                         .foregroundStyle(Palette.textPrimary)
                     if copy.edited != nil {
-                        Text("Edited")
-                            .font(Typography.caption.weight(.semibold))
-                            .foregroundStyle(Palette.brand)
+                        Chip("Edited", systemImage: "pencil", prominent: true)
                     }
                 }
                 Text(copy.hasTitle ? copy.current.title : copy.current.description)
-                    .font(Typography.callout)
+                    .font(Typography.subheadline)
                     .foregroundStyle(Palette.textSecondary)
                     .lineLimit(2)
                 if let problem = copy.problems.first {
-                    Label(problem, systemImage: "exclamationmark.triangle.fill")
-                        .font(Typography.caption)
+                    Label(problem, systemImage: StatusTone.failed.systemImage)
+                        .font(Typography.footnote.weight(.semibold))
                         .foregroundStyle(Palette.danger)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right")
-                .font(Typography.caption.weight(.semibold))
+                .font(Typography.footnote.weight(.semibold))
                 .foregroundStyle(Palette.textSecondary)
+                .frame(minHeight: 36)
                 .accessibilityHidden(true)
         }
-        .padding(Spacing.md)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
         .frame(minHeight: Layout.minimumTapTarget)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityHint("Edits the copy for \(copy.name)")
-    }
-}
-
-extension View {
-    /// The bar under a screen's content that holds its main action.
-    func bottomBar() -> some View {
-        padding(.horizontal, Spacing.md)
-            .padding(.vertical, Spacing.sm)
-            .frame(maxWidth: .infinity)
-            .background(Palette.background)
-            .overlay(alignment: .top) {
-                Divider().overlay(Palette.separator.color)
-            }
-    }
-
-    /// The card surface without the card's padding, for lists of rows.
-    func cardBackground() -> some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
-        return background(Palette.surface, in: shape)
-            .overlay(shape.strokeBorder(Palette.separator, lineWidth: 1))
     }
 }

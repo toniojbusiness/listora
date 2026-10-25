@@ -122,7 +122,7 @@ struct BatchReviewPage: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
-        .safeAreaInset(edge: .bottom) { actions }
+        .bottomActionBar { actions }
         .task {
             if case .idle = model.pricing {
                 await model.loadPricing()
@@ -216,27 +216,25 @@ struct BatchReviewPage: View {
 
     // MARK: Actions
 
+    @ViewBuilder
     private var actions: some View {
-        VStack(spacing: Spacing.xs) {
-            Button {
-                Task {
-                    isApproving = true
-                    defer { isApproving = false }
-                    await batch.approve(model)
-                }
-            } label: {
-                Label(approveTitle, systemImage: "checkmark.circle.fill")
+        Button {
+            Task {
+                isApproving = true
+                defer { isApproving = false }
+                await batch.approve(model)
             }
-            .buttonStyle(.listoraPrimary)
-            .loading(isApproving || model.isWorking)
-            .disabled(isApproving || model.isWorking)
-            .accessibilityIdentifier("batchReview.approve.\(number)")
-            Button("Skip for now") { batch.skip() }
-                .buttonStyle(.listora(.tertiary, size: .compact))
-                .disabled(isApproving)
-                .accessibilityIdentifier("batchReview.skipItem.\(number)")
+        } label: {
+            Label(approveTitle, systemImage: "checkmark.circle.fill")
         }
-        .bottomBar()
+        .buttonStyle(.listoraPrimary)
+        .loading(isApproving || model.isWorking)
+        .disabled(isApproving || model.isWorking)
+        .accessibilityIdentifier("batchReview.approve.\(number)")
+        Button("Skip for now") { batch.skip() }
+            .buttonStyle(.listora(.tertiary, size: .compact))
+            .disabled(isApproving)
+            .accessibilityIdentifier("batchReview.skipItem.\(number)")
     }
 
     private var approveTitle: String {

@@ -17,6 +17,7 @@ struct FieldRow: View {
     /// Moves on to the next detail that needs a look. Without it the row has no swipe and no
     /// "Next to check" action: the batch review's swipe pages to the next item instead.
     var onNext: (() -> Void)?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         let outlined = row
@@ -84,19 +85,30 @@ struct FieldRow: View {
     }
 
     private var summary: some View {
-        HStack(alignment: .top, spacing: Spacing.sm) {
+        // At accessibility sizes the source badge goes under the value, leaving it the full width.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xs))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: Spacing.sm))
+        return layout {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(field.key.title)
-                    .font(Typography.caption)
+                    .font(Typography.footnote)
                     .foregroundStyle(Palette.textSecondary)
-                Text(field.value.isEmpty ? placeholder : field.displayValue)
-                    .font(Typography.body)
-                    .foregroundStyle(field.value.isEmpty ? Palette.textSecondary : Palette.textPrimary)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(field.key.kind == .multiline ? 4 : 2)
+                if field.value.isEmpty {
+                    // An empty detail reads as the action to add it, not as a value.
+                    Label(placeholder, systemImage: "plus")
+                        .font(Typography.body)
+                        .foregroundStyle(Palette.brand)
+                } else {
+                    Text(field.displayValue)
+                        .font(Typography.body)
+                        .foregroundStyle(Palette.textPrimary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(field.key.kind == .multiline ? 4 : 2)
+                }
                 if let note = attentionNote {
                     Label(note, systemImage: field.isMissing ? "plus.circle.fill" : "exclamationmark.circle.fill")
-                        .font(Typography.caption.weight(.semibold))
+                        .font(Typography.footnote.weight(.semibold))
                         .foregroundStyle(Palette.warning)
                 }
             }
@@ -108,11 +120,6 @@ struct FieldRow: View {
         .padding(.horizontal, Spacing.md)
         .padding(.vertical, Spacing.sm)
         .frame(minHeight: Layout.minimumTapTarget)
-        .background(alignment: .leading) {
-            if field.needsAttention {
-                Palette.warning.color.frame(width: 4)
-            }
-        }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
@@ -121,7 +128,7 @@ struct FieldRow: View {
     }
 
     private var placeholder: String {
-        "Add \(field.key.title.lowercased())"
+        "Add \(field.key.inlineTitle)"
     }
 
     private var attentionNote: String? {
@@ -153,7 +160,7 @@ struct ProvenanceBadge: View {
     var body: some View {
         Label(provenance.label, systemImage: provenance.systemImage)
             .labelStyle(.titleAndIcon)
-            .font(Typography.caption.weight(.semibold))
+            .font(Typography.label)
             .foregroundStyle(provenance == .user ? Palette.onBrand : Palette.textPrimary)
             .padding(.horizontal, Spacing.xs)
             .padding(.vertical, Spacing.xxs)
@@ -181,7 +188,7 @@ private struct FieldEditor: View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
             HStack(alignment: .firstTextBaseline) {
                 Text(field.key.title)
-                    .font(Typography.caption)
+                    .font(Typography.footnote)
                     .foregroundStyle(Palette.brand)
                 Spacer()
                 // In the row rather than above the keyboard: a keyboard toolbar inside a lazy
@@ -193,7 +200,7 @@ private struct FieldEditor: View {
                     .accessibilityIdentifier("review.editor.done")
             }
             TextField(
-                field.key.kind == .list ? "Separate with commas" : "Add \(field.key.title.lowercased())",
+                field.key.kind == .list ? "Separate with commas" : "Add \(field.key.inlineTitle)",
                 text: $text,
                 axis: field.key.kind == .multiline ? .vertical : .horizontal,
             )

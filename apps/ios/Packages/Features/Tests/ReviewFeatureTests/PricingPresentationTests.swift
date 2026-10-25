@@ -49,6 +49,10 @@ struct PricingPresentationTests {
             == "Below your floor on eBay, so you would make less than your minimum after fees.")
         #expect(presentation.warning(for: 1000)
             == "Below your floor on eBay and Depop, so you would make less than your minimum after fees.")
+        #expect(presentation.shortWarning(for: 1800) == nil)
+        #expect(presentation.shortWarning(for: 1500) == "Below your floor on eBay")
+        #expect(presentation.shortWarning(for: 1000) == "Below your floor on eBay and Depop")
+        #expect(presentation.floorsAbove(1000).map(\.marketplace) == ["ebay", "depop"])
     }
 
     @Test
@@ -57,6 +61,7 @@ struct PricingPresentationTests {
         #expect(presentation.floors.isEmpty)
         #expect(presentation.highestFloor == nil)
         #expect(presentation.warning(for: 1) == nil)
+        #expect(presentation.shortWarning(for: 1) == nil)
     }
 
     @Test

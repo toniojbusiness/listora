@@ -110,7 +110,7 @@ struct UploadPlannerTests {
         #expect(next(snapshot) == .readTag(photoID: "p1"))
         var read = tag
         read.tagReadState = .done
-        #expect(try next(UploadSnapshot(drafts: [draft()], photos: [read], deletions: [])) == .attach(photoID: "p1"))
+        #expect(next(UploadSnapshot(drafts: [draft()], photos: [read], deletions: [])) == .attach(photoID: "p1"))
     }
 
     @Test
@@ -165,9 +165,9 @@ struct UploadPlannerTests {
             serverPhotoID: "server-old",
         )
 
-        #expect(try next(UploadSnapshot(drafts: [draft()], photos: [replacement], deletions: [deletion])) ==
+        #expect(next(UploadSnapshot(drafts: [draft()], photos: [replacement], deletions: [deletion])) ==
             .deleteOnServer(deletionID: "x1"))
-        #expect(try next(UploadSnapshot(drafts: [draft()], photos: [replacement], deletions: [])) ==
+        #expect(next(UploadSnapshot(drafts: [draft()], photos: [replacement], deletions: [])) ==
             .attach(photoID: "p1"))
     }
 
@@ -176,7 +176,7 @@ struct UploadPlannerTests {
         var changed = try photo("p1", role: .back, step: .done)
         changed.role = .flaw
 
-        #expect(try next(UploadSnapshot(drafts: [draft()], photos: [changed], deletions: [])) ==
+        #expect(next(UploadSnapshot(drafts: [draft()], photos: [changed], deletions: [])) ==
             .syncRole(photoID: "p1"))
     }
 

@@ -8,7 +8,7 @@ import XCTest
 /// `StubAPIServer`; the first pass is signed out, as on a fresh install.
 @MainActor
 final class ScreenshotTourUITests: XCTestCase {
-    private let app = XCUIApplication()
+    let app = XCUIApplication()
     private var server: StubAPIServer?
     private var directory: URL?
 
@@ -41,6 +41,95 @@ final class ScreenshotTourUITests: XCTestCase {
     func testTour() throws {
         try signedOutTour()
         try signedInTour(server: XCTUnwrap(server))
+    }
+
+    /// The review flow against the local stack (`make ios-screenshots` starts it, with the fake AI
+    /// of `ReviewFlowUITests`): the analysis, the confidence-first review, cost, price, and the
+    /// saved item.
+    func testReviewTour() throws {
+        let stack = try E2EStack.fromEnvironment()
+        app.launchEnvironment = try [
+            "LISTORA_FIXTURE_PHOTOS": fixturesPath,
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_API_BASE_URL": stack.apiURL.absoluteString,
+            "LISTORA_DEV_ACCESS_TOKEN": stack.token,
+            "LISTORA_DEV_ACCESS_EMAIL": stack.email,
+        ]
+        app.launch()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        tab("Add")
+        app.buttons["addItem.importPhotos"].tap()
+        let tagPhoto = app.buttons["photo.tile.2"]
+        XCTAssertTrue(tagPhoto.waitForExistence(timeout: 15))
+        tagPhoto.tap()
+        let tag = app.buttons["photo.role.tag"]
+        if !tag.isHittable || tag.frame.maxY > app.buttons["photo.crop"].frame.minY {
+            app.scrollViews.firstMatch.swipeUp()
+        }
+        tag.tap()
+        app.buttons["photo.done"].tap()
+
+        try reviewTour()
+        try costTour()
+        try priceTour()
+        app.buttons["price.save"].tap()
+        XCTAssertTrue(app.staticTexts["saved.sku"].waitForExistence(timeout: 15))
+        try shot("26-saved")
+        app.terminate()
+    }
+
+    /// The analysis (when it is slow enough to catch) and the review, top to bottom.
+    private func reviewTour() throws {
+        app.buttons["draft.review"].tap()
+        if app.descendants(matching: .any)["review.progress"].waitForExistence(timeout: 5) {
+            try shot("15-review-analyzing", settle: 0.3)
+        }
+        // The review's bar; at the largest text sizes the attention section starts off screen.
+        XCTAssertTrue(app.buttons["review.continue"].waitForExistence(timeout: 120))
+        try shot("16-review")
+        app.swipeUp()
+        try shot("17-review-details")
+        app.swipeUp()
+        app.swipeUp()
+        try shot("18-review-copy")
+        app.buttons["review.continue"].tap()
+    }
+
+    private func costTour() throws {
+        XCTAssertTrue(app.staticTexts["cost.amount"].waitForExistence(timeout: 10))
+        try shot("19-cost-empty", settle: 1)
+        app.buttons["keypad.1"].tap()
+        app.buttons["keypad.2"].tap()
+        try shot("20-cost")
+        app.buttons["cost.continue"].tap()
+    }
+
+    /// The price options, a floor opened, the sources, and a price of the seller's under every
+    /// floor. Ends with the recommended price chosen.
+    private func priceTour() throws {
+        let recommended = app.buttons["price.tier.recommended"]
+        XCTAssertTrue(recommended.waitForExistence(timeout: 15))
+        try shot("21-price")
+        app.swipeUp()
+        app.buttons["price.floor.ebay"].tap()
+        try shot("22-price-floors")
+        app.swipeUp()
+        app.swipeUp()
+        try shot("23-price-sources")
+        app.buttons["price.setOwn"].tap()
+        XCTAssertTrue(app.buttons["price.customUse"].waitForExistence(timeout: 5))
+        // From the chosen $26 to $9, under every floor.
+        for _ in 0 ..< 4 {
+            app.buttons["keypad.delete"].tap()
+        }
+        app.buttons["keypad.9"].tap()
+        try shot("24-price-custom")
+        app.buttons["price.customUse"].tap()
+        try shot("25-price-below-floor")
+        app.swipeDown()
+        app.swipeDown()
+        recommended.tap()
+        XCTAssertTrue(recommended.isSelected)
     }
 
     /// Signed out, as on a fresh install: drafts stay on the phone.
@@ -89,19 +178,28 @@ final class ScreenshotTourUITests: XCTestCase {
         ]
         app.launch()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.descendants(matching: .any)["today.money.sales"].waitForExistence(timeout: 10))
-        try shot("15-today")
+        // The count heads the loaded list; at the largest text sizes the money summary is several
+        // screens down.
+        XCTAssertTrue(app.staticTexts["today.count"].waitForExistence(timeout: 10))
+        try shot("00-today-signed-in")
         app.buttons["settings.open"].tap()
         app.buttons["settings.marketplaces"].tap()
         XCTAssertTrue(app.buttons["marketplaces.ebay.connect"].waitForExistence(timeout: 10))
         try shot("12-marketplaces")
+        // Done is on the Settings screen, under Marketplaces.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
         app.buttons["settings.done"].tap()
 
         tab("Add")
         XCTAssertTrue(app.buttons["draft.row"].waitForExistence(timeout: 5))
         try shot("13-drafts-upload-failed", settle: 3)
         app.buttons["draft.row"].tap()
-        XCTAssertTrue(app.buttons["photo.tile.0"].waitForExistence(timeout: 5))
+        let tile = app.buttons["photo.tile.0"]
+        // At the largest text sizes the failure banner fills the screen and the tiles start below it.
+        if !tile.waitForExistence(timeout: 5) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(tile.waitForExistence(timeout: 5))
         try shot("14-draft-editor-upload-failed")
         app.terminate()
     }
@@ -157,12 +255,12 @@ final class ScreenshotTourUITests: XCTestCase {
         try shot("08-drafts-signed-out")
     }
 
-    private func tab(_ title: String) {
+    func tab(_ title: String) {
         app.tabBars.buttons[title].tap()
     }
 
     /// Waits for animations and images to settle, then saves the screen.
-    private func shot(_ name: String, settle: TimeInterval = 1.5) throws {
+    func shot(_ name: String, settle: TimeInterval = 1.5) throws {
         RunLoop.current.run(until: Date(timeIntervalSinceNow: settle))
         let screenshot = XCUIScreen.main.screenshot()
         let directory = try XCTUnwrap(directory)
