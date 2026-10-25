@@ -1,0 +1,32 @@
+{
+  "name": "@listora/automation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser automation for marketplaces without an API (decision D1): the headless-Chromium runner, its safety rules (pacing, rate limits, challenge detection, redaction), the automation adapter base, sale-check scheduling, the runner launcher, and the fake marketplace site used in development and tests.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "fake-site": "node --env-file-if-exists=../../.env src/fake-site/cli.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ecs": "^3.1156.0",
+    "@listora/connections": "*",
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/operations": "*",
+    "@listora/sales": "*",
+    "@listora/shared": "*",
+    "@listora/storage": "*",
+    "kysely": "^0.29.7",
+    "pg": "^8.23.1",
+    "playwright-core": "^1.64.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*",
+    "@types/pg": "^8.23.1",
+    "sharp": "^0.35.5"
+  }
+}

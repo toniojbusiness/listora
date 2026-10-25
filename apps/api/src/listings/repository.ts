@@ -5,6 +5,8 @@
 import type { ListingVariant } from '@listora/api-contract';
 import {
   jsonb,
+  type ConnectionMode,
+  type ConnectionStatus,
   type DbExecutor,
   type DbTransaction,
   type ListingStatus,
@@ -16,9 +18,10 @@ import { sql, type Selectable } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
 
-/** A listing with the mode of its connection (null when it has none). */
+/** A listing with the mode and status of its connection (null when it has none). */
 export type ListingRow = Selectable<MarketplaceListingTable> & {
-  connection_mode: 'api' | 'assisted' | null;
+  connection_mode: ConnectionMode | null;
+  connection_status: ConnectionStatus | null;
 };
 
 export type OperationRow = Selectable<MarketplaceOperationTable>;
@@ -32,7 +35,7 @@ function listingQuery(db: DbExecutor, tenant: Tenant) {
         .onRef('connection.id', '=', 'listing.connection_id'),
     )
     .selectAll('listing')
-    .select('connection.mode as connection_mode')
+    .select(['connection.mode as connection_mode', 'connection.status as connection_status'])
     .where('listing.account_id', '=', tenant.accountId);
 }
 

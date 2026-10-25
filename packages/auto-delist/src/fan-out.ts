@@ -267,6 +267,7 @@ async function prepareTargets(
       'listing.pending_external_listing_id',
       'connection.id as connection_id',
       'connection.mode as connection_mode',
+      'connection.status as connection_status',
     ])
     .where('listing.account_id', '=', input.accountId)
     .where('listing.item_id', '=', input.itemId)
@@ -296,9 +297,15 @@ async function prepareTargets(
 
     const adapter = input.adapters(listing.marketplace);
     const connection =
-      listing.connection_id === null || listing.connection_mode === null
+      listing.connection_id === null ||
+      listing.connection_mode === null ||
+      listing.connection_status === null
         ? null
-        : { id: listing.connection_id, mode: listing.connection_mode };
+        : {
+            id: listing.connection_id,
+            mode: listing.connection_mode,
+            status: listing.connection_status,
+          };
     const capabilities = adapter?.capabilities(connection);
     // A sale elsewhere is marked sold where the marketplace's API has that (Depop); every
     // other listing is ended.

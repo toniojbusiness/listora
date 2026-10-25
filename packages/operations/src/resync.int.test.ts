@@ -62,7 +62,7 @@ describe('listing drift resync on eBay', () => {
     sequence += 1;
     const sku = `RS-${String(sequence).padStart(6, '0')}`;
     const content = sampleListingContent();
-    const ref = { id: connectionId, mode: 'api' } as const;
+    const ref = { id: connectionId, mode: 'api', status: 'connected' } as const;
     const outcome = await ebay.execute(
       {
         operationId: `op-${sku}`,

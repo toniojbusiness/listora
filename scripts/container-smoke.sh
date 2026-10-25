@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
-# Smoke test of the application image (run by CI; needs Docker and `npm ci`).
+# Smoke test of the application and browser runner images (run by CI; needs Docker and
+# `npm ci`).
 #
-# Builds the image from the root Dockerfile, then runs the schema migration task and starts
-# the API and the worker from it the way ECS does: read-only root file system, the exact
-# container environment from infra/src/containers.ts, and the database password only in
-# PGPASSWORD, against a real PostgreSQL 18 that requires that password. Passes when the
-# migrations apply, the API reports ready (database reachable), the worker stays up, and both
-# stop cleanly on SIGTERM.
+# Builds both images from the root Dockerfile, then runs the schema migration task and starts
+# the API, the worker, and the browser runner the way ECS does: read-only root file system
+# (with a writable /tmp for the runner), the exact container environment from
+# infra/src/containers.ts, and the database password only in PGPASSWORD, against a real
+# PostgreSQL 18 that requires that password. Passes when the migrations apply, the runner's
+# headless Chromium starts, the API reports ready (database reachable), the worker and the
+# runner stay up, and all three stop cleanly on SIGTERM.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 readonly image=listora-app:smoke
+readonly runner_image=listora-runner:smoke
 readonly network=listora-smoke
 readonly password=smoke-only-password
 readonly database_url=postgres://listora@listora-smoke-db:5432/listora
-readonly containers=(listora-smoke-migrate listora-smoke-api listora-smoke-worker listora-smoke-db)
+readonly containers=(
+  listora-smoke-migrate listora-smoke-api listora-smoke-worker listora-smoke-runner-test
+  listora-smoke-runner listora-smoke-db
+)
 
 workdir=$(mktemp -d)
 cleanup() {
@@ -35,7 +41,14 @@ fail() {
 }
 
 docker build --tag "$image" .
+docker build --target runner --tag "$runner_image" .
 docker network create "$network" >/dev/null
+
+# The browser starts in the runner image as the task runs it.
+docker run --name listora-smoke-runner-test --read-only --tmpfs /tmp \
+  "$runner_image" node apps/worker/src/runner/main.ts self-test >/dev/null ||
+  fail "the runner image's browser did not start"
+echo "container-smoke: runner browser self-test passed"
 
 docker run --detach --name listora-smoke-db --network "$network" \
   --env POSTGRES_USER=listora --env POSTGRES_PASSWORD="$password" --env POSTGRES_DB=listora \
@@ -50,7 +63,7 @@ done
 docker exec listora-smoke-db pg_isready --host 127.0.0.1 --username listora >/dev/null ||
   fail "postgres did not start"
 
-for container in migrate api worker; do
+for container in migrate api worker runner; do
   PGPASSWORD="$password" node infra/src/container-env.ts "$container" "$database_url" \
     >"$workdir/$container.env"
 done
@@ -67,6 +80,9 @@ docker run --detach --name listora-smoke-api --network "$network" --read-only \
 docker run --detach --name listora-smoke-worker --network "$network" --read-only \
   --env-file "$workdir/worker.env" \
   "$image" node apps/worker/src/main.ts >/dev/null
+docker run --detach --name listora-smoke-runner --network "$network" --read-only --tmpfs /tmp \
+  --env-file "$workdir/runner.env" \
+  "$runner_image" node apps/worker/src/runner/main.ts >/dev/null
 
 ready=""
 for _ in $(seq 30); do
@@ -77,7 +93,7 @@ done
 echo "container-smoke: api ready: $ready"
 
 sleep 5
-for container in listora-smoke-api listora-smoke-worker; do
+for container in listora-smoke-api listora-smoke-worker listora-smoke-runner; do
   [[ "$(docker inspect --format '{{.State.Running}}' "$container")" == true ]] ||
     fail "$container exited early"
   docker stop --time 30 "$container" >/dev/null

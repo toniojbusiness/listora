@@ -362,9 +362,11 @@ function checkedVariant(variant: ListingVariant): ListingVariant {
 }
 
 function connectionRef(row: ListingRow): ConnectionRef | null {
-  return row.connection_id === null || row.connection_mode === null
+  return row.connection_id === null ||
+    row.connection_mode === null ||
+    row.connection_status === null
     ? null
-    : { id: row.connection_id, mode: row.connection_mode };
+    : { id: row.connection_id, mode: row.connection_mode, status: row.connection_status };
 }
 
 /**

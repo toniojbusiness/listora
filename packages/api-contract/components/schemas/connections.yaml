@@ -22,7 +22,11 @@ CapabilityMode:
       maxLength: 64
 KnownCapabilityMode:
   type: string
-  enum: [api, assisted, bulk_file, none]
+  description: |
+    `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
+    seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+    `none`: not offered.
+  enum: [api, automation, assisted, bulk_file, none]
 MarkSoldMode:
   description: |
     A `KnownMarkSoldMode`, or a mode added after this client was built. Clients treat an
@@ -33,7 +37,7 @@ MarkSoldMode:
       maxLength: 64
 KnownMarkSoldMode:
   type: string
-  enum: [api, assisted, bulk_file, none, not_needed]
+  enum: [api, automation, assisted, bulk_file, none, not_needed]
 ConnectMethod:
   description: |
     A `KnownConnectMethod`, or a method added after this client was built. Clients treat
@@ -44,7 +48,11 @@ ConnectMethod:
       maxLength: 64
 KnownConnectMethod:
   type: string
-  enum: [oauth, none]
+  description: |
+    `oauth`: the seller authorizes Listora on the marketplace. `session`: the seller logs into
+    the marketplace in the app, and Listora keeps the session's cookies (never the password)
+    for its browser runner. `none`: nothing to connect.
+  enum: [oauth, session, none]
 VerifyReadMode:
   description: |
     A `KnownVerifyReadMode`, or a mode added after this client was built. Clients offer no
@@ -55,8 +63,10 @@ VerifyReadMode:
       maxLength: 64
 KnownVerifyReadMode:
   type: string
-  description: How success is established.
-  enum: [api, user_confirm]
+  description: |
+    How success is established: a read-back through the API, a read-back through the
+    automated browser session, or the user's confirmation.
+  enum: [api, automation, user_confirm]
 ImportListingsMode:
   description: |
     A `KnownImportListingsMode`, or a mode added after this client was built. Clients

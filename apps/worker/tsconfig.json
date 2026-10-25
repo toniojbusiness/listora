@@ -21,6 +21,7 @@
     { "path": "../../packages/storage" },
     { "path": "../../packages/ai" },
     { "path": "../../packages/photos" },
-    { "path": "../../packages/analysis" }
+    { "path": "../../packages/analysis" },
+    { "path": "../../packages/automation" }
   ]
 }

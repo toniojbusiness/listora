@@ -45,7 +45,7 @@ export function connectionView(
   const canConnect = context.canConnect(marketplace);
   const capabilities = context.adapters.capabilities(
     marketplace,
-    row === undefined ? null : { id: row.id, mode: row.mode },
+    row === undefined ? null : { id: row.id, mode: row.mode, status: row.status },
   );
   const view = describeConnection({
     marketplace,

@@ -1138,11 +1138,13 @@ export interface components {
         IntegrationMode: components["schemas"]["KnownIntegrationMode"];
         /**
          * @description `api`: Listora acts through the marketplace's official API and verifies by read-back.
-         *     `assisted`: Listora prepares the work and the user does the final step in the
+         *     `automation`: Listora's browser runner acts in the seller's own marketplace session
+         *     (where the marketplace permits it and has no API) and verifies by read-back through that
+         *     session. `assisted`: Listora prepares the work and the user does the final step in the
          *     marketplace app, then confirms.
          * @enum {string}
          */
-        KnownIntegrationMode: "api" | "assisted";
+        KnownIntegrationMode: "api" | "automation" | "assisted";
         /**
          * @description A `KnownStatusTone`, or a tone added after this client was built. Clients style an
          *     unknown tone like `neutral` and still show the `label`.
@@ -1167,7 +1169,7 @@ export interface components {
             detail?: string;
         };
         /**
-         * @description `marketplace_api`: confirmed by an API read-back. `user_confirmation`: the user confirmed an assisted task.
+         * @description `marketplace_api`: confirmed by a read-back from the marketplace (its API, or the automated browser session). `user_confirmation`: the user confirmed an assisted task.
          * @enum {string}
          */
         VerificationMethod: "marketplace_api" | "user_confirmation";
@@ -2067,32 +2069,43 @@ export interface components {
          *     an unknown mode like `none` (the capability is not offered).
          */
         CapabilityMode: components["schemas"]["KnownCapabilityMode"];
-        /** @enum {string} */
-        KnownCapabilityMode: "api" | "assisted" | "bulk_file" | "none";
+        /**
+         * @description `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
+         *     seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+         *     `none`: not offered.
+         * @enum {string}
+         */
+        KnownCapabilityMode: "api" | "automation" | "assisted" | "bulk_file" | "none";
         /**
          * @description A `KnownMarkSoldMode`, or a mode added after this client was built. Clients treat an
          *     unknown mode like `none`.
          */
         MarkSoldMode: components["schemas"]["KnownMarkSoldMode"];
         /** @enum {string} */
-        KnownMarkSoldMode: "api" | "assisted" | "bulk_file" | "none" | "not_needed";
+        KnownMarkSoldMode: "api" | "automation" | "assisted" | "bulk_file" | "none" | "not_needed";
         /**
          * @description A `KnownConnectMethod`, or a method added after this client was built. Clients treat
          *     an unknown method like `none` (no connect button).
          */
         ConnectMethod: components["schemas"]["KnownConnectMethod"];
-        /** @enum {string} */
-        KnownConnectMethod: "oauth" | "none";
+        /**
+         * @description `oauth`: the seller authorizes Listora on the marketplace. `session`: the seller logs into
+         *     the marketplace in the app, and Listora keeps the session's cookies (never the password)
+         *     for its browser runner. `none`: nothing to connect.
+         * @enum {string}
+         */
+        KnownConnectMethod: "oauth" | "session" | "none";
         /**
          * @description A `KnownVerifyReadMode`, or a mode added after this client was built. Clients offer no
          *     "check again" action for an unknown mode.
          */
         VerifyReadMode: components["schemas"]["KnownVerifyReadMode"];
         /**
-         * @description How success is established.
+         * @description How success is established: a read-back through the API, a read-back through the
+         *     automated browser session, or the user's confirmation.
          * @enum {string}
          */
-        KnownVerifyReadMode: "api" | "user_confirm";
+        KnownVerifyReadMode: "api" | "automation" | "user_confirm";
         /**
          * @description A `KnownImportListingsMode`, or a mode added after this client was built. Clients
          *     treat an unknown mode like `none`.
@@ -4399,7 +4412,7 @@ type ReadonlyArray<T> = [
 ] ? Readonly<Exclude<T, undefined>> : Readonly<Exclude<T, undefined>[]>;
 export const currencyCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["CurrencyCode"]> = ["USD"];
 export const knownMarketplaceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplace"]> = ["ebay", "depop", "poshmark", "mercari"];
-export const knownIntegrationModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownIntegrationMode"]> = ["api", "assisted"];
+export const knownIntegrationModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownIntegrationMode"]> = ["api", "automation", "assisted"];
 export const knownStatusToneValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownStatusTone"]> = ["success", "in_progress", "checking", "failed", "action_needed", "neutral"];
 export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["marketplace_api", "user_confirmation"];
 export const knownProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownProvenance"]> = ["ai", "ocr", "barcode", "user"];
@@ -4429,10 +4442,10 @@ export const knownOperationKindValues: ReadonlyArray<FlattenedDeepRequired<compo
 export const knownOperationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOperationStatus"]> = ["queued", "running", "retrying", "verifying", "succeeded", "failed", "needs_user_action", "canceled"];
 export const knownOperationOriginTypeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownOperationOriginType"]> = ["user", "auto_delist", "reprice_rule"];
 export const knownConnectionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionStatus"]> = ["not_connected", "connected", "degraded", "reauth_required", "revoked"];
-export const knownCapabilityModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownCapabilityMode"]> = ["api", "assisted", "bulk_file", "none"];
-export const knownMarkSoldModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarkSoldMode"]> = ["api", "assisted", "bulk_file", "none", "not_needed"];
-export const knownConnectMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectMethod"]> = ["oauth", "none"];
-export const knownVerifyReadModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownVerifyReadMode"]> = ["api", "user_confirm"];
+export const knownCapabilityModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownCapabilityMode"]> = ["api", "automation", "assisted", "bulk_file", "none"];
+export const knownMarkSoldModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarkSoldMode"]> = ["api", "automation", "assisted", "bulk_file", "none", "not_needed"];
+export const knownConnectMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectMethod"]> = ["oauth", "session", "none"];
+export const knownVerifyReadModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownVerifyReadMode"]> = ["api", "automation", "user_confirm"];
 export const knownImportListingsModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImportListingsMode"]> = ["api", "share_sheet", "bulk_file", "none"];
 export const knownImageTransportModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImageTransportMode"]> = ["url_fetch", "upload", "user_saves_photos"];
 export const knownConnectionActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAction"]> = ["connect", "reconnect"];

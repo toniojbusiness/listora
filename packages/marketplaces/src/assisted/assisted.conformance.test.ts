@@ -28,6 +28,6 @@ describeAdapterConformance({
 describeAdapterConformance({
   name: 'Depop (assisted)',
   adapter: createDepopAssistedAdapter(),
-  connection: { id: 'connection-depop', mode: 'assisted' },
+  connection: { id: 'connection-depop', mode: 'assisted', status: 'connected' },
   goldenDir: golden('depop'),
 });

@@ -25,7 +25,13 @@ import { MemoryDepopTokenStore } from './tokens.ts';
 /** The connection the configured seller is bound to (`DEPOP_USER_CONNECTION_ID`). */
 const CONNECTION_ID = 'connection-depop';
 
-const ctx = (connection: AdapterContext['connection'] = { id: CONNECTION_ID, mode: 'api' }) => ({
+const ctx = (
+  connection: AdapterContext['connection'] = {
+    id: CONNECTION_ID,
+    mode: 'api',
+    status: 'connected',
+  },
+) => ({
   signal: new AbortController().signal,
   connection,
 });
@@ -261,7 +267,7 @@ describe('DepopAdapter against the fake Depop', () => {
       grantExpiresAt: Date.now() + 60_000,
     });
     const readOnly = createDepopAdapter(config, { tokenStore: store, requestTimeoutMs: 2_000 });
-    const connection = { id: 'read-only', mode: 'api' } as const;
+    const connection = { id: 'read-only', mode: 'api', status: 'connected' } as const;
     expect(await readOnly.execute(request('create', namedRef()), ctx(connection))).toMatchObject({
       type: 'rejected',
       code: 'reauth_required',
@@ -367,7 +373,9 @@ describe('DepopAdapter against the fake Depop', () => {
     });
     // A sold product reads back sold.
     expect(await adapter.readListing(second, ctx())).toMatchObject({ status: 'sold' });
-    expect(await adapter.listOrders({}, ctx({ id: 'elsewhere', mode: 'api' }))).toEqual({
+    expect(
+      await adapter.listOrders({}, ctx({ id: 'elsewhere', mode: 'api', status: 'connected' })),
+    ).toEqual({
       type: 'unavailable',
       reauthRequired: true,
     });

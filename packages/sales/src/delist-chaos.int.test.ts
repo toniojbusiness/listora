@@ -144,7 +144,7 @@ describe('auto-delist chaos: an item listed on four marketplaces sells', () => {
     ] as const) {
       await registered
         .get(marketplace)
-        ?.healthCheck({ signal: signal(), connection: { id, mode: 'api' } });
+        ?.healthCheck({ signal: signal(), connection: { id, mode: 'api', status: 'connected' } });
     }
 
     worker = await startOperationWorker({

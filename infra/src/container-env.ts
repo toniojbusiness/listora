@@ -1,11 +1,12 @@
 // Prints a container's environment as a Docker env file, so the image smoke test
 // (scripts/container-smoke.sh) starts each process exactly as ECS configures it.
 //
-//   node infra/src/container-env.ts <api|worker|migrate> <database-url>
+//   node infra/src/container-env.ts <api|worker|runner|migrate> <database-url>
 //
 // Secrets that ECS injects (PGPASSWORD and the app secrets) take their value from this
-// process's environment, or the word `placeholder` when unset. The photo storage and the token
-// key are placeholders: the smoke test starts the processes but stores no photo or token.
+// process's environment, or the word `placeholder` when unset. The photo storage, the runner
+// service, and the token key are placeholders: the smoke test starts the processes but stores
+// no photo or credential, and starts no runner through ECS.
 import {
   CONTAINER_NAMES,
   containerEnvironment,
@@ -19,6 +20,7 @@ const SMOKE_RESOURCES: ServiceResources = {
     region: 'us-east-1',
     publicBaseUrl: 'https://photos.smoke.invalid',
   },
+  runner: { cluster: 'listora-smoke', service: 'runner', region: 'us-east-1' },
   tokenKeyArn: 'alias/listora-smoke-tokens',
 };
 

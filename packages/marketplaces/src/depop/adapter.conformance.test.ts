@@ -38,7 +38,7 @@ function adapterAt(url: string) {
 describeAdapterConformance({
   name: 'DepopAdapter',
   adapter: adapterAt(fake.url),
-  connection: { id: CONNECTION_ID, mode: 'api' },
+  connection: { id: CONNECTION_ID, mode: 'api', status: 'connected' },
   goldenDir: fileURLToPath(new URL('__golden__/', import.meta.url)),
   // An item in a category whose Depop product type Depop's documentation names.
   content: { item: { category: 'clothing/tops/t_shirts' } },

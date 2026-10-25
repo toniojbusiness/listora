@@ -42,7 +42,7 @@ describe('DepopSellerTokens against the fake Depop', () => {
   beforeEach(() => {
     // Each check gets a seller of its own, connected with expired access.
     sequence += 1;
-    connection = { id: `connection-${String(sequence)}`, mode: 'api' };
+    connection = { id: `connection-${String(sequence)}`, mode: 'api', status: 'connected' };
     store = new MemoryDepopTokenStore();
     const seller = fake.addSeller();
     sellerId = seller.userId;
@@ -186,10 +186,10 @@ describe('DepopSellerTokens against the fake Depop', () => {
     const source = tokens();
     await expect(source.accessToken(null, signal)).rejects.toThrow('Connect Depop');
     await expect(
-      source.accessToken({ id: connection.id, mode: 'assisted' }, signal),
+      source.accessToken({ id: connection.id, mode: 'assisted', status: 'connected' }, signal),
     ).rejects.toThrow('Connect Depop');
     await expect(
-      source.accessToken({ id: 'never-connected', mode: 'api' }, signal),
+      source.accessToken({ id: 'never-connected', mode: 'api', status: 'connected' }, signal),
     ).rejects.toThrow('Connect Depop');
   });
 });

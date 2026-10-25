@@ -5,8 +5,9 @@ import type { DbExecutor } from '@listora/db';
 import type { OperationRow } from './transitions.ts';
 
 /**
- * Whether any step of the operation started under a mode other than assisted, so its request
- * may have reached the marketplace. A `running` event without a recorded mode counts.
+ * Whether any step of the operation started under a mode other than assisted (the API, or the
+ * browser runner), so its request may have reached the marketplace. A `running` event without a
+ * recorded mode counts.
  */
 export async function wasSentThroughApi(
   executor: DbExecutor,
