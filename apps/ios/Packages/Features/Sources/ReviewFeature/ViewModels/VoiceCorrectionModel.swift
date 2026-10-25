@@ -57,6 +57,12 @@ final class VoiceCorrectionModel {
         heard != nil || !proposals.isEmpty || notice != nil || phase == .interpreting
     }
 
+    /// Whether the review shows the tray: it has content, the seller is talking, or they opened
+    /// the typing field (which lives in the tray, so the keyboard button must show it).
+    var showsTray: Bool {
+        hasContent || isListening || showsTyping
+    }
+
     // MARK: Listening
 
     /// The talk button went down. Without permission yet, it explains and offers to ask; with

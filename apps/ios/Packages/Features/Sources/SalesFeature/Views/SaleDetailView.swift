@@ -31,26 +31,6 @@ struct SaleDetailView: View {
                     Task { await model.perform(.markShipped(labelCostCents: labelCost)) }
                 }
             }
-            .confirmationDialog(
-                confirming == .cancel ? "Cancel this sale?" : "Record a return?",
-                isPresented: Binding(get: { confirming != nil }, set: {
-                    if !$0 {
-                        confirming = nil
-                    }
-                }),
-                titleVisibility: .visible,
-                presenting: confirming,
-            ) { action in
-                Button(action == .cancel ? "Cancel sale" : "Record return", role: .destructive) {
-                    confirming = nil
-                    Task { await model.perform(action == .cancel ? .cancel : .recordReturn) }
-                }
-                .accessibilityIdentifier("sale.confirm.\(action.rawValue)")
-                Button("Keep the sale", role: .cancel) {}
-            } message: { _ in
-                Text("The item goes back to your inventory. Listora then asks whether to relist it, "
-                    + "and relists nothing until you choose.")
-            }
     }
 
     @ViewBuilder
@@ -154,9 +134,48 @@ struct SaleDetailView: View {
         case .cancel:
             Button("Cancel sale", systemImage: "xmark") { confirming = .cancel }
                 .accessibilityIdentifier("sale.action.cancel")
+                .modifier(confirmation(of: .cancel))
         case .recordReturn:
             Button("Record return", systemImage: "arrow.uturn.backward") { confirming = .recordReturn }
                 .accessibilityIdentifier("sale.action.recordReturn")
+                .modifier(confirmation(of: .recordReturn))
+        }
+    }
+
+    /// The confirmation of a cancel or a return, on its own button so it opens where it was tapped.
+    private func confirmation(of action: Components.Schemas.KnownSaleAction) -> SaleActionConfirmation {
+        SaleActionConfirmation(
+            action: action,
+            isPresented: Binding(get: { confirming == action }, set: {
+                if !$0 {
+                    confirming = nil
+                }
+            }),
+        ) {
+            confirming = nil
+            Task { await model.perform(action == .cancel ? .cancel : .recordReturn) }
+        }
+    }
+}
+
+/// "Cancel this sale?" or "Record a return?", with what happens next.
+private struct SaleActionConfirmation: ViewModifier {
+    let action: Components.Schemas.KnownSaleAction
+    @Binding var isPresented: Bool
+    let confirm: () -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog(
+            action == .cancel ? "Cancel this sale?" : "Record a return?",
+            isPresented: $isPresented,
+            titleVisibility: .visible,
+        ) {
+            Button(action == .cancel ? "Cancel sale" : "Record return", role: .destructive, action: confirm)
+                .accessibilityIdentifier("sale.confirm.\(action.rawValue)")
+            Button("Keep the sale", role: .cancel) {}
+        } message: {
+            Text("The item goes back to your inventory. Listora then asks whether to relist it, "
+                + "and relists nothing until you choose.")
         }
     }
 }

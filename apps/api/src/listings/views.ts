@@ -11,7 +11,11 @@ import type {
 } from '@listora/api-contract';
 import type { DbExecutor, Marketplace, OperationKind } from '@listora/db';
 import { operationMode, type AdapterRegistry } from '@listora/marketplaces';
-import { describeListingStatus, UNFINISHED_STATUSES } from '@listora/operations';
+import {
+  describeListingStatus,
+  REFUSED_CONTENT_ERROR,
+  UNFINISHED_STATUSES,
+} from '@listora/operations';
 import { assertNever } from '@listora/shared';
 
 import { operationView } from '../operations/views.ts';
@@ -101,6 +105,7 @@ export function listingStatusDisplay(row: ListingRow, operation?: OperationRow):
         status: operation.status,
         attempts: operation.attempts,
         errorMessage: operation.error_message,
+        errorCode: operation.error_code,
         successEvidence: operation.success_evidence,
       },
     });
@@ -168,6 +173,16 @@ export function actionsForState(state: ListingState): KnownListingAction[] {
   );
 }
 
+/**
+ * A failed operation that Listora refused before sending anything: its content broke the
+ * marketplace's rules, so nothing of it reached the marketplace.
+ */
+export function wasRefusedBeforeSending(
+  operation: Pick<OperationRow, 'status' | 'error_code'>,
+): boolean {
+  return operation.status === 'failed' && operation.error_code === REFUSED_CONTENT_ERROR;
+}
+
 /** Items that can get a new listing, or be published or relisted: not sold and not archived. */
 export const LISTABLE_ITEM_STATUSES: ReadonlySet<string> = new Set(['draft', 'ready', 'listed']);
 
@@ -181,7 +196,9 @@ function listingActions(state: ListingState): KnownListingAction[] {
   }
   switch (row.status) {
     case 'draft':
-      return operation === undefined ? ['publish'] : [];
+      // A draft whose publish Listora refused before sending it never reached the marketplace:
+      // the seller fixes it and publishes again, since retrying the same content cannot work.
+      return operation === undefined || wasRefusedBeforeSending(operation) ? ['publish'] : [];
     case 'active':
       return ['change_price', 'revise', 'end', 'verify'];
     case 'ended':

@@ -95,6 +95,7 @@ import { syncItemListedStatus } from './item-status.ts';
 import { delayAfterAttempt, maxAttempts, type RetryPolicy } from './policy.ts';
 import { dismissOpenTasks } from './commands.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
+import { REFUSED_CONTENT_ERROR } from './status-display.ts';
 import {
   operationPriority,
   transitionOperation,
@@ -865,8 +866,8 @@ function preparePayload(deps: StepDependencies, ctx: StepContext): PreparedPaylo
     return {
       ok: false,
       error: {
-        code: 'validation_failed',
-        message: `${first.message} Fix the listing, then try again.`,
+        code: REFUSED_CONTENT_ERROR,
+        message: `${first.message} Fix it, then try again.`,
       },
       detail: { issues: issues.map(({ field, code, message }) => ({ field, code, message })) },
     };
@@ -1353,7 +1354,19 @@ async function applyResolution(
       );
       return 'failed';
     case 'user': {
-      await transitionOperation(trx, op, { to: 'needs_user_action' }, detail);
+      const waiting = await transitionOperation(trx, op, { to: 'needs_user_action' }, detail);
+      if (!(await delistSaleStands(trx, op))) {
+        // The sale was canceled or returned while this step ran, after the lifecycle stopped the
+        // run's waiting delists (`cancelUnsentDelists` skips a running one): the seller may keep
+        // the item listed, so no task asks them to delist it.
+        await transitionOperation(
+          trx,
+          waiting,
+          { to: 'canceled' },
+          { action: 'cancel', reason: 'the sale no longer stands' },
+        );
+        return 'canceled';
+      }
       await trx
         .insertInto('user_task')
         .values({
@@ -1373,6 +1386,31 @@ async function applyResolution(
     default:
       return assertNever(resolution, 'step resolution');
   }
+}
+
+/**
+ * Whether the sale an auto-delist serves still stands (true for every other operation). The sale
+ * is read under a share lock, so a cancel or return committing meanwhile is either seen here or
+ * waits for this step, after which it stops the delist itself (the sale lifecycle locks the sale
+ * before it cancels the run's waiting delists).
+ */
+async function delistSaleStands(trx: DbTransaction, op: OperationRow): Promise<boolean> {
+  if (op.delist_run_id === null) return true;
+  const run = await trx
+    .selectFrom('delist_run')
+    .select('sale_id')
+    .where('account_id', '=', op.account_id)
+    .where('id', '=', op.delist_run_id)
+    .executeTakeFirst();
+  if (run === undefined) return true;
+  const sale = await trx
+    .selectFrom('sale')
+    .select('status')
+    .where('account_id', '=', op.account_id)
+    .where('id', '=', run.sale_id)
+    .forShare()
+    .executeTakeFirst();
+  return sale === undefined || (sale.status !== 'canceled' && sale.status !== 'returned');
 }
 
 /**

@@ -193,7 +193,9 @@ struct CameraCaptureView: View {
                 Spacer()
                 Group {
                     if guide.step == .details {
-                        Color.clear
+                        // Holds Skip's place at its size, so the shutter stays centered and the
+                        // bar keeps its height (a bare Color.clear takes all the space it is offered).
+                        Color.clear.frame(width: 64, height: 64)
                     } else {
                         Button {
                             guide.skip()

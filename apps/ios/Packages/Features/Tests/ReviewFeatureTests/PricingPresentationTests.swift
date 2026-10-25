@@ -124,6 +124,8 @@ struct AmountEntryTests {
         #expect(typed([.decimalPoint, .digit(9), .digit(9)]).cents == 99)
         #expect(AmountEntry().cents == nil)
         #expect(AmountEntry().display == "$0")
+        #expect(AmountEntry(cents: 9_999_999).display == "$99,999.99")
+        #expect(AmountEntry(cents: 125_000).display == "$1,250")
     }
 
     @Test

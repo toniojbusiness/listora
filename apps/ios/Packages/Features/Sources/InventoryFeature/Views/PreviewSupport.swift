@@ -13,6 +13,14 @@ private struct EmptyInventoryService: InventoryService {
         throw .networkUnavailable
     }
 
+    func replaceItem(id _: String, with _: Components.Schemas.ItemReplace) async throws(APIFailure) -> Item {
+        throw .networkUnavailable
+    }
+
+    func floors(itemID _: String) async throws(APIFailure) -> [Components.Schemas.MarketplaceFloor] {
+        []
+    }
+
     func connections() async throws(APIFailure) -> [Connection] {
         []
     }

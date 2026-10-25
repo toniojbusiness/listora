@@ -427,6 +427,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"           |
 | [features/security.md](features/security.md)                       | The security review: findings, severities, fixes, and follow-ups               |
 | [features/performance.md](features/performance.md)                 | Latency, idle cost, AI cost per item, and the API benchmark at 2,000 items     |
+| [features/bugs.md](features/bugs.md)                               | The bug bash: each bug found, how to see it, its fix and test, the follow-ups  |
 
 ### Former section numbers
 

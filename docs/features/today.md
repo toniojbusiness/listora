@@ -52,7 +52,9 @@ cards on screen while it loads and when a later load fails. Done cards leave wit
 With nothing to do and no sales in either week it shows "You're all caught up"; with sales, a
 smaller caught-up card above the money summary. Cards push the item, sale, and marketplaces screens on
 Today's own navigation stack (the app passes them in, since a feature never depends on another);
-the drafts card switches to the Add Item tab.
+the drafts card switches to the Add Item tab when this iPhone has drafts, and otherwise to Inventory
+filtered to drafts (drafts made on another device or before a reinstall), whose item screen offers
+Review item.
 
 ### The morning summary
 

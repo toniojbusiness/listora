@@ -209,9 +209,14 @@ final class ReviewFlowModel {
         item.status.value1 == .draft
     }
 
-    /// Waits until the server has processed every photo; a failed photo stops the flow.
+    /// Waits until the server has processed every photo; a failed photo stops the flow, and so
+    /// does an item without photos (the Add Item tab opens the review only once they are attached,
+    /// so none means there are none to wait for, as for an item made without the app's capture).
     private func waitForPhotos(_ item: Item) async throws -> Item {
         var item = item
+        if item.photos.isEmpty {
+            throw ReviewFlowError.noPhotos
+        }
         for _ in 0 ..< timing.photoPolls {
             let photos = item.photos
             if let failed = photos.first(where: { $0.status == .failed }) {

@@ -35,7 +35,7 @@ import { listingContent } from './content.ts';
 import {
   findListing,
   hasLiveListingOn,
-  hasOperations,
+  hasSentOperations,
   insertDraftListing,
   itemListingRows,
   listListingRows,
@@ -144,7 +144,7 @@ export function registerListingActionRoutes(
     inTransaction(db, async (trx) => {
       const row = await lockListing(trx, tenant, params.listingId);
       if (!row) throw notFound('Listing');
-      if (row.status !== 'draft' || (await hasOperations(trx, tenant, row.id))) {
+      if (row.status !== 'draft' || (await hasSentOperations(trx, tenant, row.id))) {
         throw new ApiError(
           'invalid_state_transition',
           'This listing was already sent to the marketplace. Change it with a price change or an update.',

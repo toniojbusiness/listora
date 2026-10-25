@@ -152,7 +152,7 @@ struct ReviewFormView: View {
         let missing = form.missing
         let toCheck = model.fieldsToCheck.count
         return VStack(spacing: Spacing.xs) {
-            if voice.hasContent || voice.isListening {
+            if voice.showsTray {
                 VoiceTray(voice: voice)
             }
             HStack(spacing: Spacing.xs) {
@@ -176,7 +176,7 @@ struct ReviewFormView: View {
                 }
             }
             if !missing.isEmpty {
-                Text("Add \(missing.map { $0.title.lowercased() }.formatted(.list(type: .and))) to continue.")
+                Text("Add \(missing.map(\.inlineTitle).formatted(.list(type: .and))) to continue.")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.warning)
                     .accessibilityIdentifier("review.missing")

@@ -58,6 +58,13 @@ public final class AddItemEnvironment {
     let signalReader: any PhotoSignalReader
     /// Where the batch screen reads its batch's progress.
     let batchProgress: any BatchProgressSource
+    /// Whether this iPhone holds any draft: the Add Item tab lists only these, so the Today card
+    /// for drafts on the server opens it only then.
+    public var hasDrafts: Bool {
+        guard case let .ready(store, _) = state else { return false }
+        return (try? store.drafts().isEmpty) == false
+    }
+
     private let tokenChanges: AsyncStream<AccessGrant?>?
     private var tokenObservation: Task<Void, Never>?
 

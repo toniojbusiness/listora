@@ -121,7 +121,7 @@ struct FieldRow: View {
     }
 
     private var placeholder: String {
-        "Add \(field.key.title.lowercased())"
+        "Add \(field.key.inlineTitle)"
     }
 
     private var attentionNote: String? {
@@ -193,7 +193,7 @@ private struct FieldEditor: View {
                     .accessibilityIdentifier("review.editor.done")
             }
             TextField(
-                field.key.kind == .list ? "Separate with commas" : "Add \(field.key.title.lowercased())",
+                field.key.kind == .list ? "Separate with commas" : "Add \(field.key.inlineTitle)",
                 text: $text,
                 axis: field.key.kind == .multiline ? .vertical : .horizontal,
             )

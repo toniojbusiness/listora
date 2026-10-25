@@ -38,6 +38,12 @@ public struct InventoryView<Header: View>: View {
                 }
                 // Runs each time the list appears (a tab switch, back from an item) and when the
                 // query changes; typing waits a moment so each keystroke is not a request.
+                .onAppear {
+                    if let status = environment.takeRequestedStatus() {
+                        path = []
+                        model.query.status = status
+                    }
+                }
                 .task(id: model.query) {
                     if !model.query.search.isEmpty {
                         try? await Task.sleep(for: .milliseconds(300))

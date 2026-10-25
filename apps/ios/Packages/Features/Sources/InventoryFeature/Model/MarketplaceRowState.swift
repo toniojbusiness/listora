@@ -84,9 +84,13 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
             actions = Self.actions(of: listing)
         } else {
             statusLabel = "Not listed"
-            statusDetail = nil
             tone = .neutral
-            actions = Self.canList(marketplace: marketplace, connection: connection) ? [.list] : []
+            let canList = Self.canList(marketplace: marketplace, connection: connection)
+            actions = canList ? [.list] : []
+            // Without a usable connection (only eBay needs one) the card says how to list here.
+            statusDetail = canList ? nil : connection == nil
+                ? "Connect your \(name) account in Settings > Marketplaces to list it here."
+                : "Reconnect \(name) in Settings > Marketplaces to list it here."
         }
     }
 

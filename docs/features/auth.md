@@ -237,8 +237,11 @@ The response lists every API connection by marketplace (and the seller's name th
 with `revoked: false` names a marketplace whose access the person must revoke manually: the
 app lists them and tells the person to remove Listora in each one's settings, since the job's
 later outcome never reaches the app (Listora keeps no record of the deleted person beyond the
-job's log line). The app has no account deletion screen yet; when it gets one, its
-confirmation copy lists these marketplaces.
+job's log line). In the app it is Settings > Delete account (shown while someone is signed in,
+`AccountDeletionModel` in `SettingsFeature`): it says what deleting removes and keeps, asks to
+confirm, then signs out and lists these marketplaces. A `401` answer means an earlier try already
+deleted the account, so it reads as deleted too; any other error deletes nothing and can be
+tried again.
 
 A token stays cryptographically valid until it expires, and until the job has deleted the
 Cognito user, Cognito can still issue new ones (on a refresh, or a new sign-in). The tenancy

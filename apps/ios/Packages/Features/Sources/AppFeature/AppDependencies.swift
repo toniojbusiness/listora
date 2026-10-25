@@ -44,6 +44,8 @@ public struct AppDependencies {
     /// Signing in from Settings: the local API's dev driver in Dev builds, otherwise the
     /// environment's Cognito user pool, with an emailed code.
     public let signIn: SignInModel
+    /// Settings > Delete account.
+    public let accountDeletion: AccountDeletionModel
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
     public let marketplaces: MarketplacesModel
     /// Link accounts: sign in on Poshmark, Mercari, and Depop for Listora to automate them.
@@ -92,6 +94,7 @@ public struct AppDependencies {
             saleScreens: Self.saleScreens(sales),
             taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
         )
+        inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,
@@ -107,6 +110,7 @@ public struct AppDependencies {
         linkAccounts = LinkAccountsModel(service: APIMarketplaceSessionService(api: apiClient))
         today = Self.makeToday(apiClient, accessTokens, inventory, sales, marketplaces)
         signIn = SignInModel(method: Self.signInMethod(configuration, cognito), tokens: accessTokens)
+        accountDeletion = Self.makeAccountDeletion(apiClient, accessTokens)
     }
 
     /// The Cognito client of a build with a user pool app client. The Share Extension builds the
@@ -125,6 +129,16 @@ public struct AppDependencies {
             return DevSignIn(client: DevSignInClient(baseURL: configuration.apiBaseURL))
         }
         return cognito.map(EmailCodeSignIn.init(client:))
+    }
+
+    private static func makeAccountDeletion(_ apiClient: APIClient, _ accessTokens: AccessTokenStore)
+        -> AccountDeletionModel
+    {
+        AccountDeletionModel(
+            service: APIAccountDeletionService(client: apiClient.client),
+            isSignedIn: { accessTokens.grant != nil },
+            signOut: { accessTokens.signOut() },
+        )
     }
 
     /// The sales screens the item screen opens, from the sales feature.

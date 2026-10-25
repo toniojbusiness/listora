@@ -1,6 +1,7 @@
 import APIClient
 import Core
 import Foundation
+import ListoraAPI
 import SwiftUI
 
 /// The sales screens the item screen opens, which the sales feature implements: "Mark as sold"
@@ -29,6 +30,13 @@ public typealias TaskDestination = @MainActor (
     _ onFinished: @escaping @MainActor () -> Void,
 ) -> AnyView
 
+/// The review of a server item that is still a draft (the review feature's flow), handed over by
+/// `AppDependencies` so the two features never import each other.
+public typealias ItemReviewScreen = @MainActor (
+    ItemReviewRequest,
+    _ onFinished: @escaping @MainActor (ItemReviewOutcome) -> Void,
+) -> AnyView
+
 /// Everything the inventory, item, and listing screens need, built once at launch by
 /// `AppDependencies`.
 @MainActor
@@ -42,6 +50,11 @@ public final class InventoryEnvironment {
     let saleScreens: SaleScreens?
     /// The task screen for an assisted step; without one, the item screen offers no "Open task".
     let taskDestination: TaskDestination?
+    /// Reviews a draft item, also one that is not a draft on this iPhone (made on another device,
+    /// or before a reinstall); without one, the item screen offers no "Review item".
+    public var reviewScreen: ItemReviewScreen?
+    /// A status filter for the list to apply when it next appears (the Today card for drafts).
+    private var requestedStatus: Components.Schemas.KnownItemStatus?
 
     public convenience init(
         apiClient: APIClient,
@@ -78,6 +91,17 @@ public final class InventoryEnvironment {
     /// The item screen, for another tab's navigation stack (a Today card opens it).
     public func itemDetail(itemID: String) -> some View {
         ItemDetailView(environment: self, itemID: itemID)
+    }
+
+    /// Shows the drafts the next time the inventory appears.
+    public func showDrafts() {
+        requestedStatus = .draft
+    }
+
+    /// The status filter asked for since the list last appeared, once.
+    func takeRequestedStatus() -> Components.Schemas.KnownItemStatus? {
+        defer { requestedStatus = nil }
+        return requestedStatus
     }
 
     func makeListModel() -> InventoryListModel {

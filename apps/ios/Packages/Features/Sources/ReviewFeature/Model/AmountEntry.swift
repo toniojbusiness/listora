@@ -66,8 +66,18 @@ struct AmountEntry: Equatable, Sendable {
         return whole * 100 + fraction
     }
 
-    /// The keys pressed, with a dollar sign ("$12.5" while typing $12.50).
+    /// The keys pressed, with a dollar sign and thousands grouped ("$12.5" while typing $12.50,
+    /// "$1,250").
     var display: String {
-        text.isEmpty ? "$0" : "$" + text
+        guard !text.isEmpty else { return "$0" }
+        let parts = text.split(separator: ".", omittingEmptySubsequences: false)
+        var whole = ""
+        for (index, digit) in parts[0].reversed().enumerated() {
+            if index > 0, index.isMultiple(of: 3) {
+                whole.append(",")
+            }
+            whole.append(digit)
+        }
+        return "$" + String(whole.reversed()) + (parts.count == 2 ? "." + parts[1] : "")
     }
 }

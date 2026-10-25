@@ -69,7 +69,15 @@ public struct RootView: View {
         case .today:
             TodayView(
                 environment: dependencies.today,
-                onOpenDrafts: { selection = .addItem },
+                onOpenDrafts: {
+                    // The Add Item tab lists this iPhone's drafts; the server's others are in Inventory.
+                    if dependencies.addItem.hasDrafts {
+                        selection = .addItem
+                    } else {
+                        dependencies.inventory.showDrafts()
+                        selection = .inventory
+                    }
+                },
                 settings: { settingsButton },
             )
         case .inventory:
@@ -105,6 +113,7 @@ extension RootView {
         SettingsView(
             content: SettingsContent(configuration: dependencies.configuration, version: dependencies.version),
             signIn: dependencies.signIn,
+            accountDeletion: dependencies.accountDeletion,
             path: $settingsPath,
             marketplacesAttention: dependencies.marketplaces.attention == nil ? nil : "Needs attention",
             onDone: { showsSettings = false },

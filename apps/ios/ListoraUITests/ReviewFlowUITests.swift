@@ -20,6 +20,7 @@ final class ReviewFlowUITests: XCTestCase {
         createDraftAndOpenReview()
         reviewConfidenceFirst()
         identifyHarder()
+        enterSize()
         enterCost()
         let sku = choosePriceAndSave()
 
@@ -31,6 +32,7 @@ final class ReviewFlowUITests: XCTestCase {
         XCTAssertEqual(item.details.purchaseSource, "Goodwill")
         XCTAssertEqual(item.details.colors, ["navy"])
         XCTAssertEqual(item.fieldProvenance["colors"], "user")
+        XCTAssertEqual(item.details.sizeLabel, "M")
         XCTAssertNotNil(item.details.floorPrice)
 
         // Done: back to Add Item, where the saved item's draft is gone.
@@ -186,7 +188,8 @@ final class ReviewFlowUITests: XCTestCase {
         review.tap()
         let attention = app.staticTexts["review.section.attention"]
         XCTAssertTrue(attention.waitForExistence(timeout: 120), "the review never appeared")
-        XCTAssertEqual(attention.label, "Check these (2)")
+        // The size the tag doesn't show, then the uncertain brand and color.
+        XCTAssertEqual(attention.label, "Check these (3)")
         keepScreenshot("Review")
     }
 
@@ -234,7 +237,7 @@ final class ReviewFlowUITests: XCTestCase {
         identifyHarder.tap()
         XCTAssertTrue(app.descendants(matching: .any)["review.premiumDone"].waitForExistence(timeout: 60))
         XCTAssertTrue(app.buttons["review.field.colors"].label.hasPrefix("Colors, Navy, From You"))
-        XCTAssertEqual(app.staticTexts["review.section.attention"].label, "Check these (1)")
+        XCTAssertEqual(app.staticTexts["review.section.attention"].label, "Check these (2)")
     }
 
     /// The cost on the in-app keypad, then where it was bought.
@@ -312,5 +315,23 @@ final class ReviewFlowUITests: XCTestCase {
         let predicate = NSPredicate(format: "label BEGINSWITH %@", prefix)
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+}
+
+extension ReviewFlowUITests {
+    /// A shirt can't be listed without its size, which the tag doesn't show, so Continue waits
+    /// for it.
+    private func enterSize() {
+        XCTAssertEqual(app.staticTexts["review.missing"].label, "Add size to continue.")
+        XCTAssertFalse(app.buttons["review.continue"].isEnabled)
+        let size = scrolledTo(app.buttons["review.field.sizeLabel"], upward: true)
+        size.tap()
+        let editor = app.textFields["review.editor.sizeLabel"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("M")
+        app.buttons["review.editor.done"].tap()
+        let edited = app.buttons["review.field.sizeLabel"]
+        XCTAssertTrue(waitForLabel(of: edited, prefix: "Size, M, From You"), edited.label)
+        XCTAssertFalse(app.staticTexts["review.missing"].exists)
     }
 }

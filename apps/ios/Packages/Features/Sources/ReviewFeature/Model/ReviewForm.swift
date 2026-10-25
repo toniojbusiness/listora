@@ -67,8 +67,19 @@ struct ReviewForm: Equatable, Sendable {
             provenance: provenance,
             confidence: confidence,
             isLowConfidence: provenance != .user && (confidence.map { $0 < Self.lowConfidence } ?? false),
-            isMissing: key.isRequiredToList && value.isEmpty,
+            isMissing: isRequiredToList(key) && value.isEmpty,
         )
+    }
+
+    /// Whether the item can't be listed without `key`: what every marketplace needs, and the size
+    /// of clothing and shoes, which eBay, Poshmark, Mercari, and Depop all refuse to list without
+    /// (eBay's rule is `categoryTraits` in @listora/marketplaces).
+    func isRequiredToList(_ key: ReviewFieldKey) -> Bool {
+        if key.isRequiredToList {
+            return true
+        }
+        guard key == .sizeLabel, let category = details.category else { return false }
+        return category.hasPrefix("clothing/") || category.hasPrefix("shoes/")
     }
 
     /// The sections in display order, each with its details: those needing attention only in
