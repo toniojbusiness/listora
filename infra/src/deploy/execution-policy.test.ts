@@ -73,6 +73,28 @@ describe('the restricted CDK execution policy', () => {
   );
 
   it.each(deployed)(
+    'can read every stack the $name stacks take outputs from (Fn::GetStackOutput)',
+    ({ environment, resources }) => {
+      const policy = cdkExecutionPolicy(environment, ACCOUNT);
+      const producers = new Set(
+        [
+          ...JSON.stringify(resources).matchAll(/"Fn::GetStackOutput":\{"StackName":"([^"]+)"/g),
+        ].map((match) => match[1] ?? ''),
+      );
+      expect(producers.size).toBeGreaterThan(0);
+      for (const stack of producers) {
+        const arn = `arn:aws:cloudformation:us-east-1:${ACCOUNT}:stack/${stack}/d812ad80-0000`;
+        expect(allows(policy.Statement, 'cloudformation:DescribeStacks', arn), stack).toBe(true);
+      }
+      // Never another app's stacks or the bootstrap's.
+      for (const other of ['PrequalChecker-prod', 'CDKToolkit', 'CDKToolkit-listora']) {
+        const arn = `arn:aws:cloudformation:us-east-1:${ACCOUNT}:stack/${other}/x`;
+        expect(allows(policy.Statement, 'cloudformation:DescribeStacks', arn), other).toBe(false);
+      }
+    },
+  );
+
+  it.each(deployed)(
     'covers every IAM resource and managed policy of the $name stacks',
     ({ environment, resources }) => {
       const policy = cdkExecutionPolicy(environment, ACCOUNT);
