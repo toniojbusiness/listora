@@ -17,9 +17,12 @@
  *
  * Imports, webhooks, and emails join this interface with the tasks that first use them (T-17,
  * T-23, T-36), as optional members; orders joined with the browser runner's sale checks
- * (`listOrdersSince`). Credentials are not members: an adapter gets a connection's tokens or
- * browser session at use time from its own source (eBay's `EbaySellerSource`, which
- * `@listora/connections` implements over the token vault; the browser runner's session vault).
+ * (`listOrdersSince`), and the seller's listings with the Poshmark and Mercari automation
+ * adapters
+ * (`listListings`, for imports and drift checks). Credentials are not members: an adapter gets
+ * a connection's tokens or browser session at use time from its own source (eBay's
+ * `EbaySellerSource`, which `@listora/connections` implements over the token vault; the browser
+ * runner's session vault).
  */
 import type {
   ConnectionMode,
@@ -312,6 +315,21 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
    * be read, like `readListing`; an empty list means it showed no order.
    */
   listOrdersSince?(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]>;
+  /**
+   * The seller's listings on the marketplace, as read-backs, for imports and drift checks. Only
+   * adapters that can list them have it. Throws when the marketplace cannot be read.
+   */
+  listListings?(ctx: AdapterContext): Promise<RemoteListings>;
+}
+
+/** A listing a read found. */
+export type RemoteListing = Extract<RemoteListingState, { found: true }>;
+
+/** The seller's listings, newest first. */
+export interface RemoteListings {
+  listings: RemoteListing[];
+  /** `false` when the adapter stopped at its page limit before the last listing. */
+  complete: boolean;
 }
 
 /** One item of a marketplace order, as a sale check reads it. */

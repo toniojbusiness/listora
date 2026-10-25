@@ -16,6 +16,7 @@
     { "path": "../packages/connections" },
     { "path": "../packages/observability" },
     { "path": "../apps/api" },
-    { "path": "../apps/worker" }
+    { "path": "../apps/worker" },
+    { "path": "../packages/testing" }
   ]
 }

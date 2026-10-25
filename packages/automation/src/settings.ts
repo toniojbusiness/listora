@@ -35,6 +35,17 @@ export interface AutomationSettings {
    * Mercari, and Depop, whose automation connections then run against it.
    */
   readonly fakeSiteUrl: string | undefined;
+  /**
+   * Development and tests only: the fake Poshmark, which the Poshmark automation adapter then
+   * drives instead of poshmark.com (it takes precedence over `fakeSiteUrl` for Poshmark).
+   */
+  readonly fakePoshmarkUrl: string | undefined;
+  /**
+   * Development and tests only: the fake Mercari site (`npm run dev:fake-mercari`), which the
+   * Mercari automation adapter then drives instead of mercari.com (it takes precedence over
+   * `fakeSiteUrl` for Mercari).
+   */
+  readonly fakeMercariSiteUrl: string | undefined;
 }
 
 export class AutomationConfigError extends Error {
@@ -67,16 +78,9 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
     issues.push('AUTOMATION_CALL_TIMEOUT_MS must be at least AUTOMATION_STEP_TIMEOUT_MS');
   }
 
-  const rawFakeSiteUrl = env['FAKE_AUTOMATION_SITE_URL'];
-  const fakeSiteUrl = rawFakeSiteUrl === '' ? undefined : rawFakeSiteUrl;
-  if (
-    fakeSiteUrl !== undefined &&
-    !/^http:\/\/(127\.0\.0\.1|localhost):\d+\/?$/.test(fakeSiteUrl)
-  ) {
-    issues.push(
-      'FAKE_AUTOMATION_SITE_URL must be http://127.0.0.1:<port> or http://localhost:<port>',
-    );
-  }
+  const fakeSiteUrl = localUrl(issues, env, 'FAKE_AUTOMATION_SITE_URL');
+  const fakePoshmarkUrl = localUrl(issues, env, 'FAKE_POSHMARK_URL');
+  const fakeMercariSiteUrl = localUrl(issues, env, 'FAKE_MERCARI_SITE_URL');
 
   const profiles = Object.fromEntries(
     AUTOMATED_MARKETPLACES.map((marketplace) => {
@@ -119,10 +123,15 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
         pacing: { ...base.pacing, actionDelayMs, sessionGapMs },
         limits: { runsPerHour, runsPerDay },
       };
-      return [
-        marketplace,
-        fakeSiteUrl === undefined ? profile : standInProfile(profile, fakeSiteUrl),
-      ];
+      // In development, a marketplace's stand-in replaces its real site, never the reverse.
+      const ownFake =
+        marketplace === 'poshmark'
+          ? fakePoshmarkUrl
+          : marketplace === 'mercari'
+            ? fakeMercariSiteUrl
+            : undefined;
+      const standIn = ownFake ?? fakeSiteUrl;
+      return [marketplace, standIn === undefined ? profile : standInProfile(profile, standIn)];
     }),
   ) as Record<AutomatedMarketplace, AutomationProfile>;
 
@@ -143,7 +152,25 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
   }
 
   if (issues.length > 0) throw new AutomationConfigError(issues);
-  return { stepTimeoutMs, callTimeoutMs, profiles, saleChecks, fakeSiteUrl };
+  return {
+    stepTimeoutMs,
+    callTimeoutMs,
+    profiles,
+    saleChecks,
+    fakeSiteUrl,
+    fakePoshmarkUrl,
+    fakeMercariSiteUrl,
+  };
+}
+
+/** A local development server's URL, `http://127.0.0.1:<port>`; unset or empty is `undefined`. */
+function localUrl(issues: string[], env: NodeJS.ProcessEnv, key: string): string | undefined {
+  const raw = env[key];
+  if (raw === undefined || raw === '') return undefined;
+  if (!/^http:\/\/(127\.0\.0\.1|localhost):\d+\/?$/.test(raw)) {
+    issues.push(`${key} must be http://127.0.0.1:<port> or http://localhost:<port>`);
+  }
+  return raw;
 }
 
 function integer(

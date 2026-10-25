@@ -165,18 +165,20 @@ them breaks; turning it off is a separate, later step:
 
 Run from the repository root.
 
-| Command                                  | What it does                                                                                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `npm run infra:synth`                    | `cdk synth` for every environment, plus personal with a domain, with placeholder settings and AWS credentials hidden (offline) |
-| `npx vitest run --project unit infra`    | Infra tests: config, assertions per stack and environment, template snapshots, deploy and TestFlight workflows                 |
-| `npx vitest run --project unit infra -u` | Refresh the template snapshots in `src/__snapshots__/` after an intended change; review the diff                               |
+| Command                                  | What it does                                                                                                                                |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run infra:synth`                    | `cdk synth` for every environment, plus personal with a domain, with placeholder settings and AWS credentials hidden (offline)              |
+| `npx vitest run --project unit infra`    | Infra tests: config, assertions per stack and environment, template snapshots, deploy and TestFlight workflows                              |
+| `npx vitest run --project unit infra -u` | Refresh the template snapshots in `src/__snapshots__/` after an intended change; review the diff                                            |
+| `scripts/deploy-personal.sh --dry-run`   | The personal deploy's offline checks and the steps it would run ([Deploying the personal environment](#deploying-the-personal-environment)) |
 
 Commands that talk to AWS (`cdk diff`, `cdk deploy`) run from `infra/` with that account's
 credentials and the settings below, for example `npx cdk diff -c env=staging`.
 
 ## Settings
 
-Account ids and domains are never committed. `loadDeployTarget` reads each setting from CDK
+Account ids and domains are never committed, except the personal account that
+`scripts/deploy-personal.sh` pins so that it cannot deploy anywhere else. `loadDeployTarget` reads each setting from CDK
 context (`-c key=value`) or else an environment variable (all documented in `.env.example`),
 and fails fast, naming the missing or invalid key without printing its value.
 
@@ -191,6 +193,110 @@ and fails fast, naming the missing or invalid key without printing its value.
 | `alarmEmail`        | `LISTORA_ALARM_EMAIL`        | no       | Subscribed to the alarm topic                                    |
 | `githubRepository`  | `LISTORA_GITHUB_REPOSITORY`  | no       | Repository allowed to deploy; default `toniojbusiness/listora`   |
 | `availabilityZones` | `LISTORA_AVAILABILITY_ZONES` | no       | Two zones of the region, comma-separated; default: the first two |
+
+## Deploying the personal environment
+
+The personal environment deploys from a Mac with one command, `scripts/deploy-personal.sh`,
+instead of the Deploy workflow: no GitHub environment, OIDC role, or `deploy-access` stack is
+involved. It deploys only to the captain's account `976033325938` (pinned in the script; any
+other account is refused) and runs the same steps in the same order as the workflow.
+
+**Before the first run:** sign in to the account's AWS CLI profile (for example
+`aws sso login --profile prequal-main`), start Docker (`LISTORA_CONTAINER_CLI=finch` uses Finch
+instead), and put the Anthropic key in `~/.config/listora/anthropic.env` as one
+`ANTHROPIC_API_KEY=...` line. Optional settings (`LISTORA_AWS_REGION`,
+`LISTORA_AVAILABILITY_ZONES`, `LISTORA_ALARM_EMAIL`, `LISTORA_DOMAIN` with
+`LISTORA_HOSTED_ZONE_ID`) come from the environment, as for `cdk` ([Settings](#settings)).
+
+```sh
+scripts/deploy-personal.sh --dry-run --profile prequal-main   # offline: checks and prints every step
+scripts/deploy-personal.sh --profile prequal-main             # deploys
+```
+
+From a clean checkout of the commit to deploy (the image is tagged with it), the script:
+
+1. **Checks locally**: the tools, a clean checkout, and the Anthropic key file (never printed).
+2. **Verifies the account**: `aws sts get-caller-identity` must be `976033325938`.
+3. **Checks the zones and the stacks**: refuses `use1-az3` (no API Gateway VPC links) and
+   suggests a `LISTORA_AVAILABILITY_ZONES` value; refuses any stack that is busy, failed, or
+   `ROLLBACK_COMPLETE`, so it never deletes or replaces something that exists.
+4. **Synthesizes offline** with the real settings into `infra/cdk.out/deploy-personal` and
+   deploys exactly that assembly. It checks the templates first: the database has deletion
+   protection, the API's `AUTH_DRIVER` is `dev` or `cognito`, and `AI_PROVIDER` is not `fake`.
+5. **Makes sure the CDK bootstrap is the restricted one** ([Trust boundary](#trust-boundary)).
+   It first checks `CDKToolkit`: a bootstrap with any other execution policy (the default
+   `AdministratorAccess` included) stops the script before it changes anything, since
+   re-bootstrapping changes every CDK app in the account. Then it creates the managed policy
+   `listora-personal-cdk-execution` from `src/deploy/execution-policy.ts` (or makes the
+   committed document its default version), and bootstraps an account that has none with:
+
+   ```sh
+   npx cdk bootstrap aws://976033325938/us-east-1 --profile prequal-main \
+     --cloudformation-execution-policies arn:aws:iam::976033325938:policy/listora-personal-cdk-execution \
+     --termination-protection
+   ```
+
+6. **Deploys** the registry, builds the `app` and `runner` images for `linux/amd64` (the
+   tasks run on X86_64) and pushes them (reusing an image already pushed for the commit), then
+   the state stacks and the migrate stack.
+7. **Stores the Anthropic key** in `listora/personal/anthropic-api-key` from a private
+   temporary file, only when it differs; if the services were already running, it restarts
+   them so they read it.
+8. **Runs the migrations** (`scripts/run-migrations.sh`, the workflow's step), then deploys
+   compute and observability.
+9. **Waits for health** (`/health/ready` with the database ok, 10 minutes at most), runs the
+   **smoke test**, and prints the API URL and the line to put in the iPhone app's Prod
+   configuration.
+
+**Smoke test** (`src/deploy/smoke.ts`, also runnable on its own): `/health/live` and
+`/health/ready`, a sign-in with the configured driver, then it creates a draft item, reads it,
+deletes it, and checks that it is gone. With the `dev` driver it requests a code, reads it from
+the API's log group `/listora/personal/api`, and finally deletes the throwaway account it
+signed in to. With `cognito` it signs in with `LISTORA_SMOKE_ID_TOKEN`, an ID token of a
+dedicated smoke user, whose account it keeps. It never starts an analysis or touches a
+marketplace, so it costs no AI usage. A failed step fails the deploy with the step's name.
+
+**Point the iPhone app at it.** Set the printed URL in `apps/ios/Config/Prod.xcconfig`, keeping
+the `$()` that stops xcconfig from reading `//` as a comment, for example
+`API_BASE_URL = https:/$()/abc123.execute-api.us-east-1.amazonaws.com`, then ship a TestFlight
+build ([apps/ios/README.md](../apps/ios/README.md#environments)). The URL changes only when a
+domain is added ([Without a domain](#without-a-domain)).
+
+### Rollback
+
+- **A failed deploy step.** The script stops at the first failure. CloudFormation rolls the
+  failing stack back to its last good state by itself, and a failed migration stops the deploy
+  before any new task starts, so the previous release keeps serving. Fix the cause and run the
+  script again.
+- **A stack that failed while being created** is left `ROLLBACK_COMPLETE` and must be removed
+  before it can be created again; the script refuses to touch it. For a stack without data
+  (network, migrate, compute, observability): turn off its termination protection
+  (`aws cloudformation update-termination-protection --no-enable-termination-protection
+--stack-name <stack>`) and remove it (`aws cloudformation delete-stack --stack-name <stack>`).
+  Never do this for the data stack without checking what it holds.
+- **A bad release.** Check out the last good commit and run the script again: its image is
+  still in ECR, so nothing is rebuilt, and because migrations are expand-then-contract, the
+  older code runs on the newer schema. Do not revert migrations in the deployed database.
+- **A bad Anthropic key.** Fix `~/.config/listora/anthropic.env` and run the script again.
+
+### Teardown
+
+Removing the personal environment destroys its data; there is no undo except the final
+database snapshot. Remove the stacks in reverse order (observability, compute, email, storage,
+migrate, data, secrets, network, registry), turning off each stack's termination protection
+first. Before the data stack:
+
+- **The database has deletion protection.** Turn it off on purpose, or removing the stack
+  fails: `aws rds modify-db-instance --db-instance-identifier <id> --no-deletion-protection
+--apply-immediately`. Removing the stack then takes a final snapshot, which costs storage
+  until you remove it.
+- **Retained resources** outlive their stacks and keep costing (a little) until removed by
+  hand: the photo and inbound-mail buckets, the ECR repository, the log groups, the app
+  secrets, and the KMS token key (schedule its deletion; every stored marketplace token becomes
+  unreadable).
+
+The bootstrap (`CDKToolkit`, termination-protected) and the `listora-personal-cdk-execution`
+policy can stay; remove them last if the account will run no CDK app.
 
 ## First deploy of an environment
 
@@ -209,10 +315,18 @@ account. The examples use staging.
    if either is `use1-az3`, pick two other zones for the `availabilityZones` setting
    (`AVAILABILITY_ZONES` in the GitHub environment). Choose them before the first deploy:
    changing zones later replaces the network and everything in it.
-2. **Bootstrap CDK** in the account and region:
-   `npx cdk bootstrap aws://<account>/us-east-1` (from `infra/`). The bootstrap's
-   CloudFormation execution policy (`AdministratorAccess` by default) is the ceiling on what
-   any deploy can change; see [Trust boundary](#trust-boundary).
+2. **Bootstrap CDK** in the account and region, with the restricted execution policy: create
+   `listora-<env>-cdk-execution` from `node src/deploy/execution-policy.ts <env> <account>`
+   (`aws iam create-policy --policy-name listora-<env>-cdk-execution --policy-document
+file://policy.json`), then from `infra/`:
+   `npx cdk bootstrap aws://<account>/us-east-1 --cloudformation-execution-policies
+arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protection`. The
+   bootstrap's CloudFormation execution policy is the ceiling on what any deploy can change;
+   see [Trust boundary](#trust-boundary). It allows no OIDC provider, so `deploy-access`
+   (step 3) cannot deploy through this bootstrap, by design: the administrator deploys its
+   synthesized template with plain CloudFormation (`aws cloudformation deploy`). The personal
+   environment needs neither: `scripts/deploy-personal.sh` does steps 2, 5, and 7
+   ([Deploying the personal environment](#deploying-the-personal-environment)).
 3. **Deploy access.** From `infra/`, with the settings exported (or as `-c` flags):
    `npx cdk deploy listora-staging-deploy-access`. If the account already has the GitHub OIDC
    provider, remove it first or import it; an account can have only one per URL.
@@ -253,18 +367,24 @@ Later deploys are step 5 only.
 ## Trust boundary
 
 The deploy role can assume the CDK bootstrap roles, and the bootstrap's CloudFormation
-execution role has `AdministratorAccess` unless the bootstrap restricted it. So a job holding
-the deploy role can change anything in the account, including the `deploy-access` stack and
-the role's own trust policy. The workflow leaving `deploy-access` to an administrator is a
-convention, not an enforced limit. What actually bounds a deploy:
+execution role can do whatever the bootstrap's execution policy allows (`AdministratorAccess`
+unless the bootstrap restricted it). What actually bounds a deploy:
 
 - the GitHub environment's protection rules (required reviewers, `main` only), which decide
   who can run a job that assumes the role, and
 - the bootstrap's CloudFormation execution policy, which decides what that job can change.
 
-**Follow-up (T-33, security hardening):** bootstrap with a restricted
-`--cloudformation-execution-policies` and a permissions boundary on the roles it creates, so
-a deploy can change only Listora's own resources and never the deploy role itself.
+**The restricted execution policy** (`src/deploy/execution-policy.ts`, managed policy
+`listora-<env>-cdk-execution`) replaces `AdministratorAccess`. It grants every action of the
+services the stacks use (`SERVICE_PREFIXES`; a test fails when a stack adds a resource of
+another service), IAM only on roles named `listora-<env>-*` (attaching only the listed AWS
+managed policies) and on service-linked roles, and it denies any change to the GitHub deploy
+role, the bootstrap's roles, and the bootstrap bucket's policy. It grants nothing on IAM
+users, groups, OIDC providers, Organizations, or account settings, so a deploy can no longer
+rewrite the deploy role's own permissions. Every environment bootstraps with it (step 2).
+
+**Follow-up (T-33, security hardening):** a permissions boundary on every role the stacks
+create, since a stack's own role can still be given any inline permission.
 
 ## Conventions
 

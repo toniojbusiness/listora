@@ -42,20 +42,51 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
     expect(adapters.capabilities('depop', api)?.verifyRead).toBe('api');
   });
 
-  it('builds none without the fake site, until each marketplace has its own adapter', () => {
-    const automation = createAutomationAdapters({
-      settings: loadAutomationSettings({}),
-      sessions: NoBrowserSessions,
-      photos: new HttpPhotoSource(),
-      logger: createLogger({ service: 'test', level: 'silent' }),
+  it('automates Poshmark on poshmark.com in production, and never a real site in development', () => {
+    const logger = createLogger({ service: 'test', level: 'silent' });
+    const build = (env: NodeJS.ProcessEnv) =>
+      createMarketplaceAdapters({
+        fakeMarketplaceUrl: undefined,
+        ebay: undefined,
+        depop: undefined,
+        automation: createAutomationAdapters({
+          settings: loadAutomationSettings(env),
+          sessions: NoBrowserSessions,
+          photos: new HttpPhotoSource(),
+          logger,
+        }),
+      });
+    // Production: Poshmark's and Mercari's own adapters; Depop waits for its own.
+    const production = build({});
+    expect(production.capabilities('poshmark', automated)).toMatchObject({
+      create: 'automation',
+      delist: 'automation',
+      relist: 'automation',
+      markSold: 'not_needed',
+      verifyRead: 'automation',
+      readFreshness: 'revision',
+      saleDetection: ['poll', 'email', 'manual'],
     });
-    expect(automation).toEqual({});
-    const adapters = createMarketplaceAdapters({
-      fakeMarketplaceUrl: undefined,
-      ebay: undefined,
-      depop: undefined,
-      automation,
+    expect(production.capabilities('poshmark', null)?.create).toBe('assisted');
+    expect(production.capabilities('mercari', automated)).toMatchObject({
+      connect: 'session',
+      create: 'automation',
+      updatePrice: 'automation',
+      updateDetails: 'automation',
+      delist: 'automation',
+      relist: 'automation',
+      markSold: 'not_needed',
+      verifyRead: 'automation',
+      readFreshness: 'revision',
+      saleDetection: ['poll', 'email', 'manual'],
     });
-    expect(adapters.capabilities('poshmark', automated)?.create).toBe('assisted');
+    expect(production.capabilities('mercari', null)?.create).toBe('assisted');
+    expect(production.capabilities('depop', automated)?.create).toBe('assisted');
+    // The fake Poshmark serves the same adapter in development.
+    const development = build({ FAKE_POSHMARK_URL: 'http://127.0.0.1:4500' });
+    expect(development.capabilities('poshmark', automated)?.readFreshness).toBe('revision');
+    // And the fake Mercari site serves Mercari's.
+    const mercari = build({ FAKE_MERCARI_SITE_URL: 'http://127.0.0.1:4600' });
+    expect(mercari.capabilities('mercari', automated)?.readFreshness).toBe('revision');
   });
 });

@@ -22,10 +22,11 @@ sessions the user logs into from the iPhone app.
 - Every action is still confirmed by read-back ([operations.md](operations.md)), never reported
   as a false success.
 
-The runner, the `automation` mode, the session vault, and sale-check scheduling are built. The
-automation adapters for Poshmark, Mercari, and Depop, which write each site's scripts, and the
-app's linking screen are their own tasks; until a marketplace's adapter lands it runs
-assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
+The runner, the `automation` mode, the session vault, sale-check scheduling, and the Poshmark
+and Mercari automation adapters ([poshmark.md](poshmark.md), [mercari.md](mercari.md)) are
+built. The automation adapter for Depop and the app's linking screen are their own tasks; until
+a marketplace's adapter lands it runs assisted. [costs.md](costs.md#browser-automation) sizes
+and prices the runner.
 
 ## How it works
 
@@ -61,8 +62,16 @@ assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
   `automation`. It maps every way a run ends onto an outcome and never claims more than it
   knows: only an applied script is `confirmed`, a failure after a mutating step is `unknown`,
   one before it `transient`, a marketplace validation message `rejected`, and a check, a missing
-  session, or a page the script no longer understands the assisted task. The fake site's adapter
-  (`fake-site/`) is the reference and passes the shared conformance suite in a real browser.
+  session, or a page the script no longer understands the assisted task (a script throws
+  `PageChangedError` when a page's data is not what it reads, which ends the run as
+  `element_missing`). The fake site's adapter (`fake-site/`) is the reference and passes the
+  shared conformance suite in a real browser.
+- **Poshmark** (`poshmark/`, [poshmark.md](poshmark.md)) is automated on poshmark.com, or on the
+  fake Poshmark with `FAKE_POSHMARK_URL`. With only `FAKE_AUTOMATION_SITE_URL` set, development
+  drives the fake site instead, so a development setup never drives a real marketplace.
+- **Mercari** (`mercari/`, [mercari.md](mercari.md)) is automated on mercari.com, or on the
+  fake Mercari site with `FAKE_MERCARI_SITE_URL`. With only `FAKE_AUTOMATION_SITE_URL` set,
+  development drives the fake site instead.
 - **Routing.** The automation adapters join the marketplace adapters
   (`createMarketplaceAdapters`, its `automation` setting): a marketplace's
   `ConnectionAwareAdapter` serves its automation adapter under an `automation` connection whose
@@ -117,15 +126,17 @@ error, a validation refusal, a slow page, a stale read, and an off-site redirect
 contact a real marketplace. Like the database, a missing browser fails the browser tests; it
 never skips them.
 
-| Switch                                       | Effect                                                                |
-| -------------------------------------------- | --------------------------------------------------------------------- |
-| `FAKE_AUTOMATION_SITE_URL`                   | The fake site serves all three marketplaces' automation connections   |
-| `AUTOMATION_STEP_TIMEOUT_MS`, `_CALL_`       | One script step's timeout, and one automated call's                   |
-| `AUTOMATION_<MARKETPLACE>_*`                 | Pacing, the pause between sessions, and the per-seller rate limits    |
-| `SALE_CHECK_DEFAULT_HOURS`, `_MIN_`, `_MAX_` | The sale-check interval without history, and the adapted one's bounds |
-| `BROWSER_RUNNER_LAUNCH`, `BROWSER_RUNNER_*`  | How the worker starts the runner (`process`, `ecs`, or `none`)        |
-| `RUNNER_IDLE_EXIT_SECONDS`                   | How long the runner stays up with nothing to do                       |
-| `PLAYWRIGHT_BROWSERS_PATH`                   | Where the headless Chromium is installed                              |
+| Switch                                       | Effect                                                                    |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `FAKE_AUTOMATION_SITE_URL`                   | The fake site serves Depop (and Poshmark or Mercari without its own fake) |
+| `FAKE_POSHMARK_URL`                          | The Poshmark adapter drives the fake Poshmark instead of poshmark.com     |
+| `FAKE_MERCARI_SITE_URL`                      | The Mercari adapter drives the fake Mercari site instead of mercari.com   |
+| `AUTOMATION_STEP_TIMEOUT_MS`, `_CALL_`       | One script step's timeout, and one automated call's                       |
+| `AUTOMATION_<MARKETPLACE>_*`                 | Pacing, the pause between sessions, and the per-seller rate limits        |
+| `SALE_CHECK_DEFAULT_HOURS`, `_MIN_`, `_MAX_` | The sale-check interval without history, and the adapted one's bounds     |
+| `BROWSER_RUNNER_LAUNCH`, `BROWSER_RUNNER_*`  | How the worker starts the runner (`process`, `ecs`, or `none`)            |
+| `RUNNER_IDLE_EXIT_SECONDS`                   | How long the runner stays up with nothing to do                           |
+| `PLAYWRIGHT_BROWSERS_PATH`                   | Where the headless Chromium is installed                                  |
 
 ## Data
 

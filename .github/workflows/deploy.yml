@@ -102,43 +102,10 @@ jobs:
             "listora-$LISTORA_ENV-migrate"
       # Migrations run while the previous release still serves, before any new task starts, so
       # every migration must work with the code already running (expand, then contract). The
-      # deploy stops here unless the task exits 0. Its logs: /listora/<env>/migrate.
+      # deploy stops here unless the task exits 0 (scripts/run-migrations.sh, which
+      # scripts/deploy-personal.sh runs too). Its logs: /listora/<env>/migrate.
       - name: Run schema migrations
-        run: |
-          cluster="listora-$LISTORA_ENV-migrate"
-          outputs=$(aws cloudformation describe-stacks --stack-name "listora-$LISTORA_ENV-migrate" \
-            --query 'Stacks[0].Outputs' --output json)
-          output() { jq --raw-output --arg key "$1" '.[] | select(.OutputKey == $key) | .OutputValue' <<<"$outputs"; }
-          subnets=$(output SubnetIds)
-          group=$(output SecurityGroupId)
-          public_ip=$(output AssignPublicIp)
-          started=$(aws ecs run-task --cluster "$cluster" --task-definition "listora-$LISTORA_ENV-migrate" \
-            --launch-type FARGATE --count 1 --started-by "deploy-$GITHUB_RUN_ID" \
-            --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$group],assignPublicIp=$public_ip}" \
-            --output json)
-          task=$(jq --raw-output '.tasks[0].taskArn // empty' <<<"$started")
-          if [[ -z "$task" ]]; then
-            echo "::error::The schema migration task did not start: $(jq --compact-output '.failures' <<<"$started")"
-            exit 1
-          fi
-          echo "Schema migration task $task"
-          # No fixed wait limit: a long migration runs until it stops, bounded by the job timeout.
-          while true; do
-            stopped=$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task" --output json)
-            status=$(jq --raw-output '.tasks[0].lastStatus // "MISSING"' <<<"$stopped")
-            if [[ "$status" == STOPPED ]]; then break; fi
-            if [[ "$status" == MISSING ]]; then
-              echo "::error::The schema migration task disappeared: $(jq --compact-output '.failures' <<<"$stopped")"
-              exit 1
-            fi
-            sleep 15
-          done
-          code=$(jq --raw-output '.tasks[0].containers[0].exitCode // "none"' <<<"$stopped")
-          if [[ "$code" != 0 ]]; then
-            echo "::error::Schema migrations failed (exit code $code): $(jq --raw-output '.tasks[0].stoppedReason // ""' <<<"$stopped")"
-            exit 1
-          fi
-          echo "Schema migrations applied"
+        run: scripts/run-migrations.sh "$LISTORA_ENV" "deploy-$GITHUB_RUN_ID"
       - name: Deploy the services and alarms
         working-directory: infra
         run: |
