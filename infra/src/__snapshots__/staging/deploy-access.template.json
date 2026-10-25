@@ -46,7 +46,7 @@
             {
               "Action": "sts:AssumeRole",
               "Effect": "Allow",
-              "Resource": "arn:aws:iam::111111111111:role/cdk-hnb659fds-*-111111111111-us-east-1",
+              "Resource": "arn:aws:iam::111111111111:role/cdk-listora-*-111111111111-us-east-1",
               "Sid": "UseCdkBootstrapRoles"
             },
             {
@@ -134,7 +134,7 @@
   "Parameters": {
     "BootstrapVersion": {
       "Type": "AWS::SSM::Parameter::Value<String>",
-      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Default": "/cdk-bootstrap/listora/version",
       "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
     }
   },

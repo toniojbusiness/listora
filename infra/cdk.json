@@ -1,5 +1,6 @@
 {
   "app": "node src/main.ts",
+  "toolkitStackName": "CDKToolkit-listora",
   "context": {
     "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
     "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,
@@ -77,6 +78,7 @@
     "@aws-cdk/aws-stepfunctions:useDistributedMapResultWriterV2": true,
     "@aws-cdk/core:annotationsInValidationReport": true,
     "@aws-cdk/core:aspectPrioritiesMutating": true,
+    "@aws-cdk/core:bootstrapQualifier": "listora",
     "@aws-cdk/core:cfnIncludeRejectComplexResourceUpdateCreatePolicyIntrinsics": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:defaultCrossStackReferences": "weak",
