@@ -3,7 +3,7 @@ import DesignSystem
 import Foundation
 import ListoraAPI
 
-/// A marketplace the user links by signing in on its own page (Poshmark, Mercari, Depop), as
+/// A marketplace the user links by signing in on its own page (Poshmark, Mercari, Depop, eBay), as
 /// the server reports it. The state comes from the server: the app never decides on its own
 /// that a marketplace is linked.
 public struct MarketplaceLink: Identifiable, Equatable, Sendable {

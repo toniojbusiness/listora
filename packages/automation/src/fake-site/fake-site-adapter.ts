@@ -19,6 +19,7 @@ import type {
 } from '@listora/marketplaces';
 import {
   createDepopAssistedAdapter,
+  createEbayAssistedAdapter,
   createMercariAdapter,
   createPoshmarkAdapter,
   REMOTE_LISTING_STATUSES,
@@ -262,6 +263,8 @@ export function assistedAdapter(marketplace: AutomatedMarketplace): AssistedAdap
       return createMercariAdapter();
     case 'depop':
       return createDepopAssistedAdapter();
+    case 'ebay':
+      return createEbayAssistedAdapter();
   }
 }
 

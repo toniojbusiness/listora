@@ -1,7 +1,7 @@
 # Browser automation (decision D1)
 
-How Listora acts on marketplaces without an API (Poshmark, Mercari, and Depop until its partner
-API is granted). `@listora/automation` holds the browser runner and everything around it; the
+How Listora acts on marketplaces without an API it can use (Poshmark, Mercari, Depop until its
+partner API is granted, and eBay until Listora's eBay developer keys exist). `@listora/automation` holds the browser runner and everything around it; the
 session vault is in `@listora/connections` ([connections.md](connections.md)), next to the
 token vault it seals with. The assisted adapters that serve these marketplaces until a seller
 links a session, and whenever automation must stop, are in
@@ -9,8 +9,9 @@ links a session, and whenever automation must stop, are in
 
 **Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
 only". The marketplaces granted the product owner permission to automate where no API exists,
-Listora is for the product owner's personal use, and everything runs in the cloud. So
-Poshmark, Mercari, and Depop (until its partner API is granted) use cloud browser automation:
+Listora is for the product owner's personal use, and everything runs in the cloud. eBay granted
+the same permission for the product owner's own account. So Poshmark, Mercari, Depop (until its
+partner API is granted), and eBay (until its API is connected) use cloud browser automation:
 the headless-Chromium browser runner (`browserRunner` in `infra/src/config.ts`) acts on
 sessions the user logs into from the iPhone app.
 
@@ -23,8 +24,9 @@ sessions the user logs into from the iPhone app.
   as a false success.
 
 The runner, the `automation` mode, the session vault, sale-check scheduling, the Poshmark,
-Mercari, and Depop automation adapters ([poshmark.md](poshmark.md), [mercari.md](mercari.md),
-[depop-automation.md](depop-automation.md)), and linking from the app
+Mercari, Depop, and eBay automation adapters ([poshmark.md](poshmark.md), [mercari.md](mercari.md),
+[depop-automation.md](depop-automation.md), [ebay-automation.md](ebay-automation.md)), and linking
+from the app
 ([marketplace-linking.md](marketplace-linking.md)) are built.
 [costs.md](costs.md#browser-automation) sizes and prices the runner.
 
@@ -76,11 +78,18 @@ Mercari, and Depop automation adapters ([poshmark.md](poshmark.md), [mercari.md]
   on the fake Depop site with `FAKE_DEPOP_SITE_URL`, for sellers whose Depop connection is a
   browser session; one that uses Depop's API gets the API adapter. With only
   `FAKE_AUTOMATION_SITE_URL` set, development drives the fake site instead.
+- **eBay** (`ebay/`, [ebay-automation.md](ebay-automation.md)) is automated on ebay.com, or on the
+  fake eBay site with `FAKE_EBAY_SITE_URL`, for sellers whose eBay connection is a browser
+  session; one that uses eBay's API gets the API adapter, and both address the same listings by
+  item number and SKU. With only `FAKE_AUTOMATION_SITE_URL` set, development drives the fake site
+  instead.
 - **Routing.** The automation adapters join the marketplace adapters
   (`createMarketplaceAdapters`, its `automation` setting): a marketplace's
   `ConnectionAwareAdapter` serves its automation adapter under an `automation` connection whose
-  session works (`connected` or `degraded`), and its assisted adapter otherwise
-  ([marketplaces.md](marketplaces.md#adapter-model)). The worker and the runner build the same
+  session works (`connected` or `degraded`), its API adapter (eBay, Depop) under an `api`
+  connection, and its assisted adapter otherwise ([marketplaces.md](marketplaces.md#adapter-model)).
+  The API builds no automation adapters, so it reports an automation connection's steps as
+  assisted. The worker and the runner build the same
   automation adapters (the worker's have no browser), so both route each operation to the same
   mode.
 - **Where it runs.** Automated steps need a browser, which only the runner has. The worker hands
@@ -121,8 +130,8 @@ Mercari, and Depop automation adapters ([poshmark.md](poshmark.md), [mercari.md]
 
 `scripts/dev-browser.sh` installs the headless Chromium build Playwright pins into
 `.local/playwright`. Set `FAKE_AUTOMATION_SITE_URL` and start `npm run dev:fake-site`: Poshmark,
-Mercari, and Depop connections that hold a linked session are then automated against that local
-site. The worker starts the runner as a child process whenever automated work waits
+Mercari, Depop, and eBay connections that hold a linked session are then automated against that
+local site. The worker starts the runner as a child process whenever automated work waits
 (`BROWSER_RUNNER_LAUNCH=process`, the local default), or run it by hand with
 `npm run dev:runner` (`none`). The runner needs the token vault's key (`TOKEN_ENCRYPTION_KEY`
 locally), because every session it opens is sealed.
@@ -139,6 +148,7 @@ never skips them.
 | `FAKE_POSHMARK_URL`                          | The Poshmark adapter drives the fake Poshmark instead of poshmark.com   |
 | `FAKE_MERCARI_SITE_URL`                      | The Mercari adapter drives the fake Mercari site instead of mercari.com |
 | `FAKE_DEPOP_SITE_URL`                        | The Depop adapter drives the fake Depop site instead of depop.com       |
+| `FAKE_EBAY_SITE_URL`                         | The eBay adapter drives the fake eBay site instead of ebay.com          |
 | `AUTOMATION_STEP_TIMEOUT_MS`, `_CALL_`       | One script step's timeout, and one automated call's                     |
 | `AUTOMATION_<MARKETPLACE>_*`                 | Pacing, the pause between sessions, and the per-seller rate limits      |
 | `SALE_CHECK_DEFAULT_HOURS`, `_MIN_`, `_MAX_` | The sale-check interval without history, and the adapted one's bounds   |

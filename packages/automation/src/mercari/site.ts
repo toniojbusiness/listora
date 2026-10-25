@@ -54,6 +54,7 @@ export const MERCARI_CHALLENGE_SIGNS: ChallengeSigns = {
   ],
   // Cloudflare's Turnstile container (Cloudflare's interstitial
   // is already caught by its title, its wording, and its 403).
+  botCheckPaths: [],
   challengeSelectors: ['#turnstile-wrapper'],
 };
 

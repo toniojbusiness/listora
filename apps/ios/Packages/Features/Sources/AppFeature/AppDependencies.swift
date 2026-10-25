@@ -45,7 +45,7 @@ public struct AppDependencies {
     public let devSignIn: DevSignInModel?
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
     public let marketplaces: MarketplacesModel
-    /// Link accounts: sign in on Poshmark, Mercari, and Depop for Listora to automate them.
+    /// Link accounts: sign in on Poshmark, Mercari, Depop, and eBay for Listora to automate them.
     public let linkAccounts: LinkAccountsModel
 
     public init(

@@ -74,8 +74,9 @@ its registrar and is not included.
 
 ## Browser automation
 
-Poshmark, Mercari, and Depop (until its partner API is granted) are automated in the cloud by
-the headless-Chromium runner (decision D1 in [automation.md](automation.md)). The runner
+Poshmark, Mercari, Depop (until its partner API is granted), and eBay (until its API keys exist)
+are automated in the cloud by the headless-Chromium runner (decision D1 in
+[automation.md](automation.md)). The runner
 is reserved at 1 vCPU and 4 GB, with no task while idle (`browserRunner` in
 `infra/src/config.ts`): it is the compute stack's `runner` service at a desired count of 0.
 The worker sets the count to 1 when automated listing actions or sale checks wait, and the

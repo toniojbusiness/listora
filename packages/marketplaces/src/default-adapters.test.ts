@@ -13,14 +13,21 @@ const api = { id: 'connection-1', mode: 'api', status: 'connected' } as const;
 const automated = { id: 'connection-2', mode: 'automation', status: 'connected' } as const;
 
 describe('createMarketplaceAdapters', () => {
-  it('serves the assisted marketplaces, and no eBay, without FAKE_MARKETPLACE_URL', () => {
+  it('serves every marketplace assisted, eBay included, without FAKE_MARKETPLACE_URL', () => {
     const adapters = createMarketplaceAdapters({
       fakeMarketplaceUrl: undefined,
       ebay: undefined,
       depop: undefined,
     });
-    expect(adapters.marketplaces).toEqual(['depop', 'poshmark', 'mercari']);
-    expect(adapters.get('ebay')).toBeUndefined();
+    expect(adapters.marketplaces).toEqual(['ebay', 'depop', 'poshmark', 'mercari']);
+    // Without the eBay API's keys and without a linked session, the user lists on eBay.
+    for (const connection of [null, api, automated]) {
+      expect(adapters.capabilities('ebay', connection)).toMatchObject({
+        create: 'assisted',
+        markSold: 'not_needed',
+        verifyRead: 'user_confirm',
+      });
+    }
     expect(adapters.get('poshmark')).toBeInstanceOf(AssistedAdapter);
     expect(adapters.get('mercari')).toBeInstanceOf(AssistedAdapter);
     // Depop stays assisted even under an api connection while it has no api adapter.
@@ -34,7 +41,10 @@ describe('createMarketplaceAdapters', () => {
       depop: undefined,
     });
     expect(adapters.marketplaces).toEqual(['ebay', 'depop', 'poshmark', 'mercari']);
-    expect(adapters.get('ebay')).toBeInstanceOf(FakeMarketplaceAdapter);
+    const ebay = adapters.get('ebay');
+    if (!(ebay instanceof ConnectionAwareAdapter)) throw new Error('connection-aware');
+    expect(ebay.adapterFor(null)).toBeInstanceOf(FakeMarketplaceAdapter);
+    expect(ebay.adapterFor(api)).toBeInstanceOf(FakeMarketplaceAdapter);
     const depop = adapters.get('depop');
     expect(depop).toBeInstanceOf(ConnectionAwareAdapter);
     expect(depop?.capabilities(null).verifyRead).toBe('user_confirm');
@@ -60,7 +70,13 @@ describe('createMarketplaceAdapters', () => {
     const ebay = loadEbayConfig({ EBAY_ENV: 'fake', EBAY_USER_CONNECTION_ID: api.id });
     for (const fakeMarketplaceUrl of [undefined, 'http://127.0.0.1:4100']) {
       const adapters = createMarketplaceAdapters({ fakeMarketplaceUrl, ebay, depop: undefined });
-      expect(adapters.get('ebay')).toBeInstanceOf(EbayAdapter);
+      const served = adapters.get('ebay');
+      if (!(served instanceof ConnectionAwareAdapter)) throw new Error('connection-aware');
+      expect(served.adapterFor(api)).toBeInstanceOf(EbayAdapter);
+      // A listing without a connection is asked to connect eBay, as the API adapter does.
+      expect(served.adapterFor(null)).toBeInstanceOf(EbayAdapter);
+      // An automation connection without an automation adapter (the API's view) is assisted.
+      expect(served.adapterFor(automated)).toBeInstanceOf(AssistedAdapter);
       expect(adapters.capabilities('ebay', api)).toMatchObject({
         verifyRead: 'api',
         readFreshness: 'none',

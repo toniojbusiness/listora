@@ -26,8 +26,9 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   delist run), and after a canceled or returned sale, "Relist it?" ([sales.md](sales.md)). Relist
   is offered only while the item is not sold or archived.
 - **List flow**: List opens the marketplace choice, with the row's marketplace selected. eBay is
-  offered when the account's eBay connection is usable; Poshmark, Mercari, and Depop (without an
-  API connection) are offered as assisted: listing them creates a task the seller finishes in the
+  offered when the account's eBay connection is usable (its API, or a linked eBay session,
+  [ebay-automation.md](ebay-automation.md)); Poshmark, Mercari, and Depop (without an API or
+  automation connection) are offered as assisted: listing them creates a task the seller finishes in the
   marketplace's app ([tasks.md](tasks.md)). A marketplace the item is already on is not offered.
   Each chosen marketplace's version is reviewed in turn ("Poshmark listing (2 of 2)"), starting
   from the seller's own copy for it from the review screen (`ListingCopyStore`), else the
