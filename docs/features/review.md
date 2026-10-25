@@ -22,7 +22,9 @@ reopened item whose photos changed since its analysis was applied is analyzed ag
 - **Review, confidence first.** Every detail with its value, its source (AI, Tag, Barcode, or
   You), and the analysis's confidence. Details proposed below 0.6 (the analysis prompt's own
   "a person should check it" line) and empty details every marketplace needs (title, category,
-  condition) come first under "Check these", lowest confidence first. The order is fixed while
+  condition, and the size of clothing and shoes, which eBay, Poshmark, Mercari, and Depop all
+  refuse to list without) come first under "Check these", lowest confidence first; Continue waits
+  until they are filled in. An item without photos says so at once and offers Edit photos. The order is fixed while
   the seller edits, so rows never jump. Each detail edits in place, and the typed text is kept
   when the seller continues or opens another detail; canonical ones (category, department, size
   type, condition) are menus of the vocabulary in `Resources/vocabulary.json`, a copy of

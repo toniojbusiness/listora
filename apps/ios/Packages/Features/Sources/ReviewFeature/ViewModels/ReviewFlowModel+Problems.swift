@@ -43,6 +43,7 @@ enum ReviewFlowError: Error, Equatable {
     }
 
     case photoFailed(reason: String?)
+    case noPhotos
     case timedOut(Stage)
 
     var problem: ReviewFlowModel.Problem {
@@ -52,6 +53,13 @@ enum ReviewFlowError: Error, Equatable {
                 title: "A photo couldn't be processed",
                 message: [reason, "Remove or replace that photo, then review the item again."]
                     .compactMap(\.self).joined(separator: " "),
+                canRetry: false,
+                suggestsEditingPhotos: true,
+            )
+        case .noPhotos:
+            ReviewFlowModel.Problem(
+                title: "This item has no photos",
+                message: "Listora reads the item from its photos. Add them, then review the item.",
                 canRetry: false,
                 suggestsEditingPhotos: true,
             )

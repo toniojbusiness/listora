@@ -227,8 +227,11 @@ describe('assisted operations and connection-aware capabilities (real Postgres)'
       .executeTakeFirstOrThrow();
   }
 
-  /** The item sells on eBay, and the auto-delist ends the listing. */
-  async function autoDelistAfterEbaySale(listing: ListingRow) {
+  /**
+   * The item sells on eBay, and the auto-delist ends the listing. `canceledFirst`: the sale is
+   * already canceled when the delist's step runs, as when the cancel commits while it runs.
+   */
+  async function autoDelistAfterEbaySale(listing: ListingRow, canceledFirst = false) {
     const sale = await harness.db
       .insertInto('sale')
       .values({
@@ -236,6 +239,7 @@ describe('assisted operations and connection-aware capabilities (real Postgres)'
         marketplace: 'ebay',
         sold_at: new Date(),
         detection_source: 'manual',
+        ...(canceledFirst ? { status: 'canceled' as const, canceled_at: new Date() } : {}),
       })
       .returning('id')
       .executeTakeFirstOrThrow();
@@ -302,6 +306,24 @@ describe('assisted operations and connection-aware capabilities (real Postgres)'
     });
     expect(await statusOf(listing, op)).not.toBe('Done (you confirmed)');
   }
+
+  it('asks nobody to delist when the sale was undone while the delist step ran', async () => {
+    await startWith({});
+    const listing = await activePoshmarkListing();
+    // The lifecycle's own cancel skips a delist whose step is running, so the step itself must
+    // see that the sale no longer stands.
+    const { end } = await autoDelistAfterEbaySale(listing, true);
+    expect(await harness.waitForStatus(end.id, SETTLED, 5_000)).toMatchObject({
+      status: 'canceled',
+      success_evidence: null,
+    });
+    expect((await harness.events(end.id)).at(-1)).toMatchObject({
+      from_status: 'needs_user_action',
+      to_status: 'canceled',
+      detail: { action: 'cancel', reason: 'the sale no longer stands' },
+    });
+    expect(await tasksOf(end.id)).toEqual([]);
+  });
 
   it('delists after a sale at once, past an edit the user never answered', async () => {
     await startWith({});
@@ -427,7 +449,7 @@ describe('assisted operations and connection-aware capabilities (real Postgres)'
     expect(await harness.waitForStatus(op.id, SETTLED)).toMatchObject({
       status: 'failed',
       error_code: 'validation_failed',
-      error_message: 'eBay titles can be at most 80 characters. Fix the listing, then try again.',
+      error_message: 'eBay titles can be at most 80 characters. Fix it, then try again.',
     });
     expect(harness.fake.requests.filter((request) => request.sku === listing.id)).toEqual([]);
     expect((await harness.events(op.id)).at(-1)?.detail).toMatchObject({

@@ -186,6 +186,12 @@ describe('listing views', () => {
     expect(actionsForState(state('draft'))).toEqual(['publish']);
     // A publish that failed may have been applied: Retry it, never publish twice.
     expect(actionsForState(state('draft', { kind: 'create', status: 'failed' }))).toEqual([]);
+    // One Listora refused before sending reached nothing: the seller fixes it and publishes again.
+    expect(
+      actionsForState(
+        state('draft', { kind: 'create', status: 'failed', error_code: 'validation_failed' }),
+      ),
+    ).toEqual(['publish']);
     expect(actionsForState(state('active'))).toEqual(['change_price', 'revise', 'end', 'verify']);
     // A failed price change must never keep the seller from delisting.
     expect(actionsForState(state('active', { kind: 'price', status: 'failed' }))).toContain('end');
@@ -214,6 +220,31 @@ describe('listing views', () => {
     expect(view(row({ marketplace: 'mercari', status: 'ended' })).availableActions).toEqual([
       { action: 'relist', mode: 'assisted' },
     ]);
+  });
+
+  it('never offers Retry for content Listora refused before sending it', () => {
+    const refused = view(
+      row({ marketplace: 'poshmark', status: 'draft' }),
+      operation({
+        kind: 'create',
+        status: 'failed',
+        error_code: 'validation_failed',
+        error_message: 'Poshmark needs a size for Men’s Shirts. Fix it, then try again.',
+      }),
+    );
+    expect(refused.statusDisplay).toEqual({
+      tone: 'failed',
+      label: 'Publish failed',
+      detail: 'Poshmark needs a size for Men’s Shirts. Fix it, then try again.',
+    });
+    expect(refused.latestOperation?.error?.retryable).toBe(false);
+    expect(refused.availableActions).toEqual([{ action: 'publish', mode: 'assisted' }]);
+    // Any other failure can be retried as it is.
+    const failed = view(
+      row({ status: 'active' }),
+      operation({ kind: 'end', status: 'failed', error_code: 'ebay_500', error_message: 'x' }),
+    );
+    expect(failed.latestOperation?.error?.retryable).toBe(true);
   });
 
   it('includes the newest operation with its own label', () => {

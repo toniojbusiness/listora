@@ -44,6 +44,8 @@ public struct AppDependencies {
     /// Signing in from Settings: the local API's dev driver in Dev builds, otherwise the
     /// environment's Cognito user pool, with an emailed code.
     public let signIn: SignInModel
+    /// Settings > Delete account.
+    public let accountDeletion: AccountDeletionModel
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
     public let marketplaces: MarketplacesModel
     /// Link accounts: sign in on Poshmark, Mercari, Depop, and eBay for Listora to automate them.
@@ -92,6 +94,7 @@ public struct AppDependencies {
             saleScreens: Self.saleScreens(sales),
             taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
         )
+        inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,
@@ -106,7 +109,7 @@ public struct AppDependencies {
         self.marketplaces = marketplaces
         linkAccounts = LinkAccountsModel(service: APIMarketplaceSessionService(api: apiClient))
         today = Self.makeToday(apiClient, accessTokens, inventory, sales, marketplaces)
-        signIn = SignInModel(method: Self.signInMethod(configuration, cognito), tokens: accessTokens)
+        (signIn, accountDeletion) = Self.makeAccount(configuration, cognito, apiClient, accessTokens)
     }
 
     /// The Cognito client of a build with a user pool app client. The Share Extension builds the
@@ -125,6 +128,22 @@ public struct AppDependencies {
             return DevSignIn(client: DevSignInClient(baseURL: configuration.apiBaseURL))
         }
         return cognito.map(EmailCodeSignIn.init(client:))
+    }
+
+    /// Settings' account section: signing in, and deleting the account.
+    private static func makeAccount(
+        _ configuration: AppConfiguration,
+        _ cognito: CognitoSignInClient?,
+        _ apiClient: APIClient,
+        _ accessTokens: AccessTokenStore,
+    ) -> (SignInModel, AccountDeletionModel) {
+        let signIn = SignInModel(method: signInMethod(configuration, cognito), tokens: accessTokens)
+        let deletion = AccountDeletionModel(
+            service: APIAccountDeletionService(client: apiClient.client),
+            isSignedIn: { accessTokens.grant != nil },
+            signOut: { accessTokens.signOut() },
+        )
+        return (signIn, deletion)
     }
 
     /// The sales screens the item screen opens, from the sales feature.

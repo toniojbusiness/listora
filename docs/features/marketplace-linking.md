@@ -15,6 +15,10 @@ flow end to end.
    including any two-step check, then taps **I'm signed in**.
 3. The row shows `Checking...` until the browser runner has confirmed that the marketplace
    accepts the session, then `Linked`. If it does not, the row says why and offers Relink.
+4. **Unlink** (on every row with a session, or with eBay's API connection) asks to confirm, then
+   deletes what Listora holds for that marketplace (`disconnectConnection`,
+   [privacy.md](privacy.md)): the row shows `Not linked` once the server answered. Items,
+   listings, and sales stay, and listings stay on the marketplace.
 
 Listora never sees the password: it is typed into the marketplace's page, the app never reads
 the page or runs a script in it, and only the site's cookies are handed over. Listora cannot and
@@ -35,7 +39,9 @@ does not read sessions from the marketplaces' own iPhone apps.
   the same cookies with the same key), then polls `getMarketplaceSession` every 3 seconds while
   the server says `checking`. A failed poll changes nothing; the row stays `Checking...`. The
   model never decides on its own that a marketplace is linked: every status and label is the
-  server's.
+  server's. Unlink waits for the confirmation, keeps the row as it was when the unlink fails (with
+  Try again), and reads the row back afterwards; a `404` (nothing linked any more, an earlier try
+  whose answer was lost) counts as unlinked.
 - The sign-in page and cookie domains come from the server (`login`), so the app has no
   marketplace URLs of its own; in development they point at the fake site.
 
@@ -113,10 +119,12 @@ and the runner checks the session against the fake site in local headless Chromi
 - `packages/automation/src/session-checks/session-checks.int.test.ts`: the runner's check in real
   Chromium against the fake site: passed, rejected, CAPTCHA, retries then failure, no adapter,
   and a replaced link.
-- `MarketplaceLinkingFeatureTests`: the model's linked, needs-relink, and failed paths, retries,
-  polling that never claims success, cookie capture, and the API service's request shapes.
+- `MarketplaceLinkingFeatureTests`: the model's linked, needs-relink, failed, and unlink paths,
+  retries, polling that never claims success, cookie capture, and the API service's request
+  shapes.
 - `LinkAccountsUITests`: the real app signs in on a fake marketplace page served by
-  `StubAPIServer` and links it; the test checks that the cookie was sent and the password was not.
+  `StubAPIServer` and links it; the test checks that the cookie was sent and the password was not,
+  then unlinks it.
 
 ## Follow-ups
 

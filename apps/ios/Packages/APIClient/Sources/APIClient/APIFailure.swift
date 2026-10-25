@@ -157,3 +157,12 @@ extension Components.Responses.ServiceUnavailable: ErrorResponseCarrying {
         }
     }
 }
+
+/// `deleteAccount`'s `403`: the account has other members.
+extension Operations.DeleteAccount.Output.Forbidden: ErrorResponseCarrying {
+    public var errorResponse: Components.Schemas.ErrorResponse {
+        switch body {
+        case let .json(response): response
+        }
+    }
+}

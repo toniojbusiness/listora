@@ -5,11 +5,19 @@ import SwiftUI
 /// What a new item needs, shown before the first draft: the guided shots in order.
 struct NewItemGuide: View {
     let isCameraAvailable: Bool
+    let isSignedIn: Bool
 
     private static let cameraIntro =
         "Listora guides you through each shot, saves the draft on this iPhone, and uploads it in the background."
     private static let importIntro =
         "Import the item's photos. Listora saves the draft on this iPhone and uploads it in the background."
+
+    /// What happens to the photos: signed out, they wait on this iPhone.
+    nonisolated static func privacyNote(isSignedIn: Bool) -> String {
+        isSignedIn
+            ? "Each photo's location is removed before it's uploaded."
+            : "Photos stay on this iPhone until you sign in, and their location is removed before upload."
+    }
 
     private struct Shot {
         let title: String
@@ -47,13 +55,10 @@ struct NewItemGuide: View {
                 }
             }
             .cardStyle()
-            Label(
-                "Photos stay on this iPhone until you sign in, and their location is removed before upload.",
-                systemImage: "lock.shield",
-            )
-            .labelStyle(.titleAndIcon)
-            .font(Typography.footnote)
-            .foregroundStyle(Palette.textSecondary)
+            Label(Self.privacyNote(isSignedIn: isSignedIn), systemImage: "lock.shield")
+                .labelStyle(.titleAndIcon)
+                .font(Typography.footnote)
+                .foregroundStyle(Palette.textSecondary)
         }
         .frame(maxWidth: Layout.readableWidth, alignment: .leading)
         .frame(maxWidth: .infinity)

@@ -41,10 +41,25 @@ export interface ListingStatusInput {
     status: OperationStatus;
     attempts: number;
     errorMessage: string | null;
+    /** The failure's code; a failure the same content can never get past is not retryable. */
+    errorCode?: string | null;
     successEvidence: SuccessEvidence | null;
   } | null;
   /** Attempts an operation gets (default: the engine's default retry policy). */
   maxAttempts?: number;
+}
+
+/**
+ * The error code of an operation Listora refused before sending anything to the marketplace: its
+ * content breaks the marketplace's rules (eBay's standard size, a title too long). Retrying the
+ * same content can only fail again, so it is not offered; the seller fixes the item or the
+ * listing and sends it again, which a listing that never reached the marketplace allows.
+ */
+export const REFUSED_CONTENT_ERROR = 'validation_failed';
+
+/** Whether a failed operation can be retried as it is (every failure but refused content). */
+export function isRetryableFailure(errorCode: string | null | undefined): boolean {
+  return errorCode !== REFUSED_CONTENT_ERROR;
 }
 
 /** "Publishing...", while a step runs or waits. */
@@ -179,7 +194,9 @@ function describeUnsettled(
     case 'needs_user_action':
       return { tone: 'action_needed', label: `Action needed - ${USER_STEP[kind]} on ${name}` };
     case 'failed':
-      return { tone: 'failed', label: `${FAILED[kind]} failed - Retry`, ...detail };
+      return isRetryableFailure(operation.errorCode)
+        ? { tone: 'failed', label: `${FAILED[kind]} failed - Retry`, ...detail }
+        : { tone: 'failed', label: `${FAILED[kind]} failed`, ...detail };
     case 'succeeded':
     case 'canceled':
       throw new Error(`a ${operation.status} operation is settled`);

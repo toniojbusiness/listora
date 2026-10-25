@@ -59,6 +59,15 @@ describe('detailErrors', () => {
       }),
     ).toEqual([]);
   });
+
+  it('refuses a list price of zero but allows a cost of zero', () => {
+    expect(
+      detailErrors({
+        listPrice: { amountCents: 0, currency: 'USD' },
+        cost: { amountCents: 0, currency: 'USD' },
+      }),
+    ).toEqual([{ field: 'details.listPrice.amountCents', message: 'must be more than zero' }]);
+  });
 });
 
 describe('columns and rows', () => {

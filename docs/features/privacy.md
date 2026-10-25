@@ -50,6 +50,8 @@ after their retention period (7 days for personal, 30 for production).
 | eBay Marketplace Account Deletion                | Every connection to that eBay user in every account (as an unlink), and every eBay event about them, in one transaction that checks and records ([ebay-notifications.md](ebay-notifications.md))                    | None needed: eBay deleted the user                                                                                | The Listora account's own records              |
 | The marketplace ends Listora's access (Depop)    | Every connection to the marketplace in one mode, in every account, as an unlink (reason `marketplace_terminated`)                                                                                                   | As an unlink                                                                                                      | The same as an unlink                          |
 
+In the app, a person deletes their account in Settings > Delete account ([auth.md](auth.md#account-deletion)) and unlinks a marketplace with Unlink in Settings > Link accounts ([marketplace-linking.md](marketplace-linking.md)).
+
 An operator runs the last one with
 `npm run admin -- marketplace-purge depop --mode api --actor <name> --reason <text>`, which only
 counts the connections until it is run again with `--confirm`; the log line names the actor and
@@ -117,8 +119,6 @@ Migration `20261025221245_privacy_retention`:
 
 ## Open items
 
-- The iPhone app has no Unlink button yet (the API is ready: `disconnectConnection`), and no
-  account deletion screen (auth.md).
 - Apple token revocation for Sign in with Apple ([auth.md](auth.md#account-deletion)).
 - Depop's own deletion requirements (its webhooks or terms may add a deletion notice like eBay's)
   once partner access is granted; the purge command covers termination today.

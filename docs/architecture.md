@@ -441,6 +441,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/performance.md](features/performance.md)                 | Latency, idle cost, AI cost per item, and the API benchmark at 2,000 items    |
 | [features/privacy.md](features/privacy.md)                         | Deletions with completion records, unlinking, retention, photo metadata       |
 | [features/threat-model.md](features/threat-model.md)               | Assets, trust boundaries, the main threats, and where each is mitigated       |
+| [features/bugs.md](features/bugs.md)                               | The bug bash: each bug found, how to see it, its fix and test, the follow-ups |
 
 ### Former section numbers
 

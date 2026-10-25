@@ -3,6 +3,7 @@
  * with the eBay adapter against the fake eBay, and the API shows the listing as done only once
  * the engine verified it on eBay. Failures stay visible with a Retry that works.
  */
+import { jsonb } from '@listora/db';
 import { createLogger } from '@listora/shared';
 import {
   createMarketplaceAdapters,
@@ -349,6 +350,57 @@ describe('listing actions through the operation engine and the fake eBay (real P
     });
     expect(fixed.status).toBe(200);
     expect(fixed.body.variant?.title).toBe(VARIANT.title);
+  });
+
+  it('lets the seller fix and publish again a draft whose publish was refused before sending', async () => {
+    // A publish the engine refused before sending (an automated marketplace's own rules, such as
+    // Poshmark's size): its content as the engine stored it, failed with nothing sent.
+    const sent = await readyItem();
+    const sentDraft = await draftListing(sent.id);
+    await api.call('publishListing', { token, params: { listingId: sentDraft.id } });
+    const published = await settled(sentDraft.id);
+    const { content } = await api.db
+      .selectFrom('marketplace_operation')
+      .select('content')
+      .where('id', '=', published.latestOperation?.id ?? '')
+      .executeTakeFirstOrThrow();
+    const ready = await readyItem();
+    const draft = await draftListing(ready.id);
+    await api.db
+      .insertInto('marketplace_operation')
+      .values({
+        account_id: tenant.accountId,
+        listing_id: draft.id,
+        kind: 'create',
+        idempotency_key: `refused-${draft.id}`,
+        desired: jsonb({ status: 'active' }),
+        status: 'failed',
+        attempts: 1,
+        error_code: 'validation_failed',
+        error_message: 'eBay needs a standard size for clothing. Fix it, then try again.',
+        origin: 'user',
+        content: jsonb(content ?? {}),
+      })
+      .execute();
+
+    // No Retry of content that can only fail again; publishing again is offered instead.
+    const refused = await api.call('getListing', { token, params: { listingId: draft.id } });
+    expect(refused.body.statusDisplay).toMatchObject({ tone: 'failed', label: 'Publish failed' });
+    expect(refused.body.latestOperation?.error?.retryable).toBe(false);
+    expect(refused.body.availableActions.map((available) => available.action)).toEqual(['publish']);
+
+    // Nothing reached eBay, so the draft can still be edited, then published.
+    const fixed = await api.call('replaceListingDraft', {
+      token,
+      params: { listingId: draft.id },
+      body: { variant: { ...VARIANT, title: 'Fixed title' } },
+    });
+    expect(fixed.status).toBe(200);
+    const again = await api.call('publishListing', { token, params: { listingId: draft.id } });
+    expect(again.status).toBe(202);
+    const live = await settled(draft.id);
+    expect(live.statusDisplay.label).toBe('Active (confirmed by eBay)');
+    expect(live.variant?.title).toBe('Fixed title');
   });
 
   it('allows one change at a time and only what the listing state allows', async () => {

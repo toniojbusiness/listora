@@ -76,6 +76,19 @@ struct ReviewFlowModelTests {
     }
 
     @Test
+    func `an item without photos says so at once instead of waiting for photos that never come`() async {
+        await harness.service.setItems([.success(Fixtures.item(photos: []))])
+        let model = harness.model()
+        await model.start()
+        #expect(model.phase == .failed(.init(
+            title: "This item has no photos",
+            message: "Listora reads the item from its photos. Add them, then review the item.",
+            canRetry: false,
+            suggestsEditingPhotos: true,
+        )))
+    }
+
+    @Test
     func `a photo the server could not process stops with its reason`() async {
         await harness.service.setItems([.success(Fixtures.item(photos: [
             Fixtures.photo(0, status: .ready),

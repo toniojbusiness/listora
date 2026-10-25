@@ -168,7 +168,7 @@ struct ReviewFormView: View {
     private func continueBar(_ form: ReviewForm) -> some View {
         let missing = form.missing
         let toCheck = model.fieldsToCheck.count
-        if voice.hasContent || voice.isListening {
+        if voice.showsTray {
             VoiceTray(voice: voice)
         }
         HStack(spacing: Spacing.xs) {

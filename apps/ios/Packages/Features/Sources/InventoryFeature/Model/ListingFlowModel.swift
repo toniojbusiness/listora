@@ -33,11 +33,34 @@ final class ListingFlowModel {
     private(set) var step: Step = .choose
     private(set) var choices: [Choice] = []
     var selected: Set<String> = []
-    var title = ""
-    var description = ""
+    /// An edit answers the last refusal, so its message goes until the next send says otherwise.
+    var title = "" {
+        didSet {
+            if title != oldValue {
+                problem = nil
+            }
+        }
+    }
+
+    var description = "" {
+        didSet {
+            if description != oldValue {
+                problem = nil
+            }
+        }
+    }
+
     /// The price in cents (``PriceField`` edits it); nil while empty.
-    var priceCents: Int?
-    /// Why the listing can't be sent as it is, from the server or this screen.
+    var priceCents: Int? {
+        didSet {
+            if priceCents != oldValue {
+                problem = nil
+            }
+        }
+    }
+
+    /// Why the listing can't be sent as it is, from the server or this screen; it clears once the
+    /// seller edits the listing.
     private(set) var problem: String?
     private(set) var isPublishing = false
     private(set) var isPreparing = true

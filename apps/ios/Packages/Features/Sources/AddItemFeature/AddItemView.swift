@@ -98,7 +98,11 @@ struct DraftListView: View {
                     ScrollView {
                         Group {
                             switch model.mode {
-                            case .single: NewItemGuide(isCameraAvailable: environment.isCameraAvailable)
+                            case .single:
+                                NewItemGuide(
+                                    isCameraAvailable: environment.isCameraAvailable,
+                                    isSignedIn: environment.activity.isSignedIn,
+                                )
                             case .batch: BatchGuide(isCameraAvailable: environment.isCameraAvailable)
                             }
                         }
