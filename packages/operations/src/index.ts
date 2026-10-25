@@ -2,6 +2,7 @@ export {
   cancelMootOperations,
   cancelOperation,
   confirmOperationByUser,
+  dismissOperationByUser,
   enqueueOperation,
   retryOperation,
 } from './commands.ts';

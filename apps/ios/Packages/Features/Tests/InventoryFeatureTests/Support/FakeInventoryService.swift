@@ -17,6 +17,7 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
     private var _queries: [InventoryQuery] = []
     private var _variantsSent: [Schemas.ListingVariant] = []
     private var _requests: [(ListingRequest, String)] = []
+    private var _createdOn: [String] = []
 
     private func locked<T>(_ body: () -> T) -> T {
         lock.lock()
@@ -54,6 +55,11 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
     var failingCall: String? {
         get { locked { _failingCall } }
         set { locked { _failingCall = newValue } }
+    }
+
+    /// The marketplace of every draft created, in order.
+    var createdOn: [String] {
+        locked { _createdOn }
     }
 
     var calls: [String] {
@@ -116,11 +122,14 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
 
     func createListing(
         itemID _: String,
-        marketplace _: Schemas.KnownMarketplace,
+        marketplace: Schemas.KnownMarketplace,
         variant: Schemas.ListingVariant,
         idempotencyKey _: String,
     ) async throws(APIFailure) -> Schemas.Listing {
-        locked { _variantsSent.append(variant) }
+        locked {
+            _variantsSent.append(variant)
+            _createdOn.append(marketplace.rawValue)
+        }
         try record("create")
         return Fixtures.listing(status: .draft, label: "Draft", tone: .neutral, actions: [.publish], variant: variant)
     }

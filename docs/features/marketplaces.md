@@ -136,7 +136,8 @@ automation meets a check it must not pass. `execute` never contacts the marketpl
 `pendingUser` with a user task, `list_manually` (create, relist), `edit_manually` (revise, price),
 or `delist_manually` (end), with a deep link and a copy-assist payload (title, description, price,
 and photo URLs in posting order). The engine records the task in the same transaction as the
-`needs_user_action` status, and only `confirmOperationByUser` can finish the operation. Assisted
+`needs_user_action` status, and only `confirmOperationByUser` can finish the operation; the
+task inbox where the user does it is [tasks.md](tasks.md). Assisted
 capabilities establish success by `user_confirm`, `readListing` always throws, and the engine never
 reads back an assisted operation, so no read can ever confirm one. New listings open the
 marketplace's site; changes open the listing's own page once the user has linked it, and only when
