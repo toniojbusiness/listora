@@ -116,7 +116,11 @@ the eBay developer keys exist, one command checks the adapter against eBay's rea
 2. Put `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, and `EBAY_RUNAME` in `.env`.
 3. `npm run ebay:sandbox-token`: open the URL it prints, sign in as the sandbox test user, agree,
    and paste the address of the page eBay shows. It saves `EBAY_USER_REFRESH_TOKEN` in `.env`.
-4. `npm run ebay:sandbox-check`.
+4. `npm run ebay:sandbox-check`. The check binds the test user to its own connection. To have a
+   sandbox worker list for that user, also set `EBAY_USER_CONNECTION_ID` to the id of the
+   Listora eBay connection (`marketplace_connection` row) it lists for. Listings on any other
+   connection, or on none, get "Connect eBay". Production refuses both keys: there, every
+   eBay connection gets its own token with eBay connect.
 
 The check uses about 15 Trading calls. It tests both OAuth grants, that every category Listora
 maps to is still an eBay leaf, the health check, preparing a listing (item specifics and eBay's

@@ -48,7 +48,7 @@ describe('createAdapters', () => {
   });
 
   it('routes eBay to the eBay adapter when EBAY_ENV is set, whatever FAKE_MARKETPLACE_URL says', () => {
-    const ebay = loadEbayConfig({ EBAY_ENV: 'fake' });
+    const ebay = loadEbayConfig({ EBAY_ENV: 'fake', EBAY_USER_CONNECTION_ID: api.id });
     for (const fakeMarketplaceUrl of [undefined, 'http://127.0.0.1:4100']) {
       const adapters = createAdapters({ fakeMarketplaceUrl, ebay });
       expect(adapters.get('ebay')).toBeInstanceOf(EbayAdapter);

@@ -222,6 +222,7 @@ export class EbayAdapter implements MarketplaceAdapter<EbayListingPayload> {
             el('SKU', sku),
             ...listingFields(op.payload, pictures.urls, 'revise'),
           ]),
+          ...deletedFields(op.payload),
         ];
         return this.#write('ReviseFixedPriceItem', fields, pictures.token, ctx, 'normal');
       }
@@ -905,6 +906,16 @@ function listingFields(
 }
 
 /**
+ * The fields a revise removes: ReviseFixedPriceItem keeps every field it is not sent, so a
+ * value the payload no longer has must be named in a `DeletedField`.
+ */
+function deletedFields(payload: EbayListingPayload): XmlElement[] {
+  return payload.conditionDescription === null
+    ? [el('DeletedField', 'Item.ConditionDescription')]
+    : [];
+}
+
+/**
  * How the seller ships, gets paid, and takes returns: business policies when the seller has
  * them, else free USPS Priority shipping and no returns (development and the sandbox check).
  */
@@ -1049,6 +1060,7 @@ export function fitItemSpecifics(
   }[],
 ): { specifics: { name: string; values: string[] }[]; issues: ValidationIssue[] } {
   const issues: ValidationIssue[] = [];
+  const reported = new Set<string>();
   const fitted = specifics.map((specific) => {
     const aspect = aspects.find(
       (candidate) => candidate.name.toLowerCase() === specific.name.toLowerCase(),
@@ -1059,11 +1071,9 @@ export function fitItemSpecifics(
       values = values.flatMap((value) => {
         const allowed = matchAllowedValue(value, aspect.values);
         if (allowed !== null) return [allowed];
+        reported.add(aspect.name.toLowerCase());
         issues.push({
-          field:
-            aspect.name === 'Size' || aspect.name === 'US Shoe Size'
-              ? 'item.sizeLabel'
-              : 'variant.aspects',
+          field: aspectField(aspect.name),
           code: 'not_standard',
           message: `${NAME} doesn't accept "${value}" for ${aspect.name}.`,
         });
@@ -1074,23 +1084,24 @@ export function fitItemSpecifics(
     return { name: aspect.name, values };
   });
   for (const aspect of aspects) {
-    if (!aspect.required) continue;
+    if (!aspect.required || reported.has(aspect.name.toLowerCase())) continue;
     const given = fitted.find(
       (specific) => specific.name.toLowerCase() === aspect.name.toLowerCase(),
     );
     if (given === undefined || given.values.length === 0) {
-      if (issues.some((issue) => issue.message.includes(` for ${aspect.name}.`))) continue;
       issues.push({
-        field:
-          aspect.name === 'Size' || aspect.name === 'US Shoe Size'
-            ? 'item.sizeLabel'
-            : 'variant.aspects',
+        field: aspectField(aspect.name),
         code: 'required',
         message: `${NAME} needs ${aspect.name} for this category.`,
       });
     }
   }
   return { specifics: fitted.filter((specific) => specific.values.length > 0), issues };
+}
+
+/** The listing field an eBay aspect comes from: the item's size, else the variant's aspects. */
+function aspectField(aspect: string): string {
+  return aspect === 'Size' || aspect === 'US Shoe Size' ? 'item.sizeLabel' : 'variant.aspects';
 }
 
 function verifyField(code: string): string {

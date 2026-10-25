@@ -3,6 +3,7 @@
  * startup. `EBAY_ENV` picks the hosts: `fake` (the fake-ebay server at `EBAY_FAKE_URL`, the
  * default for development and tests), `sandbox`, or `production`. Nothing needs a real key
  * unless `EBAY_ENV` is `sandbox` or `production`. Errors name the bad key, never its value.
+ * The single configured seller is a development and sandbox convenience only (`seller`).
  */
 import type { EbayListingSettings } from './oauth.ts';
 import { DEFAULT_LISTING_SETTINGS } from './oauth.ts';
@@ -73,11 +74,15 @@ export interface EbayConfig {
   clientId: string;
   clientSecret: string;
   /**
-   * The one seller this process lists for, until eBay connections and their token vault land
-   * (T-16): a refresh token from the seller's consent. Unset means eBay operations fail with
-   * "connect eBay" (in `fake`, the fake's development seller is used).
+   * The one seller this process lists for in `fake` and `sandbox`, until eBay connections and
+   * their token vault land (T-16): a refresh token from the seller's consent
+   * (`EBAY_USER_REFRESH_TOKEN`; in `fake`, the fake's development seller by default), bound to
+   * the one Listora connection it acts for (`EBAY_USER_CONNECTION_ID`). Every other connection,
+   * and a listing with none, fails with "connect eBay", as does every operation when this is
+   * unset. Always unset in `production`, which refuses a configured seller: one seller's
+   * account must never act for every Listora user.
    */
-  userRefreshToken: string | undefined;
+  seller: { refreshToken: string; connectionId: string } | undefined;
   listingSettings: EbayListingSettings;
   /** The application's daily Trading API call limit, until eBay reports it (budget.ts). */
   tradingDailyLimit: number;
@@ -121,8 +126,7 @@ export function loadEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfig
   if (clientSecret === undefined) {
     issues.push(`EBAY_CLIENT_SECRET is required when EBAY_ENV is ${environment}`);
   }
-  const userRefreshToken =
-    value('EBAY_USER_REFRESH_TOKEN') ?? (isFake ? FAKE_EBAY_REFRESH_TOKEN : undefined);
+  const seller = configuredSeller(environment, value, issues);
 
   const postalCode = value('EBAY_ITEM_POSTAL_CODE') ?? DEFAULT_LISTING_SETTINGS.postalCode;
   if (!/^\d{5}(-\d{4})?$/.test(postalCode)) {
@@ -162,7 +166,7 @@ export function loadEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfig
     endpoints: ebayEndpoints(environment, fakeUrl),
     clientId,
     clientSecret,
-    userRefreshToken,
+    seller,
     listingSettings: {
       postalCode,
       dispatchTimeMax: Number(dispatch),
@@ -175,4 +179,38 @@ export function loadEbayConfig(env: NodeJS.ProcessEnv = process.env): EbayConfig
     },
     tradingDailyLimit,
   };
+}
+
+/** The single configured seller (`EbayConfig.seller`), recording what is wrong in `issues`. */
+function configuredSeller(
+  environment: EbayEnvironment,
+  value: (key: string) => string | undefined,
+  issues: string[],
+): EbayConfig['seller'] {
+  const refreshToken = value('EBAY_USER_REFRESH_TOKEN');
+  const connectionId = value('EBAY_USER_CONNECTION_ID');
+  if (environment === 'production') {
+    for (const key of ['EBAY_USER_REFRESH_TOKEN', 'EBAY_USER_CONNECTION_ID'] as const) {
+      if (value(key) !== undefined) {
+        issues.push(
+          `${key} is not allowed when EBAY_ENV is production (each eBay connection has its own token)`,
+        );
+      }
+    }
+    return undefined;
+  }
+  if (connectionId === undefined) {
+    if (refreshToken !== undefined) {
+      issues.push('EBAY_USER_CONNECTION_ID is required with EBAY_USER_REFRESH_TOKEN');
+    }
+    return undefined;
+  }
+  const token = refreshToken ?? (environment === 'fake' ? FAKE_EBAY_REFRESH_TOKEN : undefined);
+  if (token === undefined) {
+    issues.push(
+      `EBAY_USER_CONNECTION_ID needs EBAY_USER_REFRESH_TOKEN when EBAY_ENV is ${environment}`,
+    );
+    return undefined;
+  }
+  return { refreshToken: token, connectionId };
 }

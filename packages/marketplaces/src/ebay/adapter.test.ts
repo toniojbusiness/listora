@@ -14,7 +14,7 @@ import type {
 } from '../adapter.ts';
 import { desiredStateForContent, isContentKind, type ListingContent } from '../content.ts';
 import { sampleListingContent } from '../testing.ts';
-import { EbayAdapter, ebayUuid, chooseEbayCategory } from './adapter.ts';
+import { EbayAdapter, ebayUuid, chooseEbayCategory, fitItemSpecifics } from './adapter.ts';
 import { DailyCallBudget } from './budget.ts';
 import { loadEbayConfig, type EbayConfig } from './config.ts';
 import { createEbayAdapter } from './create.ts';
@@ -22,9 +22,12 @@ import { FakeEbay } from './fake/fake-ebay.ts';
 import { ApplicationToken, EbayOAuthClient, RefreshTokenSeller } from './oauth.ts';
 import type { EbayListingPayload } from './payload.ts';
 
-const ctx = (): AdapterContext => ({
+/** The connection the configured seller is bound to (`EBAY_USER_CONNECTION_ID`). */
+const CONNECTION_ID = 'connection-ebay';
+
+const ctx = (connection: AdapterContext['connection'] = { id: CONNECTION_ID, mode: 'api' }) => ({
   signal: new AbortController().signal,
-  connection: { id: 'connection-ebay', mode: 'api' },
+  connection,
 });
 
 let sequence = 0;
@@ -45,7 +48,11 @@ describe('EbayAdapter against the fake eBay', () => {
 
   beforeAll(async () => {
     fake = await FakeEbay.start();
-    const loaded = loadEbayConfig({ EBAY_ENV: 'fake', EBAY_FAKE_URL: fake.url });
+    const loaded = loadEbayConfig({
+      EBAY_ENV: 'fake',
+      EBAY_FAKE_URL: fake.url,
+      EBAY_USER_CONNECTION_ID: CONNECTION_ID,
+    });
     if (loaded === undefined) throw new Error('no config');
     config = loaded;
     adapter = createEbayAdapter(config, { requestTimeoutMs: 1_000 });
@@ -275,7 +282,7 @@ describe('EbayAdapter against the fake eBay', () => {
   it('asks the seller to reconnect when the grant is revoked, everywhere', async () => {
     const { refreshToken } = fake.addSeller();
     const revoked = createEbayAdapter(
-      { ...config, userRefreshToken: refreshToken },
+      { ...config, seller: { refreshToken, connectionId: CONNECTION_ID } },
       { requestTimeoutMs: 1_000 },
     );
     fake.revokeSeller(refreshToken);
@@ -287,6 +294,41 @@ describe('EbayAdapter against the fake eBay', () => {
     });
     expect(await revoked.healthCheck(ctx())).toMatchObject({ status: 'reauth_required' });
     await expect(revoked.readListing(newRef(), ctx())).rejects.toThrow('reauth_required');
+  });
+
+  it("acts for the configured seller's connection only: any other, or none, must connect eBay", async () => {
+    const before = fake.requests.length;
+    for (const connection of [{ id: 'another-connection', mode: 'api' } as const, null]) {
+      expect(await adapter.execute(request('create', newRef()), ctx(connection))).toMatchObject({
+        type: 'rejected',
+        code: 'reauth_required',
+        message: 'Connect eBay to list there.',
+      });
+      await expect(adapter.readListing(newRef(), ctx(connection))).rejects.toThrow(
+        'reauth_required',
+      );
+      expect(await adapter.healthCheck(ctx(connection))).toMatchObject({
+        status: 'reauth_required',
+      });
+      const prepared = await adapter.prepareListing(sampleListingContent(), ctx(connection));
+      expect(prepared).toMatchObject({ type: 'unavailable', code: 'reauth_required' });
+    }
+    // Nothing reached the seller's account: only the Taxonomy calls, with the app's own token.
+    const sent = fake.requests.slice(before).map((entry) => entry.action);
+    expect(sent.filter((action) => action !== 'taxonomy' && action !== 'token')).toEqual([]);
+    expect(await adapter.healthCheck(ctx())).toEqual({ status: 'ok' });
+  });
+
+  it('removes the condition description from a listing when the item no longer has one', async () => {
+    const ref = await create();
+    expect(fake.listing(ref.externalListingId)?.conditionDescription).toBe(
+      'Light fading at the cuffs.',
+    );
+    const cleared = sampleListingContent({ item: { conditionNotes: null, flaws: [] } });
+    expect(
+      await adapter.execute(request('revise', ref, { content: cleared }), ctx()),
+    ).toMatchObject({ type: 'confirmed' });
+    expect(fake.listing(ref.externalListingId)?.conditionDescription).toBeNull();
   });
 
   it("never puts a token in an outcome's excerpt", async () => {
@@ -310,7 +352,11 @@ describe('EbayAdapter against the fake eBay', () => {
         });
         const budgeted = new EbayAdapter({
           endpoints: { ...config.endpoints, ...endpointsAt(limited.url) },
-          seller: new RefreshTokenSeller({ oauth, refreshToken: config.userRefreshToken ?? '' }),
+          seller: new RefreshTokenSeller({
+            oauth,
+            refreshToken: config.seller?.refreshToken ?? '',
+            connectionId: CONNECTION_ID,
+          }),
           applicationToken: new ApplicationToken(oauth),
           budget: new DailyCallBudget({ dailyLimit: 6, reserveRatio: 0.5 }),
           tradingDailyLimit: 6,
@@ -447,7 +493,11 @@ describe('EbayAdapter against the fake eBay', () => {
       });
       const noSuggestions = new EbayAdapter({
         endpoints: config.endpoints,
-        seller: new RefreshTokenSeller({ oauth, refreshToken: config.userRefreshToken ?? '' }),
+        seller: new RefreshTokenSeller({
+          oauth,
+          refreshToken: config.seller?.refreshToken ?? '',
+          connectionId: CONNECTION_ID,
+        }),
         applicationToken: new ApplicationToken(oauth),
         budget: new DailyCallBudget(),
         tradingDailyLimit: 5_000,
@@ -496,6 +546,44 @@ describe('chooseEbayCategory', () => {
     expect(chooseEbayCategory(suggestions, null, 'men')).toBe('57988');
     expect(chooseEbayCategory(suggestions, null, null)).toBe('63862');
     expect(chooseEbayCategory([], null, 'women')).toBeNull();
+  });
+});
+
+describe('fitItemSpecifics', () => {
+  const aspect = (name: string, values: string[] = ['M', 'L']) => ({
+    name,
+    required: true,
+    mode: 'SELECTION_ONLY' as const,
+    cardinality: 'SINGLE' as const,
+    values,
+  });
+
+  it('reports a required aspect once: refused when a value was given, missing when none was', () => {
+    const { specifics, issues } = fitItemSpecifics(
+      [
+        { name: 'size', values: ['Medium-ish'] },
+        { name: 'Color', values: ['blue'] },
+      ],
+      [aspect('Size'), aspect('Color', ['Blue']), aspect('US Shoe Size'), aspect('Brand', [])],
+    );
+    expect(specifics).toEqual([{ name: 'Color', values: ['Blue'] }]);
+    expect(issues).toEqual([
+      {
+        field: 'item.sizeLabel',
+        code: 'not_standard',
+        message: 'eBay doesn\'t accept "Medium-ish" for Size.',
+      },
+      {
+        field: 'item.sizeLabel',
+        code: 'required',
+        message: 'eBay needs US Shoe Size for this category.',
+      },
+      {
+        field: 'variant.aspects',
+        code: 'required',
+        message: 'eBay needs Brand for this category.',
+      },
+    ]);
   });
 });
 

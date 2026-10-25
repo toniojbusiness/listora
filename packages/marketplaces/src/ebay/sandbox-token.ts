@@ -48,7 +48,13 @@ async function main(): Promise<void> {
   const ruName = process.env['EBAY_RUNAME'] ?? '';
   let config;
   try {
-    config = loadEbayConfig({ ...process.env, EBAY_ENV: 'sandbox' });
+    // Only the application keys matter here: the seller being replaced is not read.
+    config = loadEbayConfig({
+      ...process.env,
+      EBAY_ENV: 'sandbox',
+      EBAY_USER_REFRESH_TOKEN: '',
+      EBAY_USER_CONNECTION_ID: '',
+    });
   } catch (error) {
     if (!(error instanceof EbayConfigError)) throw error;
     process.stderr.write(`${error.message}\nSet them in .env (see .env.example).\n`);
@@ -89,7 +95,8 @@ async function main(): Promise<void> {
   writeFileSync(ENV_FILE, withEnvValue(current, 'EBAY_USER_REFRESH_TOKEN', tokens.refreshToken));
   process.stdout.write(
     `\nSaved EBAY_USER_REFRESH_TOKEN in .env (it lasts until ${new Date(tokens.refreshExpiresAt).toDateString()}).\n` +
-      'Now run: npm run ebay:sandbox-check\n',
+      'Now run: npm run ebay:sandbox-check\n' +
+      'For a sandbox worker, also set EBAY_USER_CONNECTION_ID to the eBay connection it lists for.\n',
   );
 }
 

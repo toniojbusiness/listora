@@ -35,11 +35,12 @@ export function createEbayAdapter(
   });
   const applicationToken = new ApplicationToken(oauth, options.now);
   const seller: EbaySellerSource =
-    config.userRefreshToken === undefined
+    config.seller === undefined
       ? new UnconnectedSeller(config.listingSettings)
       : new RefreshTokenSeller({
           oauth,
-          refreshToken: config.userRefreshToken,
+          refreshToken: config.seller.refreshToken,
+          connectionId: config.seller.connectionId,
           settings: config.listingSettings,
           ...(options.now === undefined ? {} : { now: options.now }),
         });

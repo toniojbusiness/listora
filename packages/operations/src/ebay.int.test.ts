@@ -45,17 +45,45 @@ describe('the engine with the eBay adapter and the fake eBay', () => {
   let harness: EngineHarness;
   let fake: FakeEbay;
   let adapters: AdapterLookup;
+  /** The eBay connection the fake's development seller is bound to (EBAY_USER_CONNECTION_ID). */
+  let connectionId: string;
 
   beforeAll(async () => {
     harness = await createEngineHarness('ebay');
     fake = await FakeEbay.start({ staleReadWindowMs: STALE_WINDOW_MS });
-    const config = loadEbayConfig({ EBAY_ENV: 'fake', EBAY_FAKE_URL: fake.url });
+    const connection = await harness.db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: harness.accountId,
+        marketplace: 'ebay',
+        mode: 'api',
+        external_user_id: 'listora_dev_seller',
+      })
+      .returning(['id', 'mode'])
+      .executeTakeFirstOrThrow();
+    connectionId = connection.id;
+    const config = loadEbayConfig({
+      EBAY_ENV: 'fake',
+      EBAY_FAKE_URL: fake.url,
+      EBAY_USER_CONNECTION_ID: connectionId,
+    });
     if (config === undefined) throw new Error('no eBay configuration');
     const ebay = createEbayAdapter(config, { requestTimeoutMs: 300 });
     adapters = (marketplace) => (marketplace === 'ebay' ? ebay : harness.adapters(marketplace));
     // Warm up the token, the first connection, and the JIT, so the short timeouts hold.
-    await ebay.healthCheck({ signal: AbortSignal.timeout(10_000), connection: null });
+    await ebay.healthCheck({ signal: AbortSignal.timeout(10_000), connection });
   });
+
+  /** An eBay listing on the bound connection. */
+  async function createEbayListing(): Promise<ListingRow> {
+    const listing = await harness.createListing('ebay');
+    return harness.db
+      .updateTable('marketplace_listing')
+      .set({ connection_id: connectionId })
+      .where('id', '=', listing.id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
 
   afterAll(async () => {
     await harness.close();
@@ -65,7 +93,7 @@ describe('the engine with the eBay adapter and the fake eBay', () => {
   it('lists, reprices, ends, and relists, each confirmed by eBay reads', async () => {
     const worker = await harness.startWorker({ adapters, policy: POLICY });
     try {
-      const listing = await harness.createListing('ebay');
+      const listing = await createEbayListing();
       const create = await harness.enqueue(listing, 'create', {
         title: 'eBay engine jacket',
         priceCents: 5500,
@@ -145,7 +173,7 @@ describe('the engine with the eBay adapter and the fake eBay', () => {
       const runs: { listing: ListingRow; operations: OperationRow[] }[] = [];
       try {
         for (let index = 0; index < 5; index += 1) {
-          const listing = await harness.createListing('ebay');
+          const listing = await createEbayListing();
           listingIndex.set(listing.id, index);
           const operations: OperationRow[] = [];
           for (const [kind, desired] of planOperations(plan)) {

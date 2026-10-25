@@ -401,6 +401,9 @@ eBay Picture Services by the Media API. Its rules:
   idempotency key; eBay answers a repeat with error 488 naming the listing, which counts as
   accepted. Listings are tracked by SKU (`externalSku`, else the listing id), so eBay also refuses
   a second active listing with that SKU, and a create whose answer was lost is found by SKU.
+- **Revise.** ReviseFixedPriceItem keeps every field it is not sent, so a revise whose
+  payload has no condition description removes it with `DeletedField`
+  `Item.ConditionDescription`, and eBay never keeps showing cleared notes or flaws.
 - **Read-back.** GetItem by id, or by SKU before eBay's id is known. **eBay's reads carry no
   revision or last-modified time** (only a "revised" flag), so the adapter declares
   `readFreshness: 'none'` and the engine confirms after two matching reads a delay apart
@@ -414,11 +417,18 @@ eBay Picture Services by the Media API. Its rules:
   once more (only reads and photo uploads, which change no listing).
 - **Daily-call budget** (`budget.ts`): every Trading call takes one call from the application's
   daily budget (5,000 by default), which keeps a reserve for ends and read-backs and re-reads the
-  real usage from eBay's Developer Analytics API, so several workers share one quota.
+  real usage from eBay's Developer Analytics API (the app-wide daily Trading rate, never a
+  per-call or short-window one), so several workers share one quota.
 - **Tokens.** The adapter gets the seller's user token from an `EbaySellerSource`. Until
   per-connection tokens arrive (T-16), `RefreshTokenSeller` serves one seller from
-  `EBAY_USER_REFRESH_TOKEN` (the fake's development seller with `EBAY_ENV=fake`); without one,
-  operations fail with "Connect eBay". The health check is one Fulfillment `getOrders` call.
+  `EBAY_USER_REFRESH_TOKEN` (the fake's development seller with `EBAY_ENV=fake`), bound to the
+  one connection `EBAY_USER_CONNECTION_ID` names. It is a development and sandbox convenience
+  only: `EBAY_ENV=production` refuses both keys, so one seller's account never acts for every
+  Listora user. Any other connection, a listing with no connection, and every connection
+  without a configured seller get `reauth_required` ("Connect eBay") on every path (execute,
+  read-back, health check, preparing). Token refreshes are single-flight, and the shared
+  refresh runs under the OAuth client's own timeout, so one caller's deadline never fails the
+  others. The health check is one Fulfillment `getOrders` call.
 
 The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth, Media, Taxonomy,
 Fulfillment, Developer Analytics, and Notification endpoints the adapter uses, signs

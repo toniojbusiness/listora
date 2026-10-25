@@ -36,6 +36,8 @@ const PHOTO_URL =
   process.env['EBAY_SANDBOX_PHOTO_URL'] ??
   'https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg';
 const REPORT = new URL('../../../../.local/ebay-sandbox-check.json', import.meta.url);
+/** The connection the check acts for: the sandbox test user's token is bound to it. */
+const CONNECTION_ID = 'sandbox-check';
 
 describe.runIf(required && !ready)('eBay sandbox check: keys', () => {
   it('has the keys it needs', () => {
@@ -58,7 +60,7 @@ describe.runIf(ready)('eBay sandbox check', { timeout: 120_000 }, () => {
   });
   const ctx = (): AdapterContext => ({
     signal: AbortSignal.timeout(110_000),
-    connection: { id: 'sandbox-check', mode: 'api' },
+    connection: { id: CONNECTION_ID, mode: 'api' },
   });
   const runId = String(Date.now());
   const live = new Set<string>();
@@ -232,7 +234,11 @@ describe.runIf(ready)('eBay sandbox check', { timeout: 120_000 }, () => {
 });
 
 function sandboxConfig(): EbayConfig {
-  const config = loadEbayConfig({ ...process.env, EBAY_ENV: 'sandbox' });
+  const config = loadEbayConfig({
+    ...process.env,
+    EBAY_ENV: 'sandbox',
+    EBAY_USER_CONNECTION_ID: CONNECTION_ID,
+  });
   if (config === undefined) throw new Error('EBAY_ENV=sandbox gives a configuration');
   return config;
 }

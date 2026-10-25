@@ -81,11 +81,14 @@ describe('worker process (real Postgres)', () => {
     return worker;
   }
 
-  async function createOperation(marketplace: Marketplace = 'ebay') {
+  async function createOperation(
+    marketplace: Marketplace = 'ebay',
+    connectionId: string | null = null,
+  ) {
     const item = await createInventoryItem(database.db, accountId, { title: 'Process test item' });
     const listing = await database.db
       .insertInto('marketplace_listing')
-      .values({ account_id: accountId, item_id: item.id, marketplace })
+      .values({ account_id: accountId, item_id: item.id, marketplace, connection_id: connectionId })
       .returningAll()
       .executeTakeFirstOrThrow();
     const { operation } = await enqueueOperation(database.db, {
@@ -212,11 +215,25 @@ describe('worker process (real Postgres)', () => {
     expect(fake.listings('ebay', listing.id)).toHaveLength(1);
   });
 
-  it('lists eBay operations on the fake eBay with EBAY_ENV=fake', async () => {
+  it('lists eBay operations on the fake eBay with EBAY_ENV=fake, for the bound connection only', async () => {
     const ebay = await FakeEbay.start();
     try {
-      await startWorker({ EBAY_ENV: 'fake', EBAY_FAKE_URL: ebay.url });
-      const { listing, operation } = await createOperation();
+      const connection = await database.db
+        .insertInto('marketplace_connection')
+        .values({
+          account_id: accountId,
+          marketplace: 'ebay',
+          mode: 'api',
+          external_user_id: 'listora_dev_seller',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await startWorker({
+        EBAY_ENV: 'fake',
+        EBAY_FAKE_URL: ebay.url,
+        EBAY_USER_CONNECTION_ID: connection.id,
+      });
+      const { listing, operation } = await createOperation('ebay', connection.id);
       // eBay's reads carry no freshness marker, so a matching read waits for a second one.
       const waiting = await waitForOperation(operation.id, 'verifying');
       expect(waiting.error_code).toBe('confirming');
@@ -224,6 +241,12 @@ describe('worker process (real Postgres)', () => {
         { title: 'Process test jacket', price: '55.0', status: 'Active', trackedBySku: true },
       ]);
       expect(fake.listings('ebay', listing.id)).toEqual([]);
+
+      // A listing without that connection never lists on the configured seller's account.
+      const unbound = await createOperation();
+      const refused = await waitForOperation(unbound.operation.id, 'failed');
+      expect(refused).toMatchObject({ error_code: 'reauth_required', success_evidence: null });
+      expect(ebay.listings(unbound.listing.id)).toEqual([]);
     } finally {
       await ebay.close();
     }

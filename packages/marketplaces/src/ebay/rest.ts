@@ -292,9 +292,14 @@ function readOrder(entry: unknown): EbayOrder[] {
 
 // Developer Analytics ----------------------------------------------------------------------
 
+/** The time window of eBay's app-wide daily call quota, in seconds. */
+const DAY_SECONDS = 86_400;
+
 /**
- * The application's Trading API usage from `getRateLimits` (`api_context=tradingapi`). When
- * eBay reports several Trading resources, the one closest to its limit counts.
+ * The application's Trading API usage from `getRateLimits` (`api_context=tradingapi`): the
+ * app-wide daily quota (the `TradingAPI` resource's 86,400-second window, else the largest
+ * daily one). Per-call and short-window rates are not the daily budget and never stand in
+ * for it.
  */
 export class AnalyticsTradingUsage implements TradingUsageSource {
   readonly #endpoints: RestEndpoints;
@@ -328,26 +333,35 @@ export class AnalyticsTradingUsage implements TradingUsageSource {
   }
 }
 
-function tradingUsage(body: unknown, now: number): TradingUsage | undefined {
+export function tradingUsage(body: unknown, now: number): TradingUsage | undefined {
   const limits = (body as { rateLimits?: unknown } | null)?.rateLimits;
   if (!Array.isArray(limits)) return undefined;
-  let tightest: TradingUsage | undefined;
-  for (const limit of limits as { resources?: { rates?: unknown[] }[] }[]) {
+  let daily: { usage: TradingUsage; aggregate: boolean } | undefined;
+  for (const limit of limits as { resources?: { name?: unknown; rates?: unknown[] }[] }[]) {
     for (const resource of limit.resources ?? []) {
+      const aggregate =
+        typeof resource.name === 'string' && resource.name.toLowerCase() === 'tradingapi';
       for (const entry of resource.rates ?? []) {
         const rate = (entry ?? {}) as Record<string, unknown>;
         const { limit: quota, remaining, reset, timeWindow } = rate;
         if (typeof quota !== 'number' || typeof remaining !== 'number') continue;
+        if (timeWindow !== DAY_SECONDS) continue;
         const resetAt = typeof reset === 'string' ? Date.parse(reset) : Number.NaN;
         const usage: TradingUsage = {
           limit: quota,
           remaining,
-          resetAt: Number.isFinite(resetAt) ? resetAt : now + 24 * 60 * 60 * 1000,
-          windowMs: typeof timeWindow === 'number' ? timeWindow * 1000 : 24 * 60 * 60 * 1000,
+          resetAt: Number.isFinite(resetAt) ? resetAt : now + DAY_SECONDS * 1000,
+          windowMs: DAY_SECONDS * 1000,
         };
-        if (tightest === undefined || usage.remaining < tightest.remaining) tightest = usage;
+        if (
+          daily === undefined ||
+          (aggregate && !daily.aggregate) ||
+          (aggregate === daily.aggregate && usage.limit > daily.usage.limit)
+        ) {
+          daily = { usage, aggregate };
+        }
       }
     }
   }
-  return tightest;
+  return daily?.usage;
 }

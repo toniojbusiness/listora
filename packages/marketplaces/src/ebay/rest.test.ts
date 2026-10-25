@@ -12,7 +12,7 @@ import {
 } from './fake/constants.ts';
 import { FakeEbay } from './fake/fake-ebay.ts';
 import { ApplicationToken, EbayOAuthClient } from './oauth.ts';
-import { AnalyticsTradingUsage, getOrders } from './rest.ts';
+import { AnalyticsTradingUsage, getOrders, tradingUsage } from './rest.ts';
 import { TradingClient } from './trading.ts';
 import { el } from './xml.ts';
 
@@ -148,5 +148,50 @@ describe('eBay REST and Trading clients against the fake eBay', () => {
         resolve();
       });
     });
+  });
+});
+
+describe('tradingUsage', () => {
+  const rate = (limit: number, remaining: number, timeWindow: number) => ({
+    count: limit - remaining,
+    limit,
+    remaining,
+    reset: '2026-10-25T07:00:00.000Z',
+    timeWindow,
+  });
+  const answer = (resources: { name: string; rates: unknown[] }[]) => ({
+    rateLimits: [{ apiContext: 'TradingAPI', apiName: 'TradingAPI', resources }],
+  });
+
+  it('takes the app-wide daily rate, never a nearly used-up per-call or short-window one', () => {
+    const usage = tradingUsage(
+      answer([
+        { name: 'GetItem', rates: [rate(100, 0, 86_400)] },
+        { name: 'TradingAPI', rates: [rate(5_000, 4_200, 86_400), rate(50, 1, 5)] },
+        { name: 'AddFixedPriceItem', rates: [rate(10_000, 9_000, 86_400)] },
+      ]),
+      0,
+    );
+    expect(usage).toEqual({
+      limit: 5_000,
+      remaining: 4_200,
+      resetAt: Date.parse('2026-10-25T07:00:00.000Z'),
+      windowMs: 86_400_000,
+    });
+  });
+
+  it('falls back to the largest daily rate without the aggregate resource, and to none without a daily one', () => {
+    expect(
+      tradingUsage(
+        answer([
+          { name: 'GetItem', rates: [rate(100, 0, 86_400)] },
+          { name: 'Other', rates: [rate(5_000, 3_000, 86_400), rate(50, 0, 60)] },
+        ]),
+        0,
+      ),
+    ).toMatchObject({ limit: 5_000, remaining: 3_000 });
+    expect(tradingUsage(answer([{ name: 'TradingAPI', rates: [rate(50, 0, 5)] }]), 0)).toBe(
+      undefined,
+    );
   });
 });

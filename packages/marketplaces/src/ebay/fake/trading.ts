@@ -336,6 +336,10 @@ function reviseItem(
   if (conditionId !== undefined) changes.conditionId = validCondition(category, conditionId);
   const conditionDescription = text(item, 'ConditionDescription');
   if (conditionDescription !== undefined) changes.conditionDescription = conditionDescription;
+  for (const field of texts(request, 'DeletedField')) {
+    if (field !== 'Item.ConditionDescription') throw invalid('DeletedField');
+    changes.conditionDescription = null;
+  }
   const startPrice = child(item, 'StartPrice');
   if (startPrice !== undefined) Object.assign(changes, validPrice(startPrice));
   const pictures = child(item, 'PictureDetails');

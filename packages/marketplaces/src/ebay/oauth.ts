@@ -5,7 +5,9 @@
  *
  * Tokens never reach logs, excerpts, or error messages. A token source caches each access
  * token until shortly before it expires and refreshes it single-flight, so concurrent calls
- * for one seller cause one refresh.
+ * for one seller cause one refresh. The shared refresh belongs to no caller: it runs under the
+ * OAuth client's own request timeout, so one caller's deadline or abort never fails the others,
+ * and each caller stops waiting when its own signal aborts.
  */
 import type { ConnectionRef } from '../adapter.ts';
 import { requestText } from '../http.ts';
@@ -68,6 +70,11 @@ export class EbayOAuthClient {
   constructor(options: EbayOAuthClientOptions) {
     this.#options = options;
     this.#now = options.now ?? Date.now;
+  }
+
+  /** How long one token endpoint request may take. */
+  get timeoutMs(): number {
+    return this.#options.timeoutMs ?? 10_000;
   }
 
   /** A user access token from a seller's refresh token (no scopes: the ones consented to). */
@@ -139,7 +146,7 @@ export class EbayOAuthClient {
       },
       body: new URLSearchParams(fields).toString(),
       signal,
-      timeoutMs: this.#options.timeoutMs ?? 10_000,
+      timeoutMs: this.timeoutMs,
     });
     if (result.type !== 'response') throw new EbayTokenUnavailableError(result.code);
     const body = parseJson(result.text);
@@ -190,12 +197,13 @@ export function ebayConsentUrl(options: {
 /**
  * The seller behind a connection, as the eBay adapter needs it: a user access token and the
  * seller's listing settings. The token vault (T-16) implements it per connection; until then
- * `RefreshTokenSeller` serves one seller from a refresh token.
+ * `RefreshTokenSeller` serves one seller, bound to one connection, from a refresh token.
  */
 export interface EbaySellerSource {
   /**
    * The seller's current user access token. Throws `EbayReauthRequiredError` when the seller
-   * must connect eBay again, and `EbayTokenUnavailableError` when it can't be had right now.
+   * must connect eBay again (or the connection, or a listing without one, has no seller here),
+   * and `EbayTokenUnavailableError` when it can't be had right now.
    */
   accessToken(connection: ConnectionRef | null, signal: AbortSignal): Promise<string>;
   /** eBay refused this token (revoked early): forget it, so the next call refreshes. */
@@ -230,6 +238,8 @@ export const DEFAULT_LISTING_SETTINGS: EbayListingSettings = {
 export interface RefreshTokenSellerOptions {
   oauth: EbayOAuthClient;
   refreshToken: string;
+  /** The one Listora connection this seller acts for; every other connection is refused. */
+  connectionId: string;
   /** A subset of the consented scopes to ask for; default: all of them. */
   scopes?: readonly string[];
   settings?: EbayListingSettings;
@@ -239,36 +249,34 @@ export interface RefreshTokenSellerOptions {
 }
 
 /**
- * One seller, from a refresh token in configuration: the sandbox check, the fake in
- * development, and a single-seller worker until per-connection tokens arrive (T-16).
+ * One seller, from a refresh token in configuration, bound to one Listora connection: the
+ * sandbox check and the fake in development, until per-connection tokens arrive (T-16). Any
+ * other connection, and a listing with no connection, must connect eBay: the seller's account
+ * never acts for them.
  */
 export class RefreshTokenSeller implements EbaySellerSource {
   readonly #options: RefreshTokenSellerOptions;
-  readonly #now: () => number;
-  #cached: AccessToken | undefined;
-  #refreshing: Promise<AccessToken> | undefined;
+  readonly #tokens: TokenCache;
 
   constructor(options: RefreshTokenSellerOptions) {
     this.#options = options;
-    this.#now = options.now ?? Date.now;
+    this.#tokens = new TokenCache(
+      (signal) =>
+        options.oauth.refreshUserToken(options.refreshToken, options.scopes ?? [], signal),
+      options.refreshMarginMs ?? 5 * 60_000,
+      options.now ?? Date.now,
+    );
   }
 
-  async accessToken(_connection: ConnectionRef | null, signal: AbortSignal): Promise<string> {
-    const margin = this.#options.refreshMarginMs ?? 5 * 60_000;
-    const cached = this.#cached;
-    if (cached !== undefined && cached.expiresAt - margin > this.#now()) return cached.token;
-    this.#refreshing ??= this.#options.oauth
-      .refreshUserToken(this.#options.refreshToken, this.#options.scopes ?? [], signal)
-      .finally(() => {
-        this.#refreshing = undefined;
-      });
-    const token = await this.#refreshing;
-    this.#cached = token;
-    return token.token;
+  accessToken(connection: ConnectionRef | null, signal: AbortSignal): Promise<string> {
+    if (connection?.id !== this.#options.connectionId) {
+      return Promise.reject(new EbayReauthRequiredError('Connect eBay to list there.'));
+    }
+    return this.#tokens.get(signal);
   }
 
-  forget(_connection: ConnectionRef | null, token: string): void {
-    if (this.#cached?.token === token) this.#cached = undefined;
+  forget(connection: ConnectionRef | null, token: string): void {
+    if (connection?.id === this.#options.connectionId) this.#tokens.forget(token);
   }
 
   listingSettings(): EbayListingSettings {
@@ -278,32 +286,76 @@ export class RefreshTokenSeller implements EbaySellerSource {
 
 /** The application token, cached and refreshed single-flight like a seller's. */
 export class ApplicationToken {
-  readonly #oauth: EbayOAuthClient;
+  readonly #tokens: TokenCache;
+
+  constructor(oauth: EbayOAuthClient, now: () => number = Date.now) {
+    this.#tokens = new TokenCache(
+      (signal) => oauth.applicationToken([EBAY_APPLICATION_SCOPE], signal),
+      5 * 60_000,
+      now,
+    );
+  }
+
+  get(signal: AbortSignal): Promise<string> {
+    return this.#tokens.get(signal);
+  }
+
+  forget(token: string): void {
+    this.#tokens.forget(token);
+  }
+}
+
+/** An access token, cached until `marginMs` before it expires and refreshed single-flight. */
+class TokenCache {
+  readonly #refresh: (signal: AbortSignal) => Promise<AccessToken>;
+  readonly #marginMs: number;
   readonly #now: () => number;
   #cached: AccessToken | undefined;
   #refreshing: Promise<AccessToken> | undefined;
 
-  constructor(oauth: EbayOAuthClient, now: () => number = Date.now) {
-    this.#oauth = oauth;
+  constructor(
+    refresh: (signal: AbortSignal) => Promise<AccessToken>,
+    marginMs: number,
+    now: () => number,
+  ) {
+    this.#refresh = refresh;
+    this.#marginMs = marginMs;
     this.#now = now;
   }
 
   async get(signal: AbortSignal): Promise<string> {
     const cached = this.#cached;
-    if (cached !== undefined && cached.expiresAt - 5 * 60_000 > this.#now()) return cached.token;
-    this.#refreshing ??= this.#oauth
-      .applicationToken([EBAY_APPLICATION_SCOPE], signal)
+    if (cached !== undefined && cached.expiresAt - this.#marginMs > this.#now())
+      return cached.token;
+    // No caller's signal: the request's deadline is the OAuth client's own timeout.
+    this.#refreshing ??= this.#refresh(new AbortController().signal)
+      .then((token) => {
+        this.#cached = token;
+        return token;
+      })
       .finally(() => {
         this.#refreshing = undefined;
       });
-    const token = await this.#refreshing;
-    this.#cached = token;
-    return token.token;
+    return (await untilAborted(this.#refreshing, signal)).token;
   }
 
   forget(token: string): void {
     if (this.#cached?.token === token) this.#cached = undefined;
   }
+}
+
+/** `shared`, unless `signal` aborts first: then this caller alone stops waiting. */
+function untilAborted<T>(shared: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new EbayTokenUnavailableError('aborted'));
+  return new Promise<T>((resolve, reject) => {
+    const abort = (): void => {
+      reject(new EbayTokenUnavailableError('aborted'));
+    };
+    signal.addEventListener('abort', abort, { once: true });
+    void shared.then(resolve, reject).finally(() => {
+      signal.removeEventListener('abort', abort);
+    });
+  });
 }
 
 function parseJson(text: string): Record<string, unknown> | null {

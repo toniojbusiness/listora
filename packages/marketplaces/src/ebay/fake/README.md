@@ -91,7 +91,9 @@ All pages are on developer.ebay.com unless noted, read on 2026-10-24.
   (ItemID always 0; eBay's placeholder picture `https://i2.ebayimg.com/abc/M28/dummy.jpg`),
   [UUIDType](https://developer.ebay.com/devzone/xml/docs/reference/ebay/types/UUIDType.html).
 - Changes: [ReviseFixedPriceItem](https://developer.ebay.com/devzone/xml/docs/reference/ebay/ReviseFixedPriceItem.html)
-  (the ItemID stays; a SKU-tracked listing needs `InventoryTrackingMethod` and `SKU`),
+  (the ItemID stays; a SKU-tracked listing needs `InventoryTrackingMethod` and `SKU`; fields
+  not sent are kept, and `DeletedField` `Item.ConditionDescription` removes the condition
+  description, the one deletion the fake supports),
   [EndFixedPriceItem](https://developer.ebay.com/devzone/xml/docs/reference/ebay/EndFixedPriceItem.html)
   (`EndingReason` required), and
   [RelistFixedPriceItem](https://developer.ebay.com/devzone/xml/docs/reference/ebay/RelistFixedPriceItem.html)
