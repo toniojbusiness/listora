@@ -18,6 +18,7 @@ let package = Package(
         .library(name: "MarketplacesFeature", targets: ["MarketplacesFeature"]),
         .library(name: "TagReadingFeature", targets: ["TagReadingFeature"]),
         .library(name: "VoiceInputFeature", targets: ["VoiceInputFeature"]),
+        .library(name: "PhotoSignalsFeature", targets: ["PhotoSignalsFeature"]),
         .library(name: "ShareLinkFeature", targets: ["ShareLinkFeature"]),
         .library(name: "MarketplaceLinkingFeature", targets: ["MarketplaceLinkingFeature"]),
     ],
@@ -48,6 +49,7 @@ let package = Package(
                 "TagReadingFeature",
                 "MarketplaceLinkingFeature",
                 "VoiceInputFeature",
+                "PhotoSignalsFeature",
             ],
         ),
         .target(
@@ -93,6 +95,7 @@ let package = Package(
         ),
         .target(name: "TagReadingFeature", dependencies: ["Core"]),
         .target(name: "VoiceInputFeature", dependencies: ["Core"]),
+        .target(name: "PhotoSignalsFeature", dependencies: ["Core"]),
         // The Share Extension's UI; the app target does not link it.
         .target(
             name: "ShareLinkFeature",
@@ -160,6 +163,11 @@ let package = Package(
             resources: [.copy("Fixtures")],
         ),
         .testTarget(name: "VoiceInputFeatureTests", dependencies: ["VoiceInputFeature", "Core"]),
+        .testTarget(
+            name: "PhotoSignalsFeatureTests",
+            dependencies: ["PhotoSignalsFeature", "Core"],
+            resources: [.copy("Fixtures")],
+        ),
         .testTarget(
             name: "ShareLinkFeatureTests",
             dependencies: [

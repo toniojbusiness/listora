@@ -27,7 +27,7 @@ final class DraftStore: Sendable {
     static let maxPhotosPerDraft = 24
 
     let database: DraftDatabase
-    private let now: @Sendable () -> Date
+    let now: @Sendable () -> Date
 
     init(database: DraftDatabase, now: @escaping @Sendable () -> Date = Date.init) {
         self.database = database
@@ -229,7 +229,8 @@ final class DraftStore: Sendable {
             guard let draft = try DraftRecord.fetchOne(db, key: draftID) else { return [] }
             let photos = try Self.photos(of: draftID, in: db)
             if draft.createItemSent {
-                try ServerDeletionRecord.item(draft, now: now()).insert(db)
+                let batch = try draft.batchID.flatMap { try BatchRecord.fetchOne(db, key: $0) }
+                try ServerDeletionRecord.item(draft, serverBatchID: batch?.serverBatchID, now: now()).insert(db)
             }
             try draft.delete(db)
             return photos

@@ -171,10 +171,15 @@ targets:
       - path: ListoraUITests
         excludes:
           - Fixtures
+          - BatchFixtures
           # The fake AI answers of the local stack `make ios-test` starts; read by the stack.
           - FakeAI
       # Photos the UI tests import through the app's debug fixture import, kept as one folder.
       - path: ListoraUITests/Fixtures
+        type: folder
+        buildPhase: resources
+      # A 3-item haul the batch UI test shoots with the fake camera (make ios-batch-fixtures).
+      - path: ListoraUITests/BatchFixtures
         type: folder
         buildPhase: resources
     dependencies:
@@ -211,6 +216,7 @@ schemes:
         - package: Features/MarketplacesFeatureTests
         - package: Features/TagReadingFeatureTests
         - package: Features/VoiceInputFeatureTests
+        - package: Features/PhotoSignalsFeatureTests
         - package: Features/ShareLinkFeatureTests
         - package: Features/MarketplaceLinkingFeatureTests
     profile:

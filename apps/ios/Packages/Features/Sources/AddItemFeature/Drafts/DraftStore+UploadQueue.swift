@@ -11,6 +11,7 @@ extension DraftStore {
                 drafts: DraftRecord.order(DraftRecord.Columns.createdAt).fetchAll(db),
                 photos: DraftPhotoRecord.order(DraftPhotoRecord.Columns.position).fetchAll(db),
                 deletions: ServerDeletionRecord.order(Column("createdAt")).fetchAll(db),
+                batches: BatchRecord.order(Column("createdAt")).fetchAll(db),
             )
         }
     }
@@ -37,6 +38,17 @@ extension DraftStore {
             change(&photo)
             try photo.update(db)
             return photo
+        }
+    }
+
+    /// Applies `change` to a batch if it still exists. Returns the updated batch.
+    @discardableResult
+    func updateBatch(_ id: String, _ change: @escaping @Sendable (inout BatchRecord) -> Void) throws -> BatchRecord? {
+        try writer.write { db in
+            guard var batch = try BatchRecord.fetchOne(db, key: id) else { return nil }
+            change(&batch)
+            try batch.update(db)
+            return batch
         }
     }
 
