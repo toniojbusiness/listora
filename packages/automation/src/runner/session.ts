@@ -25,6 +25,7 @@ import {
 } from '../safety/challenges.ts';
 import type { Pacing } from '../safety/pacing.ts';
 import { originForLog, sanitizeMessage, SCREENSHOT_MASK_SELECTORS } from '../safety/redaction.ts';
+import { PageChangedError } from './errors.ts';
 import type { ScreenshotStore } from './screenshots.ts';
 import type {
   AutomationSession,
@@ -282,6 +283,12 @@ export class PlaywrightSession implements AutomationSession {
       return { ...error(step, thrown.code, thrown.message), screenshotKey };
     }
     if (signal.aborted) return error(step, 'aborted', 'the run was stopped');
+    if (thrown instanceof PageChangedError) {
+      return {
+        ...error(step, 'element_missing', sanitizeMessage(thrown.message, this.#typed)),
+        screenshotKey: await this.#screenshot(),
+      };
+    }
     const message = thrown instanceof Error ? thrown.message : String(thrown);
     return {
       ...error(step, 'script_error', sanitizeMessage(message, this.#typed)),

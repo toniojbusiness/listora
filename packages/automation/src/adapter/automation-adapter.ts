@@ -33,6 +33,7 @@ import {
   type OperationRequest,
   type Outcome,
   type RemoteListingState,
+  type RemoteListings,
   type RemoteOrder,
   type ValidationIssue,
   type WriteOperationKind,
@@ -72,6 +73,8 @@ export interface AutomationScripts<P extends AssistedListingPayload> {
   health: (step: StepRunner) => Promise<void>;
   /** The seller's orders sold at or after `since`, for sale checks. Only reads. */
   orders?: (since: Date | null, step: StepRunner) => Promise<RemoteOrder[]>;
+  /** The seller's listings, for imports and drift checks. Only reads. */
+  listings?: (step: StepRunner) => Promise<RemoteListings>;
 }
 
 const SCRIPT_FOR_KIND = {
@@ -250,6 +253,18 @@ export class AutomationAdapter<
       ctx.signal,
     );
     return this.#readValue(run, 'check sales');
+  }
+
+  async listListings(ctx: AdapterContext): Promise<RemoteListings> {
+    const listings = this.#options.scripts.listings;
+    if (listings === undefined) throw new Error(`Listora doesn't list ${this.#name} listings`);
+    const connection = this.#connection(ctx);
+    const run = await this.#options.sessions.use(
+      this.#request(connection, 'operation', null, 'list listings'),
+      (session, signal) => session.read('list listings', (step) => listings(step), signal),
+      ctx.signal,
+    );
+    return this.#readValue(run, 'list your listings');
   }
 
   #writeOutcome(op: OperationRequest<P>, run: SessionRun<WriteResult>): Promise<Outcome> | Outcome {
