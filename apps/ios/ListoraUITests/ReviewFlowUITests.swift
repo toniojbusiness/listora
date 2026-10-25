@@ -80,14 +80,23 @@ final class ReviewFlowUITests: XCTestCase {
     /// The uncertain brand (read off the tag) and color lead, highlighted; fixing the color in
     /// place makes it the seller's.
     private func reviewConfidenceFirst() {
+        // Each read of `label` queries the app again, and the rows can still be settling just after
+        // the review appears, so wait for each label instead of reading it once.
         let brand = app.buttons["review.field.brand"]
-        XCTAssertTrue(brand.label.hasPrefix("Brand, Acme Outfitters, From Tag, Check this: 45% sure"), brand.label)
+        XCTAssertTrue(
+            waitForLabel(of: brand, prefix: "Brand, Acme Outfitters, From Tag, Check this: 45% sure"),
+            brand.label,
+        )
         let colors = app.buttons["review.field.colors"]
-        XCTAssertTrue(colors.label.hasPrefix("Colors, Blue, From AI, Check this: 50% sure"), colors.label)
+        XCTAssertTrue(waitForLabel(of: colors, prefix: "Colors, Blue, From AI, Check this: 50% sure"), colors.label)
         XCTAssertLessThan(brand.frame.minY, colors.frame.minY, "the least certain detail comes first")
-        XCTAssertTrue(app.buttons["review.field.rnNumber"].label.hasPrefix("RN number, 12345, From Tag"))
+        let rnNumber = app.buttons["review.field.rnNumber"]
+        XCTAssertTrue(waitForLabel(of: rnNumber, prefix: "RN number, 12345, From Tag"), rnNumber.label)
         let category = app.buttons["review.field.category"]
-        XCTAssertTrue(category.label.hasPrefix("Category, Clothing › Tops › Shirts, From AI"), category.label)
+        XCTAssertTrue(
+            waitForLabel(of: category, prefix: "Category, Clothing › Tops › Shirts, From AI"),
+            category.label,
+        )
 
         colors.tap()
         let editor = app.textFields["review.editor.colors"]
