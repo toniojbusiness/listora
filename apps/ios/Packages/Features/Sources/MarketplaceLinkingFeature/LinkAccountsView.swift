@@ -3,7 +3,8 @@ import DesignSystem
 import SwiftUI
 
 /// Link accounts: Poshmark, Mercari, Depop, and eBay (until its API is connected), each with the
-/// server's status and a one-tap Link or Relink that opens the marketplace's own sign-in page.
+/// server's status, a one-tap Link or Relink that opens the marketplace's own sign-in page, and
+/// Unlink (after a confirmation), which deletes what Listora holds for that marketplace.
 public struct LinkAccountsView: View {
     @Bindable private var model: LinkAccountsModel
 
@@ -28,6 +29,8 @@ public struct LinkAccountsView: View {
                             progress: model.progress[link.marketplace],
                             onLink: { model.startLinking(link) },
                             onRetry: { Task { await model.retry(link.marketplace) } },
+                            onUnlink: { model.requestUnlink(link) },
+                            onRetryUnlink: { Task { await model.retryUnlink(link.marketplace) } },
                         )
                     }
                 } footer: {
@@ -45,6 +48,29 @@ public struct LinkAccountsView: View {
         .navigationTitle("Link accounts")
         .task { await model.load() }
         .refreshable { await model.load() }
+        .confirmationDialog(
+            model.confirmingUnlink.map { "Unlink \($0.name)?" } ?? "",
+            isPresented: Binding(
+                get: { model.confirmingUnlink != nil },
+                set: {
+                    if !$0 {
+                        model.cancelUnlink()
+                    }
+                },
+            ),
+            titleVisibility: .visible,
+            presenting: model.confirmingUnlink,
+        ) { link in
+            Button("Unlink \(link.name)", role: .destructive) { Task { await model.confirmUnlink() } }
+                .accessibilityIdentifier("linkAccounts.confirmUnlink")
+            Button("Cancel", role: .cancel) { model.cancelUnlink() }
+        } message: { link in
+            Text(
+                "Listora deletes its \(link.name) sign-in and what it read from \(link.name), and asks "
+                    + "\(link.name) to end its access. Your items, listings, and sales stay. Listings stay on "
+                    + "\(link.name), but Listora can't update them until you link it again.",
+            )
+        }
         .sheet(item: $model.signingIn) { link in
             MarketplaceSignInView(
                 link: link,
@@ -76,6 +102,12 @@ private struct LinkAccountRow: View {
     let progress: LinkAccountsModel.LinkProgress?
     let onLink: () -> Void
     let onRetry: () -> Void
+    let onUnlink: () -> Void
+    let onRetryUnlink: () -> Void
+
+    private var busy: Bool {
+        progress == .sending || progress == .unlinking
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -90,7 +122,7 @@ private struct LinkAccountRow: View {
                     }
                 }
                 Spacer()
-                if link.canLink, progress != .sending {
+                if link.canLink, !busy {
                     Button(link.linkActionTitle, action: onLink)
                         .buttonStyle(.bordered)
                         .tint(Palette.brand.color)
@@ -111,6 +143,23 @@ private struct LinkAccountRow: View {
                     .font(Typography.caption)
                     .foregroundStyle(Palette.textSecondary)
                     .accessibilityIdentifier("linkAccounts.sending.\(link.marketplace)")
+            case .unlinking:
+                Label("Unlinking \(link.name)...", systemImage: "minus.circle")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("linkAccounts.unlinking.\(link.marketplace)")
+            case let .unlinkFailed(error):
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(error.message)
+                        .font(Typography.caption)
+                        .foregroundStyle(Palette.danger)
+                        .accessibilityIdentifier("linkAccounts.unlinkError.\(link.marketplace)")
+                    if error.retryable {
+                        Button("Try again", action: onRetryUnlink)
+                            .font(Typography.caption)
+                            .accessibilityIdentifier("linkAccounts.retryUnlink.\(link.marketplace)")
+                    }
+                }
             case let .failed(error):
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(error.message)
@@ -125,6 +174,11 @@ private struct LinkAccountRow: View {
                 }
             case nil:
                 EmptyView()
+            }
+            if link.canUnlink, !busy {
+                Button("Unlink", role: .destructive, action: onUnlink)
+                    .buttonStyle(.listora(.destructiveText, size: .compact))
+                    .accessibilityIdentifier("linkAccounts.unlink.\(link.marketplace)")
             }
         }
         .padding(.vertical, Spacing.xxs)

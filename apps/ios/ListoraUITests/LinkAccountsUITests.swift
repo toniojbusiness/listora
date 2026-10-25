@@ -3,7 +3,7 @@ import XCTest
 /// Links Poshmark from Settings > Link accounts against `StubAPIServer`: the app opens a fake
 /// marketplace's sign-in page in its own web view, the user signs in there, and the app hands
 /// the stub API that site's session cookie, never the password. The marketplace shows as linked
-/// only after the stub's check says so.
+/// only after the stub's check says so, and unlinking it (after a confirmation) unlinks it.
 @MainActor
 final class LinkAccountsUITests: XCTestCase {
     private let app = XCUIApplication()
@@ -73,6 +73,19 @@ final class LinkAccountsUITests: XCTestCase {
         XCTAssertEqual(app.buttons["linkAccounts.link.poshmark"].label, "Relink")
 
         try assertSentTheCookieButNotThePassword(server)
+
+        // Unlinking asks first, then shows not linked once the server unlinked it.
+        app.buttons["linkAccounts.unlink.poshmark"].tap()
+        let confirm = app.buttons["linkAccounts.confirmUnlink"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "no confirmation\n\(app.debugDescription)")
+        snapshot("4-unlink-confirmation")
+        confirm.tap()
+        expectation(for: NSPredicate(format: "label == %@", "Not linked"), evaluatedWith: poshmarkStatus)
+        waitForExpectations(timeout: 10)
+        XCTAssertEqual(app.buttons["linkAccounts.link.poshmark"].label, "Link")
+        XCTAssertFalse(app.buttons["linkAccounts.unlink.poshmark"].exists)
+        XCTAssertTrue(server.requests.contains { $0.method == "DELETE" && $0.path == "/v1/connections/poshmark" })
+        snapshot("5-unlinked")
     }
 
     /// Signs in on the fake marketplace's page in the app's own web view, then taps

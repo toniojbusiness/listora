@@ -229,27 +229,31 @@ final class StubAPIServer: @unchecked Sendable {
 
     /// Every marketplace's connection before eBay is connected, as a JSON array, in the words the
     /// server uses (`packages/connections/src/status-display.ts`).
+    private static func capabilities(_ mode: String, connect: String) -> String {
+        let verify = mode == "api" ? "api" : "user_confirm"
+        return #"{"connect":"\#(connect)","create":"\#(mode)","updatePrice":"\#(mode)","#
+            + #""updateDetails":"\#(mode)","delist":"\#(mode)","relist":"\#(mode)","markSold":"\#(mode)","#
+            + #""verifyRead":"\#(verify)","importListings":"none","saleDetection":["manual"],"#
+            + #""imageTransport":"url_fetch"}"#
+    }
+
+    /// A marketplace Listora works with in assisted mode, with no account linked.
+    static func assistedConnection(_ id: String, _ name: String) -> String {
+        #"{"marketplace":"\#(id)","mode":"assisted","status":"not_connected","#
+            + #""statusDisplay":{"tone":"neutral","label":"Not linked","detail":"Listora works with "#
+            + #"\#(name) in assisted mode: it prepares each listing and change, and you finish it in the "#
+            + #"\#(name) app, then confirm it."},"#
+            + #""capabilities":\#(capabilities("assisted", connect: "none")),"availableActions":[]}"#
+    }
+
     private static let connections: String = {
-        func capabilities(_ mode: String, connect: String) -> String {
-            let verify = mode == "api" ? "api" : "user_confirm"
-            return #"{"connect":"\#(connect)","create":"\#(mode)","updatePrice":"\#(mode)","#
-                + #""updateDetails":"\#(mode)","delist":"\#(mode)","relist":"\#(mode)","markSold":"\#(mode)","#
-                + #""verifyRead":"\#(verify)","importListings":"none","saleDetection":["manual"],"#
-                + #""imageTransport":"url_fetch"}"#
-        }
-        func assisted(_ id: String, _ name: String) -> String {
-            #"{"marketplace":"\#(id)","mode":"assisted","status":"not_connected","#
-                + #""statusDisplay":{"tone":"neutral","label":"Not linked","detail":"Listora works with "#
-                + #"\#(name) in assisted mode: it prepares each listing and change, and you finish it in the "#
-                + #"\#(name) app, then confirm it."},"#
-                + #""capabilities":\#(capabilities("assisted", connect: "none")),"availableActions":[]}"#
-        }
         let ebay = #"{"marketplace":"ebay","mode":"api","status":"not_connected","#
             + #""statusDisplay":{"tone":"neutral","label":"Not connected","detail":"Connect your eBay "#
             + #"account so Listora can list, update, and end your items there, and confirm every change "#
-            + #"with eBay."},"capabilities":\#(capabilities("api", connect: "oauth")),"#
+            + #"with eBay."},"capabilities":\#(StubAPIServer.capabilities("api", connect: "oauth")),"#
             + #""availableActions":["connect"]}"#
-        let all = [ebay, assisted("depop", "Depop"), assisted("poshmark", "Poshmark"), assisted("mercari", "Mercari")]
+        let assisted = [("depop", "Depop"), ("poshmark", "Poshmark"), ("mercari", "Mercari")]
+        let all = [ebay] + assisted.map { StubAPIServer.assistedConnection($0.0, $0.1) }
         return "[\(all.joined(separator: ","))]"
     }()
 }
@@ -282,6 +286,10 @@ extension StubAPIServer {
         case ("GET", "/v1/marketplace-sessions/poshmark"):
             poshmarkChecks = poshmarkChecks.map { $0 + 1 }
             return Self.http(status: "200 OK", body: poshmarkSession())
+        case ("DELETE", "/v1/connections/poshmark"):
+            // Unlinked: the session is gone, and Poshmark is back to assisted.
+            poshmarkChecks = nil
+            return Self.http(status: "200 OK", body: Self.assistedConnection("poshmark", "Poshmark"))
         default:
             return nil
         }

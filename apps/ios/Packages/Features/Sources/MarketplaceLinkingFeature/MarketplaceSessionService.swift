@@ -49,6 +49,24 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
         }
     }
 
+    /// Whether there is a link to remove: a session (in any state) or an API connection.
+    public var canUnlink: Bool {
+        state != .notLinked
+    }
+
+    /// The same marketplace once the server confirmed it is unlinked.
+    func unlinked() -> MarketplaceLink {
+        MarketplaceLink(
+            marketplace: marketplace,
+            name: name,
+            state: .notLinked,
+            statusLabel: "Not linked",
+            statusTone: .neutral,
+            loginURL: loginURL,
+            cookieDomains: cookieDomains,
+        )
+    }
+
     /// "Link" for a first link, "Relink" once there was a session.
     public var linkActionTitle: String {
         state == .notLinked ? "Link" : "Relink"
@@ -87,6 +105,10 @@ public protocol MarketplaceSessionService: Sendable {
         cookies: [CapturedCookie],
         idempotencyKey: String,
     ) async throws(APIFailure) -> MarketplaceLink
+    /// Unlinks the marketplace (`disconnectConnection`): the server deletes the session or
+    /// tokens and the data that came through them, and asks the marketplace to revoke access.
+    /// Unlinking one that is no longer linked succeeds, so a retry after a lost answer is safe.
+    func unlink(_ marketplace: String) async throws(APIFailure)
 }
 
 /// `MarketplaceSessionService` on the Listora API.
@@ -143,6 +165,22 @@ public struct APIMarketplaceSessionService: MarketplaceSessionService {
             throw APIFailure(statusCode: 409, response: response)
         case let .unprocessableContent(response):
             throw APIFailure(statusCode: 422, response: response)
+        case let .default(status, response):
+            throw APIFailure(statusCode: status, response: response)
+        }
+    }
+
+    public func unlink(_ marketplace: String) async throws(APIFailure) {
+        let path = try pathMarketplace(marketplace)
+        let output = try await call {
+            try await api.client.disconnectConnection(path: .init(marketplace: path))
+        }
+        switch output {
+        case .ok:
+            return
+        case .notFound:
+            // Nothing is linked: already unlinked (an earlier try whose answer was lost).
+            return
         case let .default(status, response):
             throw APIFailure(statusCode: status, response: response)
         }

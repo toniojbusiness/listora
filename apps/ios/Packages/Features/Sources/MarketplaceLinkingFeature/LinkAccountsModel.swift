@@ -23,6 +23,10 @@ public final class LinkAccountsModel {
         /// The session did not reach Listora (or was refused). Retry resends the same sign-in
         /// with the same Idempotency-Key when `error.retryable`; otherwise the user signs in again.
         case failed(APIFailure)
+        /// Asking Listora to unlink the marketplace.
+        case unlinking
+        /// The unlink did not go through; the marketplace is still linked. Retry asks again.
+        case unlinkFailed(APIFailure)
     }
 
     public private(set) var links: [MarketplaceLink] = []
@@ -30,6 +34,8 @@ public final class LinkAccountsModel {
     public private(set) var progress: [String: LinkProgress] = [:]
     /// The marketplace whose sign-in page is open.
     public var signingIn: MarketplaceLink?
+    /// The marketplace the user asked to unlink, waiting for them to confirm.
+    public var confirmingUnlink: MarketplaceLink?
 
     private let service: any MarketplaceSessionService
     private let makeIdempotencyKey: @Sendable () -> String
@@ -77,8 +83,60 @@ public final class LinkAccountsModel {
 
     /// Opens the marketplace's sign-in page.
     public func startLinking(_ link: MarketplaceLink) {
-        guard link.canLink, progress[link.marketplace] != .sending else { return }
+        guard link.canLink, !isBusy(link.marketplace) else { return }
         signingIn = link
+    }
+
+    /// Asks the user to confirm unlinking: it deletes what Listora holds for the marketplace.
+    public func requestUnlink(_ link: MarketplaceLink) {
+        guard link.canUnlink, !isBusy(link.marketplace) else { return }
+        confirmingUnlink = link
+    }
+
+    public func cancelUnlink() {
+        confirmingUnlink = nil
+    }
+
+    /// The user confirmed: unlinks the marketplace, then shows the server's state of it. It
+    /// shows as not linked only once the server says so.
+    public func confirmUnlink() async {
+        guard let link = confirmingUnlink else { return }
+        confirmingUnlink = nil
+        await unlink(link.marketplace)
+    }
+
+    /// Asks again after an unlink that did not go through.
+    public func retryUnlink(_ marketplace: String) async {
+        guard case let .unlinkFailed(error) = progress[marketplace], error.retryable else { return }
+        await unlink(marketplace)
+    }
+
+    private func unlink(_ marketplace: String) async {
+        progress[marketplace] = .unlinking
+        unsent[marketplace] = nil
+        do {
+            try await service.unlink(marketplace)
+        } catch {
+            progress[marketplace] = .unlinkFailed(error)
+            return
+        }
+        progress[marketplace] = nil
+        do {
+            try await replace(service.get(marketplace))
+        } catch {
+            // The server confirmed the unlink but its fresh state could not be read: show what
+            // it confirmed, so the row never keeps saying Linked.
+            if let link = links.first(where: { $0.marketplace == marketplace }) {
+                replace(link.unlinked())
+            }
+        }
+    }
+
+    private func isBusy(_ marketplace: String) -> Bool {
+        switch progress[marketplace] {
+        case .sending, .unlinking: true
+        case .failed, .unlinkFailed, nil: false
+        }
     }
 
     public func cancelSignIn() {
