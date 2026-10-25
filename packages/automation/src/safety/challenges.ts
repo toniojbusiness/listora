@@ -93,6 +93,9 @@ export function inspectPage(signals: PageSignals, profile: AutomationProfile): P
     return { type: 'challenge', kind: 'unexpected_page', sign: 'origin' };
   }
   const path = url.pathname;
+  if (profile.challenges.botCheckPaths.some((pattern) => pattern.test(path))) {
+    return { type: 'challenge', kind: 'bot_check', sign: 'bot-check page' };
+  }
   if (
     profile.challenges.verificationPaths.some((pattern) => pattern.test(path)) ||
     VERIFICATION_TEXT.test(signals.text)

@@ -47,7 +47,7 @@ Depop API operations locally (listings on a connection whose mode is `api`), set
 `DEPOP_ENV=fake` and `DEPOP_USER_CONNECTION_ID` and start `npm run dev:fake-depop`.
 To watch browser automation (decision D1,
 [docs/features/automation.md](docs/features/automation.md)), set `FAKE_AUTOMATION_SITE_URL` and
-start `npm run dev:fake-site`: Poshmark, Mercari, and Depop connections that hold a linked
+start `npm run dev:fake-site`: Poshmark, Mercari, Depop, and eBay connections that hold a linked
 session are then automated against that local site, and the worker starts the browser runner
 as a child process whenever automated work waits. To watch the Poshmark adapter itself, also
 set `FAKE_POSHMARK_URL` and start `npm run dev:fake-poshmark`
@@ -132,7 +132,7 @@ packages/storage/       Object storage drivers: local disk (.local/storage) and 
 packages/photos/        Image pipeline: derivatives, metadata stripping, hashes, processing job (@listora/photos)
 packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay and Depop adapters, eBay's connect client, the fake marketplace, fake eBay, and fake Depop (@listora/marketplaces)
 packages/connections/   Marketplace connections: OAuth connect, token vault, browser session vault, credentials, health (@listora/connections)
-packages/automation/    Browser automation: Playwright runner, safety rules, automation adapter base, the Poshmark adapter, sale checks, fake site, fake Poshmark (@listora/automation)
+packages/automation/    Browser automation: Playwright runner, safety rules, automation adapter base, the Poshmark, Mercari, Depop, and eBay adapters, sale checks, fake site and fake marketplace sites (@listora/automation)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker metrics job (@listora/observability)
 packages/sales/         Sale intake, eBay notifications, the order poll, eBay account deletion (@listora/sales)

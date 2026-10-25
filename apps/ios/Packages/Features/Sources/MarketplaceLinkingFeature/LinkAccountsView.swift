@@ -2,8 +2,8 @@ import APIClient
 import DesignSystem
 import SwiftUI
 
-/// Link accounts: Poshmark, Mercari, and Depop, each with the server's status and a one-tap
-/// Link or Relink that opens the marketplace's own sign-in page.
+/// Link accounts: Poshmark, Mercari, Depop, and eBay (until its API is connected), each with the
+/// server's status and a one-tap Link or Relink that opens the marketplace's own sign-in page.
 public struct LinkAccountsView: View {
     @Bindable private var model: LinkAccountsModel
 

@@ -1,7 +1,8 @@
 # Linking marketplaces from the iPhone
 
-Poshmark, Mercari, and Depop (until its partner API) are automated by the cloud browser runner
-in the seller's own session (decision D1, [automation.md](automation.md)).
+Poshmark, Mercari, Depop (until its partner API), and eBay (until its API is connected,
+[ebay-automation.md](ebay-automation.md)) are automated by the cloud browser runner in the
+seller's own session (decision D1, [automation.md](automation.md)).
 The seller links each one from the app: **Settings > Link accounts**. This page describes that
 flow end to end.
 
@@ -45,8 +46,8 @@ does not read sessions from the marketplaces' own iPhone apps.
 
 | Operation                 | Route                                         | What it does                                    |
 | ------------------------- | --------------------------------------------- | ----------------------------------------------- |
-| `listMarketplaceSessions` | `GET /v1/marketplace-sessions`                | Poshmark, Mercari, and Depop with their status  |
-| `getMarketplaceSession`   | `GET /v1/marketplace-sessions/{marketplace}`  | One of them (`404` for eBay, which uses OAuth)  |
+| `listMarketplaceSessions` | `GET /v1/marketplace-sessions`                | Poshmark, Mercari, Depop, and eBay, with status |
+| `getMarketplaceSession`   | `GET /v1/marketplace-sessions/{marketplace}`  | One of them                                     |
 | `linkMarketplaceSession`  | `POST /v1/marketplace-sessions/{marketplace}` | Stores the session and starts its check (`201`) |
 
 `linkMarketplaceSession` (`apps/api/src/marketplace-sessions/`) calls `linkAutomationSession`
@@ -62,7 +63,8 @@ first sale check is due.
   cookies have all expired (`422`, field `cookies`). Nothing is stored for a refused request.
 - **Never logged.** Cookie values appear in no log line, response, or error. The idempotency
   record keeps only a SHA-256 of the request and the response, which holds no cookie.
-- A marketplace connected through its API answers `409 marketplace_action_unavailable`.
+- A marketplace connected through its API (eBay or Depop) answers `409
+marketplace_action_unavailable`, and lists as `api_connected`: the API takes precedence.
 - Without a token vault (`TOKEN_ENCRYPTION_KEY` or `TOKEN_KMS_KEY_ID`, read by
   `@listora/connections`) nothing can be linked: `linkMarketplaceSession` answers `409
 marketplace_action_unavailable`.
@@ -96,14 +98,15 @@ The worker's dispatcher starts the runner when the job waits (within a minute; i
 ## Development
 
 With `FAKE_AUTOMATION_SITE_URL` and the same `TOKEN_ENCRYPTION_KEY` set for the API, the
-worker, and the runner, and
-`npm run dev:fake-site` running, Link accounts opens the fake site's `/login` for all three
-marketplaces. Any username and password sign in there (`POST /login` sets the session cookie),
+worker, and the runner, and `npm run dev:fake-site` running, Link accounts opens the fake site's
+`/login` for Poshmark, Mercari, and Depop, and its `/signin/` (eBay's own sign-in path) for eBay.
+Any username and password sign in there (a `POST` sets the session cookie),
 and the runner checks the session against the fake site in local headless Chromium.
 
 ## Tests
 
-- `apps/api/src/marketplace-sessions/marketplace-sessions.int.test.ts`: the list, the vault
+- `apps/api/src/marketplace-sessions/marketplace-sessions.int.test.ts`: the list (eBay
+  included, and its API taking over), the vault
   write (encrypted at rest, readable by the vault), the check job, the statuses, relink,
   idempotent replay, tenancy, every refused session, and that no cookie value is logged,
   returned, or stored in the idempotency record.

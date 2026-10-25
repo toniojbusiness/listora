@@ -33,6 +33,7 @@ export type {
 } from './assisted/assisted-adapter.ts';
 export {
   createDepopAssistedAdapter,
+  createEbayAssistedAdapter,
   createMercariAdapter,
   createPoshmarkAdapter,
 } from './assisted/marketplaces.ts';
@@ -164,8 +165,16 @@ export type {
   TradingUsage,
   TradingUsageSource,
 } from './ebay/budget.ts';
-export { mapEbayCategory, mappedEbayCategories } from './ebay/categories.ts';
-export type { EbayCategory } from './ebay/categories.ts';
+export {
+  categoryTraits,
+  mapEbayCategory,
+  mappedEbayCategories,
+  mappedEbayCategory,
+} from './ebay/categories.ts';
+export type { EbayCategory, SizeAspect } from './ebay/categories.ts';
+export { EBAY_CONDITION_IDS } from './ebay/conditions.ts';
+export type { ConditionScheme } from './ebay/conditions.ts';
+export { descriptionHtml, descriptionText } from './ebay/description.ts';
 export {
   DEFAULT_EBAY_FAKE_URL,
   EBAY_ENVIRONMENTS,
@@ -193,6 +202,14 @@ export type {
   FakeEbayRequest,
 } from './ebay/fake/fake-ebay.ts';
 export type { NotificationMessage, SignedNotification } from './ebay/fake/notifications.ts';
+export {
+  fakeCategories as fakeEbayCategories,
+  fakeCategory as fakeEbayCategory,
+} from './ebay/fake/taxonomy.ts';
+export type {
+  FakeAspect as FakeEbayAspect,
+  FakeCategory as FakeEbayCategory,
+} from './ebay/fake/taxonomy.ts';
 export type { FakeEbayListing, FakeOrder } from './ebay/fake/state.ts';
 export {
   ApplicationToken,

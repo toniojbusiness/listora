@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ConnectionRef } from './adapter.ts';
-import { createDepopAssistedAdapter, createPoshmarkAdapter } from './assisted/marketplaces.ts';
+import {
+  createDepopAssistedAdapter,
+  createEbayAssistedAdapter,
+  createPoshmarkAdapter,
+} from './assisted/marketplaces.ts';
 import { ConnectionAwareAdapter } from './connection-aware.ts';
 import { FakeMarketplaceAdapter } from './fake/fake-adapter.ts';
 import { sampleListingContent } from './testing.ts';
@@ -31,6 +35,25 @@ describe('ConnectionAwareAdapter', () => {
     const { item, variant } = sampleListingContent();
     expect(depop.buildPayload(item, variant, null)).toEqual(assisted.buildPayload(item, variant));
     expect(depop.buildPayload(item, variant, api)).toEqual(fake.buildPayload(item, variant));
+  });
+
+  it('serves listings without a connection through the unconnected adapter when one is set', () => {
+    const ebayAssisted = createEbayAssistedAdapter();
+    const ebayApi = new FakeMarketplaceAdapter({
+      marketplace: 'ebay',
+      baseUrl: 'http://127.0.0.1:1',
+    });
+    const ebay = new ConnectionAwareAdapter({
+      assisted: ebayAssisted,
+      api: ebayApi,
+      unconnected: ebayApi,
+    });
+    expect(ebay.adapterFor(null)).toBe(ebayApi);
+    expect(ebay.adapterFor(api)).toBe(ebayApi);
+    expect(ebay.adapterFor(assistedConnection)).toBe(ebayAssisted);
+    expect(() => new ConnectionAwareAdapter({ assisted: ebayAssisted, unconnected: fake })).toThrow(
+      'unconnected adapter is for depop',
+    );
   });
 
   it('stays assisted under an api connection when no api adapter is configured', () => {

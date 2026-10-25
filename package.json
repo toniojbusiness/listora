@@ -38,6 +38,7 @@
     "dev:fake-poshmark": "npm run fake-poshmark --workspace @listora/automation",
     "dev:fake-mercari": "npm run fake-mercari --workspace @listora/automation",
     "dev:fake-depop-site": "npm run fake-depop-site --workspace @listora/automation",
+    "dev:fake-ebay-site": "npm run fake-ebay-site --workspace @listora/automation",
     "db:migrate": "npm run migrate --workspace @listora/db --",
     "admin": "npm run admin --workspace @listora/admin --",
     "eval": "npm run eval --workspace @listora/eval --",

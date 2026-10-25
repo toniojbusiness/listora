@@ -58,6 +58,7 @@ final class LinkAccountsUITests: XCTestCase {
         )
         XCTAssertEqual(app.buttons["linkAccounts.link.mercari"].label, "Relink")
         XCTAssertEqual(element("linkAccounts.status.depop").label, "Not linked")
+        XCTAssertEqual(element("linkAccounts.status.ebay").label, "Not linked")
         snapshot("1-link-accounts")
 
         app.buttons["linkAccounts.link.poshmark"].tap()

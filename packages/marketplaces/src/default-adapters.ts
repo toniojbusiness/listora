@@ -4,6 +4,7 @@ import type { Logger } from '@listora/shared';
 import type { MarketplaceAdapter } from './adapter.ts';
 import {
   createDepopAssistedAdapter,
+  createEbayAssistedAdapter,
   createMercariAdapter,
   createPoshmarkAdapter,
 } from './assisted/marketplaces.ts';
@@ -33,13 +34,17 @@ export interface MarketplaceAdaptersConfig {
   /**
    * The browser automation adapters, by marketplace (`createAutomationAdapters` in
    * `@listora/automation`): each serves its marketplace's connections that hold a linked
-   * browser session (decision D1, docs/features/automation.md). eBay is never automated.
+   * browser session (decision D1, docs/features/automation.md). An `api` connection is never
+   * automated: eBay's and Depop's APIs take precedence.
    */
   automation?: Partial<Record<AutomatedMarketplace, MarketplaceAdapter>>;
 }
 
-/** The marketplaces browser automation can serve: those without an API Listora uses. */
-export type AutomatedMarketplace = Exclude<Marketplace, 'ebay'>;
+/**
+ * The marketplaces browser automation can serve: every one (decision D1, revised 2026-10-24),
+ * eBay and Depop only until their APIs are connected.
+ */
+export type AutomatedMarketplace = Marketplace;
 
 /**
  * The marketplace adapters Listora runs with (docs/features/marketplaces.md): the worker runs
@@ -57,14 +62,17 @@ export type AutomatedMarketplace = Exclude<Marketplace, 'ebay'>;
  *   Depop adapter with DEPOP_ENV set (`fake` for the fake Depop, or Depop's sandbox or
  *   production once Listora's partner access is granted); without DEPOP_ENV, the generic fake
  *   marketplace when FAKE_MARKETPLACE_URL is set (the operation engine's process tests).
- * - eBay goes through its adapter with EBAY_ENV set (`fake` for the fake eBay server, or the
- *   sandbox or production). Without EBAY_ENV, eBay listings use the generic fake marketplace
- *   when FAKE_MARKETPLACE_URL is set (the operation engine's process tests), and otherwise
- *   fail visibly with "Listora can't connect to eBay yet" (and a Retry action) rather than
- *   wait.
+ * - eBay goes through its API adapter with EBAY_ENV set (`fake` for the fake eBay server, or
+ *   the sandbox or production), for `api` connections and for listings without a connection
+ *   (which it asks to connect eBay). Without EBAY_ENV, those use the generic fake marketplace
+ *   when FAKE_MARKETPLACE_URL is set (the operation engine's process tests), and otherwise run
+ *   assisted. Until Listora's eBay developer keys exist, a seller links an eBay browser session
+ *   instead, and eBay's automation adapter serves it (docs/features/ebay-automation.md); the
+ *   API takes precedence once connected, and an `api` connection is never automated.
  *
  * The browser runner never runs API steps (they are never automated), so it builds no eBay or
- * Depop API adapter.
+ * Depop API adapter. The API builds no automation adapters: it reports an automation
+ * connection's steps as assisted, and the worker routes them to the runner.
  */
 export function createMarketplaceAdapters(
   config: MarketplaceAdaptersConfig,
@@ -97,15 +105,20 @@ export function createMarketplaceAdapters(
       ? fake('depop', { externalSkuReusable: false, title: 'none' })[0]
       : createDepopAdapter(config.depop, logger === undefined ? {} : { logger });
   const depopAutomation = automation.depop;
+  const ebayApi: MarketplaceAdapter | undefined =
+    config.ebay === undefined
+      ? fake('ebay')[0]
+      : createEbayAdapter(
+          config.ebay,
+          config.ebaySeller === undefined ? {} : { seller: config.ebaySeller },
+        );
+  const ebayAutomation = automation.ebay;
   return createAdapterRegistry([
-    ...(config.ebay === undefined
-      ? fake('ebay')
-      : [
-          createEbayAdapter(
-            config.ebay,
-            config.ebaySeller === undefined ? {} : { seller: config.ebaySeller },
-          ),
-        ]),
+    new ConnectionAwareAdapter({
+      assisted: createEbayAssistedAdapter(),
+      ...(ebayApi === undefined ? {} : { api: ebayApi, unconnected: ebayApi }),
+      ...(ebayAutomation === undefined ? {} : { automation: ebayAutomation }),
+    }),
     new ConnectionAwareAdapter({
       assisted: createDepopAssistedAdapter(),
       ...(depopApi === undefined ? {} : { api: depopApi }),

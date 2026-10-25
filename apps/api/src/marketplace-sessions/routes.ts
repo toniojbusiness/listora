@@ -111,7 +111,10 @@ export function registerMarketplaceSessionRoutes(
   });
 }
 
-/** The marketplace if it is linked by signing in; `404` otherwise (eBay connects by OAuth). */
+/**
+ * The marketplace if it is linked by signing in; `404` otherwise. Every marketplace is today:
+ * eBay and Depop until their APIs are connected (an API connection answers `409`).
+ */
 function sessionMarketplace(marketplace: Marketplace): AutomatedMarketplace {
   if (!isAutomatedMarketplace(marketplace)) throw notFound('Marketplace session');
   return marketplace;
