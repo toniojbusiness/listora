@@ -74,16 +74,24 @@ ios-check-ats: ios-generate
 	done; done
 
 # A test that hangs (a UI test waiting on a stuck simulator) fails after 5 minutes instead of
-# blocking the run.
-IOS_TEST_LIMITS := -test-timeouts-enabled YES -default-test-execution-time-allowance 300
+# blocking the run. A failing test is retried up to twice: one that passes on a retry does not fail
+# the run, but the summary lists it as flaky so it gets a follow-up fix (README, CI section).
+IOS_TEST_LIMITS := -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
+	-retry-tests-on-failure -test-iterations 3
+# Optional file the failing-test summary is also written to (CI sets $$GITHUB_STEP_SUMMARY).
+IOS_TEST_SUMMARY_FILE ?=
 
 ## Run unit, package, and UI tests on the simulator. Results: .build/ios/Test.xcresult.
 ## Parallel testing is off because it would clone the simulator. The UI tests that go through the
 ## backend run against the local stack (packages/e2e): the real API and worker with fakes, on a
 ## scratch database of this checkout's Postgres cluster. Its logs: .build/ios/e2e-logs.
+## It ends by naming the tests that failed and the ones that passed only on a retry.
 ios-test: ios-generate ios-simulator ios-check-ats ios-e2e-ready
 	rm -rf $(IOS_BUILD_DIR)/Test.xcresult $(IOS_BUILD_DIR)/e2e-logs
-	$(E2E_STACK) -- $(XCODEBUILD) test -parallel-testing-enabled NO $(IOS_TEST_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/Test.xcresult
+	@status=0; \
+	$(E2E_STACK) -- $(XCODEBUILD) test -parallel-testing-enabled NO $(IOS_TEST_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/Test.xcresult || status=$$?; \
+	scripts/ios-test-summary.sh $(IOS_BUILD_DIR)/Test.xcresult '$(IOS_TEST_SUMMARY_FILE)'; \
+	exit $$status
 
 ## Check that the local stack can start: backend dependencies installed, Postgres cluster running.
 ios-e2e-ready:

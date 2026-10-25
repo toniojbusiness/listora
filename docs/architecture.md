@@ -330,7 +330,10 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
   `.build/ios`. It runs them inside the local stack (`packages/e2e`, `npm run e2e:stack`): the
   API and worker from this checkout with the fake drivers, on a scratch database of the
   `scripts/dev-db.sh` cluster, with a signed-in test user. UI tests that go through the
-  backend use it; the fake AI answers them from `apps/ios/ListoraUITests/FakeAI`.
+  backend use it; the fake AI answers them from `apps/ios/ListoraUITests/FakeAI`. It retries a
+  failing test up to twice and ends by naming the tests that failed and the ones that passed only
+  on a retry (flaky: they do not block a merge but get a follow-up fix; the
+  [README](../README.md#ci) has the rule).
 - Integration tests use a real Postgres: the local `listora_test` database from
   `scripts/dev-db.sh` (locally and in CI), or `TEST_DATABASE_URL` when set. They fail, and
   never skip, when the database is unreachable. Tests that need their own schema create a
