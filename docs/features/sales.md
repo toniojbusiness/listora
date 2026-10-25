@@ -107,7 +107,7 @@ of its latest sale that stands.
   a delist runs), the fees with "Estimated" or "From <marketplace>", payout, label, cost, profit,
   and ROI, and the actions the sale allows (cancel and return ask first).
 - **Sales tab.** Recent sales, newest first, with price and profit ("Est. profit" while fees are
-  estimated).
+  estimated), and the way to the profit dashboard ([profit.md](profit.md)).
 
 ## Local development
 

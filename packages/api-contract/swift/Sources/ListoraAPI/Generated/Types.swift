@@ -547,6 +547,21 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/sales/{saleId}/relist`.
     /// - Remark: Generated from `#/paths//v1/sales/{saleId}/relist/post(decideSaleRelist)`.
     func decideSaleRelist(_ input: Operations.DecideSaleRelist.Input) async throws -> Operations.DecideSaleRelist.Output
+    /// Get the profit dashboard for a period
+    ///
+    /// The seller's results for the days `from` to `to` (inclusive) in `timeZone`: revenue,
+    /// fees, shipping, cost of goods, net profit, ROI, the averages, sell-through, a series by
+    /// day, week, or month, the seller's own totals per marketplace (in a fixed order, never
+    /// ranked), the best and worst brands and categories, and dead stock today. Every amount is
+    /// computed from the sales' fee lines and the items' costs exactly as each sale's own money
+    /// is (`Sale`), so the dashboard and the sale screens agree to the cent. No AI is involved.
+    /// `422 validation_failed` when `to` is before `from`, the period is longer than 3660 days,
+    /// or `timeZone` is not an IANA time zone.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/profit`.
+    /// - Remark: Generated from `#/paths//v1/profit/get(getProfit)`.
+    func getProfit(_ input: Operations.GetProfit.Input) async throws -> Operations.GetProfit.Output
     /// List assisted-mode tasks
     ///
     /// Urgent first, then oldest first.
@@ -1556,6 +1571,29 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
+        ))
+    }
+    /// Get the profit dashboard for a period
+    ///
+    /// The seller's results for the days `from` to `to` (inclusive) in `timeZone`: revenue,
+    /// fees, shipping, cost of goods, net profit, ROI, the averages, sell-through, a series by
+    /// day, week, or month, the seller's own totals per marketplace (in a fixed order, never
+    /// ranked), the best and worst brands and categories, and dead stock today. Every amount is
+    /// computed from the sales' fee lines and the items' costs exactly as each sale's own money
+    /// is (`Sale`), so the dashboard and the sale screens agree to the cent. No AI is involved.
+    /// `422 validation_failed` when `to` is before `from`, the period is longer than 3660 days,
+    /// or `timeZone` is not an IANA time zone.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/profit`.
+    /// - Remark: Generated from `#/paths//v1/profit/get(getProfit)`.
+    public func getProfit(
+        query: Operations.GetProfit.Input.Query,
+        headers: Operations.GetProfit.Input.Headers = .init()
+    ) async throws -> Operations.GetProfit.Output {
+        try await getProfit(Operations.GetProfit.Input(
+            query: query,
+            headers: headers
         ))
     }
     /// List assisted-mode tasks

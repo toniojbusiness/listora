@@ -1,3 +1,4 @@
+import Core
 import Foundation
 
 /// Listora's canonical item vocabulary and each marketplace's copy limits, read from
@@ -40,7 +41,7 @@ struct ItemVocabulary: Decodable, Sendable {
 
     /// "Clothing › Tops › T-shirts" for `clothing/tops/t_shirts`.
     static func categoryName(_ path: String) -> String {
-        path.split(separator: "/").map { humanize(String($0)) }.joined(separator: " › ")
+        VocabularyName.category(path)
     }
 
     static func departmentName(_ value: String) -> String {
@@ -72,22 +73,8 @@ struct ItemVocabulary: Decodable, Sendable {
         }
     }
 
-    private static let wordOverrides = [
-        "t_shirts": "T-shirts",
-        "hoodies_sweatshirts": "Hoodies & sweatshirts",
-        "jumpsuits_rompers": "Jumpsuits & rompers",
-        "sleep_lounge": "Sleep & lounge",
-        "suits_sets": "Suits & sets",
-        "one_pieces": "One-pieces",
-        "cover_ups": "Cover-ups",
-    ]
-
     /// `snake_case` ids as words: "tank_tops" is "Tank tops".
     static func humanize(_ id: String) -> String {
-        if let override = wordOverrides[id] {
-            return override
-        }
-        let words = id.replacingOccurrences(of: "_", with: " ")
-        return words.prefix(1).uppercased() + words.dropFirst()
+        VocabularyName.humanize(id)
     }
 }

@@ -244,7 +244,7 @@ struct ItemsSection: View {
 }
 
 /// "Fee  -$6.12", with an optional note under the amount.
-private struct MoneyRow: View {
+struct MoneyRow: View {
     let label: String
     let money: Money
     let negative: Bool
@@ -264,7 +264,9 @@ private struct MoneyRow: View {
                 .foregroundStyle(Palette.textSecondary)
             Spacer(minLength: Spacing.sm)
             VStack(alignment: .trailing, spacing: 2) {
-                Text(negative ? "-\(SaleFormatting.money(money))" : SaleFormatting.money(money))
+                Text(negative && money.amountCents != 0
+                    ? "-\(SaleFormatting.money(money))"
+                    : SaleFormatting.money(money))
                     .font(Typography.subheadline.weight(.semibold).monospacedDigit())
                     .foregroundStyle(Palette.textPrimary)
                 if let note {

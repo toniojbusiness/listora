@@ -76,3 +76,27 @@ export type {
   EbaySellerSubscriptionsPayload,
   EbaySubscriptionDependencies,
 } from './ebay/subscriptions.ts';
+export {
+  bucketStart,
+  bucketStarts,
+  MAX_PROFIT_PERIOD_DAYS,
+  periodDays,
+  PROFIT_GRANULARITIES,
+  PROFIT_RANKING_SIZE,
+  profitGranularity,
+  profitReport,
+} from './profit.ts';
+export type {
+  MarketplaceProfit,
+  ProfitBucket,
+  ProfitFeeRow,
+  ProfitGranularity,
+  ProfitGroup,
+  ProfitItemRow,
+  ProfitPeriodDays,
+  ProfitRanking,
+  ProfitReport,
+  ProfitReportInput,
+  ProfitSummary,
+  ProfitTotals,
+} from './profit.ts';
