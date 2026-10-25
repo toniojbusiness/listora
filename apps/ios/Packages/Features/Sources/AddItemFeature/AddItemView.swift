@@ -43,6 +43,34 @@ enum AddItemRoute: Hashable {
     case draft(String)
     /// The review of a draft's server item (the review feature's flow).
     case review(ItemReviewRequest)
+    /// A batch: its items and their progress.
+    case batch(String)
+    /// Checking how a batch's new photos are grouped into items.
+    case batchGrouping(String)
+    /// The rapid review of a batch's analyzed items (the review feature's), by the batch's id on
+    /// this iPhone.
+    case batchReview(String, BatchReviewRequest)
+}
+
+/// Whether Add Item starts one item or a whole haul.
+enum AddItemMode: String, CaseIterable {
+    case single
+    case batch
+
+    /// Where the seller's last choice is kept (`UserDefaults`).
+    static let storageKey = "com.listora.add-item-mode"
+
+    var title: String {
+        switch self {
+        case .single: "One item"
+        case .batch: "Batch"
+        }
+    }
+}
+
+/// The batch whose camera is open.
+struct BatchCapture: Identifiable {
+    let id: String
 }
 
 /// The drafts on this iPhone, with the new-item actions pinned at the bottom within thumb reach.
@@ -53,14 +81,21 @@ struct DraftListView: View {
     @State private var path: [AddItemRoute] = []
     @State private var isCapturing = false
     @State private var unloadedPhotos: PickedPhotos<PhotosPickerItem>?
+    @State private var batchCapture: BatchCapture?
+    @AppStorage(AddItemMode.storageKey) private var mode: AddItemMode = .single
 
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if model.drafts.isEmpty {
+                if model.drafts.isEmpty, model.batches.isEmpty {
                     ScrollView {
-                        NewItemGuide(isCameraAvailable: environment.isCameraAvailable)
-                            .padding(Spacing.md)
+                        Group {
+                            switch mode {
+                            case .single: NewItemGuide(isCameraAvailable: environment.isCameraAvailable)
+                            case .batch: BatchGuide(isCameraAvailable: environment.isCameraAvailable)
+                            }
+                        }
+                        .padding(Spacing.md)
                     }
                 } else {
                     draftList
@@ -79,9 +114,33 @@ struct DraftListView: View {
                     environment.reviewDestination?(request) { outcome in
                         finishReview(request, outcome)
                     }
+                case let .batch(batchID):
+                    BatchScreen(
+                        batchID: batchID,
+                        model: model,
+                        environment: environment,
+                        onCheckGrouping: { path.append(.batchGrouping(batchID)) },
+                        onKeepShooting: { keepShooting(batchID) },
+                        onReview: { path.append(.batchReview(batchID, $0)) },
+                        onEditPhotos: { path.append(.draft($0)) },
+                        onDeleted: { path = [] },
+                    )
+                case let .batchGrouping(batchID):
+                    BatchGroupingScreen(
+                        batchID: batchID,
+                        model: model,
+                        environment: environment,
+                        onConfirmed: { showBatch(batchID) },
+                        onKeepShooting: { keepShooting(batchID) },
+                    )
+                case let .batchReview(batchID, request):
+                    environment.batchReviewDestination?(request) { event in
+                        finishBatchReview(batchID, event)
+                    }
                 }
             }
             .task { await model.observeDrafts() }
+            .task { await model.observeBatches() }
             .motion(value: model.drafts.map(\.id))
             .fullScreenCover(isPresented: $isCapturing) {
                 CameraCaptureView(camera: environment.makeCamera()) { shots in
@@ -90,6 +149,15 @@ struct DraftListView: View {
                         path.append(.draft(id))
                     }
                 }
+            }
+            .fullScreenCover(item: $batchCapture) { capture in
+                BatchCaptureView(
+                    camera: environment.makeCamera(),
+                    model: model.captureModel(for: capture.id, reader: environment.signalReader),
+                ) { kept in
+                    await finishBatchCapture(capture.id, kept: kept)
+                }
+                .measuresInteraction(model.meter, session: BatchRecord.meterSession(capture.id))
             }
             .alert("Couldn't save", isPresented: errorBinding) {
                 Button("OK", role: .cancel) {}
@@ -101,64 +169,95 @@ struct DraftListView: View {
 
     private var draftList: some View {
         List {
-            Section {
-                ForEach(model.drafts) { draft in
-                    NavigationLink(value: AddItemRoute.draft(draft.id)) {
-                        DraftRow(draft: draft, activity: model.activity, fileURL: model.store.fileURL(for:))
+            if !model.batches.isEmpty {
+                Section {
+                    ForEach(model.batches) { batch in
+                        NavigationLink(value: AddItemRoute.batch(batch.id)) {
+                            BatchRow(
+                                batch: batch,
+                                fileURL: model.store.fileURL(for:),
+                                draftFileURL: model.store.fileURL(for:),
+                            )
+                        }
+                        .accessibilityIdentifier("batch.row")
                     }
-                    .accessibilityIdentifier("draft.row")
+                } header: {
+                    SectionHeader(
+                        model.batches.count == 1 ? "1 batch" : "\(model.batches.count) batches",
+                        subtitle: "Hauls you shot in one go. Each item uploads and is analyzed on its own.",
+                    )
+                    .padding(.bottom, Spacing.xxs)
                 }
-                .onDelete { offsets in
-                    for index in offsets {
-                        model.deleteDraft(model.drafts[index].id)
-                    }
-                }
-            } header: {
-                SectionHeader(
-                    model.drafts.count == 1 ? "1 draft" : "\(model.drafts.count) drafts",
-                    subtitle: "Saved on this iPhone. Uploads keep going in the background.",
-                )
-                .padding(.bottom, Spacing.xxs)
+                .listRowBackground(Palette.surface.color)
+                .listSectionSeparatorTint(Palette.separator.color)
             }
-            .listRowBackground(Palette.surface.color)
-            .listSectionSeparatorTint(Palette.separator.color)
+            if !model.drafts.isEmpty {
+                draftSection
+            }
         }
         .scrollContentBackground(.hidden)
     }
 
-    @ViewBuilder
-    private var actions: some View {
-        UnloadedPhotosNotice(picked: $unloadedPhotos, onPicked: importPhotos)
-        if environment.isCameraAvailable {
-            Button {
-                model.beginNewItem()
-                isCapturing = true
-            } label: {
-                Label("Take photos", systemImage: "camera.fill")
+    private var draftSection: some View {
+        Section {
+            ForEach(model.drafts) { draft in
+                NavigationLink(value: AddItemRoute.draft(draft.id)) {
+                    DraftRow(draft: draft, activity: model.activity, fileURL: model.store.fileURL(for:))
+                }
+                .accessibilityIdentifier("draft.row")
             }
-            .buttonStyle(.listoraPrimary)
-            .accessibilityIdentifier("addItem.takePhotos")
+            .onDelete { offsets in
+                for index in offsets {
+                    model.deleteDraft(model.drafts[index].id)
+                }
+            }
+        } header: {
+            SectionHeader(
+                model.drafts.count == 1 ? "1 draft" : "\(model.drafts.count) drafts",
+                subtitle: "Saved on this iPhone. Uploads keep going in the background.",
+            )
+            .padding(.bottom, Spacing.xxs)
         }
-        importButton
+        .listRowBackground(Palette.surface.color)
+        .listSectionSeparatorTint(Palette.separator.color)
     }
 
     @ViewBuilder
-    private var importButton: some View {
-        let button = PhotoLibraryButton(
-            maxCount: DraftStore.maxPhotosPerDraft,
-            fixturePhotosDirectory: environment.fixturePhotosDirectory,
-            unloaded: $unloadedPhotos,
-            onPicked: importPhotos,
-            title: environment.isCameraAvailable ? "Import from library" : "Import photos",
-            systemImage: "photo.on.rectangle",
-        )
-        .disabled(model.isPreparingPhotos)
-        .loading(model.isPreparingPhotos)
-        .accessibilityIdentifier("addItem.importPhotos")
-        if environment.isCameraAvailable {
-            button.buttonStyle(.listora(.tertiary, size: .large))
-        } else {
-            button.buttonStyle(.listoraPrimary)
+    private var actions: some View {
+        Picker("Add", selection: $mode) {
+            ForEach(AddItemMode.allCases, id: \.self) { mode in
+                Text(mode.title).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("addItem.mode")
+        UnloadedPhotosNotice(picked: $unloadedPhotos, onPicked: importPhotos)
+        switch mode {
+        case .single:
+            if environment.isCameraAvailable {
+                Button {
+                    model.beginNewItem()
+                    isCapturing = true
+                } label: {
+                    Label("Take photos", systemImage: "camera.fill")
+                }
+                .buttonStyle(.listoraPrimary)
+                .accessibilityIdentifier("addItem.takePhotos")
+            }
+            importButton
+        case .batch:
+            if environment.isCameraAvailable {
+                Button {
+                    if let batchID = model.beginBatch() {
+                        batchCapture = BatchCapture(id: batchID)
+                    }
+                } label: {
+                    Label("Shoot a batch", systemImage: "camera.fill")
+                }
+                .buttonStyle(.listoraPrimary)
+                .accessibilityIdentifier("addItem.shootBatch")
+            }
+            batchImportButton
         }
     }
 
@@ -194,120 +293,78 @@ struct DraftListView: View {
     }
 }
 
-/// What a new item needs, shown before the first draft: the guided shots in order.
-struct NewItemGuide: View {
-    let isCameraAvailable: Bool
-
-    private static let cameraIntro =
-        "Listora guides you through each shot, saves the draft on this iPhone, and uploads it in the background."
-    private static let importIntro =
-        "Import the item's photos. Listora saves the draft on this iPhone and uploads it in the background."
-
-    private struct Shot {
-        let title: String
-        let detail: String
-        let systemImage: String
-    }
-
-    private static let shots = [
-        Shot(title: "Front", detail: "Lay it flat or hang it", systemImage: "tshirt"),
-        Shot(title: "Back", detail: "Turn it over", systemImage: "arrow.uturn.left"),
-        Shot(title: "Tag", detail: "Brand and care labels, up close", systemImage: "tag"),
-        Shot(title: "Flaws & details", detail: "Anything a buyer should see", systemImage: "magnifyingglass"),
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.lg) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Take photos once")
-                    .font(Typography.title)
-                    .foregroundStyle(Palette.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                Text(isCameraAvailable ? Self.cameraIntro : Self.importIntro)
-                    .font(Typography.body)
-                    .foregroundStyle(Palette.textSecondary)
-            }
-            VStack(spacing: 0) {
-                ForEach(Array(Self.shots.enumerated()), id: \.offset) { index, shot in
-                    if index > 0 {
-                        Divider().overlay(Palette.separator.color).padding(.leading, 36 + Spacing.sm)
-                    }
-                    ListRow(shot.title, subtitle: shot.detail, systemImage: shot.systemImage)
-                        .padding(.vertical, Spacing.xs)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Shot \(index + 1): \(shot.title). \(shot.detail)")
-                }
-            }
-            .cardStyle()
-            Label(
-                "Photos stay on this iPhone until you sign in, and their location is removed before upload.",
-                systemImage: "lock.shield",
-            )
-            .labelStyle(.titleAndIcon)
-            .font(Typography.footnote)
-            .foregroundStyle(Palette.textSecondary)
-        }
-        .frame(maxWidth: Layout.readableWidth, alignment: .leading)
-        .frame(maxWidth: .infinity)
-    }
-}
-
-/// One draft in the list: cover photo, SKU once the server assigned it, and the upload status.
-struct DraftRow: View {
-    let draft: Draft
-    let activity: UploadActivity
-    let fileURL: (DraftPhotoRecord) -> URL
-    @ScaledMetric(relativeTo: .headline) private var thumbnailSize: CGFloat = 64
-
-    var body: some View {
-        let summary = DraftUploadSummary(
-            draft: draft,
-            transferring: activity.transferring,
-            isSignedIn: activity.isSignedIn,
+/// Batch mode (docs/features/batch.md): starting a batch, and the batch screens' way back.
+extension DraftListView {
+    @ViewBuilder
+    private var batchImportButton: some View {
+        let button = PhotoLibraryButton(
+            maxCount: AddItemModel.maxBatchImport,
+            fixturePhotosDirectory: environment.fixturePhotosDirectory,
+            unloaded: $unloadedPhotos,
+            onPicked: importBatch,
+            title: environment.isCameraAvailable ? "Import a batch" : "Import a batch from photos",
+            systemImage: "photo.stack",
         )
-        HStack(spacing: Spacing.sm) {
-            Group {
-                if let cover = draft.photos.first {
-                    PhotoThumbnail(url: fileURL(cover), pointSize: thumbnailSize)
-                } else {
-                    Palette.surfaceSecondary.color
-                        .overlay(Image(systemName: "photo").foregroundStyle(Palette.textSecondary))
-                }
-            }
-            .frame(width: min(thumbnailSize, 96), height: min(thumbnailSize, 96))
-            .clipShape(RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(draft.record.sku ?? "New draft")
-                    .font(Typography.headline)
-                    .foregroundStyle(Palette.textPrimary)
-                Text(
-                    "\(photoCount) · \(draft.record.createdAt, format: .relative(presentation: .named))",
-                )
-                .font(Typography.subheadline)
-                .foregroundStyle(Palette.textSecondary)
-                StatusBadge(summary.badge, tone: summary.tone.statusTone)
-                    .padding(.top, 2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        .disabled(model.isPreparingPhotos)
+        .loading(model.isPreparingPhotos)
+        .accessibilityIdentifier("addItem.importBatch")
+        if environment.isCameraAvailable {
+            button.buttonStyle(.listora(.tertiary, size: .large))
+        } else {
+            button.buttonStyle(.listoraPrimary)
         }
-        .padding(.vertical, Spacing.xs)
-        .accessibilityElement(children: .combine)
     }
 
-    private var photoCount: String {
-        draft.photos.count == 1 ? "1 photo" : "\(draft.photos.count) photos"
+    private func importBatch(_ images: [Data]) async {
+        if let batchID = await model.importBatch(images, reader: environment.signalReader) {
+            path = [.batch(batchID), .batchGrouping(batchID)]
+        }
     }
-}
 
-extension DraftUploadSummary.Tone {
-    var statusTone: StatusTone {
-        switch self {
-        case .neutral: .inProgress
-        case .empty: .neutral
-        case .success: .success
-        case .warning: .actionNeeded
-        case .danger: .failed
+    /// The camera closed: check the new photos' grouping, or go back where the seller was.
+    private func finishBatchCapture(_ batchID: String, kept: Bool) async {
+        batchCapture = nil
+        guard kept else {
+            model.dropBatchIfEmpty(batchID)
+            return
+        }
+        path = [.batch(batchID), .batchGrouping(batchID)]
+    }
+
+    private func keepShooting(_ batchID: String) {
+        guard environment.isCameraAvailable else { return }
+        batchCapture = BatchCapture(id: batchID)
+    }
+
+    /// The items are created: back to the batch, which shows them uploading and analyzing.
+    private func showBatch(_ batchID: String) {
+        path = [.batch(batchID)]
+    }
+
+    private func finishBatchReview(_ batchID: String, _ event: BatchReviewEvent) {
+        model.handle(event, batchID: batchID)
+        if event == .finished, case .batchReview = path.last {
+            path.removeLast()
+        }
+    }
+
+    @ViewBuilder
+    private var importButton: some View {
+        let button = PhotoLibraryButton(
+            maxCount: DraftStore.maxPhotosPerDraft,
+            fixturePhotosDirectory: environment.fixturePhotosDirectory,
+            unloaded: $unloadedPhotos,
+            onPicked: importPhotos,
+            title: environment.isCameraAvailable ? "Import from library" : "Import photos",
+            systemImage: "photo.on.rectangle",
+        )
+        .disabled(model.isPreparingPhotos)
+        .loading(model.isPreparingPhotos)
+        .accessibilityIdentifier("addItem.importPhotos")
+        if environment.isCameraAvailable {
+            button.buttonStyle(.listora(.tertiary, size: .large))
+        } else {
+            button.buttonStyle(.listoraPrimary)
         }
     }
 }

@@ -4,6 +4,7 @@ import Core
 import Foundation
 import InventoryFeature
 import MarketplacesFeature
+import PhotoSignalsFeature
 import ReviewFeature
 import SalesFeature
 import SettingsFeature
@@ -82,8 +83,10 @@ public struct AppDependencies {
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,
+            signalReader: VisionPhotoSignalReader(),
             meter: meter,
             reviewDestination: { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) },
+            batchReviewDestination: { request, onEvent in AnyView(review.batchFlow(for: request, onEvent: onEvent)) },
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
@@ -114,6 +117,7 @@ public struct AppDependencies {
         }
         interactionStorage.reset()
         ReviewEnvironment.resetLocalData(defaults: defaults)
+        AddItemEnvironment.resetLocalData(defaults: defaults)
         accessGrantStorage.save(nil)
     }
 

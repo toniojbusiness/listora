@@ -13,12 +13,15 @@ final class AddItemModel {
     let activity: UploadActivity
     /// Measures each new item's interaction time from its first photo.
     let meter: InteractionMeter
+    /// The drafts of single items; a batch's drafts show with their batch.
     private(set) var drafts: [Draft] = []
+    /// The batches on this iPhone, newest first.
+    var batches: [Batch] = []
     /// A problem to show in an alert.
     var errorMessage: String?
-    /// Photos being prepared for a new or existing draft.
-    private(set) var isPreparingPhotos = false
-    private let log = Logger(subsystem: "com.listora.app", category: "drafts")
+    /// Photos being prepared for a new or existing draft or batch.
+    var isPreparingPhotos = false
+    let log = Logger(subsystem: "com.listora.app", category: "drafts")
     /// The measurement of a new item whose draft does not exist yet (the camera is open, or the
     /// photos are being prepared).
     private var pendingSession: String?
@@ -61,7 +64,7 @@ final class AddItemModel {
     func observeDrafts() async {
         do {
             for try await drafts in store.observeDrafts() {
-                self.drafts = drafts
+                self.drafts = drafts.filter { $0.record.batchID == nil }
             }
         } catch {
             log.error("Observing drafts failed: \(String(describing: error), privacy: .public)")
@@ -164,10 +167,15 @@ final class AddItemModel {
         meter.discard(draftID)
     }
 
-    /// The draft's item was saved in review: only this iPhone's copy of the draft goes.
+    /// The draft's item was saved in review: only this iPhone's copy of the draft goes (and its
+    /// batch, once nothing else of the batch is left here).
     func completeDraft(_ draftID: String) {
+        let batchID = try? store.draft(id: draftID)?.record.batchID
         perform { store in
             try cancelTransfers(of: store.completeDraft(draftID).map(\.id))
+            if let batchID, try store.removeBatchIfFinished(batchID) {
+                meter.discard(BatchRecord.meterSession(batchID))
+            }
         }
     }
 
@@ -209,7 +217,7 @@ final class AddItemModel {
         Task { await uploader.cancelTransfers(of: photoIDs) }
     }
 
-    private func show(_ error: any Error) {
+    func show(_ error: any Error) {
         log.error("Draft change failed: \(String(describing: error), privacy: .public)")
         errorMessage = switch error {
         case DraftStoreError.tooManyPhotos:

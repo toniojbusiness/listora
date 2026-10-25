@@ -43,6 +43,9 @@ reopened item whose photos changed since its analysis was applied is analyzed ag
   marketplace (Depop Pricing Inspiration) is not shown here, since this is no listing context.
 - **Save** stores the price, the highest floor, and status `ready`, and shows the SKU.
 
+A batch's rapid review ([batch.md](batch.md#rapid-review)) shows each item on one page with the
+same model, and saves its details, cost, and price in one tap.
+
 ## Interaction time
 
 `InteractionMeter` (in `Core`) measures each new item from its first photo (the camera opening,

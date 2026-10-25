@@ -54,6 +54,15 @@ public final class ReviewEnvironment {
         ReviewFlowView(environment: self, request: request, onFinished: onFinished)
     }
 
+    /// The rapid review of a batch's items (docs/features/batch.md): `onEvent` hears of each saved
+    /// item as it is saved, and of the seller finishing.
+    public func batchFlow(
+        for request: BatchReviewRequest,
+        onEvent: @escaping @MainActor (BatchReviewEvent) -> Void,
+    ) -> some View {
+        BatchReviewView(environment: self, request: request, onEvent: onEvent)
+    }
+
     func makeModel(for request: ItemReviewRequest) -> ReviewFlowModel {
         ReviewFlowModel(
             request: request,
