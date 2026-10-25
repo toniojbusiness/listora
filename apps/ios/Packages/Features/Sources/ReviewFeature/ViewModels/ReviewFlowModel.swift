@@ -109,6 +109,7 @@ final class ReviewFlowModel {
     var showsPrice = false
     var showsSaved = false
     private var pipeline: Task<Void, Never>?
+    private var hasAppeared = false
 
     init(
         request: ItemReviewRequest,
@@ -131,6 +132,15 @@ final class ReviewFlowModel {
     }
 
     // MARK: Loading and analysis
+
+    /// The review screen appeared: loads the item the first time only. SwiftUI can show this screen
+    /// again (restarting its task) while the cost, price, or saved screen is pushed on top, and
+    /// loading then would reset the review, or replace the saved item and its measurement.
+    func appeared() async {
+        guard !hasAppeared else { return }
+        hasAppeared = true
+        await start()
+    }
 
     /// Loads the item and runs whatever it still needs: photo processing, the analysis, applying
     /// it. Safe to call again (Try again): every step is idempotent on the server.
@@ -301,39 +311,6 @@ final class ReviewFlowModel {
 }
 
 extension ReviewFlowModel {
-    // MARK: Problems
-
-    static func problem(_ failure: APIFailure) -> Problem {
-        let title = switch failure.knownCode {
-        case .quotaExceeded: "Your plan's limit is reached"
-        case .notFound: "This item isn't on Listora anymore"
-        default: "Something went wrong"
-        }
-        return Problem(
-            title: title,
-            message: failure.message,
-            canRetry: failure.retryable || failure.statusCode == nil,
-            suggestsEditingPhotos: false,
-        )
-    }
-
-    static func problem(analysisFailure failure: Components.Schemas.AnalysisFailure?) -> Problem {
-        guard let failure else {
-            return Problem(
-                title: "Listora couldn't analyze this item",
-                message: "The analysis stopped without a reason. Try again.",
-                canRetry: true,
-                suggestsEditingPhotos: false,
-            )
-        }
-        return Problem(
-            title: "Listora couldn't analyze this item",
-            message: failure.message,
-            canRetry: failure.retryable,
-            suggestsEditingPhotos: !failure.retryable,
-        )
-    }
-
     // MARK: Dates
 
     private static let dayFormat = Date.ISO8601FormatStyle(timeZone: .current).year().month().day()
@@ -345,43 +322,5 @@ extension ReviewFlowModel {
 
     static func date(fromDay day: String) -> Date? {
         try? dayFormat.parse(day)
-    }
-}
-
-/// Why the flow stopped, before it becomes a ``ReviewFlowModel/Problem``.
-enum ReviewFlowError: Error, Equatable {
-    enum Stage: Equatable {
-        case photos
-        case analysis
-    }
-
-    case photoFailed(reason: String?)
-    case timedOut(Stage)
-
-    var problem: ReviewFlowModel.Problem {
-        switch self {
-        case let .photoFailed(reason):
-            ReviewFlowModel.Problem(
-                title: "A photo couldn't be processed",
-                message: [reason, "Remove or replace that photo, then review the item again."]
-                    .compactMap(\.self).joined(separator: " "),
-                canRetry: false,
-                suggestsEditingPhotos: true,
-            )
-        case .timedOut(.photos):
-            ReviewFlowModel.Problem(
-                title: "Your photos are taking longer than usual",
-                message: "Listora is still getting them ready. Try again in a moment.",
-                canRetry: true,
-                suggestsEditingPhotos: false,
-            )
-        case .timedOut(.analysis):
-            ReviewFlowModel.Problem(
-                title: "The analysis is taking longer than usual",
-                message: "It keeps running on Listora. Try again in a moment to see the result.",
-                canRetry: true,
-                suggestsEditingPhotos: false,
-            )
-        }
     }
 }

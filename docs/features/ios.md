@@ -27,6 +27,10 @@ The details and commands are in [apps/ios/README.md](../../apps/ios/README.md).
   Interactive steps (review, cost, price) save to the server before the next screen opens, so a
   relaunch resumes from the server's state; every wait on the server has a deadline and ends in
   a failure with a Retry, never an endless spinner ([review.md](review.md)).
+- A screen's `.task` loads its data once: SwiftUI can show a screen again, restarting its task,
+  while later screens are pushed over it, so a flow's model guards its first load
+  (`ReviewFlowModel.appeared()`). A setting that a navigation host reads lives in its model, not
+  in `@AppStorage`, which redraws the view on every `UserDefaults` write.
 - Views use `DesignSystem` tokens and components, never raw colors, sizes, or their own button
   and card styling, so light and dark mode stay consistent. A test checks WCAG AA contrast for
   every text and background pair. The design system and its rules are in
