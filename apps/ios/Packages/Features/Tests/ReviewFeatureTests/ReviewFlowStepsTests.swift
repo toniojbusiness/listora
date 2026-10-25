@@ -52,7 +52,7 @@ struct ReviewFlowStepsTests {
     }
 
     @Test
-    func `Continue keeps the text still open in a detail's editor`() async {
+    func `tapping Continue keeps the text still open in a detail's editor`() async {
         await harness.scriptHappyPath()
         let model = harness.model()
         await model.start()
