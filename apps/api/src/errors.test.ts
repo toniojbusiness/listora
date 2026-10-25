@@ -118,6 +118,21 @@ describe('error responses', () => {
     expect(empty.statusCode).toBe(422);
     expect(empty.json()).toMatchObject({ error: { code: 'validation_failed' } });
 
+    // An empty body is no body whatever content type comes with it, except JSON, which must
+    // then be valid JSON.
+    for (const headers of [
+      { 'content-type': 'text/plain', 'transfer-encoding': 'chunked' },
+      { 'content-type': 'application/octet-stream', 'transfer-encoding': 'chunked' },
+    ]) {
+      const typedEmpty = await app.inject({
+        method: 'POST',
+        url: '/dev/auth/codes',
+        headers,
+        payload: '',
+      });
+      expect(typedEmpty.statusCode, JSON.stringify(headers)).toBe(422);
+    }
+
     // A body without a content type, or of any type but JSON, is still refused.
     for (const headers of [{ 'transfer-encoding': 'chunked' }, { 'content-type': 'text/xml' }]) {
       const refused = await app.inject({
