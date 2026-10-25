@@ -1,6 +1,9 @@
 {
-  "description": "The UI tests' item: the fixture photos in ListoraUITests/Fixtures, a shirt whose tag (3-tag.jpg) reads ACME OUTFITTERS, RN 12345, 60% cotton 40% polyester, style AB1234. The brand and color are uncertain, so review lists them first and offers Identify harder; the size is not on the tag.",
+  "description": "The UI tests' item: the fixture photos in ListoraUITests/Fixtures, a shirt whose tag (3-tag.jpg) reads ACME OUTFITTERS, RN 12345, 60% cotton 40% polyester, style AB1234. The brand and color are uncertain, so review lists them first and offers Identify harder; the size is not on the tag. A spoken correction the phone could not parse comes back as the keyword \"embroidered logo\".",
   "outputs": {
+    "voice_correction": {
+      "changes": [{ "field": "keywords", "value": "embroidered logo" }]
+    },
     "item_analysis": {
       "attributes": {
         "brand": "Acme Outfitters",
