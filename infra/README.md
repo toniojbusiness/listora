@@ -236,9 +236,9 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
      --termination-protection
    ```
 
-6. **Deploys** the registry, builds the image for `linux/amd64` (the tasks run on X86_64)
-   and pushes it (reusing an image already pushed for the commit), then the state stacks and
-   the migrate stack.
+6. **Deploys** the registry, builds the `app` and `runner` images for `linux/amd64` (the
+   tasks run on X86_64) and pushes them (reusing an image already pushed for the commit), then
+   the state stacks and the migrate stack.
 7. **Stores the Anthropic key** in `listora/personal/anthropic-api-key` from a private
    temporary file, only when it differs; if the services were already running, it restarts
    them so they read it.
