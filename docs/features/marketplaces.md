@@ -163,6 +163,10 @@ produce each failure mode the suite asks for (`ConformanceMarketplace`).
 
 ## Listings in the API (`apps/api/src/listings`)
 
+- **Listing actions.** Draft listings, publish, price change, revise, end, relist, and verify,
+  each queued as an operation, and the rule for which action a listing allows now
+  (`availableActions`): [inventory.md](inventory.md#the-api-behind-it).
+
 - **Listings.** An item's `listings` (and `ItemSummary.listings`) are its newest listing per
   marketplace, each with a server-rendered `statusDisplay` (`listings/views.ts`). A listing is
   `api` only while it is on an API connection, otherwise `assisted`. Only an API listing can be
@@ -181,7 +185,9 @@ produce each failure mode the suite asks for (`ConformanceMarketplace`).
 
 - **Marketplaces:** `marketplace_connection` and `connection_authorization`
   ([connections.md](connections.md#data)),
-  `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot and
+  `marketplace_listing` (per-marketplace variant: title, description, price, category, the
+  marketplace's condition when it differs from the item's, item specifics as an ordered
+  `[{name, values}]` list, and hashtags; external ids, status, remote snapshot and
   newest seen revision, desired/applied version, `last_verified_at` for a read-back and
   `user_confirmed_at` for the user's confirmation; a listing known only by a share short link
   is unique by its URL), `marketplace_operation` (with the listing `content` a create, revise,

@@ -183,7 +183,9 @@ src/
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
   usage/         getUsage: the plan's quota use, from the counters the AI guards enforce
-  listings/      Listing views (honest statusDisplay) and shared-listing links
+  listings/      Draft listings, the listing actions (publish, price, revise, end, relist,
+                 verify) queued on the operation engine, honest views, shared-listing links
+  operations/    Operations, their history, Retry, and Cancel
   connections/   Marketplace connections, connect attempts, and the public OAuth callback
   sales/         The sales feed (listSales, getSale) with each sale's delist runs and double sales
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
@@ -380,6 +382,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/ios.md](features/ios.md)                               | iOS app conventions                                                           |
 | [features/review.md](features/review.md)                         | The iPhone review, cost, and price screens and the interaction-time metric    |
 | [features/design.md](features/design.md)                         | The iPhone app's design system, screenshots, and UI audit                     |
+| [features/inventory.md](features/inventory.md)                   | The Inventory tab, the item screen, the listing flow and its API              |
 
 ### Former section numbers
 

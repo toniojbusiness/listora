@@ -91,12 +91,78 @@ const USER_DONE = {
   verify: 'checked it',
 } as const satisfies Record<OperationKind, string>;
 
+/** "Delisted (confirmed by eBay)": what a succeeded operation made true, in its history. */
+const RESULT = {
+  create: 'Published',
+  revise: 'Updated',
+  price: 'Price changed',
+  end: 'Delisted',
+  relist: 'Relisted',
+  mark_sold: 'Marked sold',
+  verify: 'Checked',
+} as const satisfies Record<OperationKind, string>;
+
+type OperationInput = NonNullable<ListingStatusInput['operation']>;
+
 export function describeListingStatus(input: ListingStatusInput): StatusDisplay {
-  const name = MARKETPLACE_NAMES[input.marketplace];
   const { operation } = input;
   if (operation === null || operation.status === 'canceled') {
     return describeUnverified(input.listingStatus);
   }
+  const name = MARKETPLACE_NAMES[input.marketplace];
+  if (operation.status === 'succeeded') {
+    return describeSuccess(
+      confirmedState(input.listingStatus),
+      operation.successEvidence,
+      operation.kind,
+      name,
+      input.listingStatus,
+    );
+  }
+  return describeUnsettled(operation, name, input.maxAttempts);
+}
+
+/**
+ * One operation as its history shows it. A success names what that operation did ("Delisted
+ * (confirmed by eBay)"), never the listing's state now, which a later operation may have
+ * changed.
+ */
+export function describeOperation(input: {
+  marketplace: Marketplace;
+  operation: OperationInput;
+  maxAttempts?: number;
+}): StatusDisplay {
+  const { operation } = input;
+  const name = MARKETPLACE_NAMES[input.marketplace];
+  switch (operation.status) {
+    case 'canceled':
+      return { tone: 'neutral', label: 'Canceled' };
+    case 'succeeded':
+      return describeSuccess(
+        RESULT[operation.kind],
+        operation.successEvidence,
+        operation.kind,
+        name,
+        null,
+      );
+    case 'queued':
+    case 'running':
+    case 'retrying':
+    case 'verifying':
+    case 'needs_user_action':
+    case 'failed':
+      return describeUnsettled(operation, name, input.maxAttempts);
+    default:
+      return assertNever(operation.status, 'operation status');
+  }
+}
+
+/** An operation that is still running, waiting, or failed. */
+function describeUnsettled(
+  operation: OperationInput,
+  name: string,
+  attemptsPerOperation: number | undefined,
+): StatusDisplay {
   const detail = operation.errorMessage === null ? {} : { detail: operation.errorMessage };
   const { kind } = operation;
   switch (operation.status) {
@@ -104,7 +170,7 @@ export function describeListingStatus(input: ListingStatusInput): StatusDisplay 
     case 'running':
       return { tone: 'in_progress', label: `${IN_PROGRESS[kind]}...` };
     case 'retrying': {
-      const retries = (input.maxAttempts ?? maxAttempts(DEFAULT_RETRY_POLICY)) - 1;
+      const retries = (attemptsPerOperation ?? maxAttempts(DEFAULT_RETRY_POLICY)) - 1;
       const label = `${IN_PROGRESS[kind]}... retry ${String(operation.attempts)} of ${String(retries)}`;
       return { tone: 'in_progress', label, ...detail };
     }
@@ -115,21 +181,27 @@ export function describeListingStatus(input: ListingStatusInput): StatusDisplay 
     case 'failed':
       return { tone: 'failed', label: `${FAILED[kind]} failed - Retry`, ...detail };
     case 'succeeded':
-      return describeSuccess(input.listingStatus, operation.successEvidence, kind, name);
+    case 'canceled':
+      throw new Error(`a ${operation.status} operation is settled`);
     default:
       return assertNever(operation.status, 'operation status');
   }
 }
 
+/**
+ * `state` is what the read-back confirmed. Without evidence (which the database refuses) the
+ * listing's recorded status is shown unconfirmed, or a neutral "Done" for an operation's history.
+ */
 function describeSuccess(
-  listingStatus: ListingStatus,
+  state: string,
   evidence: SuccessEvidence | null,
   kind: OperationKind,
   name: string,
+  listingStatus: ListingStatus | null,
 ): StatusDisplay {
   switch (evidence) {
     case 'read_back':
-      return { tone: 'success', label: `${confirmedState(listingStatus)} (confirmed by ${name})` };
+      return { tone: 'success', label: `${state} (confirmed by ${name})` };
     case 'user_confirmation':
       return {
         tone: 'success',
@@ -138,7 +210,9 @@ function describeSuccess(
       };
     case null:
       // The database refuses a success without evidence; never show one as confirmed.
-      return describeUnverified(listingStatus);
+      return listingStatus === null
+        ? { tone: 'neutral', label: 'Done' }
+        : describeUnverified(listingStatus);
     default:
       return assertNever(evidence, 'success evidence');
   }

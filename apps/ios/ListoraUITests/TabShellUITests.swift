@@ -1,14 +1,14 @@
 import XCTest
 
-/// Drives the real app on the simulator: the tab shell and what each placeholder screen shows.
+/// Drives the real app on the simulator, signed out: the tab shell and what each screen shows.
 @MainActor
 final class TabShellUITests: XCTestCase {
     private let app = XCUIApplication()
 
     override func setUp() async throws {
         continueAfterFailure = false
-        // Without drafts, Add Item shows its guide.
-        app.launchEnvironment["LISTORA_RESET_LOCAL_DATA"] = "1"
+        // Signed out, whatever an earlier test left behind, so no screen talks to a server.
+        app.launchEnvironment = ["LISTORA_RESET_LOCAL_DATA": "1"]
         app.launch()
     }
 
@@ -19,7 +19,7 @@ final class TabShellUITests: XCTestCase {
             XCTAssertTrue(tabBar.buttons[title].exists, "missing tab \(title)")
         }
         XCTAssertTrue(app.navigationBars["Inventory"].exists)
-        XCTAssertTrue(app.staticTexts["No items yet"].exists)
+        XCTAssertTrue(app.staticTexts["Sign in to see your inventory"].waitForExistence(timeout: 5))
     }
 
     func testEachTabShowsItsScreen() {
@@ -29,7 +29,7 @@ final class TabShellUITests: XCTestCase {
             ("Add Item", "Take photos once"),
             ("Tasks", "You're all caught up"),
             ("Settings", "Environment"),
-            ("Inventory", "No items yet"),
+            ("Inventory", "Sign in to see your inventory"),
         ]
         for (tab, text) in expected {
             tabBar.buttons[tab].tap()
@@ -38,7 +38,7 @@ final class TabShellUITests: XCTestCase {
         }
     }
 
-    func testAddItemFromEmptyInventorySwitchesTabs() {
+    func testAddItemFromTheSignedOutInventorySwitchesTabs() {
         let addItem = app.buttons["Add item"]
         XCTAssertTrue(addItem.waitForExistence(timeout: 10))
         addItem.tap()

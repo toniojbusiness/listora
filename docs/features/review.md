@@ -29,7 +29,8 @@ reopened item whose photos changed since its analysis was applied is analyzed ag
   @listora/analysis's that `packages/analysis/src/ios-vocabulary.test.ts` keeps equal.
   The canonical title and description are details too; each marketplace's copy opens in an
   editor that counts its limits. The seller's copy edits stay on this iPhone
-  (`ListingCopyStore` in `Core`) until the item's listings exist (plan task T-19).
+  (`ListingCopyStore` in `Core`); the List flow starts each marketplace's draft listing from them
+  ([inventory.md](inventory.md)), and from then on the listing carries the copy.
 - **Identify harder** is prominent when the brand is missing or below 0.6, or the analysis asks
   for it, and shows the plan's premium identifications (`getUsage`); once they are used up it
   says so and is unavailable. It saves the seller's edits first, so the premium details never

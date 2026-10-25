@@ -27,7 +27,13 @@ export {
   operationJobKey,
 } from './jobs.ts';
 export type { OperationJobPayload } from './jobs.ts';
-export { DEFAULT_RETRY_POLICY, delayAfterAttempt, maxAttempts, RETRY_DELAYS_MS } from './policy.ts';
+export {
+  DEFAULT_RETRY_POLICY,
+  delayAfterAttempt,
+  maxAttempts,
+  RETRY_DELAYS_MS,
+  scaledRetryPolicy,
+} from './policy.ts';
 export type { RetryPolicy } from './policy.ts';
 export { LIVENESS_APPLICATION_PREFIX, reapStoppedWorkers } from './recovery.ts';
 export {
@@ -45,7 +51,7 @@ export {
   UNFINISHED_STATUSES,
 } from './state-machine.ts';
 export type { OperationChange, OperationError, OperationRow } from './transitions.ts';
-export { describeListingStatus } from './status-display.ts';
+export { describeListingStatus, describeOperation } from './status-display.ts';
 export type { ListingStatusInput, StatusDisplay, StatusTone } from './status-display.ts';
 export { startOperationWorker } from './worker.ts';
 export type {
