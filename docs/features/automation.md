@@ -40,8 +40,15 @@ from the app
   `read` runs a script that may not mutate (form input refuses). A failed run leaves one
   screenshot of the viewport with every form field and the profile's private elements blacked
   out, in private storage under `automation/<account>/`, deleted after 14 days or with the
-  account. The browser is honest about what it is: Playwright's own headless Chromium and user
-  agent, no stealth, no fingerprint changes.
+  account; a page off the marketplace's origins is never kept. The browser is honest about what
+  it is: Playwright's own headless Chromium and user agent, no stealth, no fingerprint changes.
+- **Network rules** (`safety/network.ts`). The runner checks every request and WebSocket before
+  Chromium sends it. The main frame may only load the profile's own origins. No request may go
+  to a private address: loopback, the private ranges, link-local (where the cloud's metadata
+  and task credential endpoints are), or internal host names. Images, scripts, and styles from
+  other public hosts (the marketplaces' CDNs) still load. Chromium follows HTTP redirects
+  without asking, so a redirect hop is not checked. If a redirect sends the main frame
+  elsewhere, the page inspection below stops the run.
 - **Safety rules** (`safety/`, `profiles.ts`). Pacing: a random delay before every action and
   keystroke, and between a seller's sessions, per marketplace (`AUTOMATION_<MARKETPLACE>_*`),
   never below the floors in `profiles.ts`. Rate limits: runs per hour and per day per seller,

@@ -38,3 +38,15 @@ export function sanitizeMessage(message: string, typed: Iterable<string>): strin
   line = line.replace(/\bhttps?:\/\/[^\s'")]+/g, (url) => originForLog(url));
   return line.length > MAX_ERROR_LENGTH ? `${line.slice(0, MAX_ERROR_LENGTH)}...` : line;
 }
+
+/** A thrown value as a log line may carry it: its name and its sanitized first line. */
+export function sanitizedError(
+  thrown: unknown,
+  typed: Iterable<string> = [],
+): { name: string; message: string } {
+  const name = thrown instanceof Error ? thrown.name : 'Error';
+  return {
+    name,
+    message: sanitizeMessage(thrown instanceof Error ? thrown.message : String(thrown), typed),
+  };
+}
