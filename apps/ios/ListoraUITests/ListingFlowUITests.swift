@@ -25,44 +25,13 @@ final class ListingFlowUITests: XCTestCase {
         keepScreenshot("Inventory")
         row.tap()
 
-        // Not on eBay yet; List opens the marketplace choice, then the eBay version.
         let status = app.descendants(matching: .any)["marketplace.ebay.status"]
-        XCTAssertTrue(waitForLabel(of: status, "Not listed", timeout: 15), status.label)
-        XCTAssertTrue(app.staticTexts["item.cost"].exists || app.descendants(matching: .any)["item.cost"].exists)
-        keepScreenshot("Item")
-        app.buttons["marketplace.ebay.action.list"].tap()
-        let next = app.buttons["listing.next"]
-        XCTAssertTrue(next.waitForExistence(timeout: 10))
-        XCTAssertTrue(waitForEnabled(next), "eBay is not offered")
-        keepScreenshot("Choose marketplaces")
-        next.tap()
-        let title = app.textFields["listing.title"]
-        XCTAssertTrue(title.waitForExistence(timeout: 5))
-        XCTAssertEqual(title.value as? String, "Levi's Trucker Denim Jacket")
-        keepScreenshot("eBay listing")
-        app.buttons["listing.publish"].tap()
-
+        publishOnEbay(status: status)
         // Publish: in progress, then confirmed by eBay's read-back.
         XCTAssertTrue(waitForLabel(of: status, "Active (confirmed by eBay)", timeout: 60), status.label)
         keepScreenshot("Active")
 
-        // A price change, confirmed the same way.
-        app.buttons["marketplace.ebay.action.changePrice"].tap()
-        let price = app.textFields["price.field"]
-        XCTAssertTrue(price.waitForExistence(timeout: 5))
-        price.tap()
-        price.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6) + "39")
-        app.buttons["price.save"].tap()
-        // The label reads "Active (confirmed by eBay)" before the change is queued too, so wait
-        // for the change in the history and its actions coming back, which happens only once it
-        // is settled; then the label must still be the confirmed one.
-        let history = app.descendants(matching: .any)["marketplace.ebay.history"]
-        XCTAssertTrue(waitForLabel(of: history, "History (2)", timeout: 30), history.label)
-        let end = app.buttons["marketplace.ebay.action.end"]
-        XCTAssertTrue(end.waitForExistence(timeout: 60), "the price change never settled: \(status.label)")
-        XCTAssertEqual(status.label, "Active (confirmed by eBay)")
-        XCTAssertEqual(app.descendants(matching: .any)["marketplace.ebay.price"].label, "Listed at $39.00")
-
+        let end = changePrice(status: status)
         // eBay refuses the delist: the failure is shown, with Retry.
         try await stack.injectEbayFault(action: "end", type: "reject", message: "The listing cannot be ended now.")
         end.tap()
@@ -100,6 +69,44 @@ final class ListingFlowUITests: XCTestCase {
     }
 
     // MARK: Steps
+
+    /// Not on eBay yet; List opens the marketplace choice, then the eBay version, then publishes.
+    private func publishOnEbay(status: XCUIElement) {
+        XCTAssertTrue(waitForLabel(of: status, "Not listed", timeout: 15), status.label)
+        XCTAssertTrue(app.descendants(matching: .any)["item.cost"].exists)
+        keepScreenshot("Item")
+        app.buttons["marketplace.ebay.action.list"].tap()
+        let next = app.buttons["listing.next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10))
+        XCTAssertTrue(waitForEnabled(next), "eBay is not offered")
+        keepScreenshot("Choose marketplaces")
+        next.tap()
+        let title = app.textFields["listing.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.value as? String, "Levi's Trucker Denim Jacket")
+        keepScreenshot("eBay listing")
+        app.buttons["listing.publish"].tap()
+    }
+
+    /// A price change to $39, confirmed by eBay. Returns the End button, back once it settled.
+    private func changePrice(status: XCUIElement) -> XCUIElement {
+        app.buttons["marketplace.ebay.action.changePrice"].tap()
+        let price = app.textFields["price.field"]
+        XCTAssertTrue(price.waitForExistence(timeout: 5))
+        price.tap()
+        price.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6) + "39")
+        app.buttons["price.save"].tap()
+        // The label reads "Active (confirmed by eBay)" before the change is queued too, so wait
+        // for the change in the history and its actions coming back, which happens only once it
+        // is settled; then the label must still be the confirmed one.
+        let history = app.descendants(matching: .any)["marketplace.ebay.history"]
+        XCTAssertTrue(waitForLabel(of: history, "History (2)", timeout: 30), history.label)
+        let end = app.buttons["marketplace.ebay.action.end"]
+        XCTAssertTrue(end.waitForExistence(timeout: 60), "the price change never settled: \(status.label)")
+        XCTAssertEqual(status.label, "Active (confirmed by eBay)")
+        XCTAssertEqual(app.descendants(matching: .any)["marketplace.ebay.price"].label, "Listed at $39.00")
+        return end
+    }
 
     private func launch(signedInTo stack: E2EStack) {
         app.launchEnvironment = [
