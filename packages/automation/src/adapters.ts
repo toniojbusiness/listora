@@ -1,10 +1,10 @@
 /**
- * The automation adapters a process serves, per marketplace (decision D1). Poshmark has its own
- * adapter (poshmark/), which drives poshmark.com, or the fake Poshmark with `FAKE_POSHMARK_URL`.
- * The adapters for Mercari and Depop are their own tasks; until each lands, its marketplace has
- * no automation adapter and stays assisted. In development and tests,
- * `FAKE_AUTOMATION_SITE_URL` serves Mercari and Depop, and Poshmark without `FAKE_POSHMARK_URL`,
- * through the fake site's adapter, so a development setup never drives a real marketplace.
+ * The automation adapters a process serves, per marketplace (decision D1). Poshmark and Mercari
+ * have their own adapters (poshmark/, mercari/), which drive poshmark.com and mercari.com, or
+ * their fakes with `FAKE_POSHMARK_URL` and `FAKE_MERCARI_SITE_URL`. The adapter for Depop is its
+ * own task; until it lands, Depop has no automation adapter and stays assisted. In development
+ * and tests, `FAKE_AUTOMATION_SITE_URL` serves Depop, and Poshmark or Mercari without its own
+ * fake, through the fake site's adapter, so a development setup never drives a real marketplace.
  *
  * The worker and the browser runner build the same adapters (with and without a browser), so
  * both route every operation to the same mode.
@@ -16,6 +16,7 @@ import type { PhotoSource } from './adapter/photos.ts';
 import type { AutomationSessions } from './adapter/sessions.ts';
 import { createFakeSiteAdapter } from './fake-site/fake-site-adapter.ts';
 import { createPoshmarkAutomationAdapter } from './poshmark/adapter.ts';
+import { createMercariAutomationAdapter } from './mercari/adapter.ts';
 import { AUTOMATED_MARKETPLACES, type AutomatedMarketplace } from './profiles.ts';
 import type { AutomationSettings } from './settings.ts';
 
@@ -56,6 +57,17 @@ export function createAutomationAdapters(
       sessions: deps.sessions,
       photos: deps.photos,
       logger: deps.logger,
+    });
+  }
+  if (settings.fakeMercariSiteUrl !== undefined || siteUrl === undefined) {
+    adapters.mercari = createMercariAutomationAdapter({
+      profile: settings.profiles.mercari,
+      sessions: deps.sessions,
+      photos: deps.photos,
+      logger: deps.logger,
+      ...(settings.fakeMercariSiteUrl === undefined
+        ? {}
+        : { siteUrl: settings.fakeMercariSiteUrl }),
     });
   }
   return adapters;

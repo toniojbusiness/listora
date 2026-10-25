@@ -9,7 +9,8 @@
   },
   "scripts": {
     "fake-site": "node --env-file-if-exists=../../.env src/fake-site/cli.ts",
-    "fake-poshmark": "node --env-file-if-exists=../../.env src/poshmark/fake/cli.ts"
+    "fake-poshmark": "node --env-file-if-exists=../../.env src/poshmark/fake/cli.ts",
+    "fake-mercari": "node --env-file-if-exists=../../.env src/mercari/fake/cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ecs": "^3.1156.0",

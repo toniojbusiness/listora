@@ -17,7 +17,8 @@
  *
  * Imports, webhooks, and emails join this interface with the tasks that first use them (T-17,
  * T-23, T-36), as optional members; orders joined with the browser runner's sale checks
- * (`listOrdersSince`), and the seller's listings with the Poshmark automation adapter
+ * (`listOrdersSince`), and the seller's listings with the Poshmark and Mercari automation
+ * adapters
  * (`listListings`, for imports and drift checks). Credentials are not members: an adapter gets
  * a connection's tokens or browser session at use time from its own source (eBay's
  * `EbaySellerSource`, which `@listora/connections` implements over the token vault; the browser

@@ -56,7 +56,7 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
           logger,
         }),
       });
-    // Production: Poshmark's own adapter; Mercari and Depop wait for theirs.
+    // Production: Poshmark's and Mercari's own adapters; Depop waits for its own.
     const production = build({});
     expect(production.capabilities('poshmark', automated)).toMatchObject({
       create: 'automation',
@@ -68,11 +68,25 @@ describe('createAutomationAdapters in the marketplace adapters', () => {
       saleDetection: ['poll', 'email', 'manual'],
     });
     expect(production.capabilities('poshmark', null)?.create).toBe('assisted');
-    for (const marketplace of ['mercari', 'depop'] as const) {
-      expect(production.capabilities(marketplace, automated)?.create, marketplace).toBe('assisted');
-    }
+    expect(production.capabilities('mercari', automated)).toMatchObject({
+      connect: 'session',
+      create: 'automation',
+      updatePrice: 'automation',
+      updateDetails: 'automation',
+      delist: 'automation',
+      relist: 'automation',
+      markSold: 'not_needed',
+      verifyRead: 'automation',
+      readFreshness: 'revision',
+      saleDetection: ['poll', 'email', 'manual'],
+    });
+    expect(production.capabilities('mercari', null)?.create).toBe('assisted');
+    expect(production.capabilities('depop', automated)?.create).toBe('assisted');
     // The fake Poshmark serves the same adapter in development.
     const development = build({ FAKE_POSHMARK_URL: 'http://127.0.0.1:4500' });
     expect(development.capabilities('poshmark', automated)?.readFreshness).toBe('revision');
+    // And the fake Mercari site serves Mercari's.
+    const mercari = build({ FAKE_MERCARI_SITE_URL: 'http://127.0.0.1:4600' });
+    expect(mercari.capabilities('mercari', automated)?.readFreshness).toBe('revision');
   });
 });

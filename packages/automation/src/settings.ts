@@ -40,6 +40,12 @@ export interface AutomationSettings {
    * drives instead of poshmark.com (it takes precedence over `fakeSiteUrl` for Poshmark).
    */
   readonly fakePoshmarkUrl: string | undefined;
+  /**
+   * Development and tests only: the fake Mercari site (`npm run dev:fake-mercari`), which the
+   * Mercari automation adapter then drives instead of mercari.com (it takes precedence over
+   * `fakeSiteUrl` for Mercari).
+   */
+  readonly fakeMercariSiteUrl: string | undefined;
 }
 
 export class AutomationConfigError extends Error {
@@ -74,6 +80,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
 
   const fakeSiteUrl = localUrl(issues, env, 'FAKE_AUTOMATION_SITE_URL');
   const fakePoshmarkUrl = localUrl(issues, env, 'FAKE_POSHMARK_URL');
+  const fakeMercariSiteUrl = localUrl(issues, env, 'FAKE_MERCARI_SITE_URL');
 
   const profiles = Object.fromEntries(
     AUTOMATED_MARKETPLACES.map((marketplace) => {
@@ -117,7 +124,13 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
         limits: { runsPerHour, runsPerDay },
       };
       // In development, a marketplace's stand-in replaces its real site, never the reverse.
-      const standIn = marketplace === 'poshmark' ? (fakePoshmarkUrl ?? fakeSiteUrl) : fakeSiteUrl;
+      const ownFake =
+        marketplace === 'poshmark'
+          ? fakePoshmarkUrl
+          : marketplace === 'mercari'
+            ? fakeMercariSiteUrl
+            : undefined;
+      const standIn = ownFake ?? fakeSiteUrl;
       return [marketplace, standIn === undefined ? profile : standInProfile(profile, standIn)];
     }),
   ) as Record<AutomatedMarketplace, AutomationProfile>;
@@ -139,7 +152,15 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
   }
 
   if (issues.length > 0) throw new AutomationConfigError(issues);
-  return { stepTimeoutMs, callTimeoutMs, profiles, saleChecks, fakeSiteUrl, fakePoshmarkUrl };
+  return {
+    stepTimeoutMs,
+    callTimeoutMs,
+    profiles,
+    saleChecks,
+    fakeSiteUrl,
+    fakePoshmarkUrl,
+    fakeMercariSiteUrl,
+  };
 }
 
 /** A local development server's URL, `http://127.0.0.1:<port>`; unset or empty is `undefined`. */
