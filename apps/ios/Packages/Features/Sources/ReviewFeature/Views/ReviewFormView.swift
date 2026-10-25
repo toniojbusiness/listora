@@ -9,7 +9,6 @@ struct ReviewFormView: View {
     @Bindable var model: ReviewFlowModel
     let voice: VoiceCorrectionModel
     @State private var editingCopy: MarketplaceCopy?
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         if let form = model.form {
@@ -172,11 +171,7 @@ struct ReviewFormView: View {
         if voice.hasContent || voice.isListening {
             VoiceTray(voice: voice)
         }
-        // At accessibility sizes the controls stack, so "Hold to talk" and "Next" read whole.
-        let controls = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xs))
-            : AnyLayout(HStackLayout(spacing: Spacing.xs))
-        controls {
+        HStack(spacing: Spacing.xs) {
             TalkButton(voice: voice)
             Button("Type", systemImage: "keyboard") {
                 voice.showsTyping.toggle()
@@ -185,9 +180,7 @@ struct ReviewFormView: View {
             .buttonStyle(.listora(.tertiary, size: .compact))
             .accessibilityLabel(voice.showsTyping ? "Hide the typing field" : "Type a correction")
             .accessibilityIdentifier("voice.type")
-            if !dynamicTypeSize.isAccessibilitySize {
-                Spacer(minLength: 0)
-            }
+            Spacer(minLength: 0)
             if toCheck > 0 {
                 Button("Next (\(toCheck))", systemImage: "arrow.right.circle") {
                     model.advanceToNextCheck()
@@ -198,6 +191,8 @@ struct ReviewFormView: View {
                 .accessibilityIdentifier("review.nextToCheck")
             }
         }
+        // One row that stops growing at the first accessibility size, so Continue stays on screen.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         if !missing.isEmpty {
             Label(
                 "Add \(missing.map(\.inlineTitle).formatted(.list(type: .and))) to continue.",
