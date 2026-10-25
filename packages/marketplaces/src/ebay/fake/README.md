@@ -15,7 +15,10 @@ against the real sandbox, fix the fake and this file together.
 
 | Path                                                                             | eBay API                                                                                                                                       |
 | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /oauth2/authorize`, `POST /oauth2/authorize`                                | OAuth: the consent page ("Agree and Continue", "Not now") and its redirect to the RuName's accept or decline URL                               |
 | `POST /identity/v1/oauth2/token`                                                 | OAuth: refresh-token, authorization-code, and client-credentials grants                                                                        |
+| `POST /identity/v1/oauth2/token/revoke`                                          | OAuth: token revocation (revokes the seller's grant)                                                                                           |
+| `GET /commerce/identity/v1/user`                                                 | Commerce Identity getUser (the seller's immutable `userId` and `username`)                                                                     |
 | `POST /ws/api.dll`                                                               | Trading API: AddFixedPriceItem, VerifyAddFixedPriceItem, ReviseFixedPriceItem, EndFixedPriceItem, RelistFixedPriceItem, GetItem, GetSellerList |
 | `POST /commerce/media/v1_beta/image/create_image_from_url`, `GET .../image/{id}` | Media API (photos into eBay Picture Services)                                                                                                  |
 | `GET /commerce/taxonomy/v1/get_default_category_tree_id`                         | Taxonomy API                                                                                                                                   |
@@ -33,14 +36,17 @@ that the procedure that verifies eBay's own SDK test vector (`__fixtures__/`, fr
 github.com/eBay/event-notification-nodejs-sdk, Apache-2.0) also verifies the fake's
 notifications and rejects tampered ones.
 
-Test controls: sellers (`addSeller`, `revokeSeller`, `authorizationCode`), token expiry
-(`expireAccessTokens`), listings (`listings`, `listing`, `remove`, `sell`), every request
+Test controls: sellers (`addSeller`, `revokeSeller`, `revokeSellerAccess`, `authorizationCode`),
+the consent page (`signInAs`, `consent`, `setConsentRedirect`, and the `consentRedirect`
+option), token expiry (`expireAccessTokens`, `expireRefreshTokens`), token endpoint load
+(`tokenGrants`, `tokenDelayMs`), every code and token issued (`issuedSecrets`), listings (`listings`, `listing`, `remove`, `sell`), every request
 received (`requests`, `waitForRequest`), and faults (below).
 
 ## Fault injection
 
 `fake.inject({ action, fault, sku?, itemId?, times? })` makes matching requests fail;
-`setChaos(picker)` picks faults for randomized runs. Actions: `token`, `add`, `verify`, `revise`,
+`setChaos(picker)` picks faults for randomized runs. Actions: `authorize`, `token`, `revoke`,
+`identity`, `add`, `verify`, `revise`,
 `end`, `relist`, `get_item`, `get_seller_list`, `media`, `taxonomy`, `orders`, `rate_limits`,
 `public_key`.
 
@@ -122,7 +128,14 @@ All pages are on developer.ebay.com unless noted, read on 2026-10-24.
 
 - OAuth: token endpoint, Basic client credentials, `expires_in` 7200,
   `refresh_token_expires_in` 47304000, errors as `{ error, error_description }`
-  ([authorization guide](https://developer.ebay.com/develop/guides/sell/authorization)).
+  ([authorization guide](https://developer.ebay.com/develop/guides/sell/authorization)). The
+  consent page takes `client_id`, `redirect_uri` (the RuName), `response_type=code`, `scope`, and
+  `state`, and "Agree" redirects with `state`, `code` (single use), and `expires_in=299`.
+  Revocation is `POST .../oauth2/token/revoke` with `token` and `token_type_hint`, answering 200
+  with an empty body (also for a token that is already revoked).
+- Commerce Identity: `apiz.ebay.com/commerce/identity/v1/user`, `getUser` with a user token and
+  `commerce.identity.readonly`: `userId` (immutable), `username`, `accountType`
+  (`commerce_identity_v1_oas3.json`).
 - Media: `apim.ebay.com/commerce/media/v1_beta`, `createImageFromUrl` (https only; 201 with a
   `Location` header and `imageUrl`, `expirationDate`; errors 190201 to 190204), scope
   `sell.inventory` (`commerce_media_v1_beta_oas3.json`).
@@ -168,4 +181,8 @@ exercises the real behavior; correct the fake when it differs.
   state only when a `stale_read` fault asks, within `staleReadWindowMs` of the change.
 - **The sandbox Media host** is `apim.sandbox.ebay.com` (eBay's OpenAPI lists only production
   hosts).
+- **The decline redirect.** eBay sends a declining seller to the RuName's "auth declined" URL;
+  whether it adds `state` is not documented. Unless `consentRedirect.declineUrl` is set, the fake
+  uses the accept URL with `error=access_denied` and `state`; Listora's callback also handles a
+  redirect without `state`.
 - **Item ids** are 12 digits from 110000000001, like the sandbox's.

@@ -120,10 +120,14 @@ them breaks; turning it off is a separate, later step:
   with the `anthropic-api-key` secret, which must be set by hand before analyses succeed;
   until then they fail visibly with the reason.
 - **Task roles (least privilege).** Both services: read and write the photo bucket, and
-  `kms:GenerateDataKey` / `kms:Decrypt` on the token key. Worker only: read raw sale email
-  under `inbound/`. Each service can read only its own secrets. These grants are the designed
-  access for T-07 (storage), T-16 (token vault), and T-23 (email ingest), which add their
-  config keys to `src/containers.ts`.
+  `kms:GenerateDataKey` on the token key (`TOKEN_KMS_KEY_ID`), to seal marketplace tokens.
+  Worker only: `kms:Decrypt` on the token key (only the worker opens tokens, at use time), and
+  read raw sale email under `inbound/`. A combined task's role holds both services' grants.
+  Each service can read only its own secrets. These grants are the designed access for T-07
+  (storage), T-16 (token vault), and T-23 (email ingest), which add their config keys to
+  `src/containers.ts`. eBay connects once an environment has an eBay keyset (`EBAY_ENV`,
+  `EBAY_CLIENT_ID`, `EBAY_RUNAME`, and an `EBAY_CLIENT_SECRET` secret), which the eBay go-live
+  task adds (T-35); until then the app shows eBay as "Coming soon".
 - **Schema migrations.** Every deploy runs the migration task after the image push and
   before the compute stack, waits for it to stop, and stops unless it exits 0. The previous
   release keeps serving while migrations apply, so **every migration must be compatible with

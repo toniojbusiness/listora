@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AiClient } from '@listora/ai';
 import type { AnalysisJobQueue } from '@listora/analysis';
 import type { Db } from '@listora/db';
+import { createMarketplaceAdapters } from '@listora/marketplaces';
 import type { PhotoJobQueue } from '@listora/photos';
 import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
 import { fastify, LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
@@ -10,6 +11,7 @@ import { fastify, LogController, type FastifyBaseLogger, type FastifyInstance } 
 import { registerAccountRoutes } from './account/routes.ts';
 import { registerAnalysisRoutes } from './analyses/routes.ts';
 import type { AuthDriver } from './auth/driver.ts';
+import { registerConnectionRoutes, type ConnectionsDependencies } from './connections/routes.ts';
 import { registerErrorHandling } from './errors.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
 import { registerItemRoutes } from './items/routes.ts';
@@ -32,6 +34,11 @@ export interface AppDependencies extends HealthDependencies {
   ai: AiClient;
   /** Where starting or escalating an analysis adds its job. */
   analysisJobs: AnalysisJobQueue;
+  /**
+   * Marketplace adapters, OAuth clients, and the token sealer. Defaults to the assisted
+   * marketplaces only, with nothing that can be connected.
+   */
+  connections?: ConnectionsDependencies;
   /** Where attached photo files come from; defaults to upload sessions in `storage`. */
   uploads?: PhotoUploads;
   /** The clock upload sessions expire by. */
@@ -83,6 +90,19 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     photoJobs: deps.photoJobs,
   });
   registerPricingRoutes(app, routeDeps);
+  registerConnectionRoutes(app, {
+    ...routeDeps,
+    ...(deps.connections ?? {
+      adapters: createMarketplaceAdapters({
+        fakeMarketplaceUrl: undefined,
+        ebay: undefined,
+        depop: undefined,
+      }),
+      oauth: {},
+      sealer: undefined,
+    }),
+    now,
+  });
   registerAnalysisRoutes(app, {
     ...routeDeps,
     ai: deps.ai,

@@ -80,6 +80,10 @@ export type ConnectionMode = (typeof CONNECTION_MODES)[number];
 export const CONNECTION_STATUSES = ['connected', 'degraded', 'reauth_required', 'revoked'] as const;
 export type ConnectionStatus = (typeof CONNECTION_STATUSES)[number];
 
+/** `connection_authorization.status`; a pending attempt past its expiry reads as expired. */
+export const CONNECTION_AUTHORIZATION_STATUSES = ['pending', 'completed', 'failed'] as const;
+export type ConnectionAuthorizationStatus = (typeof CONNECTION_AUTHORIZATION_STATUSES)[number];
+
 export const LISTING_STATUSES = [
   'draft',
   'queued',

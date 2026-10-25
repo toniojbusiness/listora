@@ -54,6 +54,8 @@ export interface FakeAccessToken {
   /** `null` for an application token (client-credentials grant). */
   sellerUserId: string | null;
   expiresAt: number;
+  /** The refresh token it was issued from (revoking that one revokes it too). */
+  refreshToken?: string;
 }
 
 export interface FakeOrder {

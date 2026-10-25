@@ -424,6 +424,10 @@ public protocol APIProtocol: Sendable {
     /// server exchanges the code and always answers with a redirect to the app
     /// (`listora://connections/{marketplace}?authorizationId=...`), also on failure; the
     /// app then calls `getConnectionAuthorization`. Query parameter names follow OAuth 2.0.
+    /// A request whose `state` names no attempt (missing, unknown, or already used by another
+    /// marketplace) changes nothing and redirects without `authorizationId`; the app then
+    /// reads the attempt it started. A repeated callback with the same `state` only redirects
+    /// again.
     ///
     ///
     /// - Remark: HTTP `GET /v1/connections/{marketplace}/callback`.
@@ -1252,13 +1256,17 @@ extension APIProtocol {
     /// server exchanges the code and always answers with a redirect to the app
     /// (`listora://connections/{marketplace}?authorizationId=...`), also on failure; the
     /// app then calls `getConnectionAuthorization`. Query parameter names follow OAuth 2.0.
+    /// A request whose `state` names no attempt (missing, unknown, or already used by another
+    /// marketplace) changes nothing and redirects without `authorizationId`; the app then
+    /// reads the attempt it started. A repeated callback with the same `state` only redirects
+    /// again.
     ///
     ///
     /// - Remark: HTTP `GET /v1/connections/{marketplace}/callback`.
     /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/callback/get(handleConnectionCallback)`.
     public func handleConnectionCallback(
         path: Operations.HandleConnectionCallback.Input.Path,
-        query: Operations.HandleConnectionCallback.Input.Query,
+        query: Operations.HandleConnectionCallback.Input.Query = .init(),
         headers: Operations.HandleConnectionCallback.Input.Headers = .init()
     ) async throws -> Operations.HandleConnectionCallback.Output {
         try await handleConnectionCallback(Operations.HandleConnectionCallback.Input(

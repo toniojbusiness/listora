@@ -17,7 +17,8 @@ export const EBAY_APPLICATION_SCOPE = 'https://api.ebay.com/oauth/api_scope';
 
 /**
  * The scopes Listora asks a seller to grant: the Trading API calls accept any user token,
- * Media needs `sell.inventory`, Fulfillment `sell.fulfillment`, and notification
+ * Media needs `sell.inventory`, Fulfillment `sell.fulfillment`, Commerce Identity (which seller
+ * connected, and the daily health check) `commerce.identity.readonly`, and notification
  * subscriptions `commerce.notification.subscription`.
  */
 export const EBAY_USER_SCOPES = [
@@ -25,6 +26,7 @@ export const EBAY_USER_SCOPES = [
   'https://api.ebay.com/oauth/api_scope/sell.inventory',
   'https://api.ebay.com/oauth/api_scope/sell.account',
   'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+  'https://api.ebay.com/oauth/api_scope/commerce.identity.readonly',
   'https://api.ebay.com/oauth/api_scope/commerce.notification.subscription',
 ] as const;
 

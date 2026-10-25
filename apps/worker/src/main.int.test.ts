@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,9 +16,20 @@ import {
   requestAnalysis,
   type ItemAnalysisOutput,
 } from '@listora/analysis';
-import { createInventoryItem, inTransaction, type Marketplace } from '@listora/db';
+import { CONNECTION_HEALTH_TASK, LocalTokenVault } from '@listora/connections';
+import {
+  createInventoryItem,
+  inTransaction,
+  JOB_QUEUE_SCHEMA,
+  type Marketplace,
+} from '@listora/db';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
-import { FakeEbay, FakeMarketplace } from '@listora/marketplaces';
+import {
+  EbayConnectClient,
+  FakeEbay,
+  FakeMarketplace,
+  loadEbayConfig,
+} from '@listora/marketplaces';
 import { contentWith } from '@listora/marketplaces/testing';
 import { TRUST_METRICS_TASK } from '@listora/observability';
 import { enqueueOperation, LIVENESS_APPLICATION_PREFIX } from '@listora/operations';
@@ -456,6 +468,85 @@ describe('worker process (real Postgres)', () => {
       if (!left) break;
       if (Date.now() > deadline) throw new Error('the account deletion did not finish');
       await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  });
+
+  it('checks eBay connections with the vault and the fake eBay, and never logs a token', async () => {
+    const ebay = await FakeEbay.start();
+    try {
+      const key = randomBytes(32);
+      const vault = new LocalTokenVault(key);
+      const config = loadEbayConfig({ EBAY_ENV: 'fake', EBAY_FAKE_URL: ebay.url });
+      const oauth = config === undefined ? undefined : EbayConnectClient.fromConfig(config);
+      if (oauth === undefined) throw new Error('no eBay connect client');
+      const now = new Date();
+      const code = new URL(ebay.consent(oauth.authorizationUrl('worker-test'))).searchParams.get(
+        'code',
+      );
+      const exchanged = await oauth.exchangeCode(code ?? '', {
+        signal: AbortSignal.timeout(5_000),
+        now,
+      });
+      if (exchanged.type !== 'granted') throw new Error('no grant');
+      // The access token expires within the refresh margin, so the check refreshes it first.
+      const connection = await database.db
+        .insertInto('marketplace_connection')
+        .values({
+          account_id: accountId,
+          marketplace: 'ebay',
+          mode: 'api',
+          external_user_id: ebay.signedInSeller.userId,
+          display_name: 'old_name',
+          access_expires_at: new Date(now.getTime() + 60_000),
+          refresh_expires_at: exchanged.grant.refreshExpiresAt,
+          granted_at: now,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      await database.db
+        .updateTable('marketplace_connection')
+        .set({
+          token_ciphertext: await vault.seal(exchanged.grant.tokens, {
+            marketplace: 'ebay',
+            connectionId: connection.id,
+          }),
+        })
+        .where('id', '=', connection.id)
+        .execute();
+
+      const worker = await startWorker({
+        EBAY_ENV: 'fake',
+        EBAY_FAKE_URL: ebay.url,
+        TOKEN_ENCRYPTION_KEY: key.toString('base64'),
+      });
+      expect(worker.logs).toContainEqual(
+        expect.objectContaining({ msg: 'worker ready', ebay: 'fake', tokenVault: 'local' }),
+      );
+      await sql`select ${sql.id(JOB_QUEUE_SCHEMA)}.add_job(${CONNECTION_HEALTH_TASK})`.execute(
+        database.db,
+      );
+      await worker.waitForLog(
+        (line) => line['msg'] === 'connection health checks finished',
+        20_000,
+      );
+
+      expect(ebay.tokenGrants('refresh_token')).toBe(1);
+      expect(ebay.requests.filter((request) => request.action === 'identity')).toHaveLength(1);
+      const checked = await database.db
+        .selectFrom('marketplace_connection')
+        .selectAll()
+        .where('id', '=', connection.id)
+        .executeTakeFirstOrThrow();
+      expect(checked).toMatchObject({ status: 'connected', display_name: 'listora_dev_seller' });
+      expect(checked.last_ok_at?.getTime()).toBeGreaterThan(now.getTime());
+      const logs = JSON.stringify(worker.logs) + worker.stderr;
+      for (const secret of ebay.issuedSecrets()) expect(logs).not.toContain(secret);
+      await database.db
+        .deleteFrom('marketplace_connection')
+        .where('id', '=', connection.id)
+        .execute();
+    } finally {
+      await ebay.close();
     }
   });
 

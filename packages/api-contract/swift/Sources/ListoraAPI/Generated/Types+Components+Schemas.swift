@@ -4554,6 +4554,67 @@ extension Components {
                 case occurredAt
             }
         }
+        /// A `KnownConnectionAction`, or an action added after this client was built. Clients hide
+        /// actions they do not know.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ConnectionAction`.
+        public struct ConnectionAction: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectionAction/value1`.
+            public var value1: Components.Schemas.KnownConnectionAction?
+            /// - Remark: Generated from `#/components/schemas/ConnectionAction/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ConnectionAction`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownConnectionAction? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `connect`: start `startConnectionAuthorization` for a marketplace not connected yet.
+        /// `reconnect`: the same, for a connection that needs the seller's consent again (its grant
+        /// was revoked, expires within 30 days, or fails); it renews the existing connection.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownConnectionAction`.
+        @frozen public enum KnownConnectionAction: String, Codable, Hashable, Sendable, CaseIterable {
+            case connect = "connect"
+            case reconnect = "reconnect"
+        }
         /// - Remark: Generated from `#/components/schemas/Connection`.
         public struct Connection: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/Connection/marketplace`.
@@ -4566,6 +4627,10 @@ extension Components {
             public var statusDisplay: Components.Schemas.StatusDisplay
             /// - Remark: Generated from `#/components/schemas/Connection/capabilities`.
             public var capabilities: Components.Schemas.MarketplaceCapabilities
+            /// What the user can do about the connection now; empty when nothing.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Connection/availableActions`.
+            public var availableActions: [Components.Schemas.ConnectionAction]
             /// The seller's name on the marketplace.
             ///
             /// - Remark: Generated from `#/components/schemas/Connection/displayName`.
@@ -4588,6 +4653,7 @@ extension Components {
             ///   - status:
             ///   - statusDisplay:
             ///   - capabilities:
+            ///   - availableActions: What the user can do about the connection now; empty when nothing.
             ///   - displayName: The seller's name on the marketplace.
             ///   - connectedAt:
             ///   - grantExpiresAt: When the user must reconnect (Depop grants last one year; eBay refresh tokens about 18 months).
@@ -4599,6 +4665,7 @@ extension Components {
                 status: Components.Schemas.ConnectionStatus,
                 statusDisplay: Components.Schemas.StatusDisplay,
                 capabilities: Components.Schemas.MarketplaceCapabilities,
+                availableActions: [Components.Schemas.ConnectionAction],
                 displayName: Swift.String? = nil,
                 connectedAt: Components.Schemas.Timestamp? = nil,
                 grantExpiresAt: Components.Schemas.Timestamp? = nil,
@@ -4610,6 +4677,7 @@ extension Components {
                 self.status = status
                 self.statusDisplay = statusDisplay
                 self.capabilities = capabilities
+                self.availableActions = availableActions
                 self.displayName = displayName
                 self.connectedAt = connectedAt
                 self.grantExpiresAt = grantExpiresAt
@@ -4622,6 +4690,7 @@ extension Components {
                 case status
                 case statusDisplay
                 case capabilities
+                case availableActions
                 case displayName
                 case connectedAt
                 case grantExpiresAt
@@ -4659,10 +4728,13 @@ extension Components {
             public var marketplace: Components.Schemas.Marketplace
             /// - Remark: Generated from `#/components/schemas/ConnectionAuthorization/status`.
             public var status: Components.Schemas.ConnectionAuthorizationStatus
-            /// The marketplace's own consent page.
+            /// The marketplace's own consent page. Only in the `startConnectionAuthorization`
+            /// response (and its replays): it carries the attempt's single-use `state`, which
+            /// Listora keeps only as a hash.
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/ConnectionAuthorization/authorizationUrl`.
-            public var authorizationUrl: Swift.String
+            public var authorizationUrl: Swift.String?
             /// The URL scheme `ASWebAuthenticationSession` waits for (`listora`).
             ///
             /// - Remark: Generated from `#/components/schemas/ConnectionAuthorization/callbackUrlScheme`.
@@ -4687,7 +4759,7 @@ extension Components {
             ///   - id:
             ///   - marketplace:
             ///   - status:
-            ///   - authorizationUrl: The marketplace's own consent page.
+            ///   - authorizationUrl: The marketplace's own consent page. Only in the `startConnectionAuthorization`
             ///   - callbackUrlScheme: The URL scheme `ASWebAuthenticationSession` waits for (`listora`).
             ///   - expiresAt:
             ///   - failure: Present when `status` is `failed`.
@@ -4698,7 +4770,7 @@ extension Components {
                 id: Components.Schemas.Id,
                 marketplace: Components.Schemas.Marketplace,
                 status: Components.Schemas.ConnectionAuthorizationStatus,
-                authorizationUrl: Swift.String,
+                authorizationUrl: Swift.String? = nil,
                 callbackUrlScheme: Swift.String,
                 expiresAt: Components.Schemas.Timestamp,
                 failure: Components.Schemas.ApiError? = nil,

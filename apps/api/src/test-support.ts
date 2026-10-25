@@ -60,6 +60,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp, type AppDependencies } from './app.ts';
 import { DevAuthDriver } from './auth/dev-driver.ts';
 import type { AuthDriver } from './auth/driver.ts';
+import type { ConnectionsDependencies } from './connections/routes.ts';
 import { operationSpec, responseContractErrors } from './contract/contract.ts';
 import type { ContractReply, OperationId } from './contract/routes.ts';
 import { resolveTenant, type Tenant } from './tenancy.ts';
@@ -275,6 +276,8 @@ export interface TestAccountDeletions {
 export interface TestApiOptions {
   /** Replaces the dev driver (whose `signIn` and `tenantOf` then do not work). */
   auth?: AuthDriver;
+  /** Marketplace adapters, OAuth clients, and the token sealer (default: nothing connects). */
+  connections?: ConnectionsDependencies;
 }
 
 export interface TestApi {
@@ -298,6 +301,8 @@ export interface TestApi {
   ai: AiClient;
   /** The clock for dev sign-in and upload sessions, in milliseconds; move it to expire them. */
   clock: { now: number };
+  /** Every line the API logged (requests included), parsed, oldest first. */
+  logLines: Record<string, unknown>[];
   /** Signs in through the dev endpoints and returns the bearer token. */
   signIn(email: string): Promise<string>;
   /** The tenant a signed-in email acts as (signs in first if needed). */
@@ -370,8 +375,10 @@ export async function createTestApi(
     runAll: () => runAccountDeletionJobs(deletionDeps),
   };
   const app = buildApp({
+    logger,
     db,
     auth: options.auth ?? devAuth,
+    ...(options.connections === undefined ? {} : { connections: options.connections }),
     storage,
     photoJobs,
     ai,
@@ -473,6 +480,7 @@ export async function createTestApi(
     aiControls,
     ai,
     clock,
+    logLines,
     signIn,
     tenantOf,
     call,

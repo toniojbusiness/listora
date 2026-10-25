@@ -16,19 +16,39 @@ public struct SettingsContent: Equatable, Sendable {
 }
 
 /// Account, marketplace connections, and app information. Dev builds also have a developer
-/// sign-in; the real account (T-28, T-31) and connection (T-16, T-25) sections come later.
-public struct SettingsView: View {
+/// sign-in; the real account section (T-28, T-31) comes later. The Marketplaces screen comes from
+/// the caller (AppFeature), since a feature never imports another.
+public struct SettingsView<Marketplaces: View>: View {
     private let content: SettingsContent
     private let devSignIn: DevSignInModel?
+    private let marketplaces: Marketplaces?
 
-    public init(content: SettingsContent, devSignIn: DevSignInModel? = nil) {
+    public init(
+        content: SettingsContent,
+        devSignIn: DevSignInModel? = nil,
+        @ViewBuilder marketplaces: () -> Marketplaces,
+    ) {
         self.content = content
         self.devSignIn = devSignIn
+        self.marketplaces = marketplaces()
     }
 
     public var body: some View {
         NavigationStack {
             List {
+                if let marketplaces {
+                    Section {
+                        NavigationLink {
+                            marketplaces
+                        } label: {
+                            Label("Marketplaces", systemImage: "link")
+                        }
+                        .accessibilityIdentifier("settings.marketplaces")
+                    } footer: {
+                        Text("Connect eBay, and see how Listora works with each marketplace.")
+                    }
+                    .listRowBackground(Palette.surface.color)
+                }
                 if let devSignIn {
                     DevSignInSection(model: devSignIn)
                         .listRowBackground(Palette.surface.color)
@@ -56,6 +76,15 @@ public struct SettingsView: View {
         } label: {
             Text(title)
         }
+    }
+}
+
+extension SettingsView where Marketplaces == EmptyView {
+    /// Settings without a Marketplaces screen.
+    public init(content: SettingsContent, devSignIn: DevSignInModel? = nil) {
+        self.content = content
+        self.devSignIn = devSignIn
+        marketplaces = nil
     }
 }
 

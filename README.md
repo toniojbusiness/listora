@@ -17,8 +17,9 @@ tasks and how they depend on each other.
 - **Swift 6 toolchain**, used by `npm run contract:check` to regenerate and test the Swift API
   client. It comes with Xcode on macOS (on Linux, install Swift 6 from swift.org).
 - Docker is not needed.
-- For the iOS app only: **Xcode 26.3** with the iPhone 17 simulator, plus XcodeGen, SwiftLint,
-  and SwiftFormat (`brew install xcodegen swiftlint swiftformat`). See
+- For the iOS app only: **Xcode 26.3 or 27.1** (CI uses 26.3; the app builds without warnings on
+  both) with the iPhone 17 simulator, plus XcodeGen, SwiftLint, and SwiftFormat
+  (`brew install xcodegen swiftlint swiftformat`). See
   [apps/ios/README.md](apps/ios/README.md).
 
 ## Setup
@@ -58,6 +59,20 @@ curl -X POST localhost:3000/dev/auth/sessions -H 'content-type: application/json
 Send the token as `Authorization: Bearer <accessToken>` on every `/v1` request, and an
 `Idempotency-Key` header (a new UUID per action) on every POST.
 
+### Connecting eBay locally
+
+The fake eBay server stands in for eBay's consent page, token endpoint, and seller identity, so
+connecting an eBay account needs no eBay credential. With `.env.example`'s `EBAY_ENV=fake`, add a
+token vault key to `.env` (any 32 random bytes), then run `npm run dev:fake-ebay` next to the
+API and the worker:
+
+```sh
+TOKEN_ENCRYPTION_KEY=<output of openssl rand -base64 32>
+```
+
+In the app, Settings > Marketplaces > Connect eBay opens the fake consent page ("Agree and
+Continue"), which sends the browser back through the API's callback to the app.
+
 Staging and production use `AUTH_DRIVER=cognito`, where the app signs in with the Cognito user
 pool (Sign in with Apple or an emailed code). [docs/auth.md](docs/auth.md) covers both drivers,
 the user pool settings, and in-app account deletion (`DELETE /v1/account`).
@@ -78,7 +93,7 @@ the user pool settings, and in-app account deletion (`DELETE /v1/account`).
 | `npm run dev:api`              | Run the API with reload on change (`http://127.0.0.1:3000/health/ready`)                                                                         |
 | `npm run dev:worker`           | Run the worker with reload on change                                                                                                             |
 | `npm run dev:fake-marketplace` | Run the fake marketplace at `FAKE_MARKETPLACE_URL`, for the worker in development                                                                |
-| `npm run dev:fake-ebay`        | Run the fake eBay at `EBAY_FAKE_URL`, which the worker lists on with `EBAY_ENV=fake`                                                             |
+| `npm run dev:fake-ebay`        | Run the fake eBay at `EBAY_FAKE_URL`, which the worker lists on and sellers connect with under `EBAY_ENV=fake`                                   |
 | `npm run dev:fake-depop`       | Run the fake Depop at `DEPOP_FAKE_URL`, which api-connected Depop listings use with `DEPOP_ENV=fake`                                             |
 | `npm run ebay:sandbox-token`   | Sign a sandbox test seller in on eBay and save their refresh token in `.env` (see [eBay sandbox check](#ebay-sandbox-check))                     |
 | `npm run ebay:sandbox-check`   | Run the eBay adapter end to end against eBay's sandbox; fails with what to set when keys are missing                                             |
@@ -146,7 +161,8 @@ packages/api-contract/  OpenAPI v1 contract + generated TS and Swift code (@list
 packages/db/            SQL migrations, migration runner, Kysely types (@listora/db)
 packages/storage/       Object storage drivers: local disk (.local/storage) and S3 (@listora/storage)
 packages/photos/        Image pipeline: derivatives, metadata stripping, hashes, processing job (@listora/photos)
-packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay and Depop adapters, the fake marketplace, fake eBay, and fake Depop (@listora/marketplaces)
+packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay and Depop adapters, eBay's connect client, the fake marketplace, fake eBay, and fake Depop (@listora/marketplaces)
+packages/connections/   Marketplace connections: OAuth connect, token vault, credentials, health (@listora/connections)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker metrics job (@listora/observability)
 packages/shared/        Shared types and utilities (@listora/shared)

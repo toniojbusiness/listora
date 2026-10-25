@@ -8,13 +8,10 @@ import {
 } from '@listora/ai';
 import { AnalysisConfigError, loadAnalysisConfig, type AnalysisConfig } from '@listora/analysis';
 import {
-  DepopConfigError,
-  EbayConfigError,
-  loadDepopConfig,
-  loadEbayConfig,
-  type DepopConfig,
-  type EbayConfig,
-} from '@listora/marketplaces';
+  loadMarketplaceConfig,
+  MarketplaceConfigError,
+  type MarketplaceConfig,
+} from '@listora/connections';
 import { isLogLevel, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -25,15 +22,11 @@ export interface WorkerConfig {
   concurrency: number;
   /** Photo processing and item analysis jobs run at the same time, in their own pool. */
   taskConcurrency: number;
-  /** Base URL of the fake marketplace every adapter uses (development and tests only). */
-  fakeMarketplaceUrl: string | undefined;
-  /** EBAY_* keys, read by @listora/marketplaces; `undefined` when EBAY_ENV is unset. */
-  ebay: EbayConfig | undefined;
   /**
-   * DEPOP_* keys, read by @listora/marketplaces; `undefined` when DEPOP_ENV is unset (Depop
-   * runs assisted, as it must until Listora's partner access is granted).
+   * FAKE_MARKETPLACE_URL, EBAY_*, and TOKEN_* keys, read by @listora/connections: the adapters,
+   * the marketplaces whose connections the worker refreshes and checks, and the token vault.
    */
-  depop: DepopConfig | undefined;
+  marketplaces: MarketplaceConfig;
   /** STORAGE_* keys, read by @listora/storage: where photo processing and analysis read. */
   storage: StorageConfig;
   /** AI_* keys, read by @listora/ai: the provider and guards item analysis calls through. */
@@ -82,11 +75,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const taskConcurrency = poolSize(issues, env, 'WORKER_TASK_CONCURRENCY', '2');
 
   // Empty means unset, as `FAKE_MARKETPLACE_URL=` in an env file.
-  const rawFakeMarketplaceUrl = env['FAKE_MARKETPLACE_URL'];
-  const fakeMarketplaceUrl = rawFakeMarketplaceUrl === '' ? undefined : rawFakeMarketplaceUrl;
-  if (fakeMarketplaceUrl !== undefined && !/^https?:\/\/[^\s]+$/.test(fakeMarketplaceUrl)) {
-    issues.push('FAKE_MARKETPLACE_URL must be an http:// or https:// URL');
-  }
+  const marketplaces = collect(issues, MarketplaceConfigError, () => loadMarketplaceConfig(env));
 
   const rawUserPoolId = env['COGNITO_USER_POOL_ID'];
   const userPoolId = rawUserPoolId === '' ? undefined : rawUserPoolId;
@@ -98,8 +87,6 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const ai = collect(issues, AiConfigError, () => loadAiConfig(env));
   const analysis = collect(issues, AnalysisConfigError, () => loadAnalysisConfig(env));
   const aiAlerts = collect(issues, AiConfigError, () => loadAiAlertConfig(env));
-  const ebay = collect(issues, EbayConfigError, () => loadEbayConfig(env));
-  const depop = collect(issues, DepopConfigError, () => loadDepopConfig(env));
 
   if (
     issues.length > 0 ||
@@ -107,7 +94,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     storage === undefined ||
     ai === undefined ||
     analysis === undefined ||
-    aiAlerts === undefined
+    aiAlerts === undefined ||
+    marketplaces === undefined
   ) {
     throw new ConfigError(issues);
   }
@@ -116,9 +104,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     logLevel,
     concurrency,
     taskConcurrency,
-    fakeMarketplaceUrl,
-    ebay,
-    depop,
+    marketplaces,
     storage,
     ai,
     analysis,

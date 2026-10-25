@@ -4,14 +4,14 @@ import type { Marketplace } from '@listora/db';
 export interface GrantToRevoke {
   connectionId: string;
   marketplace: Marketplace;
-  /** The stored OAuth tokens, encrypted (decrypting them is the token vault's job, T-16). */
+  /** The stored OAuth tokens, encrypted; only the worker's token vault opens them. */
   tokenCiphertext: Buffer;
 }
 
 /**
  * Revokes Listora's access to a seller's marketplace account through the marketplace's
- * official revocation endpoint. Marketplace adapters implement it as they add OAuth
- * connections (eBay in T-16, Depop in T-24).
+ * official revocation endpoint. The worker uses `OAuthGrantRevoker` from
+ * `@listora/connections` (eBay now, Depop with T-24).
  */
 export interface MarketplaceAccessRevoker {
   /**

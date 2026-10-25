@@ -39,6 +39,8 @@ export {
 } from './capabilities.ts';
 export type { OperationMode } from './capabilities.ts';
 export { ConnectionAwareAdapter } from './connection-aware.ts';
+export { createMarketplaceAdapters } from './default-adapters.ts';
+export type { MarketplaceAdaptersConfig } from './default-adapters.ts';
 export type { ConnectionAwareAdapterOptions } from './connection-aware.ts';
 export {
   CONTENT_KINDS,
@@ -169,6 +171,7 @@ export {
   FAKE_EBAY_CLIENT_SECRET,
   FAKE_EBAY_POLICIES,
   FAKE_EBAY_REFRESH_TOKEN,
+  FAKE_EBAY_RU_NAME,
 } from './ebay/fake/constants.ts';
 export { FakeEbay } from './ebay/fake/fake-ebay.ts';
 export type {
@@ -218,5 +221,24 @@ export type {
 } from './fake/fake-marketplace.ts';
 export { requestJson, requestText } from './http.ts';
 export type { HttpResult, HttpTextResult, JsonRequest, TextRequest } from './http.ts';
+export { EbayConnectClient } from './ebay/connect.ts';
+export {
+  AUTHORIZATION_REVOCATION_TOPIC,
+  EBAY_REVOKE_REASONS,
+  InvalidNotificationError,
+  parseAuthorizationRevocation,
+} from './ebay/notifications.ts';
+export type { EbayAuthorizationRevocation, EbayRevokeReason } from './ebay/notifications.ts';
+export type {
+  CodeExchangeResult,
+  IdentityResult,
+  MarketplaceOAuthClient,
+  OAuthCallContext,
+  OAuthClients,
+  OAuthFailure,
+  OAuthGrant,
+  OAuthTokens,
+  TokenRefreshResult,
+} from './oauth.ts';
 export { AdapterRegistryError, createAdapterRegistry } from './registry.ts';
 export type { AdapterRegistry } from './registry.ts';

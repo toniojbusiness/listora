@@ -2,6 +2,7 @@ import AddItemFeature
 import APIClient
 import Core
 import Foundation
+import MarketplacesFeature
 import SettingsFeature
 import TagReadingFeature
 
@@ -20,6 +21,8 @@ public struct AppDependencies {
     public let addItem: AddItemEnvironment
     /// Dev builds only: sign in against the local API's dev auth driver.
     public let devSignIn: DevSignInModel?
+    /// The Marketplaces screen (in Settings): connection status and connecting eBay.
+    public let marketplaces: MarketplacesModel
 
     public init(
         configuration: AppConfiguration,
@@ -59,6 +62,7 @@ public struct AppDependencies {
             tagReader: tagReader,
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
         )
+        marketplaces = MarketplacesModel(service: APIConnectionsService(client: apiClient.client))
         devSignIn = configuration.environment == .dev
             ? DevSignInModel(client: DevSignInClient(baseURL: configuration.apiBaseURL), tokens: accessTokens)
             : nil

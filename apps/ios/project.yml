@@ -196,6 +196,7 @@ schemes:
         - package: Features/AppFeatureTests
         - package: Features/AddItemFeatureTests
         - package: Features/SettingsFeatureTests
+        - package: Features/MarketplacesFeatureTests
         - package: Features/TagReadingFeatureTests
         - package: Features/ShareLinkFeatureTests
     profile:

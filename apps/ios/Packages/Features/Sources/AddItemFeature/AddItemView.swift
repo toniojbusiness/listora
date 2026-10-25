@@ -126,9 +126,9 @@ struct DraftListView: View {
             fixturePhotosDirectory: environment.fixturePhotosDirectory,
             unloaded: $unloadedPhotos,
             onPicked: importPhotos,
-        ) {
-            Label("Import photos", systemImage: "photo.on.rectangle")
-        }
+            title: "Import photos",
+            systemImage: "photo.on.rectangle",
+        )
         .disabled(model.isPreparingPhotos)
         .accessibilityIdentifier("addItem.importPhotos")
         if environment.isCameraAvailable {

@@ -134,9 +134,9 @@ struct DraftEditorView: View {
                     fixturePhotosDirectory: environment.fixturePhotosDirectory,
                     unloaded: $unloadedPhotos,
                     onPicked: addPhotos,
-                ) {
-                    Label("Add photos", systemImage: "photo.badge.plus")
-                }
+                    title: "Add photos",
+                    systemImage: "photo.badge.plus",
+                )
                 .buttonStyle(.listoraSecondary)
                 .disabled(remaining <= 0 || model.isPreparingPhotos)
                 .accessibilityIdentifier("draft.addPhotos")

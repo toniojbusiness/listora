@@ -108,6 +108,8 @@ import Testing
         #expect(future.capabilities.create.value1 == nil)
         #expect(future.capabilities.create.value2 == "partner_feed")
         #expect(future.capabilities.saleDetection.map(\.value1) == [.webhook, nil])
+        #expect(future.availableActions.map(\.value1) == [nil, .connect])
+        #expect(future.availableActions.first?.value2 == "join_waitlist")
     }
 
     @Test func bundleSaleDecodesItemsFeesAndProfit() async throws {
@@ -243,6 +245,7 @@ private let connectionsJSON = """
           "mode": "api",
           "status": "connected",
           "statusDisplay": { "tone": "success", "label": "Connected" },
+          "availableActions": [],
           "capabilities": {
             "connect": "oauth", "create": "api", "updatePrice": "api", "updateDetails": "api",
             "delist": "api", "relist": "api", "markSold": "not_needed", "verifyRead": "api",
@@ -254,6 +257,7 @@ private let connectionsJSON = """
           "mode": "assisted",
           "status": "waitlisted",
           "statusDisplay": { "tone": "neutral", "label": "Coming soon" },
+          "availableActions": ["join_waitlist", "connect"],
           "capabilities": {
             "connect": "none", "create": "partner_feed", "updatePrice": "none", "updateDetails": "none",
             "delist": "assisted", "relist": "none", "markSold": "assisted", "verifyRead": "user_confirm",
