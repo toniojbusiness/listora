@@ -27,7 +27,7 @@ struct ReviewFlowView: View {
             .navigationBarTitleDisplayMode(.inline)
             // The flow has its own bottom bars; the tabs come back when it ends.
             .toolbar(.hidden, for: .tabBar)
-            .task { await model.start() }
+            .task { await model.appeared() }
             .measuresInteraction(model)
             .actionErrorAlert(model)
             .navigationDestination(isPresented: $model.showsCost) {

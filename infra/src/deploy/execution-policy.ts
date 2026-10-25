@@ -85,8 +85,9 @@ export interface PolicyDocument {
 /**
  * What CloudFormation may do while deploying one environment's stacks:
  *
- * - every action of the services the stacks use (`SERVICE_PREFIXES`), and reading the CDK
- *   bootstrap version parameter;
+ * - every action of the services the stacks use (`SERVICE_PREFIXES`), reading the CDK
+ *   bootstrap version parameter, and reading the environment's own stacks, which every weak
+ *   cross-stack reference (`Fn::GetStackOutput`) needs;
  * - IAM only on roles named after the environment's stacks (`listora-<env>-*`, which
  *   CloudFormation's generated role names start with too), attaching only
  *   `ATTACHABLE_MANAGED_POLICIES`, plus the service-linked roles AWS creates on first use;
@@ -118,6 +119,12 @@ export function cdkExecutionPolicy(environment: EnvironmentName, account: string
         Effect: 'Allow',
         Action: ['ssm:GetParameter', 'ssm:GetParameters'],
         Resource: `arn:aws:ssm:*:${account}:parameter/cdk-bootstrap/*`,
+      },
+      {
+        Sid: 'ReadOwnStackOutputs',
+        Effect: 'Allow',
+        Action: 'cloudformation:DescribeStacks',
+        Resource: `arn:aws:cloudformation:*:${account}:stack/listora-${environment}-*/*`,
       },
       {
         Sid: 'StackRoles',

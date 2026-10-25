@@ -1,0 +1,187 @@
+ItemBatchItemState:
+  description: |
+    A `KnownItemBatchItemState`, or a state added after this client was built. Clients show
+    an unknown state's `statusDisplay` as given and never treat it as saved.
+  anyOf:
+    - $ref: '#/KnownItemBatchItemState'
+    - type: string
+      maxLength: 64
+KnownItemBatchItemState:
+  type: string
+  description: |
+    Where a batch item is: `uploading` (the app has not submitted it yet), `preparing_photos`
+    (the server is processing its photos), `analyzing`, `ready_for_review` (analyzed, waiting
+    for the seller), `saved` (the seller saved it; its status is no longer `draft`), or
+    `failed` (see `problem`).
+  enum: [uploading, preparing_photos, analyzing, ready_for_review, saved, failed]
+ItemBatchItemProblem:
+  type: object
+  description: |
+    Why a batch item stopped. `retryable` says whether submitting it again may help as it is.
+  required: [code, message, retryable]
+  properties:
+    code:
+      type: string
+      maxLength: 100
+      description: |
+        Stable snake_case, for example `photo_failed`, `photos_not_ready`, `no_photos`,
+        `ai_budget_exceeded`, `quota_exceeded`, or an analysis failure's code.
+    message:
+      type: string
+      maxLength: 1000
+      description: Safe to show to the user.
+    retryable:
+      type: boolean
+InteractionTotals:
+  type: object
+  description: |
+    The seller's interaction as the app measured it: time a screen of the flow was in front of
+    them with nothing to wait for (`activeMs`), the time spent waiting on Listora meanwhile
+    (`waitingMs`), and taps.
+  required: [activeMs, waitingMs, taps]
+  properties:
+    activeMs:
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 604800000
+    waitingMs:
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 604800000
+    taps:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 1000000
+ItemBatchPhotoProgress:
+  type: object
+  description: How many of the item's photos the server has, and how many are processed.
+  required: [total, ready]
+  properties:
+    total:
+      type: integer
+      format: int32
+      minimum: 0
+    ready:
+      type: integer
+      format: int32
+      minimum: 0
+ItemBatchItem:
+  type: object
+  required: [position, item, state, statusDisplay, photos]
+  properties:
+    position:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 999
+      description: The item's place in the haul, 0 first.
+    item:
+      $ref: './items.yaml#/ItemSummary'
+    state:
+      $ref: '#/ItemBatchItemState'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+    photos:
+      $ref: '#/ItemBatchPhotoProgress'
+    problem:
+      $ref: '#/ItemBatchItemProblem'
+      description: Present exactly when `state` is `failed`.
+    interaction:
+      $ref: '#/InteractionTotals'
+      description: This item's share of the batch's interaction, once the app reported it.
+ItemBatchProgress:
+  type: object
+  description: How many of the batch's items are in each state.
+  required: [total, uploading, preparingPhotos, analyzing, readyForReview, saved, failed]
+  properties:
+    total:
+      type: integer
+      format: int32
+      minimum: 0
+    uploading:
+      type: integer
+      format: int32
+      minimum: 0
+    preparingPhotos:
+      type: integer
+      format: int32
+      minimum: 0
+    analyzing:
+      type: integer
+      format: int32
+      minimum: 0
+    readyForReview:
+      type: integer
+      format: int32
+      minimum: 0
+    saved:
+      type: integer
+      format: int32
+      minimum: 0
+    failed:
+      type: integer
+      format: int32
+      minimum: 0
+ItemBatch:
+  type: object
+  description: The items of one haul, photographed in one session, in haul order.
+  required: [id, items, progress, createdAt, updatedAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    items:
+      type: array
+      maxItems: 1000
+      items:
+        $ref: '#/ItemBatchItem'
+    progress:
+      $ref: '#/ItemBatchProgress'
+    interaction:
+      $ref: '#/InteractionTotals'
+      description: The batch's interaction from its first photo, once the app reported it.
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    updatedAt:
+      $ref: './common.yaml#/Timestamp'
+ItemBatchItemCreate:
+  type: object
+  required: [position]
+  properties:
+    position:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 999
+      description: The item's place in the haul, 0 first.
+ItemBatchItemSubmit:
+  type: object
+  required: [photoCount]
+  properties:
+    photoCount:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 24
+      description: How many photos the app attached; the item must have exactly these many.
+ItemBatchItemInteraction:
+  type: object
+  required: [itemId, interaction]
+  properties:
+    itemId:
+      $ref: './common.yaml#/Id'
+    interaction:
+      $ref: '#/InteractionTotals'
+ItemBatchInteractionReplace:
+  type: object
+  required: [batch, items]
+  properties:
+    batch:
+      $ref: '#/InteractionTotals'
+    items:
+      type: array
+      maxItems: 1000
+      items:
+        $ref: '#/ItemBatchItemInteraction'

@@ -230,7 +230,10 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
       failure: { kind: 'challenge', challenge: kind, step: 'open the account' },
     });
     expect(afterwards).toBe(false);
-    expect(result.ok ? null : result.failure.screenshotKey).toEqual(expect.any(String));
+    // A page off the marketplace is never kept, whatever it shows.
+    expect(result.ok ? null : result.failure.screenshotKey).toEqual(
+      kind === 'unexpected_page' ? null : expect.any(String),
+    );
 
     // The session refuses every later run without touching the page.
     const requests = site.requests.length;
@@ -242,6 +245,33 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
       ),
     ).toMatchObject({ ok: false, failure: { kind: 'challenge', challenge: kind } });
     expect(site.requests).toHaveLength(requests);
+  });
+
+  it('sends nothing to another origin on a private address, and keeps the main frame on the site', async () => {
+    const browser = await session();
+    const before = site.requests.length;
+    site.inject({ action: 'health', fault: { type: 'offsite_content' } });
+    const result = await browser.run(
+      'offsite content',
+      async (step) => {
+        await step('open the account', { mutates: false }, (page) => page.goto(`${site.url}/`));
+        const seller = await step('read the seller', { mutates: false }, (page) =>
+          page.attribute('[data-account]', 'data-account'),
+        );
+        await step('follow the link', { mutates: false }, (page) => page.click('#offsite-link'));
+        return seller;
+      },
+      signal(),
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      steps: ['open the account', 'read the seller', 'follow the link'],
+      failure: { step: 'follow the link', screenshotKey: null },
+    });
+    const elsewhere = new URL(site.url.replace('127.0.0.1', 'localhost')).host;
+    const sent = site.requests.slice(before);
+    expect(sent.map((request) => request.path)).toContain('/');
+    expect(sent.filter((request) => request.host === elsewhere)).toEqual([]);
   });
 
   it('stops at a check even when the script catches the error and tries to go on', async () => {

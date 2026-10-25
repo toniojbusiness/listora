@@ -42,7 +42,7 @@ require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Ins
 
 .PHONY: ios-generate ios-build ios-test ios-e2e-ready ios-check-ats ios-screenshots ios-lint ios-format ios-open ios-clean \
 	ios-simulator \
-	ios-tag-fixtures ios-app-icon ios-archive ios-testflight
+	ios-tag-fixtures ios-batch-fixtures ios-app-icon ios-archive ios-testflight
 
 ## Generate Listora.xcodeproj from apps/ios/project.yml.
 ios-generate:
@@ -145,6 +145,15 @@ ios-tag-fixtures:
 	mkdir -p $(IOS_BUILD_DIR)/tools
 	xcrun swiftc -O -o $(IOS_BUILD_DIR)/tools/generate-tag-fixtures $(IOS_DIR)/Tools/generate-tag-fixtures.swift
 	$(IOS_BUILD_DIR)/tools/generate-tag-fixtures
+
+## Re-render the synthetic haul photos that PhotoSignalsFeatureTests groups and the batch UI
+## test shoots, then record their Vision signals for the grouping tests in CoreTests.
+ios-batch-fixtures:
+	mkdir -p $(IOS_BUILD_DIR)/tools
+	xcrun swiftc -O -o $(IOS_BUILD_DIR)/tools/generate-batch-fixtures $(IOS_DIR)/Tools/generate-batch-fixtures.swift
+	$(IOS_BUILD_DIR)/tools/generate-batch-fixtures
+	xcrun swiftc -O -parse-as-library -o $(IOS_BUILD_DIR)/tools/record-batch-signals $(IOS_DIR)/Tools/record-batch-signals.swift
+	$(IOS_BUILD_DIR)/tools/record-batch-signals
 
 ## Re-render the placeholder app icon PNGs in Listora/Assets.xcassets/AppIcon.appiconset.
 ios-app-icon:

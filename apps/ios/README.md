@@ -24,20 +24,21 @@ The app talks to the backend only through the generated `ListoraAPI` Swift packa
 
 Run these from the repository root.
 
-| Command                 | What it does                                                         |
-| ----------------------- | -------------------------------------------------------------------- |
-| `make ios-generate`     | Generate `apps/ios/Listora.xcodeproj` from `project.yml`             |
-| `make ios-open`         | Generate the project and open it in Xcode                            |
-| `make ios-build`        | Build the app, Share Extension, and packages for the simulator       |
-| `make ios-test`         | Run package, unit, and UI tests on the simulator, in the local stack |
-| `make ios-lint`         | SwiftLint (strict) and the SwiftFormat check                         |
-| `make ios-format`       | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes       |
-| `make ios-clean`        | Delete the generated project and `.build/ios`                        |
-| `make ios-tag-fixtures` | Re-render the tag-reading test photos (see Tag reading)              |
-| `make ios-app-icon`     | Re-render the placeholder app icon (see App icon)                    |
-| `make ios-screenshots`  | Screenshot every screen in four variants (see Design)                |
-| `make ios-archive`      | Unsigned release archive; needs no Apple account (Releases)          |
-| `make ios-testflight`   | Signed release archive uploaded to TestFlight (Releases)             |
+| Command                   | What it does                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------- |
+| `make ios-generate`       | Generate `apps/ios/Listora.xcodeproj` from `project.yml`                           |
+| `make ios-open`           | Generate the project and open it in Xcode                                          |
+| `make ios-build`          | Build the app, Share Extension, and packages for the simulator                     |
+| `make ios-test`           | Run package, unit, and UI tests on the simulator, in the local stack               |
+| `make ios-lint`           | SwiftLint (strict) and the SwiftFormat check                                       |
+| `make ios-format`         | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes                     |
+| `make ios-clean`          | Delete the generated project and `.build/ios`                                      |
+| `make ios-tag-fixtures`   | Re-render the tag-reading test photos (see Tag reading)                            |
+| `make ios-batch-fixtures` | Re-render the batch hauls and record their Vision signals (docs/features/batch.md) |
+| `make ios-app-icon`       | Re-render the placeholder app icon (see App icon)                                  |
+| `make ios-screenshots`    | Screenshot every screen in four variants (see Design)                              |
+| `make ios-archive`        | Unsigned release archive; needs no Apple account (Releases)                        |
+| `make ios-testflight`     | Signed release archive uploaded to TestFlight (Releases)                           |
 
 `make ios-test` writes DerivedData, SwiftPM caches, and the result bundle
 (`.build/ios/Test.xcresult`) to `.build/ios` in this checkout, never to `~/Library`. To use a
@@ -91,6 +92,8 @@ Packages/
     TagReadingFeature On-device tag reading with Vision (VisionTagReader); no UI
     VoiceInputFeature On-device speech to text for spoken corrections (AppleSpeechTranscriber,
                       and ScriptedVoiceTranscriber for UI tests); no UI
+    PhotoSignalsFeature On-device grouping signals of batch photos with Vision
+                      (VisionPhotoSignalReader, implementing Core's PhotoSignalReader); no UI
     ShareLinkFeature  The Share Extension's screen (ShareLinkView, ShareLinkModel)
     MarketplaceLinkingFeature  Settings > Link accounts: sign in on a marketplace's own page
                       in a web view and hand Listora its session
@@ -246,6 +249,11 @@ audit on the main screens as part of `make ios-test`.
 - **Review item** opens the review once the draft is saved to Listora. Tapped earlier, it waits
   for the upload, then opens it. When the item is saved, the draft leaves this iPhone (its server
   item stays: `DraftStore.completeDraft`).
+
+- **Batch mode.** The One item / Batch switch above the actions shoots or imports a whole haul,
+  splits it into items on the device, and makes each confirmed item a draft of its batch, which
+  the queue creates in the server batch and submits once uploaded. How it works is in
+  [docs/features/batch.md](../../docs/features/batch.md).
 
 - **Tag reading results.** A tag photo's screen shows what on-device reading found, as read:
   the text lines and barcodes, or that nothing was found or reading failed. The device never

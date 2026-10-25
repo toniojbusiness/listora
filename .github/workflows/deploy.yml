@@ -56,6 +56,17 @@ jobs:
         run: |
           npx vitest run --project unit infra
           npm run infra:synth
+      # The dev sign-in driver writes every sign-in code to the API log and lets anyone ask for
+      # one, so only the personal environment (whose iPhone app has no Cognito sign-in yet) may
+      # run it. Staging and prod deploy only with AUTH_DRIVER=cognito (docs/features/auth.md).
+      - name: Refuse the dev sign-in driver outside the personal environment
+        if: inputs.environment != 'personal'
+        run: |
+          driver=$(node infra/src/container-env.ts api postgres://unused | sed -n 's/^AUTH_DRIVER=//p')
+          if [ "$driver" != cognito ]; then
+            echo "::error::the api container's AUTH_DRIVER is '$driver'; $LISTORA_ENV needs cognito (T-31)"
+            exit 1
+          fi
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/listora-${{ inputs.environment }}-github-deploy

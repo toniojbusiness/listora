@@ -14,11 +14,13 @@ struct FieldRow: View {
     let onSelect: (FieldValue) -> Void
     let onCommit: () -> Void
     var onQuickPick: (QuickValues.Option) -> Void = { _ in }
-    var onNext: () -> Void = {}
+    /// Moves on to the next detail that needs a look. Without it the row has no swipe and no
+    /// "Next to check" action: the batch review's swipe pages to the next item instead.
+    var onNext: (() -> Void)?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        row
+        let outlined = row
             .overlay {
                 if isFocused {
                     RoundedRectangle(cornerRadius: Radius.small, style: .continuous)
@@ -26,15 +28,21 @@ struct FieldRow: View {
                         .allowsHitTesting(false)
                 }
             }
-            // Swiping left, mostly sideways, moves on; vertical drags stay the scroll view's.
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 24).onEnded { drag in
-                    if drag.translation.width < -60, abs(drag.translation.height) < abs(drag.translation.width) / 2 {
-                        onNext()
-                    }
-                },
-            )
-            .accessibilityAction(named: "Next to check", onNext)
+        if let onNext {
+            outlined
+                // Swiping left, mostly sideways, moves on; vertical drags stay the scroll view's.
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 24).onEnded { drag in
+                        let sideways = abs(drag.translation.height) < abs(drag.translation.width) / 2
+                        if drag.translation.width < -60, sideways {
+                            onNext()
+                        }
+                    },
+                )
+                .accessibilityAction(named: "Next to check", onNext)
+        } else {
+            outlined
+        }
     }
 
     @ViewBuilder

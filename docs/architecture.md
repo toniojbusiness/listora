@@ -79,10 +79,10 @@ The iOS conventions are in [features/ios.md](features/ios.md).
 apps/
   api/          Fastify HTTP API (@listora/api)
   worker/       Background worker: operation engine, plus one module per feature's jobs in
-                src/features/ (account deletion, AI spend check, item analysis, photo
-                processing, trust metrics, the daily connection health check, the delist SLA,
-                push delivery, sale fees, the morning summary); and the on-demand browser runner
-                (src/runner/main.ts)
+                src/features/ (account deletion, AI spend check, item analysis, batch items'
+                analysis start, photo processing, trust metrics, the daily connection health
+                check, the delist SLA, push delivery, sale fees, the morning summary); and the
+                on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
                 and account blocks (@listora/admin)
@@ -95,6 +95,8 @@ packages/
   analysis/     Item analysis: canonical vocabulary, marketplace copy limits, prompt assembly,
                 the strict output schema, provenance, escalation, the analysis job
                 (@listora/analysis)
+  batches/      Batch listing: batches and their items' state, the job that starts each submitted
+                item's analysis once its photos are processed (@listora/batches)
   pricing/      Pricing v1: versioned fee tables, cost floor, AI-estimate tiers, research
                 links, sold-data label guard; pure, no I/O (@listora/pricing)
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
@@ -190,6 +192,8 @@ src/
   idempotency.ts Idempotency-Key handling for POSTs
   items/ photos/ One folder per resource: routes.ts, feature.ts, repository.ts, mapping and views
   analyses/      Start, get, escalate, and apply analyses; the guard pre-check
+  batches/       Batches of items photographed in one session: items by position, submits, the
+                 measured interaction
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
@@ -312,7 +316,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   batches by later POSTs once expired).
 - **Elsewhere:** connections and connect attempts in [connections.md](features/connections.md#data);
   automation runs and sale-check schedules in [automation.md](features/automation.md#data);
-  inventory, photos, and history in [items.md](features/items.md); uploads in
+  inventory, photos, and history in [items.md](features/items.md); batches in
+  [batch.md](features/batch.md#data); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
   [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in
   [operations.md](features/operations.md#data) (double-sale incidents in
@@ -411,6 +416,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                   |
 | [features/ios.md](features/ios.md)                                 | iOS app conventions                                                            |
 | [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric     |
+| [features/batch.md](features/batch.md)                             | Batch listing: a whole haul shot at once, grouped, analyzed, rapid review      |
 | [features/design.md](features/design.md)                           | The iPhone app's design system, screenshots, and UI audit                      |
 | [features/inventory.md](features/inventory.md)                     | The Inventory tab, the item screen, the listing flow and its API               |
 | [features/sales.md](features/sales.md)                             | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI    |
@@ -418,6 +424,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule   |
 | [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push   |
 | [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"           |
+| [features/security.md](features/security.md)                       | The security review: findings, severities, fixes, and follow-ups               |
 
 ### Former section numbers
 

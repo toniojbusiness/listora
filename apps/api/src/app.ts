@@ -3,11 +3,18 @@ import { randomUUID } from 'node:crypto';
 import type { AiClient } from '@listora/ai';
 import type { AnalysisJobQueue } from '@listora/analysis';
 import { loadAutomationSettings } from '@listora/automation';
+import { graphileBatchJobs, type BatchJobQueue } from '@listora/batches';
 import type { Db } from '@listora/db';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
 import type { PhotoJobQueue } from '@listora/photos';
 import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
-import { fastify, LogController, type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import {
+  errorCodes,
+  fastify,
+  LogController,
+  type FastifyBaseLogger,
+  type FastifyInstance,
+} from 'fastify';
 
 import type { AuthDriver } from './auth/driver.ts';
 import type { ConnectionsDependencies } from './connections/routes.ts';
@@ -31,6 +38,8 @@ export interface AppDependencies extends HealthDependencies {
   ai: AiClient;
   /** Where starting or escalating an analysis adds its job. */
   analysisJobs: AnalysisJobQueue;
+  /** Where submitting a batch item adds its job; defaults to the Graphile Worker queue. */
+  batchJobs?: BatchJobQueue;
   /**
    * Marketplace adapters, OAuth clients, and the token sealer. Defaults to the assisted
    * marketplaces only, with nothing that can be connected.
@@ -71,6 +80,21 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   });
   // Every body is JSON; without this, Fastify would hand a text/plain body to validation.
   app.removeContentTypeParser('text/plain');
+  // Any other body is refused, but an empty one is no body, whatever its content type: API
+  // Gateway's HTTP API (the personal environment's ingress) forwards a bodyless DELETE as a
+  // request with an empty body that Fastify would otherwise try to parse, so the app's deletes
+  // failed there. A refused body logs its content type and length (never its contents).
+  app.addContentTypeParser('*', { parseAs: 'string' }, (request, body, done) => {
+    if (body === '') {
+      done(null, undefined);
+      return;
+    }
+    request.log.info(
+      { contentType: request.headers['content-type'] ?? null, bodyLength: body.length },
+      'unsupported request body',
+    );
+    done(new errorCodes.FST_ERR_CTP_INVALID_MEDIA_TYPE());
+  });
   app.decorateRequest('tenant', null);
   app.decorateRequest('identity', null);
   app.addHook('onRequest', async (request, reply) => {
@@ -91,6 +115,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     photoJobs: deps.photoJobs,
     ai: deps.ai,
     analysisJobs: deps.analysisJobs,
+    batchJobs: deps.batchJobs ?? graphileBatchJobs,
     connections: deps.connections ?? {
       adapters: createMarketplaceAdapters({
         fakeMarketplaceUrl: undefined,
