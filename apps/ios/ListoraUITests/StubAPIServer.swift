@@ -26,6 +26,20 @@ final class StubAPIServer: @unchecked Sendable {
     private var startFailure: NWError?
     /// Poshmark's link: nil until the app links it, then how many times its check was read.
     private var poshmarkChecks: Int?
+    private var todayState = TodayState.busy
+
+    /// What `GET /v1/today` answers.
+    enum TodayState: Sendable {
+        /// A card of every kind, and this week's sales.
+        case busy
+        /// Nothing to do and no sales.
+        case caughtUp
+    }
+
+    /// Changes what `GET /v1/today` answers from the next request on.
+    func setToday(_ state: TodayState) {
+        queue.sync { todayState = state }
+    }
 
     private(set) var port: UInt16 = 0
 
@@ -133,6 +147,13 @@ final class StubAPIServer: @unchecked Sendable {
             return Self.http(status: "200 OK", body: #"{"data":\#(Self.connections)}"#)
         case ("GET", "/v1/connection-health"):
             return Self.http(status: "200 OK", body: Self.connectionHealth)
+        case ("GET", "/v1/today"):
+            return Self.http(status: "200 OK", body: todayState == .busy ? Self.busyToday() : Self.caughtUpToday())
+        case ("GET", "/v1/today/settings"):
+            return Self.http(status: "200 OK", body: #"{"enabled":true,"time":"08:00","timeZone":"UTC"}"#)
+        case ("PUT", "/v1/today/settings"):
+            // Saved as sent.
+            return Self.http(status: "200 OK", body: request.body)
         default:
             if let linking = respondToLinkAccounts(method: request.method, path: path) {
                 return linking

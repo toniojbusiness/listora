@@ -7905,5 +7905,857 @@ extension Components {
                 case nextCursor
             }
         }
+        /// A `KnownTodayCardKind`, or a card added after this client was built. Clients show an
+        /// unknown card's `title`, `detail`, and action generically.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayCardKind`.
+        public struct TodayCardKind: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayCardKind/value1`.
+            public var value1: Components.Schemas.KnownTodayCardKind?
+            /// - Remark: Generated from `#/components/schemas/TodayCardKind/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `TodayCardKind`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownTodayCardKind? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `delist`: an item sold and is not delisted (or confirmed) everywhere else yet.
+        /// `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
+        /// seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
+        /// `stale_listing`: a listing live a long time with no changes, with a price drop (never below
+        /// the item's floor) or a relist suggested.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownTodayCardKind`.
+        @frozen public enum KnownTodayCardKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case delist = "delist"
+            case ship = "ship"
+            case reconnect = "reconnect"
+            case reviewDrafts = "review_drafts"
+            case staleListing = "stale_listing"
+        }
+        /// A `KnownTodayUrgency`, or a level added after this client was built, which clients show
+        /// like `normal`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayUrgency`.
+        public struct TodayUrgency: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayUrgency/value1`.
+            public var value1: Components.Schemas.KnownTodayUrgency?
+            /// - Remark: Generated from `#/components/schemas/TodayUrgency/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `TodayUrgency`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownTodayUrgency? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `urgent`: needs the seller now (a delist that is stuck or waiting for them, a ship-by date
+        /// within a day or past). `high`: soon. `normal`: when the seller has a moment.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownTodayUrgency`.
+        @frozen public enum KnownTodayUrgency: String, Codable, Hashable, Sendable, CaseIterable {
+            case urgent = "urgent"
+            case high = "high"
+            case normal = "normal"
+        }
+        /// A `KnownTodayDestination`, or a screen added after this client was built. Clients that do
+        /// not know it open the item when the action names one, and otherwise offer no action.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayDestination`.
+        public struct TodayDestination: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayDestination/value1`.
+            public var value1: Components.Schemas.KnownTodayDestination?
+            /// - Remark: Generated from `#/components/schemas/TodayDestination/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `TodayDestination`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownTodayDestination? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `item`: the item screen (`itemId`). `sale`: the sale's screen (`saleId`; `itemId` names the
+        /// item too). `marketplaces`: the marketplace connections screen (`connectionId` names the
+        /// connection). `drafts`: the drafts waiting for review.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownTodayDestination`.
+        @frozen public enum KnownTodayDestination: String, Codable, Hashable, Sendable, CaseIterable {
+            case item = "item"
+            case sale = "sale"
+            case marketplaces = "marketplaces"
+            case drafts = "drafts"
+        }
+        /// The card's one primary action and the screen it opens.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayAction`.
+        public struct TodayAction: Codable, Hashable, Sendable {
+            /// The button's title, for example `Open sale` or `Lower to $40`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayAction/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TodayAction/destination`.
+            public var destination: Components.Schemas.TodayDestination
+            /// - Remark: Generated from `#/components/schemas/TodayAction/itemId`.
+            public var itemId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/TodayAction/saleId`.
+            public var saleId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/TodayAction/connectionId`.
+            public var connectionId: Components.Schemas.Id?
+            /// Creates a new `TodayAction`.
+            ///
+            /// - Parameters:
+            ///   - label: The button's title, for example `Open sale` or `Lower to $40`.
+            ///   - destination:
+            ///   - itemId:
+            ///   - saleId:
+            ///   - connectionId:
+            public init(
+                label: Swift.String,
+                destination: Components.Schemas.TodayDestination,
+                itemId: Components.Schemas.Id? = nil,
+                saleId: Components.Schemas.Id? = nil,
+                connectionId: Components.Schemas.Id? = nil
+            ) {
+                self.label = label
+                self.destination = destination
+                self.itemId = itemId
+                self.saleId = saleId
+                self.connectionId = connectionId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case label
+                case destination
+                case itemId
+                case saleId
+                case connectionId
+            }
+        }
+        /// The item a card is about.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayItem`.
+        public struct TodayItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayItem/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodayItem/sku`.
+            public var sku: Components.Schemas.Sku
+            /// - Remark: Generated from `#/components/schemas/TodayItem/title`.
+            public var title: Swift.String?
+            /// The item's cover photo, small; absent until a photo is processed.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayItem/thumbnailUrl`.
+            public var thumbnailUrl: Swift.String?
+            /// Creates a new `TodayItem`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - sku:
+            ///   - title:
+            ///   - thumbnailUrl: The item's cover photo, small; absent until a photo is processed.
+            public init(
+                id: Components.Schemas.Id,
+                sku: Components.Schemas.Sku,
+                title: Swift.String? = nil,
+                thumbnailUrl: Swift.String? = nil
+            ) {
+                self.id = id
+                self.sku = sku
+                self.title = title
+                self.thumbnailUrl = thumbnailUrl
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case sku
+                case title
+                case thumbnailUrl
+            }
+        }
+        /// A `ship` card's sale and where the item is kept.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayShipment`.
+        public struct TodayShipment: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayShipment/saleId`.
+            public var saleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodayShipment/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/TodayShipment/soldAt`.
+            public var soldAt: Components.Schemas.Timestamp
+            /// The marketplace's ship-by date, when it gives one.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayShipment/shipBy`.
+            public var shipBy: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/TodayShipment/location`.
+            public var location: Components.Schemas.TodayLocation?
+            /// Creates a new `TodayShipment`.
+            ///
+            /// - Parameters:
+            ///   - saleId:
+            ///   - marketplace:
+            ///   - soldAt:
+            ///   - shipBy: The marketplace's ship-by date, when it gives one.
+            ///   - location:
+            public init(
+                saleId: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                soldAt: Components.Schemas.Timestamp,
+                shipBy: Components.Schemas.Timestamp? = nil,
+                location: Components.Schemas.TodayLocation? = nil
+            ) {
+                self.saleId = saleId
+                self.marketplace = marketplace
+                self.soldAt = soldAt
+                self.shipBy = shipBy
+                self.location = location
+            }
+            public enum CodingKeys: String, CodingKey {
+                case saleId
+                case marketplace
+                case soldAt
+                case shipBy
+                case location
+            }
+        }
+        /// Where the item is kept, for example bin `B-12`.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayLocation`.
+        public struct TodayLocation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayLocation/code`.
+            public var code: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TodayLocation/label`.
+            public var label: Swift.String?
+            /// Creates a new `TodayLocation`.
+            ///
+            /// - Parameters:
+            ///   - code:
+            ///   - label:
+            public init(
+                code: Swift.String,
+                label: Swift.String? = nil
+            ) {
+                self.code = code
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case label
+            }
+        }
+        /// A `delist` card's delist run, with its honest summary.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayDelist`.
+        public struct TodayDelist: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayDelist/saleId`.
+            public var saleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodayDelist/delistRunId`.
+            public var delistRunId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodayDelist/soldOn`.
+            public var soldOn: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/TodayDelist/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// The marketplaces where it is not delisted or confirmed yet.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayDelist/remaining`.
+            public var remaining: [Components.Schemas.Marketplace]
+            /// Creates a new `TodayDelist`.
+            ///
+            /// - Parameters:
+            ///   - saleId:
+            ///   - delistRunId:
+            ///   - soldOn:
+            ///   - statusDisplay:
+            ///   - remaining: The marketplaces where it is not delisted or confirmed yet.
+            public init(
+                saleId: Components.Schemas.Id,
+                delistRunId: Components.Schemas.Id,
+                soldOn: Components.Schemas.Marketplace,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                remaining: [Components.Schemas.Marketplace]
+            ) {
+                self.saleId = saleId
+                self.delistRunId = delistRunId
+                self.soldOn = soldOn
+                self.statusDisplay = statusDisplay
+                self.remaining = remaining
+            }
+            public enum CodingKeys: String, CodingKey {
+                case saleId
+                case delistRunId
+                case soldOn
+                case statusDisplay
+                case remaining
+            }
+        }
+        /// A `reconnect` card's connection.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayConnection`.
+        public struct TodayConnection: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayConnection/connectionId`.
+            public var connectionId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodayConnection/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/TodayConnection/displayName`.
+            public var displayName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TodayConnection/status`.
+            public var status: Components.Schemas.ConnectionStatus
+            /// Creates a new `TodayConnection`.
+            ///
+            /// - Parameters:
+            ///   - connectionId:
+            ///   - marketplace:
+            ///   - displayName:
+            ///   - status:
+            public init(
+                connectionId: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                displayName: Swift.String? = nil,
+                status: Components.Schemas.ConnectionStatus
+            ) {
+                self.connectionId = connectionId
+                self.marketplace = marketplace
+                self.displayName = displayName
+                self.status = status
+            }
+            public enum CodingKeys: String, CodingKey {
+                case connectionId
+                case marketplace
+                case displayName
+                case status
+            }
+        }
+        /// A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
+        /// clients show through the card's `detail` and action.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayStaleSuggestion`.
+        public struct TodayStaleSuggestion: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayStaleSuggestion/value1`.
+            public var value1: Components.Schemas.KnownTodayStaleSuggestion?
+            /// - Remark: Generated from `#/components/schemas/TodayStaleSuggestion/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `TodayStaleSuggestion`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownTodayStaleSuggestion? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `price_drop`: lower the price to `suggestedPrice`, which is never below the item's floor.
+        /// `relist`: no price drop is possible (the price is at its floor, or no floor is known).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownTodayStaleSuggestion`.
+        @frozen public enum KnownTodayStaleSuggestion: String, Codable, Hashable, Sendable, CaseIterable {
+            case priceDrop = "price_drop"
+            case relist = "relist"
+        }
+        /// A `stale_listing` card's listing facts and suggestion.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayStaleListing`.
+        public struct TodayStaleListing: Codable, Hashable, Sendable {
+            /// When its oldest live listing went live.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/listedAt`.
+            public var listedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/daysListed`.
+            public var daysListed: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/price`.
+            public var price: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/floor`.
+            public var floor: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/suggestion`.
+            public var suggestion: Components.Schemas.TodayStaleSuggestion
+            /// Present with `price_drop`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/suggestedPrice`.
+            public var suggestedPrice: Components.Schemas.Money?
+            /// Where it is live.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/marketplaces`.
+            public var marketplaces: [Components.Schemas.Marketplace]
+            /// Creates a new `TodayStaleListing`.
+            ///
+            /// - Parameters:
+            ///   - listedAt: When its oldest live listing went live.
+            ///   - daysListed:
+            ///   - price:
+            ///   - floor:
+            ///   - suggestion:
+            ///   - suggestedPrice: Present with `price_drop`.
+            ///   - marketplaces: Where it is live.
+            public init(
+                listedAt: Components.Schemas.Timestamp,
+                daysListed: Swift.Int32,
+                price: Components.Schemas.Money,
+                floor: Components.Schemas.Money? = nil,
+                suggestion: Components.Schemas.TodayStaleSuggestion,
+                suggestedPrice: Components.Schemas.Money? = nil,
+                marketplaces: [Components.Schemas.Marketplace]
+            ) {
+                self.listedAt = listedAt
+                self.daysListed = daysListed
+                self.price = price
+                self.floor = floor
+                self.suggestion = suggestion
+                self.suggestedPrice = suggestedPrice
+                self.marketplaces = marketplaces
+            }
+            public enum CodingKeys: String, CodingKey {
+                case listedAt
+                case daysListed
+                case price
+                case floor
+                case suggestion
+                case suggestedPrice
+                case marketplaces
+            }
+        }
+        /// A `review_drafts` card's drafts.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayDrafts`.
+        public struct TodayDrafts: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayDrafts/count`.
+            public var count: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/TodayDrafts/oldestCreatedAt`.
+            public var oldestCreatedAt: Components.Schemas.Timestamp
+            /// Creates a new `TodayDrafts`.
+            ///
+            /// - Parameters:
+            ///   - count:
+            ///   - oldestCreatedAt:
+            public init(
+                count: Swift.Int32,
+                oldestCreatedAt: Components.Schemas.Timestamp
+            ) {
+                self.count = count
+                self.oldestCreatedAt = oldestCreatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case count
+                case oldestCreatedAt
+            }
+        }
+        /// One thing that needs the seller. A card exists only while its work is not done, so it is
+        /// gone from the next summary once the work is finished. The kind's own property (`shipment`,
+        /// `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayCard`.
+        public struct TodayCard: Codable, Hashable, Sendable {
+            /// Stable while the card's work is the same, for example `ship:<saleItemId>`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayCard/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TodayCard/kind`.
+            public var kind: Components.Schemas.TodayCardKind
+            /// - Remark: Generated from `#/components/schemas/TodayCard/urgency`.
+            public var urgency: Components.Schemas.TodayUrgency
+            /// - Remark: Generated from `#/components/schemas/TodayCard/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TodayCard/detail`.
+            public var detail: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/action`.
+            public var action: Components.Schemas.TodayAction
+            /// - Remark: Generated from `#/components/schemas/TodayCard/item`.
+            public var item: Components.Schemas.TodayItem?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/shipment`.
+            public var shipment: Components.Schemas.TodayShipment?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/delist`.
+            public var delist: Components.Schemas.TodayDelist?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/connection`.
+            public var connection: Components.Schemas.TodayConnection?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/staleListing`.
+            public var staleListing: Components.Schemas.TodayStaleListing?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/drafts`.
+            public var drafts: Components.Schemas.TodayDrafts?
+            /// Creates a new `TodayCard`.
+            ///
+            /// - Parameters:
+            ///   - id: Stable while the card's work is the same, for example `ship:<saleItemId>`.
+            ///   - kind:
+            ///   - urgency:
+            ///   - title:
+            ///   - detail:
+            ///   - action:
+            ///   - item:
+            ///   - shipment:
+            ///   - delist:
+            ///   - connection:
+            ///   - staleListing:
+            ///   - drafts:
+            public init(
+                id: Swift.String,
+                kind: Components.Schemas.TodayCardKind,
+                urgency: Components.Schemas.TodayUrgency,
+                title: Swift.String,
+                detail: Swift.String? = nil,
+                action: Components.Schemas.TodayAction,
+                item: Components.Schemas.TodayItem? = nil,
+                shipment: Components.Schemas.TodayShipment? = nil,
+                delist: Components.Schemas.TodayDelist? = nil,
+                connection: Components.Schemas.TodayConnection? = nil,
+                staleListing: Components.Schemas.TodayStaleListing? = nil,
+                drafts: Components.Schemas.TodayDrafts? = nil
+            ) {
+                self.id = id
+                self.kind = kind
+                self.urgency = urgency
+                self.title = title
+                self.detail = detail
+                self.action = action
+                self.item = item
+                self.shipment = shipment
+                self.delist = delist
+                self.connection = connection
+                self.staleListing = staleListing
+                self.drafts = drafts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case kind
+                case urgency
+                case title
+                case detail
+                case action
+                case item
+                case shipment
+                case delist
+                case connection
+                case staleListing
+                case drafts
+            }
+        }
+        /// Sales in a 7-day period. Canceled and returned sales count for nothing. `profit` is the sum
+        /// over the sales whose profit is known (price plus shipping charged, minus fees and the items'
+        /// costs); a sale without recorded fees or with an item without a cost is counted in
+        /// `profitPendingSales` instead. `profit` is absent when no sale's profit is known.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod`.
+        public struct TodayMoneyPeriod: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/start`.
+            public var start: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/end`.
+            public var end: Components.Schemas.Timestamp
+            /// Orders.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/sales`.
+            public var sales: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/itemsSold`.
+            public var itemsSold: Swift.Int32
+            /// What the items sold for, before shipping, fees, and costs.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/salesTotal`.
+            public var salesTotal: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/profit`.
+            public var profit: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/profitPendingSales`.
+            public var profitPendingSales: Swift.Int32
+            /// Creates a new `TodayMoneyPeriod`.
+            ///
+            /// - Parameters:
+            ///   - start:
+            ///   - end:
+            ///   - sales: Orders.
+            ///   - itemsSold:
+            ///   - salesTotal: What the items sold for, before shipping, fees, and costs.
+            ///   - profit:
+            ///   - profitPendingSales:
+            public init(
+                start: Components.Schemas.Timestamp,
+                end: Components.Schemas.Timestamp,
+                sales: Swift.Int32,
+                itemsSold: Swift.Int32,
+                salesTotal: Components.Schemas.Money,
+                profit: Components.Schemas.Money? = nil,
+                profitPendingSales: Swift.Int32
+            ) {
+                self.start = start
+                self.end = end
+                self.sales = sales
+                self.itemsSold = itemsSold
+                self.salesTotal = salesTotal
+                self.profit = profit
+                self.profitPendingSales = profitPendingSales
+            }
+            public enum CodingKeys: String, CodingKey {
+                case start
+                case end
+                case sales
+                case itemsSold
+                case salesTotal
+                case profit
+                case profitPendingSales
+            }
+        }
+        /// The last 7 days (`thisWeek`, ending now) next to the 7 days before (`lastWeek`).
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayMoney`.
+        public struct TodayMoney: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayMoney/thisWeek`.
+            public var thisWeek: Components.Schemas.TodayMoneyPeriod
+            /// - Remark: Generated from `#/components/schemas/TodayMoney/lastWeek`.
+            public var lastWeek: Components.Schemas.TodayMoneyPeriod
+            /// Creates a new `TodayMoney`.
+            ///
+            /// - Parameters:
+            ///   - thisWeek:
+            ///   - lastWeek:
+            public init(
+                thisWeek: Components.Schemas.TodayMoneyPeriod,
+                lastWeek: Components.Schemas.TodayMoneyPeriod
+            ) {
+                self.thisWeek = thisWeek
+                self.lastWeek = lastWeek
+            }
+            public enum CodingKeys: String, CodingKey {
+                case thisWeek
+                case lastWeek
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/Today`.
+        public struct Today: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Today/generatedAt`.
+            public var generatedAt: Components.Schemas.Timestamp
+            /// Most urgent first. Empty when the seller is all caught up.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Today/cards`.
+            public var cards: [Components.Schemas.TodayCard]
+            /// - Remark: Generated from `#/components/schemas/Today/money`.
+            public var money: Components.Schemas.TodayMoney
+            /// Creates a new `Today`.
+            ///
+            /// - Parameters:
+            ///   - generatedAt:
+            ///   - cards: Most urgent first. Empty when the seller is all caught up.
+            ///   - money:
+            public init(
+                generatedAt: Components.Schemas.Timestamp,
+                cards: [Components.Schemas.TodayCard],
+                money: Components.Schemas.TodayMoney
+            ) {
+                self.generatedAt = generatedAt
+                self.cards = cards
+                self.money = money
+            }
+            public enum CodingKeys: String, CodingKey {
+                case generatedAt
+                case cards
+                case money
+            }
+        }
+        /// The morning summary notification: once a day at `time` in `timeZone`, a push that sums up
+        /// the Today screen (nothing is sent on a day with nothing to do). Until the app saves a time
+        /// zone, `timeZone` is absent and no summary is sent.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodaySummarySettings`.
+        public struct TodaySummarySettings: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettings/enabled`.
+            public var enabled: Swift.Bool
+            /// Wall-clock `HH:MM`, 24-hour.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettings/time`.
+            public var time: Swift.String
+            /// An IANA time zone name, for example `America/New_York`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettings/timeZone`.
+            public var timeZone: Swift.String?
+            /// Creates a new `TodaySummarySettings`.
+            ///
+            /// - Parameters:
+            ///   - enabled:
+            ///   - time: Wall-clock `HH:MM`, 24-hour.
+            ///   - timeZone: An IANA time zone name, for example `America/New_York`.
+            public init(
+                enabled: Swift.Bool,
+                time: Swift.String,
+                timeZone: Swift.String? = nil
+            ) {
+                self.enabled = enabled
+                self.time = time
+                self.timeZone = timeZone
+            }
+            public enum CodingKeys: String, CodingKey {
+                case enabled
+                case time
+                case timeZone
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TodaySummarySettingsReplace`.
+        public struct TodaySummarySettingsReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettingsReplace/enabled`.
+            public var enabled: Swift.Bool
+            /// Wall-clock `HH:MM`, 24-hour.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettingsReplace/time`.
+            public var time: Swift.String
+            /// An IANA time zone name, for example `America/New_York` (the device's own).
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettingsReplace/timeZone`.
+            public var timeZone: Swift.String
+            /// Creates a new `TodaySummarySettingsReplace`.
+            ///
+            /// - Parameters:
+            ///   - enabled:
+            ///   - time: Wall-clock `HH:MM`, 24-hour.
+            ///   - timeZone: An IANA time zone name, for example `America/New_York` (the device's own).
+            public init(
+                enabled: Swift.Bool,
+                time: Swift.String,
+                timeZone: Swift.String
+            ) {
+                self.enabled = enabled
+                self.time = time
+                self.timeZone = timeZone
+            }
+            public enum CodingKeys: String, CodingKey {
+                case enabled
+                case time
+                case timeZone
+            }
+        }
     }
 }

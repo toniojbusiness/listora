@@ -107,7 +107,8 @@ thing.
 - **In the app** (`MarketplacesFeature`): one card per marketplace with its mode, status, detail,
   last successful check, and actions (Connect, Reconnect, Retry check; the main one filled); a
   Sale emails card; and `ConnectionAttentionBanner`, which Inventory shows above the list while
-  anything needs attention and which opens Marketplaces in Settings. The Settings tab gets a badge.
+  anything needs attention and which opens Marketplaces in Settings. The Settings gear in the
+  Today and Sales headers gets a dot.
 
 ## Data
 

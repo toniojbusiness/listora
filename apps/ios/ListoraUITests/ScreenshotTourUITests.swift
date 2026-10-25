@@ -52,9 +52,12 @@ final class ScreenshotTourUITests: XCTestCase {
         ]
         app.launch()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        try shot("00-today-signed-out")
+
+        tab("Inventory")
         try shot("01-inventory")
 
-        tab("Add Item")
+        tab("Add")
         XCTAssertTrue(app.buttons["addItem.importPhotos"].waitForExistence(timeout: 5))
         try shot("02-add-item")
 
@@ -64,7 +67,8 @@ final class ScreenshotTourUITests: XCTestCase {
         tab("Tasks")
         try shot("09-tasks")
 
-        tab("Settings")
+        tab("Today")
+        app.buttons["settings.open"].tap()
         XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
         try shot("10-settings")
 
@@ -85,12 +89,15 @@ final class ScreenshotTourUITests: XCTestCase {
         ]
         app.launch()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
-        tab("Settings")
+        XCTAssertTrue(app.descendants(matching: .any)["today.money.sales"].waitForExistence(timeout: 10))
+        try shot("15-today")
+        app.buttons["settings.open"].tap()
         app.buttons["settings.marketplaces"].tap()
         XCTAssertTrue(app.buttons["marketplaces.ebay.connect"].waitForExistence(timeout: 10))
         try shot("12-marketplaces")
+        app.buttons["settings.done"].tap()
 
-        tab("Add Item")
+        tab("Add")
         XCTAssertTrue(app.buttons["draft.row"].waitForExistence(timeout: 5))
         try shot("13-drafts-upload-failed", settle: 3)
         app.buttons["draft.row"].tap()
