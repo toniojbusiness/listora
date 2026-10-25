@@ -40,7 +40,7 @@ final class LinkAccountsUITests: XCTestCase {
         ]
         app.launch()
 
-        let settings = app.tabBars.buttons["Settings"]
+        let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.tap()
         let linkAccounts = app.buttons["settings.linkAccounts"]
