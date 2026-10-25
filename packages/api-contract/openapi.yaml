@@ -141,6 +141,10 @@ paths:
     $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1checks'
   /v1/connection-health:
     $ref: './paths/connections.yaml#/~1v1~1connection-health'
+  /v1/marketplace-sessions:
+    $ref: './paths/connections.yaml#/~1v1~1marketplace-sessions'
+  /v1/marketplace-sessions/{marketplace}:
+    $ref: './paths/connections.yaml#/~1v1~1marketplace-sessions~1{marketplace}'
   /v1/sales:
     $ref: './paths/sales.yaml#/~1v1~1sales'
   /v1/sales/{saleId}:
@@ -548,6 +552,21 @@ components:
       $ref: './components/schemas/connections.yaml#/SaleForwarding'
     ConnectionHealthSummary:
       $ref: './components/schemas/connections.yaml#/ConnectionHealthSummary'
+    # ---------------------------------------------------------------- marketplace sessions
+    MarketplaceSessionStatus:
+      $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSessionStatus'
+    KnownMarketplaceSessionStatus:
+      $ref: './components/schemas/marketplace-sessions.yaml#/KnownMarketplaceSessionStatus'
+    MarketplaceSessionLogin:
+      $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSessionLogin'
+    MarketplaceSession:
+      $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSession'
+    MarketplaceSessionList:
+      $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSessionList'
+    SessionCookie:
+      $ref: './components/schemas/marketplace-sessions.yaml#/SessionCookie'
+    MarketplaceSessionLink:
+      $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSessionLink'
     # ---------------------------------------------------------------- sales
     SaleStatus:
       $ref: './components/schemas/sales.yaml#/SaleStatus'

@@ -3,7 +3,7 @@
  * freshly migrated scratch database, dev sign-in, and a `call` that drives one contract
  * operation and fails the test when the response does not match the contract.
  */
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -36,6 +36,8 @@ import {
   type AnalysisJobPayload,
   type AnalysisJobQueue,
 } from '@listora/analysis';
+import { loadAutomationSettings } from '@listora/automation';
+import { LocalTokenVault, SessionVault } from '@listora/connections';
 import {
   createDatabase,
   migrateJobQueue,
@@ -51,7 +53,7 @@ import {
   type PhotoProcessingDependencies,
   type PhotoProcessingOutcome,
 } from '@listora/photos';
-import { createLogger, sha256Hex } from '@listora/shared';
+import { createLogger, sha256Hex, type Logger } from '@listora/shared';
 import { LocalDiskStorage } from '@listora/storage';
 import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
 import type { ApiError, ErrorResponse } from '@listora/api-contract';
@@ -63,6 +65,7 @@ import type { AuthDriver } from './auth/driver.ts';
 import type { ConnectionsDependencies } from './connections/routes.ts';
 import { operationSpec, responseContractErrors } from './contract/contract.ts';
 import type { ContractReply, OperationId } from './contract/routes.ts';
+import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import { resolveTenant, type Tenant } from './tenancy.ts';
 import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
@@ -225,6 +228,16 @@ export function offlineDependencies(): Pick<
   };
 }
 
+/** The session vault under a random key, and the marketplaces' real profiles. */
+function testMarketplaceSessions(
+  logger: Logger,
+): MarketplaceSessionsDependencies & { vault: SessionVault } {
+  return {
+    vault: new SessionVault({ vault: new LocalTokenVault(randomBytes(32)), logger }),
+    profiles: loadAutomationSettings({}).profiles,
+  };
+}
+
 function unused(): never {
   throw new Error('offline test dependencies are not used');
 }
@@ -281,6 +294,8 @@ export interface TestApiOptions {
   connections?: ConnectionsDependencies;
   /** eBay's notification endpoint (default: not served). */
   ebayWebhook?: EbayWebhookDependencies;
+  /** The session vault and profiles linking uses (default: `vault`, under a random key). */
+  marketplaceSessions?: MarketplaceSessionsDependencies;
 }
 
 export interface TestApi {
@@ -302,6 +317,8 @@ export interface TestApi {
   aiControls: TestAiControls;
   /** The AI client the API and the jobs share. */
   ai: AiClient;
+  /** The session vault `linkMarketplaceSession` stores sessions in (a random local key). */
+  vault: SessionVault;
   /** The clock for dev sign-in and upload sessions, in milliseconds; move it to expire them. */
   clock: { now: number };
   /** Every line the API logged (requests included), parsed, oldest first. */
@@ -377,6 +394,7 @@ export async function createTestApi(
     jobs: () => accountDeletionJobs(db),
     runAll: () => runAccountDeletionJobs(deletionDeps),
   };
+  const marketplaceSessions = testMarketplaceSessions(logger);
   const app = buildApp({
     logger,
     db,
@@ -387,6 +405,7 @@ export async function createTestApi(
     photoJobs,
     ai,
     analysisJobs,
+    marketplaceSessions: options.marketplaceSessions ?? marketplaceSessions,
     now: () => new Date(clock.now),
     pingDatabase: () => Promise.resolve(),
   });
@@ -483,6 +502,7 @@ export async function createTestApi(
     analysisJobs,
     aiControls,
     ai,
+    vault: marketplaceSessions.vault,
     clock,
     logLines,
     signIn,
