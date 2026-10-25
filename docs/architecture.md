@@ -105,8 +105,9 @@ The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
 ```text
 apps/
   api/          Fastify HTTP API (@listora/api)
-  worker/       Background worker: operation engine, account deletion, polls, the daily
-                connection health check, photo processing, item analysis (@listora/worker)
+  worker/       Background worker: operation engine, account deletion, the eBay order poll and
+                notifications, listing resyncs, the daily connection health check, photo
+                processing, item analysis (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
                 and account blocks (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
@@ -133,7 +134,10 @@ packages/
   connections/  Marketplace account connections: OAuth connect, the token vault (local key or KMS),
                 use-time credentials with single-flight refresh, health checks, revocation
                 (@listora/connections)
-  operations/   Operation engine: enqueue, state machine, executor, crash recovery (@listora/operations)
+  operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
+                drift resync (@listora/operations)
+  sales/        Sale intake: inbound events, recording sales for auto-delist; eBay notifications,
+                the order poll, eBay account deletion (@listora/sales)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
@@ -180,6 +184,7 @@ src/
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
   listings/      Listing views (honest statusDisplay) and shared-listing links
   connections/   Marketplace connections, connect attempts, and the public OAuth callback
+  webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -318,8 +323,9 @@ interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
 }
 ```
 
-Imports, orders, webhooks, and emails join the interface as optional members with the tasks
-that first use them (T-17, T-23, T-36). Credentials are not part of the interface: an adapter
+Imports and emails join the interface as optional members with the tasks that first use them
+(T-23, T-36). eBay's notifications and order sync follow eBay's own contracts and live in
+`@listora/sales`, outside the interface ([ebay-notifications.md](ebay-notifications.md)). Credentials are not part of the interface: an adapter
 gets a connection's tokens at use time from its own token source (eBay's `EbaySellerSource`,
 which `@listora/connections` implements over the token vault, below).
 
@@ -536,8 +542,9 @@ cites the Depop pages it follows and what they leave open.
 
 The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth (with the consent
 page and token revocation), Commerce Identity, Media, Taxonomy, Fulfillment, Developer
-Analytics, and Notification endpoints the adapter and eBay connect use, signs
-notifications the way eBay does, and injects eBay's failure modes; its README cites the eBay
+Analytics, and Notification endpoints (subscriptions with eBay's endpoint challenge) the
+adapter, eBay connect, and the notifications use, signs notifications the way eBay does and
+delivers its own events to subscribed endpoints, and injects eBay's failure modes; its README cites the eBay
 documentation it follows and lists what eBay leaves undocumented. `npm run ebay:sandbox-check`
 runs the adapter against eBay's sandbox once the keys are in `.env` (README.md).
 
@@ -577,8 +584,9 @@ official OAuth 2.0 authorization code grant; Listora never sees a marketplace pa
   about 18 months), and a reconnect action whenever only the seller can fix it.
 - **Revocation.** `recordAuthorizationRevocation` (eBay `AUTHORIZATION_REVOCATION`, parsed by
   `parseAuthorizationRevocation`) flips every connection of that seller to `revoked` at once and
-  deletes the tokens; a notice older than the current grant changes nothing. The notifications
-  task (T-17) verifies and delivers the notices. Account deletion revokes grants through the
+  deletes the tokens; a notice older than the current grant changes nothing. eBay's notice
+  arrives at `/webhooks/ebay`, which verifies it and records it at once
+  ([ebay-notifications.md](ebay-notifications.md)). Account deletion revokes grants through the
   marketplace's revocation endpoint (`OAuthGrantRevoker`).
 
 **Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
@@ -725,7 +733,10 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
 7. **Listing truth.** A verified success records what the marketplace showed on the
    `marketplace_listing`: status, external id and URL (a confirmed pending id becomes the
    external id), `remote_snapshot` (with its revision), `remote_revision`, `last_verified_at`.
-   A user confirmation changes only the status.
+   A user confirmation changes only the status. Between operations, a **drift resync**
+   (`runListingResync`, when the marketplace reports a change or a sale) records what a read
+   shows the same way, in the listing's queue and never under an unfinished operation; without
+   read revisions it records a change only after two matching reads a delay apart.
 8. **History.** Every transition appends an `operation_event` with a redacted request/response
    excerpt (`redactForStorage` in `@listora/shared`), error code, and attempt number.
 9. **Invariant, enforced in code and tests:** no code path sets `succeeded` without a verified
@@ -745,7 +756,10 @@ its order (see `sale` in section 9). Then, in one transaction, Listora records t
 the item to `sold_pending_delist`, and creates a high-priority delist operation or urgent
 assisted task for every other listing. A `delist_run` gathers the per-marketplace results. If
 anything is still unconfirmed after 10 minutes, Listora alerts the user again, and after 30
-minutes it escalates the alert. A second sale opens a double-sale incident.
+minutes it escalates the alert. A second sale opens a double-sale incident. Today
+`recordSale` (`@listora/sales`) records the sale and, in the same transaction, adds its
+`sale_recorded` job, the event the orchestrator (T-20) will consume; eBay sales arrive by the
+`ORDER_CONFIRMATION` webhook and the 5-minute order poll ([ebay-notifications.md](ebay-notifications.md)).
 
 **Status vocabulary** shown to users: `Active (confirmed by eBay)`, `Delisting... retry 2 of 6`,
 `Delist failed - Retry`, `Checking...`, `Action needed - delist on Poshmark`,
@@ -998,7 +1012,9 @@ Tables by area:
   or relist publishes), and the append-only `operation_event`.
 - **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
   provider event id, so an id that repeats in another account or on another marketplace is
-  never dropped as a duplicate). `sale` is one marketplace order (unique per account,
+  never dropped as a duplicate; `external_user_id` names the marketplace user it is about, so
+  that user's data can be deleted). `marketplace_connection.orders_polled_through` is the order
+  poll's mark. `sale` is one marketplace order (unique per account,
   marketplace, and external order id) with the order-level fields: sold time, currency,
   shipping charged, detection source, status, and ship-by. Its `sale_item` rows are the items
   it sold, one per item (an order can be a bundle), each with its price and, when known, the

@@ -21,12 +21,20 @@
  *   GET  /commerce/taxonomy/v1/category_tree/0/get_category_suggestions?q=...
  *   GET  /commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category?category_id=...
  *   GET  /sell/fulfillment/v1/order                         Fulfillment: getOrders
+ *   GET  /sell/fulfillment/v1/order/:id                     Fulfillment: getOrder
  *   GET  /developer/analytics/v1_beta/rate_limit/           Developer Analytics: Trading usage
  *   GET  /commerce/notification/v1/public_key/:id           Notification: the signing key
+ *   ...  /commerce/notification/v1/{config,topic,destination,subscription}
+ *                                                           Notification: subscriptions
+ *                                                           (notification-api.ts)
  *   GET  /itm/:id                                           A listing's page (the view URL)
  *
  * Signed notifications (notifications.ts) are produced with `notification`, and delivered to
- * a subscriber with `deliver`. Faults are injected per action (`inject`): 429s, 5xx before and
+ * a subscriber with `deliver`. Once Listora subscribes, the fake also publishes eBay's own
+ * events to the subscribed destinations, as eBay does: `ORDER_CONFIRMATION` on `sell`,
+ * `LISTING` when a Trading call creates, revises, ends, or relists a listing,
+ * `AUTHORIZATION_REVOCATION` on `revokeSeller`, and `MARKETPLACE_ACCOUNT_DELETION` on
+ * `deleteUser` (`notifications.settled()` waits for those deliveries). Faults are injected per action (`inject`): 429s, 5xx before and
  * after the change, eBay system errors, refusals, expired or revoked authorization, the daily
  * call limit, timeouts after the change was applied, held requests, and stale reads. State
  * lives in memory, outside the process under test, so it survives a worker killed mid-call.
@@ -45,6 +53,7 @@ import {
   FAKE_EBAY_REFRESH_TOKEN,
   FAKE_EBAY_RU_NAME,
 } from './constants.ts';
+import { FakeNotificationApi } from './notification-api.ts';
 import { NotificationSigner, type SignedNotification } from './notifications.ts';
 import type { FakeAccessToken, FakeEbayListing, FakeOrder, FakeSeller } from './state.ts';
 import { fakeCategory, suggestCategories } from './taxonomy.ts';
@@ -75,7 +84,9 @@ export type FakeEbayAction =
   | 'taxonomy'
   | 'orders'
   | 'rate_limits'
-  | 'public_key';
+  | 'public_key'
+  /** Notification API config, topic, destination, and subscription calls. */
+  | 'notification';
 
 const TRADING_ACTIONS = {
   AddFixedPriceItem: 'add',
@@ -156,6 +167,11 @@ export interface FakeEbayOptions {
    * with `error=access_denied`).
    */
   consentRedirect?: { acceptUrl: string; declineUrl?: string };
+  /**
+   * Accept http notification destinations (local development and tests receive them on
+   * 127.0.0.1; eBay accepts only https URLs that are not localhost).
+   */
+  allowHttpNotificationEndpoints?: boolean;
   now?: () => Date;
 }
 
@@ -194,6 +210,7 @@ export class FakeEbay {
   readonly #waiters = new Set<() => void>();
   readonly #timers = new Set<NodeJS.Timeout>();
   readonly #signer = new NotificationSigner();
+  readonly #notifications: FakeNotificationApi;
   #chaos: FakeEbayFaultPicker | undefined;
   /** When each refresh token from a code exchange expires (epoch ms). */
   readonly #refreshExpiry = new Map<string, number>();
@@ -210,6 +227,12 @@ export class FakeEbay {
   private constructor(options: FakeEbayOptions) {
     this.#options = options;
     this.#tradingWindowStart = this.#now().getTime();
+    this.#notifications = new FakeNotificationApi({
+      signer: this.#signer,
+      baseUrl: () => this.#url,
+      now: () => this.#now(),
+      allowHttpEndpoints: options.allowHttpNotificationEndpoints ?? false,
+    });
     this.#consentRedirect = options.consentRedirect ?? {
       acceptUrl: 'http://127.0.0.1:3000/v1/connections/ebay/callback',
     };
@@ -248,6 +271,14 @@ export class FakeEbay {
 
   get requests(): readonly FakeEbayRequest[] {
     return this.#requests;
+  }
+
+  /**
+   * The Notification API's state: config, destinations, subscriptions, the deliveries made,
+   * `publish` (deliver a topic's notification to its subscribers now), and `settled`.
+   */
+  get notifications(): FakeNotificationApi {
+    return this.#notifications;
   }
 
   /** The id of the key notifications are signed with. */
@@ -360,6 +391,36 @@ export class FakeEbay {
   revokeSeller(refreshToken: string): void {
     const seller = this.#sellers.find((candidate) => candidate.refreshTokens.has(refreshToken));
     if (seller === undefined) return;
+    this.#dropGrants(seller);
+    this.#notifications.publishLater(
+      'AUTHORIZATION_REVOCATION',
+      {
+        username: seller.username,
+        userId: seller.userId,
+        eiasToken: eiasTokenOf(seller.userId),
+        revokeReason: 'REVOKED_BY_USER',
+        revocationDate: this.#now().toISOString(),
+      },
+      null,
+    );
+  }
+
+  /**
+   * The eBay user closes their account and asks eBay to delete their data: their grants stop
+   * working and every subscribed application gets `MARKETPLACE_ACCOUNT_DELETION`.
+   */
+  deleteUser(userId: string): void {
+    const seller = this.#sellers.find((candidate) => candidate.userId === userId);
+    if (seller === undefined) throw new Error(`no eBay user ${userId}`);
+    this.#dropGrants(seller);
+    this.#notifications.publishLater(
+      'MARKETPLACE_ACCOUNT_DELETION',
+      { username: seller.username, userId: seller.userId, eiasToken: eiasTokenOf(seller.userId) },
+      null,
+    );
+  }
+
+  #dropGrants(seller: FakeSeller): void {
     seller.refreshTokens.clear();
     for (const [token, grant] of this.#tokens) {
       if (grant.sellerUserId === seller.userId) this.#tokens.delete(token);
@@ -393,7 +454,7 @@ export class FakeEbay {
   }
 
   /** A buyer buys the listing: it ends with a sale and the seller gets an order. */
-  sell(itemId: string, options: { buyer?: string } = {}): FakeOrder {
+  sell(itemId: string, options: { buyer?: string; shipping?: string } = {}): FakeOrder {
     const listing = this.#listings.find((candidate) => candidate.itemId === itemId);
     if (listing?.status !== 'Active') throw new Error(`listing ${itemId} is not active`);
     this.#previous.set(itemId, { ...listing });
@@ -418,8 +479,24 @@ export class FakeEbay {
       creationDate: now,
       lastModifiedDate: now,
       cancelState: 'NONE_REQUESTED',
+      shippingValue: options.shipping ?? '0.0',
+      shipByDate: new Date(this.#now().getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
     };
     this.#orders.push(order);
+    const seller = this.#sellers.find((candidate) => candidate.userId === listing.sellerUserId);
+    this.#notifications.publishLater(
+      'ORDER_CONFIRMATION',
+      {
+        user: { userId: listing.sellerUserId, username: seller?.username ?? '' },
+        order: {
+          orderId: order.orderId,
+          orderLineItems: [
+            { orderLineItemId: `${order.orderId}-1`, listingId: itemId, quantity: 1 },
+          ],
+        },
+      },
+      listing.sellerUserId,
+    );
     return { ...order };
   }
 
@@ -530,6 +607,11 @@ export class FakeEbay {
     }
     if (method === 'POST' && path === '/ws/api.dll') {
       this.#trading(request, response, body);
+      return;
+    }
+    const notificationPath = /^\/commerce\/notification\/v1(\/(?!public_key\/).*)$/.exec(path)?.[1];
+    if (notificationPath !== undefined) {
+      await this.#notificationCall(request, response, method, notificationPath, body);
       return;
     }
     const rest = this.#restRoute(method, path, url, body);
@@ -655,6 +737,61 @@ export class FakeEbay {
         return;
       }
     }
+  }
+
+  /**
+   * A Notification API call. Faults: `rate_limited`, `server_error`, and the REST refusals
+   * answer without applying anything; the timing faults answer like `server_error`.
+   */
+  async #notificationCall(
+    request: IncomingMessage,
+    response: ServerResponse,
+    method: string,
+    path: string,
+    body: string,
+  ): Promise<void> {
+    const record: FakeEbayRequest = {
+      action: 'notification',
+      sku: null,
+      itemId: null,
+      uuid: null,
+      fault: null,
+      applied: false,
+      status: 'held',
+    };
+    const fault = this.#takeFault(record);
+    record.fault = fault?.type ?? null;
+    let reply: Reply;
+    if (fault !== undefined) {
+      reply =
+        fault.type === 'rate_limited'
+          ? restError(new RestFailure(429, 2001, 'Too many requests.'))
+          : (restFault(fault) ?? { status: 503, body: 'Service Unavailable' });
+    } else {
+      try {
+        const grant = this.#bearer(request, false);
+        const answer = await this.#notifications.handle(method, path, body, grant.sellerUserId);
+        reply =
+          answer === undefined
+            ? restError(new RestFailure(404, 0, 'No such endpoint'))
+            : {
+                status: answer.status,
+                body: answer.body === undefined ? '' : JSON.stringify(answer.body),
+                headers: {
+                  ...(answer.body === undefined ? {} : { 'content-type': 'application/json' }),
+                  ...answer.headers,
+                },
+              };
+        record.applied = method !== 'GET' && reply.status < 300;
+      } catch (error) {
+        if (!(error instanceof RestFailure)) throw error;
+        reply = restError(error);
+      }
+    }
+    record.status = reply.status;
+    this.#requests.push(record);
+    for (const waiter of [...this.#waiters]) waiter();
+    send(response, reply);
   }
 
   #takeFault(record: FakeEbayRequest): FakeEbayFault | undefined {
@@ -856,10 +993,14 @@ export class FakeEbay {
           );
         }
         try {
+          const before = new Map(
+            this.#listings.map((listing) => [listing.itemId, listing.status] as const),
+          );
           const fields =
             fault?.type === 'stale_read' && callName === 'GetItem'
               ? runStaleGetItem(this.#store(), auth, node)
               : runTradingCall(this.#store(), auth, callName, node);
+          this.#publishListingChanges(callName, auth, itemId, before);
           return answer(undefined, fields);
         } catch (error) {
           if (error instanceof TradingFailure) return answer(error);
@@ -868,6 +1009,31 @@ export class FakeEbay {
       },
       failure,
     );
+  }
+
+  /** `LISTING` notifications for what a successful Trading call changed. */
+  #publishListingChanges(
+    callName: TradingCallName,
+    seller: FakeSeller,
+    itemId: string | null,
+    before: Map<string, FakeEbayListing['status']>,
+  ): void {
+    const publish = (listingId: string, reason: 'CREATED' | 'UPDATED' | 'ENDED'): void => {
+      this.#notifications.publishLater(
+        'LISTING',
+        { listingId, reason, user: { userId: seller.userId, username: seller.username } },
+        seller.userId,
+      );
+    };
+    for (const listing of this.#listings) {
+      if (listing.sellerUserId !== seller.userId) continue;
+      const was = before.get(listing.itemId);
+      if (was === undefined) publish(listing.itemId, 'CREATED');
+      else if (was === 'Active' && listing.status !== 'Active') publish(listing.itemId, 'ENDED');
+    }
+    if (callName === 'ReviseFixedPriceItem' && itemId !== null && before.has(itemId)) {
+      publish(itemId, 'UPDATED');
+    }
   }
 
   #tradingSeller(request: IncomingMessage): FakeSeller | TradingFailure {
@@ -1072,6 +1238,24 @@ export class FakeEbay {
         handle: (grant) => this.#getOrders(grant, url),
       };
     }
+    const orderPath = /^\/sell\/fulfillment\/v1\/order\/([^/]+)$/.exec(path);
+    if (method === 'GET' && orderPath?.[1] !== undefined) {
+      const orderId = decodeURIComponent(orderPath[1]);
+      return {
+        meta: { action: 'orders' },
+        needsSeller: true,
+        handle: (grant) => {
+          const order = this.#orders.find(
+            (candidate) =>
+              candidate.orderId === orderId && candidate.sellerUserId === grant.sellerUserId,
+          );
+          if (order === undefined) {
+            throw new RestFailure(404, 32100, 'Order not found. Please check the order id.');
+          }
+          return json(200, this.#orderView(order));
+        },
+      };
+    }
     if (method === 'GET' && path === '/developer/analytics/v1_beta/rate_limit') {
       return {
         meta: { action: 'rate_limits' },
@@ -1171,7 +1355,6 @@ export class FakeEbay {
       return time >= from && time <= to;
     });
     const page = matching.slice(offset, offset + limit);
-    const seller = this.#sellers.find((candidate) => candidate.userId === grant.sellerUserId);
     const href = `${this.#url}/sell/fulfillment/v1/order?${url.searchParams.toString()}`;
     const next = new URLSearchParams(url.searchParams);
     next.set('offset', String(offset + limit));
@@ -1183,36 +1366,52 @@ export class FakeEbay {
       ...(offset + limit < matching.length
         ? { next: `${this.#url}/sell/fulfillment/v1/order?${next.toString()}` }
         : {}),
-      orders: page.map((order) => {
-        const amount = { value: order.priceValue, currency: order.currency };
-        return {
-          orderId: order.orderId,
-          creationDate: order.creationDate,
-          lastModifiedDate: order.lastModifiedDate,
-          orderFulfillmentStatus: 'NOT_STARTED',
-          orderPaymentStatus: 'PAID',
-          sellerId: seller?.username ?? '',
-          buyer: { username: order.buyer },
-          pricingSummary: { priceSubtotal: amount, total: amount },
-          cancelStatus: { cancelState: order.cancelState, cancelRequests: [] },
-          lineItems: [
-            {
-              lineItemId: `${order.orderId}-1`,
-              legacyItemId: order.itemId,
-              ...(order.sku === null ? {} : { sku: order.sku }),
-              title: order.title,
-              quantity: 1,
-              lineItemCost: amount,
-              total: amount,
-              soldFormat: 'FIXED_PRICE',
-              listingMarketplaceId: 'EBAY_US',
-              purchaseMarketplaceId: 'EBAY_US',
-              lineItemFulfillmentStatus: 'NOT_STARTED',
-            },
-          ],
-        };
-      }),
+      orders: page.map((order) => this.#orderView(order)),
     });
+  }
+
+  /** An order as `getOrder` and `getOrders` answer it (`Order` in eBay's OpenAPI document). */
+  #orderView(order: FakeOrder): Record<string, unknown> {
+    const seller = this.#sellers.find((candidate) => candidate.userId === order.sellerUserId);
+    const amount = { value: order.priceValue, currency: order.currency };
+    const shipping = { value: order.shippingValue, currency: order.currency };
+    const sum = Math.round((Number(order.priceValue) + Number(order.shippingValue)) * 100) / 100;
+    // eBay echoes amounts with at least one decimal (`20.0`, `24.99`).
+    const total = {
+      value: sum.toFixed(Number.isInteger(sum * 10) ? 1 : 2),
+      currency: order.currency,
+    };
+    return {
+      orderId: order.orderId,
+      legacyOrderId: order.orderId,
+      creationDate: order.creationDate,
+      lastModifiedDate: order.lastModifiedDate,
+      orderFulfillmentStatus: 'NOT_STARTED',
+      orderPaymentStatus: 'PAID',
+      sellerId: seller?.username ?? '',
+      buyer: { username: order.buyer },
+      pricingSummary: { priceSubtotal: amount, deliveryCost: shipping, total },
+      cancelStatus: { cancelState: order.cancelState, cancelRequests: [] },
+      lineItems: [
+        {
+          lineItemId: `${order.orderId}-1`,
+          legacyItemId: order.itemId,
+          ...(order.sku === null ? {} : { sku: order.sku }),
+          title: order.title,
+          quantity: 1,
+          lineItemCost: amount,
+          total: amount,
+          soldFormat: 'FIXED_PRICE',
+          listingMarketplaceId: 'EBAY_US',
+          purchaseMarketplaceId: 'EBAY_US',
+          lineItemFulfillmentStatus: 'NOT_STARTED',
+          lineItemFulfillmentInstructions: {
+            shipByDate: order.shipByDate,
+            guaranteedDelivery: false,
+          },
+        },
+      ],
+    };
   }
 
   #rateLimits(url: URL): Reply {
@@ -1363,6 +1562,11 @@ function unsupportedCall(callName: string): string {
       `The API call "${callName}" is invalid or not supported in this release.`,
     ),
   ).replaceAll('GetItemResponse', `${callName === '' ? 'Unknown' : callName}Response`);
+}
+
+/** A stand-in for eBay's legacy EIAS token of a user. */
+function eiasTokenOf(userId: string): string {
+  return Buffer.from(`eias:${userId}`).toString('base64');
 }
 
 function restError(error: RestFailure): Reply {

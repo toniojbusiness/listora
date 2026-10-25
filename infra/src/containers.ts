@@ -75,7 +75,10 @@ export function containerEnvironment(
       STORAGE_S3_REGION: photoStorage.region,
       STORAGE_PUBLIC_BASE_URL: photoStorage.publicBaseUrl,
       // eBay connects once the environment has an eBay keyset (EBAY_ENV, EBAY_CLIENT_ID,
-      // EBAY_RUNAME, and the EBAY_CLIENT_SECRET secret; the eBay go-live task, T-35).
+      // EBAY_RUNAME, and the EBAY_CLIENT_SECRET secret; the eBay go-live task, T-35). Its
+      // notifications then need EBAY_NOTIFICATION_ENDPOINT (the API's /webhooks/ebay URL),
+      // EBAY_NOTIFICATION_ALERT_EMAIL, and the EBAY_NOTIFICATION_VERIFICATION_TOKEN secret in
+      // both containers (docs/ebay-notifications.md).
       TOKEN_KMS_KEY_ID: resources.tokenKeyArn,
     };
   };

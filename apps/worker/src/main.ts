@@ -26,6 +26,7 @@ import { createStorage } from '@listora/storage';
 import { aiSpendCheckTask } from './ai-spend-check.ts';
 import { loadWorkerConfig } from './config.ts';
 import { createConnectionWork } from './connections.ts';
+import { createEbaySyncWork } from './ebay-sync.ts';
 import { createWorkerTasks } from './tasks.ts';
 
 const config = loadWorkerConfig();
@@ -46,18 +47,29 @@ const connections = createConnectionWork({
   logger,
 });
 
+const adapters = createMarketplaceAdapters(
+  {
+    ...config.marketplaces,
+    ...(connections.ebaySeller === undefined ? {} : { ebaySeller: connections.ebaySeller }),
+  },
+  logger,
+).lookup;
+// eBay notifications, the order poll backstop, account deletions, and listing read-backs.
+const ebaySync = createEbaySyncWork({
+  db,
+  ebay: config.marketplaces.ebay,
+  tokens: connections.tokens,
+  adapters,
+  logger,
+});
+
 try {
   const worker = await startOperationWorker({
     connectionString: config.databaseUrl,
     db,
-    adapters: createMarketplaceAdapters(
-      {
-        ...config.marketplaces,
-        ...(connections.ebaySeller === undefined ? {} : { ebaySeller: connections.ebaySeller }),
-      },
-      logger,
-    ).lookup,
+    adapters,
     tasks: {
+      ...ebaySync.tasks,
       ...createWorkerTasks({
         db,
         storage: createStorage(config.storage),
@@ -81,7 +93,11 @@ try {
     logger,
     concurrency: config.concurrency,
     taskConcurrency: config.taskConcurrency,
-    scheduledTasks: [aiSpendCheckTask(db, config.aiAlerts, logger), ...connections.scheduledTasks],
+    scheduledTasks: [
+      aiSpendCheckTask(db, config.aiAlerts, logger),
+      ...connections.scheduledTasks,
+      ...ebaySync.scheduledTasks,
+    ],
     crontab: [TRUST_METRICS_CRONTAB],
     onFatalError: (error) => {
       // Other workers recover this worker's jobs once its process is gone; exiting at once
@@ -90,6 +106,8 @@ try {
       process.exit(1);
     },
   });
+
+  await ebaySync.start();
 
   handleShutdownSignals({
     logger,
@@ -106,6 +124,7 @@ try {
       fakeMarketplace: config.marketplaces.fakeMarketplaceUrl !== undefined,
       ebay: config.marketplaces.ebay?.environment ?? null,
       tokenVault: config.marketplaces.tokenVault?.driver ?? null,
+      ebayNotifications: config.marketplaces.ebay?.notifications !== undefined,
       aiProvider: config.ai.provider,
       cognitoUserPool: config.cognitoUserPool?.userPoolId,
     },

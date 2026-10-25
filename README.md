@@ -165,6 +165,7 @@ packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eB
 packages/connections/   Marketplace connections: OAuth connect, token vault, credentials, health (@listora/connections)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker metrics job (@listora/observability)
+packages/sales/         Sale intake, eBay notifications, the order poll, eBay account deletion (@listora/sales)
 packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)
 packages/tag-parse/     Deterministic tag-text parsers (@listora/tag-parse)

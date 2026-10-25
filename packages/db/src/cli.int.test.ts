@@ -22,6 +22,7 @@ const SHIPPED = [
   '0012_listing_links',
   '0013_trust_metric_indexes',
   '0014_marketplace_connect',
+  '0015_ebay_notifications',
 ];
 const LATEST = SHIPPED.at(-1) ?? '';
 

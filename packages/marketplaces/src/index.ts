@@ -202,8 +202,49 @@ export type {
 } from './ebay/oauth.ts';
 export { buildEbayPayload, EBAY_LIMITS, validateEbayPayload } from './ebay/payload.ts';
 export type { EbayItemSpecific, EbayListingPayload } from './ebay/payload.ts';
-export { getOrders } from './ebay/rest.ts';
-export type { EbayOrder, OrdersPage, RestEndpoints, RestResult } from './ebay/rest.ts';
+export {
+  EBAY_LISTING_REASONS,
+  EBAY_NOTIFICATION_TOPICS,
+  EBAY_VERIFICATION_TOKEN_PATTERN,
+  ebayChallengeResponse,
+  InvalidEbayNotificationError,
+  notificationUserId,
+  parseEbayNotification,
+} from './ebay/notification-events.ts';
+export type {
+  EbayListingReason,
+  EbayNotification,
+  EbayNotificationEnvelope,
+  EbayNotificationTopic,
+} from './ebay/notification-events.ts';
+export { decodeSignatureHeader, EbayNotificationVerifier } from './ebay/notification-signature.ts';
+export type {
+  NotificationVerifierOptions,
+  SignatureRejection,
+  SignatureVerdict,
+} from './ebay/notification-signature.ts';
+export {
+  EBAY_APPLICATION_TOPICS,
+  EBAY_SELLER_TOPICS,
+  EbayNotificationSubscriptions,
+} from './ebay/notification-subscriptions.ts';
+export type {
+  DestinationResult,
+  EbayNotificationSettings,
+  EbayNotificationSubscriptionsOptions,
+  NotificationProblem,
+  TopicProblem,
+  TopicResult,
+} from './ebay/notification-subscriptions.ts';
+export { getOrder, getOrders } from './ebay/rest.ts';
+export type {
+  EbayAmount,
+  EbayOrder,
+  OrdersPage,
+  RestEndpoints,
+  RestRequestOptions,
+  RestResult,
+} from './ebay/rest.ts';
 export { FakeMarketplaceAdapter } from './fake/fake-adapter.ts';
 export type {
   FakeAdapterOptions,

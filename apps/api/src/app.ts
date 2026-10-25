@@ -22,6 +22,7 @@ import { registerPricingRoutes } from './pricing/routes.ts';
 import { registerLocalStorageRoutes } from './storage/local-routes.ts';
 import { registerUploadRoutes } from './uploads/routes.ts';
 import { SessionPhotoUploads } from './uploads/uploads.ts';
+import { registerEbayWebhookRoutes, type EbayWebhookDependencies } from './webhooks/ebay.ts';
 
 export interface AppDependencies extends HealthDependencies {
   db: Db;
@@ -39,6 +40,8 @@ export interface AppDependencies extends HealthDependencies {
    * marketplaces only, with nothing that can be connected.
    */
   connections?: ConnectionsDependencies;
+  /** eBay's notification endpoint (`/webhooks/ebay`); not served without it. */
+  ebayWebhook?: Omit<EbayWebhookDependencies, 'db'>;
   /** Where attached photo files come from; defaults to upload sessions in `storage`. */
   uploads?: PhotoUploads;
   /** The clock upload sessions expire by. */
@@ -103,6 +106,9 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
     }),
     now,
   });
+  if (deps.ebayWebhook !== undefined) {
+    registerEbayWebhookRoutes(app, { db: deps.db, ...deps.ebayWebhook });
+  }
   registerAnalysisRoutes(app, {
     ...routeDeps,
     ai: deps.ai,

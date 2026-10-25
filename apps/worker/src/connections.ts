@@ -24,6 +24,8 @@ export interface ConnectionWorkDependencies {
 
 /** What the worker does with marketplace connections, when it has a vault to open tokens. */
 export interface ConnectionWork {
+  /** Use-time access to every connection's tokens; undefined without a vault. */
+  tokens: ConnectionTokens | undefined;
   /** Each eBay connection's own tokens for the eBay adapter (single-flight refresh). */
   ebaySeller: EbaySellerSource | undefined;
   /** The daily health check. */
@@ -41,10 +43,11 @@ export interface ConnectionWork {
 export function createConnectionWork(deps: ConnectionWorkDependencies): ConnectionWork {
   const { vault, oauth, db, logger, ebay } = deps;
   if (vault === undefined || Object.keys(oauth).length === 0) {
-    return { ebaySeller: undefined, scheduledTasks: [], revoker: undefined };
+    return { tokens: undefined, ebaySeller: undefined, scheduledTasks: [], revoker: undefined };
   }
   const tokens = new ConnectionTokens({ db, vault, oauth, logger });
   return {
+    tokens,
     ebaySeller:
       ebay === undefined || oauth.ebay === undefined
         ? undefined

@@ -333,6 +333,8 @@ export interface MarketplaceConnectionTable {
   token_ciphertext: Nullable<Buffer>;
   access_expires_at: NullableTimestamp;
   refresh_expires_at: NullableTimestamp;
+  /** The order poll has seen every order last changed before this time. */
+  orders_polled_through: NullableTimestamp;
   scopes: TextArray;
   status: Generated<ConnectionStatus>;
   last_ok_at: NullableTimestamp;
@@ -446,6 +448,8 @@ export interface InboundEventTable {
   processed_at: NullableTimestamp;
   result: Nullable<InboundEventResult>;
   error_message: Nullable<string>;
+  /** The marketplace user the event is about (eBay userId), for deleting their data. */
+  external_user_id: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
