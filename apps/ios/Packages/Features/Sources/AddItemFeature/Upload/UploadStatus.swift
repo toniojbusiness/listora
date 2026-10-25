@@ -70,6 +70,8 @@ struct DraftUploadSummary: Equatable, Sendable {
     let tone: Tone
     /// True when retries stopped and the user can start them again.
     let canRetry: Bool
+    /// True when the server has every photo attached in order: the item can be reviewed.
+    let isComplete: Bool
 
     init(draft: Draft, transferring: Set<String>, isSignedIn: Bool) {
         let statuses = draft.photos.map {
@@ -95,7 +97,7 @@ struct DraftUploadSummary: Equatable, Sendable {
                   draft.record.syncedPhotoOrder == draft.photos.compactMap(\.serverPhotoID)
         {
             let photos = total == 1 ? "1 photo" : "all \(total) photos"
-            self.init(text: "Saved to Listora with \(photos)", tone: .success, canRetry: false)
+            self.init(text: "Saved to Listora with \(photos)", tone: .success, canRetry: false, isComplete: true)
         } else if !isSignedIn {
             self.init(text: "Saved on this phone. Sign in to upload.", tone: .warning, canRetry: false)
         } else {
@@ -103,9 +105,10 @@ struct DraftUploadSummary: Equatable, Sendable {
         }
     }
 
-    private init(text: String, tone: Tone, canRetry: Bool) {
+    private init(text: String, tone: Tone, canRetry: Bool, isComplete: Bool = false) {
         self.text = text
         self.tone = tone
         self.canRetry = canRetry
+        self.isComplete = isComplete
     }
 }

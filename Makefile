@@ -32,10 +32,15 @@ IOS_RELEASE_CONFIGURATION ?= Prod-Release
 IOS_BUILD_NUMBER ?=
 IOS_RELEASE := IOS_BUILD_DIR='$(IOS_BUILD_DIR)' scripts/ios-release.sh
 
+# The local stack the UI tests run against (packages/e2e), wrapped around a command.
+E2E_STACK := node --env-file-if-exists=.env packages/e2e/src/cli.ts \
+	--fake-ai-fixtures $(IOS_DIR)/ListoraUITests/FakeAI \
+	--log-dir $(IOS_BUILD_DIR)/e2e-logs
+
 # Fails with an install hint when a command-line tool is missing.
 require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Install it with: brew install $(2)" >&2; exit 1; }
 
-.PHONY: ios-generate ios-build ios-test ios-check-ats ios-lint ios-format ios-open ios-clean ios-simulator \
+.PHONY: ios-generate ios-build ios-test ios-e2e-ready ios-check-ats ios-lint ios-format ios-open ios-clean ios-simulator \
 	ios-tag-fixtures ios-app-icon ios-archive ios-testflight
 
 ## Generate Listora.xcodeproj from apps/ios/project.yml.
@@ -68,10 +73,18 @@ ios-check-ats: ios-generate
 	done; done
 
 ## Run unit, package, and UI tests on the simulator. Results: .build/ios/Test.xcresult.
-## Parallel testing is off because it would clone the simulator.
-ios-test: ios-generate ios-simulator ios-check-ats
-	rm -rf $(IOS_BUILD_DIR)/Test.xcresult
-	$(XCODEBUILD) test -parallel-testing-enabled NO -resultBundlePath $(IOS_BUILD_DIR)/Test.xcresult
+## Parallel testing is off because it would clone the simulator. The UI tests that go through the
+## backend run against the local stack (packages/e2e): the real API and worker with fakes, on a
+## scratch database of this checkout's Postgres cluster. Its logs: .build/ios/e2e-logs.
+ios-test: ios-generate ios-simulator ios-check-ats ios-e2e-ready
+	rm -rf $(IOS_BUILD_DIR)/Test.xcresult $(IOS_BUILD_DIR)/e2e-logs
+	$(E2E_STACK) -- $(XCODEBUILD) test -parallel-testing-enabled NO -resultBundlePath $(IOS_BUILD_DIR)/Test.xcresult
+
+## Check that the local stack can start: backend dependencies installed, Postgres cluster running.
+ios-e2e-ready:
+	$(call require,node,node)
+	@[ -d node_modules/@listora/e2e ] || { echo "error: backend dependencies are missing. Run: npm ci" >&2; exit 1; }
+	scripts/dev-db.sh start
 
 ## SwiftLint and the SwiftFormat check, both failing on any finding.
 ios-lint:

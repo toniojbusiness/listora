@@ -1,19 +1,25 @@
+import Core
 import DesignSystem
 import PhotosUI
 import SwiftUI
 
 /// One draft's photos: their order (the first is the cover), roles, and upload status. Tap a
 /// photo to change its role, crop it, make it the cover, or remove it; drag photos to reorder.
+/// "Review item" opens the review once the server has every photo; tapped earlier, it waits for
+/// the upload and then opens it.
 struct DraftEditorView: View {
     let draftID: String
     let model: AddItemModel
     let environment: AddItemEnvironment
+    let onReview: (ItemReviewRequest) -> Void
 
     @State private var draft: Draft?
     @State private var selection: PhotoSelection?
     @State private var isCapturing = false
     @State private var isConfirmingDelete = false
     @State private var unloadedPhotos: PickedPhotos<PhotosPickerItem>?
+    /// "Review item" was tapped before the upload finished.
+    @State private var isWaitingToReview = false
     @Environment(\.dismiss) private var dismiss
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: Spacing.xs), count: 3)
@@ -42,6 +48,27 @@ struct DraftEditorView: View {
             .padding(Spacing.md)
         }
         .background(Palette.background)
+        .safeAreaInset(edge: .bottom) {
+            if let draft, !draft.photos.isEmpty, environment.reviewDestination != nil {
+                reviewBar
+            }
+        }
+        .onAppear { model.meter.enter(draftID) }
+        .onDisappear {
+            isWaitingToReview = false
+            model.meter.setWaiting(false, for: draftID)
+            model.meter.leave(draftID)
+        }
+        .onChange(of: reviewRequest) { _, request in
+            guard isWaitingToReview, let request else { return }
+            openReview(request)
+        }
+        .onChange(of: canWaitForUpload) { _, canWait in
+            if !canWait, isWaitingToReview {
+                isWaitingToReview = false
+                model.meter.setWaiting(false, for: draftID)
+            }
+        }
         .navigationTitle(draft?.record.sku ?? "New draft")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -147,6 +174,70 @@ struct DraftEditorView: View {
 
     private func addPhotos(_ images: [Data]) async {
         _ = await model.addPhotos(images, to: draftID)
+    }
+
+    private func summary(_ draft: Draft) -> DraftUploadSummary {
+        DraftUploadSummary(
+            draft: draft,
+            transferring: model.activity.transferring,
+            isSignedIn: model.activity.isSignedIn,
+        )
+    }
+
+    /// The review of the draft's item, once the server has all of its photos.
+    private var reviewRequest: ItemReviewRequest? {
+        guard let draft, summary(draft).isComplete, let itemID = draft.record.serverItemID else { return nil }
+        return ItemReviewRequest(sessionID: draftID, itemID: itemID, sku: draft.record.sku)
+    }
+
+    /// The upload is still going (signed in, nothing stopped), so the review can wait for it.
+    private var canWaitForUpload: Bool {
+        guard let draft else { return false }
+        let summary = summary(draft)
+        return model.activity.isSignedIn && !summary.canRetry && summary.tone != .empty
+    }
+
+    private func openReview(_ request: ItemReviewRequest) {
+        isWaitingToReview = false
+        model.meter.setWaiting(false, for: draftID)
+        onReview(request)
+    }
+
+    private var reviewBar: some View {
+        VStack(spacing: Spacing.xs) {
+            Button {
+                if let reviewRequest {
+                    openReview(reviewRequest)
+                } else {
+                    isWaitingToReview = true
+                    model.meter.setWaiting(true, for: draftID)
+                }
+            } label: {
+                if isWaitingToReview {
+                    HStack(spacing: Spacing.xs) {
+                        ProgressView().tint(Palette.onBrand.color)
+                        Text("Uploading, then review")
+                    }
+                } else {
+                    Text("Review item")
+                }
+            }
+            .buttonStyle(.listoraPrimary)
+            .disabled(isWaitingToReview || (reviewRequest == nil && !canWaitForUpload))
+            .accessibilityIdentifier("draft.review")
+            if reviewRequest == nil, !canWaitForUpload, !model.activity.isSignedIn {
+                Text("Sign in to upload the photos, then review the item.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+        .frame(maxWidth: .infinity)
+        .background(Palette.background)
+        .overlay(alignment: .top) {
+            Divider().overlay(Palette.separator.color)
+        }
     }
 }
 

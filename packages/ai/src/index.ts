@@ -27,6 +27,7 @@ export type {
 export { AI_ERROR_CODES, AiCallError, AiGuardError, AiProviderError } from './errors.ts';
 export type { AiErrorCode, AiGuardReason } from './errors.ts';
 export {
+  DEFAULT_FIXTURE_FILE,
   directoryFixtures,
   estimateImageTokens,
   FakeAiProvider,
@@ -92,6 +93,11 @@ export type {
   TokenUsage,
 } from './types.ts';
 export { PostgresQuotaPolicy, utcMonthPeriod } from './quota.ts';
-export type { PostgresQuotaPolicyOptions, QuotaPeriod } from './quota.ts';
+export type {
+  AccountQuotaUsage,
+  PostgresQuotaPolicyOptions,
+  QuotaPeriod,
+  QuotaUse,
+} from './quota.ts';
 export { InMemoryUsageStore, PostgresUsageStore, utcMonthRange } from './usage-store.ts';
 export type { UsageEventInput, UsageStore, UsageTotals } from './usage-store.ts';

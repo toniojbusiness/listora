@@ -1,0 +1,208 @@
+{
+  "categories": [
+    {
+      "category": "clothing/tops",
+      "subcategories": [
+        "t_shirts",
+        "shirts",
+        "blouses",
+        "tank_tops",
+        "polos",
+        "sweaters",
+        "cardigans",
+        "hoodies_sweatshirts",
+        "bodysuits",
+        "other"
+      ]
+    },
+    {
+      "category": "clothing/bottoms",
+      "subcategories": [
+        "jeans",
+        "pants",
+        "shorts",
+        "skirts",
+        "leggings",
+        "joggers",
+        "other"
+      ]
+    },
+    {
+      "category": "clothing/dresses",
+      "subcategories": [
+        "dresses",
+        "jumpsuits_rompers",
+        "other"
+      ]
+    },
+    {
+      "category": "clothing/outerwear",
+      "subcategories": [
+        "jackets",
+        "coats",
+        "vests",
+        "blazers",
+        "other"
+      ]
+    },
+    {
+      "category": "clothing/activewear",
+      "subcategories": [
+        "tops",
+        "bottoms",
+        "sports_bras",
+        "sets",
+        "other"
+      ]
+    },
+    {
+      "category": "clothing/swimwear",
+      "subcategories": [
+        "one_pieces",
+        "bikinis",
+        "swim_trunks",
+        "cover_ups",
+        "other"
+      ]
+    },
+    {
+      "category": "clothing/sleep_lounge",
+      "subcategories": [
+        "pajamas",
+        "robes",
+        "loungewear",
+        "other"
+      ]
+    },
+    {
+      "category": "clothing/intimates",
+      "subcategories": [
+        "bras",
+        "underwear",
+        "shapewear",
+        "socks",
+        "other"
+      ]
+    },
+    {
+      "category": "clothing/suits_sets",
+      "subcategories": [
+        "suits",
+        "matching_sets",
+        "other"
+      ]
+    },
+    {
+      "category": "shoes",
+      "subcategories": [
+        "sneakers",
+        "boots",
+        "sandals",
+        "heels",
+        "flats",
+        "loafers",
+        "dress_shoes",
+        "slippers",
+        "other"
+      ]
+    },
+    {
+      "category": "bags",
+      "subcategories": [
+        "handbags",
+        "shoulder_bags",
+        "crossbody_bags",
+        "totes",
+        "backpacks",
+        "clutches",
+        "wallets",
+        "other"
+      ]
+    },
+    {
+      "category": "accessories",
+      "subcategories": [
+        "hats",
+        "scarves",
+        "belts",
+        "sunglasses",
+        "gloves",
+        "hair_accessories",
+        "ties",
+        "watches",
+        "other"
+      ]
+    },
+    {
+      "category": "jewelry",
+      "subcategories": [
+        "necklaces",
+        "earrings",
+        "bracelets",
+        "rings",
+        "brooches",
+        "other"
+      ]
+    },
+    {
+      "category": "home",
+      "subcategories": [
+        "decor",
+        "kitchen",
+        "bedding",
+        "other"
+      ]
+    },
+    {
+      "category": "other",
+      "subcategories": [
+        "other"
+      ]
+    }
+  ],
+  "departments": [
+    "women",
+    "men",
+    "kids",
+    "unisex"
+  ],
+  "sizeSystems": [
+    "letter",
+    "numeric",
+    "waist_inseam",
+    "us",
+    "uk",
+    "eu",
+    "one_size"
+  ],
+  "conditions": [
+    "new_with_tags",
+    "new_without_tags",
+    "new_with_defects",
+    "pre_owned_excellent",
+    "pre_owned_good",
+    "pre_owned_fair"
+  ],
+  "copyLimits": {
+    "ebay": {
+      "title": 80,
+      "description": 4000,
+      "hashtags": 0
+    },
+    "depop": {
+      "title": 80,
+      "description": 1000,
+      "hashtags": 5
+    },
+    "poshmark": {
+      "title": 80,
+      "description": 1500,
+      "hashtags": 0
+    },
+    "mercari": {
+      "title": 80,
+      "description": 1000,
+      "hashtags": 0
+    }
+  }
+}

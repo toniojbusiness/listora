@@ -10,7 +10,10 @@ The details and commands are in [apps/ios/README.md](../../apps/ios/README.md).
   OpenAPI contract, with the session's bearer token and the error model), and `Features` (one
   library per feature). A feature never imports another
   feature; `AppFeature` composes them into the tab shell. The app target only starts
-  `AppFeature`; the Share Extension target only starts `ShareLinkFeature`.
+  `AppFeature`; the Share Extension target only starts `ShareLinkFeature`. When one feature
+  opens another's screens (Add Item opens the review), it gets a view builder from
+  `AppDependencies` and talks through a value type in `Core` (`ItemReviewRequest`,
+  `ItemReviewOutcome`).
 - The app and the Share Extension share the signed-in session through an App Group
   (`APP_GROUP_IDENTIFIER` in `Base.xcconfig`): the session is a keychain item in the group's
   access group (`KeychainAccessGrantStorage.session(appGroup:)`).
@@ -21,6 +24,9 @@ The details and commands are in [apps/ios/README.md](../../apps/ios/README.md).
   first, and work against the server goes through a persistent queue whose every request has a
   stored `Idempotency-Key`, so it resumes after a relaunch without duplicates and shows each
   failure with a Retry. The Add Item upload queue is the model (`apps/ios/README.md`).
+  Interactive steps (review, cost, price) save to the server before the next screen opens, so a
+  relaunch resumes from the server's state; every wait on the server has a deadline and ends in
+  a failure with a Retry, never an endless spinner ([review.md](review.md)).
 - Views use `DesignSystem` tokens, never raw colors or sizes, so light and dark mode stay
   consistent. A test checks WCAG AA contrast for every text and background pair.
 - Tests use Swift Testing; UI tests use XCTest. `make ios-lint` (SwiftLint and SwiftFormat)

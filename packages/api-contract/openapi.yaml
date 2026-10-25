@@ -53,6 +53,8 @@ tags:
     description: Sales and the automatic delist run each sale starts.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
+  - name: usage
+    description: How much of the plan's quotas the account has used this period.
 
 paths:
   /health/live:
@@ -85,6 +87,8 @@ paths:
     $ref: './paths/analysis.yaml#/~1v1~1analyses~1{analysisId}~1escalate'
   /v1/analyses/{analysisId}/apply:
     $ref: './paths/analysis.yaml#/~1v1~1analyses~1{analysisId}~1apply'
+  /v1/usage:
+    $ref: './paths/usage.yaml#/~1v1~1usage'
   /v1/items/{itemId}/pricing:
     $ref: './paths/pricing.yaml#/~1v1~1items~1{itemId}~1pricing'
   /v1/items/{itemId}/listings:
@@ -388,6 +392,15 @@ components:
       $ref: './components/schemas/pricing.yaml#/ResearchLink'
     PricingSuggestion:
       $ref: './components/schemas/pricing.yaml#/PricingSuggestion'
+    # ---------------------------------------------------------------- usage
+    UsageMetric:
+      $ref: './components/schemas/usage.yaml#/UsageMetric'
+    KnownUsageMetric:
+      $ref: './components/schemas/usage.yaml#/KnownUsageMetric'
+    QuotaUsage:
+      $ref: './components/schemas/usage.yaml#/QuotaUsage'
+    Usage:
+      $ref: './components/schemas/usage.yaml#/Usage'
     # ---------------------------------------------------------------- listings
     ListingStatus:
       $ref: './components/schemas/listings.yaml#/ListingStatus'
