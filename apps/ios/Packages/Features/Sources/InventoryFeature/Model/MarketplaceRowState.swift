@@ -71,8 +71,11 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         id = marketplace.rawValue
         name = Formatting.marketplaceName(marketplace.rawValue)
         self.listing = listing
-        let usesAPI = (listing?.mode ?? connection?.mode)?.value1 == .api
-        modeLabel = usesAPI ? "Through \(name)'s API" : "Assisted - you finish each step in the \(name) app"
+        modeLabel = switch (listing?.mode ?? connection?.mode)?.value1 {
+        case .api: "Through \(name)'s API"
+        case .automation: "Automated in your \(name) session"
+        case .assisted, nil: "Assisted - you finish each step in the \(name) app"
+        }
         priceLabel = listing?.variant.map { Formatting.money($0.price) }
         if let listing {
             statusLabel = listing.statusDisplay.label
@@ -101,22 +104,37 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         listing?.latestOperation
     }
 
-    /// Whether the item can be listed on the marketplace from here. Under an API connection the
-    /// connection must be usable; without one, every marketplace but eBay (which Listora reaches
-    /// only through its API) is listed assisted, through a task the user finishes in its app.
+    /// Whether the item can be listed on the marketplace from here: Listora does it under a
+    /// usable API or browser automation connection; otherwise every marketplace but eBay (which
+    /// Listora reaches only through its API) is listed assisted, through a task the user
+    /// finishes in its app.
     static func canList(marketplace: KnownMarketplace, connection: Connection?) -> Bool {
-        if let connection, connection.mode.value1 == .api {
-            switch connection.status.value1 {
-            case .connected, .degraded: return true
-            default: return false
-            }
+        if isListoraDone(connection: connection) {
+            return true
         }
         return isAssisted(marketplace: marketplace, connection: connection)
     }
 
-    /// Whether a new listing on the marketplace is assisted: no API connection, and not eBay.
+    /// Whether a new listing on the marketplace is assisted: Listora can't do it itself (no
+    /// usable API or automation connection; an automation session that stopped working falls
+    /// back to assisted), and it is not eBay.
     static func isAssisted(marketplace: KnownMarketplace, connection: Connection?) -> Bool {
-        connection?.mode.value1 != .api && marketplace != .ebay
+        !isListoraDone(connection: connection) && marketplace != .ebay
+    }
+
+    /// A usable connection through which Listora acts and reads the result back itself.
+    private static func isListoraDone(connection: Connection?) -> Bool {
+        guard let connection else { return false }
+        switch connection.mode.value1 {
+        case .api, .automation:
+            break
+        case .assisted, nil:
+            return false
+        }
+        switch connection.status.value1 {
+        case .connected, .degraded: return true
+        default: return false
+        }
     }
 
     /// The server's actions, in the order the row shows them, plus Retry for a failed change
