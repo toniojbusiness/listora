@@ -211,6 +211,26 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/usage`.
     /// - Remark: Generated from `#/paths//v1/usage/get(getUsage)`.
     func getUsage(_ input: Operations.GetUsage.Input) async throws -> Operations.GetUsage.Output
+    /// Interpret a spoken correction the app could not parse
+    ///
+    /// Maps the short text of a spoken correction on the review screen ("the pattern is
+    /// houndstooth, it's from the nineties") to proposed detail changes, with the cheap text
+    /// model. The app transcribes speech on the device and parses routine phrases itself, so
+    /// it sends only the phrases its own parser could not map, and only their text, never
+    /// audio. The answer is a proposal: nothing is changed on the item, and the app shows each
+    /// change for the seller to accept or undo before it saves anything (`replaceItem`).
+    /// Canonical details (category, department, size type, colors, pattern, materials,
+    /// condition) hold canonical values only, and `cost` and `listPrice` carry an `amount`;
+    /// every other change carries a `value`. A phrase the model could not map is left out, so
+    /// `changes` may be empty. The call is metered and counted in the account's daily AI
+    /// budget like every AI call, but uses no plan quota: `429 ai_budget_exceeded` when the
+    /// budget is used up, `503 service_unavailable` while AI is switched off or the model
+    /// could not answer (retryable), and `403 forbidden` when AI is turned off for the account.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/items/{itemId}/voice-corrections`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/voice-corrections/post(interpretVoiceCorrection)`.
+    func interpretVoiceCorrection(_ input: Operations.InterpretVoiceCorrection.Input) async throws -> Operations.InterpretVoiceCorrection.Output
     /// Get price suggestions for an item
     ///
     /// Every number carries its source. Without real sold data the response has no
@@ -946,6 +966,36 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/usage/get(getUsage)`.
     public func getUsage(headers: Operations.GetUsage.Input.Headers = .init()) async throws -> Operations.GetUsage.Output {
         try await getUsage(Operations.GetUsage.Input(headers: headers))
+    }
+    /// Interpret a spoken correction the app could not parse
+    ///
+    /// Maps the short text of a spoken correction on the review screen ("the pattern is
+    /// houndstooth, it's from the nineties") to proposed detail changes, with the cheap text
+    /// model. The app transcribes speech on the device and parses routine phrases itself, so
+    /// it sends only the phrases its own parser could not map, and only their text, never
+    /// audio. The answer is a proposal: nothing is changed on the item, and the app shows each
+    /// change for the seller to accept or undo before it saves anything (`replaceItem`).
+    /// Canonical details (category, department, size type, colors, pattern, materials,
+    /// condition) hold canonical values only, and `cost` and `listPrice` carry an `amount`;
+    /// every other change carries a `value`. A phrase the model could not map is left out, so
+    /// `changes` may be empty. The call is metered and counted in the account's daily AI
+    /// budget like every AI call, but uses no plan quota: `429 ai_budget_exceeded` when the
+    /// budget is used up, `503 service_unavailable` while AI is switched off or the model
+    /// could not answer (retryable), and `403 forbidden` when AI is turned off for the account.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/items/{itemId}/voice-corrections`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/voice-corrections/post(interpretVoiceCorrection)`.
+    public func interpretVoiceCorrection(
+        path: Operations.InterpretVoiceCorrection.Input.Path,
+        headers: Operations.InterpretVoiceCorrection.Input.Headers,
+        body: Operations.InterpretVoiceCorrection.Input.Body
+    ) async throws -> Operations.InterpretVoiceCorrection.Output {
+        try await interpretVoiceCorrection(Operations.InterpretVoiceCorrection.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
     }
     /// Get price suggestions for an item
     ///

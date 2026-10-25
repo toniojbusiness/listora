@@ -200,6 +200,7 @@ src/
   sales/         The sales feed (listSales, getSale) with each sale's money, delist runs, and
                  double sales; Mark as sold (createSale), the lifecycle, and the relist question
   profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
+  voice/         interpretVoiceCorrection: the text model's reading of a spoken correction
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
 ```
 
@@ -407,6 +408,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/sales.md](features/sales.md)                           | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI   |
 | [features/tasks.md](features/tasks.md)                           | Assisted mode: the task inbox, copy-assist, confirmations, reminders          |
 | [features/profit.md](features/profit.md)                         | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule  |
+| [features/voice.md](features/voice.md)                           | Spoken corrections on the review, common values, and "Next to check"          |
 
 ### Former section numbers
 

@@ -4,11 +4,20 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { MARKETPLACE_COPY_LIMITS } from './marketplace-copy.ts';
-import { CATEGORY_TREE, CONDITIONS, DEPARTMENTS, SIZE_SYSTEMS } from './vocabulary.ts';
+import {
+  CATEGORY_TREE,
+  COLORS,
+  CONDITIONS,
+  DEPARTMENTS,
+  MATERIALS,
+  PATTERNS,
+  SIZE_SYSTEMS,
+} from './vocabulary.ts';
 
 /**
- * The iPhone app's review screen offers the canonical vocabulary as choices and checks copy
- * against each marketplace's limits, from its own copy of them in this JSON file. This test
+ * The iPhone app's review screen offers the canonical vocabulary as choices, maps spoken
+ * corrections to it, and checks copy against each marketplace's limits, from its own copy of
+ * them in this JSON file. This test
  * keeps that copy equal to the source of truth here. After changing the vocabulary or the
  * limits, rewrite the file with
  * `UPDATE_IOS_VOCABULARY=1 npx vitest run packages/analysis/src/ios-vocabulary.test.ts`.
@@ -35,6 +44,9 @@ function expectedVocabulary(): string {
     })),
     departments: DEPARTMENTS,
     sizeSystems: SIZE_SYSTEMS,
+    colors: COLORS,
+    patterns: PATTERNS,
+    materials: MATERIALS,
     conditions: CONDITIONS,
     copyLimits,
   };

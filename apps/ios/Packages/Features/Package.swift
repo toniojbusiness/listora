@@ -16,6 +16,7 @@ let package = Package(
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
         .library(name: "MarketplacesFeature", targets: ["MarketplacesFeature"]),
         .library(name: "TagReadingFeature", targets: ["TagReadingFeature"]),
+        .library(name: "VoiceInputFeature", targets: ["VoiceInputFeature"]),
         .library(name: "ShareLinkFeature", targets: ["ShareLinkFeature"]),
     ],
     dependencies: [
@@ -42,6 +43,7 @@ let package = Package(
                 "SettingsFeature",
                 "MarketplacesFeature",
                 "TagReadingFeature",
+                "VoiceInputFeature",
             ],
         ),
         .target(
@@ -82,6 +84,7 @@ let package = Package(
             dependencies: ["DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .target(name: "TagReadingFeature", dependencies: ["Core"]),
+        .target(name: "VoiceInputFeature", dependencies: ["Core"]),
         // The Share Extension's UI; the app target does not link it.
         .target(
             name: "ShareLinkFeature",
@@ -135,6 +138,7 @@ let package = Package(
             dependencies: ["TagReadingFeature", "Core"],
             resources: [.copy("Fixtures")],
         ),
+        .testTarget(name: "VoiceInputFeatureTests", dependencies: ["VoiceInputFeature", "Core"]),
         .testTarget(
             name: "ShareLinkFeatureTests",
             dependencies: [

@@ -57,6 +57,8 @@ tags:
     description: Assisted-mode tasks the user completes in a marketplace app.
   - name: usage
     description: How much of the plan's quotas the account has used this period.
+  - name: voice
+    description: Spoken corrections on the review screen that the app could not parse itself.
 
 paths:
   /health/live:
@@ -91,6 +93,8 @@ paths:
     $ref: './paths/analysis.yaml#/~1v1~1analyses~1{analysisId}~1apply'
   /v1/usage:
     $ref: './paths/usage.yaml#/~1v1~1usage'
+  /v1/items/{itemId}/voice-corrections:
+    $ref: './paths/voice.yaml#/~1v1~1items~1{itemId}~1voice-corrections'
   /v1/items/{itemId}/pricing:
     $ref: './paths/pricing.yaml#/~1v1~1items~1{itemId}~1pricing'
   /v1/items/{itemId}/listings:
@@ -421,6 +425,17 @@ components:
       $ref: './components/schemas/usage.yaml#/QuotaUsage'
     Usage:
       $ref: './components/schemas/usage.yaml#/Usage'
+    # ---------------------------------------------------------------- voice
+    VoiceCorrectionRequest:
+      $ref: './components/schemas/voice.yaml#/VoiceCorrectionRequest'
+    VoiceCorrection:
+      $ref: './components/schemas/voice.yaml#/VoiceCorrection'
+    VoiceCorrectionChange:
+      $ref: './components/schemas/voice.yaml#/VoiceCorrectionChange'
+    VoiceCorrectionField:
+      $ref: './components/schemas/voice.yaml#/VoiceCorrectionField'
+    KnownVoiceCorrectionField:
+      $ref: './components/schemas/voice.yaml#/KnownVoiceCorrectionField'
     # ---------------------------------------------------------------- listings
     ListingStatus:
       $ref: './components/schemas/listings.yaml#/ListingStatus'

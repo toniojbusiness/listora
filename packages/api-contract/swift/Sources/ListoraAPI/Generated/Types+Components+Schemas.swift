@@ -3092,6 +3092,154 @@ extension Components {
                 case quotas
             }
         }
+        /// - Remark: Generated from `#/components/schemas/VoiceCorrectionRequest`.
+        public struct VoiceCorrectionRequest: Codable, Hashable, Sendable {
+            /// The phrases of the seller's spoken correction that the app's own parser could not
+            /// map, as text (on-device speech recognition). Never audio.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionRequest/transcript`.
+            public var transcript: Swift.String
+            /// Creates a new `VoiceCorrectionRequest`.
+            ///
+            /// - Parameters:
+            ///   - transcript: The phrases of the seller's spoken correction that the app's own parser could not
+            public init(transcript: Swift.String) {
+                self.transcript = transcript
+            }
+            public enum CodingKeys: String, CodingKey {
+                case transcript
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/VoiceCorrection`.
+        public struct VoiceCorrection: Codable, Hashable, Sendable {
+            /// The proposed changes in the order they were said; empty when nothing mapped.
+            ///
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrection/changes`.
+            public var changes: [Components.Schemas.VoiceCorrectionChange]
+            /// Creates a new `VoiceCorrection`.
+            ///
+            /// - Parameters:
+            ///   - changes: The proposed changes in the order they were said; empty when nothing mapped.
+            public init(changes: [Components.Schemas.VoiceCorrectionChange]) {
+                self.changes = changes
+            }
+            public enum CodingKeys: String, CodingKey {
+                case changes
+            }
+        }
+        /// One proposed change. `cost` (what the seller paid) and `listPrice` carry `amount`; every
+        /// other field carries `value`: a canonical value for category (`<category>/<subcategory>`),
+        /// department, sizeSystem, colors, pattern, materials, and condition, otherwise text. A list
+        /// detail gets one change per entry: the colors (or materials) of one answer together
+        /// replace the item's, and each keyword or flaw is added to the item's.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/VoiceCorrectionChange`.
+        public struct VoiceCorrectionChange: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionChange/field`.
+            public var field: Components.Schemas.VoiceCorrectionField
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionChange/value`.
+            public var value: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionChange/amount`.
+            public var amount: Components.Schemas.Money?
+            /// Creates a new `VoiceCorrectionChange`.
+            ///
+            /// - Parameters:
+            ///   - field:
+            ///   - value:
+            ///   - amount:
+            public init(
+                field: Components.Schemas.VoiceCorrectionField,
+                value: Swift.String? = nil,
+                amount: Components.Schemas.Money? = nil
+            ) {
+                self.field = field
+                self.value = value
+                self.amount = amount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case field
+                case value
+                case amount
+            }
+        }
+        /// A `KnownVoiceCorrectionField`, or a field added after this client was built. Clients
+        /// ignore a change to a field they do not know.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/VoiceCorrectionField`.
+        public struct VoiceCorrectionField: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionField/value1`.
+            public var value1: Components.Schemas.KnownVoiceCorrectionField?
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionField/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `VoiceCorrectionField`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownVoiceCorrectionField? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// The item detail a change is for, named like `ItemDetails`; `cost` is what the seller paid
+        /// and `purchaseSource` where they bought it.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownVoiceCorrectionField`.
+        @frozen public enum KnownVoiceCorrectionField: String, Codable, Hashable, Sendable, CaseIterable {
+            case title = "title"
+            case brand = "brand"
+            case productName = "productName"
+            case category = "category"
+            case department = "department"
+            case sizeLabel = "sizeLabel"
+            case sizeSystem = "sizeSystem"
+            case colors = "colors"
+            case pattern = "pattern"
+            case materials = "materials"
+            case keywords = "keywords"
+            case styleNumber = "styleNumber"
+            case condition = "condition"
+            case conditionNotes = "conditionNotes"
+            case flaws = "flaws"
+            case cost = "cost"
+            case purchaseSource = "purchaseSource"
+            case listPrice = "listPrice"
+        }
         /// A `KnownListingStatus`, or a status added after this client was built. Clients show
         /// the listing's `statusDisplay` for an unknown status and never treat it as success.
         ///

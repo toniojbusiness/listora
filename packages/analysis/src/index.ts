@@ -76,3 +76,15 @@ export type {
   Pattern,
   Subcategory,
 } from './vocabulary.ts';
+export {
+  dollarsToCents,
+  interpretVoiceCorrection,
+  MAX_VOICE_CHANGES,
+  MAX_VOICE_TRANSCRIPT_LENGTH,
+  normalizeVoiceChanges,
+  VOICE_CORRECTION_OUTPUT,
+  VOICE_CORRECTION_OUTPUT_NAME,
+  VOICE_CORRECTION_PURPOSE,
+  VOICE_CORRECTION_SYSTEM,
+} from './voice-correction.ts';
+export type { VoiceCorrectionAnswer, VoiceCorrectionInput } from './voice-correction.ts';

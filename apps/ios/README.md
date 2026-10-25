@@ -68,8 +68,9 @@ Code lives in local Swift packages under `Packages/`. The app target only compos
 ```text
 Packages/
   Core/          Models and utilities with no UI: AppConfiguration, AppEnvironment, AppVersion,
-                 the TagReader protocol with its TagReading model, the listing URL parser
-                 (ListingURL, SharedContent), the vocabulary's display names (VocabularyName)
+                 the TagReader protocol with its TagReading model, the VoiceTranscriber
+                 protocol, the listing URL parser (ListingURL, SharedContent), the vocabulary's
+                 display names (VocabularyName)
   DesignSystem/  Palette (light and dark colors), Typography, Spacing, Radius, Elevation, Motion,
                  Haptics, and the shared components (docs/features/design.md)
   APIClient/     The generated ListoraAPI client over URLSession, the signed-in session (Keychain),
@@ -85,6 +86,8 @@ Packages/
                       health, connecting eBay through ASWebAuthenticationSession, Retry
                       check, and the connection banner Inventory shows
     TagReadingFeature On-device tag reading with Vision (VisionTagReader); no UI
+    VoiceInputFeature On-device speech to text for spoken corrections (AppleSpeechTranscriber,
+                      and ScriptedVoiceTranscriber for UI tests); no UI
     ShareLinkFeature  The Share Extension's screen (ShareLinkView, ShareLinkModel)
 ```
 

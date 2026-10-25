@@ -25,7 +25,7 @@ export interface AppDependencies extends HealthDependencies {
   storage: ObjectStorage;
   /** Where `addItemPhoto` adds each new photo's processing job. */
   photoJobs: PhotoJobQueue;
-  /** The AI client whose guards analysis requests are checked against (it is never called). */
+  /** The AI client: analysis requests are checked against its guards; voice corrections call it. */
   ai: AiClient;
   /** Where starting or escalating an analysis adds its job. */
   analysisJobs: AnalysisJobQueue;

@@ -1,0 +1,46 @@
+/v1/items/{itemId}/voice-corrections:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  post:
+    tags: [voice]
+    operationId: interpretVoiceCorrection
+    summary: Interpret a spoken correction the app could not parse
+    description: |
+      Maps the short text of a spoken correction on the review screen ("the pattern is
+      houndstooth, it's from the nineties") to proposed detail changes, with the cheap text
+      model. The app transcribes speech on the device and parses routine phrases itself, so
+      it sends only the phrases its own parser could not map, and only their text, never
+      audio. The answer is a proposal: nothing is changed on the item, and the app shows each
+      change for the seller to accept or undo before it saves anything (`replaceItem`).
+      Canonical details (category, department, size type, colors, pattern, materials,
+      condition) hold canonical values only, and `cost` and `listPrice` carry an `amount`;
+      every other change carries a `value`. A phrase the model could not map is left out, so
+      `changes` may be empty. The call is metered and counted in the account's daily AI
+      budget like every AI call, but uses no plan quota: `429 ai_budget_exceeded` when the
+      budget is used up, `503 service_unavailable` while AI is switched off or the model
+      could not answer (retryable), and `403 forbidden` when AI is turned off for the account.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/voice.yaml#/VoiceCorrectionRequest'
+    responses:
+      '200':
+        description: The proposed changes, possibly none.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/voice.yaml#/VoiceCorrection'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      '429':
+        $ref: '../components/responses.yaml#/RateLimited'
+      '503':
+        $ref: '../components/responses.yaml#/ServiceUnavailable'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
