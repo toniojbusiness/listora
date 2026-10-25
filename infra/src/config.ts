@@ -316,6 +316,14 @@ export interface DeployTarget {
    */
   readonly ownerEmail: string | undefined;
   /**
+   * Whether the email stack creates the owner's SES email identity (`create`, the default) or
+   * leaves one that already exists outside it alone (`existing`): an account can hold an
+   * address's identity only once, and CloudFormation refuses to create one that exists.
+   * scripts/deploy-personal.sh picks `existing` when the account already has the identity and
+   * no Listora stack owns it. Only with an owner pool.
+   */
+  readonly ownerEmailIdentity: OwnerEmailIdentity;
+  /**
    * The two availability zones the VPC spans, when they must be chosen: some services skip
    * a zone (in us-east-1, API Gateway VPC links and Graviton instances are not offered in
    * `use1-az3`), and zone names map to different zone ids in every account. Unset means the
@@ -323,6 +331,9 @@ export interface DeployTarget {
    */
   readonly availabilityZones: readonly string[] | undefined;
 }
+
+export const OWNER_EMAIL_IDENTITIES = ['create', 'existing'] as const;
+export type OwnerEmailIdentity = (typeof OWNER_EMAIL_IDENTITIES)[number];
 
 /** A domain and its hosted zone, always set together. */
 export interface DnsTarget {
@@ -361,6 +372,7 @@ const SOURCES = {
   githubRepository: { context: 'githubRepository', env: 'LISTORA_GITHUB_REPOSITORY' },
   alarmEmail: { context: 'alarmEmail', env: 'LISTORA_ALARM_EMAIL' },
   ownerEmail: { context: 'ownerEmail', env: 'LISTORA_OWNER_EMAIL' },
+  ownerEmailIdentity: { context: 'ownerEmailIdentity', env: 'LISTORA_OWNER_EMAIL_IDENTITY' },
   availabilityZones: { context: 'availabilityZones', env: 'LISTORA_AVAILABILITY_ZONES' },
 } as const satisfies Record<Exclude<keyof DeployTarget, 'dns'> | keyof DnsTarget, Source>;
 
@@ -470,6 +482,15 @@ export function loadDeployTarget(
   if (!ownsPool && read(SOURCES.ownerEmail) !== undefined) {
     issues.push(`${describe(SOURCES.ownerEmail)} is only for an environment with an owner pool`);
   }
+  const identityValue = read(SOURCES.ownerEmailIdentity);
+  const ownerEmailIdentity = OWNER_EMAIL_IDENTITIES.find((value) => value === identityValue);
+  if (identityValue !== undefined && ownerEmailIdentity === undefined) {
+    issues.push(`${describe(SOURCES.ownerEmailIdentity)} must be create or existing`);
+  } else if (!ownsPool && identityValue !== undefined) {
+    issues.push(
+      `${describe(SOURCES.ownerEmailIdentity)} is only for an environment with an owner pool`,
+    );
+  }
 
   const zonesValue = read(SOURCES.availabilityZones);
   const availabilityZones = zonesValue?.split(',').map((zone) => zone.trim());
@@ -495,6 +516,7 @@ export function loadDeployTarget(
     githubRepository,
     alarmEmail,
     ownerEmail,
+    ownerEmailIdentity: ownerEmailIdentity ?? 'create',
     availabilityZones,
   };
 }

@@ -153,8 +153,13 @@ fi
 step "Check the availability zones and the existing stacks"
 zones=${LISTORA_AVAILABILITY_ZONES:-}
 compute_existed=false
+# The email stack creates the owner's SES identity unless the account already has one that no
+# Listora stack owns (CloudFormation refuses to create an identity that exists, and the script
+# never takes over or changes a resource it did not make).
+owner_identity=${LISTORA_OWNER_EMAIL_IDENTITY:-create}
 if [[ "$dry_run" == true ]]; then
   would "aws ec2 describe-availability-zones  (refuse a zone without API Gateway VPC links, use1-az3)"
+  would "aws sesv2 get-email-identity --email-identity $owner_email  (an identity no Listora stack owns is left alone: ownerEmailIdentity=existing)"
   would "aws cloudformation describe-stacks --stack-name listora-$ENVIRONMENT-<each stack>  (refuse a failed or busy stack)"
 else
   zone_table=$(aws_ ec2 describe-availability-zones --filters Name=state,Values=available \
@@ -190,12 +195,27 @@ else
     [[ "$name" != compute ]] || compute_existed=true
     info "$stack: $status"
   done
+  if aws_ sesv2 get-email-identity --email-identity "$owner_email" >/dev/null 2>"$workdir/err"; then
+    owned=$(aws_ cloudformation list-stack-resources --stack-name "listora-$ENVIRONMENT-email" \
+      --query "StackResourceSummaries[?ResourceType=='AWS::SES::EmailIdentity'].PhysicalResourceId" \
+      --output text 2>/dev/null || true)
+    if grep -qx "$owner_email" <<<"${owned//$'\t'/$'\n'}"; then
+      owner_identity=create
+      info "SES identity $owner_email: managed by listora-$ENVIRONMENT-email"
+    else
+      owner_identity=existing
+      info "SES identity $owner_email: already in the account outside Listora's stacks; left alone"
+    fi
+  else
+    grep -q 'NotFoundException' "$workdir/err" || fail "cannot read the SES identity $owner_email: $(cat "$workdir/err")"
+  fi
 fi
 
 # --- 4. Offline synthesis and template checks ------------------------------------------------
 step "Synthesize the stacks offline with the real settings"
 context=(--context "env=$ENVIRONMENT" --context "account=$EXPECTED_ACCOUNT" --context "region=$region"
-  --context "imageTag=$image_tag" --context "ownerEmail=$owner_email")
+  --context "imageTag=$image_tag" --context "ownerEmail=$owner_email"
+  --context "ownerEmailIdentity=$owner_identity")
 [[ -z "$zones" ]] || context+=(--context "availabilityZones=$zones")
 [[ -z "${LISTORA_ALARM_EMAIL:-}" ]] || context+=(--context "alarmEmail=$LISTORA_ALARM_EMAIL")
 [[ -z "${LISTORA_DOMAIN:-}" ]] || context+=(--context "domain=$LISTORA_DOMAIN")

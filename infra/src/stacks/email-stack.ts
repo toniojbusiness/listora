@@ -43,7 +43,9 @@ export class EmailStack extends ListoraStack {
     const { dns } = target;
 
     if (dns !== undefined) this.verifyDomain(dns, target);
-    if (target.ownerEmail !== undefined) {
+    // An identity that already exists outside this stack is left alone (`ownerEmailIdentity`);
+    // the deploy still waits until it is verified before the user pool deploys.
+    if (target.ownerEmail !== undefined && target.ownerEmailIdentity === 'create') {
       new ses.EmailIdentity(this, 'OwnerAddress', {
         identity: ses.Identity.email(target.ownerEmail),
       });

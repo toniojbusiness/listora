@@ -23,8 +23,8 @@ import {
   HTTP_API_THROTTLE,
   RUNNER_SERVICE_NAME,
 } from './stacks/compute-stack.ts';
-import { PLACEHOLDER_SHAPES } from './placeholders.ts';
 import { MIGRATE_OUTPUTS, migrateTaskNames } from './stacks/migrate-stack.ts';
+import { PLACEHOLDER_CONTEXT, PLACEHOLDER_SHAPES } from './placeholders.ts';
 import { stackList, synthesize } from './test-support.ts';
 
 type Resource = { Type: string; Properties?: Record<string, unknown> } & Record<string, unknown>;
@@ -1445,5 +1445,21 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       expect(passRole).toContain('"iam:PassedToService":"ecs-tasks.amazonaws.com"');
       expect(bySid('ReadStackOutputs')).toContain(`:stack/listora-${environment}-*/*`);
     });
+  });
+});
+
+describe('the owner email identity', () => {
+  const identities = (overrides: Record<string, unknown>) =>
+    resources(
+      Template.fromStack(synthesize('personal', overrides).stacks.email),
+      'AWS::SES::EmailIdentity',
+    ).map((identity) => identity.Properties?.['EmailIdentity']);
+
+  it('is created by the email stack by default', () => {
+    expect(identities({})).toEqual([PLACEHOLDER_CONTEXT.personal['ownerEmail']]);
+  });
+
+  it('is left alone when it already exists outside the stack', () => {
+    expect(identities({ ownerEmailIdentity: 'existing' })).toEqual([]);
   });
 });
