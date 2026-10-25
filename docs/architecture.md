@@ -81,7 +81,7 @@ apps/
   worker/       Background worker: operation engine, plus one module per feature's jobs in
                 src/features/ (account deletion, AI spend check, item analysis, photo
                 processing, trust metrics, the daily connection health check, the delist SLA,
-                push delivery); and the on-demand browser runner (src/runner/main.ts)
+                push delivery, sale fees); and the on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
                 and account blocks (@listora/admin)
@@ -116,7 +116,8 @@ packages/
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
                 drift resync (@listora/operations)
   sales/        Sale intake: inbound events, recording sales (which starts their auto-delist);
-                eBay notifications, the order poll, eBay account deletion (@listora/sales)
+                the sale lifecycle, fee lines, payout and profit; eBay notifications, the order
+                poll, eBay account deletion (@listora/sales)
   auto-delist/  The auto-delist orchestrator: the fan-out after a sale, delist runs and their
                 per-marketplace truth, SLA re-alerts, double-sale incidents (@listora/auto-delist)
   push/         Push notifications: the notification, the sender interface and its recording
@@ -195,7 +196,8 @@ src/
   operations/    Operations, their history, Retry, and Cancel
   connections/   Marketplace connections, the health summary and Retry check, connect attempts,
                  and the public OAuth callback
-  sales/         The sales feed (listSales, getSale) with each sale's delist runs and double sales
+  sales/         The sales feed (listSales, getSale) with each sale's money, delist runs, and
+                 double sales; Mark as sold (createSale), the lifecycle, and the relist question
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
 ```
 
@@ -305,7 +307,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
   [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in
   [operations.md](features/operations.md#data) (double-sale incidents in
-  [auto-delist.md](features/auto-delist.md#data)); pricing in [pricing.md](features/pricing.md#data);
+  [auto-delist.md](features/auto-delist.md#data), the lifecycle and fee columns in
+  [sales.md](features/sales.md#data)); pricing in [pricing.md](features/pricing.md#data);
   deleted identities and account deletion in [auth.md](features/auth.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
@@ -397,6 +400,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/review.md](features/review.md)                         | The iPhone review, cost, and price screens and the interaction-time metric    |
 | [features/design.md](features/design.md)                         | The iPhone app's design system, screenshots, and UI audit                     |
 | [features/inventory.md](features/inventory.md)                   | The Inventory tab, the item screen, the listing flow and its API              |
+| [features/sales.md](features/sales.md)                           | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI   |
 
 ### Former section numbers
 

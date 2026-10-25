@@ -146,5 +146,6 @@ describe('the restricted CDK execution policy', () => {
     const refused = spawnSync('node', [script, 'personal', '123'], { encoding: 'utf8' });
     expect(refused.status).toBe(2);
     expect(refused.stderr).toContain('usage:');
-  });
+    // Two Node processes start here; on a loaded machine that takes longer than the default 5 s.
+  }, 30_000);
 });

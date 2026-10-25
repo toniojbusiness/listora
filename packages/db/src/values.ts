@@ -164,8 +164,12 @@ export type InboundEventResult = (typeof INBOUND_EVENT_RESULTS)[number];
 export const SALE_DETECTION_SOURCES = ['webhook', 'poll', 'email', 'manual'] as const;
 export type SaleDetectionSource = (typeof SALE_DETECTION_SOURCES)[number];
 
-export const SALE_STATUSES = ['detected', 'confirmed', 'canceled', 'returned'] as const;
+export const SALE_STATUSES = ['detected', 'confirmed', 'shipped', 'canceled', 'returned'] as const;
 export type SaleStatus = (typeof SALE_STATUSES)[number];
+
+/** After a canceled or returned sale: whether the seller relisted the item (`sale_item`). */
+export const RELIST_DECISIONS = ['pending', 'relisted', 'declined'] as const;
+export type RelistDecision = (typeof RELIST_DECISIONS)[number];
 
 export const DELIST_RUN_STATUSES = ['in_progress', 'completed', 'attention_needed'] as const;
 export type DelistRunStatus = (typeof DELIST_RUN_STATUSES)[number];

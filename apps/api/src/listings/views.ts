@@ -161,6 +161,17 @@ export const ACTION_KIND = {
  * operation's Retry is the operation's own (`retryOperation`), not a listing action.
  */
 export function actionsForState(state: ListingState): KnownListingAction[] {
+  // A sold or archived item is not put on a marketplace again (`assertListable` refuses it).
+  const listable = LISTABLE_ITEM_STATUSES.has(state.row.item_status);
+  return listingActions(state).filter(
+    (action) => listable || (action !== 'publish' && action !== 'relist'),
+  );
+}
+
+/** Items that can get a new listing, or be published or relisted: not sold and not archived. */
+export const LISTABLE_ITEM_STATUSES: ReadonlySet<string> = new Set(['draft', 'ready', 'listed']);
+
+function listingActions(state: ListingState): KnownListingAction[] {
   const { row, operation } = state;
   if (
     operation !== undefined &&
@@ -175,10 +186,13 @@ export function actionsForState(state: ListingState): KnownListingAction[] {
       return ['change_price', 'revise', 'end', 'verify'];
     case 'ended':
       return ['relist', 'verify'];
+    case 'sold':
+      // Relisting a sold listing is refused while its item is sold; once the sale is canceled
+      // or returned, the seller may relist it.
+      return ['relist'];
     case 'queued':
     case 'publishing':
     case 'ending':
-    case 'sold':
     case 'error':
     case 'unknown':
     case 'needs_user_action':

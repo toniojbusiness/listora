@@ -50,10 +50,25 @@ const BASIS_POINTS_PER_WHOLE = 10_000;
 
 /** The estimated fees, in cents, for one item sold at `priceCents`. */
 export function estimateFeesCents(table: FeeTable, priceCents: number): number {
+  return estimateFeeLines(table, priceCents).reduce((sum, line) => sum + line.amountCents, 0);
+}
+
+/** One rule's estimated fee: what a sale's estimated `fee_line` records. */
+export interface EstimatedFee {
+  /** The rule's name, for example "Final value fee". */
+  readonly name: string;
+  readonly kind: EstimatedFeeKind;
+  readonly amountCents: number;
+}
+
+/** The estimated fee of each of the table's rules for a sale at `priceCents`, in rule order. */
+export function estimateFeeLines(table: FeeTable, priceCents: number): EstimatedFee[] {
   assertCents(priceCents, 'priceCents');
-  let total = 0;
-  for (const rule of table.rules) total += ruleFeeCents(rule, priceCents);
-  return total;
+  return table.rules.map((rule) => ({
+    name: rule.name,
+    kind: rule.kind,
+    amountCents: ruleFeeCents(rule, priceCents),
+  }));
 }
 
 function ruleFeeCents(rule: FeeRule, priceCents: number): number {

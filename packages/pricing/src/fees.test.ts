@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { feeTableByVersion, feeTableFor, feeTableForSale, FEE_TABLES } from './fee-tables.ts';
-import { estimateFeesCents, type FeeTable } from './fees.ts';
+import { estimateFeeLines, estimateFeesCents, type FeeTable } from './fees.ts';
 
 const ON = new Date('2026-10-24T12:00:00Z');
 const fees = (marketplace: FeeTable['marketplace'], priceCents: number) =>
@@ -14,6 +14,16 @@ describe('fee tables', () => {
     expect(fees('ebay', 1001)).toBe(137 + 40); // over $10.00: $0.40
     expect(fees('ebay', 750_000)).toBe(102_000 + 40);
     expect(fees('ebay', 800_000)).toBe(102_000 + 1_175 + 40); // 2.35% of the $500 over
+  });
+
+  it('name each rule of an estimate, so a sale records one fee line per rule', () => {
+    expect(estimateFeeLines(feeTableFor('ebay', ON), 4500)).toEqual([
+      { name: 'Final value fee', kind: 'marketplace', amountCents: 612 },
+      { name: 'Per-order fee', kind: 'marketplace', amountCents: 40 },
+    ]);
+    expect(estimateFeeLines(feeTableFor('depop', ON), 4500)).toEqual([
+      { name: 'Transaction fee', kind: 'payment', amountCents: 194 },
+    ]);
   });
 
   it('estimate Poshmark: $2.95 under $15, 20% at $15 or more', () => {

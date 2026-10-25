@@ -5,6 +5,7 @@ import Foundation
 import InventoryFeature
 import MarketplacesFeature
 import ReviewFeature
+import SalesFeature
 import SettingsFeature
 import SwiftUI
 import TagReadingFeature
@@ -29,6 +30,8 @@ public struct AppDependencies {
     public let addItem: AddItemEnvironment
     /// The inventory, item, and listing screens.
     public let inventory: InventoryEnvironment
+    /// The Sales tab, "Mark as sold", and each sale's screen.
+    public let sales: SalesEnvironment
     /// Dev builds only: sign in against the local API's dev auth driver.
     public let devSignIn: DevSignInModel?
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
@@ -71,17 +74,16 @@ public struct AppDependencies {
         interactionMeter = meter
         let listingCopy = ListingCopyStore(directory: listingCopyDirectory)
         let review = ReviewEnvironment(apiClient: apiClient, meter: meter, listingCopy: listingCopy, defaults: defaults)
-        inventory = InventoryEnvironment(apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy)
+        sales = SalesEnvironment(apiClient: apiClient, accessTokens: accessTokens)
+        inventory = InventoryEnvironment(
+            apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy,
+            saleScreens: Self.saleScreens(sales),
+        )
         self.review = review
         addItem = AddItemEnvironment(
-            dataDirectory: dataDirectory,
-            apiClient: apiClient,
-            accessTokens: accessTokens,
-            tagReader: tagReader,
+            dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,
             meter: meter,
-            reviewDestination: { request, onFinished in
-                AnyView(review.flow(for: request, onFinished: onFinished))
-            },
+            reviewDestination: { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) },
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
@@ -92,6 +94,14 @@ public struct AppDependencies {
         devSignIn = configuration.environment == .dev
             ? DevSignInModel(client: DevSignInClient(baseURL: configuration.apiBaseURL), tokens: accessTokens)
             : nil
+    }
+
+    /// The sales screens the item screen opens, from the sales feature.
+    private static func saleScreens(_ sales: SalesEnvironment) -> SaleScreens {
+        SaleScreens(
+            markSold: { request, onRecorded in AnyView(sales.markSold(request, onRecorded: onRecorded)) },
+            sale: { saleID in AnyView(sales.saleScreen(saleID: saleID)) },
+        )
     }
 
     /// The background URLSession that photo uploads use; the app scene handles its events.

@@ -5,7 +5,10 @@
  * into one shape. Amounts are integer cents; an amount Depop sends that isn't a decimal makes
  * the order unreadable rather than wrong.
  */
+import type { FeeKind } from '@listora/db';
 import { z } from 'zod';
+
+import type { OrderFee } from '../adapter.ts';
 
 import { depopCents } from './payload.ts';
 
@@ -156,4 +159,34 @@ function common(order: {
       soldViaOffers: line.sold_via_offers,
     })),
   };
+}
+
+/** Depop's fee types and the `fee_line` kind each one is. */
+const DEPOP_FEE_KINDS: Record<string, { kind: FeeKind; description: string }> = {
+  DEPOP_FEE: { kind: 'marketplace', description: 'Depop fee' },
+  PAYMENT_FEE: { kind: 'payment', description: 'Payment processing fee' },
+  SHIPPING_FEE: { kind: 'shipping_label', description: 'Depop shipping' },
+  BOOSTING_FEE: { kind: 'promotion', description: 'Boosting fee' },
+};
+
+/**
+ * An order's `seller_fee_breakdown` as Listora's fee lines; `null` when a fee is in another
+ * currency than the order or the breakdown is missing (the webhooks carry only the total).
+ * Zero amounts are left out.
+ */
+export function depopOrderFees(order: DepopOrder): OrderFee[] | null {
+  if (order.createdAt === null || order.currency !== 'USD') return null;
+  const fees: OrderFee[] = [];
+  for (const fee of order.fees) {
+    if (fee.currency !== order.currency) return null;
+    if (fee.amountCents === 0) continue;
+    const known = DEPOP_FEE_KINDS[fee.type];
+    fees.push({
+      kind: known?.kind ?? 'other',
+      description: known?.description ?? `Depop ${fee.type.toLowerCase().replaceAll('_', ' ')}`,
+      amountCents: fee.amountCents,
+      currency: 'USD',
+    });
+  }
+  return fees;
 }

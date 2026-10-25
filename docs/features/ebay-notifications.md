@@ -149,5 +149,7 @@ about, indexed with the marketplace, so their deletion finds every event) and
 
 - Ask sellers for `sell.listing.read` once the sandbox confirms the keyset may request it (a
   scope the keyset lacks breaks the consent page for everyone), so `LISTING` can be subscribed.
-- Order changes after the sale (cancellations, returns) and eBay's fee lines are T-26.
+- Order changes after the sale (cancellations, returns) are recorded by the seller
+  ([sales.md](sales.md)); reading them from eBay's order updates is a follow-up. eBay's actual
+  fees come from the Finances API ([sales.md](sales.md#fee-lines)).
 - T-35 makes the deletion endpoint live on staging for eBay's production keyset.

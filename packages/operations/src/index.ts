@@ -1,6 +1,7 @@
 export {
   cancelMootOperations,
   cancelOperation,
+  cancelUnsentDelists,
   confirmOperationByUser,
   enqueueOperation,
   retryOperation,

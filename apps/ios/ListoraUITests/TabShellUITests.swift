@@ -13,10 +13,10 @@ final class TabShellUITests: XCTestCase {
         app.launch()
     }
 
-    func testShowsTheFourTabsAndOpensInventory() {
+    func testShowsTheFiveTabsAndOpensInventory() {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.waitForExistence(timeout: 10))
-        for title in ["Inventory", "Add Item", "Tasks", "Settings"] {
+        for title in ["Inventory", "Sales", "Add Item", "Tasks", "Settings"] {
             XCTAssertTrue(tabBar.buttons[title].exists, "missing tab \(title)")
         }
         XCTAssertTrue(app.navigationBars["Inventory"].exists)
@@ -27,6 +27,7 @@ final class TabShellUITests: XCTestCase {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.waitForExistence(timeout: 10))
         let expected: [(tab: String, text: String)] = [
+            ("Sales", "Sign in to see your sales"),
             ("Add Item", "Take photos once"),
             ("Tasks", "You're all caught up"),
             ("Settings", "Environment"),

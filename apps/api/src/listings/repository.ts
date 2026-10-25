@@ -9,6 +9,7 @@ import {
   type ConnectionStatus,
   type DbExecutor,
   type DbTransaction,
+  type ItemStatus,
   type ListingStatus,
   type Marketplace,
   type MarketplaceListingTable,
@@ -18,10 +19,11 @@ import { sql, type Selectable } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
 
-/** A listing with the mode and status of its connection (null when it has none). */
+/** A listing with the mode and status of its connection (null when it has none) and its item's status. */
 export type ListingRow = Selectable<MarketplaceListingTable> & {
   connection_mode: ConnectionMode | null;
   connection_status: ConnectionStatus | null;
+  item_status: ItemStatus;
 };
 
 export type OperationRow = Selectable<MarketplaceOperationTable>;
@@ -34,8 +36,17 @@ function listingQuery(db: DbExecutor, tenant: Tenant) {
         .onRef('connection.account_id', '=', 'listing.account_id')
         .onRef('connection.id', '=', 'listing.connection_id'),
     )
+    .innerJoin('inventory_item as item', (join) =>
+      join
+        .onRef('item.account_id', '=', 'listing.account_id')
+        .onRef('item.id', '=', 'listing.item_id'),
+    )
     .selectAll('listing')
-    .select(['connection.mode as connection_mode', 'connection.status as connection_status'])
+    .select([
+      'connection.mode as connection_mode',
+      'connection.status as connection_status',
+      'item.status as item_status',
+    ])
     .where('listing.account_id', '=', tenant.accountId);
 }
 

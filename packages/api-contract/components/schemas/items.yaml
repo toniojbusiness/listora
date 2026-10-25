@@ -225,6 +225,8 @@ Item:
     doubleSale:
       $ref: './sales.yaml#/DoubleSale'
       description: The item's newest double sale that is still open; absent when there is none.
+    relistPrompt:
+      $ref: '#/ItemRelistPrompt'
     createdAt:
       $ref: './common.yaml#/Timestamp'
     updatedAt:
@@ -244,6 +246,20 @@ StorageLocationSummary:
       type: string
       maxLength: 120
       description: For example "Garage shelf 3, bin 12".
+ItemRelistPrompt:
+  type: object
+  description: |
+    The item's sale was canceled or returned and the seller has not decided whether to
+    relist it. The app asks, with the options in the sale's `items[].relist`.
+  required: [saleId, saleStatus, soldOn]
+  properties:
+    saleId:
+      $ref: './common.yaml#/Id'
+    saleStatus:
+      $ref: './sales.yaml#/SaleStatus'
+      description: '`canceled` or `returned`.'
+    soldOn:
+      $ref: './common.yaml#/Marketplace'
 ItemSaleSummary:
   type: object
   description: |
@@ -255,6 +271,13 @@ ItemSaleSummary:
   properties:
     saleId:
       $ref: './common.yaml#/Id'
+    soldOn:
+      $ref: './common.yaml#/Marketplace'
+    saleStatus:
+      $ref: './sales.yaml#/SaleStatus'
+    feesEstimated:
+      type: boolean
+      description: True while any of the sale's fees is an estimate; `netProceeds` and `profit` are estimates then.
     soldAt:
       $ref: './common.yaml#/Timestamp'
     salePrice:

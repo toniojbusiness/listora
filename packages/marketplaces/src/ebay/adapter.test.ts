@@ -110,6 +110,44 @@ describe('EbayAdapter against the fake eBay', () => {
     return { ...ref, externalListingId: outcome.externalListingId };
   }
 
+  it("reads an order's actual fees from the Finances API", async () => {
+    const ref = await create();
+    const order = fake.sell(ref.externalListingId, { shipping: '5.0' });
+    // $45.00 + $5.00 shipping: 13.6% is $6.80, and the per-order fee $0.40.
+    expect(await adapter.readOrderFees(order.orderId, ctx())).toEqual({
+      type: 'fees',
+      fees: [
+        { kind: 'marketplace', description: 'Final value fee', amountCents: 680, currency: 'USD' },
+        { kind: 'marketplace', description: 'Per-order fee', amountCents: 40, currency: 'USD' },
+      ],
+    });
+    expect(fake.requests.at(-1)).toMatchObject({ action: 'finances' });
+  });
+
+  it('reports fees not recorded yet, temporary failures, and no access without guessing', async () => {
+    expect(await adapter.readOrderFees('99-99999-99999', ctx())).toEqual({ type: 'not_yet' });
+
+    fake.inject({ action: 'finances', fault: { type: 'server_error' } });
+    expect(await adapter.readOrderFees('99-99999-99999', ctx())).toMatchObject({
+      type: 'transient',
+      code: 'http_503',
+    });
+    fake.clearFaults();
+
+    fake.inject({ action: 'finances', fault: { type: 'rate_limited', retryAfterSeconds: 7 } });
+    expect(await adapter.readOrderFees('99-99999-99999', ctx())).toMatchObject({
+      type: 'transient',
+      code: 'rate_limited',
+      retryAfterMs: 7_000,
+    });
+    fake.clearFaults();
+
+    fake.inject({ action: 'finances', fault: { type: 'unauthorized' }, times: 2 });
+    expect(await adapter.readOrderFees('99-99999-99999', ctx())).toMatchObject({
+      type: 'unavailable',
+    });
+  });
+
   it('lists with the photos copied into EPS in posting order, the SKU, and the UUID', async () => {
     const ref = await create();
     const listing = fake.listing(ref.externalListingId);

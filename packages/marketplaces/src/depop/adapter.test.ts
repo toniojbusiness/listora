@@ -380,4 +380,34 @@ describe('DepopAdapter against the fake Depop', () => {
       reauthRequired: true,
     });
   });
+
+  it("reads an order's fee breakdown as fee lines, and says when it can't", async () => {
+    const listing = await create();
+    const order = fake.purchase(listing.externalListingId ?? '');
+    // The fake charges 3.3% + $0.45 on $45.00.
+    expect(await adapter.readOrderFees(order.purchase_id, ctx())).toEqual({
+      type: 'fees',
+      fees: [
+        {
+          kind: 'payment',
+          description: 'Payment processing fee',
+          amountCents: 194,
+          currency: 'USD',
+        },
+      ],
+    });
+    expect(await adapter.readOrderFees('404404', ctx())).toMatchObject({
+      type: 'unavailable',
+      code: 'order_not_found',
+    });
+    expect(
+      await adapter.readOrderFees(
+        order.purchase_id,
+        ctx({ id: 'elsewhere', mode: 'api', status: 'connected' }),
+      ),
+    ).toMatchObject({
+      type: 'unavailable',
+      code: 'reauth_required',
+    });
+  });
 });

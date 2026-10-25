@@ -98,10 +98,16 @@ describe('the sales feed (real Postgres)', () => {
     const item = await api.call('getItem', { token, params: { itemId } });
     expect(item.status).toBe(200);
     expect(item.body.status).toBe('sold_pending_delist');
+    // eBay's table: 13.6% of $45.00 ($6.12) and the $0.40 per-order fee, estimated until eBay
+    // reports them. No cost, so no profit.
     expect(item.body.saleSummary).toEqual({
       saleId: recorded.saleId,
+      soldOn: 'ebay',
+      saleStatus: 'detected',
+      feesEstimated: true,
       soldAt: '2026-10-24T18:00:00.000Z',
       salePrice: { amountCents: 4500, currency: 'USD' },
+      netProceeds: { amountCents: 4500 + 599 - 652, currency: 'USD' },
     });
     const run = item.body.delistRun;
     expect(run).toMatchObject({

@@ -4,6 +4,7 @@ import Core
 import DesignSystem
 import InventoryFeature
 import MarketplacesFeature
+import SalesFeature
 import SettingsFeature
 import SwiftUI
 import TasksFeature
@@ -56,6 +57,8 @@ public struct RootView: View {
                     }
                 },
             )
+        case .sales:
+            SalesView(environment: dependencies.sales)
         case .addItem:
             AddItemView(environment: dependencies.addItem)
         case .tasks:

@@ -34,6 +34,7 @@ import type {
   MarketplaceAdapter,
   MarketplaceCapabilities,
   OperationRequest,
+  OrderFeesResult,
   Outcome,
   RemoteListingState,
   ValidationIssue,
@@ -41,7 +42,12 @@ import type {
 import type { ItemSnapshot, ListingVariant } from '../content.ts';
 import { depopErrors, retryAfterMs, type DepopApi, type DepopCallResult } from './client.ts';
 import { DepopReauthRequiredError } from './oauth.ts';
-import { parseDepopOrdersPage, type DepopOrdersPage } from './orders.ts';
+import {
+  depopOrderFees,
+  depopOrderSchema,
+  parseDepopOrdersPage,
+  type DepopOrdersPage,
+} from './orders.ts';
 import {
   buildDepopPayload,
   depopAmount,
@@ -432,6 +438,75 @@ export class DepopAdapter implements MarketplaceAdapter<DepopListingPayload> {
     }
     const page = parseDepopOrdersPage(result.body);
     return page === null ? { type: 'unavailable', reauthRequired: false } : { type: 'ok', page };
+  }
+
+  /** The fees Depop charged on one of the seller's orders: its `seller_fee_breakdown`. */
+  async readOrderFees(purchaseId: string, ctx: AdapterContext): Promise<OrderFeesResult> {
+    const result = await this.#api.call(
+      { method: 'GET', path: `/api/v1/orders/${encodeURIComponent(purchaseId)}/`, group: 'other' },
+      ctx,
+    );
+    switch (result.type) {
+      case 'token_failed':
+        return result.error instanceof DepopReauthRequiredError
+          ? {
+              type: 'unavailable',
+              code: 'reauth_required',
+              message: `Reconnect ${NAME} to read its fees.`,
+            }
+          : {
+              type: 'transient',
+              code: 'token_unavailable',
+              message: `Listora couldn't sign in to ${NAME} right now.`,
+            };
+      case 'rate_limited':
+        return {
+          type: 'transient',
+          code: 'rate_limited',
+          message: `${NAME} is busy.`,
+          retryAfterMs: result.retryAfterMs,
+        };
+      case 'not_sent':
+      case 'maybe_sent':
+        return { type: 'transient', code: result.code, message: `Listora couldn't reach ${NAME}.` };
+      case 'response':
+        break;
+      default:
+        return assertNever(result);
+    }
+    if (result.status === 404) {
+      return {
+        type: 'unavailable',
+        code: 'order_not_found',
+        message: `${NAME} doesn't know this order.`,
+      };
+    }
+    if (result.status === 401 || result.status === 403) {
+      return {
+        type: 'unavailable',
+        code: 'no_orders_access',
+        message: `Reconnect ${NAME} to read its fees.`,
+      };
+    }
+    if (result.status !== 200) {
+      const wait = retryAfterMs(result.headers);
+      return {
+        type: 'transient',
+        code: result.status === 429 ? 'rate_limited' : `http_${String(result.status)}`,
+        message: `${NAME} isn't answering normally right now.`,
+        ...(wait === undefined ? {} : { retryAfterMs: wait }),
+      };
+    }
+    const order = depopOrderSchema.safeParse(result.body);
+    const fees = order.success ? depopOrderFees(order.data) : null;
+    if (fees === null) {
+      return {
+        type: 'unavailable',
+        code: 'unreadable_order',
+        message: `Listora couldn't read the ${NAME} order's fees.`,
+      };
+    }
+    return { type: 'fees', fees };
   }
 }
 
