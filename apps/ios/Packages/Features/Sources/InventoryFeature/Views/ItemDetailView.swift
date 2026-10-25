@@ -74,7 +74,7 @@ struct ItemDetailView: View {
                 }
                 Button("Keep it listed", role: .cancel) {}
             } message: { row in
-                if row.listing?.mode.value1 == .api {
+                if row.listing?.mode.value1 == .api || row.listing?.mode.value1 == .automation {
                     Text("Listora ends it on \(row.name) and shows it as delisted once \(row.name) confirms.")
                 } else {
                     Text("You end it in the \(row.name) app: Listora adds a task with a link to the listing.")

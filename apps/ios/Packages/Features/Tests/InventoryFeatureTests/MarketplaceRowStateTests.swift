@@ -81,6 +81,19 @@ struct MarketplaceRowStateTests {
     }
 
     @Test
+    func `lists through a working automation session, and assisted once the session stops working`() {
+        let automated = Fixtures.connection(.poshmark, mode: "automation")
+        let row = MarketplaceRowState(marketplace: .poshmark, listing: nil, connection: automated)
+        #expect(row.actions == [.list])
+        #expect(row.modeLabel == "Automated in your Poshmark session")
+        #expect(!MarketplaceRowState.isAssisted(marketplace: .poshmark, connection: automated))
+
+        let expired = Fixtures.connection(.poshmark, mode: "automation", status: "reauth_required")
+        #expect(MarketplaceRowState.isAssisted(marketplace: .poshmark, connection: expired))
+        #expect(MarketplaceRowState.canList(marketplace: .poshmark, connection: expired))
+    }
+
+    @Test
     func `opens the task of a step that waits on the user, and never offers a check on it`() {
         let waiting = Fixtures.operation(
             kind: .create,
