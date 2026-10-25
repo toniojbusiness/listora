@@ -125,6 +125,7 @@ apps/admin/             Operator CLI: AI cost reports, spend check, kill switch,
 apps/ios/               iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift packages
 packages/ai/            AI provider layer: providers, price table, metering, budget guards, quota counter (@listora/ai)
 packages/analysis/      Item analysis: prompt, output schema, provenance, marketplace copy, the job (@listora/analysis)
+packages/batches/       Batch listing: batches, their items' state, the job that starts each item's analysis (@listora/batches)
 packages/pricing/       Fee tables, cost floor, price tiers, research links, label guard (@listora/pricing)
 packages/api-contract/  OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
 packages/db/            SQL migrations, migration runner, Kysely types (@listora/db)

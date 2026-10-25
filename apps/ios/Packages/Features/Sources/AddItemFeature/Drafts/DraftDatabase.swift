@@ -84,6 +84,7 @@ final class DraftDatabase: Sendable {
                 table.column("retry", .jsonText).notNull()
             }
         }
+        registerBatchMigration(in: &migrator)
         return migrator
     }
 }

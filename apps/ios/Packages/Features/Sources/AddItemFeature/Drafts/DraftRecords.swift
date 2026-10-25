@@ -45,9 +45,18 @@ struct DraftRecord: Codable, Equatable, Identifiable, Sendable, FetchableRecord,
     /// The server photo ids in the order last sent with `reorderItemPhotos`.
     var syncedPhotoOrder: [String]?
     var retry = RetryState()
+    /// The batch this draft came from (docs/features/batch.md); its server item is created in
+    /// the batch, at `batchPosition`, with `createItemKey` as the `addItemBatchItem` key.
+    var batchID: String?
+    var batchPosition: Int?
+    /// The `Idempotency-Key` of the next `submitItemBatchItem`, and the server photos the last
+    /// one submitted: a batch draft is submitted again when its photos change.
+    var submitKey: String?
+    var submittedPhotoIDs: [String]?
 
     enum Columns {
         static let createdAt = Column(CodingKeys.createdAt)
+        static let batchID = Column(CodingKeys.batchID)
     }
 
     static func new(now: Date) -> DraftRecord {
@@ -216,14 +225,22 @@ struct ServerDeletionRecord: Codable, Equatable, Identifiable, Sendable, Fetchab
     /// The removed photo's SHA-256, to find it on the item once the replay's answer is gone.
     var sha256: String?
     var retry = RetryState()
+    /// For a batch item whose `addItemBatchItem` answer never arrived: adding at its position
+    /// again returns the item.
+    var serverBatchID: String?
+    var batchPosition: Int?
 
-    static func item(_ draft: DraftRecord, now: Date) -> ServerDeletionRecord {
-        ServerDeletionRecord(
+    static func item(_ draft: DraftRecord, serverBatchID: String?, now: Date) -> ServerDeletionRecord {
+        let unknown = draft.serverItemID == nil
+        let inBatch = draft.batchID != nil
+        return ServerDeletionRecord(
             id: UUID().uuidString.lowercased(),
             kind: .item,
             createdAt: now,
             serverItemID: draft.serverItemID,
-            createItemKey: draft.serverItemID == nil ? draft.createItemKey : nil,
+            createItemKey: unknown && !inBatch ? draft.createItemKey : nil,
+            serverBatchID: unknown && inBatch ? serverBatchID : nil,
+            batchPosition: unknown && inBatch ? draft.batchPosition : nil,
         )
     }
 

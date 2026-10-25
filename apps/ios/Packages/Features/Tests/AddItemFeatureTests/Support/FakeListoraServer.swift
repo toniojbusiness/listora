@@ -49,6 +49,7 @@ final class FakeListoraServer: StubServer {
         var requests: [StubRequest] = []
         var faults: [Fault] = []
         var nextSKU = 184
+        var batches: [String: Batch] = [:]
     }
 
     let apiHost = "api-\(UUID().uuidString.lowercased()).test"
@@ -73,6 +74,10 @@ final class FakeListoraServer: StubServer {
 
     var items: [Item] {
         state.withLock { state in state.itemOrder.compactMap { state.items[$0] } }
+    }
+
+    var batches: [Batch] {
+        state.withLock { Array($0.batches.values) }
     }
 
     var requests: [StubRequest] {
@@ -152,6 +157,9 @@ extension FakeListoraServer {
             return .error(401, code: "unauthenticated", message: "Sign in again.", retryable: false)
         }
         let parts = request.path.split(separator: "/").map(String.init)
+        if parts.count >= 2, parts[1] == "item-batches" {
+            return batchRoute(request, parts: parts, in: &state)
+        }
         switch (request.method, parts.count) {
         case ("POST", 2) where parts[1] == "items":
             return createItem(in: &state)
@@ -176,14 +184,18 @@ extension FakeListoraServer {
         }
     }
 
-    private static let notFound = StubReply.error(404, code: "not_found", message: "Not found.", retryable: false)
+    static let notFound = StubReply.error(404, code: "not_found", message: "Not found.", retryable: false)
 
     private static func createItem(in state: inout State) -> StubReply {
+        .json(201, itemJSON(newItem(in: &state)))
+    }
+
+    static func newItem(in state: inout State) -> Item {
         let item = Item(id: UUID().uuidString.lowercased(), sku: String(format: "AJ-%06d", state.nextSKU))
         state.nextSKU += 1
         state.items[item.id] = item
         state.itemOrder.append(item.id)
-        return .json(201, itemJSON(item))
+        return item
     }
 
     private static func createSession(_ request: StubRequest, in state: inout State) -> StubReply {
@@ -311,13 +323,13 @@ extension FakeListoraServer {
 
     // MARK: JSON
 
-    private static let timestamp = "2026-10-24T12:00:00.000Z"
+    static let timestamp = "2026-10-24T12:00:00.000Z"
 
-    private static func json(_ data: Data) -> [String: Any]? {
+    static func json(_ data: Data) -> [String: Any]? {
         (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
-    private static func itemJSON(_ item: Item) -> [String: Any] {
+    static func itemJSON(_ item: Item) -> [String: Any] {
         [
             "id": item.id,
             "sku": item.sku,

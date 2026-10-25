@@ -1,0 +1,64 @@
+[
+  {
+    "files" : [
+      "01-tee-front.jpg",
+      "02-tee-back.jpg",
+      "03-tee-tag.jpg",
+      "04-jeans-front.jpg",
+      "05-jeans-back.jpg",
+      "06-jeans-tag.jpg",
+      "07-dress-front.jpg",
+      "08-dress-back.jpg",
+      "09-dress-tag.jpg"
+    ],
+    "items" : [
+      0,
+      0,
+      0,
+      1,
+      1,
+      1,
+      2,
+      2,
+      2
+    ],
+    "purpose" : "Three items shot as the batch guide asks: front, back, then the tag of each.",
+    "sequence" : "haul"
+  },
+  {
+    "files" : [
+      "01-flannel-front.jpg",
+      "02-flannel-back.jpg",
+      "03-jeans-front.jpg",
+      "04-jeans-back.jpg",
+      "05-stripes-front.jpg",
+      "06-stripes-back.jpg"
+    ],
+    "items" : [
+      0,
+      0,
+      1,
+      1,
+      2,
+      2
+    ],
+    "purpose" : "Three items without tag shots: only the photos themselves tell the items apart.",
+    "sequence" : "no-tags"
+  },
+  {
+    "files" : [
+      "01-navy-a-front.jpg",
+      "02-navy-a-back.jpg",
+      "03-navy-b-front.jpg",
+      "04-navy-b-back.jpg"
+    ],
+    "items" : [
+      0,
+      0,
+      1,
+      1
+    ],
+    "purpose" : "Two nearly identical navy tees back to back, without tags: the seller must check the boundary.",
+    "sequence" : "look-alikes"
+  }
+]
