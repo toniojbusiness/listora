@@ -186,11 +186,17 @@ export async function scaleRunnerServiceToZero(
   );
 }
 
-/** Whether a browser runner is alive (its session is open). */
+/**
+ * Whether a browser runner is alive (its session is open). Only sessions on this database count:
+ * `pg_stat_activity` lists the whole cluster, where another database's runner (a parallel test's
+ * scratch database) serves none of this one's work.
+ */
 export async function browserRunnerAlive(db: Db): Promise<boolean> {
   const { rows } = await sql<{ alive: boolean }>`
     select exists (
-      select 1 from pg_stat_activity where application_name like ${`${RUNNER_SESSION_PREFIX}%`}
+      select 1 from pg_stat_activity
+      where datname = current_database()
+        and application_name like ${`${RUNNER_SESSION_PREFIX}%`}
     ) as alive
   `.execute(db);
   return rows[0]?.alive === true;
