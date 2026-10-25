@@ -83,14 +83,22 @@ fail() {
 
 # Every AWS call names the profile and region; nothing is exported.
 aws_() { aws --profile "$profile" --region "$region" "$@"; }
-# An SSO sign-in lasts much longer than its cached access token (about an hour), and only the
-# AWS CLI renews that token; cdk reads it as cached and fails once it is stale. So every cdk
-# command is preceded by a cheap CLI call, which renews the token from the sign-in's refresh
-# token. Nothing is exported: the CLI only rewrites its own cache.
+# cdk reads an SSO profile's cached access token, which lasts about an hour, and cannot renew
+# it, while the AWS CLI keeps working from its own cached role credentials. So cdk gets its
+# credentials from the CLI: a private AWS config in the work directory (removed on exit) holds
+# one profile whose credential_process asks the CLI for the profile's credentials. Nothing is
+# exported or written to disk but that config, which holds no credentials.
+readonly cdk_profile=listora-deploy-cdk
+cdk_config() {
+  local source_config=${AWS_CONFIG_FILE:-$HOME/.aws/config}
+  (umask 077 && printf '[profile %s]\ncredential_process = env AWS_CONFIG_FILE="%s" aws configure export-credentials --profile %s --format process\nregion = %s\n' \
+    "$cdk_profile" "$source_config" "$profile" "$region" >"$workdir/aws-config")
+}
 cdk_() {
   aws_ sts get-caller-identity >/dev/null ||
     fail "the sign-in of profile $profile has expired; run aws sso login --profile $profile and run this again"
-  (cd infra && npx cdk "$@" --profile "$profile" --no-notices --no-version-reporting)
+  [[ -e "$workdir/aws-config" ]] || cdk_config
+  (cd infra && AWS_CONFIG_FILE="$workdir/aws-config" npx cdk "$@" --profile "$cdk_profile" --no-notices --no-version-reporting)
 }
 
 # --- 1. Local checks --------------------------------------------------------------------------

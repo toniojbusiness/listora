@@ -73,6 +73,7 @@ echo "unexpected aws call: \${args[*]}" >&2; exit 99`,
   stub(
     'npx',
     `echo "npx $*" >>"${calls}"
+if [[ -n "\${AWS_CONFIG_FILE:-}" ]]; then sed 's/^/config: /' "$AWS_CONFIG_FILE" >>"${calls}"; fi
 if [[ "${String(realSynth)}" == true && "$1 $2" == "cdk synth" ]]; then exec "${npx}" "$@"; fi
 echo "npx must not run in this test" >&2; exit 98`,
   );
@@ -212,9 +213,20 @@ describe('scripts/deploy-personal.sh', () => {
     expect(run.calls).toContainEqual(
       expect.stringMatching(
         new RegExp(
-          `^npx cdk bootstrap aws://${ACCOUNT}/us-east-1 --app cdk.out/deploy-personal --qualifier listora --toolkit-stack-name CDKToolkit-listora --cloudformation-execution-policies ${POLICY_ARN} --termination-protection --profile p `,
+          `^npx cdk bootstrap aws://${ACCOUNT}/us-east-1 --app cdk.out/deploy-personal --qualifier listora --toolkit-stack-name CDKToolkit-listora --cloudformation-execution-policies ${POLICY_ARN} --termination-protection --profile listora-deploy-cdk `,
         ),
       ),
+    );
+    // cdk gets the profile's credentials from the AWS CLI through a private config, which
+    // names the CLI command but holds no credentials.
+    expect(run.calls).toContain('config: [profile listora-deploy-cdk]');
+    expect(run.calls).toContainEqual(
+      expect.stringMatching(
+        /^config: credential_process = env AWS_CONFIG_FILE=".+" aws configure export-credentials --profile p --format process$/,
+      ),
+    );
+    expect(run.calls.filter((call) => call.startsWith('config: '))).not.toContainEqual(
+      expect.stringMatching(/aws_access_key_id|aws_secret_access_key|aws_session_token/i),
     );
   }, 120_000);
 
