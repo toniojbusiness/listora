@@ -188,7 +188,7 @@ Xcode derives every smaller size from them:
 
 The Share Extension has no icon of its own; the share sheet shows the containing app's icon.
 
-The current icon is a placeholder: a price tag on the brand teal, drawn by
+The current icon is a placeholder: a price tag on teal (the first brand color), drawn by
 `Tools/generate-app-icon.swift`. To change it, edit that tool and run `make ios-app-icon`. To
 ship a real design, export the three PNGs above from the design file, replace the files (keep
 the names, or update `Contents.json`), delete the tool and the `ios-app-icon` target, and run
@@ -199,7 +199,8 @@ the names, or update `Contents.json`), delete the tool and the `ios-app-icon` ta
 The visual language (palette, type scale, spacing, motion, haptics, components) and the UI audit
 are in [docs/features/design.md](../../docs/features/design.md). `make ios-screenshots
 IOS_SIMULATOR='<name>'` runs `ScreenshotTourUITests`, which visits every screen against
-`StubAPIServer` and the fake camera, once each in light and dark mode at the default and the
+`StubAPIServer` and the fake camera (the review flow against the local stack, which the target
+starts, like `ios-test`), once each in light and dark mode at the default and the
 largest accessibility text size, and writes PNGs to `.build/ios/screenshots/<variant>/` (set
 `IOS_SCREENSHOT_DIR` to write elsewhere). It switches the simulator's appearance and text size
 and puts them back afterwards. `make ios-test` skips the tour, which runs only when the test

@@ -41,10 +41,15 @@ private struct MarketplaceCard: View {
     let isEnabled: Bool
     let perform: (MarketplaceRowState.Action) -> Void
     let loadEvents: (String) async -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        // The price under the name at accessibility sizes, so neither breaks mid-word.
+        let heading = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xs))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: Spacing.sm))
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(alignment: .center, spacing: Spacing.sm) {
+            heading {
                 IconTile(
                     monogram: String(row.name.prefix(1)),
                     tone: row.tone == .success ? .success : nil,
@@ -59,11 +64,12 @@ private struct MarketplaceCard: View {
                         .font(Typography.footnote)
                         .foregroundStyle(Palette.textSecondary)
                 }
-                Spacer(minLength: Spacing.xs)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 if let price = row.priceLabel {
                     Text(price)
                         .font(Typography.price)
                         .foregroundStyle(Palette.textPrimary)
+                        .fixedSize()
                         .accessibilityLabel("Listed at \(price)")
                         .accessibilityIdentifier("marketplace.\(row.id).price")
                 }

@@ -8,52 +8,78 @@ struct SavedItemView: View {
     let onDone: () -> Void
 
     var body: some View {
+        CenteredScroll { content }
+            .background(Palette.background)
+            .navigationTitle("Saved")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
+            .bottomActionBar {
+                Button("Done", action: onDone)
+                    .buttonStyle(.listoraPrimary)
+                    .accessibilityIdentifier("saved.done")
+            }
+            .sensoryFeedback(.success, trigger: saved.sku)
+    }
+
+    private var content: some View {
         VStack(spacing: Spacing.lg) {
-            Spacer(minLength: 0)
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 56, weight: .regular))
-                .foregroundStyle(Palette.success)
-                .accessibilityHidden(true)
+            IconTile(systemImage: "checkmark", tone: .success, size: .hero)
             VStack(spacing: Spacing.xs) {
                 Text("Saved to inventory")
                     .font(Typography.title)
                     .foregroundStyle(Palette.textPrimary)
                     .accessibilityAddTraits(.isHeader)
-                Text(saved.sku)
-                    .font(Typography.largeTitle.monospacedDigit())
-                    .foregroundStyle(Palette.textPrimary)
-                    .textSelection(.enabled)
-                    .accessibilityLabel("SKU \(saved.sku)")
-                    .accessibilityIdentifier("saved.sku")
                 if let title = saved.title {
                     Text(title)
                         .font(Typography.body)
                         .foregroundStyle(Palette.textSecondary)
-                        .lineLimit(2)
+                        .lineLimit(3)
                 }
-                if let price = saved.price {
+            }
+            .multilineTextAlignment(.center)
+            itemCard
+            if let summary = saved.summary {
+                metric(summary)
+            }
+        }
+    }
+
+    /// The SKU to write on the item's tag, and the price it was saved at.
+    private var itemCard: some View {
+        VStack(spacing: Spacing.sm) {
+            VStack(spacing: Spacing.xxs) {
+                Text("SKU")
+                    .font(Typography.eyebrow)
+                    .tracking(0.6)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityHidden(true)
+                Text(saved.sku)
+                    .font(Typography.largeTitle.monospacedDigit())
+                    .foregroundStyle(Palette.textPrimary)
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                    .textSelection(.enabled)
+                    .accessibilityLabel("SKU \(saved.sku)")
+                    .accessibilityIdentifier("saved.sku")
+            }
+            .frame(maxWidth: .infinity)
+            if let price = saved.price {
+                Divider().overlay(Palette.separator.color)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Price")
+                        .font(Typography.body)
+                        .foregroundStyle(Palette.textSecondary)
+                        .accessibilityHidden(true)
+                    Spacer(minLength: Spacing.sm)
                     Text(price)
                         .font(Typography.price)
-                        .foregroundStyle(Palette.brand)
+                        .foregroundStyle(Palette.textPrimary)
                         .accessibilityLabel("Price \(price)")
                         .accessibilityIdentifier("saved.price")
                 }
             }
-            .multilineTextAlignment(.center)
-            if let summary = saved.summary {
-                metric(summary)
-            }
-            Spacer(minLength: 0)
-            Button("Done", action: onDone)
-                .buttonStyle(.listoraPrimary)
-                .accessibilityIdentifier("saved.done")
         }
-        .padding(Spacing.lg)
-        .frame(maxWidth: 480)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Palette.background)
-        .navigationTitle("Saved")
-        .navigationBarTitleDisplayMode(.inline)
+        .cardStyle()
     }
 
     private func metric(_ summary: InteractionSummary) -> some View {
@@ -63,8 +89,11 @@ struct SavedItemView: View {
             "\(seconds) s of your time, \(taps)",
             systemImage: summary.meetsGoal ? "bolt.fill" : "timer",
         )
-        .font(Typography.callout)
-        .foregroundStyle(summary.meetsGoal ? Palette.success : Palette.textSecondary)
+        .font(Typography.subheadline.weight(.semibold))
+        .foregroundStyle(summary.meetsGoal ? Palette.brand : Palette.textSecondary)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.xs)
+        .background(summary.meetsGoal ? Palette.brandSoft : Palette.surfaceSecondary, in: Capsule())
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("saved.metric")
     }

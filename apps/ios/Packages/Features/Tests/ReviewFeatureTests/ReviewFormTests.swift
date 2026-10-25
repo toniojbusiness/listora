@@ -7,6 +7,13 @@ struct ReviewFormTests {
     let form = ReviewForm(item: Fixtures.appliedItem(), result: Fixtures.result())
 
     @Test
+    func `names a detail in a sentence in lowercase, keeping acronyms`() {
+        #expect(ReviewFieldKey.sizeSystem.inlineTitle == "size type")
+        #expect(ReviewFieldKey.upc.inlineTitle == "UPC")
+        #expect(ReviewFieldKey.rnNumber.inlineTitle == "RN number")
+    }
+
+    @Test
     func `puts the low-confidence details first, the least certain at the top`() {
         // Brand 0.45 and colors 0.55 are below 0.6; condition at 0.7 is not.
         #expect(form.attention == [.brand, .colors])

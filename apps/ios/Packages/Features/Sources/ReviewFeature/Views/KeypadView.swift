@@ -39,6 +39,8 @@ struct KeypadView: View {
                 }
             }
         }
+        // Digits stay legible at every size; past this the pad would push the amount off screen.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     @ViewBuilder
@@ -75,5 +77,27 @@ private struct KeypadKeyStyle: ButtonStyle {
         configuration.label
             .foregroundStyle(Palette.textPrimary)
             .opacity(configuration.isPressed ? 0.6 : 1)
+    }
+}
+
+/// The amount being typed on the keypad, large and centered; gray while empty.
+struct AmountDisplay: View {
+    let entry: AmountEntry
+    let label: String
+    let identifier: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Text(entry.display)
+            .font(Typography.priceLarge)
+            .foregroundStyle(entry.isEmpty ? Palette.textSecondary : Palette.textPrimary)
+            .contentTransition(reduceMotion ? .identity : .numericText())
+            .animation(Motion.animation(Motion.snappy, reduceMotion: reduceMotion), value: entry)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .frame(maxWidth: .infinity, minHeight: Layout.buttonHeight)
+            .accessibilityLabel(label)
+            .accessibilityValue(entry.isEmpty ? "None" : entry.display)
+            .accessibilityIdentifier(identifier)
     }
 }
