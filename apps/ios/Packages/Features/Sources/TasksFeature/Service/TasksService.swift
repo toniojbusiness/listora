@@ -5,6 +5,15 @@ import ListoraAPI
 public typealias UserTask = Components.Schemas.UserTask
 typealias Photo = Components.Schemas.Photo
 
+/// What the user's confirmation says besides "done": a list task's new listing link, or a sale
+/// email review's answer (the item that sold, or that none did).
+struct TaskCompletion: Equatable, Sendable {
+    var listingURL: String?
+    var matchedItemID: String?
+    /// None of the user's items sold.
+    var rejectMatch = false
+}
+
 /// The task inbox's calls, returning the contract's types and throwing ``APIFailure`` for every
 /// other answer. A protocol so the models' tests run against a fake. Only the server finishes a
 /// task: these calls send the user's confirmation, and the screens show what the server answers.
@@ -12,8 +21,10 @@ protocol TasksService: Sendable {
     /// Open tasks, urgent first, then oldest first; `itemID` narrows them to one item.
     func openTasks(itemID: String?) async throws(APIFailure) -> [UserTask]
     func task(id: String) async throws(APIFailure) -> UserTask
-    /// The user's confirmation that they did the task; `listingURL` links a new listing.
-    func complete(taskID: String, listingURL: String?, idempotencyKey: String) async throws(APIFailure) -> UserTask
+    /// The user's confirmation that they did the task; a listing link links a new listing, and a
+    /// review's answer records the sale of the item they picked (or nothing).
+    func complete(taskID: String, completion: TaskCompletion, idempotencyKey: String) async throws(APIFailure)
+        -> UserTask
     /// The user gives up on the task; its operation fails with a Retry.
     func dismiss(taskID: String, idempotencyKey: String) async throws(APIFailure) -> UserTask
 }
@@ -55,12 +66,18 @@ struct APITasksService: TasksService {
         }
     }
 
-    func complete(taskID: String, listingURL: String?, idempotencyKey: String) async throws(APIFailure) -> UserTask {
+    func complete(taskID: String, completion: TaskCompletion, idempotencyKey: String) async throws(APIFailure)
+        -> UserTask
+    {
         let output = try await call {
             try await client.completeTask(
                 path: .init(taskId: taskID),
                 headers: .init(idempotencyKey: idempotencyKey),
-                body: .json(.init(externalUrl: listingURL)),
+                body: .json(.init(
+                    externalUrl: completion.listingURL,
+                    matchedItemId: completion.matchedItemID,
+                    rejectMatch: completion.rejectMatch ? true : nil,
+                )),
             )
         }
         switch output {

@@ -30,6 +30,8 @@ public final class LinkAccountsModel {
     public private(set) var progress: [String: LinkProgress] = [:]
     /// The marketplace whose sign-in page is open.
     public var signingIn: MarketplaceLink?
+    /// The sale emails section; nil where the screen shows none.
+    public let saleEmails: SaleEmailsModel?
 
     private let service: any MarketplaceSessionService
     private let makeIdempotencyKey: @Sendable () -> String
@@ -42,6 +44,7 @@ public final class LinkAccountsModel {
 
     public init(
         service: any MarketplaceSessionService,
+        saleEmails: SaleEmailsModel? = nil,
         makeIdempotencyKey: @escaping @Sendable () -> String = { UUID().uuidString },
         pollInterval: Duration = .seconds(3),
         maxPolls: Int = 100,
@@ -49,6 +52,7 @@ public final class LinkAccountsModel {
         now: @escaping @Sendable () -> Date = { Date() },
     ) {
         self.service = service
+        self.saleEmails = saleEmails
         self.makeIdempotencyKey = makeIdempotencyKey
         self.pollInterval = pollInterval
         self.maxPolls = maxPolls

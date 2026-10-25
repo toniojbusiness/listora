@@ -16,6 +16,10 @@ flow end to end.
 3. The row shows `Checking...` until the browser runner has confirmed that the marketplace
    accepts the session, then `Linked`. If it does not, the row says why and offers Relink.
 
+Below the marketplaces, the **Sale emails** section shows the forwarding address that catches
+their sold emails, how to set forwarding up, the email provider's confirmation code, and "Ask
+before delisting" ([email-sales.md](email-sales.md)).
+
 Listora never sees the password: it is typed into the marketplace's page, the app never reads
 the page or runs a script in it, and only the site's cookies are handed over. Listora cannot and
 does not read sessions from the marketplaces' own iPhone apps.

@@ -710,6 +710,22 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/tasks/{taskId}/dismiss`.
     /// - Remark: Generated from `#/paths//v1/tasks/{taskId}/dismiss/post(dismissTask)`.
     func dismissTask(_ input: Operations.DismissTask.Input) async throws -> Operations.DismissTask.Output
+    /// Get the sale email forwarding address and its status
+    ///
+    /// The account's forwarding address (created on first use), the setup steps, the provider's
+    /// forwarding confirmation while it waits, and the "ask before auto-delist" setting.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sale-emails`.
+    /// - Remark: Generated from `#/paths//v1/sale-emails/get(getSaleEmails)`.
+    func getSaleEmails(_ input: Operations.GetSaleEmails.Input) async throws -> Operations.GetSaleEmails.Output
+    /// Replace the sale email setting
+    ///
+    /// Turns "ask before auto-delist" on or off for sales found by email.
+    ///
+    /// - Remark: HTTP `PUT /v1/sale-emails/settings`.
+    /// - Remark: Generated from `#/paths//v1/sale-emails/settings/put(replaceSaleEmailSettings)`.
+    func replaceSaleEmailSettings(_ input: Operations.ReplaceSaleEmailSettings.Input) async throws -> Operations.ReplaceSaleEmailSettings.Output
     /// Get what needs the seller today
     ///
     /// The Today screen: one card per thing that needs the seller (items to ship, delists that
@@ -1991,6 +2007,32 @@ extension APIProtocol {
         try await dismissTask(Operations.DismissTask.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Get the sale email forwarding address and its status
+    ///
+    /// The account's forwarding address (created on first use), the setup steps, the provider's
+    /// forwarding confirmation while it waits, and the "ask before auto-delist" setting.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sale-emails`.
+    /// - Remark: Generated from `#/paths//v1/sale-emails/get(getSaleEmails)`.
+    public func getSaleEmails(headers: Operations.GetSaleEmails.Input.Headers = .init()) async throws -> Operations.GetSaleEmails.Output {
+        try await getSaleEmails(Operations.GetSaleEmails.Input(headers: headers))
+    }
+    /// Replace the sale email setting
+    ///
+    /// Turns "ask before auto-delist" on or off for sales found by email.
+    ///
+    /// - Remark: HTTP `PUT /v1/sale-emails/settings`.
+    /// - Remark: Generated from `#/paths//v1/sale-emails/settings/put(replaceSaleEmailSettings)`.
+    public func replaceSaleEmailSettings(
+        headers: Operations.ReplaceSaleEmailSettings.Input.Headers = .init(),
+        body: Operations.ReplaceSaleEmailSettings.Input.Body
+    ) async throws -> Operations.ReplaceSaleEmailSettings.Output {
+        try await replaceSaleEmailSettings(Operations.ReplaceSaleEmailSettings.Input(
+            headers: headers,
+            body: body
         ))
     }
     /// Get what needs the seller today

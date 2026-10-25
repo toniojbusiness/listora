@@ -23,6 +23,7 @@ import { API_FEATURES, type ApiRouteContext } from './features.ts';
 import { registerHealthRoutes, type HealthDependencies } from './health.ts';
 import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
+import type { SaleEmailsDependencies } from './sale-emails/routes.ts';
 import { registerLocalStorageRoutes } from './storage/local-routes.ts';
 import { SessionPhotoUploads } from './uploads/uploads.ts';
 import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
@@ -52,6 +53,8 @@ export interface AppDependencies extends HealthDependencies {
   marketplaceSessions?: MarketplaceSessionsDependencies;
   /** eBay's notification endpoint (`/webhooks/ebay`); not served without it. */
   ebayWebhook?: EbayWebhookDependencies;
+  /** Email sale detection's settings; defaults to none (no forwarding address is shown). */
+  saleEmails?: SaleEmailsDependencies;
   /** Where attached photo files come from; defaults to upload sessions in `storage`. */
   uploads?: PhotoUploads;
   /** The clock upload sessions expire by. */
@@ -130,6 +133,7 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
       profiles: loadAutomationSettings({}).profiles,
     },
     ...(deps.ebayWebhook === undefined ? {} : { ebayWebhook: deps.ebayWebhook }),
+    saleEmails: deps.saleEmails ?? { ingest: { driver: 'off' } },
     now,
   };
   // Each feature folder's routes (features.ts), so a new feature never edits this file.

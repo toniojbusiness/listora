@@ -314,11 +314,11 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
   describe('email', () => {
     const t = template(shape, 'email');
 
-    it('keeps raw sale email in a private bucket for 90 days', () => {
+    it('keeps raw sale email in a private bucket, at most 14 days if it is never processed', () => {
       t.hasResourceProperties('AWS::S3::Bucket', {
         PublicAccessBlockConfiguration: Match.objectLike({ BlockPublicPolicy: true }),
         LifecycleConfiguration: {
-          Rules: [Match.objectLike({ ExpirationInDays: 90, Prefix: 'inbound/' })],
+          Rules: [Match.objectLike({ ExpirationInDays: 14, Prefix: 'inbound/' })],
         },
       });
     });
@@ -339,7 +339,14 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
             Recipients: [`in.${dns.domain}`],
             ScanEnabled: true,
             TlsPolicy: 'Require',
-            Actions: [{ S3Action: Match.objectLike({ ObjectKeyPrefix: 'inbound/' }) }],
+            Actions: [
+              {
+                S3Action: Match.objectLike({
+                  ObjectKeyPrefix: 'inbound/',
+                  TopicArn: { Ref: Match.stringLikeRegexp('^SaleEmailTopic') },
+                }),
+              },
+            ],
           }),
         });
         t.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: dns.domain });
@@ -356,6 +363,35 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           },
         });
       });
+
+      it('notifies the worker of each stored message: SES publishes to a topic, raw into an encrypted queue', () => {
+        t.hasResourceProperties('AWS::SNS::TopicPolicy', {
+          PolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Action: 'sns:Publish',
+                Principal: { Service: 'ses.amazonaws.com' },
+                Condition: { StringEquals: { 'aws:SourceAccount': target.account } },
+              }),
+            ]),
+          },
+        });
+        t.hasResourceProperties('AWS::SNS::Subscription', {
+          Protocol: 'sqs',
+          RawMessageDelivery: true,
+          TopicArn: { Ref: Match.stringLikeRegexp('^SaleEmailTopic') },
+        });
+        t.hasResourceProperties('AWS::SQS::Queue', {
+          QueueName: `listora-${environment}-sale-email`,
+          SqsManagedSseEnabled: true,
+          VisibilityTimeout: 300,
+          RedrivePolicy: Match.objectLike({ maxReceiveCount: 5 }),
+        });
+        t.hasResourceProperties('AWS::SQS::Queue', {
+          QueueName: `listora-${environment}-sale-email-dead-letters`,
+          MessageRetentionPeriod: 14 * 24 * 3600,
+        });
+      });
     } else {
       it('receives no email without a domain: no domain identity, MX record, or receipt rule', () => {
         expect(
@@ -367,6 +403,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           'AWS::SES::ReceiptRuleSet',
           'AWS::SES::ReceiptRule',
           'AWS::Route53::RecordSet',
+          'AWS::SNS::Topic',
+          'AWS::SQS::Queue',
         ]) {
           t.resourceCountIs(type, 0);
         }
@@ -655,6 +693,9 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           Object.keys(
             containerEnvironment(service, 'postgres://', {
               ...ANY_RESOURCES,
+              ...(dns === undefined
+                ? {}
+                : { saleEmail: { inboundDomain: '', queueUrl: '', bucket: '', region: '' } }),
               signIn: signInResources(
                 settings.signIn,
                 settings.signIn.via === 'owner-pool'
@@ -669,6 +710,28 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(JSON.stringify(env.find((entry) => entry.Name === 'TOKEN_KMS_KEY_ID'))).toContain(
           'TokenKey',
         );
+      }
+    });
+
+    it('gives api and worker the sale email queue and bucket where mail is received, else none', () => {
+      for (const service of SERVICE_NAMES) {
+        const env = Object.fromEntries(
+          (container(service)['Environment'] as { Name: string; Value: unknown }[]).map((entry) => [
+            entry.Name,
+            entry.Value,
+          ]),
+        );
+        if (dns === undefined) {
+          expect(env['EMAIL_INGEST']).toBe('off');
+        } else {
+          expect(env).toMatchObject({
+            EMAIL_INGEST: 'ses',
+            EMAIL_INBOUND_DOMAIN: `in.${dns.domain}`,
+            EMAIL_SES_REGION: target.region,
+          });
+          expect(JSON.stringify(env['EMAIL_SES_QUEUE_URL'])).toContain('SaleEmailQueue');
+          expect(JSON.stringify(env['EMAIL_SES_BUCKET'])).toContain('InboundMail');
+        }
       }
     });
 
@@ -795,7 +858,14 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(policy).toContain('Photos');
         // Raw sale email, and starting the browser runner, only for a task that runs the worker.
         expect(policy.includes('InboundMail')).toBe(containers.includes('worker'));
-        if (containers.includes('worker')) expect(policy).toContain('/inbound/*');
+        if (containers.includes('worker')) {
+          expect(policy).toContain('/inbound/*');
+          expect(policy).toContain('s3:DeleteObject*');
+        }
+        // Reading the sale email queue: the worker, and only where mail is received.
+        expect(policy.includes('sqs:ReceiveMessage')).toBe(
+          containers.includes('worker') && dns !== undefined,
+        );
         expect(policy.includes('ecs:UpdateService')).toBe(containers.includes('worker'));
         // Every task seals; only the worker opens marketplace tokens, and never a browser session
         // (only the runner opens those).

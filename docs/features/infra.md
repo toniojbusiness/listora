@@ -26,7 +26,8 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
   database password reaches the processes only as `PGPASSWORD` from the RDS secret.
 - **Data.** RDS PostgreSQL 18 (Multi-AZ in prod; deletion protection in prod and personal), a
   private photo bucket whose `public/` prefix CloudFront serves by exact key (at its
-  `*.cloudfront.net` domain; the bucket policy lets CloudFront read only `public/`), SES inbound mail for `in.<domain>` stored in a private bucket,
+  `*.cloudfront.net` domain; the bucket policy lets CloudFront read only `public/`), SES inbound mail for `in.<domain>` stored in a private bucket and announced to the worker's
+  queue ([email-sales.md](email-sales.md)),
   and a KMS key for the envelope encryption of marketplace credentials (`TOKEN_KMS_KEY_ID`:
   every task may `GenerateDataKey`; the worker may also `Decrypt` OAuth tokens, and the runner
   browser sessions, each only its own purpose).

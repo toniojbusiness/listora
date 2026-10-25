@@ -85,7 +85,11 @@ UserTask:
       $ref: './common.yaml#/Id'
     saleId:
       $ref: './common.yaml#/Id'
-      description: For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
+      description: |
+        For a completed `confirm_sale` or `review_match` of a sale email, the sale it recorded;
+        for `resolve_double_sale`, the later sale.
+    saleEmail:
+      $ref: '#/UserTaskSaleEmail'
     deepLink:
       type: string
       format: uri
@@ -98,6 +102,54 @@ UserTask:
       $ref: './common.yaml#/Timestamp'
     completedAt:
       $ref: './common.yaml#/Timestamp'
+UserTaskSaleEmailReason:
+  description: A `KnownUserTaskSaleEmailReason`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownUserTaskSaleEmailReason'
+    - type: string
+      maxLength: 64
+KnownUserTaskSaleEmailReason:
+  type: string
+  description: |
+    Why a sale email waits for the user:
+
+    - `ask_before_delist`: it matched `item`, and the user asked to confirm sale emails first
+      (a `confirm_sale` task). Completing it records the sale and delists the item everywhere
+      else; dismissing it records nothing.
+    - `ambiguous_match`: it could be any of `candidates` (a `review_match` task).
+    - `unknown_format`: Listora cannot read it (a `review_match` task, no `candidates`).
+  enum: [ask_before_delist, ambiguous_match, unknown_format]
+UserTaskSaleEmail:
+  type: object
+  description: |
+    What a forwarded sale email said, for a `confirm_sale` or `review_match` task: its parsed
+    details and a short excerpt with the buyer's details removed (Listora keeps nothing more of
+    the email).
+  required: [reason, receivedAt, excerpt, candidates]
+  properties:
+    reason:
+      $ref: '#/UserTaskSaleEmailReason'
+    receivedAt:
+      $ref: './common.yaml#/Timestamp'
+    excerpt:
+      type: string
+      maxLength: 500
+    title:
+      type: string
+      maxLength: 200
+      description: The item's title as the email gave it.
+    salePrice:
+      $ref: './common.yaml#/Money'
+    soldAt:
+      $ref: './common.yaml#/Timestamp'
+    orderNumber:
+      type: string
+      maxLength: 64
+    candidates:
+      type: array
+      description: The items an ambiguous email could be; the user picks one with `matchedItemId`.
+      items:
+        $ref: '#/UserTaskItem'
 UserTaskItem:
   type: object
   description: The item a task is about, enough to show it in the task inbox.
@@ -124,8 +176,11 @@ UserTaskCompletion:
       it is not a listing on that marketplace, and `409 already_exists` when another listing
       already has it.
     - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
-      `rejectMatch: true` when nothing matches. Exactly one of the two is required.
-    - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+      `rejectMatch: true` when nothing matches. Exactly one of the two is required. For a sale
+      email, the chosen item's sale is recorded and delisted everywhere else; `422` when the
+      email shows no price and the item has no listing price on that marketplace.
+    - `confirm_sale`: optional `saleCorrection` when the detected details are wrong. For a sale
+      email, completing it records the sale and delists the item everywhere else.
     - `delist_manually`, `edit_manually`, `reconnect`, `resolve_double_sale`: nothing besides
       `note`.
     - Every kind: optional `note`.

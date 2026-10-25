@@ -139,6 +139,25 @@
               ]
             },
             {
+              "Action": "s3:DeleteObject*",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-personal-email",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputFnGetAttInboundMailDA244C94Arn018032F9"
+                      }
+                    },
+                    "/inbound/*"
+                  ]
+                ]
+              }
+            },
+            {
               "Action": "ecs:UpdateService",
               "Effect": "Allow",
               "Resource": "arn:aws:ecs:us-east-1:333333333333:service/listora-personal/runner",
@@ -305,6 +324,10 @@
                     "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
                   }
                 }
+              },
+              {
+                "Name": "EMAIL_INGEST",
+                "Value": "off"
               }
             ],
             "Essential": true,
@@ -505,6 +528,10 @@
                     "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
                   }
                 }
+              },
+              {
+                "Name": "EMAIL_INGEST",
+                "Value": "off"
               },
               {
                 "Name": "COGNITO_USER_POOL_ID",
