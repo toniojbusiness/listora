@@ -1,0 +1,89 @@
+name: Nightly iOS
+
+# Cost rules (the CI section of README.md): macOS minutes bill at 10x Linux minutes, so the iOS
+# build never runs on pull requests or branch pushes; workers run `make ios-test` locally before
+# pushing. This workflow is the safety net: once a night on `main`, and by hand from the Actions
+# tab. A scheduled run skips the macOS job when `main` has not moved since the last successful
+# nightly run; a manual run always builds.
+on:
+  schedule:
+    # 07:17 UTC, off the top of the hour when GitHub delays scheduled runs most.
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  changed:
+    name: Check main moved since the last success
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # Reads this workflow's earlier runs.
+      actions: read
+    outputs:
+      build: ${{ steps.check.outputs.build }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != schedule ]]; then
+            echo "Started by hand; building."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/nightly.yml/runs?branch=main&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // ""')
+          if [[ "$last" == "$GITHUB_SHA" ]]; then
+            echo "main is still at $GITHUB_SHA, which the last successful nightly run built; skipping."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "main moved from ${last:-nothing} to $GITHUB_SHA; building."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  ios:
+    name: iOS lint, build and test (macOS)
+    needs: changed
+    if: needs.changed.outputs.build == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      # Pinned to the Xcode used for local development (README prerequisites).
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Show Xcode and simulators
+        run: |
+          xcodebuild -version
+          xcrun simctl list devices available | grep iPhone
+      - name: Install XcodeGen, SwiftLint, and SwiftFormat
+        run: brew install xcodegen swiftlint swiftformat
+      # SwiftPM checkouts for the app's package graph. DerivedData is not cached: Xcode keys
+      # incremental builds on file timestamps, which every fresh checkout resets.
+      - name: Cache SwiftPM checkouts for the iOS app
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build/ios/SourcePackages
+            .build/ios/PackageCache
+          key: ios-swiftpm-${{ runner.os }}-xcode-26.3-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/*/Package.swift', 'apps/ios/**/Package.resolved') }}
+      - run: make ios-lint
+      - run: make ios-test
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-test-results
+          path: .build/ios/Test.xcresult
+          retention-days: 7

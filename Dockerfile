@@ -2,7 +2,7 @@
 # The Listora application image. One image runs both services; ECS chooses the entry point
 # per service (infra/src/containers.ts). Node runs the TypeScript sources directly, so there is
 # no build stage: install the production dependencies and copy the sources.
-# Built and pushed by .github/workflows/deploy.yml; CI builds and smoke-tests it on every PR.
+# Built and pushed by .github/workflows/deploy.yml; CI builds and smoke-tests it when an image input changes.
 FROM node:26-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec
 
 ENV NODE_ENV=production
