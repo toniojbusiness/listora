@@ -10,6 +10,7 @@ import type { Marketplace } from '@listora/db';
 import type { AutomatedMarketplace } from '@listora/marketplaces';
 
 import { DEPOP_CHALLENGE_SIGNS, DEPOP_PRIVATE_SELECTORS } from './depop/site.ts';
+import { EBAY_CHALLENGE_SIGNS, EBAY_PRIVATE_SELECTORS } from './ebay/site.ts';
 import { MERCARI_CHALLENGE_SIGNS, MERCARI_PRIVATE_SELECTORS } from './mercari/site.ts';
 
 /** A closed range of milliseconds; each wait picks uniformly inside it. */
@@ -39,6 +40,8 @@ export interface ChallengeSigns {
   readonly loginPaths: readonly RegExp[];
   /** Main-frame paths of its verification steps (a code sent by email or text). */
   readonly verificationPaths: readonly RegExp[];
+  /** Main-frame paths of its own bot-check or CAPTCHA pages (eBay's `/splashui/challenge`). */
+  readonly botCheckPaths: readonly RegExp[];
   /** Elements only its CAPTCHA or bot-check pages show. */
   readonly challengeSelectors: readonly string[];
 }
@@ -85,10 +88,11 @@ export const LIMITS_CEILING: RunLimits = { runsPerHour: 120, runsPerDay: 1_000 }
 const COMMON_SIGNS: ChallengeSigns = {
   loginPaths: [/^\/(login|log-in|signin|sign-in|sign_in)(\/|$)/i],
   verificationPaths: [/^\/(verify|verification|two-factor|2fa|otp|challenge)(\/|$)/i],
+  botCheckPaths: [],
   challengeSelectors: [],
 };
 
-const PROFILES: Readonly<Record<Exclude<Marketplace, 'ebay'>, AutomationProfile>> = {
+const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
   poshmark: {
     marketplace: 'poshmark',
     origins: ['https://poshmark.com', 'https://www.poshmark.com'],
@@ -119,13 +123,30 @@ const PROFILES: Readonly<Record<Exclude<Marketplace, 'ebay'>, AutomationProfile>
     challenges: DEPOP_CHALLENGE_SIGNS,
     privateSelectors: DEPOP_PRIVATE_SELECTORS,
   },
+  ebay: {
+    marketplace: 'ebay',
+    // eBay's sign-in pages are on signin.ebay.com: a session eBay rejected is sent there, and
+    // is stopped as a login page rather than as a page outside eBay.
+    origins: ['https://www.ebay.com', 'https://ebay.com', 'https://signin.ebay.com'],
+    cookieDomains: ['ebay.com'],
+    loginUrl: 'https://signin.ebay.com/signin/',
+    pacing: DEFAULT_PACING,
+    limits: DEFAULT_LIMITS,
+    challenges: EBAY_CHALLENGE_SIGNS,
+    privateSelectors: EBAY_PRIVATE_SELECTORS,
+  },
 };
 
-/** The marketplaces browser automation may serve: every one without a usable API. */
+/**
+ * The marketplaces browser automation may serve, in the order Link accounts lists them: every
+ * one without a usable API, and eBay until Listora's eBay developer keys exist (an `api`
+ * connection is never automated).
+ */
 export const AUTOMATED_MARKETPLACES = [
   'poshmark',
   'mercari',
   'depop',
+  'ebay',
 ] as const satisfies readonly AutomatedMarketplace[];
 
 export function isAutomatedMarketplace(
@@ -152,7 +173,7 @@ export function standInProfile(base: AutomationProfile, siteUrl: string): Automa
     origins: [site.origin],
     cookieDomains: [site.hostname],
     // The marketplace's own sign-in path, on the stand-in (`/login` on Poshmark, `/login/` on
-    // Mercari and Depop).
+    // Mercari and Depop, `/signin/` on eBay).
     loginUrl: new URL(new URL(base.loginUrl).pathname, site.origin).href,
   };
 }

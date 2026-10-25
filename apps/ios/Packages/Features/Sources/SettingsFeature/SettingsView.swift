@@ -86,7 +86,8 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
                             NavigationLink(value: SettingsDestination.linkAccounts) {
                                 ListRow(
                                     "Link accounts",
-                                    subtitle: "Sign in on Poshmark, Mercari, and Depop for Listora to automate them.",
+                                    subtitle: "Sign in on Poshmark, Mercari, Depop, and eBay "
+                                        + "for Listora to automate them.",
                                     systemImage: "person.badge.key",
                                 )
                             }

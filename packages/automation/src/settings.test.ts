@@ -140,4 +140,31 @@ describe('loadAutomationSettings', () => {
       'FAKE_DEPOP_SITE_URL',
     );
   });
+
+  it('points eBay at the fake eBay site, which wins over the fake site, local only', () => {
+    const settings = loadAutomationSettings({
+      FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400',
+      FAKE_EBAY_SITE_URL: 'http://127.0.0.1:4800',
+    });
+    expect(settings.fakeEbaySiteUrl).toBe('http://127.0.0.1:4800');
+    expect(settings.profiles.ebay).toMatchObject({
+      origins: ['http://127.0.0.1:4800'],
+      cookieDomains: ['127.0.0.1'],
+      // eBay's own sign-in path, on the stand-in.
+      loginUrl: 'http://127.0.0.1:4800/signin/',
+    });
+    expect(settings.profiles.depop.origins).toEqual(['http://127.0.0.1:4400']);
+    expect(
+      loadAutomationSettings({ FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400' }).profiles.ebay
+        .loginUrl,
+    ).toBe('http://127.0.0.1:4400/signin/');
+    expect(loadAutomationSettings({}).profiles.ebay).toMatchObject({
+      origins: ['https://www.ebay.com', 'https://ebay.com', 'https://signin.ebay.com'],
+      cookieDomains: ['ebay.com'],
+      loginUrl: 'https://signin.ebay.com/signin/',
+    });
+    expect(() => loadAutomationSettings({ FAKE_EBAY_SITE_URL: 'https://www.ebay.com' })).toThrow(
+      'FAKE_EBAY_SITE_URL',
+    );
+  });
 });

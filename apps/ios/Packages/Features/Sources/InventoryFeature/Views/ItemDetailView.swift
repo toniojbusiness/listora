@@ -256,10 +256,15 @@ struct ItemDetailView: View {
 /// Title, SKU, status, and list price.
 private struct ItemHeader: View {
     let item: Item
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        // The price under the title at accessibility sizes, so neither breaks mid-word.
+        let heading = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xxs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spacing.sm))
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            heading {
                 Text(item.details.title ?? "Untitled item")
                     .font(Typography.title)
                     .foregroundStyle(Palette.textPrimary)
@@ -270,11 +275,13 @@ private struct ItemHeader: View {
                 if let price = item.details.listPrice {
                     Text(Formatting.money(price))
                         .font(Typography.price)
-                        .foregroundStyle(Palette.brand)
+                        .foregroundStyle(Palette.textPrimary)
+                        .fixedSize()
                         .accessibilityLabel("List price \(Formatting.money(price))")
                 }
             }
-            HStack(spacing: Spacing.xs) {
+            // The chip wraps under the SKU rather than breaking it.
+            FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
                 Text(item.sku)
                     .font(Typography.subheadline.monospacedDigit())
                     .foregroundStyle(Palette.textSecondary)

@@ -160,44 +160,58 @@ struct ItemRoute: Hashable {
     let itemID: String
 }
 
-/// One item: cover photo, title, SKU, status, price, and its status on each marketplace.
+/// One item: cover photo, title, SKU, status, price, and its status on each marketplace. The title
+/// gets the row's full width; the price sits at the end of the SKU line. At accessibility sizes
+/// the photo goes above the text and the price under the SKU, so nothing breaks mid-word.
 struct InventoryRow: View {
     let item: ItemSummary
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(alignment: .top, spacing: Spacing.sm) {
-            PhotoView(url: item.coverPhoto?.urls?.thumbnail, cornerRadius: Radius.small)
+        let isAccessibilitySize = dynamicTypeSize.isAccessibilitySize
+        let outer = isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.sm))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: Spacing.sm))
+        let meta = isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xxs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spacing.xs))
+        outer {
+            PhotoView(url: item.coverPhoto?.urls?.thumbnail, cornerRadius: Radius.medium)
                 .frame(width: 72, height: 72)
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+            HStack(alignment: .top, spacing: Spacing.xs) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(item.title ?? "Untitled item")
                         .font(Typography.headline)
                         .foregroundStyle(Palette.textPrimary)
-                        .lineLimit(2)
+                        .lineLimit(isAccessibilitySize ? nil : 2)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if let price = item.listPrice {
-                        Text(Formatting.money(price))
-                            .font(Typography.price)
-                            .foregroundStyle(Palette.brand)
-                    }
-                }
-                Text("\(item.sku) · \(item.status.label)")
-                    .font(Typography.footnote.monospacedDigit())
-                    .foregroundStyle(Palette.textSecondary)
-                if !item.listings.isEmpty {
-                    FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
-                        ForEach(item.listings, id: \.listingId) { listing in
-                            MarketplaceBadge(listing: listing)
+                    meta {
+                        Text("\(item.sku) · \(item.status.label)")
+                            .font(Typography.footnote.monospacedDigit())
+                            .foregroundStyle(Palette.textSecondary)
+                            .frame(maxWidth: isAccessibilitySize ? nil : .infinity, alignment: .leading)
+                        if let price = item.listPrice {
+                            Text(Formatting.money(price))
+                                .font(Typography.headline.monospacedDigit())
+                                .foregroundStyle(Palette.textPrimary)
+                                .fixedSize()
                         }
                     }
-                    .padding(.top, Spacing.xxs)
+                    if !item.listings.isEmpty {
+                        FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
+                            ForEach(item.listings, id: \.listingId) { listing in
+                                MarketplaceBadge(listing: listing)
+                            }
+                        }
+                        .padding(.top, Spacing.xxs)
+                    }
                 }
+                Image(systemName: "chevron.right")
+                    .font(Typography.footnote.weight(.semibold))
+                    .foregroundStyle(Palette.textSecondary)
+                    .padding(.top, Spacing.xxs)
+                    .accessibilityHidden(true)
             }
-            Image(systemName: "chevron.right")
-                .font(Typography.footnote.weight(.semibold))
-                .foregroundStyle(Palette.textSecondary)
-                .padding(.top, Spacing.xxs)
-                .accessibilityHidden(true)
         }
         .cardStyle(.outlined, padding: Spacing.sm)
         .contentShape(Rectangle())
@@ -214,6 +228,7 @@ struct MarketplaceBadge: View {
             Text(Formatting.marketplaceName(listing.marketplace.id))
                 .font(Typography.label)
                 .foregroundStyle(Palette.textPrimary)
+                .fixedSize()
             StatusBadge(listing.statusDisplay.label, tone: StatusTone(listing.statusDisplay.tone))
         }
         .accessibilityElement(children: .combine)

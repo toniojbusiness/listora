@@ -10694,9 +10694,11 @@ public enum Operations {
     }
     /// List the marketplaces linked by signing in
     ///
-    /// One entry per marketplace whose connection is a browser session (`connect: session`):
-    /// Poshmark, Mercari, and Depop. Each says whether it is linked, where the app opens the
-    /// marketplace's sign-in page, and which cookies to hand over. Not paginated.
+    /// One entry per marketplace whose connection can be a browser session (`connect:
+    /// session`): Poshmark, Mercari, Depop, and eBay (Depop and eBay until their APIs are
+    /// connected; an API connection is `api_connected`). Each says whether it is linked, where
+    /// the app opens the marketplace's sign-in page, and which cookies to hand over. Not
+    /// paginated.
     ///
     ///
     /// - Remark: HTTP `GET /v1/marketplace-sessions`.
@@ -10829,7 +10831,7 @@ public enum Operations {
     /// Get one marketplace's sign-in link
     ///
     /// The app polls this after `linkMarketplaceSession` until `status` is no longer
-    /// `checking`. `404` for a marketplace that is not linked by signing in (eBay).
+    /// `checking`. `404` for a marketplace that is not linked by signing in.
     ///
     ///
     /// - Remark: HTTP `GET /v1/marketplace-sessions/{marketplace}`.

@@ -46,11 +46,16 @@ public struct ColorToken: Equatable, Sendable, ShapeStyle {
     }
 
     public var color: Color {
+        Color(uiColor: uiColor)
+    }
+
+    /// The token as a `UIColor` that adapts to the appearance.
+    var uiColor: UIColor {
         let light = light.uiColor
         let dark = dark.uiColor
-        return Color(uiColor: UIColor { traits in
+        return UIColor { traits in
             traits.userInterfaceStyle == .dark ? dark : light
-        })
+        }
     }
 
     public func resolve(in environment: EnvironmentValues) -> Color {
@@ -63,38 +68,54 @@ public struct ColorToken: Equatable, Sendable, ShapeStyle {
 /// stay consistent. `PaletteTests` checks every text and background pair for WCAG AA contrast
 /// (4.5:1), in both modes.
 ///
-/// The brand is a deep teal. Each status tone has a strong color for text and icons and a soft
-/// color for the background of badges and banners; the strong color is readable on the soft one.
+/// Blush and plum: soft blush tints, a deep plum brand, warm ivory surfaces, and their deep
+/// counterparts in dark mode. Each status tone has a strong color for text and icons and a soft color for the
+/// background of
+/// badges and banners; the strong color is readable on the soft one.
 public enum Palette {
-    // Backgrounds, from the screen up: `background` behind everything, `surface` for cards and
-    // rows, `surfaceSecondary` for wells inside a card (text fields, placeholders, chips).
-    public static let background = ColorToken(light: 0xF4F5F7, dark: 0x0B0D10)
-    public static let surface = ColorToken(light: 0xFFFFFF, dark: 0x16191D)
-    public static let surfaceSecondary = ColorToken(light: 0xEBEDF0, dark: 0x22262C)
-    public static let separator = ColorToken(light: 0xDCDFE4, dark: 0x2C3138)
+    /// Backgrounds, from the screen up: `background` behind everything, `surface` for cards and
+    /// rows, `surfaceSecondary` for wells inside a card (text fields, placeholders, chips).
+    public static let background = ColorToken(light: 0xFBF7F4, dark: 0x161013)
 
-    // Text
-    public static let textPrimary = ColorToken(light: 0x111418, dark: 0xF3F5F7)
-    public static let textSecondary = ColorToken(light: 0x4B5361, dark: 0xA3ABB7)
+    public static let surface = ColorToken(light: 0xFFFDFB, dark: 0x211A1E)
+
+    public static let surfaceSecondary = ColorToken(light: 0xF5ECEA, dark: 0x2D2429)
+
+    public static let separator = ColorToken(light: 0xEADCD8, dark: 0x3A2F35)
+
+    /// Text
+    public static let textPrimary = ColorToken(light: 0x2A1B26, dark: 0xF7EEF2)
+
+    public static let textSecondary = ColorToken(light: 0x6B5864, dark: 0xC4B3BD)
 
     /// Brand
-    public static let brand = ColorToken(light: 0x0B7268, dark: 0x2DD4BF)
-    /// A brand-tinted background: selected chips, icon tiles, highlights.
-    public static let brandSoft = ColorToken(light: 0xDDF3EF, dark: 0x0D3532)
-    public static let onBrand = ColorToken(light: 0xFFFFFF, dark: 0x032B28)
+    public static let brand = ColorToken(light: 0x6E2A5C, dark: 0xE7A3C9)
 
-    // Status, matching the states users see. Only `success` means done, and it is used only for
-    // what an API read-back or the user confirmed (see `StatusBadge`).
-    public static let success = ColorToken(light: 0x157A3E, dark: 0x4ADE80)
-    public static let successSoft = ColorToken(light: 0xE2F5E9, dark: 0x0E3220)
-    public static let warning = ColorToken(light: 0x9A4806, dark: 0xFBBF24)
-    public static let warningSoft = ColorToken(light: 0xFDF0DF, dark: 0x372807)
-    public static let danger = ColorToken(light: 0xB42318, dark: 0xFF8A80)
-    public static let dangerSoft = ColorToken(light: 0xFDE9E7, dark: 0x3D1513)
+    /// A brand-tinted background: selected chips, icon tiles, highlights.
+    public static let brandSoft = ColorToken(light: 0xF6E3EC, dark: 0x43213A)
+
+    public static let onBrand = ColorToken(light: 0xFFFFFF, dark: 0x2E0F25)
+
+    /// Status, matching the states users see. Only `success` means done, and it is used only for
+    /// what an API read-back or the user confirmed (see `StatusBadge`).
+    public static let success = ColorToken(light: 0x2E6B4A, dark: 0x86D3A6)
+
+    public static let successSoft = ColorToken(light: 0xE5F1E9, dark: 0x173224)
+
+    public static let warning = ColorToken(light: 0x8F4A12, dark: 0xF2C27A)
+
+    public static let warningSoft = ColorToken(light: 0xFBEEDD, dark: 0x3B2A12)
+
+    public static let danger = ColorToken(light: 0xA8243B, dark: 0xFF8A7A)
+
+    public static let dangerSoft = ColorToken(light: 0xFBE6EA, dark: 0x47161F)
+
     /// Labels on a `danger` fill (destructive buttons).
-    public static let onDanger = ColorToken(light: 0xFFFFFF, dark: 0x2B0806)
-    public static let info = ColorToken(light: 0x1D5FC2, dark: 0x7CB4FF)
-    public static let infoSoft = ColorToken(light: 0xE6EFFC, dark: 0x12294A)
+    public static let onDanger = ColorToken(light: 0xFFFFFF, dark: 0x3A0A14)
+
+    public static let info = ColorToken(light: 0x3D5585, dark: 0xA9BCF0)
+
+    public static let infoSoft = ColorToken(light: 0xE7ECF6, dark: 0x1E2A45)
 
     // Media: the camera and the crop screen show photos edge to edge on black in both modes, with
     // white controls on top. `scrim` (used translucent) dims the parts of a photo being cut away
@@ -105,5 +126,5 @@ public enum Palette {
 
     /// Shadows under raised elements. Shadows barely show on dark backgrounds, so dark mode relies
     /// on the surfaces' lighter tone and hairline borders instead.
-    public static let shadow = ColorToken(light: 0x0B1F33, dark: 0x000000)
+    public static let shadow = ColorToken(light: 0x2A1B26, dark: 0x000000)
 }

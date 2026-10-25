@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The type scale: SF Pro on Dynamic Type text styles, so every style scales with the user's text
-/// size setting. Titles use the default design so they match system navigation titles.
+/// size setting. The three title styles are New York (serif) for a refined look; everything else,
+/// including prices, stays SF Pro.
 ///
 /// | Style        | Text style   | Weight   | Use                                      |
 /// | ------------ | ------------ | -------- | ---------------------------------------- |
@@ -19,9 +20,10 @@ import SwiftUI
 /// | `price`      | Title 3      | Semibold | Prices in lists, tabular digits          |
 /// | `priceLarge` | Large Title  | Bold     | The price being entered, tabular digits  |
 public enum Typography {
-    public static let largeTitle = Font.largeTitle.weight(.bold)
-    public static let title = Font.title2.weight(.semibold)
-    public static let title3 = Font.title3.weight(.semibold)
+    public static let largeTitle = Font.system(.largeTitle, design: .serif, weight: .bold)
+    public static let title = Font.system(.title2, design: .serif, weight: .semibold)
+    public static let title3 = Font.system(.title3, design: .serif, weight: .semibold)
+
     public static let headline = Font.headline
     public static let body = Font.body
     public static let callout = Font.callout

@@ -129,9 +129,21 @@ struct PricingPresentation: Equatable, Sendable {
         tiers.first { $0.tier == .recommended } ?? tiers.first
     }
 
+    /// The marketplaces whose floor is above `cents`.
+    func floorsAbove(_ cents: Int64) -> [Floor] {
+        floors.filter { cents < $0.cents }
+    }
+
+    /// "Below your floor on eBay" when `cents` is under a marketplace's floor, for a price option.
+    func shortWarning(for cents: Int64) -> String? {
+        let below = floorsAbove(cents)
+        guard !below.isEmpty else { return nil }
+        return "Below your floor on \(below.map(\.name).formatted(.list(type: .and)))"
+    }
+
     /// A warning when `cents` is below a marketplace's floor, naming them.
     func warning(for cents: Int64) -> String? {
-        let below = floors.filter { cents < $0.cents }
+        let below = floorsAbove(cents)
         guard !below.isEmpty else { return nil }
         let names = below.map(\.name).formatted(.list(type: .and))
         return "Below your floor on \(names), so you would make less than your minimum after fees."

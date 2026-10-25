@@ -113,8 +113,8 @@ export interface EnvironmentSettings {
   };
   readonly services: ServiceLayout;
   /**
-   * Size of the on-demand headless-Chromium runner that automates Poshmark, Mercari, and Depop
-   * (decision D1 in docs/features/automation.md): the compute stack's `runner` service, with no
+   * Size of the on-demand headless-Chromium runner that automates Poshmark, Mercari, Depop, and
+   * eBay (decision D1 in docs/features/automation.md): the compute stack's `runner` service, with no
    * task while idle, started by the worker when automated steps or sale checks wait
    * (docs/features/costs.md prices it). Only `cpu` and `memoryMiB` apply: it runs at most one
    * task, and nothing autoscales it.

@@ -25,6 +25,8 @@ struct ReviewFlowView: View {
             .background(Palette.background)
             .navigationTitle(model.item?.sku ?? model.request.sku ?? "Review")
             .navigationBarTitleDisplayMode(.inline)
+            // The flow has its own bottom bars; the tabs come back when it ends.
+            .toolbar(.hidden, for: .tabBar)
             .task { await model.appeared() }
             .measuresInteraction(model)
             .actionErrorAlert(model)
@@ -60,36 +62,28 @@ struct AnalysisProgressView: View {
     let phase: ReviewFlowModel.Phase
 
     var body: some View {
-        VStack(spacing: Spacing.lg) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 40, weight: .regular))
-                .foregroundStyle(Palette.brand)
-                .frame(width: 88, height: 88)
-                .background(Palette.surfaceSecondary, in: Circle())
-                .accessibilityHidden(true)
-            VStack(spacing: Spacing.xs) {
-                Text(title)
-                    .font(Typography.title)
-                    .foregroundStyle(Palette.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                Text(detail)
-                    .font(Typography.callout)
-                    .foregroundStyle(Palette.textSecondary)
+        CenteredScroll {
+            VStack(spacing: Spacing.lg) {
+                IconTile(systemImage: "sparkles", size: .hero)
+                VStack(spacing: Spacing.xs) {
+                    Text(title)
+                        .font(Typography.title)
+                        .foregroundStyle(Palette.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(detail)
+                        .font(Typography.body)
+                        .foregroundStyle(Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .multilineTextAlignment(.center)
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    step("Photos uploaded", state: .done)
+                    step(photosStep, state: photosState)
+                    step("Reading the tags and photos", state: analysisState)
+                }
+                .cardStyle()
             }
-            .multilineTextAlignment(.center)
-            VStack(alignment: .leading, spacing: Spacing.sm) {
-                step("Photos uploaded", state: .done)
-                step(photosStep, state: photosState)
-                step("Reading the tags and photos", state: analysisState)
-            }
-            .cardStyle()
-            ProgressView()
-                .controlSize(.large)
-                .tint(Palette.brand.color)
         }
-        .padding(Spacing.lg)
-        .frame(maxWidth: 480)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("review.progress")
     }
@@ -145,23 +139,25 @@ struct AnalysisProgressView: View {
                 case .done:
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.success)
                 case .running:
-                    ProgressView().controlSize(.small)
+                    ProgressView().controlSize(.small).tint(Palette.info.color)
                 case .waiting:
                     Image(systemName: "circle").foregroundStyle(Palette.textSecondary)
                 }
             }
+            .font(Typography.headline)
             .frame(width: 24, height: 24)
             .accessibilityHidden(true)
             Text(text)
-                .font(Typography.body)
+                .font(state == .running ? Typography.body.weight(.semibold) : Typography.body)
                 .foregroundStyle(state == .waiting ? Palette.textSecondary : Palette.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
         .accessibilityValue(state == .done ? "Done" : state == .running ? "In progress" : "Waiting")
     }
 }
 
-/// Why the flow stopped, with what the seller can do about it.
+/// Why the flow stopped, with what the seller can do about it in the bottom bar.
 struct ProblemView: View {
     let problem: ReviewFlowModel.Problem
     let onRetry: () -> Void
@@ -169,48 +165,58 @@ struct ProblemView: View {
     let onGoBack: () -> Void
 
     var body: some View {
-        VStack(spacing: Spacing.lg) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 40, weight: .regular))
-                .foregroundStyle(Palette.danger)
-                .frame(width: 88, height: 88)
-                .background(Palette.surfaceSecondary, in: Circle())
-                .accessibilityHidden(true)
-            VStack(spacing: Spacing.xs) {
-                Text(problem.title)
-                    .font(Typography.title)
-                    .foregroundStyle(Palette.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                Text(problem.message)
-                    .font(Typography.body)
-                    .foregroundStyle(Palette.textSecondary)
-                    .accessibilityIdentifier("review.problem")
-            }
-            .multilineTextAlignment(.center)
-            VStack(spacing: Spacing.sm) {
-                if problem.canRetry {
-                    Button("Try again", action: onRetry)
-                        .buttonStyle(.listoraPrimary)
-                        .accessibilityIdentifier("review.retry")
+        CenteredScroll {
+            VStack(spacing: Spacing.lg) {
+                IconTile(systemImage: "exclamationmark.triangle.fill", tone: .failed, size: .hero)
+                VStack(spacing: Spacing.xs) {
+                    Text(problem.title)
+                        .font(Typography.title)
+                        .foregroundStyle(Palette.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(problem.message)
+                        .font(Typography.body)
+                        .foregroundStyle(Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("review.problem")
                 }
-                if problem.suggestsEditingPhotos, problem.canRetry {
-                    Button("Edit photos", action: onEditPhotos)
-                        .buttonStyle(.listoraSecondary)
-                        .accessibilityIdentifier("review.editPhotos")
-                } else if problem.suggestsEditingPhotos {
-                    Button("Edit photos", action: onEditPhotos)
-                        .buttonStyle(.listoraPrimary)
-                        .accessibilityIdentifier("review.editPhotos")
-                } else if !problem.canRetry {
-                    Button("Go back", action: onGoBack)
-                        .buttonStyle(.listoraPrimary)
-                        .accessibilityIdentifier("review.goBack")
-                }
+                .multilineTextAlignment(.center)
             }
         }
-        .padding(Spacing.lg)
-        .frame(maxWidth: 480)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .bottomActionBar {
+            if problem.canRetry {
+                Button("Try again", systemImage: "arrow.clockwise", action: onRetry)
+                    .buttonStyle(.listoraPrimary)
+                    .accessibilityIdentifier("review.retry")
+            }
+            if problem.suggestsEditingPhotos {
+                Button("Edit photos", systemImage: "photo.on.rectangle", action: onEditPhotos)
+                    .buttonStyle(problem.canRetry ? .listoraSecondary : .listoraPrimary)
+                    .accessibilityIdentifier("review.editPhotos")
+            } else if !problem.canRetry {
+                Button("Go back", action: onGoBack)
+                    .buttonStyle(.listoraPrimary)
+                    .accessibilityIdentifier("review.goBack")
+            }
+        }
+    }
+}
+
+/// Content centered on the screen when it fits, scrolling from the top when large text makes it
+/// taller, at a readable width.
+struct CenteredScroll<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView {
+                content
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.vertical, Spacing.xl)
+                    .frame(maxWidth: 480)
+                    .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
     }
 }
 

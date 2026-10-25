@@ -158,10 +158,15 @@ struct ListingFlowView: View {
 private struct ChoiceRow: View {
     let choice: ListingFlowModel.Choice
     @Binding var isOn: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        // The tile above the text at accessibility sizes, leaving the text room beside the switch.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xs))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: Spacing.sm))
         Toggle(isOn: $isOn) {
-            HStack(alignment: .center, spacing: Spacing.sm) {
+            layout {
                 IconTile(monogram: String(choice.name.prefix(1)), tone: choice.isAvailable ? nil : .neutral)
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(choice.name)

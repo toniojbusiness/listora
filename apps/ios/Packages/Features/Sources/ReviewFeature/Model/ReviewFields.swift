@@ -59,13 +59,11 @@ enum ReviewFieldKey: String, CaseIterable, Hashable, Sendable {
         }
     }
 
-    /// The title inside a sentence ("Add product name"): lowercase, except an abbreviation such
-    /// as UPC or RN, which keeps its capitals.
+    /// The title inside a sentence ("Add size type", "Add UPC"): lowercased, except a leading
+    /// acronym such as UPC or RN.
     var inlineTitle: String {
-        guard let first = title.split(separator: " ").first, first.count > 1, first == first.uppercased() else {
-            return title.lowercased()
-        }
-        return first + title.dropFirst(first.count).lowercased()
+        let first = title.prefix { $0 != " " }
+        return first.count > 1 && first.allSatisfy(\.isUppercase) ? title : title.lowercased()
     }
 
     var kind: Kind {

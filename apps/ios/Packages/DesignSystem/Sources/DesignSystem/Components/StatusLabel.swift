@@ -47,8 +47,9 @@ public struct StatusBadge: View {
                 Image(systemName: tone.systemImage)
                     .imageScale(.small)
             }
+            // Never truncated: the label is the server's honest status, read in full.
             Text(label)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(Typography.label)
         .foregroundStyle(tone.color)

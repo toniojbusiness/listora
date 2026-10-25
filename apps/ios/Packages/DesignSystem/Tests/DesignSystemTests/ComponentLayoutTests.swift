@@ -77,6 +77,31 @@ struct ComponentLayoutTests {
     }
 
     @Test
+    func `a status badge shows the whole label, however many lines it takes`() {
+        let short = size(of: StatusBadge("Ready", tone: .success), typeSize: .accessibility5)
+        let long = size(
+            of: StatusBadge("Active (confirmed by eBay), price change waiting for eBay", tone: .success),
+            typeSize: .accessibility5,
+        )
+        #expect(long.height > short.height * 2.5, "the label was cut short: \(long)")
+        #expect(long.width <= Self.width)
+    }
+
+    @Test
+    func `a chip wider than its row wraps in a flow instead of being cut off`() {
+        let label = "Poshmark: Active (you confirmed), price change waiting for you in the Poshmark app"
+        let flow = FlowLayout {
+            StatusBadge("Ready", tone: .success)
+            StatusBadge(label, tone: .actionNeeded)
+        }
+        let single = size(of: StatusBadge("Ready", tone: .success), typeSize: .large)
+        let measured = size(of: flow, typeSize: .large)
+        #expect(measured.width <= Self.width)
+        // Two rows, and the second one wrapped onto more than one line.
+        #expect(measured.height > single.height * 2.5, "the long chip was cut short: \(measured)")
+    }
+
+    @Test
     func `text grows with Dynamic Type`() {
         let badge = StatusBadge("Upload failed", tone: .failed)
         #expect(size(of: badge, typeSize: .accessibility5).height > size(of: badge, typeSize: .large).height)
