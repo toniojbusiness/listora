@@ -11103,6 +11103,204 @@ public enum Operations {
             }
         }
     }
+    /// Get the profit dashboard for a period
+    ///
+    /// The seller's results for the days `from` to `to` (inclusive) in `timeZone`: revenue,
+    /// fees, shipping, cost of goods, net profit, ROI, the averages, sell-through, a series by
+    /// day, week, or month, the seller's own totals per marketplace (in a fixed order, never
+    /// ranked), the best and worst brands and categories, and dead stock today. Every amount is
+    /// computed from the sales' fee lines and the items' costs exactly as each sale's own money
+    /// is (`Sale`), so the dashboard and the sale screens agree to the cent. No AI is involved.
+    /// `422 validation_failed` when `to` is before `from`, the period is longer than 3660 days,
+    /// or `timeZone` is not an IANA time zone.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/profit`.
+    /// - Remark: Generated from `#/paths//v1/profit/get(getProfit)`.
+    public enum GetProfit {
+        public static let id: Swift.String = "getProfit"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/profit/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// The period's first day in `timeZone`.
+                ///
+                /// - Remark: Generated from `#/paths/v1/profit/GET/query/from`.
+                public var from: Swift.String
+                /// The period's last day in `timeZone` (inclusive).
+                ///
+                /// - Remark: Generated from `#/paths/v1/profit/GET/query/to`.
+                public var to: Swift.String
+                /// The seller's IANA time zone, for example `America/New_York`.
+                ///
+                /// - Remark: Generated from `#/paths/v1/profit/GET/query/timeZone`.
+                public var timeZone: Swift.String
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - from: The period's first day in `timeZone`.
+                ///   - to: The period's last day in `timeZone` (inclusive).
+                ///   - timeZone: The seller's IANA time zone, for example `America/New_York`.
+                public init(
+                    from: Swift.String,
+                    to: Swift.String,
+                    timeZone: Swift.String
+                ) {
+                    self.from = from
+                    self.to = to
+                    self.timeZone = timeZone
+                }
+            }
+            public var query: Operations.GetProfit.Input.Query
+            /// - Remark: Generated from `#/paths/v1/profit/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetProfit.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetProfit.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetProfit.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.GetProfit.Input.Query,
+                headers: Operations.GetProfit.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/profit/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/profit/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ProfitReport)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ProfitReport {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetProfit.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetProfit.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The period's report.
+            ///
+            /// - Remark: Generated from `#/paths//v1/profit/get(getProfit)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetProfit.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetProfit.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/profit/get(getProfit)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/profit/get(getProfit)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// List assisted-mode tasks
     ///
     /// Urgent first, then oldest first.

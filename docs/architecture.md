@@ -116,8 +116,8 @@ packages/
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
                 drift resync (@listora/operations)
   sales/        Sale intake: inbound events, recording sales (which starts their auto-delist);
-                the sale lifecycle, fee lines, payout and profit; eBay notifications, the order
-                poll, eBay account deletion (@listora/sales)
+                the sale lifecycle, fee lines, payout and profit, the profit dashboard's math;
+                eBay notifications, the order poll, eBay account deletion (@listora/sales)
   auto-delist/  The auto-delist orchestrator: the fan-out after a sale, delist runs and their
                 per-marketplace truth, SLA re-alerts, double-sale incidents (@listora/auto-delist)
   push/         Push notifications: the notification, the sender interface and its recording
@@ -198,6 +198,7 @@ src/
                  and the public OAuth callback
   sales/         The sales feed (listSales, getSale) with each sale's money, delist runs, and
                  double sales; Mark as sold (createSale), the lifecycle, and the relist question
+  profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
 ```
 
@@ -308,7 +309,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in
   [operations.md](features/operations.md#data) (double-sale incidents in
   [auto-delist.md](features/auto-delist.md#data), the lifecycle and fee columns in
-  [sales.md](features/sales.md#data)); pricing in [pricing.md](features/pricing.md#data);
+  [sales.md](features/sales.md#data), the profit dashboard's index in
+  [profit.md](features/profit.md#data)); pricing in [pricing.md](features/pricing.md#data);
   deleted identities and account deletion in [auth.md](features/auth.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
@@ -401,6 +403,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/design.md](features/design.md)                         | The iPhone app's design system, screenshots, and UI audit                     |
 | [features/inventory.md](features/inventory.md)                   | The Inventory tab, the item screen, the listing flow and its API              |
 | [features/sales.md](features/sales.md)                           | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI   |
+| [features/profit.md](features/profit.md)                         | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule  |
 
 ### Former section numbers
 

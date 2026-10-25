@@ -1,0 +1,48 @@
+/v1/profit:
+  get:
+    tags: [profit]
+    operationId: getProfit
+    summary: Get the profit dashboard for a period
+    description: |
+      The seller's results for the days `from` to `to` (inclusive) in `timeZone`: revenue,
+      fees, shipping, cost of goods, net profit, ROI, the averages, sell-through, a series by
+      day, week, or month, the seller's own totals per marketplace (in a fixed order, never
+      ranked), the best and worst brands and categories, and dead stock today. Every amount is
+      computed from the sales' fee lines and the items' costs exactly as each sale's own money
+      is (`Sale`), so the dashboard and the sale screens agree to the cent. No AI is involved.
+      `422 validation_failed` when `to` is before `from`, the period is longer than 3660 days,
+      or `timeZone` is not an IANA time zone.
+    parameters:
+      - name: from
+        in: query
+        required: true
+        description: The period's first day in `timeZone`.
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        description: The period's last day in `timeZone` (inclusive).
+        schema:
+          type: string
+          format: date
+      - name: timeZone
+        in: query
+        required: true
+        description: The seller's IANA time zone, for example `America/New_York`.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 64
+    responses:
+      '200':
+        description: The period's report.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/profit.yaml#/ProfitReport'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

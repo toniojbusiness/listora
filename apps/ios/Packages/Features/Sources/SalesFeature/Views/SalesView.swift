@@ -2,8 +2,9 @@ import DesignSystem
 import ListoraAPI
 import SwiftUI
 
-/// The Sales tab: recent sales, newest first, with what each one sold for and its profit. The
-/// list is read from the server each time it appears and on pull to refresh.
+/// The Sales tab: recent sales, newest first, with what each one sold for and its profit, and the
+/// way to the profit dashboard. The list is read from the server each time it appears and on
+/// pull to refresh.
 public struct SalesView: View {
     private let environment: SalesEnvironment
     @State private var model: SalesListModel
@@ -20,6 +21,17 @@ public struct SalesView: View {
                 .navigationTitle("Sales")
                 .navigationDestination(for: SaleRoute.self) { route in
                     SaleDetailView(environment: environment, saleID: route.saleID)
+                }
+                .navigationDestination(for: ProfitRoute.self) { _ in
+                    ProfitView(model: environment.makeProfitModel())
+                }
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink(value: ProfitRoute()) {
+                            Label("Profit", systemImage: "chart.bar.xaxis")
+                        }
+                        .accessibilityIdentifier("sales.profit")
+                    }
                 }
                 .task { await model.load() }
                 .refreshable { await model.load() }
@@ -73,6 +85,11 @@ public struct SalesView: View {
     private var list: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.sm) {
+                NavigationLink(value: ProfitRoute()) {
+                    ProfitEntryRow()
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("sales.profitCard")
                 ForEach(model.sales, id: \.id) { sale in
                     NavigationLink(value: SaleRoute(saleID: sale.id)) {
                         SaleRow(sale: sale)
@@ -95,6 +112,33 @@ public struct SalesView: View {
 
 struct SaleRoute: Hashable {
     let saleID: String
+}
+
+struct ProfitRoute: Hashable {}
+
+/// The way into the profit dashboard, above the sales.
+private struct ProfitEntryRow: View {
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            IconTile(systemImage: "chart.bar.xaxis", size: .card)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("Profit dashboard")
+                    .font(Typography.headline)
+                    .foregroundStyle(Palette.textPrimary)
+                Text("Revenue, fees, profit, and dead stock by week, month, or year")
+                    .font(Typography.subheadline)
+                    .foregroundStyle(Palette.textSecondary)
+            }
+            Spacer(minLength: Spacing.sm)
+            Image(systemName: "chevron.right")
+                .font(Typography.subheadline.weight(.semibold))
+                .foregroundStyle(Palette.textSecondary)
+                .accessibilityHidden(true)
+        }
+        .contentShape(Rectangle())
+        .cardStyle()
+        .accessibilityElement(children: .combine)
+    }
 }
 
 /// One sale in the list: what sold, where and when, its price, and its profit.

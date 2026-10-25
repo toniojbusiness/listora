@@ -6555,6 +6555,599 @@ extension Components {
                 case nextCursor
             }
         }
+        /// A `KnownProfitGranularity`, or a bucket size added after this client was built. Clients
+        /// label an unknown granularity's buckets by their `start` date.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ProfitGranularity`.
+        public struct ProfitGranularity: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProfitGranularity/value1`.
+            public var value1: Components.Schemas.KnownProfitGranularity?
+            /// - Remark: Generated from `#/components/schemas/ProfitGranularity/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ProfitGranularity`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownProfitGranularity? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// The size of each `series` bucket, chosen by the server from the period's length: `day` up
+        /// to 31 days, `week` (Monday to Sunday) up to 184 days, `month` beyond.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownProfitGranularity`.
+        @frozen public enum KnownProfitGranularity: String, Codable, Hashable, Sendable, CaseIterable {
+            case day = "day"
+            case week = "week"
+            case month = "month"
+        }
+        /// The period the report covers, in the seller's time zone.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ProfitPeriod`.
+        public struct ProfitPeriod: Codable, Hashable, Sendable {
+            /// The period's first day.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitPeriod/from`.
+            public var from: Swift.String
+            /// The period's last day (inclusive).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitPeriod/to`.
+            public var to: Swift.String
+            /// The IANA time zone the days are counted in, for example `America/New_York`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitPeriod/timeZone`.
+            public var timeZone: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProfitPeriod/granularity`.
+            public var granularity: Components.Schemas.ProfitGranularity
+            /// Creates a new `ProfitPeriod`.
+            ///
+            /// - Parameters:
+            ///   - from: The period's first day.
+            ///   - to: The period's last day (inclusive).
+            ///   - timeZone: The IANA time zone the days are counted in, for example `America/New_York`.
+            ///   - granularity:
+            public init(
+                from: Swift.String,
+                to: Swift.String,
+                timeZone: Swift.String,
+                granularity: Components.Schemas.ProfitGranularity
+            ) {
+                self.from = from
+                self.to = to
+                self.timeZone = timeZone
+                self.granularity = granularity
+            }
+            public enum CodingKeys: String, CodingKey {
+                case from
+                case to
+                case timeZone
+                case granularity
+            }
+        }
+        /// The period's totals over its sales that stand (detected, confirmed, or shipped; a canceled
+        /// or returned sale counts nowhere). `netProfit` is `revenue` minus `fees`, `shipping`, and
+        /// `costOfGoods`, so the lines always add up. An item sold without a cost counts as zero cost
+        /// (`missingCostCount` says how many, and the profit is overstated by their cost).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ProfitSummary`.
+        public struct ProfitSummary: Codable, Hashable, Sendable {
+            /// What buyers paid: the sale prices plus the shipping they paid.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/revenue`.
+            public var revenue: Components.Schemas.Money
+            /// Every fee line except shipping labels (marketplace, payment, promotion, tax, other).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/fees`.
+            public var fees: Components.Schemas.Money
+            /// What the seller paid to ship: labels the marketplace deducted (`shipping_label` fee
+            /// lines) plus labels bought outside the payout (`Sale.shippingCost`).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/shipping`.
+            public var shipping: Components.Schemas.Money
+            /// The sold items' costs (an item without a cost adds nothing).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/costOfGoods`.
+            public var costOfGoods: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/netProfit`.
+            public var netProfit: Components.Schemas.Money
+            /// `netProfit` over `costOfGoods` in basis points (12550 is 125.5%). Absent for a zero cost of goods.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/roiBasisPoints`.
+            public var roiBasisPoints: Swift.Int64?
+            /// Orders (a bundle is one).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/salesCount`.
+            public var salesCount: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/itemsSold`.
+            public var itemsSold: Swift.Int32
+            /// Sold items with no cost entered; their cost counts as zero.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/missingCostCount`.
+            public var missingCostCount: Swift.Int32
+            /// The sale prices over `itemsSold`. Absent when nothing sold.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/averageSalePrice`.
+            public var averageSalePrice: Components.Schemas.Money?
+            /// `netProfit` over `itemsSold`. Absent when nothing sold.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/averageProfitPerItem`.
+            public var averageProfitPerItem: Components.Schemas.Money?
+            /// Whole days from an item's first listing (or, never listed through Listora, from when it
+            /// was added) to its sale, averaged over the items sold. Absent when nothing sold.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/averageDaysToSell`.
+            public var averageDaysToSell: Swift.Int32?
+            /// `itemsSold` over `itemsSold` plus the items listed now that were added by the period's
+            /// end, in basis points. Absent when both are zero.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/sellThroughBasisPoints`.
+            public var sellThroughBasisPoints: Swift.Int32?
+            /// True while any of the period's fee lines is an estimate; the profit is then an estimate too.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitSummary/feesEstimated`.
+            public var feesEstimated: Swift.Bool
+            /// Creates a new `ProfitSummary`.
+            ///
+            /// - Parameters:
+            ///   - revenue: What buyers paid: the sale prices plus the shipping they paid.
+            ///   - fees: Every fee line except shipping labels (marketplace, payment, promotion, tax, other).
+            ///   - shipping: What the seller paid to ship: labels the marketplace deducted (`shipping_label` fee
+            ///   - costOfGoods: The sold items' costs (an item without a cost adds nothing).
+            ///   - netProfit:
+            ///   - roiBasisPoints: `netProfit` over `costOfGoods` in basis points (12550 is 125.5%). Absent for a zero cost of goods.
+            ///   - salesCount: Orders (a bundle is one).
+            ///   - itemsSold:
+            ///   - missingCostCount: Sold items with no cost entered; their cost counts as zero.
+            ///   - averageSalePrice: The sale prices over `itemsSold`. Absent when nothing sold.
+            ///   - averageProfitPerItem: `netProfit` over `itemsSold`. Absent when nothing sold.
+            ///   - averageDaysToSell: Whole days from an item's first listing (or, never listed through Listora, from when it
+            ///   - sellThroughBasisPoints: `itemsSold` over `itemsSold` plus the items listed now that were added by the period's
+            ///   - feesEstimated: True while any of the period's fee lines is an estimate; the profit is then an estimate too.
+            public init(
+                revenue: Components.Schemas.Money,
+                fees: Components.Schemas.Money,
+                shipping: Components.Schemas.Money,
+                costOfGoods: Components.Schemas.Money,
+                netProfit: Components.Schemas.Money,
+                roiBasisPoints: Swift.Int64? = nil,
+                salesCount: Swift.Int32,
+                itemsSold: Swift.Int32,
+                missingCostCount: Swift.Int32,
+                averageSalePrice: Components.Schemas.Money? = nil,
+                averageProfitPerItem: Components.Schemas.Money? = nil,
+                averageDaysToSell: Swift.Int32? = nil,
+                sellThroughBasisPoints: Swift.Int32? = nil,
+                feesEstimated: Swift.Bool
+            ) {
+                self.revenue = revenue
+                self.fees = fees
+                self.shipping = shipping
+                self.costOfGoods = costOfGoods
+                self.netProfit = netProfit
+                self.roiBasisPoints = roiBasisPoints
+                self.salesCount = salesCount
+                self.itemsSold = itemsSold
+                self.missingCostCount = missingCostCount
+                self.averageSalePrice = averageSalePrice
+                self.averageProfitPerItem = averageProfitPerItem
+                self.averageDaysToSell = averageDaysToSell
+                self.sellThroughBasisPoints = sellThroughBasisPoints
+                self.feesEstimated = feesEstimated
+            }
+            public enum CodingKeys: String, CodingKey {
+                case revenue
+                case fees
+                case shipping
+                case costOfGoods
+                case netProfit
+                case roiBasisPoints
+                case salesCount
+                case itemsSold
+                case missingCostCount
+                case averageSalePrice
+                case averageProfitPerItem
+                case averageDaysToSell
+                case sellThroughBasisPoints
+                case feesEstimated
+            }
+        }
+        /// One bucket of the period's series (see `ProfitPeriod.granularity`).
+        ///
+        /// - Remark: Generated from `#/components/schemas/ProfitBucket`.
+        public struct ProfitBucket: Codable, Hashable, Sendable {
+            /// The bucket's first day (the period's first day for a partial first bucket).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitBucket/start`.
+            public var start: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProfitBucket/revenue`.
+            public var revenue: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ProfitBucket/netProfit`.
+            public var netProfit: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ProfitBucket/itemsSold`.
+            public var itemsSold: Swift.Int32
+            /// Creates a new `ProfitBucket`.
+            ///
+            /// - Parameters:
+            ///   - start: The bucket's first day (the period's first day for a partial first bucket).
+            ///   - revenue:
+            ///   - netProfit:
+            ///   - itemsSold:
+            public init(
+                start: Swift.String,
+                revenue: Components.Schemas.Money,
+                netProfit: Components.Schemas.Money,
+                itemsSold: Swift.Int32
+            ) {
+                self.start = start
+                self.revenue = revenue
+                self.netProfit = netProfit
+                self.itemsSold = itemsSold
+            }
+            public enum CodingKeys: String, CodingKey {
+                case start
+                case revenue
+                case netProfit
+                case itemsSold
+            }
+        }
+        /// The seller's own totals on one marketplace. Only totals: no ranking, share, or speed, so
+        /// no marketplace's performance is presented relative to another's (eBay's API License
+        /// Agreement restricts that without eBay's consent).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MarketplaceProfit`.
+        public struct MarketplaceProfit: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceProfit/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/MarketplaceProfit/salesCount`.
+            public var salesCount: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/MarketplaceProfit/itemsSold`.
+            public var itemsSold: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/MarketplaceProfit/revenue`.
+            public var revenue: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/MarketplaceProfit/fees`.
+            public var fees: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/MarketplaceProfit/shipping`.
+            public var shipping: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/MarketplaceProfit/costOfGoods`.
+            public var costOfGoods: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/MarketplaceProfit/netProfit`.
+            public var netProfit: Components.Schemas.Money
+            /// Creates a new `MarketplaceProfit`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - salesCount:
+            ///   - itemsSold:
+            ///   - revenue:
+            ///   - fees:
+            ///   - shipping:
+            ///   - costOfGoods:
+            ///   - netProfit:
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                salesCount: Swift.Int32,
+                itemsSold: Swift.Int32,
+                revenue: Components.Schemas.Money,
+                fees: Components.Schemas.Money,
+                shipping: Components.Schemas.Money,
+                costOfGoods: Components.Schemas.Money,
+                netProfit: Components.Schemas.Money
+            ) {
+                self.marketplace = marketplace
+                self.salesCount = salesCount
+                self.itemsSold = itemsSold
+                self.revenue = revenue
+                self.fees = fees
+                self.shipping = shipping
+                self.costOfGoods = costOfGoods
+                self.netProfit = netProfit
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case salesCount
+                case itemsSold
+                case revenue
+                case fees
+                case shipping
+                case costOfGoods
+                case netProfit
+            }
+        }
+        /// The period's sold items of one brand or one category.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ProfitGroup`.
+        public struct ProfitGroup: Codable, Hashable, Sendable {
+            /// The brand as entered, or the category path (`ItemDetails.category`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitGroup/key`.
+            public var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ProfitGroup/itemsSold`.
+            public var itemsSold: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ProfitGroup/revenue`.
+            public var revenue: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/ProfitGroup/netProfit`.
+            public var netProfit: Components.Schemas.Money
+            /// `netProfit` over the items' cost in basis points. Absent for a zero cost.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitGroup/roiBasisPoints`.
+            public var roiBasisPoints: Swift.Int64?
+            /// - Remark: Generated from `#/components/schemas/ProfitGroup/averageDaysToSell`.
+            public var averageDaysToSell: Swift.Int32?
+            /// Creates a new `ProfitGroup`.
+            ///
+            /// - Parameters:
+            ///   - key: The brand as entered, or the category path (`ItemDetails.category`).
+            ///   - itemsSold:
+            ///   - revenue:
+            ///   - netProfit:
+            ///   - roiBasisPoints: `netProfit` over the items' cost in basis points. Absent for a zero cost.
+            ///   - averageDaysToSell:
+            public init(
+                key: Swift.String,
+                itemsSold: Swift.Int32,
+                revenue: Components.Schemas.Money,
+                netProfit: Components.Schemas.Money,
+                roiBasisPoints: Swift.Int64? = nil,
+                averageDaysToSell: Swift.Int32? = nil
+            ) {
+                self.key = key
+                self.itemsSold = itemsSold
+                self.revenue = revenue
+                self.netProfit = netProfit
+                self.roiBasisPoints = roiBasisPoints
+                self.averageDaysToSell = averageDaysToSell
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case itemsSold
+                case revenue
+                case netProfit
+                case roiBasisPoints
+                case averageDaysToSell
+            }
+        }
+        /// Groups ranked by net profit: up to five `best` (highest first) and up to five `worst`
+        /// (lowest first), never the same group in both. Items without a brand or category are left
+        /// out.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ProfitRanking`.
+        public struct ProfitRanking: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProfitRanking/best`.
+            public var best: [Components.Schemas.ProfitGroup]
+            /// - Remark: Generated from `#/components/schemas/ProfitRanking/worst`.
+            public var worst: [Components.Schemas.ProfitGroup]
+            /// Creates a new `ProfitRanking`.
+            ///
+            /// - Parameters:
+            ///   - best:
+            ///   - worst:
+            public init(
+                best: [Components.Schemas.ProfitGroup],
+                worst: [Components.Schemas.ProfitGroup]
+            ) {
+                self.best = best
+                self.worst = worst
+            }
+            public enum CodingKeys: String, CodingKey {
+                case best
+                case worst
+            }
+        }
+        /// Unsold items in inventory longer than the bucket's age, and the money tied up in them.
+        ///
+        /// - Remark: Generated from `#/components/schemas/DeadStockBucket`.
+        public struct DeadStockBucket: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DeadStockBucket/itemCount`.
+            public var itemCount: Swift.Int32
+            /// The items' total cost (an item without a cost adds nothing).
+            ///
+            /// - Remark: Generated from `#/components/schemas/DeadStockBucket/cost`.
+            public var cost: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/DeadStockBucket/missingCostCount`.
+            public var missingCostCount: Swift.Int32
+            /// Creates a new `DeadStockBucket`.
+            ///
+            /// - Parameters:
+            ///   - itemCount:
+            ///   - cost: The items' total cost (an item without a cost adds nothing).
+            ///   - missingCostCount:
+            public init(
+                itemCount: Swift.Int32,
+                cost: Components.Schemas.Money,
+                missingCostCount: Swift.Int32
+            ) {
+                self.itemCount = itemCount
+                self.cost = cost
+                self.missingCostCount = missingCostCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemCount
+                case cost
+                case missingCostCount
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/DeadStockItem`.
+        public struct DeadStockItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DeadStockItem/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/DeadStockItem/sku`.
+            public var sku: Components.Schemas.Sku
+            /// - Remark: Generated from `#/components/schemas/DeadStockItem/title`.
+            public var title: Swift.String?
+            /// Whole days since the item was bought (its purchase date) or, without one, added.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DeadStockItem/ageDays`.
+            public var ageDays: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/DeadStockItem/cost`.
+            public var cost: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/DeadStockItem/status`.
+            public var status: Components.Schemas.ItemStatus
+            /// Creates a new `DeadStockItem`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - sku:
+            ///   - title:
+            ///   - ageDays: Whole days since the item was bought (its purchase date) or, without one, added.
+            ///   - cost:
+            ///   - status:
+            public init(
+                itemId: Components.Schemas.Id,
+                sku: Components.Schemas.Sku,
+                title: Swift.String? = nil,
+                ageDays: Swift.Int32,
+                cost: Components.Schemas.Money? = nil,
+                status: Components.Schemas.ItemStatus
+            ) {
+                self.itemId = itemId
+                self.sku = sku
+                self.title = title
+                self.ageDays = ageDays
+                self.cost = cost
+                self.status = status
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case sku
+                case title
+                case ageDays
+                case cost
+                case status
+            }
+        }
+        /// Active inventory (draft, ready, or listed) that has not sold, by age today, whatever the
+        /// report's period.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/DeadStock`.
+        public struct DeadStock: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DeadStock/over60Days`.
+            public var over60Days: Components.Schemas.DeadStockBucket
+            /// - Remark: Generated from `#/components/schemas/DeadStock/over90Days`.
+            public var over90Days: Components.Schemas.DeadStockBucket
+            /// The oldest items over 60 days, oldest first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DeadStock/oldest`.
+            public var oldest: [Components.Schemas.DeadStockItem]
+            /// Creates a new `DeadStock`.
+            ///
+            /// - Parameters:
+            ///   - over60Days:
+            ///   - over90Days:
+            ///   - oldest: The oldest items over 60 days, oldest first.
+            public init(
+                over60Days: Components.Schemas.DeadStockBucket,
+                over90Days: Components.Schemas.DeadStockBucket,
+                oldest: [Components.Schemas.DeadStockItem]
+            ) {
+                self.over60Days = over60Days
+                self.over90Days = over90Days
+                self.oldest = oldest
+            }
+            public enum CodingKeys: String, CodingKey {
+                case over60Days
+                case over90Days
+                case oldest
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ProfitReport`.
+        public struct ProfitReport: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProfitReport/period`.
+            public var period: Components.Schemas.ProfitPeriod
+            /// - Remark: Generated from `#/components/schemas/ProfitReport/summary`.
+            public var summary: Components.Schemas.ProfitSummary
+            /// One bucket per day, week, or month of the period, in order, including empty ones.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitReport/series`.
+            public var series: [Components.Schemas.ProfitBucket]
+            /// The marketplaces with a sale in the period, in the fixed `KnownMarketplace` order (never ranked).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ProfitReport/marketplaces`.
+            public var marketplaces: [Components.Schemas.MarketplaceProfit]
+            /// - Remark: Generated from `#/components/schemas/ProfitReport/brands`.
+            public var brands: Components.Schemas.ProfitRanking
+            /// - Remark: Generated from `#/components/schemas/ProfitReport/categories`.
+            public var categories: Components.Schemas.ProfitRanking
+            /// - Remark: Generated from `#/components/schemas/ProfitReport/deadStock`.
+            public var deadStock: Components.Schemas.DeadStock
+            /// Creates a new `ProfitReport`.
+            ///
+            /// - Parameters:
+            ///   - period:
+            ///   - summary:
+            ///   - series: One bucket per day, week, or month of the period, in order, including empty ones.
+            ///   - marketplaces: The marketplaces with a sale in the period, in the fixed `KnownMarketplace` order (never ranked).
+            ///   - brands:
+            ///   - categories:
+            ///   - deadStock:
+            public init(
+                period: Components.Schemas.ProfitPeriod,
+                summary: Components.Schemas.ProfitSummary,
+                series: [Components.Schemas.ProfitBucket],
+                marketplaces: [Components.Schemas.MarketplaceProfit],
+                brands: Components.Schemas.ProfitRanking,
+                categories: Components.Schemas.ProfitRanking,
+                deadStock: Components.Schemas.DeadStock
+            ) {
+                self.period = period
+                self.summary = summary
+                self.series = series
+                self.marketplaces = marketplaces
+                self.brands = brands
+                self.categories = categories
+                self.deadStock = deadStock
+            }
+            public enum CodingKeys: String, CodingKey {
+                case period
+                case summary
+                case series
+                case marketplaces
+                case brands
+                case categories
+                case deadStock
+            }
+        }
         /// A `KnownUserTaskKind`, or a kind added after this client was built. Clients show an
         /// unknown task's `title`, `instructions`, and `deepLink`, and ask the user to update
         /// the app to complete it.

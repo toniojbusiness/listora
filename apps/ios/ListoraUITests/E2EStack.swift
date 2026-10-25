@@ -44,6 +44,36 @@ struct E2EStack {
         return try JSONDecoder().decode(SeededItem.self, from: data)
     }
 
+    /// Records a sale of one item by hand through the API (`createSale`, "Mark as sold").
+    func recordSale(itemID: String, marketplace: String, priceCents: Int) async throws {
+        var request = URLRequest(url: apiURL.appending(path: "v1/sales"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "marketplace": marketplace,
+            "items": [["itemId": itemID, "salePrice": ["amountCents": priceCents, "currency": "USD"]]],
+        ])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 201, String(bytes: data, encoding: .utf8) ?? "")
+    }
+
+    /// The profit dashboard's summary as the API reports it (`getProfit`).
+    func profitSummary(firstDay: String, lastDay: String, timeZone: String) async throws -> ProfitSummary {
+        var components = URLComponents(url: apiURL.appending(path: "v1/profit"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "from", value: firstDay),
+            URLQueryItem(name: "to", value: lastDay),
+            URLQueryItem(name: "timeZone", value: timeZone),
+        ]
+        var request = try URLRequest(url: XCTUnwrap(components?.url))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200, String(bytes: data, encoding: .utf8) ?? "")
+        return try JSONDecoder().decode(ProfitReportBody.self, from: data).summary
+    }
+
     /// Makes the fake eBay fail the next matching request (`POST /ebay/faults`).
     func injectEbayFault(action: String, type: String, message: String? = nil) async throws {
         var fault: [String: Any] = ["type": type]
@@ -98,4 +128,15 @@ struct SavedDetails: Decodable {
 
 struct SavedMoney: Decodable {
     let amountCents: Int
+}
+
+/// The parts of the contract's `ProfitReport` the test checks.
+struct ProfitReportBody: Decodable {
+    let summary: ProfitSummary
+}
+
+struct ProfitSummary: Decodable {
+    let netProfit: SavedMoney
+    let revenue: SavedMoney
+    let salesCount: Int
 }

@@ -20,6 +20,12 @@ enum SaleFormatting {
         return basisPoints > 0 ? "+\(text)%" : "\(text)%"
     }
 
+    /// "66.7%" for 6670 basis points.
+    static func percent(basisPoints: Int32) -> String {
+        let percent = Decimal(Int(basisPoints)) / 100
+        return "\(percent.formatted(.number.precision(.fractionLength(0 ... 1))))%"
+    }
+
     /// The marketplace's own spelling; an id this app does not know shows as sent.
     static func marketplaceName(_ id: String) -> String {
         switch id {

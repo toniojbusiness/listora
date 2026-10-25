@@ -51,6 +51,8 @@ tags:
     description: Marketplace account connections and their health.
   - name: sales
     description: Sales and the automatic delist run each sale starts.
+  - name: profit
+    description: The profit dashboard over the seller's sales and inventory.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
   - name: usage
@@ -153,6 +155,8 @@ paths:
     $ref: './paths/sales.yaml#/~1v1~1sales~1{saleId}~1return'
   /v1/sales/{saleId}/relist:
     $ref: './paths/sales.yaml#/~1v1~1sales~1{saleId}~1relist'
+  /v1/profit:
+    $ref: './paths/profit.yaml#/~1v1~1profit'
   /v1/tasks:
     $ref: './paths/tasks.yaml#/~1v1~1tasks'
   /v1/tasks/{taskId}:
@@ -601,6 +605,31 @@ components:
       $ref: './components/schemas/sales.yaml#/Sale'
     SalePage:
       $ref: './components/schemas/sales.yaml#/SalePage'
+    # ---------------------------------------------------------------- profit
+    ProfitGranularity:
+      $ref: './components/schemas/profit.yaml#/ProfitGranularity'
+    KnownProfitGranularity:
+      $ref: './components/schemas/profit.yaml#/KnownProfitGranularity'
+    ProfitPeriod:
+      $ref: './components/schemas/profit.yaml#/ProfitPeriod'
+    ProfitSummary:
+      $ref: './components/schemas/profit.yaml#/ProfitSummary'
+    ProfitBucket:
+      $ref: './components/schemas/profit.yaml#/ProfitBucket'
+    MarketplaceProfit:
+      $ref: './components/schemas/profit.yaml#/MarketplaceProfit'
+    ProfitGroup:
+      $ref: './components/schemas/profit.yaml#/ProfitGroup'
+    ProfitRanking:
+      $ref: './components/schemas/profit.yaml#/ProfitRanking'
+    DeadStockBucket:
+      $ref: './components/schemas/profit.yaml#/DeadStockBucket'
+    DeadStockItem:
+      $ref: './components/schemas/profit.yaml#/DeadStockItem'
+    DeadStock:
+      $ref: './components/schemas/profit.yaml#/DeadStock'
+    ProfitReport:
+      $ref: './components/schemas/profit.yaml#/ProfitReport'
     # ---------------------------------------------------------------- tasks
     UserTaskKind:
       $ref: './components/schemas/tasks.yaml#/UserTaskKind'
