@@ -95,9 +95,11 @@ export interface PolicyDocument {
  *   policy and lifetime, and never an IAM user, group, or account setting (nothing grants them).
  *
  * Service actions are granted whole (`ec2:*`), so a deploy can still change any resource of
- * those services in the account; the account holds only this environment. The remaining gap
- * (a stack's role can be given any inline permission) closes with a permissions boundary on
- * every role, the T-33 follow-up in infra/README.md.
+ * those services in the account, including another app's when the account is shared (the
+ * personal account is). What a deploy changes is what the reviewed templates say; scoping
+ * these grants to Listora's tagged resources, and a permissions boundary on every role (a
+ * stack's role can still be given any inline permission), are the T-33 follow-up in
+ * infra/README.md.
  */
 export function cdkExecutionPolicy(environment: EnvironmentName, account: string): PolicyDocument {
   const role = (name: string) => `arn:aws:iam::${account}:role/${name}`;

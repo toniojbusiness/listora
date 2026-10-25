@@ -7,6 +7,7 @@ import { CREDENTIAL_PURPOSES as VAULT_PURPOSES } from '@listora/connections';
 import { MARKETPLACES } from '@listora/db';
 import { METRIC_NAMESPACE, TRUST_METRICS } from '@listora/observability/catalog';
 
+import { CDK_BOOTSTRAP_QUALIFIER } from './bootstrap.ts';
 import { APP_SECRETS, ENVIRONMENT_SETTINGS, SERVICE_NAMES } from './config.ts';
 import {
   containerEnvironment,
@@ -1264,7 +1265,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       const role = resources(t, 'AWS::IAM::Role')[0];
       expect(role?.Properties?.['ManagedPolicyArns']).toBeUndefined();
       expect(JSON.stringify(statements(t))).toContain(
-        `role/cdk-hnb659fds-*-${target.account}-${target.region}`,
+        `role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-*-${target.account}-${target.region}`,
       );
     });
 

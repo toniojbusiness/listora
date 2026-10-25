@@ -2,14 +2,12 @@ import { CfnOutput, Duration } from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import type { Construct } from 'constructs';
 
+import { CDK_BOOTSTRAP_QUALIFIER } from '../bootstrap.ts';
 import { ListoraStack, type ListoraStackProps } from './common.ts';
 import { migrateTaskNames } from './migrate-stack.ts';
 import { IMAGE_REPOSITORY_NAME, RUNNER_IMAGE_REPOSITORY_NAME } from './registry-stack.ts';
 
 export const GITHUB_OIDC_ISSUER = 'token.actions.githubusercontent.com';
-
-/** The default qualifier of `cdk bootstrap` roles. */
-const CDK_BOOTSTRAP_QUALIFIER = 'hnb659fds';
 
 export function deployRoleName(environment: string): string {
   return `listora-${environment}-github-deploy`;
