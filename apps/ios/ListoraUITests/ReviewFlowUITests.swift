@@ -289,7 +289,9 @@ final class ReviewFlowUITests: XCTestCase {
         let scrollView = app.scrollViews["review.scroll"]
         let top = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
         let lower = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.38))
-        for _ in 0 ..< 12 where !(element.exists && element.isHittable) {
+        // Inside the scroll view's frame, not only hittable: a row under the bottom bar reports
+        // hittable, but a press there lands on the bar.
+        for _ in 0 ..< 12 where !(element.exists && element.isHittable && scrollView.frame.contains(element.frame)) {
             if upward {
                 top.press(forDuration: 0.05, thenDragTo: lower)
             } else {
