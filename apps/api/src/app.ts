@@ -80,14 +80,19 @@ export function buildApp(deps: AppDependencies): FastifyInstance {
   });
   // Every body is JSON; without this, Fastify would hand a text/plain body to validation.
   app.removeContentTypeParser('text/plain');
-  // Any other content type is refused, except an empty body with none at all: API Gateway's HTTP
-  // API (the personal environment's ingress) forwards a bodyless DELETE with
-  // `transfer-encoding: chunked` and no content type, which must reach the route as no body.
+  // Any other body is refused, but an empty one is no body, whatever its content type: API
+  // Gateway's HTTP API (the personal environment's ingress) forwards a bodyless DELETE as a
+  // request with an empty body that Fastify would otherwise try to parse, so the app's deletes
+  // failed there. A refused body logs its content type and length (never its contents).
   app.addContentTypeParser('*', { parseAs: 'string' }, (request, body, done) => {
-    if (request.headers['content-type'] === undefined && body === '') {
+    if (body === '') {
       done(null, undefined);
       return;
     }
+    request.log.info(
+      { contentType: request.headers['content-type'] ?? null, bodyLength: body.length },
+      'unsupported request body',
+    );
     done(new errorCodes.FST_ERR_CTP_INVALID_MEDIA_TYPE());
   });
   app.decorateRequest('tenant', null);
