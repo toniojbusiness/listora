@@ -198,7 +198,7 @@ real marketplace page has been measured.
   decodes off the main actor at the smallest size that fills the frame (288 x 216 for a 72-point
   row at 3x: 249 KB), and keeps up to 48 MB of decoded images in memory, so a row that comes
   back shows its photo in its first frame with no download and no decode. The inventory, Today,
-  tasks, task detail, and review screens use it.
+  tasks, task detail, review, and batch screens use it.
 - **Next pages.** Appending a page checked each new row against every row already shown; it now
   uses a set (2,000 comparisons instead of 100,000 at the 40th page).
 - **Uploads are already efficient.** Photos are prepared on the phone as upright JPEGs of at most
