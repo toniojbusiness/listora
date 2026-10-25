@@ -67,8 +67,7 @@ public struct AppDependencies {
         }
         self.accessTokens = accessTokens
         apiClient = APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens)
-        let tagReader = VisionTagReader()
-        self.tagReader = tagReader
+        tagReader = VisionTagReader()
         let meter = InteractionMeter(storage: interactionStorage)
         interactionMeter = meter
         let listingCopy = ListingCopyStore(directory: listingCopyDirectory)
@@ -88,10 +87,8 @@ public struct AppDependencies {
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
-        marketplaces = MarketplacesModel(
-            service: APIConnectionsService(client: apiClient.client),
-            isSignedIn: { accessTokens.grant != nil },
-        )
+        let connections = APIConnectionsService(client: apiClient.client)
+        marketplaces = MarketplacesModel(service: connections, isSignedIn: { accessTokens.grant != nil })
         devSignIn = configuration.environment == .dev
             ? DevSignInModel(client: DevSignInClient(baseURL: configuration.apiBaseURL), tokens: accessTokens)
             : nil
