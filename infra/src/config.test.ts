@@ -300,8 +300,8 @@ describe('ENVIRONMENT_SETTINGS', () => {
   });
 });
 
-describe('docs/costs.md', () => {
-  const costs = readFileSync(new URL('../../docs/costs.md', import.meta.url), 'utf8');
+describe('docs/features/costs.md', () => {
+  const costs = readFileSync(new URL('../../docs/features/costs.md', import.meta.url), 'utf8');
 
   it('prices the personal settings as they are', () => {
     const { personal } = ENVIRONMENT_SETTINGS;

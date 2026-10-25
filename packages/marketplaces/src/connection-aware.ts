@@ -1,5 +1,5 @@
 /**
- * One marketplace served in two modes, picked per connection (docs/architecture.md section 4):
+ * One marketplace served in two modes, picked per connection (docs/features/marketplaces.md):
  * Depop runs assisted until Listora's partner access is granted and the seller connects its
  * API, then through the API. Both modes read and write the same `marketplace_listing` rows, so
  * the switch is a change to the connection's `mode` and needs no data migration; each attempt

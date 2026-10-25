@@ -5,7 +5,12 @@
 // Generated from openapi.yaml; see README.md.
 export * from './generated/openapi.ts';
 // The parsed contract document, for building request validators from the contract itself.
-export { CONTRACT_METHODS, CONTRACT_SPEC_PATH, loadContractDocument } from './document.ts';
+export {
+  CONTRACT_BUNDLE_PATH,
+  CONTRACT_METHODS,
+  CONTRACT_SPEC_PATH,
+  loadContractDocument,
+} from './document.ts';
 export type {
   ContractDocument,
   ContractMethod,

@@ -1,5 +1,5 @@
 /**
- * A Depop seller's tokens, kept safe through rotation (docs/architecture.md section 6, item 10).
+ * A Depop seller's tokens, kept safe through rotation (docs/features/operations.md, item 10).
  * Depop invalidates a refresh token, and the access token issued with it, the moment it hands out
  * new ones, so:
  *

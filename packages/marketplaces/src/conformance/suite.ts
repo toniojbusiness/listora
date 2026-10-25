@@ -1,5 +1,5 @@
 /**
- * The shared adapter conformance suite (docs/architecture.md section 4). Every adapter passes
+ * The shared adapter conformance suite (docs/features/marketplaces.md). Every adapter passes
  * it against its own fake marketplace before the engine may use it: call
  * `describeAdapterConformance` from the adapter's test file, once per connection mode it serves.
  *

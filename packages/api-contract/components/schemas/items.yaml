@@ -1,0 +1,308 @@
+ItemStatus:
+  description: |
+    A `KnownItemStatus`, or a status added after this client was built. Clients show an
+    unknown status generically and offer no status-specific action for it.
+  anyOf:
+    - $ref: '#/KnownItemStatus'
+    - type: string
+      maxLength: 64
+KnownItemStatus:
+  type: string
+  description: |
+    `draft` and `ready` are set by the user; `archived` by the user for an item with no
+    live listing. `listed`, `sold_pending_delist`, `sold`, and `shipped` are set by the
+    server from listings and sales. An archived item can be set back to either `draft` or
+    `ready` only if it was `draft` or `ready` when it was archived and has never been sold;
+    otherwise the server answers `409 invalid_state_transition` and the item stays
+    archived.
+  enum: [draft, ready, listed, sold_pending_delist, sold, shipped, archived]
+UserSettableItemStatus:
+  type: string
+  description: The item statuses a client may set directly.
+  enum: [draft, ready, archived]
+ItemCondition:
+  type: string
+  description: Canonical condition; each marketplace adapter maps it to that marketplace's values.
+  enum:
+    [
+      new_with_tags,
+      new_without_tags,
+      new_with_defects,
+      pre_owned_excellent,
+      pre_owned_good,
+      pre_owned_fair,
+    ]
+MeasurementUnit:
+  type: string
+  enum: [in, cm]
+Measurement:
+  type: object
+  required: [name, value, unit]
+  properties:
+    name:
+      type: string
+      maxLength: 64
+      description: Canonical name, for example `pit_to_pit`, `length`, `inseam`.
+    value:
+      type: number
+      minimum: 0
+      maximum: 10000
+    unit:
+      $ref: '#/MeasurementUnit'
+ItemDetails:
+  type: object
+  description: |
+    Every user-editable property of an item. All are optional: a property that is absent
+    has no value. `replaceItem` replaces this object as a whole.
+  properties:
+    title:
+      type: string
+      maxLength: 200
+    description:
+      type: string
+      maxLength: 10000
+    brand:
+      type: string
+      maxLength: 120
+    productName:
+      type: string
+      maxLength: 200
+    styleNumber:
+      type: string
+      maxLength: 64
+    rnNumber:
+      type: string
+      maxLength: 16
+      description: Registered identification number from the care tag.
+    upc:
+      type: string
+      maxLength: 14
+      description: UPC or EAN digits, checksum-validated by the server.
+    department:
+      type: string
+      maxLength: 64
+      description: Canonical department, for example `women`, `men`, `kids`, `unisex`.
+    category:
+      type: string
+      maxLength: 200
+      description: |
+        Canonical taxonomy path `<category>/<subcategory>`, for example
+        `clothing/tops/t_shirts` (`CATEGORY_TREE` in @listora/analysis).
+    sizeLabel:
+      type: string
+      maxLength: 32
+      description: The size as printed, for example `M` or `32x30`.
+    sizeSystem:
+      type: string
+      maxLength: 16
+      description: |
+        How to read `sizeLabel`: `letter` (XS to XXXL), `numeric`, `waist_inseam`
+        (`32x30`), `us`, `uk`, or `eu` (labeled on the tag), or `one_size`.
+    colors:
+      type: array
+      maxItems: 10
+      items:
+        type: string
+        maxLength: 32
+    pattern:
+      type: string
+      maxLength: 64
+    materials:
+      type: array
+      maxItems: 10
+      items:
+        type: string
+        maxLength: 64
+    condition:
+      $ref: '#/ItemCondition'
+    conditionNotes:
+      type: string
+      maxLength: 2000
+    flaws:
+      type: array
+      maxItems: 20
+      items:
+        type: string
+        maxLength: 200
+    keywords:
+      type: array
+      maxItems: 30
+      items:
+        type: string
+        maxLength: 64
+    measurements:
+      type: array
+      maxItems: 20
+      items:
+        $ref: '#/Measurement'
+    listPrice:
+      $ref: './common.yaml#/Money'
+    floorPrice:
+      $ref: './common.yaml#/Money'
+    cost:
+      $ref: './common.yaml#/Money'
+    purchaseDate:
+      type: string
+      format: date
+    purchaseSource:
+      type: string
+      maxLength: 200
+    quantity:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 10000
+      default: 1
+    storageLocationId:
+      $ref: './common.yaml#/Id'
+      description: The storage location where the item is kept (for example a bin or shelf).
+    acceptedAnalysisId:
+      $ref: './common.yaml#/Id'
+      description: The analysis whose proposals the user accepted; see `Item.fieldProvenance`.
+ItemCreate:
+  type: object
+  properties:
+    details:
+      $ref: '#/ItemDetails'
+ItemReplace:
+  type: object
+  required: [expectedVersion, details]
+  properties:
+    expectedVersion:
+      type: integer
+      format: int64
+      minimum: 1
+      description: The `version` the client last read (optimistic lock).
+    status:
+      $ref: '#/UserSettableItemStatus'
+    details:
+      $ref: '#/ItemDetails'
+Item:
+  type: object
+  required: [id, sku, status, version, details, photos, listings, createdAt, updatedAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    sku:
+      $ref: './common.yaml#/Sku'
+    status:
+      $ref: '#/ItemStatus'
+    version:
+      type: integer
+      format: int64
+      minimum: 1
+      description: Increases on every change; send it back as `expectedVersion`.
+    details:
+      $ref: '#/ItemDetails'
+    fieldProvenance:
+      type: object
+      description: |
+        Read-only: where each detail came from, keyed by property name, for example
+        `{"brand": "ocr"}`. The server owns it and clients never send it. A detail whose
+        value equals the accepted analysis's value keeps that analysis's source; any other
+        detail written through the API is `user`.
+      additionalProperties:
+        $ref: './common.yaml#/Provenance'
+    storageLocation:
+      $ref: '#/StorageLocationSummary'
+      description: Read-only; the location `details.storageLocationId` refers to.
+    photos:
+      type: array
+      description: In display order; the first is the cover.
+      items:
+        $ref: './photos.yaml#/Photo'
+    listings:
+      type: array
+      items:
+        $ref: './listings.yaml#/Listing'
+    saleSummary:
+      $ref: '#/ItemSaleSummary'
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    updatedAt:
+      $ref: './common.yaml#/Timestamp'
+StorageLocationSummary:
+  type: object
+  description: Where an item is kept.
+  required: [id, code, label]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    code:
+      type: string
+      maxLength: 32
+      description: The short code printed on the bin or shelf, for example `B-12`.
+    label:
+      type: string
+      maxLength: 120
+      description: For example "Garage shelf 3, bin 12".
+ItemSaleSummary:
+  type: object
+  description: |
+    Read-only result of the item's sale. Present only when the item has sold (status
+    `sold_pending_delist`, `sold`, or `shipped`). For an item sold in a bundle, the
+    order's fees and shipping cost are split across its items in proportion to each
+    item's `salePrice`. A value is absent until it is known.
+  required: [saleId, soldAt, salePrice]
+  properties:
+    saleId:
+      $ref: './common.yaml#/Id'
+    soldAt:
+      $ref: './common.yaml#/Timestamp'
+    salePrice:
+      $ref: './common.yaml#/Money'
+    netProceeds:
+      $ref: './common.yaml#/Money'
+      description: This item's share of the sale's `netProceeds`.
+    profit:
+      $ref: './common.yaml#/Money'
+      description: This item's share of `netProceeds`, minus its share of `shippingCost`, minus its `cost`.
+    roiBasisPoints:
+      type: integer
+      format: int64
+      description: |
+        Return on investment, `profit` divided by the item's `cost`, in basis points
+        (12550 is 125.5%). Absent when `profit` is absent or the cost is zero.
+ItemSummary:
+  type: object
+  description: The item as shown in inventory lists.
+  required: [id, sku, status, listings, createdAt, updatedAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    sku:
+      $ref: './common.yaml#/Sku'
+    status:
+      $ref: '#/ItemStatus'
+    title:
+      type: string
+      maxLength: 200
+    brand:
+      type: string
+      maxLength: 120
+    sizeLabel:
+      type: string
+      maxLength: 32
+    listPrice:
+      $ref: './common.yaml#/Money'
+    coverPhoto:
+      $ref: './photos.yaml#/Photo'
+    listings:
+      type: array
+      items:
+        $ref: './listings.yaml#/ListingStatusSummary'
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    updatedAt:
+      $ref: './common.yaml#/Timestamp'
+ItemPage:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/ItemSummary'
+    nextCursor:
+      type: string
+      description: Present when there are more results.

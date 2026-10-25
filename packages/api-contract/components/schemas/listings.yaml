@@ -1,0 +1,240 @@
+ListingStatus:
+  description: |
+    A `KnownListingStatus`, or a status added after this client was built. Clients show
+    the listing's `statusDisplay` for an unknown status and never treat it as success.
+  anyOf:
+    - $ref: '#/KnownListingStatus'
+    - type: string
+      maxLength: 64
+KnownListingStatus:
+  type: string
+  description: |
+    Lifecycle of one listing. `active` and `ended` are set only after verification
+    (see `verification`); `unknown` means an outcome is being checked.
+  enum: [draft, queued, publishing, active, ending, ended, sold, error, unknown, needs_user_action]
+ListingAction:
+  description: |
+    A `KnownListingAction`, or an action added after this client was built. Clients hide
+    actions they do not know.
+  anyOf:
+    - $ref: '#/KnownListingAction'
+    - type: string
+      maxLength: 64
+KnownListingAction:
+  type: string
+  enum: [publish, revise, change_price, end, relist, verify]
+ListingActionAvailability:
+  type: object
+  description: An action the user can take now, and whether Listora or the user performs it.
+  required: [action, mode]
+  properties:
+    action:
+      $ref: '#/ListingAction'
+    mode:
+      $ref: './common.yaml#/IntegrationMode'
+ListingAspect:
+  type: object
+  description: >-
+    A marketplace item specific, for example
+    `{"name": "Sleeve Length", "values": ["Short Sleeve"]}`.
+  required: [name, values]
+  properties:
+    name:
+      type: string
+      maxLength: 120
+    values:
+      type: array
+      minItems: 1
+      maxItems: 30
+      items:
+        type: string
+        maxLength: 200
+ListingVariant:
+  type: object
+  description: The marketplace-specific version of the item.
+  required: [title, description, price]
+  properties:
+    title:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Marketplace limits (for example 80 characters on eBay) are checked at publish.
+    description:
+      type: string
+      maxLength: 10000
+    price:
+      $ref: './common.yaml#/Money'
+    categoryRef:
+      type: string
+      maxLength: 64
+      description: The marketplace's category id.
+    condition:
+      $ref: './items.yaml#/ItemCondition'
+    aspects:
+      type: array
+      maxItems: 60
+      items:
+        $ref: '#/ListingAspect'
+    hashtags:
+      type: array
+      maxItems: 10
+      items:
+        type: string
+        maxLength: 64
+ListingCreate:
+  type: object
+  required: [marketplace, variant]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/KnownMarketplace'
+    variant:
+      $ref: '#/ListingVariant'
+SharedListingUrl:
+  type: string
+  minLength: 1
+  maxLength: 2048
+  description: |
+    A marketplace listing URL as the user shared it. Accepted: listing pages on
+    `ebay.com` (`/itm/<item id>`), `poshmark.com` (`/listing/<title>-<id>`),
+    `mercari.com` (`/us/item/<id>/`), and `depop.com` (`/products/<slug>/`), and the
+    marketplaces' share short links (`ebay.us`, `posh.mk`, `merc.li`, `depop.app.link`).
+    The server keeps the canonical form (https, no query or fragment) as the listing's
+    `externalUrl`, and the listing id as `externalListingId`; a short link has no
+    listing id, because only the marketplace can resolve it and Listora never fetches it.
+ListingLinkCreate:
+  type: object
+  required: [url]
+  properties:
+    url:
+      $ref: '#/SharedListingUrl'
+SharedListingImport:
+  type: object
+  required: [url, title]
+  properties:
+    url:
+      $ref: '#/SharedListingUrl'
+    title:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: The new item's title, entered or confirmed by the user.
+SharedListingImportResult:
+  type: object
+  required: [item, listing]
+  properties:
+    item:
+      $ref: './items.yaml#/Item'
+    listing:
+      $ref: '#/Listing'
+ListingVariantReplace:
+  type: object
+  required: [variant]
+  properties:
+    variant:
+      $ref: '#/ListingVariant'
+ListingPriceChange:
+  type: object
+  required: [price]
+  properties:
+    price:
+      $ref: './common.yaml#/Money'
+ListingEndReason:
+  type: string
+  enum: [sold_elsewhere, not_available, other]
+ListingEnd:
+  type: object
+  required: [reason]
+  properties:
+    reason:
+      $ref: '#/ListingEndReason'
+Listing:
+  type: object
+  description: |
+    One item's listing on one marketplace. `variant` is Listora's version of the listing;
+    it is absent for a listing the user linked from a share (`linkItemListing`), because
+    Listora never read that listing's title or price.
+  required:
+    [id, itemId, marketplace, mode, status, statusDisplay, availableActions, createdAt, updatedAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    itemId:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    mode:
+      $ref: './common.yaml#/IntegrationMode'
+    status:
+      $ref: '#/ListingStatus'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+    verification:
+      $ref: './common.yaml#/Verification'
+    externalListingId:
+      type: string
+      maxLength: 128
+    externalSku:
+      type: string
+      maxLength: 64
+    externalUrl:
+      type: string
+      format: uri
+    variant:
+      $ref: '#/ListingVariant'
+    latestOperation:
+      $ref: './operations.yaml#/Operation'
+    availableActions:
+      type: array
+      items:
+        $ref: '#/ListingActionAvailability'
+    listedAt:
+      $ref: './common.yaml#/Timestamp'
+    endedAt:
+      $ref: './common.yaml#/Timestamp'
+    lastVerifiedAt:
+      $ref: './common.yaml#/Timestamp'
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    updatedAt:
+      $ref: './common.yaml#/Timestamp'
+ListingStatusSummary:
+  type: object
+  required: [listingId, marketplace, mode, status, statusDisplay]
+  properties:
+    listingId:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    mode:
+      $ref: './common.yaml#/IntegrationMode'
+    status:
+      $ref: '#/ListingStatus'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+ListingList:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/Listing'
+ListingPage:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/Listing'
+    nextCursor:
+      type: string
+      description: Present when there are more results.
+ListingOperationAccepted:
+  type: object
+  required: [listing, operation]
+  properties:
+    listing:
+      $ref: '#/Listing'
+    operation:
+      $ref: './operations.yaml#/Operation'

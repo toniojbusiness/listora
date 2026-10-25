@@ -33,7 +33,7 @@ export interface ConnectionWork {
 }
 
 /**
- * The worker's side of marketplace connections (docs/architecture.md section 4): the eBay
+ * The worker's side of marketplace connections (docs/features/marketplaces.md): the eBay
  * adapter's per-connection tokens, the daily `connection_health` check, and the revocations
  * account deletion asks for. Without a vault none of them can open a token, so none runs, and
  * the eBay adapter keeps its configured development seller (`EBAY_USER_*`), if any.

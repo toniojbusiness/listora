@@ -1,5 +1,5 @@
 /**
- * How often and how long the engine keeps trying one operation (docs/architecture.md section 6).
+ * How often and how long the engine keeps trying one operation (docs/features/operations.md).
  *
  * Every step of an operation (sending it, or reading the listing back to verify it) uses one
  * attempt. After attempt n the next step waits `delaysMs[n - 1]` (the last delay repeats),

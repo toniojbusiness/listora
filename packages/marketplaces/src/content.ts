@@ -1,6 +1,6 @@
 /**
  * Listing content: the item snapshot and the marketplace variant that a create, revise, or
- * relist publishes, in Listora's own terms (docs/architecture.md section 4). The operation
+ * relist publishes, in Listora's own terms (docs/features/marketplaces.md). The operation
  * stores it (`marketplace_operation.content`), each attempt builds the marketplace payload from
  * it with the adapter's pure `buildPayload`, and the desired state a read-back checks comes from
  * it too, so the payload sent and the state verified can never drift apart.

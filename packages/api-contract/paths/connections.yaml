@@ -1,0 +1,156 @@
+/v1/connections:
+  get:
+    tags: [connections]
+    operationId: listConnections
+    summary: List marketplace connections
+    description: One entry per supported marketplace, including assisted ones, so not paginated.
+    responses:
+      '200':
+        description: Every marketplace and its connection state.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/connections.yaml#/ConnectionList'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/connections/{marketplace}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/MarketplacePath'
+  get:
+    tags: [connections]
+    operationId: getConnection
+    summary: Get one marketplace connection
+    responses:
+      '200':
+        description: The connection.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/connections.yaml#/Connection'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  delete:
+    tags: [connections]
+    operationId: disconnectConnection
+    summary: Disconnect a marketplace account
+    description: |
+      Revokes and deletes the stored tokens. Existing listings stay on the marketplace but
+      Listora can no longer change or verify them until the account is connected again.
+    responses:
+      '200':
+        description: The connection, now `not_connected`.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/connections.yaml#/Connection'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/connections/{marketplace}/authorizations:
+  parameters:
+    - $ref: '../components/parameters.yaml#/MarketplacePath'
+  post:
+    tags: [connections]
+    operationId: startConnectionAuthorization
+    summary: Start connecting a marketplace account (OAuth)
+    description: |
+      Returns the marketplace's official authorization URL. The app opens it in
+      `ASWebAuthenticationSession` with `callbackUrlScheme`. The marketplace redirects the
+      browser to `handleConnectionCallback`, which exchanges the code on the server and
+      redirects to the app. The app then reads the result with
+      `getConnectionAuthorization`; it never trusts the redirect alone. Listora never asks
+      for marketplace passwords. `409 marketplace_action_unavailable` for marketplaces
+      without an authorized API connection.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/connections.yaml#/ConnectionAuthorization'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/connections/{marketplace}/authorizations/{authorizationId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/MarketplacePath'
+    - $ref: '../components/parameters.yaml#/AuthorizationId'
+  get:
+    tags: [connections]
+    operationId: getConnectionAuthorization
+    summary: Get the result of a connection attempt
+    responses:
+      '200':
+        description: The authorization attempt.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/connections.yaml#/ConnectionAuthorization'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/connections/{marketplace}/callback:
+  parameters:
+    - $ref: '../components/parameters.yaml#/MarketplacePath'
+  get:
+    tags: [connections]
+    operationId: handleConnectionCallback
+    summary: OAuth redirect target (called by the marketplace, not the app)
+    description: |
+      The marketplace redirects the user's browser here after consent. No bearer token: the
+      single-use, short-lived `state` binds the request to the authorization attempt. The
+      server exchanges the code and always answers with a redirect to the app
+      (`listora://connections/{marketplace}?authorizationId=...`), also on failure; the
+      app then calls `getConnectionAuthorization`. Query parameter names follow OAuth 2.0.
+      A request whose `state` names no attempt (missing, unknown, or already used by another
+      marketplace) changes nothing and redirects without `authorizationId`; the app then
+      reads the attempt it started. A repeated callback with the same `state` only redirects
+      again.
+    security: []
+    parameters:
+      - name: state
+        in: query
+        description: |
+          The attempt's `state`. Not marked required: a marketplace's "declined" redirect may
+          come without it, and that still has to reach the app.
+        schema:
+          type: string
+          maxLength: 512
+      - name: code
+        in: query
+        description: Authorization code; absent when the user declined.
+        schema:
+          type: string
+          maxLength: 4096
+      - name: error
+        in: query
+        description: OAuth error code, for example `access_denied`.
+        schema:
+          type: string
+          maxLength: 256
+      - name: error_description
+        in: query
+        schema:
+          type: string
+          maxLength: 2048
+    responses:
+      '302':
+        description: Redirect to the app.
+        headers:
+          Location:
+            description: An app URL with the `listora` scheme.
+            required: true
+            schema:
+              type: string
+              format: uri
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

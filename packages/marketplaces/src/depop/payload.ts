@@ -1,5 +1,5 @@
 /**
- * The Depop listing a create, revise, or relist sends (docs/architecture.md section 4), built
+ * The Depop listing a create, revise, or relist sends (docs/features/depop.md), built
  * purely from the listing content and checked against Depop's rules before anything is sent.
  * The payload is Listora's view of the product; `productBody` (adapter.ts) adds the seller's
  * address and shipping and turns it into the Selling API's `ProductPutRequest`.

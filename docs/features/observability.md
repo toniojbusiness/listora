@@ -1,0 +1,46 @@
+# Observability
+
+What the processes log and the signals operators and alarms key on. Logging conventions every
+process follows are in [architecture.md](../architecture.md#typescript-conventions).
+
+- **Request ids.** Every API request has an id (a sane incoming `X-Request-Id`, otherwise a
+  UUID) that is in the response header, in `error.requestId`, and as `requestId` on every log
+  line of the request, so a support report leads straight to the server logs.
+- **Unexpected failures** are a generic `500 internal_error` in the response; only the log has
+  details.
+- **Operation history.** Every operation transition appends an `operation_event` with a
+  redacted request and response excerpt, error code, and attempt number
+  ([operations.md](operations.md)).
+- **AI spend.** The worker's hourly spend check logs one `event: "ai_spend_alert"` line per
+  alert and one `event: "ai_spend_check"` summary ([ai.md](ai.md)). CloudWatch metric filters
+  and alarms (T-30, T-32) key on these field names, so they change only together with the
+  alarms.
+- **Health.** `/health/live` checks no dependency (ECS replaces tasks that fail it);
+  `/health/ready` checks the database, for deploy checks and operators ([infra.md](infra.md)).
+
+## Trust metrics and alarms
+
+The worker publishes the product's trust metrics in CloudWatch Embedded Metric Format: JSON lines on
+stdout that CloudWatch Logs turns into metrics (no agent, no API calls). `TRUST_METRICS` in
+`packages/observability/src/catalog.ts` names each one, its unit, and its dimensions, and both the
+worker and the CDK alarms read it. A Graphile cron job (`trust_metrics`, once a minute across all
+workers, filled in for up to an hour after downtime) computes them from committed rows, so a
+rolled-back change is never counted and every writer (worker steps, user confirmations through the
+API) is covered. For minute T it publishes the operations that settled in [T - 2 min, T - 1 min):
+`VerifiedSuccess` (1 or 0 per settled operation, so Average is the verified-success rate) per
+marketplace and kind and per marketplace, `OperationFailed` per marketplace and kind,
+`DelistFailed`, and `DelistLatency` from the recorded sale to the verified delist per marketplace
+(p50, p95). Every scheduled tick, however late, also publishes the state at the time it runs (the
+job runs ahead of every operation step in the queue, so a backlog cannot silence it):
+`StuckOperations` and `OldestStuckOperationAge` per status (verifying, retrying, needs_user_action),
+`OldestUnverifiedOperationAge`, `AiDailyCostUsd` per account (UTC day), `MarketplaceConnections` per
+marketplace and status, and `ConnectionsNeedingRelink`. The observability stack alarms on an
+operation unverified for 30 minutes, any failed delist, an account's AI cost today over
+`aiDailyCostAlarmUsd`, a connection needing relink, and per marketplace on p95 delist latency over
+an hour above `delistLatencyAlarmMinutes` (10 minutes for eBay's API, 13 hours for the
+browser-automated marketplaces and their 12-hour sale checks) and a verified-success rate below 90%
+over a day, and on every service running fewer tasks than it should, and sends unplanned task stops
+to the alarm topic. The relink alarm fires on a level, which suits one seller; an environment with
+many sellers should alarm on increases instead, so one unlinked connection does not mask the next. A
+new metric adds a catalog entry; keep dimensions few, since CloudWatch bills each combination of
+values as a metric ([costs.md](costs.md)).

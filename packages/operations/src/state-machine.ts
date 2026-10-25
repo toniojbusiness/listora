@@ -1,5 +1,5 @@
 /**
- * The operation state machine (docs/architecture.md section 6). Every status change goes
+ * The operation state machine (docs/features/operations.md). Every status change goes
  * through `transitionOperation` (transitions.ts), which checks it against this table.
  *
  *   queued ──▶ running ──▶ succeeded            (read-back confirmed the desired state)

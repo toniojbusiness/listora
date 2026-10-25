@@ -1,5 +1,5 @@
 /**
- * The marketplace adapter interface (docs/architecture.md section 4). All marketplace logic
+ * The marketplace adapter interface (docs/features/marketplaces.md). All marketplace logic
  * lives behind it; the operation engine and the UI never branch on the marketplace name, only
  * on capability flags (capabilities.ts), which may differ per connection.
  *
@@ -210,7 +210,7 @@ export interface UserTaskSpec {
 }
 
 /**
- * What happened when an adapter executed one attempt (docs/architecture.md section 6). Codes
+ * What happened when an adapter executed one attempt (docs/features/operations.md). Codes
  * are stable machine-readable identifiers; messages are user-readable and name the marketplace.
  */
 export type Outcome =

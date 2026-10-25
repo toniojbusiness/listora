@@ -1,6 +1,6 @@
 /**
  * Connecting a seller's marketplace account through the marketplace's official OAuth 2.0
- * authorization code grant (docs/architecture.md section 4). One `MarketplaceOAuthClient` per
+ * authorization code grant (docs/features/marketplaces.md). One `MarketplaceOAuthClient` per
  * marketplace that has one (eBay first, `ebay/oauth.ts`); `@listora/connections` drives it, and
  * keeps the tokens it returns encrypted in the token vault.
  *

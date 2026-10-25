@@ -6,7 +6,7 @@ and all tests run offline: `npm run check` needs no AWS account and no credentia
 
 `staging` and `prod` are the product's environments. `personal` is the low-cost layout for one
 reseller running Listora in their own AWS account; see
-[The personal environment](#the-personal-environment) and [docs/costs.md](../docs/costs.md).
+[The personal environment](#the-personal-environment) and [docs/features/costs.md](../docs/features/costs.md).
 
 ## Stacks
 
@@ -34,9 +34,9 @@ snapshot diff.
 
 ### The personal environment
 
-The same stacks, image, and deploy workflow, with every hourly charge that one user does not
-need removed. It costs about $35 a month, or about $36 a month with browser automation, and
-$0.56 more once a domain is added; [docs/costs.md](../docs/costs.md) has the line items, the
+The same stacks, image, and deploy workflow, with every hourly charge that one user does not need
+removed. It costs about $35 a month, or about $36 a month with browser automation, and $0.56 more
+once a domain is added; [docs/features/costs.md](../docs/features/costs.md) has the line items, the
 alternatives each choice beat, and the levers left.
 
 | Piece       | staging and prod                                              | personal                                                                                                                                                                                                                         |
@@ -56,7 +56,7 @@ removes its network interfaces, and the first request afterwards fails for a few
 `browserRunner` reserves the size of the later headless-Chromium runner (1 vCPU, 4 GiB,
 started per batch of listing actions and per scheduled sale check, zero tasks while idle).
 Nothing is provisioned from it yet. It runs the browser automation of decision D1 in
-[docs/architecture.md](../docs/architecture.md#4-marketplace-adapter-model) and follows its
+[docs/features/automation.md](../docs/features/automation.md) and follows its
 rules: session cookies encrypted with the token key, never a password, human-paced actions,
 and never a CAPTCHA or bot check solved (it falls back to an assisted task).
 

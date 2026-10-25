@@ -1,6 +1,6 @@
 /**
  * The token vault: marketplace OAuth tokens are stored only encrypted, with envelope
- * encryption (docs/architecture.md section 7). Every seal makes a new random 256-bit data key,
+ * encryption (docs/architecture.md section 5). Every seal makes a new random 256-bit data key,
  * encrypts the tokens with it (AES-256-GCM), and stores the data key only wrapped by the key
  * encryption key: a KMS key in deployed environments (`KmsTokenVault`), a local key from
  * `TOKEN_ENCRYPTION_KEY` in development (`LocalTokenVault`).

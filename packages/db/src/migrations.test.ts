@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { MIGRATIONS_DIR, SqlFileMigrationProvider } from './migrations.ts';
+import { MIGRATIONS_DIR, migrationPrefix, SqlFileMigrationProvider } from './migrations.ts';
 
 const directories: string[] = [];
 
@@ -15,18 +15,25 @@ async function migrationsDir(files: readonly string[]): Promise<string> {
   return directory;
 }
 
+/** The last migration named with a four-digit number; every later one has a UTC timestamp. */
+const LAST_NUMBERED_MIGRATION = '0014_marketplace_connect';
+
 /**
- * Numbers used by more than one migration. Gaps are allowed: firstmate pre-assigns numbers to
- * open branches and merges them in order.
+ * Problems with the shipped migration names: a prefix used twice, or a numbered migration
+ * added after the switch to timestamps. Timestamps never collide between parallel branches,
+ * and gaps between numbers or times are allowed.
  */
-function numberingProblems(files: readonly string[]): string[] {
+function namingProblems(files: readonly string[]): string[] {
   const owners = new Map<string, string>();
   const problems: string[] = [];
   for (const name of [...new Set(files.map((file) => file.split('.')[0] ?? file))].sort()) {
-    const number = name.slice(0, 4);
-    const owner = owners.get(number);
-    if (owner === undefined) owners.set(number, name);
-    else problems.push(`${number} is used by ${owner} and ${name}`);
+    const prefix = migrationPrefix(name);
+    const owner = owners.get(prefix);
+    if (owner === undefined) owners.set(prefix, name);
+    else problems.push(`${prefix} is used by ${owner} and ${name}`);
+    if (prefix.length === 4 && name > LAST_NUMBERED_MIGRATION) {
+      problems.push(`${name} needs a UTC timestamp name (YYYYMMDDHHMMSS_name)`);
+    }
   }
   return problems;
 }
@@ -69,23 +76,79 @@ describe('SqlFileMigrationProvider', () => {
       '0001_other.down.sql',
     ]);
     await expect(new SqlFileMigrationProvider(directory).getMigrations()).rejects.toThrow(
-      'Migrations 0001_first and 0001_other share the number 0001',
+      'Migrations 0001_first and 0001_other share the prefix 0001',
     );
   });
 
-  it('ships migrations with unique numbers (gaps allowed)', async () => {
-    // Numbers are assigned up front and branches merge in numeric order, so a gap is only a
-    // migration that has not merged yet. A reused number fails here.
-    expect(numberingProblems(await readdir(MIGRATIONS_DIR))).toEqual([]);
+  it('rejects two migrations with the same timestamp', async () => {
+    const directory = await migrationsDir([
+      '20261024153000_a.up.sql',
+      '20261024153000_a.down.sql',
+      '20261024153000_b.up.sql',
+      '20261024153000_b.down.sql',
+    ]);
+    await expect(new SqlFileMigrationProvider(directory).getMigrations()).rejects.toThrow(
+      'Migrations 20261024153000_a and 20261024153000_b share the prefix 20261024153000',
+    );
   });
 
-  it('numbering check reports shared numbers and allows gaps', () => {
+  it.each(['20261324153000', '20261024250000', '20260230120000', '20261024156000'])(
+    'rejects %s, which is not a real UTC time',
+    async (prefix) => {
+      const directory = await migrationsDir([`${prefix}_a.up.sql`, `${prefix}_a.down.sql`]);
+      await expect(new SqlFileMigrationProvider(directory).getMigrations()).rejects.toThrow(
+        `Migration ${prefix}_a does not start with a UTC time (YYYYMMDDHHMMSS)`,
+      );
+    },
+  );
+
+  it.each(['202610241530_a.up.sql', '2026102415300000_a.up.sql', '20261024T153000_a.up.sql'])(
+    'rejects %s, whose prefix is neither a number nor a timestamp',
+    async (file) => {
+      const directory = await migrationsDir([file]);
+      await expect(new SqlFileMigrationProvider(directory).getMigrations()).rejects.toThrow(
+        /Unexpected file .*YYYYMMDDHHMMSS_name\.up\.sql/,
+      );
+    },
+  );
+
+  it('orders numbered migrations before timestamped ones, and timestamps by time', async () => {
+    const directory = await migrationsDir([
+      '20261101090000_later.up.sql',
+      '20261101090000_later.down.sql',
+      '0012_numbered.up.sql',
+      '0012_numbered.down.sql',
+      '20261024153000_earlier.up.sql',
+      '20261024153000_earlier.down.sql',
+    ]);
+    const migrations = await new SqlFileMigrationProvider(directory).getMigrations();
+    // Kysely's migrator runs migrations in name order.
+    expect(Object.keys(migrations).sort()).toEqual([
+      '0012_numbered',
+      '20261024153000_earlier',
+      '20261101090000_later',
+    ]);
+  });
+
+  it('ships migrations with unique prefixes, and timestamps after the numbered ones', async () => {
+    // A reused prefix, or a new four-digit number, fails here.
+    expect(namingProblems(await readdir(MIGRATIONS_DIR))).toEqual([]);
+  });
+
+  it('naming check reports shared prefixes and new numbers, and allows gaps', () => {
     const pair = (name: string) => [`${name}.up.sql`, `${name}.down.sql`];
-    expect(numberingProblems([...pair('0001_a'), ...pair('0002_b')])).toEqual([]);
-    expect(numberingProblems([...pair('0001_a'), ...pair('0003_c')])).toEqual([]);
-    expect(numberingProblems(pair('0002_b'))).toEqual([]);
-    expect(numberingProblems([...pair('0001_a'), ...pair('0002_b'), ...pair('0002_c')])).toEqual([
+    expect(namingProblems([...pair('0001_a'), ...pair('0003_c')])).toEqual([]);
+    expect(
+      namingProblems([...pair('0014_marketplace_connect'), ...pair('20261024153000_a')]),
+    ).toEqual([]);
+    expect(namingProblems([...pair('0001_a'), ...pair('0002_b'), ...pair('0002_c')])).toEqual([
       '0002 is used by 0002_b and 0002_c',
+    ]);
+    expect(namingProblems([...pair('20261024153000_a'), ...pair('20261024153000_b')])).toEqual([
+      '20261024153000 is used by 20261024153000_a and 20261024153000_b',
+    ]);
+    expect(namingProblems(pair('0015_new'))).toEqual([
+      '0015_new needs a UTC timestamp name (YYYYMMDDHHMMSS_name)',
     ]);
   });
 

@@ -1,5 +1,5 @@
 /**
- * Reading capability flags (docs/architecture.md section 4). The engine routes every operation
+ * Reading capability flags (docs/features/marketplaces.md). The engine routes every operation
  * by `operationMode`, never by the marketplace name, and `checkCapabilities` keeps a set of
  * flags from promising a success it could not establish.
  */

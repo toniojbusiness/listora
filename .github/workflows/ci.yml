@@ -61,6 +61,11 @@ jobs:
               - 'packages/*/package.json'
               - 'apps/api/src/main.ts'
               - 'apps/worker/src/main.ts'
+              # Read from the image's file system at startup: the feature discovery indexes
+              # and the bundled contract the API validates requests with.
+              - 'apps/api/src/features.ts'
+              - 'apps/worker/src/features.ts'
+              - 'packages/api-contract/bundled/**'
               - 'infra/**'
               - 'scripts/container-smoke.sh'
               - '.github/workflows/ci.yml'

@@ -3,8 +3,16 @@ import { fileURLToPath } from 'node:url';
 
 import { parse } from 'yaml';
 
-/** Absolute path of `openapi.yaml`, the contract every other file is generated from. */
+/**
+ * Absolute path of `openapi.yaml`, the root of the contract every other file is generated
+ * from. It references the per-resource files in `paths/` and `components/`.
+ */
 export const CONTRACT_SPEC_PATH = fileURLToPath(new URL('../openapi.yaml', import.meta.url));
+
+/** Absolute path of the contract bundled into one document (`npm run contract:generate`). */
+export const CONTRACT_BUNDLE_PATH = fileURLToPath(
+  new URL('../bundled/openapi.yaml', import.meta.url),
+);
 
 /** A JSON Schema node as the contract writes it (OpenAPI 3.1, so JSON Schema 2020-12). */
 export interface ContractSchema {
@@ -63,10 +71,11 @@ export interface ContractDocument {
 }
 
 /**
- * Parses `openapi.yaml`. The server builds its request validators from this document, so
- * requests are checked against the contract itself rather than a hand-written copy of it.
- * Every call returns a fresh object that the caller may modify.
+ * Parses the bundled contract, in which every reference is a `#/components/...` reference.
+ * The server builds its request validators from this document, so requests are checked
+ * against the contract itself rather than a hand-written copy of it. `npm run contract:check`
+ * fails when the bundle is stale. Every call returns a fresh object that the caller may modify.
  */
 export function loadContractDocument(): ContractDocument {
-  return parse(readFileSync(CONTRACT_SPEC_PATH, 'utf8')) as ContractDocument;
+  return parse(readFileSync(CONTRACT_BUNDLE_PATH, 'utf8')) as ContractDocument;
 }

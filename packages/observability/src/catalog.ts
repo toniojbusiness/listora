@@ -5,7 +5,7 @@
  *
  * Every environment is its own AWS account, so one namespace serves all of them. CloudWatch
  * bills each distinct name and dimension values as one custom metric, for the hours it
- * receives data, so dimensions stay few and low in cardinality (docs/costs.md).
+ * receives data, so dimensions stay few and low in cardinality (docs/features/costs.md).
  */
 
 export const METRIC_NAMESPACE = 'Listora';

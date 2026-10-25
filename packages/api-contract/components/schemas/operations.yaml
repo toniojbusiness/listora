@@ -1,0 +1,188 @@
+OperationKind:
+  description: |
+    A `KnownOperationKind`, or a kind added after this client was built. Clients describe
+    an unknown kind generically using the operation's `statusDisplay`.
+  anyOf:
+    - $ref: '#/KnownOperationKind'
+    - type: string
+      maxLength: 64
+KnownOperationKind:
+  type: string
+  enum: [create, revise, price, end, relist, mark_sold, verify]
+OperationStatus:
+  description: |
+    A `KnownOperationStatus`, or a status added after this client was built. Clients show
+    the operation's `statusDisplay` for an unknown status and never treat it as success.
+  anyOf:
+    - $ref: '#/KnownOperationStatus'
+    - type: string
+      maxLength: 64
+KnownOperationStatus:
+  type: string
+  description: |
+    `succeeded` only after an API read-back confirms the desired state or the user
+    confirms an assisted task. `verifying`: the outcome is unknown (for example a timeout
+    after sending) and is being checked by read-back; the request is never re-sent
+    blindly. `retrying`: a transient failure, retried with backoff.
+  enum: [queued, running, retrying, verifying, succeeded, failed, needs_user_action, canceled]
+OperationOriginType:
+  description: |
+    A `KnownOperationOriginType`, or an origin added after this client was built. Clients
+    show an unknown origin generically.
+  anyOf:
+    - $ref: '#/KnownOperationOriginType'
+    - type: string
+      maxLength: 64
+KnownOperationOriginType:
+  type: string
+  enum: [user, auto_delist, reprice_rule]
+OperationOrigin:
+  type: object
+  required: [type]
+  properties:
+    type:
+      $ref: '#/OperationOriginType'
+    saleId:
+      $ref: './common.yaml#/Id'
+      description: Set for `auto_delist`.
+    repriceRuleId:
+      $ref: './common.yaml#/Id'
+      description: Set for `reprice_rule`.
+OperationError:
+  type: object
+  required: [code, message, retryable]
+  properties:
+    code:
+      type: string
+      maxLength: 64
+      description: Listora's normalized error code, for example `marketplace_validation`.
+    message:
+      type: string
+      maxLength: 1000
+      description: User-readable reason.
+    fixHint:
+      type: string
+      maxLength: 1000
+      description: What the user can do about it.
+    retryable:
+      type: boolean
+    marketplaceErrorCode:
+      type: string
+      maxLength: 64
+      description: The marketplace's own error code, for support.
+Operation:
+  type: object
+  required:
+    [
+      id,
+      listingId,
+      itemId,
+      marketplace,
+      kind,
+      status,
+      statusDisplay,
+      attempt,
+      maxAttempts,
+      origin,
+      createdAt,
+      updatedAt,
+    ]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    listingId:
+      $ref: './common.yaml#/Id'
+    itemId:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    kind:
+      $ref: '#/OperationKind'
+    status:
+      $ref: '#/OperationStatus'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+    attempt:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Attempts made so far (shown as "retry 2 of 6").
+    maxAttempts:
+      type: integer
+      format: int32
+      minimum: 1
+    nextAttemptAt:
+      $ref: './common.yaml#/Timestamp'
+    origin:
+      $ref: '#/OperationOrigin'
+    error:
+      $ref: '#/OperationError'
+    verification:
+      $ref: './common.yaml#/Verification'
+    userTaskId:
+      $ref: './common.yaml#/Id'
+      description: The assisted task this operation waits for.
+    retryOfOperationId:
+      $ref: './common.yaml#/Id'
+    createdAt:
+      $ref: './common.yaml#/Timestamp'
+    updatedAt:
+      $ref: './common.yaml#/Timestamp'
+    completedAt:
+      $ref: './common.yaml#/Timestamp'
+OperationPage:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/Operation'
+    nextCursor:
+      type: string
+      description: Present when there are more results.
+OperationEvent:
+  type: object
+  description: One state transition. Append-only.
+  required: [id, operationId, sequence, toStatus, attempt, occurredAt]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    operationId:
+      $ref: './common.yaml#/Id'
+    sequence:
+      type: integer
+      format: int64
+      minimum: 1
+    fromStatus:
+      $ref: '#/OperationStatus'
+      description: Absent for the first event.
+    toStatus:
+      $ref: '#/OperationStatus'
+    attempt:
+      type: integer
+      format: int32
+      minimum: 0
+    message:
+      type: string
+      maxLength: 1000
+      description: User-readable summary, for example "eBay confirmed the new price".
+    error:
+      $ref: '#/OperationError'
+    detail:
+      type: object
+      description: Redacted request/response excerpt for support views. Never contains tokens.
+      additionalProperties: true
+    occurredAt:
+      $ref: './common.yaml#/Timestamp'
+OperationEventPage:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/OperationEvent'
+    nextCursor:
+      type: string
+      description: Present when there are more results.

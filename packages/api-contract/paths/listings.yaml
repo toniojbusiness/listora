@@ -1,0 +1,360 @@
+/v1/items/{itemId}/listings:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  get:
+    tags: [listings]
+    operationId: listItemListings
+    summary: List an item's marketplace listings
+    description: At most one listing per marketplace, so this list is not paginated.
+    responses:
+      '200':
+        description: The item's listings.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listings.yaml#/ListingList'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  post:
+    tags: [listings]
+    operationId: createListing
+    summary: Create a draft listing for a marketplace
+    description: |
+      Creates the marketplace-specific variant as a `draft`. Nothing is sent to the
+      marketplace until `publishListing`. `409 already_exists` when the item already has a
+      listing on that marketplace.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/listings.yaml#/ListingCreate'
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listings.yaml#/Listing'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/items/{itemId}/listing-links:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  post:
+    tags: [listings]
+    operationId: linkItemListing
+    summary: Link a listing the user already has on a marketplace
+    description: |
+      Records a listing the user created on a marketplace themselves, from the URL they
+      shared from Safari or the marketplace app. The server reads the marketplace and the
+      listing id from the URL (see `ListingLinkCreate`) and never fetches it. The listing is
+      `assisted` and `active`, and its `verification` is `user_confirmation`: it is the
+      user's word, never shown as confirmed by the marketplace. A `draft` or `ready` item
+      becomes `listed`.
+
+      `409 already_exists` when this listing is already linked to an item (the message
+      names that item's SKU) or the item already has a live listing on that marketplace.
+      `409 invalid_state_transition` when the item is sold, shipped, archived, or being
+      delisted after a sale. `422 validation_failed` (field `url`) when the URL is not a
+      listing on a supported marketplace.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/listings.yaml#/ListingLinkCreate'
+    responses:
+      '201':
+        description: Linked.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listings.yaml#/Listing'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/listing-imports:
+  post:
+    tags: [listings]
+    operationId: importSharedListing
+    summary: Create an item for a shared listing and link the listing to it
+    description: |
+      For a listing the user shared that has no item in Listora yet. Creates an import
+      placeholder item, with the account's next SKU and the given title as its only detail
+      (the user adds the rest later), and links the listing to it exactly as
+      `linkItemListing` does, in one transaction. The item is `listed`.
+
+      `409 already_exists` when this listing is already linked to an item (the message
+      names that item's SKU). `422 validation_failed` (field `url`) when the URL is not a
+      listing on a supported marketplace.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/listings.yaml#/SharedListingImport'
+    responses:
+      '201':
+        description: Created and linked.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listings.yaml#/SharedListingImportResult'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/listings:
+  get:
+    tags: [listings]
+    operationId: listListings
+    summary: List listings across items
+    description: For views such as "everything that failed" or "everything on Depop". Newest first.
+    parameters:
+      - name: marketplace
+        in: query
+        schema:
+          $ref: '../components/schemas/common.yaml#/KnownMarketplace'
+      - name: status
+        in: query
+        schema:
+          type: array
+          items:
+            $ref: '../components/schemas/listings.yaml#/KnownListingStatus'
+        style: form
+        explode: true
+      - $ref: '../components/parameters.yaml#/Cursor'
+      - $ref: '../components/parameters.yaml#/Limit'
+    responses:
+      '200':
+        description: A page of listings.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listings.yaml#/ListingPage'
+      '400':
+        $ref: '../components/responses.yaml#/BadRequest'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/listings/{listingId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ListingId'
+  get:
+    tags: [listings]
+    operationId: getListing
+    summary: Get a listing and its current status
+    responses:
+      '200':
+        description: The listing.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listings.yaml#/Listing'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/listings/{listingId}/variant:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ListingId'
+  put:
+    tags: [listings]
+    operationId: replaceListingDraft
+    summary: Replace a draft listing's variant
+    description: |
+      Only for `draft` listings; it changes nothing on the marketplace. A live listing is
+      changed with `reviseListing` or `changeListingPrice` (`409 invalid_state_transition`
+      otherwise).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/listings.yaml#/ListingVariantReplace'
+    responses:
+      '200':
+        description: The updated listing.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/listings.yaml#/Listing'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/listings/{listingId}/publish:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ListingId'
+  post:
+    tags: [listings]
+    operationId: publishListing
+    summary: Publish a draft listing to its marketplace
+    description: |
+      Queues a `create` operation. On an API marketplace the listing becomes `active` only
+      after the marketplace confirms it on read-back. On an assisted marketplace it opens a
+      `list_manually` task and the operation waits in `needs_user_action`.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '202':
+        $ref: '../components/responses.yaml#/ListingOperationAccepted'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/listings/{listingId}/revise:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ListingId'
+  post:
+    tags: [listings]
+    operationId: reviseListing
+    summary: Change a live listing's details
+    description: |
+      Queues a `revise` operation with the new variant (title, description, aspects, price).
+      Assisted marketplaces get an `edit_manually` task.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/listings.yaml#/ListingVariantReplace'
+    responses:
+      '202':
+        $ref: '../components/responses.yaml#/ListingOperationAccepted'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/listings/{listingId}/price:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ListingId'
+  post:
+    tags: [listings]
+    operationId: changeListingPrice
+    summary: Change a live listing's price
+    description: |
+      Queues a `price` operation. The listed price changes only once it is confirmed.
+      Assisted marketplaces get an `edit_manually` task.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/listings.yaml#/ListingPriceChange'
+    responses:
+      '202':
+        $ref: '../components/responses.yaml#/ListingOperationAccepted'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/listings/{listingId}/end:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ListingId'
+  post:
+    tags: [listings]
+    operationId: endListing
+    summary: End (delist) a live listing
+    description: Queues an `end` operation. Assisted marketplaces get a `delist_manually` task.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/listings.yaml#/ListingEnd'
+    responses:
+      '202':
+        $ref: '../components/responses.yaml#/ListingOperationAccepted'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/listings/{listingId}/relist:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ListingId'
+  post:
+    tags: [listings]
+    operationId: relistListing
+    summary: Relist an ended listing
+    description: |
+      Queues a `relist` operation. Some marketplaces relist as a new listing with new
+      external ids (Depop gets a new external SKU); `externalListingId` changes when
+      confirmed.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '202':
+        $ref: '../components/responses.yaml#/ListingOperationAccepted'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/listings/{listingId}/verify:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ListingId'
+  post:
+    tags: [listings]
+    operationId: verifyListing
+    summary: Check the listing's real state on the marketplace again
+    description: |
+      Queues a `verify` operation (a read-back only; nothing is changed on the marketplace).
+      Only for API listings; assisted listings answer `409 marketplace_action_unavailable`.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    responses:
+      '202':
+        $ref: '../components/responses.yaml#/ListingOperationAccepted'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

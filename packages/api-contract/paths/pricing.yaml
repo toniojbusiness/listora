@@ -1,0 +1,44 @@
+/v1/items/{itemId}/pricing:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  get:
+    tags: [pricing]
+    operationId: getItemPricing
+    summary: Get price suggestions for an item
+    description: |
+      Every number carries its source. Without real sold data the response has no
+      `soldComparables`, says so in `noSoldDataMessage`, and its tiers are based on the
+      labeled AI estimate and the cost floor. Computing suggestions never calls AI; the
+      estimate comes from the item's analysis. No eBay content is used to compute any price.
+    parameters:
+      - name: shippingCents
+        in: query
+        description: |
+          What the seller expects to pay for shipping, in cents of the item's currency.
+          Added to every floor. Defaults to 0 (the buyer pays shipping).
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 10000000
+      - name: minimumProfitCents
+        in: query
+        description: |
+          The least profit the seller accepts on this item, in cents of the item's currency.
+          Added to every floor. Defaults to 0 (break even).
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 10000000
+    responses:
+      '200':
+        description: Price suggestions.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/pricing.yaml#/PricingSuggestion'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

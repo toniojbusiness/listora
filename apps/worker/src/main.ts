@@ -1,10 +1,4 @@
 import {
-  ACCOUNT_DELETION_TASK,
-  accountDeletionTask,
-  AwsCognitoUserAdmin,
-  noMarketplaceAccessRevocation,
-} from '@listora/accounts';
-import {
   createAiClient,
   PostgresAiControls,
   PostgresQuotaPolicy,
@@ -12,21 +6,14 @@ import {
 } from '@listora/ai';
 import { createOAuthClients, createTokenVault } from '@listora/connections';
 import { createDatabase } from '@listora/db';
-import {
-  createMetricsEmitter,
-  runTrustMetricsTick,
-  TRUST_METRICS_CRONTAB,
-  TRUST_METRICS_TASK,
-} from '@listora/observability';
 import { createMarketplaceAdapters } from '@listora/marketplaces';
 import { startOperationWorker } from '@listora/operations';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
 import { createStorage } from '@listora/storage';
 
-import { aiSpendCheckTask } from './ai-spend-check.ts';
 import { loadWorkerConfig } from './config.ts';
 import { createConnectionWork } from './connections.ts';
-import { createWorkerTasks } from './tasks.ts';
+import { collectWorkerJobs, WORKER_FEATURES } from './features.ts';
 
 const config = loadWorkerConfig();
 const logger = createLogger({ service: 'worker', level: config.logLevel });
@@ -34,7 +21,6 @@ const db = createDatabase({
   connectionString: config.databaseUrl,
   max: config.concurrency + config.taskConcurrency + 5,
 });
-const metrics = { db, emitter: createMetricsEmitter({ service: 'worker' }), logger };
 
 // The worker alone opens marketplace tokens: at use time, for the eBay adapter, the health
 // check, and account deletion's revocations.
@@ -47,6 +33,20 @@ const connections = createConnectionWork({
 });
 
 try {
+  // Every feature's jobs (features.ts), so a new feature never edits this file.
+  const { tasks, scheduledTasks, crontab } = collectWorkerJobs(WORKER_FEATURES, {
+    config,
+    db,
+    storage: createStorage(config.storage),
+    ai: createAiClient(config.ai, {
+      usageStore: new PostgresUsageStore(db),
+      controls: new PostgresAiControls(db),
+      quota: new PostgresQuotaPolicy(db),
+      logger,
+    }),
+    connections,
+    logger,
+  });
   const worker = await startOperationWorker({
     connectionString: config.databaseUrl,
     db,
@@ -57,32 +57,12 @@ try {
       },
       logger,
     ).lookup,
-    tasks: {
-      ...createWorkerTasks({
-        db,
-        storage: createStorage(config.storage),
-        ai: createAiClient(config.ai, {
-          usageStore: new PostgresUsageStore(db),
-          controls: new PostgresAiControls(db),
-          quota: new PostgresQuotaPolicy(db),
-          logger,
-        }),
-        logger,
-        autoEscalate: config.analysis.autoEscalate,
-      }),
-      [ACCOUNT_DELETION_TASK]: accountDeletionTask({
-        db,
-        cognito: config.cognitoUserPool && new AwsCognitoUserAdmin(config.cognitoUserPool),
-        marketplaceAccess: connections.revoker ?? noMarketplaceAccessRevocation,
-        logger,
-      }),
-      [TRUST_METRICS_TASK]: (payload) => runTrustMetricsTick(metrics, payload),
-    },
+    tasks,
     logger,
     concurrency: config.concurrency,
     taskConcurrency: config.taskConcurrency,
-    scheduledTasks: [aiSpendCheckTask(db, config.aiAlerts, logger), ...connections.scheduledTasks],
-    crontab: [TRUST_METRICS_CRONTAB],
+    scheduledTasks,
+    crontab,
     onFatalError: (error) => {
       // Other workers recover this worker's jobs once its process is gone; exiting at once
       // is what keeps two workers from running the same step.

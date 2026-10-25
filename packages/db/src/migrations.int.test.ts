@@ -9,6 +9,7 @@ import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
 
 import { createDatabase, type Db } from './database.ts';
 import { MigrationError, SchemaMigrator, SqlFileMigrationProvider } from './migrations.ts';
+import { shippedMigrations } from './test-support.ts';
 
 const KYSELY_TABLES = ['kysely_migration', 'kysely_migration_lock'];
 
@@ -40,23 +41,8 @@ async function tablesAndViews(db: Db): Promise<string[]> {
   return rows.map((row) => row.name).filter((name) => !KYSELY_TABLES.includes(name));
 }
 
-/** Every migration in packages/db/migrations, in order. */
-const MIGRATIONS = [
-  '0001_schema_v1',
-  '0002_ai_metering',
-  '0003_idempotency',
-  '0004_item_pre_archive_status',
-  '0005_photo_pipeline',
-  '0006_read_freshness',
-  '0007_pending_listing_id',
-  '0008_item_analysis',
-  '0009_listing_content',
-  '0010_deleted_identity',
-  '0011_ai_controls',
-  '0012_listing_links',
-  '0013_trust_metric_indexes',
-  '0014_marketplace_connect',
-];
+/** Every migration in packages/db/migrations, in name order, the order they apply in. */
+const MIGRATIONS = await shippedMigrations();
 
 describe('schema migrations (real Postgres)', () => {
   let scratch: ScratchDatabase;

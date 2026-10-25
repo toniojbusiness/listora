@@ -59,7 +59,7 @@ export function cognitoIssuer(config: CognitoConfig): string {
  * it locally against the pool's published signing keys (JWKS, fetched once and cached; an
  * unknown key id triggers a refetch, so key rotation needs no restart) and checks the issuer,
  * the app client, `token_use`, expiry, and age. Every failure fails closed. Settings the user
- * pool must have are in docs/auth.md.
+ * pool must have are in docs/features/auth.md.
  */
 export class CognitoAuthDriver implements AuthDriver {
   readonly provider = 'cognito' as const;

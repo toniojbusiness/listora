@@ -1,0 +1,21 @@
+HealthCheckStatus:
+  type: string
+  enum: [ok, unavailable]
+HealthLive:
+  type: object
+  required: [status]
+  properties:
+    status:
+      $ref: '#/HealthCheckStatus'
+HealthReady:
+  type: object
+  required: [status, checks]
+  properties:
+    status:
+      $ref: '#/HealthCheckStatus'
+    checks:
+      type: object
+      required: [database]
+      properties:
+        database:
+          $ref: '#/HealthCheckStatus'

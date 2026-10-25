@@ -33,7 +33,7 @@ export interface MarketplaceAdaptersConfig {
 }
 
 /**
- * The marketplace adapters Listora runs with (docs/architecture.md section 4): the worker runs
+ * The marketplace adapters Listora runs with (docs/features/marketplaces.md): the worker runs
  * operations with them, and the API reads each marketplace's capabilities from them, so both
  * processes always agree.
  *

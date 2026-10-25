@@ -38,7 +38,7 @@ export interface ConnectionRouteDependencies extends RouteDependencies, Connecti
 /**
  * Marketplace connections: `listConnections`, `getConnection`, `startConnectionAuthorization`,
  * `getConnectionAuthorization`, and the marketplace's OAuth redirect,
- * `handleConnectionCallback` (docs/architecture.md section 4; the flow is in
+ * `handleConnectionCallback` (docs/features/marketplaces.md; the flow is in
  * `@listora/connections`).
  */
 export function registerConnectionRoutes(

@@ -2,24 +2,26 @@
 
 Listora is a mobile-first operating system for resellers: take photos once, create the item
 once, and manage it everywhere (eBay, Depop, Poshmark, Mercari). This is the engineering
-overview every task reads first. Keep it accurate and short. If your change makes something
-here wrong, fix this file in the same PR. The task list is in [roadmap.md](roadmap.md).
+overview every task reads first: the principles that cut across features, and links to the
+features' own docs in [features/](features/). Keep it accurate and short. If your change makes
+something here wrong, fix this file in the same PR; a feature's details go in its own file
+([README.md](README.md) says where). The phases are in [roadmap.md](roadmap.md).
 
 ## 1. Product invariants
 
 These two rules from the product owner override every other design choice.
 
-1. **Authorized integrations only.** Listora uses official marketplace APIs, authorized
-   partner channels, or browser automation the marketplace has permitted (decision D1, section
-   4). It never stores marketplace passwords, never solves or bypasses CAPTCHAs or bot checks,
-   never works around anti-bot protection, and never automates a marketplace in ways that put a
-   seller's account at risk. Where none of these channels is available, or automation meets a
-   check it must not pass, Listora uses **assisted mode**: it prepares the work and the user
-   does the final step.
+1. **Authorized integrations only.** Listora uses official marketplace APIs, authorized partner
+   channels, or browser automation the marketplace has permitted (decision D1,
+   [automation.md](features/automation.md)). It never stores marketplace passwords, never solves or
+   bypasses CAPTCHAs or bot checks, never works around anti-bot protection, and never automates a
+   marketplace in ways that put a seller's account at risk. Where none of these channels is
+   available, or automation meets a check it must not pass, Listora uses **assisted mode**: it
+   prepares the work and the user does the final step.
 2. **Never report false success.** A marketplace action is shown as done only after one of two
    things: a read-back from the marketplace (its API, or the automated browser session)
    confirms the desired state, or the user explicitly confirms an assisted task. Every failure
-   is visible and can be retried. See section 6.
+   is visible and can be retried. See [operations.md](features/operations.md).
 
 ## 2. Stack
 
@@ -68,45 +70,16 @@ These two rules from the product owner override every other design choice.
   is on. Adding a capability mode or status then fails the type check until every switch
   handles it.
 
-### iOS conventions
-
-The details and commands are in [apps/ios/README.md](../apps/ios/README.md).
-
-- `apps/ios/project.yml` is the only source of the Xcode project. XcodeGen generates
-  `Listora.xcodeproj`, which is gitignored and never edited by hand.
-- Swift 6 language mode with complete strict concurrency, and warnings are errors.
-- Code lives in local Swift packages: `Core` (models and utilities, no UI), `DesignSystem`
-  (palette, typography, spacing, components), `APIClient` (the client generated from the
-  OpenAPI contract, with the session's bearer token and the error model), and `Features` (one
-  library per feature). A feature never imports another
-  feature; `AppFeature` composes them into the tab shell. The app target only starts
-  `AppFeature`; the Share Extension target only starts `ShareLinkFeature`.
-- The app and the Share Extension share the signed-in session through an App Group
-  (`APP_GROUP_IDENTIFIER` in `Base.xcconfig`): the session is a keychain item in the group's
-  access group (`KeychainAccessGrantStorage.session(appGroup:)`).
-- Configuration comes only from the build configuration's xcconfig file (`Dev-Debug`,
-  `Staging-Release`, `Prod-Release`) through Info.plist. `AppConfiguration` validates it at
-  launch and stops the app with an error that names the bad key. Only Dev may use plain HTTP.
-- On-device state the user creates (drafts and their photos) is written to the GRDB database
-  first, and work against the server goes through a persistent queue whose every request has a
-  stored `Idempotency-Key`, so it resumes after a relaunch without duplicates and shows each
-  failure with a Retry. The Add Item upload queue is the model (`apps/ios/README.md`).
-- Views use `DesignSystem` tokens, never raw colors or sizes, so light and dark mode stay
-  consistent. A test checks WCAG AA contrast for every text and background pair.
-- Tests use Swift Testing; UI tests use XCTest. `make ios-lint` (SwiftLint and SwiftFormat)
-  must be clean.
-- Releases are plain `xcodebuild`, no fastlane: `scripts/ios-release.sh` archives
-  (`make ios-archive` unsigned, `make ios-testflight` signed with an App Store Connect team API
-  key and uploaded). The hand-dispatched TestFlight workflow runs it; the build number is the
-  workflow's run number. Bundle ids and the team id are xcconfig settings.
+The iOS conventions are in [features/ios.md](features/ios.md).
 
 ## 3. Repository layout
 
 ```text
 apps/
   api/          Fastify HTTP API (@listora/api)
-  worker/       Background worker: operation engine, account deletion, polls, the daily
-                connection health check, photo processing, item analysis (@listora/worker)
+  worker/       Background worker: operation engine, plus one module per feature's jobs in
+                src/features/ (account deletion, AI spend check, item analysis, photo
+                processing, trust metrics, the daily connection health check) (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
                 and account blocks (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
@@ -148,7 +121,7 @@ scripts/
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
   ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
 Dockerfile      Application image; the API and the worker run from the same image
-docs/           This overview, the roadmap, and the personal environment's cost estimate
+docs/           This overview, the roadmap, and one doc per feature in docs/features/
 Makefile        iOS commands (make ios-test, ios-lint, ...)
 ```
 
@@ -158,22 +131,43 @@ adapters). Add each one to the root
 no external services, and `*.int.test.ts` files are integration tests against the real local
 Postgres.
 
-### The API (`apps/api`)
+### Where a feature plugs in
+
+Independent features touch independent files, so parallel branches do not conflict. A feature
+adds its own files to these places instead of editing a shared list:
+
+- **API routes.** A folder under `apps/api/src/<feature>/` with `routes.ts` and a
+  `feature.ts` that exports `feature: ApiFeature`. `buildApp` registers every folder's
+  `feature.ts` that `apps/api/src/features.ts` finds; app.ts lists only the routes every
+  deployment has (health, the auth driver's, the local storage driver's).
+- **Worker jobs.** A file `apps/worker/src/features/<feature>.ts` that exports
+  `feature: WorkerFeature`: its Graphile Worker tasks and scheduled tasks. The worker runs every
+  file `apps/worker/src/features.ts` finds and refuses two features with one task name.
+- **API contract.** The resource's paths in `packages/api-contract/paths/<tag>.yaml` and its
+  schemas in `packages/api-contract/components/schemas/<area>.yaml`, plus one `$ref` line per
+  new path or component in the root `openapi.yaml` (see the package README).
+- **Migrations.** A new pair of files named by UTC timestamp (section 6).
+- **Docs.** The feature's file in `docs/features/` ([README.md](README.md)).
+
+## 4. API conventions
+
+The API is `apps/api`; every feature's routes follow these rules.
 
 ```text
 src/
   main.ts        Entry point: config, logger, database, auth driver, graceful shutdown
   app.ts         buildApp(): request ids, error handling, routes (tests drive it with inject)
+  features.ts    Finds each feature folder's feature.ts, whose routes buildApp registers
   config.ts      Environment, parsed once with a zod schema
   errors.ts      ApiError and the contract's ErrorResponse; HTTP status per error code
-  contract/      Validators compiled from openapi.yaml, and contractRoute()
+  contract/      Validators compiled from the bundled contract, and contractRoute()
   auth/          AuthDriver interface; the dev driver (with its /dev/auth endpoints) and the
                  Cognito driver
   account/       Account deletion (deleteAccount); the job that finishes it is in
                  @listora/accounts
   tenancy.ts     Tenant resolution: the tenancy guard
   idempotency.ts Idempotency-Key handling for POSTs
-  items/ photos/ One folder per resource: routes.ts, repository.ts, mapping and views
+  items/ photos/ One folder per resource: routes.ts, feature.ts, repository.ts, mapping and views
   analyses/      Start, get, escalate, and apply analyses; the guard pre-check
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
@@ -183,7 +177,7 @@ src/
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
-  the method and URL from `openapi.yaml` by operationId and validates path, query, and body
+  the method and URL from the contract by operationId and validates path, query, and body
   against the contract's own schemas (`loadContractDocument()` from `@listora/api-contract`,
   compiled with Ajv). A malformed path id is `404`; a query or body that breaks the schema is
   `422 validation_failed` with `fieldErrors`. Requests are held to `KnownX` values even where
@@ -200,13 +194,6 @@ src/
   its person deleted their account, or while the deletion still waits for the identity
   provider, is `401`, so it cannot provision a new account (checked under the lock deletion
   takes, so a deletion that commits meanwhile cannot be missed).
-- **Sign-in and account deletion.** `AUTH_DRIVER=dev|cognito`. The Cognito driver verifies
-  the pool's tokens locally (cached JWKS, issuer, app client, `token_use`, expiry) and fails
-  closed. `DELETE /v1/account` deletes the account's data in one transaction that also leaves
-  a tombstone and enqueues its `account_deletion` job, then deletes its stored objects; the
-  worker's job deletes the person at the identity provider and revokes marketplace grants,
-  retrying until done. The flows, the user pool settings the infrastructure must create, and
-  the open items are in [auth.md](auth.md).
 - **Idempotency.** A POST runs in one transaction that takes an advisory lock on (account,
   key) and stores its successful response in `idempotency_record` together with the change,
   so a retry replays it, a concurrent retry gets `409`, and a failure stores nothing. Each
@@ -216,546 +203,14 @@ src/
   a generic `500 internal_error` and only the log has details. Each request has an id (a
   sane incoming `X-Request-Id`, otherwise a UUID) that is in the response header, in
   `error.requestId`, and as `requestId` on every log line of the request.
-- **Writes** that change an item append an `audit_log` entry in the same transaction.
-  `fieldProvenance` is server-owned: a detail written through the API is `user`, an unchanged
-  one keeps its source (values compare as key-sorted JSON). Responses omit empty values
-  (absent means no value).
-- **Item status.** Archiving records the item's earlier status in `pre_archive_status`, so
-  unarchiving never overwrites a status the server owns (listed, sold, shipped). Which
-  transitions the user may make is part of the contract: see `ItemStatus` in `openapi.yaml`.
-- **Listings.** An item's `listings` (and `ItemSummary.listings`) are its newest listing per
-  marketplace, each with a server-rendered `statusDisplay` (`listings/views.ts`). A listing is
-  `api` only while it is on an API connection, otherwise `assisted`. Only an API listing can be
-  verified by a read-back (`last_verified_at`, "confirmed by eBay") and only an assisted one by
-  the user (`user_confirmed_at`, "you confirmed"), so an assisted listing can never claim the
-  marketplace confirmed it.
-- **Shared-listing links.** `linkItemListing` and `importSharedListing` record a listing the
-  user created on a marketplace and shared from Safari or the marketplace app to the Share
-  Extension. The server reads the marketplace and listing id from the URL with
-  `parseListingUrl` (`@listora/shared`; the iOS `ListingURL` parser is tested against the same
-  fixtures in `packages/shared/fixtures/listing-urls.json`) and never fetches it. The listing is
-  assisted, `active`, and user-confirmed; a short link (`posh.mk/...`) has no listing id and is
-  identified by its URL.
 - **Shutdown.** On SIGTERM the server stops accepting connections, finishes in-flight
   requests (asking their keep-alive clients to close), then closes the database pool.
 
-### Photos and storage (`packages/storage`, `packages/photos`)
+Sign-in and account deletion are in [features/auth.md](features/auth.md), items in
+[features/items.md](features/items.md), and listings and shared-listing links in
+[features/marketplaces.md](features/marketplaces.md#listings-in-the-api-appsapisrclistings).
 
-- **Upload flow.** `createUploadSession` returns one upload target per declared file (JPEG,
-  at most 20 MiB, with its SHA-256). The client PUTs the bytes straight to storage, then
-  `addItemPhoto` attaches the file: the server checks that the stored object has the declared
-  size and checksum, creates the photo as `processing`, and adds its processing job in the
-  same transaction. Targets last 15 minutes (`getUploadSession` returns fresh ones after a
-  relaunch); a session lasts 24 hours, and a file is attached at most once.
-- **Storage drivers** implement `ObjectStorage`. Both sign the content type, exact size, and
-  `x-amz-checksum-sha256` of each upload, so storage itself refuses any other body: S3 with
-  presigned PUTs, and the local driver (files in `.local/storage`) with HMAC-signed URLs that
-  the API serves under `/storage/`. Keys under `public/` are readable by URL (CloudFront in
-  production); every other key is private and never served.
-- **Processing** (`processPhoto`, a job function under the task name `photo_processing`)
-  verifies the upload's sha256, decodes it with `sharp` (a non-JPEG or broken file makes the
-  photo `failed` with a reason the user can read), turns it upright, and writes metadata-free
-  sRGB JPEGs: `original` (full size) and `ai` (1024 px) privately, and `thumbnail` (400 px)
-  and `listing` (1600 px) under an unguessable public key. It stores their keys, sizes, and
-  hashes in `photo.derivatives`, the upright size, and a 64-bit DCT pHash, then deletes the
-  upload, which may carry GPS. Every step is safe to rerun. The API adds the job to the job
-  queue (Graphile Worker, `graphilePhotoJobs`, job key `photoJobKey`) in the transaction that
-  attaches the photo, and the worker runs it (`processPhoto`, task `photo_processing`) next to
-  the operation steps. Analyses go the same way (`graphileAnalysisJobs`, `analysisJobKey`,
-  `runItemAnalysis`, task `item_analysis`). The API and the worker must share photo storage:
-  deployed, both use the S3 photo bucket (`infra/src/containers.ts`). Photo and analysis jobs
-  run in a pool of their own (`WORKER_TASK_CONCURRENCY`), so a slow AI call never holds a
-  slot an operation step, such as an urgent delist, needs.
-- **Photo-set hash.** `itemPhotoSet` returns an item's photos in order and `photoSetHash`
-  (from `@listora/shared`) over their upload sha256s, the key analysis is idempotent by. The
-  hash sorts the sha256s, so reordering the photos or choosing another cover keeps the
-  analysis; only adding or removing photos makes a new photo set. The display order reaches
-  only the prompt.
-- Deleting a photo, its item, or the whole account deletes its stored objects after the transaction commits.
-
-## 4. Marketplace adapter model
-
-All marketplace logic lives behind one `MarketplaceAdapter` interface in `@listora/marketplaces`
-(`adapter.ts`). The engine and the UI never branch on the marketplace name. They branch on
-**capability flags**, which can change for a single connection; for example, Depop runs
-assisted until its partner API is connected, then through the API.
-
-```ts
-type Mode = 'api' | 'assisted' | 'bulk_file' | 'none';
-interface MarketplaceCapabilities {
-  connect: 'oauth' | 'none';
-  create: Mode;
-  updatePrice: Mode;
-  updateDetails: Mode;
-  delist: Mode;
-  relist: Mode;
-  markSold: Mode | 'not_needed'; // not_needed: the marketplace marks its own sales sold
-  verifyRead: 'api' | 'user_confirm'; // how success is established
-  readFreshness: 'revision' | 'none'; // whether reads carry a revision (see section 6)
-  title: 'field' | 'none'; // Depop: none (listings have no title; read-backs never check one)
-  importListings: 'api' | 'share_sheet' | 'bulk_file' | 'none';
-  saleDetection: Array<'webhook' | 'poll' | 'email' | 'manual'>;
-  imageTransport: 'url_fetch' | 'upload' | 'user_saves_photos';
-  taxonomy: 'api' | 'static_snapshot';
-  pricingData: 'sold_comps_in_listing_context' | 'none';
-  externalSkuReusable: boolean; // Depop: false
-  limits: { perSellerPerMin?: number; appPerMin?: number; appPerDay?: number };
-}
-interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
-  id: 'ebay' | 'depop' | 'poshmark' | 'mercari';
-  capabilities(connection?: ConnectionRef | null): MarketplaceCapabilities;
-  buildPayload(item: ItemSnapshot, variant: ListingVariant, connection: ConnectionRef | null): P; // pure
-  validate(payload: P, connection: ConnectionRef | null): ValidationIssue[]; // pure
-  execute(op: OperationRequest<P>, ctx: AdapterContext): Promise<Outcome>;
-  // Outcome: confirmed | rejected | transient | unknown | pendingUser
-  readListing(ref: ListingRef, ctx: AdapterContext): Promise<RemoteListingState>;
-  healthCheck(ctx: AdapterContext): Promise<Health>; // ok | degraded | reauth_required | revoked
-  newListingId?(
-    item: ItemSnapshot,
-    usedIds: readonly string[],
-    connection: ConnectionRef | null,
-  ): string | null;
-}
-```
-
-Imports, orders, webhooks, and emails join the interface as optional members with the tasks
-that first use them (T-17, T-23, T-36). Credentials are not part of the interface: an adapter
-gets a connection's tokens at use time from its own token source (eBay's `EbaySellerSource`,
-which `@listora/connections` implements over the token vault, below).
-
-| Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
-| ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| eBay        | API                                                                          | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs                          | `ORDER_CONFIRMATION` webhook + 5-minute poll                    |
-| Depop       | API after partner approval; browser automation until then, assisted fallback | `PUT` by a SKU Listora names per listing (`AJ-000184-D1`, `-D2` after a relist), `PATCH`, `DELETE`/mark-as-sold; verify with `GET`         | `v1:order.*` webhooks (`X-Depop-Signature`) + orders poll       |
-| Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms | DKIM-verified forwarded emails, scheduled browser check, manual |
-| Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark                                                                                                                           | Forwarded emails, scheduled browser check, manual               |
-
-**Capabilities route every operation.** `operationMode(capabilities, kind)` (`capabilities.ts`)
-reads the flag for the kind (`create`, `updateDetails` for a revise, `updatePrice`, `delist` for
-an end, `relist`, `markSold`) under the listing's connection: `api` (Listora sends it and a
-read-back decides), `assisted` (only the user's confirmation finishes it), or `unsupported`
-(`none`, `bulk_file`, `not_needed`, or an API write without API reads), which fails without
-being sent. `checkCapabilities` rejects contradictory flags, such as an API write with
-`verifyRead: 'user_confirm'`.
-
-**Titles.** `readBackState(desired, capabilities)` is the part of a desired state a read-back
-can show: on a marketplace whose listings have no title (`title: 'none'`, Depop) the engine and
-the conformance suite never compare one. The variant's title stays Listora's own headline there.
-
-**Listings Listora names.** An adapter whose marketplace addresses listings by an id the seller's
-tool chooses (Depop's SKUs) implements `newListingId`. Before a create or relist is sent, in
-the transaction that marks the step `running`, the engine names the new listing with it, stores
-the id as the listing's pending id, and records it in the `running` event (`namedListingId`), so
-a read-back finds the listing even when the send's answer is lost. The id passes `usedIds`
-(every id the item has had on the marketplace, from its listings and their operations'
-history), so no name is given twice. An operation keeps its name on every attempt and Retry; a
-listing that already has a pending id keeps it (an earlier create or relist may have made that
-listing); a create names only a listing with no marketplace listing yet, a relist only one that
-has one. When the send that named an id was refused or never made, the listing forgets the
-pending id, so a delist never waits on a listing that was never made.
-
-**Registry.** `createAdapterRegistry` (`registry.ts`) holds one adapter per marketplace and
-refuses, at startup, a duplicate or an adapter whose capabilities are incoherent without a
-connection or under either connection mode. `createMarketplaceAdapters` (`default-adapters.ts`)
-builds the registry both processes run with: the worker passes its `lookup` to the engine, and
-the API asks it for capabilities under a connection.
-
-**Listing content and payloads.** A create, revise, or relist publishes listing content
-(`content.ts`): an `ItemSnapshot` (canonical attributes and photos with their listing URLs) and
-the marketplace's `ListingVariant` (title, description, price, category, condition, aspects,
-hashtags), mirroring the API contract. `enqueueOperation` stores it on the operation and derives
-the operation's desired state from it (`desiredStateForContent`), so what is sent and what a
-read-back checks cannot disagree. Every attempt builds the payload from that stored content
-with the adapter's pure `buildPayload`, under the connection it runs with, so a queued item edit
-never changes an operation in flight. The engine sends nothing the adapter's `validate` refuses:
-the operation fails with the first issue's message (for example "eBay titles can be at most 80
-characters.") and every issue in its history. Builders sort photos by `position` and never trust
-the input order. Each adapter's payload, validation results, and assisted tasks are pinned by
-golden files in its `__golden__` directory; `npx vitest -u` rewrites them after a deliberate
-change, and the diff is reviewed like code.
-
-**Execute and read-back rules.** `execute` never throws for a marketplace error; it returns an
-outcome. A rate limit is `transient` with the marketplace's `Retry-After`, a 5xx is `transient`
-(even when it hid an applied write, which the next attempt's read-back finds), validation and
-expired authorization (`reauth_required`) are `rejected`, a timeout after sending is `unknown`,
-and ending an ended listing is `confirmed` so that a read-back decides. `readListing` throws when
-the marketplace cannot be read (5xx, 429, auth error, unreachable), and must find the effect of
-an earlier attempt even when that attempt's outcome was unknown (by external id or SKU).
-When it finds no listing, it says whether that is `authoritative`: only when the marketplace
-definitively reports that the listing with the requested id no longer exists (a "removed" or
-410 Gone answer for that id), never for an answer that could be a listing not visible yet (a
-plain 404 from an eventually consistent API), an empty SKU search, a timeout, an auth error, or
-another unclear answer.
-
-Reads may be stale (eventually consistent APIs), so a read carries a freshness marker: a
-`revision`, a non-negative integer that grows with every change to the marketplace listing (a
-remote revision, or a last-modified time in milliseconds that differs for every change). A
-`confirmed` outcome also returns the revision the write produced, when the marketplace says. An
-adapter whose marketplace has no such marker declares `readFreshness: 'none'` and returns
-`revision: null`.
-
-**Assisted adapters.** `AssistedAdapter` (`assisted/assisted-adapter.ts`) is the base for
-assisted mode. `createPoshmarkAdapter`, `createMercariAdapter`, and `createDepopAssistedAdapter`
-configure it: those marketplaces run on it until the browser runner (decision D1, below) or
-Depop's partner API takes over, and it stays their fallback when automation meets a check it
-must not pass. `execute` never contacts the marketplace: it returns
-`pendingUser` with a user task, `list_manually` (create, relist), `edit_manually` (revise,
-price), or `delist_manually` (end), with a deep link and a copy-assist payload (title,
-description, price, and photo URLs in posting order). The engine records the task in the same
-transaction as the `needs_user_action` status, and only `confirmOperationByUser` can finish the
-operation. Assisted capabilities establish success by `user_confirm`, `readListing` always
-throws, and the engine never reads back an assisted operation, so no read can ever confirm one.
-New listings open the marketplace's site; changes open the listing's own page once the user has
-linked it, and only when that URL is an https page on the marketplace's own domain. Deeper app
-links and the Poshmark and Mercari text limits are not verified yet (plan RF15), so the base
-enforces only a positive price and at least one photo for them.
-
-**Connection-aware capabilities.** `ConnectionAwareAdapter` serves one marketplace in more than
-one mode: its assisted adapter without a connection or under an assisted one, and its API adapter
-under an `api` connection (still assisted when no API adapter is configured). Every mode reads
-and writes the same `marketplace_listing` rows, so switching Depop to the API is a change to the
-connection's `mode` and needs no data migration. The browser runner's mode joins it the same way
-when that task lands.
-
-**Conformance.** Every adapter passes the shared suite in `conformance/suite.ts`
-(`describeAdapterConformance`), once per connection mode it serves, against its own fake
-marketplace: coherent capabilities, pure golden-tested payloads and validation, create, price
-and detail updates, end (twice), relist, mark sold, read-back by SKU and id with freshness,
-stale reads, not-found classification, error mapping (429 with and without `Retry-After`, 5xx
-before and after the change, validation, expired authorization, timeout after send,
-unreachable), failing reads that throw, health checks, and, for assisted kinds, user tasks that
-never touch the network and never confirm themselves. A new marketplace fake must be able to
-produce each failure mode the suite asks for (`ConformanceMarketplace`).
-
-**The eBay adapter** (`ebay/`, `createEbayAdapter` from `EBAY_ENV` and the other `EBAY_*` keys)
-lists through the Trading API (AddFixedPriceItem, ReviseFixedPriceItem, EndFixedPriceItem,
-RelistFixedPriceItem, GetItem), so listings stay editable in Seller Hub, with photos copied into
-eBay Picture Services by the Media API. Its rules:
-
-- **Payload** (`payload.ts`, golden-tested): the variant's keyword title (at most 80
-  characters) and its description as HTML (`description.ts`, which reads eBay's HTML back to the
-  same text); the category from the variant's `categoryRef`, else the canonical category map
-  (`categories.ts`, eBay US leaf ids from eBay's published category structure); the condition
-  id for the category (`conditions.ts`: apparel has 2990/3000/3010 for the three pre-owned
-  grades); and item specifics (Brand, Department, the standard size from `sizes.ts`, Color,
-  Material, Pattern, MPN), with the variant's own aspects winning by name. Validation refuses
-  what eBay would (no category, condition, or standard size for clothing and shoes; titles with
-  HTML or edge spaces; eBay's length and count limits).
-- **Preparing** a listing (`prepareListing`, for the API to call before publishing): the
-  category is the best Taxonomy suggestion inside the mapped category's branch (the map is the
-  input; the sandbox's suggestions are boilerplate, so there the map alone decides), the item
-  specifics are matched to the values eBay allows for it (eBay blocks non-standard sizes since
-  August 2026), and VerifyAddFixedPriceItem checks the result without listing anything.
-- **Duplicate protection.** A create or relist carries `Item.UUID`, derived from the operation's
-  idempotency key; eBay answers a repeat with error 488 naming the listing, which counts as
-  accepted. Listings are tracked by SKU (`externalSku`, else the listing id), so eBay also refuses
-  a second active listing with that SKU, and a create whose answer was lost is found by SKU.
-- **Revise.** ReviseFixedPriceItem keeps every field it is not sent, so a revise whose
-  payload has no condition description removes it with `DeletedField`
-  `Item.ConditionDescription`, and eBay never keeps showing cleared notes or flaws.
-- **Read-back.** GetItem by id, or by SKU before eBay's id is known. **eBay's reads carry no
-  revision or last-modified time** (only a "revised" flag), so the adapter declares
-  `readFreshness: 'none'` and the engine confirms after two matching reads a delay apart
-  (section 6). Error 17 for an id ("the listing has been deleted") is the only authoritative
-  absence; an empty SKU lookup never is. A sold-out listing reads as `sold`. eBay marks its own
-  sales sold, so `markSold` is `not_needed`.
-- **Errors.** 429s, 5xx, eBay `SystemError`s (10007), and expired access tokens are transient;
-  error 518 (the daily limit) waits for the reset; 931, 932, 16110, and refused refresh tokens
-  are `reauth_required`; ending an ended listing (1047) is `confirmed` for a read-back to decide;
-  other refusals are `rejected` with eBay's message. A REST 401 refreshes the token and tries
-  once more (only reads and photo uploads, which change no listing).
-- **Daily-call budget** (`budget.ts`): every Trading call takes one call from the application's
-  daily budget (5,000 by default), which keeps a reserve for ends and read-backs and re-reads the
-  real usage from eBay's Developer Analytics API (the app-wide daily Trading rate, never a
-  per-call or short-window one), so several workers share one quota.
-- **Tokens.** The adapter gets the seller's user token from an `EbaySellerSource`. In the
-  worker with a token vault, that is `ConnectionSeller` (`@listora/connections`): each
-  connection's own tokens (connections, below). Without a vault, `RefreshTokenSeller` serves one
-  seller from `EBAY_USER_REFRESH_TOKEN` (the fake's development seller with `EBAY_ENV=fake`),
-  bound to the one connection `EBAY_USER_CONNECTION_ID` names. That is a development and sandbox
-  convenience only: `EBAY_ENV=production` refuses both keys, so one seller's account never acts for every
-  Listora user. Any other connection, a listing with no connection, and every connection
-  without a configured seller get `reauth_required` ("Connect eBay") on every path (execute,
-  read-back, health check, preparing). Token refreshes are single-flight, and the shared
-  refresh runs under the OAuth client's own timeout, so one caller's deadline never fails the
-  others. The health check is one Fulfillment `getOrders` call.
-
-**The Depop adapter** (`depop/`, `createDepopAdapter` from `DEPOP_ENV` and the other `DEPOP_*`
-keys) lists through Depop's Selling API. It stays dormant until Listora's partner access is
-granted: `ConnectionAwareAdapter` serves it only to connections whose mode is `api`, and every
-other Depop listing runs assisted. Its rules:
-
-- **SKUs are listing ids.** Depop creates and addresses a product by the SKU sent
-  (`PUT /api/v1/products/by-sku/{sku}/` creates or updates) and never reuses a SKU, so each
-  Depop listing gets a SKU of its own (`sku.ts`): the item's SKU and the listing's generation,
-  `AJ-000184-D1`, and `-D2` for the relist, which is a new product. The engine names it before
-  sending (`newListingId`, above). A listing the user linked from a share is known by its product
-  slug and addressed through the `by-slug` endpoints; a relist of it gets a Listora SKU.
-- **Payload** (`payload.ts`, golden-tested): Depop listings have no title, so the description is
-  the listing text, with the hashtags on their own last line (`depopDescription` in
-  `@listora/shared`, shared with the item analysis) and read back without them. Validation
-  refuses what Depop refuses (1 to 8 photos, at least $1.00, 1,000 characters and 5 hashtags,
-  no email addresses) and needs a department and product type. Depop's full taxonomy is behind
-  bot detection (Listora never works around it), so `taxonomy.ts` maps only the product types
-  Depop's documentation names; any other item names its Depop product type in the variant's
-  `categoryRef` and its size in the aspects `size_set_id` and `size_id`, until a taxonomy
-  snapshot arrives with partner access. The seller's address and shipping (Depop Shipping, or a
-  national cost) are added when sending.
-- **Writes and read-back.** Edits are `PUT` (the whole listing) or `PATCH` (the price); an end
-  is `DELETE`, which answers 200 even for a missing product, and a sale elsewhere is
-  `mark-as-sold`, which succeeds for a product that isn't on sale: their 200 is only `confirmed`,
-  and the `GET` read-back decides. A product Depop can't find is never authoritative ("a newly
-  created listing can take a short time to become retrievable"), and reads carry no revision
-  (`updated_at` has whole seconds), so `readFreshness` is `none`. Deleted and banned products
-  read as `ended`, bought or marked-sold ones as `sold`.
-- **Errors.** 429s, 5xx, and failures before sending are transient; a timeout after sending is
-  unknown; a token Depop refuses is refreshed and the call sent once more (nothing was done);
-  a refused grant or a missing scope is `reauth_required`; Depop's other refusals
-  (`duplicate_sku`, `product_not_on_sale`, validation) are `rejected` with Depop's reason.
-- **Tokens** (`oauth.ts`, `tokens.ts`). Sellers connect with the authorization code flow and PKCE
-  (S256). Depop rotates refresh tokens and invalidates the old ones at once, so refreshes are
-  single-flight per connection (ten callers, one refresh), the new tokens are kept in memory
-  before they are stored, a failed write keeps them in use and is stored on the next call
-  (clearing a "reconnect" mark another process set meanwhile), and a refused refresh token is
-  checked against the store first, since another process may have refreshed. The tokens live in
-  a `DepopTokenStore`; until Depop connect (T-24) implements it over the token vault, `MemoryDepopTokenStore` holds
-  the one development or sandbox seller (`DEPOP_USER_REFRESH_TOKEN`, refused in production).
-- **Rate limits** (`rate-limits.ts`): Depop's per-seller allowances (creates and full updates 200
-  per 10 seconds, everything else 6,000 a minute) and its application-wide 30,000 a minute
-  (`DEPOP_APP_REQUESTS_PER_MINUTE` is this process's share), as sliding windows a little longer
-  than Depop's. A call waits up to 2 seconds for room, else it is held back as transient.
-- **Sales.** `listOrders` reads the orders poll; `receiveDepopWebhook` verifies
-  `X-Depop-Signature` (HMAC-SHA256 of `<timestamp>.<raw body>`, five minutes' tolerance) and
-  reads `v1:order.*` and `v1:product.*` events, keyed for deduplication by id, type, and time.
-  The inbound endpoint and the auto-delist that use them are later tasks (T-17, T-23).
-
-The fake Depop (`depop/fake`, `npm run dev:fake-depop`) checks every request and response against
-a byte-for-byte copy of Depop's published `openapi.yaml`, follows Depop's documented rules, OAuth
-(PKCE, rotation), rate limits, and signed webhooks, and injects Depop's failure modes; its README
-cites the Depop pages it follows and what they leave open.
-
-The fake eBay (`ebay/fake`, `npm run dev:fake-ebay`) serves the Trading, OAuth (with the consent
-page and token revocation), Commerce Identity, Media, Taxonomy, Fulfillment, Developer
-Analytics, and Notification endpoints the adapter and eBay connect use, signs
-notifications the way eBay does, and injects eBay's failure modes; its README cites the eBay
-documentation it follows and lists what eBay leaves undocumented. `npm run ebay:sandbox-check`
-runs the adapter against eBay's sandbox once the keys are in `.env` (README.md).
-
-**Connections** (`@listora/connections`). A seller connects an API marketplace with its
-official OAuth 2.0 authorization code grant; Listora never sees a marketplace password.
-
-- **Connect.** `startConnectionAuthorization` stores a `connection_authorization` with the
-  SHA-256 of a random single-use `state` (10 minutes) and returns the marketplace's consent URL,
-  which the app opens in `ASWebAuthenticationSession`. The marketplace sends the browser to the
-  public `handleConnectionCallback`, where the state finds the attempt and is used once; the API
-  exchanges the code, reads the seller's immutable id (eBay `getUser`), seals the tokens, and
-  stores them on the account's one connection for that marketplace, then redirects to
-  `listora://connections/<marketplace>?authorizationId=...`. The app reads the attempt back and
-  never trusts the redirect. Reconnecting renews the same connection; a different seller account
-  on that marketplace is refused, because the account's listings belong to the connected one.
-  `MarketplaceOAuthClient` (`oauth.ts`) is the marketplace side: eBay's (`EbayConnectClient`,
-  `ebay/connect.ts`) follows eBay's documented endpoints and needs the keyset's RuName
-  (`EBAY_RUNAME`), and the fake eBay serves them locally.
-- **Token vault.** Tokens are stored only encrypted, by envelope encryption: a new AES-256-GCM
-  data key per seal, wrapped by KMS (`KmsTokenVault`, deployed) or a local key
-  (`LocalTokenVault`, development), and bound to the marketplace and connection id (the GCM
-  additional data and the KMS encryption context). The API holds only a `TokenSealer`
-  (`sealOnly`) and its KMS role only `GenerateDataKey`; only the worker decrypts, at use time.
-  Tokens, codes, and states never reach a log line (the callback's request log shows its path
-  only) or an operation excerpt; tests check the captured logs.
-- **Credentials.** `ConnectionTokens` decrypts a connection's access token when the eBay adapter
-  (through `ConnectionSeller`, its `EbaySellerSource`) or the health check asks, keeps it in memory until it nears expiry, and refreshes it 5 minutes
-  before it expires. Refresh is single-flight per connection: callers in one process share one
-  refresh, and across workers the refresh holds the connection's row lock, so a worker that
-  waited finds the new token instead of refreshing again. A refused refresh (`invalid_grant`)
-  makes the connection `reauth_required`; one that fails for now makes it `degraded`.
-- **Health.** The daily `connection_health` job (a worker scheduled task) makes one cheap call per
-  connection that still holds its grant (eBay `getUser`, after a refresh if due): it works →
-  `connected` with `last_ok_at`; the grant is refused → `reauth_required`; the marketplace cannot
-  be asked → `degraded` with the problem, until a later check succeeds. `describeConnection`
-  renders the status, a warning 30 days before the grant expires (eBay refresh tokens last
-  about 18 months), and a reconnect action whenever only the seller can fix it.
-- **Revocation.** `recordAuthorizationRevocation` (eBay `AUTHORIZATION_REVOCATION`, parsed by
-  `parseAuthorizationRevocation`) flips every connection of that seller to `revoked` at once and
-  deletes the tokens; a notice older than the current grant changes nothing. The notifications
-  task (T-17) verifies and delivers the notices. Account deletion revokes grants through the
-  marketplace's revocation endpoint (`OAuthGrantRevoker`).
-
-**Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
-only". The marketplaces granted the product owner permission to automate where no API exists,
-Listora is for the product owner's personal use, and everything runs in the cloud. So
-Poshmark, Mercari, and Depop (until its partner API is granted) use cloud browser automation:
-the headless-Chromium browser runner (`browserRunner` in `infra/src/config.ts`) acts on
-sessions the user logs into from the iPhone app.
-
-- Session cookies are stored encrypted with the token key, by the same KMS envelope
-  encryption as OAuth tokens. Passwords never are.
-- Actions are human-paced.
-- The runner never solves or bypasses a CAPTCHA or bot check: it pauses and falls back to an
-  assisted task.
-- Every action is still confirmed by read-back (section 6), never reported as a false success.
-
-The runner, its adapter mode, and session storage are later tasks; until they land, these
-marketplaces run assisted. [costs.md](costs.md#browser-automation) sizes and prices the runner.
-Assisted adapters implement `execute` by creating a `user_task` (deep link plus copy-assist
-payload) and returning `pendingUser`. An assisted operation can finish only through a user
-confirmation event. A listing the user posted themselves is linked to its item by sharing it to
-the Listora Share Extension (`importListings: 'share_sheet'`), which records it as confirmed by
-the user, never by the marketplace.
-
-## 5. Pricing data rules
-
-The eBay API License forbids using eBay data to suggest prices without written consent. The
-Depop rules allow Pricing Inspiration only inside that Depop listing. Without real sold data,
-Listora shows a cost-based floor, an estimate labeled **"AI estimate - not based on sold
-listings"**, and research links that open in the user's browser. The words "comps" and "sold"
-appear only next to real sold data, and a test enforces this (T-14).
-
-`@listora/pricing` implements these rules; `GET /v1/items/{itemId}/pricing` serves them.
-
-- **Floor** ("Don't sell below"), per marketplace: the least price P with P = cost + fees(P) +
-  shipping + minimum profit, so the breakdown adds up exactly. Shipping and minimum profit are
-  query parameters (default 0). No cost means no floors.
-- **Fee tables** live in `packages/pricing/src/fee-tables.ts`, one versioned table per
-  marketplace schedule with its official source URL and the day it was checked. A fee change
-  adds a table; every floor names its `feeTableVersion`. Estimates use the item price only and
-  round each fee up. A test checks that every table's fees never fall as the price rises.
-- **Actual fees.** With at least three recent single-item sales that have `actual` marketplace
-  or payment `fee_line`s, a marketplace's table is scaled to what it really charged
-  (`feeSource: actual_fees`). Each sale is compared with the fee table in effect on its
-  `sold_at` (the marketplace's first table for older sales), so a fee change is never masked
-  by sales at the old rate. A sale counts only when its fee data is complete: an `actual`
-  line for every fee kind the table charges, and no zero-amount or refunded (negative) line.
-  Ratios of actual to estimated fees outside 1/3 to 3 point at bad order data and are not
-  used. eBay-sourced fee data (including the eBay Finances API) stays out of eBay floor
-  computation until a legal review of the eBay API License (red flag RF3) says otherwise, so
-  eBay floors use the published table; `ORDER_DATA_MAY_ADJUST_FEES.ebay` is the one switch
-  to flip after that review.
-- **Tiers** (quick sale, recommended, higher profit) are the AI estimate's low, mid, and high,
-  each raised to the highest floor when below it, and labeled "(AI estimate)" or "(cost
-  floor)". Sold data is shown as `soldComparables` but never sets a tier.
-- **Snapshots.** `pricing_snapshot` holds source-labeled price data, validated against its
-  source's payload schema on write and on read (a malformed row is skipped and logged). The
-  estimate of the item's current analysis (the accepted one, else the latest succeeded) is
-  recorded as one `ai_estimate` snapshot per analysis; it is read from the analysis output's
-  `priceEstimate` (the contract's `AnalysisResult` shape). Sold data snapshots are shown while
-  unexpired, the latest per source and marketplace context. Sources bound to one listing
-  context must name it (`depop_inspiration` carries `marketplace: depop`, `ebay_mi` carries
-  `ebay`), on write, on read, and in the label guard, so clients can show Depop Pricing
-  Inspiration on the Depop listing only.
-- **Label guard.** `buildPricingSuggestion` runs `labelGuardViolations` on every suggestion
-  and throws instead of returning one that breaks the rules, so the API answers `500` rather
-  than mislabeling a price.
-
-## 6. Operation engine: never false success
-
-Every marketplace write is a `marketplace_operation` row whose state machine the worker drives
-(`@listora/operations`; the state diagram is in `state-machine.ts`).
-
-1. **Write path.** The API, or the auto-delist orchestrator, calls `enqueueOperation`. It
-   inserts the operation (`queued`, `idempotency_key`, desired-state snapshot, and for a
-   create, revise, or relist its listing content) and enqueues its Graphile Worker job **in
-   the same transaction**. Enqueueing the same key again returns the existing operation. The
-   desired state names the fields a read-back must show, so an empty one is refused; for a
-   content operation it comes from the content (section 4).
-2. **Execution.** One job runs one step. A step commits `running` before it can send anything,
-   so a step cut short is detectable afterwards. No transaction stays open during a
-   marketplace call, and a step records its result only if the operation is still exactly as
-   the step found it. Jobs run one at a time per listing (`queue_name = listing:<id>`,
-   `job_key = operation:<id>`), and a newer operation waits until every older one on its
-   listing is finished, so changes apply in order even while an older one waits to retry. A
-   daily job deletes listing queues that have no jobs left. Each step runs in the operation's
-   capability mode under the listing's connection (`operationMode`, section 4): an
-   `unsupported` operation fails without being sent, and a send builds its payload from the
-   stored content and fails without sending when the adapter's validation refuses it. The
-   adapter outcome determines the next state:
-   - `confirmed`: the API succeeded **and** `readListing` shows the desired state → `succeeded`.
-     A read-back that disagrees or fails → `verifying`.
-   - `rejected` (validation or permanent error) → `failed`, with a user-readable reason and fix.
-   - `transient` (429, 5xx, network failure before send) → `retrying` with backoff and jitter
-     (30 s, 2 m, 10 m, 30 m, 2 h, 6 h, ±20%, at least the marketplace's `Retry-After`), then
-     `failed` with a Retry action.
-   - `unknown` (timeout after the request may have been sent, a lost connection, an adapter that
-     throws or misses its deadline) → `verifying`. `readListing` decides: the desired state
-     holds → `succeeded`; it does not → `retrying`. The request is never re-sent blindly.
-   - `pendingUser` (assisted) → `needs_user_action` until the user confirms
-     (`confirmOperationByUser`). An assisted operation is never read back, and any other
-     outcome for it (`confirmed`, `unknown`) fails as unconfirmed; an API operation that answers
-     with a user task fails the same way.
-3. **Attempts.** Every step, a send or a read-back, uses one attempt, and an operation gets
-   seven. A step whose result is unknown is always followed by a read-back, even after the
-   last attempt. Retry (`retryOperation`) gives a failed operation a fresh set of attempts; it
-   is refused once a newer operation exists on the listing, since it would undo that one.
-4. **Idempotent re-execution.** An operation that was sent before is read back before every
-   later send, and succeeds without sending again when the change already took effect (a 5xx
-   can hide an applied write). Adapters also pass the operation's idempotency key to the
-   marketplace's own duplicate protection where it has one.
-   **Pending listing ids.** A listing id a send returns (eBay's `RelistItem` issues a new one)
-   is stored at once, in the transaction that records the step, as the listing's
-   `pending_external_listing_id`: unverified, and never linked to another listing of the
-   account. Every later step and operation on the listing targets the newest known id, the
-   pending one over the verified one, so a new listing is never lost even when its read-backs
-   fail. A read-back that confirms it promotes it to `external_listing_id`. An end on a listing
-   with both ids targets both, since either may be live, and succeeds only when each reads
-   back ended under the freshness rule (`confirmEveryReadBack` joins the proofs) or is
-   authoritatively absent. **Absent listings.** The goal of an end or mark-sold is that nothing
-   is live, so an authoritative not-found satisfies its target (eBay drops ended listings
-   after a while): a refused end is read back before it fails, a precheck that finds the id
-   absent sends nothing to it, and on success the absent id is retired from the listing row. A
-   create, relist, or edit is never confirmed by an absence.
-5. **Read freshness.** A stale read can show an older state that happens to match (after end,
-   relist, end, the first end), so a read-back confirms only when it is current
-   (`confirmByReadBack` in `evidence.ts`, the only maker of read-back proofs). Listora keeps the
-   newest revision it has seen of each marketplace listing, from reads and confirmed sends,
-   including the revision a send was confirmed with, so the rule survives a crash:
-   `marketplace_listing.remote_revision` for the verified id and `pending_remote_revision` for
-   the pending one. A read older than that revision is stale and decides nothing,
-   neither success nor a resend; another read follows after the backoff delay. With
-   `readFreshness: 'none'`, a matching read confirms only when the operation's previous read, a
-   delay earlier and with no send in between, matched too (the operation waits in `verifying`
-   with code `confirming`). That assumes staleness lasts less than the delay; adapters should
-   provide a revision wherever the marketplace has one.
-6. **Crash recovery.** Each worker holds a Postgres session named `listora-worker:<pool id>`,
-   which the operating system closes when the process dies, even on SIGKILL. Live workers
-   release the job locks of pools that have no session within about 10 seconds (Graphile
-   Worker alone waits 4 hours). The job runs again, finds its step `running`, and reads the
-   listing back. A worker that loses its own session exits at once. So every Graphile Worker
-   runner must be started through `startOperationWorker`, with the same database role, on a
-   direct connection (not a transaction pooler).
-7. **Listing truth.** A verified success records what the marketplace showed on the
-   `marketplace_listing`: status, external id and URL (a confirmed pending id becomes the
-   external id), `remote_snapshot` (with its revision), `remote_revision`, `last_verified_at`.
-   A user confirmation changes only the status.
-8. **History.** Every transition appends an `operation_event` with a redacted request/response
-   excerpt (`redactForStorage` in `@listora/shared`), error code, and attempt number.
-9. **Invariant, enforced in code and tests:** no code path sets `succeeded` without a verified
-   read-back or a user confirmation event. `transitionOperation` is the only code that writes
-   operation rows, and it sets `succeeded` only with a `SuccessProof`, which only `evidence.ts`
-   can create, and only for a current read; a test scans the code for any other writer. Chaos
-   tests inject 429s, 5xx errors (also after the change was applied), timeouts after send,
-   stale reads, and a worker killed mid-operation, over listings that are ended and relisted
-   more than once.
-10. **Concurrency (T-16, T-24).** Token refresh is single-flight per connection: for eBay, in one
-    process and across workers (the connection's row lock, section 4); Depop rotates refresh
-    tokens, so rotated tokens are kept in memory until they are stored (the Depop adapter's
-    tokens, section 4). Rate limits use per-seller and app-wide sliding windows.
-
-**Auto-delist.** A sale event (webhook, poll, email, or manual entry) is deduplicated by
-its order (see `sale` in section 9). Then, in one transaction, Listora records the sale, sets
-the item to `sold_pending_delist`, and creates a high-priority delist operation or urgent
-assisted task for every other listing. A `delist_run` gathers the per-marketplace results. If
-anything is still unconfirmed after 10 minutes, Listora alerts the user again, and after 30
-minutes it escalates the alert. A second sale opens a double-sale incident.
-
-**Status vocabulary** shown to users: `Active (confirmed by eBay)`, `Delisting... retry 2 of 6`,
-`Delist failed - Retry`, `Checking...`, `Action needed - delist on Poshmark`,
-`Done (you confirmed)`. Assisted listings never show "confirmed by <marketplace>".
-`describeListingStatus` (`status-display.ts`) renders these labels from the listing's newest
-operation: "confirmed by <marketplace>" only for a read-back's evidence, "you confirmed" only
-for the user's confirmation, and a listing without a successful operation is never shown as
-confirmed. The API serves them as `statusDisplay` (T-19).
-
-## 7. Local development: fakes and environment switches
+## 5. Local development: fakes and environment switches
 
 Nothing requires a real credential to build or test. Every external service sits behind an
 interface with a fake or dev driver, selected by an environment variable. Each switch below
@@ -780,163 +235,9 @@ lands with the task that introduces that dependency, and its keys are added to `
 Live smoke tests for real providers skip automatically when their credential is absent. Fakes
 must stay true to the real contract: shapes, error codes, and failure modes.
 
-## 8. AI pipeline and cost metering
+## 6. Data model
 
-AI cost is a product constraint, so each item is analyzed once, as cheaply as possible.
-
-1. **On device (free):** capture guidance, Vision text recognition on tags, barcode detection.
-2. **Deterministic server parsing (free):** `@listora/tag-parse` reads RN/CA numbers, UPC/EAN
-   (check digit verified), sizes with their system, fiber percentages, country of origin, and
-   labeled style numbers from OCR lines and barcode payloads. Every value carries a confidence
-   and its source line. Never scrape or call the FTC RN database.
-3. **One multimodal call** (Claude Haiku 5.5, low effort, a JSON schema every answer is
-   validated against; not strict structured output, see the deviation below). It returns
-   canonical attributes with per-field confidence and provenance, plus every marketplace
-   variant and a labeled price estimate. Typical cost is about $0.0015-0.003 per item.
-4. **Escalation** (Sonnet 5.5) only for low confidence, designer or vintage items, or when the
-   user taps "Identify harder". It counts against the plan's premium quota.
-5. **Analyze once.** There is one `ai_analysis` per item, photo-set hash, and tier
-   (`standard`, plus `premium` only after escalation). Edits, repricing, delist, sync, and
-   profit tracking never call AI. Bulk work uses the Batch API.
-6. **Evaluation.** `npm run eval` scores the parsers, and providers behind the `EvalProvider`
-   interface, on the synthetic tag corpus in `packages/eval/corpus`: AI tag reading, and the
-   full production analysis (`analyzeItem`), scored on the tag facts it reports. It prints
-   per-field accuracy, precision, recall, and cost per item, including the billed cost of
-   failed calls.
-   The `fake` (default) and `anthropic` providers go through `AiClient`, so the guards, the
-   tier's model (`--tier`), and metering are the production ones.
-   The parsers must stay at or above 95% on every field (a unit test enforces this). Providers,
-   the corpus license manifest, and how to change the corpus are described in
-   [packages/eval/corpus/README.md](../packages/eval/corpus/README.md).
-7. **Metering from day one.** Every call writes an `ai_usage_event` (tokens, images, searches,
-   `cost_micros` from a versioned price table). The system also keeps daily and monthly
-   rollups and per-plan quotas in reseller units. There is a per-account daily dollar circuit
-   breaker (default $1/day), a global kill switch, per-account blocks, and spend alerts.
-
-`@listora/analysis` implements steps 3 to 5 on top of `@listora/ai`:
-
-- **Request.** `startItemAnalysis` needs every photo of the item `ready` (the photo set is all
-  of them) and returns the existing analysis of the photo set when there is one; a `failed`
-  one is queued again, since asking again is the retry. Before anything is queued, the API
-  runs the AI guards (`AiClient.checkGuards`) with the tier's plan unit, so a request that
-  would be refused gets `503` (kill switch), `429` (daily budget), or `402` (quota) instead.
-  The row and its job commit together (`requestAnalysis`).
-- **The call.** `analyzeItem` sends at most 5 photos' `ai` derivatives (the first tag photo
-  wherever it is, then the others in display order) and at most one tag crop: a 784 px
-  centered crop of that tag photo when it is sharper than the `ai` image (`tagCrop` in
-  `@listora/photos`). Those caps (`MAX_ANALYSIS_PHOTOS`, `MAX_TAG_CROPS` in `input.ts`) are the
-  plan's cost basis (3-5 photos and one tag crop per call), which the plan limits and the
-  daily circuit breaker were sized for. The prompt is JSON with the phone's OCR lines and
-  barcodes and the `@listora/tag-parse` facts. The system prompt holds every rule and the
-  canonical vocabulary (`vocabulary.ts`: category tree, departments, colors, patterns,
-  materials, size systems, conditions) and nothing per item, so it caches. The answer's
-  schema (`itemAnalysisSchema`) also enforces each marketplace's copy limits
-  (`marketplace-copy.ts`, with their sources) and cross-field rules; an answer that breaks it
-  is `invalid_output`, retried once, then the analysis fails with a reason the user sees.
-  The answer is flat (details as plain values, empty when not found, with their confidences
-  in a parallel object; decoded before use), and its schema travels in the system prompt
-  (`enforcement: 'prompt'`).
-- **Deviation from the plan: no strict structured output.** Plan section 5.1 calls for
-  structured output with a strict JSON schema (constrained decoding). In the live runs
-  Anthropic refused this schema as a strict grammar ("compiled grammar is too large"), even
-  after flattening it, so strict mode is not possible for it. The adopted fallback: the full
-  JSON schema in the cached system prompt, every answer validated against the Zod schema
-  (`itemAnalysisSchema`), and one retry of an answer that breaks it. The cost is an
-  occasional billed `invalid_output` retry, and a visible failure after a second bad answer;
-  an invalid answer is never stored.
-- **Provenance** is the server's: a value is `ocr` or `barcode` only when the phone's reads
-  contain it, otherwise `ai`. A confident parsed fact the model agrees with gives its source;
-  one the model left out fills the value in; one it contradicts caps the value's confidence
-  at 0.5 so the review screen highlights it.
-- **Escalation.** A standard result asks for the premium identification when its brand or
-  product is uncertain (confidence below 0.6), the item looks designer or vintage, or the
-  model says so. With `AI_AUTO_ESCALATE=on` the job then queues the premium analysis (same
-  photos plus the first result) in the transaction that stores the result, when the premium
-  quota allows; otherwise the user starts it (`escalateAnalysis`). A brand the model did not
-  identify at all also sets `needsEscalation` (with the reason "The brand was not
-  identified."), so the app makes "Identify harder" prominent, but never escalates on its own:
-  many items are unbranded, and a premium identification costs the user's quota. A missing
-  product name alone sets nothing, since most secondhand items show none.
-- **Quotas.** A standard call uses one `ai_items` unit and a premium call one
-  `premium_identifications` unit when it succeeds. `PostgresQuotaPolicy` counts them in
-  `usage_counter` per UTC month and enforces the row's `quota` (null means unlimited until
-  billing, T-28, sets plan limits).
-- **Applying.** `applyAnalysis` copies the proposals into the item with their provenance and
-  sets `acceptedAnalysisId`, never overwriting a detail whose provenance is `user`. A later
-  `replaceItem` value equal to the accepted analysis's proposal keeps the analysis's source.
-- **The job** (`runItemAnalysis`, task `item_analysis`, run by the worker) records every
-  outcome on the row, unexpected errors included (`internal_error`, retryable), so an
-  analysis never stays `running` or claims a result it does not have: a failed one shows its
-  reason and whether asking again may help. Only a database outage while recording throws;
-  the queue then runs the job again with backoff.
-
-`@listora/ai` is the provider layer behind steps 3, 4, and 6, and implements step 7's metering,
-guards, cost reports, and spend check (the AI cost alarm is in section 10):
-
-- **`AiClient` is the only way to call AI.** A call names its account, purpose, and tier
-  (`standard` is the Fast tier, `premium` the escalation). The client checks the guards in
-  order: the global kill switch (`AI_KILL_SWITCH`, or the operator's switch in Postgres), an
-  operator's block on the account, the account's spend today in UTC against
-  `AI_DAILY_BUDGET_USD`, and the plan quota hook (`QuotaPolicy`, in reseller units such as
-  `ai_items`). `createAiClient` adds the operator controls when given `PostgresAiControls`. A
-  tripped guard throws `AiGuardError` before anything is sent and records nothing. Quota units
-  are consumed only when a call succeeds.
-- **Tiers map to models by configuration** (`AI_MODEL_STANDARD`, `AI_MODEL_PREMIUM`); the
-  default registry is Haiku 5.5 at low effort and Sonnet 5.5 at medium effort. Every
-  configured model must be in the price table, so every call can be priced.
-- **Prices** live in `packages/ai/src/prices.ts` as integer micro-dollars per million tokens.
-  A price change adds a new table version; each event stores the version it was priced with.
-  Costs round up to the next micro-dollar, once per call.
-- **Every call is metered, failed ones too.** The provider reports what it billed (a
-  truncated or invalid answer still costs tokens), and the event records it with
-  `outcome = 'failed'` and an `error_code` before `AiCallError` is thrown. Providers send one
-  request per call and never retry, so each request the vendor sees is its own event. If the
-  call's item or user is deleted while it runs, the event is still recorded, without that
-  reference.
-- **Rollups.** A trigger adds each event to `ai_usage_daily` for its account and UTC day, and
-  the daily budget guard reads that row. `UsageStore.monthlyUsage(accountId, 'YYYY-MM')`
-  returns an account's totals for a UTC calendar month (cost, calls, failed calls, tokens,
-  images, and web searches) by summing the month's daily rows; the table's
-  `(account_id, usage_date)` primary key serves that range scan, so there is no separate
-  monthly table or index.
-- **Operator controls.** `PostgresAiControls` keeps the global kill switch (`ai_kill_switch`,
-  one row) and per-account blocks (`ai_account_block`) in Postgres. The client asks them on
-  every call, so a change takes effect on the next call in every process, with no deploy.
-  Operators change them only through `npm run admin -- ai-kill-switch on|off` and
-  `ai-block on|off <account>`, which require `--actor` and `--reason`. Each change and its
-  `ai_control_audit` row commit in one transaction, and a request that changes nothing
-  (switching on a switch that is already on) records nothing. `AI_KILL_SWITCH=on` stays as a
-  deploy-time switch: either one refuses calls.
-- **Cost reports.** `npm run admin -- ai-cost ...` reports, for a UTC day or month: top
-  accounts by spend and one account's usage (from `ai_usage_daily`, and for one account's month
-  from `UsageStore.monthlyUsage`), AI cost per item worked on, and spend by purpose, tier, and
-  model (from `ai_usage_event`). An item's cost includes its failed calls and escalations.
-- **Spend check.** `checkAiSpend` runs every hour (minute 7, UTC) as the worker's
-  `ai_spend_check` Graphile Worker cron task, once per hour across all workers, in the
-  worker's task pool (not the operation steps' pool), with the thresholds from the worker's
-  own environment; `npm run admin -- ai-alerts check` runs it once
-  on demand. It flags accounts approaching (`AI_ALERT_WARN_PERCENT`, default 80%) or over
-  the daily circuit breaker or an AI plan quota in `usage_counter`, and all accounts together
-  approaching or over `AI_GLOBAL_DAILY_ALERT_USD` per UTC day. It only reads. It logs one
-  `event: "ai_spend_alert"` line per alert (warn when approaching, error when over) and one
-  `event: "ai_spend_check"` summary with numeric counts, through the worker's logger when
-  scheduled. CloudWatch metric filters and alarms (T-30, T-32) key on these field names, so
-  they change only together with the alarms. Alerts name accounts by id only.
-- **Timeouts.** `AI_REQUEST_TIMEOUT_MS` defaults to 600000 (the SDK's own default), so long
-  Premium calls are not cut off. A timed-out call may still be billed but is metered at zero.
-- **Providers.** `FakeAiProvider` answers from fixture JSON keyed by the request's
-  `photoSetHash` (the item's `ai_analysis.photo_set_hash`, not a hash of the images sent) and
-  output schema name (`packages/ai/fixtures/README.md`), validates it against the schema, and
-  estimates usage the way the API counts it. Fake calls are metered at the configured model's
-  real prices so budgets behave the same in development. `AnthropicProvider` uses the official
-  SDK with strict structured output (`output_config.format` from the Zod schema; an output
-  with `enforcement: 'prompt'` sends the JSON schema as system instructions instead), base64
-  images, the tier's effort, and a prompt-cache breakpoint on the system prompt. Its live smoke
-  test runs only when `ANTHROPIC_API_KEY` is set.
-
-## 9. Data model outline
-
-PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations` (T-04).
+PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations`.
 
 - **Tenancy.** Every table has a non-null `account_id`, except `account` itself, `app_user`
   (a person's identity is global, and `membership` links it to accounts), the deleted
@@ -963,145 +264,49 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   never hold credentials. `inventory_item.version` is bumped by a trigger on
   every update, for optimistic locking.
 
-Tables by area:
+**Tables.** Each feature doc's Data section describes its tables.
 
 - **Tenancy:** `account`, `app_user`, `membership`, and `sku_sequence` (gapless per-account
   SKUs such as `AJ-000184`, allocated by `createInventoryItem` / `allocateSku` in
   `@listora/db` inside the item-create transaction). `sku_prefix` lives on `account`, not on
   `membership` as the plan's data model sketched: SKUs and their counter are per account
   (decision D12), so every member of an account creates SKUs with the same prefix.
-- **Inventory:** `inventory_item` (status, canonical attributes, prices, cost,
-  `field_provenance`, optimistic-lock `version`, and `pre_archive_status`, the status an
-  archived item had before it was archived), `photo` (role, status, failure reason, hashes,
-  derivatives, OCR and barcodes), and `storage_location`. `photo` stores the upright pixel
-  `width` and `height`; each entry of `derivatives` records its key, size, byte size, and
-  sha256.
-- **Uploads:** `upload_session` (expiry) and its `upload_file` rows (declared type, size,
-  sha256, storage key, and status `pending`, `uploaded`, or `attached`).
-- **AI:** `ai_analysis` (unique per item, photo-set hash, and tier; a `premium` one names the
-  standard analysis it escalates; a failed one records whether retrying may help),
-  `ai_usage_event` (one
-  append-only row per provider call, with its tier, outcome, and error code), and
-  `ai_usage_daily`, which a trigger on `ai_usage_event` keeps in step per account and UTC day.
-  Monthly totals come from `UsageStore.monthlyUsage` (section 8). The operator controls are
-  `ai_kill_switch`, `ai_account_block`, and the append-only `ai_control_audit`.
-- **Marketplaces:** `marketplace_connection` (mode, the seller's immutable id, encrypted tokens,
-  expiries, scopes, status, when the grant was issued, `last_ok_at`, and the latest problem's
-  code, message, and time; a revoked connection holds no tokens; at most one per account and
-  marketplace, which connecting keeps under the account's row lock),
-  `connection_authorization` (one connect attempt: the state's SHA-256, its expiry, and the
-  result),
-  `marketplace_listing` (per-marketplace variant, external ids, status, remote snapshot and
-  newest seen revision, desired/applied version, `last_verified_at` for a read-back and
-  `user_confirmed_at` for the user's confirmation; a listing known only by a share short link
-  is unique by its URL), `marketplace_operation` (with the listing `content` a create, revise,
-  or relist publishes), and the append-only `operation_event`.
-- **Sales and delist:** `inbound_event` (deduplicated per account, source, marketplace, and
-  provider event id, so an id that repeats in another account or on another marketplace is
-  never dropped as a duplicate). `sale` is one marketplace order (unique per account,
-  marketplace, and external order id) with the order-level fields: sold time, currency,
-  shipping charged, detection source, status, and ship-by. Its `sale_item` rows are the items
-  it sold, one per item (an order can be a bundle), each with its price and, when known, the
-  item's listing on the sale's marketplace. `delist_run` is one per sold item and must point
-  at an item of its sale; the `delist_run_listing` view lists its operations and user tasks.
-  `fee_line` belongs to a sale and optionally to one of its items. Also `user_task` and
-  `expense`. Auto-delist operations have `origin = 'auto_delist'` and reference their
-  `delist_run`.
-- **Pricing:** `pricing_snapshot` (source-labeled; payloads per source in
-  `@listora/pricing`, see section 5).
-- **Billing:** `subscription`, `entitlement`, and `usage_counter`.
-- **History:** `audit_log` (item changes the user can see).
 - **API:** `idempotency_record` (the stored first successful response per account and
   `Idempotency-Key`, kept 24 hours; written once, so it has no `updated_at`, and deleted in
-  batches by later POSTs once expired), and `deleted_identity` (the SHA-256 of each identity
-  whose account was deleted and when, so its earlier tokens are refused; its only timestamp
-  is `deleted_at`, and later deletions purge rows older than 48 hours).
-- **Account deletion:** `account_deletion` (the tombstone of a committed deletion whose job
-  has not finished: the identity's SHA-256 and provider username, attempts) and
-  `account_deletion_grant` (the deleted account's marketplace grants still to revoke, with
-  their encrypted tokens only while pending). The job deletes the tombstone when it is done.
+  batches by later POSTs once expired).
+- **Elsewhere:** connections and connect attempts in [connections.md](features/connections.md#data);
+  inventory, photos, and history in [items.md](features/items.md); uploads in
+  [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
+  [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in
+  [operations.md](features/operations.md#data); pricing in [pricing.md](features/pricing.md#data);
+  deleted identities and account deletion in [auth.md](features/auth.md#data). Billing
+  (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
+  `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
-**Migrations.** Each migration is a pair of plain SQL files, `NNNN_name.up.sql` and
-`NNNN_name.down.sql`, run by Kysely's migrator in one transaction with a lock (`npm run
-db:migrate`; in AWS, the deploy runs them before new code starts, see section 10). Never edit
-a migration that has been merged; add a new one. Numbers must be unique and are never
-reused, but gaps are allowed: take the number firstmate assigns, or else the next free one
-on `origin/main`, and keep it. Merge migration-bearing branches in numeric order, because
-the migrator refuses to apply a migration that sorts before one already applied (Kysely's
-default; it is never turned off); `migrations.test.ts` checks the numbering. A schema change
-updates the Kysely table types in `packages/db/src/schema.ts` and the value lists in
-`values.ts` in the same change; `schema.int.test.ts` fails when they drift. `bigint` columns
-read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
+**Migrations.** Each migration is a pair of plain SQL files, `<prefix>_name.up.sql` and
+`<prefix>_name.down.sql`, run by Kysely's migrator in one transaction with a lock (`npm run
+db:migrate`; in AWS, the deploy runs them before new code starts, see
+[infra.md](features/infra.md)). Never edit a migration that has been merged; add a new one.
+
+- **Names.** The prefix of a new migration is the UTC time you create it, `YYYYMMDDHHMMSS`
+  (`date -u +%Y%m%d%H%M%S`), so branches written in parallel never pick the same name. The
+  first migrations keep their four-digit numbers (`0001` to `0014`), which sort before every
+  timestamp; no new numbered migration is added.
+- **Order.** Migrations apply in name order, and the migrator refuses to apply a migration that
+  sorts before one already applied (Kysely's default; it is never turned off). So at your final
+  rebase before merge, if `origin/main` has a migration with a later timestamp than yours,
+  rename yours (both files) to the current UTC time. Never rename a merged migration.
+- **Checks.** `migrations.test.ts` checks that every migration has both files, that prefixes are
+  unique, that timestamps are real UTC times, and that no numbered migration follows
+  `0014_marketplace_connect`. The migration integration tests read the list from the directory, so a
+  new migration edits no test.
+
+A schema change updates the Kysely table types in `packages/db/src/schema.ts` and the value
+lists in `values.ts` in the same change; `schema.int.test.ts` fails when they drift. `bigint`
+columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` columns as
 `YYYY-MM-DD` strings. Write `jsonb` values with `jsonb(value)`.
 
-## 10. Hosting and deploys
-
-Each environment (`staging`, `prod`, and `personal`, the low-cost layout for one reseller in
-their own account, priced in [costs.md](costs.md)) is its own AWS account, defined by the CDK
-app in `infra/` and documented in [infra/README.md](../infra/README.md). In short:
-
-- **One image, two services.** The root `Dockerfile` installs production dependencies and
-  the sources; ECS runs `node apps/api/src/main.ts` or `node apps/worker/src/main.ts` from it,
-  on Fargate in private subnets, with a read-only root file system. The API is behind an
-  HTTPS load balancer at `api.<domain>` that health-checks `/health/live`. ECS replaces
-  tasks that fail it, so it checks no dependency: a database failover must not restart every
-  task. `/health/ready` (database reachable) is for deploy checks and operators. `personal`
-  runs both containers in one task in public subnets (no NAT) behind an API Gateway HTTP API
-  instead of the load balancer, and ECS runs the same `/health/live` check in the container.
-  Personal can also run without a domain: the API then answers at the HTTP API's default
-  `execute-api` URL, and no sale email is received until a domain is added.
-- **Configuration.** Containers get exactly the environment in `infra/src/containers.ts`, and
-  a test runs the API's and worker's config loaders on it. A task that adds a required config
-  key adds it there (and, for a secret, to `APP_SECRETS` in `infra/src/config.ts`). The
-  database password reaches the processes only as `PGPASSWORD` from the RDS secret.
-- **Data.** RDS PostgreSQL 18 (Multi-AZ in prod; deletion protection in prod and personal), a
-  private photo bucket whose `public/` prefix CloudFront serves by exact key (at its
-  `*.cloudfront.net` domain), SES inbound mail for `in.<domain>` stored in a private bucket,
-  and a KMS key for token envelope encryption (`TOKEN_KMS_KEY_ID`: the API may only
-  `GenerateDataKey`, the worker also `Decrypt`).
-- **Deploys** run only from the manual Deploy workflow, on `main`, inside the protected GitHub
-  environment, with OIDC role assumption (no stored AWS keys). Images are tagged with the
-  commit and immutable. The environment's protection rules and the CDK bootstrap's
-  CloudFormation execution policy bound what a deploy can change (infra/README.md).
-- **Migrations** run on every deploy as a one-off ECS task (`listora-<env>-migrate`, the
-  worker's database access) after the image push and before the new services start; a
-  failed migration stops the deploy. The previous release is still serving while they run,
-  so every migration must be compatible with the code currently running: expand, then
-  contract (add first and use in a later release; stop using first and drop in a later
-  release).
-- **Trust metrics and alarms.** The worker publishes the product's trust metrics in CloudWatch
-  Embedded Metric Format: JSON lines on stdout that CloudWatch Logs turns into metrics (no
-  agent, no API calls). `TRUST_METRICS` in `packages/observability/src/catalog.ts` names each
-  one, its unit, and its dimensions, and both the worker and the CDK alarms read it. A Graphile
-  cron job (`trust_metrics`, once a minute across all workers, filled in for up to an hour
-  after downtime) computes them from committed rows, so a rolled-back change is never counted
-  and every writer (worker steps, user confirmations through the API) is covered. For minute T
-  it publishes the operations that settled in [T - 2 min, T - 1 min): `VerifiedSuccess` (1 or 0
-  per settled operation, so Average is the verified-success rate) per marketplace and kind and
-  per marketplace, `OperationFailed` per marketplace and kind, `DelistFailed`, and
-  `DelistLatency` from the recorded sale to the verified delist per marketplace (p50, p95).
-  Every scheduled tick, however late, also publishes the state at the time it runs (the job
-  runs ahead of every operation step in the queue, so a backlog cannot silence it):
-  `StuckOperations` and `OldestStuckOperationAge` per status (verifying, retrying,
-  needs_user_action), `OldestUnverifiedOperationAge`, `AiDailyCostUsd` per account (UTC day),
-  `MarketplaceConnections` per marketplace and status, and `ConnectionsNeedingRelink`. The
-  observability stack alarms on an operation unverified for 30 minutes, any failed delist, an
-  account's AI cost today over `aiDailyCostAlarmUsd`, a connection needing relink, and per
-  marketplace on p95 delist latency over an hour above `delistLatencyAlarmMinutes` (10 minutes
-  for eBay's API, 13 hours for the browser-automated marketplaces and their 12-hour sale
-  checks) and a verified-success rate below 90% over a day, and on every service running
-  fewer tasks than it should, and sends unplanned task stops to the alarm topic. The relink
-  alarm fires on a level, which suits one seller; an environment with many sellers should
-  alarm on increases instead, so one unlinked connection does not mask the next. A new metric
-  adds a catalog entry; keep dimensions few, since CloudWatch bills each combination of values
-  as a metric ([costs.md](costs.md)).
-- **Offline.** Synthesis never calls AWS: no `fromLookup`, zones resolve at deploy time, and
-  `npm run infra:synth` (part of `npm run check`) runs `cdk synth` of every environment with
-  credentials hidden.
-  Template snapshots in `infra/src/__snapshots__/` make every infrastructure change a
-  reviewable diff.
-
-## 11. Testing and CI
+## 7. Testing and CI
 
 - `npm run check` runs the format check, lint (ESLint and shellcheck), type check, the API
   contract check, the offline `cdk synth` of every environment, unit tests, and integration
@@ -1115,14 +320,15 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   throwaway database with `createScratchDatabase` from `@listora/testing` and drop it after.
 - Tests cover acceptance criteria **and failure paths**. Process-level tests start the real
   entry points with `node src/main.ts` (see `startNodeProcess` in `@listora/testing`).
-- Every marketplace adapter passes the shared conformance suite against its fake, and its
-  payloads, validation results, and assisted tasks are pinned by golden files (section 4).
-  Sample listing content for tests in any workspace comes from `@listora/marketplaces/testing`.
-- **API contract.** `packages/api-contract/openapi.yaml` is the only place an endpoint or
-  payload shape is defined. The server imports its types from `@listora/api-contract` and
-  the iOS app uses the generated `ListoraAPI` Swift package. `npm run contract:check` lints
-  the spec, fails when the committed generated code is stale, and tests the Swift package.
-  Its conventions (error model, idempotency keys, pagination, Money) are in
+- Every marketplace adapter passes the shared conformance suite against its fake, and its payloads,
+  validation results, and assisted tasks are pinned by golden files
+  ([marketplaces.md](features/marketplaces.md#adapter-model)). Sample listing content for tests in
+  any workspace comes from `@listora/marketplaces/testing`.
+- **API contract.** `packages/api-contract` (the root `openapi.yaml` and the per-resource files it
+  references) is the only place an endpoint or payload shape is defined. The server imports its
+  types from `@listora/api-contract` and the iOS app uses the generated `ListoraAPI` Swift package.
+  `npm run contract:check` lints the spec, fails when the committed generated code is stale, and
+  tests the Swift package. Its conventions (error model, idempotency keys, pagination, Money) are in
   [packages/api-contract/README.md](../packages/api-contract/README.md).
 - CI runs the same fresh-clone path as local development; see the CI section of the
   [README](../README.md#ci). A Linux job builds the application image and smoke-tests it
@@ -1130,3 +336,39 @@ app in `infra/` and documented in [infra/README.md](../infra/README.md). In shor
   `make ios-lint` and `make ios-test`, but only when a file the iOS build reads changed (macOS
   minutes cost 10 times Linux minutes); the Linux backend check runs on every non-draft pull
   request.
+
+## 8. Feature docs
+
+| File                                                   | Covers                                                                        |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| [features/operations.md](features/operations.md)       | The operation engine, auto-delist, the honest status vocabulary               |
+| [features/marketplaces.md](features/marketplaces.md)   | The adapter interface, capabilities, assisted adapters, conformance, listings |
+| [features/ebay.md](features/ebay.md)                   | The eBay adapter, the fake eBay, the sandbox check                            |
+| [features/depop.md](features/depop.md)                 | Depop: assisted today, the partner API adapter to come                        |
+| [features/automation.md](features/automation.md)       | Browser automation for marketplaces without an API (decision D1)              |
+| [features/ai.md](features/ai.md)                       | The AI pipeline, item analysis, cost metering and controls                    |
+| [features/pricing.md](features/pricing.md)             | Pricing data rules, floors, fee tables, tiers, the label guard                |
+| [features/photos.md](features/photos.md)               | Uploads, storage drivers, photo processing                                    |
+| [features/items.md](features/items.md)                 | Inventory items, item status, the audit log                                   |
+| [features/auth.md](features/auth.md)                   | Sign-in drivers, the Cognito user pool, account deletion                      |
+| [features/infra.md](features/infra.md)                 | Hosting and deploys                                                           |
+| [features/costs.md](features/costs.md)                 | The personal environment's monthly cost                                       |
+| [features/observability.md](features/observability.md) | Logs, request ids, the signals alarms key on                                  |
+| [features/ios.md](features/ios.md)                     | iOS app conventions                                                           |
+
+### Former section numbers
+
+Code comments and merged migrations written before the split cite sections of this file by
+number. They now live here:
+
+| Old section                  | Now                                                                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1, 2, 3, 7, 11               | Sections 1, 2, 3, 5, and 7 of this file                                                                                                      |
+| 3, "The API"                 | Section 4 of this file                                                                                                                       |
+| 3, "Photos and storage"      | [features/photos.md](features/photos.md)                                                                                                     |
+| 4, marketplace adapter model | [features/marketplaces.md](features/marketplaces.md), [features/ebay.md](features/ebay.md), [features/automation.md](features/automation.md) |
+| 5, pricing data rules        | [features/pricing.md](features/pricing.md)                                                                                                   |
+| 6, operation engine          | [features/operations.md](features/operations.md)                                                                                             |
+| 8, AI pipeline               | [features/ai.md](features/ai.md)                                                                                                             |
+| 9, data model                | Section 6 of this file and each feature doc's Data section                                                                                   |
+| 10, hosting and deploys      | [features/infra.md](features/infra.md)                                                                                                       |

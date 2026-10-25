@@ -1,0 +1,34 @@
+/health/live:
+  get:
+    tags: [health]
+    operationId: getLiveness
+    summary: Liveness probe
+    description: The process is up. Checks no dependencies.
+    security: []
+    responses:
+      '200':
+        description: The process is running.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/health.yaml#/HealthLive'
+/health/ready:
+  get:
+    tags: [health]
+    operationId: getReadiness
+    summary: Readiness probe
+    description: The process can serve traffic (the database answers). Never includes error details.
+    security: []
+    responses:
+      '200':
+        description: Ready.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/health.yaml#/HealthReady'
+      '503':
+        description: Not ready; at least one check is unavailable.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/health.yaml#/HealthReady'

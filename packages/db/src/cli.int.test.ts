@@ -5,24 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createScratchDatabase, startNodeProcess, type ScratchDatabase } from '@listora/testing';
 
+import { shippedMigrations } from './test-support.ts';
+
 const entry = fileURLToPath(new URL('cli.ts', import.meta.url));
-/** The migrations shipped in migrations/, in order. */
-const SHIPPED = [
-  '0001_schema_v1',
-  '0002_ai_metering',
-  '0003_idempotency',
-  '0004_item_pre_archive_status',
-  '0005_photo_pipeline',
-  '0006_read_freshness',
-  '0007_pending_listing_id',
-  '0008_item_analysis',
-  '0009_listing_content',
-  '0010_deleted_identity',
-  '0011_ai_controls',
-  '0012_listing_links',
-  '0013_trust_metric_indexes',
-  '0014_marketplace_connect',
-];
+/** The migrations shipped in migrations/, in name order, the order they apply in. */
+const SHIPPED = await shippedMigrations();
 const LATEST = SHIPPED.at(-1) ?? '';
 
 /** Runs the real migrate command (`node src/cli.ts ...`) to completion. */

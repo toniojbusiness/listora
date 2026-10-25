@@ -17,13 +17,21 @@ import type { Db } from './database.ts';
 /** Directory holding the plain SQL migrations shipped with this package. */
 export const MIGRATIONS_DIR = fileURLToPath(new URL('../migrations/', import.meta.url));
 
-/** `0001_schema_v1.up.sql` and `0001_schema_v1.down.sql` form the migration `0001_schema_v1`. */
-const MIGRATION_FILE = /^(\d{4}_[a-z0-9_]+)\.(up|down)\.sql$/;
+/**
+ * `20261024153000_add_sales.up.sql` and `20261024153000_add_sales.down.sql` form the migration
+ * `20261024153000_add_sales`. The prefix is a UTC timestamp (`YYYYMMDDHHMMSS`), so branches
+ * written in parallel never pick the same name. The first migrations, `0001` to `0014`, have
+ * four-digit numbers instead and sort before every timestamp.
+ */
+const MIGRATION_FILE = /^((?:\d{4}|\d{14})_[a-z0-9_]+)\.(up|down)\.sql$/;
 
 /**
- * Reads plain SQL migrations from a directory. Every migration is a numbered pair of files,
- * `NNNN_name.up.sql` and `NNNN_name.down.sql`; any other file, or an unpaired one, is an error
- * so a typo can never silently skip a migration. Each file runs as one multi-statement query.
+ * Reads plain SQL migrations from a directory. Every migration is a pair of files,
+ * `<prefix>_name.up.sql` and `<prefix>_name.down.sql`, whose prefix is a UTC timestamp
+ * (`YYYYMMDDHHMMSS`) or, for the first migrations, a four-digit number. Any other file, an
+ * unpaired one, a timestamp that is not a real UTC time, or two migrations with one prefix is
+ * an error, so a typo can never silently skip a migration. Each file runs as one
+ * multi-statement query.
  */
 export class SqlFileMigrationProvider implements MigrationProvider {
   readonly #directory: string;
@@ -40,7 +48,7 @@ export class SqlFileMigrationProvider implements MigrationProvider {
       const direction = match?.[2];
       if (name === undefined || (direction !== 'up' && direction !== 'down')) {
         throw new Error(
-          `Unexpected file ${file} in ${this.#directory}: migrations are NNNN_name.up.sql and NNNN_name.down.sql`,
+          `Unexpected file ${file} in ${this.#directory}: migrations are YYYYMMDDHHMMSS_name.up.sql and YYYYMMDDHHMMSS_name.down.sql`,
         );
       }
       const pair = files.get(name) ?? {};
@@ -48,18 +56,21 @@ export class SqlFileMigrationProvider implements MigrationProvider {
       files.set(name, pair);
     }
 
-    const numbers = new Map<string, string>();
+    const prefixes = new Map<string, string>();
     const migrations: Record<string, Migration> = {};
     for (const [name, { up, down }] of files) {
       if (up === undefined || down === undefined) {
         throw new Error(`Migration ${name} needs both ${name}.up.sql and ${name}.down.sql`);
       }
-      const number = name.slice(0, 4);
-      const clash = numbers.get(number);
-      if (clash !== undefined) {
-        throw new Error(`Migrations ${clash} and ${name} share the number ${number}`);
+      const prefix = migrationPrefix(name);
+      if (prefix.length === 14 && !isUtcTimestamp(prefix)) {
+        throw new Error(`Migration ${name} does not start with a UTC time (YYYYMMDDHHMMSS)`);
       }
-      numbers.set(number, name);
+      const clash = prefixes.get(prefix);
+      if (clash !== undefined) {
+        throw new Error(`Migrations ${clash} and ${name} share the prefix ${prefix}`);
+      }
+      prefixes.set(prefix, name);
       migrations[name] = {
         up: async (db) => runSqlFile(db, up),
         down: async (db) => runSqlFile(db, down),
@@ -67,6 +78,27 @@ export class SqlFileMigrationProvider implements MigrationProvider {
     }
     return migrations;
   }
+}
+
+/** The number or timestamp a migration name starts with. */
+export function migrationPrefix(name: string): string {
+  return name.slice(0, name.indexOf('_'));
+}
+
+/** Whether `YYYYMMDDHHMMSS` names a real UTC time (no 13th month or 25th hour). */
+function isUtcTimestamp(prefix: string): boolean {
+  const parts = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(prefix)?.slice(1).map(Number);
+  if (parts === undefined) return false;
+  const [year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0] = parts;
+  const time = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  return (
+    time.getUTCFullYear() === year &&
+    time.getUTCMonth() === month - 1 &&
+    time.getUTCDate() === day &&
+    time.getUTCHours() === hour &&
+    time.getUTCMinutes() === minute &&
+    time.getUTCSeconds() === second
+  );
 }
 
 async function runSqlFile(db: Kysely<unknown>, path: string): Promise<void> {

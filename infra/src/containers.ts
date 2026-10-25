@@ -82,7 +82,7 @@ export function containerEnvironment(
   switch (container) {
     case 'api':
       // Deployed APIs switch to `cognito` (with COGNITO_USER_POOL_ID and COGNITO_CLIENT_IDS) once
-      // the user pool exists; docs/auth.md lists what it needs.
+      // the user pool exists; docs/features/auth.md lists what it needs.
       return { API_HOST: '0.0.0.0', API_PORT: String(API_PORT), AUTH_DRIVER: 'dev', ...services() };
     // The worker gets COGNITO_USER_POOL_ID (and its task role cognito-idp:AdminGetUser and AdminDeleteUser) with
     // the user pool, so account deletions can delete Cognito users.

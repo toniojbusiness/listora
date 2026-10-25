@@ -1,5 +1,5 @@
 /**
- * The engine with the adapter framework (docs/architecture.md section 4): assisted operations
+ * The engine with the adapter framework (docs/features/marketplaces.md): assisted operations
  * finish only through the user's confirmation, never through a read-back; every operation runs
  * in the mode its capability flag gives it; nothing invalid is sent; and a connection switches a
  * listing from assisted to the API without any data migration.

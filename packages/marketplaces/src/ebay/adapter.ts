@@ -1,5 +1,5 @@
 /**
- * The eBay adapter (docs/architecture.md section 4): listings through the Trading API
+ * The eBay adapter (docs/features/ebay.md): listings through the Trading API
  * (AddFixedPriceItem, ReviseFixedPriceItem, EndFixedPriceItem, RelistFixedPriceItem, GetItem),
  * which keeps them editable in Seller Hub, photos through the Media API, categories and item
  * specifics through the Taxonomy API, and the seller's orders through the Fulfillment API.
@@ -284,7 +284,7 @@ export class EbayAdapter implements MarketplaceAdapter<EbayListingPayload> {
     return this.#outcome(callName, result, token, ctx.connection);
   }
 
-  /** Maps a Trading answer onto an outcome (docs/architecture.md section 4). */
+  /** Maps a Trading answer onto an outcome (docs/features/ebay.md). */
   #outcome(
     callName: TradingCallName,
     result: TradingResult,

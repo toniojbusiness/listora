@@ -1,23 +1,31 @@
 # @listora/api-contract
 
-The v1 HTTP contract between the iPhone app and the backend. [`openapi.yaml`](openapi.yaml)
-(OpenAPI 3.1) is the single source of truth. Everything else in this package is generated
-from it, committed, and checked for drift in CI.
+The v1 HTTP contract between the iPhone app and the backend, in OpenAPI 3.1. The contract is
+the single source of truth, split by resource so that work on one resource edits only that
+resource's files: [`openapi.yaml`](openapi.yaml) is the root, and it `$ref`s the paths in
+`paths/` and the components in `components/`. Redocly bundles them into one document, and
+everything else in this package is generated from that bundle, committed, and checked for
+drift in CI.
 
-| Path                                  | What it is                                                               |
-| ------------------------------------- | ------------------------------------------------------------------------ |
-| `openapi.yaml`                        | The contract. Edit this file.                                            |
-| `redocly.yaml`                        | Lint configuration (Redocly `recommended-strict`).                       |
-| `src/index.ts`                        | The TypeScript entry point (`@listora/api-contract`).                    |
-| `src/generated/openapi.ts`            | Generated TypeScript types (openapi-typescript). Do not edit.            |
-| `src/contract-rules.test.ts`          | Listora's own contract rules (see [Conventions](#conventions)).          |
-| `swift/`                              | The `ListoraAPI` Swift package the iOS app depends on.                   |
-| `swift/Sources/ListoraAPI/Generated`  | Generated Swift types and client (swift-openapi-generator). Do not edit. |
-| `swift/openapi-generator-config.yaml` | Swift generator settings.                                                |
-| `tools/codegen.ts`                    | Generate, drift check, and Swift test runner.                            |
-| `src/document.ts`                     | Loads the parsed `openapi.yaml`; the API builds its validators from it.  |
-| `src/open-enum.ts`                    | The one open-enum test, shared by codegen, the contract rules, the API.  |
-| `tools/swift-generator/`              | Pins the exact swift-openapi-generator version (`Package.resolved`).     |
+| Path                                  | What it is                                                                                      |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `openapi.yaml`                        | The root: info, tags, and one `$ref` per path and per component.                                |
+| `paths/<tag>.yaml`                    | The paths whose operations have that tag, keyed by the path itself.                             |
+| `components/schemas/<area>.yaml`      | The schemas of one area (`items`, `listings`, ...); `common.yaml` and `errors.yaml` are shared. |
+| `components/parameters.yaml`          | Shared parameters (`Idempotency-Key`, pagination, path ids).                                    |
+| `components/responses.yaml`           | Shared responses (`DefaultError`, ...).                                                         |
+| `bundled/openapi.yaml`                | The bundle (Redocly). Generated; do not edit.                                                   |
+| `redocly.yaml`                        | Lint configuration (Redocly `recommended-strict`).                                              |
+| `src/index.ts`                        | The TypeScript entry point (`@listora/api-contract`).                                           |
+| `src/generated/openapi.ts`            | Generated TypeScript types (openapi-typescript). Do not edit.                                   |
+| `src/contract-rules.test.ts`          | Listora's own contract rules (see [Conventions](#conventions)).                                 |
+| `swift/`                              | The `ListoraAPI` Swift package the iOS app depends on.                                          |
+| `swift/Sources/ListoraAPI/Generated`  | Generated Swift types and client (swift-openapi-generator). Do not edit.                        |
+| `swift/openapi-generator-config.yaml` | Swift generator settings.                                                                       |
+| `tools/codegen.ts`                    | Bundle, generate, drift check, and Swift test runner.                                           |
+| `src/document.ts`                     | Loads the parsed bundle; the API builds its validators from it.                                 |
+| `src/open-enum.ts`                    | The one open-enum test, shared by codegen, the contract rules, the API.                         |
+| `tools/swift-generator/`              | Pins the exact swift-openapi-generator version (`Package.resolved`).                            |
 
 ## Commands
 
@@ -25,7 +33,7 @@ Run these from the repository root.
 
 | Command                     | What it does                                                                                                                      |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run contract:generate` | Regenerates the TypeScript types and the Swift client from `openapi.yaml`. Commit the result.                                     |
+| `npm run contract:generate` | Bundles the spec, then regenerates the bundle, the TypeScript types, and the Swift client from it. Commit the result.             |
 | `npm run contract:check`    | Lints the spec, regenerates into a temp directory and fails if the committed output differs, then `swift test`s the Swift package |
 
 `npm run check` (and so CI) runs `contract:check`. It needs the Swift toolchain: on macOS it
@@ -35,10 +43,21 @@ gitignored `.build/` at the repository root.
 
 ## Changing the contract
 
-1. Edit `openapi.yaml`.
-2. Run `npm run contract:generate`.
-3. Run `npm run check`. `src/contract-rules.test.ts` fails when a change breaks a convention.
-4. Commit the spec and the generated code together.
+1. Edit the resource's files: its paths in `paths/<tag>.yaml` (the file is named after the
+   operations' tag) and its schemas in `components/schemas/<area>.yaml`. A new path or
+   component also needs its one `$ref` entry in `openapi.yaml`, in the same position as the
+   others of its resource: the generated code follows the root's order. A new resource gets new
+   files and a new tag.
+2. Inside a file, refer to a component by file and name: `'#/Item'` in the same file,
+   `'./common.yaml#/Money'` from another schema file, and
+   `'../components/schemas/items.yaml#/Item'` from a paths file. The bundle turns every one into
+   `#/components/schemas/Item`.
+3. Run `npm run contract:generate`.
+4. Run `npm run check`. `src/contract-rules.test.ts` fails when a change breaks a convention
+   or the file layout.
+5. Commit the spec and the generated code together. When two branches both change the
+   contract, the generated files may conflict: resolve the source files, then run
+   `npm run contract:generate` again instead of merging generated code by hand.
 
 Adding an optional property, a new operation, or a value to a `Known*` enum (an
 [open enum](#open-enums)) is backward compatible. Removing or renaming anything, making a
@@ -61,9 +80,9 @@ app.get<{ Reply: HealthReady }>('/health/ready', handler);
 ```
 
 The API does not copy any of this by hand: it serves each operation with `contractRoute`,
-which takes the method and URL from `openapi.yaml` and validates every request against the
-contract's own schemas, loaded with `loadContractDocument()` (see the API section of
-[docs/architecture.md](../../docs/architecture.md#the-api-appsapi)).
+which takes the method and URL from the contract and validates every request against the
+contract's own schemas, loaded from the bundle with `loadContractDocument()` (see the API
+conventions in [docs/architecture.md](../../docs/architecture.md#4-api-conventions)).
 
 **iOS (Swift).** The app's `APIClient` package (`apps/ios/Packages/APIClient`) depends on this
 package by local path (its package identity is `swift`, the last path component) and on

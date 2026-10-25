@@ -4,8 +4,18 @@
  */
 import { expect } from 'vitest';
 
+import { SqlFileMigrationProvider } from './migrations.ts';
+
 export { createMigratedDatabase, insertAccount } from './testing.ts';
 export type { MigratedDatabase } from './testing.ts';
+
+/**
+ * The migrations shipped in migrations/, in name order: the order the migrator applies them
+ * in. Read from the directory, so a new migration needs no edit here.
+ */
+export async function shippedMigrations(): Promise<string[]> {
+  return Object.keys(await new SqlFileMigrationProvider().getMigrations()).sort();
+}
 
 /** Postgres SQLSTATE codes the constraint tests expect. */
 export const PG_ERROR = {

@@ -90,12 +90,17 @@ describe('fee tables', () => {
       10_000_000,
     ].sort((a, b) => a - b);
     for (const table of FEE_TABLES) {
+      // One expect per table, not per price: 32,000 expect calls made this test slow enough to
+      // time out on a loaded machine.
+      const falls: string[] = [];
       let previous = estimateFeesCents(table, prices[0] ?? 0);
       for (const price of prices.slice(1)) {
         const current = estimateFeesCents(table, price);
-        expect(current, `${table.version} at ${String(price)}`).toBeGreaterThanOrEqual(previous);
+        if (current < previous)
+          falls.push(`${String(price)}: ${String(previous)} -> ${String(current)}`);
         previous = current;
       }
+      expect(falls, table.version).toEqual([]);
       const span = 1_000_000;
       expect(estimateFeesCents(table, 2 * span) - estimateFeesCents(table, span)).toBeLessThan(
         span,

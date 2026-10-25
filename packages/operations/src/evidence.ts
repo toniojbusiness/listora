@@ -24,7 +24,7 @@ export interface SuccessProof {
 }
 
 /**
- * What makes a read-back current (docs/architecture.md section 6), by the adapter's
+ * What makes a read-back current (docs/features/operations.md), by the adapter's
  * `readFreshness` capability.
  */
 export type Freshness =

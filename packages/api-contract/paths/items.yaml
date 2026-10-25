@@ -1,0 +1,149 @@
+/v1/items:
+  get:
+    tags: [items]
+    operationId: listItems
+    summary: List items
+    description: Newest first. Filters combine with AND.
+    parameters:
+      - name: status
+        in: query
+        description: Only items in one of these statuses.
+        schema:
+          type: array
+          items:
+            $ref: '../components/schemas/items.yaml#/KnownItemStatus'
+        style: form
+        explode: true
+      - name: q
+        in: query
+        description: Free-text search over SKU, title, brand, and keywords.
+        schema:
+          type: string
+          maxLength: 200
+      - $ref: '../components/parameters.yaml#/Cursor'
+      - $ref: '../components/parameters.yaml#/Limit'
+    responses:
+      '200':
+        description: A page of items.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/items.yaml#/ItemPage'
+      '400':
+        $ref: '../components/responses.yaml#/BadRequest'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  post:
+    tags: [items]
+    operationId: createItem
+    summary: Create an item
+    description: |
+      Creates a `draft` item and allocates its SKU (for example `AJ-000184`) in the same
+      transaction. Every detail is optional so a draft can be created before analysis.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/items.yaml#/ItemCreate'
+    responses:
+      '201':
+        description: Created.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/items.yaml#/Item'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/items/{itemId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  get:
+    tags: [items]
+    operationId: getItem
+    summary: Get an item
+    description: The item with its photos and per-marketplace listings.
+    responses:
+      '200':
+        description: The item.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/items.yaml#/Item'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  put:
+    tags: [items]
+    operationId: replaceItem
+    summary: Replace an item's details
+    description: |
+      Full replacement of the user-editable `details`: a property left out is cleared.
+      `expectedVersion` must equal the item's current `version`, otherwise the server
+      answers `409 version_conflict` and the client refetches. Changing details never
+      changes a live marketplace listing; use the listing actions for that.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/items.yaml#/ItemReplace'
+    responses:
+      '200':
+        description: The updated item.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/items.yaml#/Item'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+  delete:
+    tags: [items]
+    operationId: deleteItem
+    summary: Delete an item
+    description: |
+      Allowed only while no listing is live on a marketplace (every listing is `draft` or
+      `ended`); otherwise `409 invalid_state_transition`. The SKU is never reused.
+    responses:
+      '204':
+        description: Deleted.
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/skus/{sku}:
+  parameters:
+    - name: sku
+      in: path
+      required: true
+      description: The item's SKU, for example `AJ-000184` (from a scanned label).
+      schema:
+        $ref: '../components/schemas/common.yaml#/Sku'
+  get:
+    tags: [items]
+    operationId: getItemBySku
+    summary: Look up an item by SKU
+    responses:
+      '200':
+        description: The item that owns this SKU.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/items.yaml#/Item'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

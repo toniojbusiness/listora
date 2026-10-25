@@ -1,6 +1,6 @@
 /**
- * The honest status vocabulary users see for a marketplace listing (docs/architecture.md
- * section 6), rendered on the server so no client ever infers success: `Active (confirmed by
+ * The honest status vocabulary users see for a marketplace listing (docs/features/operations.md),
+ * rendered on the server so no client ever infers success: `Active (confirmed by
  * eBay)`, `Delisting... retry 2 of 6`, `Delist failed - Retry`, `Checking...`, `Action needed -
  * delist on Poshmark`, `Done (you confirmed)`.
  *

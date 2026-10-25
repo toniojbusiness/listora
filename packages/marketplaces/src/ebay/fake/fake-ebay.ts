@@ -1,6 +1,6 @@
 /**
  * `fake-ebay`: an HTTP server that speaks the subset of eBay's APIs Listora uses, for
- * development and tests (docs/architecture.md section 7). It follows eBay's documented
+ * development and tests (docs/architecture.md section 5). It follows eBay's documented
  * contract (request and response shapes, validation, error codes, and messages; README.md
  * cites every page) so the eBay adapter can be tested against every failure mode without a
  * credential:

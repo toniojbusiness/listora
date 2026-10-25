@@ -1,0 +1,178 @@
+AiPriceEstimate:
+  type: object
+  description: |
+    A model's guess, not market data. `label` is always
+    "AI estimate - not based on sold listings"; clients show it next to the numbers.
+  required: [label, low, mid, high, confidence]
+  properties:
+    label:
+      type: string
+      maxLength: 120
+    low:
+      $ref: './common.yaml#/Money'
+    mid:
+      $ref: './common.yaml#/Money'
+    high:
+      $ref: './common.yaml#/Money'
+    confidence:
+      $ref: './analysis.yaml#/Confidence'
+SoldDataSource:
+  description: |
+    A `KnownSoldDataSource`, or a source of real sold data added after this client was
+    built. Clients show the comparables' `label` for an unknown source.
+  anyOf:
+    - $ref: '#/KnownSoldDataSource'
+    - type: string
+      maxLength: 64
+KnownSoldDataSource:
+  type: string
+  description: |
+    Sources of real sold data. `ai_estimate` and `cost_floor` are deliberately not in this
+    list: the words "comps" and "sold" are only ever shown next to real sold data.
+  enum: [depop_inspiration, ebay_mi, own_history]
+SoldComparables:
+  type: object
+  description: Real sold data. Absent from a suggestion when none is available.
+  required: [source, label, sampleSize, low, median, high, fetchedAt]
+  properties:
+    source:
+      $ref: '#/SoldDataSource'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+      description: Set when the data may be shown only in that marketplace's listing context.
+    label:
+      type: string
+      maxLength: 120
+      description: For example "Sold on Depop (last 90 days)".
+    sampleSize:
+      type: integer
+      format: int32
+      minimum: 1
+    low:
+      $ref: './common.yaml#/Money'
+    median:
+      $ref: './common.yaml#/Money'
+    high:
+      $ref: './common.yaml#/Money'
+    fetchedAt:
+      $ref: './common.yaml#/Timestamp'
+PriceTierName:
+  type: string
+  enum: [quick_sale, recommended, higher_profit]
+PriceBasis:
+  description: |
+    A `KnownPriceBasis`, or a basis added after this client was built. Clients show the
+    tier's `label` for an unknown basis and never present it as sold data.
+  anyOf:
+    - $ref: '#/KnownPriceBasis'
+    - type: string
+      maxLength: 64
+KnownPriceBasis:
+  type: string
+  description: What a suggested price is derived from.
+  enum: [sold_data, ai_estimate, cost_floor]
+PriceTier:
+  type: object
+  required: [tier, price, basis, label]
+  properties:
+    tier:
+      $ref: '#/PriceTierName'
+    price:
+      $ref: './common.yaml#/Money'
+    basis:
+      $ref: '#/PriceBasis'
+    label:
+      type: string
+      maxLength: 120
+      description: For example "Recommended (AI estimate)".
+FloorBreakdown:
+  type: object
+  required: [cost, estimatedFees, shipping, minimumProfit]
+  properties:
+    cost:
+      $ref: './common.yaml#/Money'
+    estimatedFees:
+      $ref: './common.yaml#/Money'
+    shipping:
+      $ref: './common.yaml#/Money'
+    minimumProfit:
+      $ref: './common.yaml#/Money'
+MarketplaceFloor:
+  type: object
+  description: '"Don''t sell below": cost + estimated marketplace fees + shipping + the user''s minimum profit.'
+  required: [marketplace, floorPrice, breakdown, feeTableVersion]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    floorPrice:
+      $ref: './common.yaml#/Money'
+    breakdown:
+      $ref: '#/FloorBreakdown'
+    feeTableVersion:
+      type: string
+      maxLength: 64
+      description: The versioned fee table the estimated fees come from.
+    feeSource:
+      $ref: '#/FeeEstimateSource'
+FeeEstimateSource:
+  description: |
+    A `KnownFeeEstimateSource`, or a source added after this client was built. Every
+    source is an estimate.
+  anyOf:
+    - $ref: '#/KnownFeeEstimateSource'
+    - type: string
+      maxLength: 64
+KnownFeeEstimateSource:
+  type: string
+  description: |
+    `fee_table` is the marketplace's published fee schedule. `actual_fees` is that schedule
+    scaled to the fees the marketplace actually charged on the account's recent sales.
+  enum: [fee_table, actual_fees]
+ResearchLink:
+  type: object
+  description: A page the user opens in their own browser. Listora does not fetch or scrape it.
+  required: [label, url]
+  properties:
+    label:
+      type: string
+      maxLength: 120
+    url:
+      type: string
+      format: uri
+PricingSuggestion:
+  type: object
+  required: [itemId, tiers, floors, researchLinks, generatedAt]
+  properties:
+    itemId:
+      $ref: './common.yaml#/Id'
+    soldComparables:
+      type: array
+      description: Absent or empty when there is no real sold data for this item.
+      items:
+        $ref: '#/SoldComparables'
+    noSoldDataMessage:
+      type: string
+      maxLength: 120
+      description: |
+        "No sold data available for this item". Present exactly when there are no
+        `soldComparables`; clients show it in place of sold data.
+    aiEstimate:
+      $ref: '#/AiPriceEstimate'
+    tiers:
+      type: array
+      description: |
+        Quick sale, recommended, and higher profit, in that order, each labeled with its
+        basis. Never below the highest of `floors`. Empty when there is no estimate.
+      items:
+        $ref: '#/PriceTier'
+    floors:
+      type: array
+      description: One per marketplace the item is or may be listed on. Empty when the item has no cost.
+      items:
+        $ref: '#/MarketplaceFloor'
+    researchLinks:
+      type: array
+      items:
+        $ref: '#/ResearchLink'
+    generatedAt:
+      $ref: './common.yaml#/Timestamp'
