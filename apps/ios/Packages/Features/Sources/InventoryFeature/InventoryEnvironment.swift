@@ -21,6 +21,14 @@ public struct SaleScreens {
     }
 }
 
+/// Opens the task an assisted listing waits on (the task inbox's screen, from `AppDependencies`):
+/// the item, the operation, and what to do once the task is done or dismissed.
+public typealias TaskDestination = @MainActor (
+    _ itemID: String,
+    _ operationID: String,
+    _ onFinished: @escaping @MainActor () -> Void,
+) -> AnyView
+
 /// Everything the inventory, item, and listing screens need, built once at launch by
 /// `AppDependencies`.
 @MainActor
@@ -32,18 +40,22 @@ public final class InventoryEnvironment {
     let isSignedIn: @MainActor () -> Bool
     /// "Mark as sold" and the sale screen; without them the item screen offers neither.
     let saleScreens: SaleScreens?
+    /// The task screen for an assisted step; without one, the item screen offers no "Open task".
+    let taskDestination: TaskDestination?
 
     public convenience init(
         apiClient: APIClient,
         accessTokens: AccessTokenStore,
         listingCopy: ListingCopyStore,
         saleScreens: SaleScreens? = nil,
+        taskDestination: TaskDestination? = nil,
     ) {
         self.init(
             service: APIInventoryService(client: apiClient.client),
             listingCopy: listingCopy,
             isSignedIn: { accessTokens.grant != nil },
             saleScreens: saleScreens,
+            taskDestination: taskDestination,
         )
     }
 
@@ -53,12 +65,14 @@ public final class InventoryEnvironment {
         detailTiming: DetailTiming = .standard,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
         saleScreens: SaleScreens? = nil,
+        taskDestination: TaskDestination? = nil,
     ) {
         self.service = service
         self.listingCopy = listingCopy
         self.detailTiming = detailTiming
         self.isSignedIn = isSignedIn
         self.saleScreens = saleScreens
+        self.taskDestination = taskDestination
     }
 
     func makeListModel() -> InventoryListModel {
@@ -69,7 +83,8 @@ public final class InventoryEnvironment {
         ItemDetailModel(itemID: itemID, service: service, timing: detailTiming)
     }
 
-    func makeListingFlow(item: Item) -> ListingFlowModel {
-        ListingFlowModel(item: item, service: service, listingCopy: listingCopy)
+    /// The List flow, with `marketplace` (the row the seller tapped List on) selected.
+    func makeListingFlow(item: Item, marketplace: String? = nil) -> ListingFlowModel {
+        ListingFlowModel(item: item, service: service, listingCopy: listingCopy, marketplace: marketplace)
     }
 }

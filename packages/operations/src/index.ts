@@ -3,6 +3,7 @@ export {
   cancelOperation,
   cancelUnsentDelists,
   confirmOperationByUser,
+  dismissOperationByUser,
   enqueueOperation,
   retryOperation,
 } from './commands.ts';

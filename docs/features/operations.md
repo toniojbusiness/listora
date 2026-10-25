@@ -34,7 +34,9 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
      throws or misses its deadline) → `verifying`. `readListing` decides: the desired state
      holds → `succeeded`; it does not → `retrying`. The request is never re-sent blindly.
    - `pendingUser` (assisted, or an automated step that met a check automation must not pass)
-     → `needs_user_action` until the user confirms (`confirmOperationByUser`). An assisted operation is never read back, and any other
+     → `needs_user_action` until the user confirms (`confirmOperationByUser`), or `failed` when
+     the user dismisses the task (`dismissOperationByUser`, with a Retry that makes a new task;
+     [tasks.md](tasks.md)). An assisted operation is never read back, and any other
      outcome for it (`confirmed`, `unknown`) fails as unconfirmed; an API operation that answers
      with a user task fails the same way.
 3. **Attempts.** Every step, a send or a read-back, uses one attempt, and an operation gets

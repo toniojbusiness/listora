@@ -29,7 +29,7 @@ final class TabShellUITests: XCTestCase {
         let expected: [(tab: String, text: String)] = [
             ("Sales", "Sign in to see your sales"),
             ("Add Item", "Take photos once"),
-            ("Tasks", "You're all caught up"),
+            ("Tasks", "Sign in to see your tasks"),
             ("Settings", "Environment"),
             ("Inventory", "Sign in to see your inventory"),
         ]
