@@ -15,6 +15,21 @@
       },
       "UpdateReplacePolicy": "Retain",
       "DeletionPolicy": "Retain"
+    },
+    "RunnerA54BCE97": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "ImageScanningConfiguration": {
+          "ScanOnPush": true
+        },
+        "ImageTagMutability": "IMMUTABLE",
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\":[{\"rulePriority\":1,\"description\":\"Keep the newest 50 images\",\"selection\":{\"tagStatus\":\"any\",\"countType\":\"imageCountMoreThan\",\"countNumber\":50},\"action\":{\"type\":\"expire\"}}]}"
+        },
+        "RepositoryName": "listora/runner"
+      },
+      "UpdateReplacePolicy": "Retain",
+      "DeletionPolicy": "Retain"
     }
   },
   "Outputs": {
@@ -29,6 +44,19 @@
     "PublishOutputRefAppF1B9634437DCFBAC": {
       "Value": {
         "Ref": "AppF1B96344"
+      }
+    },
+    "PublishOutputFnGetAttRunnerA54BCE97Arn7DB082AE": {
+      "Value": {
+        "Fn::GetAtt": [
+          "RunnerA54BCE97",
+          "Arn"
+        ]
+      }
+    },
+    "PublishOutputRefRunnerA54BCE978BB6CFCC": {
+      "Value": {
+        "Ref": "RunnerA54BCE97"
       }
     }
   },

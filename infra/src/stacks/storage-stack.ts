@@ -12,6 +12,9 @@ import { ListoraStack, type ListoraStackProps } from './common.ts';
  */
 export const PUBLIC_PHOTO_PREFIX = 'public/';
 
+/** Private: the browser runner's screenshots of failed runs (`SCREENSHOT_PREFIX`). */
+export const AUTOMATION_SCREENSHOT_PREFIX = 'automation/';
+
 /**
  * The photo bucket and the CloudFront distribution marketplaces fetch listing images from.
  *
@@ -45,6 +48,13 @@ export class StorageStack extends ListoraStack {
           // Deleted photos are gone for good after 30 days (account deletion relies on this).
           noncurrentVersionExpiration: Duration.days(30),
           expiredObjectDeleteMarker: true,
+        },
+        {
+          // The browser runner's redacted screenshots of failed runs; the worker deletes them
+          // after 14 days, and this is the backstop.
+          id: 'expire-automation-screenshots',
+          prefix: AUTOMATION_SCREENSHOT_PREFIX,
+          expiration: Duration.days(30),
         },
       ],
     });

@@ -15,6 +15,14 @@ import {
   type DepopConfig,
   type EbayConfig,
 } from '@listora/marketplaces';
+import {
+  AutomationConfigError,
+  loadAutomationSettings,
+  loadRunnerLaunchConfig,
+  RunnerLaunchConfigError,
+  type AutomationSettings,
+  type RunnerLaunchConfig,
+} from '@listora/automation';
 import { isLogLevel, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -47,6 +55,10 @@ export interface WorkerConfig {
   cognitoUserPool: { region: string; userPoolId: string } | undefined;
   /** Thresholds of the hourly AI spend check; the daily budget is the guard's own. */
   aiAlerts: AiAlertThresholds;
+  /** AUTOMATION_*, SALE_CHECK_*, FAKE_AUTOMATION_SITE_URL: which marketplaces are automated. */
+  automation: AutomationSettings;
+  /** BROWSER_RUNNER_*: how the worker starts the browser runner when automated work waits. */
+  runnerLaunch: RunnerLaunchConfig;
 }
 
 export class ConfigError extends Error {
@@ -100,6 +112,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const aiAlerts = collect(issues, AiConfigError, () => loadAiAlertConfig(env));
   const ebay = collect(issues, EbayConfigError, () => loadEbayConfig(env));
   const depop = collect(issues, DepopConfigError, () => loadDepopConfig(env));
+  const automation = collect(issues, AutomationConfigError, () => loadAutomationSettings(env));
+  const runnerLaunch = collect(issues, RunnerLaunchConfigError, () => loadRunnerLaunchConfig(env));
 
   if (
     issues.length > 0 ||
@@ -107,7 +121,9 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     storage === undefined ||
     ai === undefined ||
     analysis === undefined ||
-    aiAlerts === undefined
+    aiAlerts === undefined ||
+    automation === undefined ||
+    runnerLaunch === undefined
   ) {
     throw new ConfigError(issues);
   }
@@ -125,11 +141,18 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     cognitoUserPool:
       userPoolId === undefined ? undefined : { region: userPoolRegion(userPoolId), userPoolId },
     aiAlerts,
+    automation,
+    runnerLaunch,
   };
 }
 
 /** A job pool's size from `key`: an integer from 1 to 100. */
-function poolSize(issues: string[], env: NodeJS.ProcessEnv, key: string, fallback: string): number {
+export function poolSize(
+  issues: string[],
+  env: NodeJS.ProcessEnv,
+  key: string,
+  fallback: string,
+): number {
   const raw = env[key] ?? fallback;
   const size = Number(raw);
   if (!/^\d+$/.test(raw) || size < 1 || size > 100) {
@@ -139,7 +162,7 @@ function poolSize(issues: string[], env: NodeJS.ProcessEnv, key: string, fallbac
 }
 
 /** A package's own configuration, or undefined with its problems added to `issues`. */
-function collect<T>(
+export function collect<T>(
   issues: string[],
   type: new (...args: never[]) => Error & { readonly issues: readonly string[] },
   load: () => T,

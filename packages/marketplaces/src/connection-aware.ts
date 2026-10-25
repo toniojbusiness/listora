@@ -1,11 +1,17 @@
 /**
- * One marketplace served in two modes, picked per connection (docs/architecture.md section 4):
- * Depop runs assisted until Listora's partner access is granted and the seller connects its
- * API, then through the API. Both modes read and write the same `marketplace_listing` rows, so
- * the switch is a change to the connection's `mode` and needs no data migration; each attempt
- * builds its payload under the connection it runs with.
+ * One marketplace served in more than one mode, picked per connection (docs/architecture.md
+ * section 4): Depop runs assisted, through browser automation once the seller links a session,
+ * and through the API once Listora's partner access is granted and the seller connects it;
+ * Poshmark and Mercari run assisted or automated. Every mode reads and writes the same
+ * `marketplace_listing` rows, so a switch is a change to the connection and needs no data
+ * migration; each attempt builds its payload under the connection it runs with.
+ *
+ * An automation connection that waits to be relinked (the marketplace rejected its session, or
+ * showed a check automation must not pass) holds no session, so it is served assisted until
+ * the seller logs in again: the user does the step, which is always honest.
  */
-import type { Marketplace } from '@listora/db';
+import type { ConnectionStatus, Marketplace } from '@listora/db';
+import { assertNever } from '@listora/shared';
 
 import type {
   AdapterContext,
@@ -18,6 +24,7 @@ import type {
   OperationRequest,
   Outcome,
   RemoteListingState,
+  RemoteOrder,
   ValidationIssue,
 } from './adapter.ts';
 import type { ItemSnapshot, ListingVariant } from './content.ts';
@@ -30,26 +37,55 @@ export interface ConnectionAwareAdapterOptions {
    * listings are served assisted too: the user does the step, which is always honest.
    */
   api?: MarketplaceAdapter;
+  /**
+   * Serves listings under a working `automation` connection (the browser runner). Without it,
+   * and while the connection waits to be relinked, they are served assisted.
+   */
+  automation?: MarketplaceAdapter;
 }
+
+/** Automation connection states that still hold a session the runner may use. */
+const USABLE_SESSION_STATUSES: readonly ConnectionStatus[] = ['connected', 'degraded'];
 
 export class ConnectionAwareAdapter implements MarketplaceAdapter {
   readonly id: Marketplace;
   readonly #assisted: MarketplaceAdapter;
   readonly #api: MarketplaceAdapter | undefined;
+  readonly #automation: MarketplaceAdapter | undefined;
 
   constructor(options: ConnectionAwareAdapterOptions) {
-    const { assisted, api } = options;
-    if (api !== undefined && api.id !== assisted.id) {
-      throw new Error(`api adapter is for ${api.id}, assisted adapter for ${assisted.id}`);
+    const { assisted, api, automation } = options;
+    for (const [mode, adapter] of [
+      ['api', api],
+      ['automation', automation],
+    ] as const) {
+      if (adapter !== undefined && adapter.id !== assisted.id) {
+        throw new Error(
+          `${mode} adapter is for ${adapter.id}, assisted adapter for ${assisted.id}`,
+        );
+      }
     }
     this.id = assisted.id;
     this.#assisted = assisted;
     this.#api = api;
+    this.#automation = automation;
   }
 
   /** The adapter that serves a connection. */
   adapterFor(connection: ConnectionRef | null | undefined): MarketplaceAdapter {
-    return connection?.mode === 'api' && this.#api !== undefined ? this.#api : this.#assisted;
+    if (connection === null || connection === undefined) return this.#assisted;
+    switch (connection.mode) {
+      case 'api':
+        return this.#api ?? this.#assisted;
+      case 'automation':
+        return this.#automation !== undefined && USABLE_SESSION_STATUSES.includes(connection.status)
+          ? this.#automation
+          : this.#assisted;
+      case 'assisted':
+        return this.#assisted;
+      default:
+        return assertNever(connection.mode, 'connection mode');
+    }
   }
 
   capabilities(connection?: ConnectionRef | null): MarketplaceCapabilities {
@@ -86,5 +122,16 @@ export class ConnectionAwareAdapter implements MarketplaceAdapter {
     connection: ConnectionRef | null,
   ): string | null {
     return this.adapterFor(connection).newListingId?.(item, usedIds, connection) ?? null;
+  }
+
+  /** The serving adapter's orders; throws when it can't read them (an assisted one never can). */
+  listOrdersSince(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]> {
+    const adapter = this.adapterFor(ctx.connection);
+    if (adapter.listOrdersSince === undefined) {
+      return Promise.reject(
+        new Error(`the ${adapter.id} adapter for this connection reads no orders`),
+      );
+    }
+    return adapter.listOrdersSince(since, ctx);
   }
 }

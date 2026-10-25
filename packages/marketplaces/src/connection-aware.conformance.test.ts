@@ -36,7 +36,7 @@ describeAdapterConformance({
 describeAdapterConformance({
   name: 'Depop with an api connection',
   adapter: depop(fake.url),
-  connection: { id: 'connection-depop', mode: 'api' },
+  connection: { id: 'connection-depop', mode: 'api', status: 'connected' },
   goldenDir: fileURLToPath(new URL('__golden__/depop-api/', import.meta.url)),
   marketplace: fakeConformanceMarketplace(fake, 'depop'),
   unreachable: depop(unreachableUrl),

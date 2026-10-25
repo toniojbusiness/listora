@@ -66,8 +66,11 @@
                 "ecr:UploadLayerPart"
               ],
               "Effect": "Allow",
-              "Resource": "arn:aws:ecr:us-east-1:111111111111:repository/listora/app",
-              "Sid": "PushApplicationImage"
+              "Resource": [
+                "arn:aws:ecr:us-east-1:111111111111:repository/listora/app",
+                "arn:aws:ecr:us-east-1:111111111111:repository/listora/runner"
+              ],
+              "Sid": "PushApplicationImages"
             },
             {
               "Action": "cloudformation:DescribeStacks",

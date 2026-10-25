@@ -10,9 +10,18 @@ import {
   loadEbayConfig,
 } from '@listora/marketplaces';
 
+import {
+  createAutomationAdapters,
+  HttpPhotoSource,
+  loadAutomationSettings,
+  NoBrowserSessions,
+} from '@listora/automation';
+import { createLogger } from '@listora/shared';
+
 import { createAdapters } from './adapters.ts';
 
-const api = { id: 'connection-1', mode: 'api' } as const;
+const api = { id: 'connection-1', mode: 'api', status: 'connected' } as const;
+const automated = { id: 'connection-2', mode: 'automation', status: 'connected' } as const;
 
 describe('createAdapters', () => {
   it('serves the assisted marketplaces, and no eBay, without FAKE_MARKETPLACE_URL', () => {
@@ -45,13 +54,45 @@ describe('createAdapters', () => {
     expect(depop?.capabilities(null).externalSkuReusable).toBe(false);
     expect(depop?.capabilities(api).externalSkuReusable).toBe(false);
     expect(adapters.capabilities('ebay', api)?.externalSkuReusable).toBe(true);
-    // Poshmark and Mercari have no api; they stay assisted until the browser runner lands.
+    // Poshmark and Mercari have no api; they stay assisted without an automation adapter.
     for (const marketplace of ['poshmark', 'mercari'] as const) {
       expect(adapters.capabilities(marketplace, api)).toMatchObject({
         create: 'assisted',
         verifyRead: 'user_confirm',
       });
+      expect(adapters.capabilities(marketplace, automated)).toMatchObject({
+        create: 'assisted',
+        verifyRead: 'user_confirm',
+      });
     }
+  });
+
+  it('automates Poshmark, Mercari, and Depop for linked sessions when they have an automation adapter', () => {
+    const settings = loadAutomationSettings({ FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400' });
+    const automation = createAutomationAdapters({
+      settings,
+      sessions: NoBrowserSessions,
+      photos: new HttpPhotoSource(),
+      logger: createLogger({ service: 'test', level: 'silent' }),
+    });
+    const adapters = createAdapters(
+      { fakeMarketplaceUrl: 'http://127.0.0.1:4100', ebay: undefined, depop: undefined },
+      { automation },
+    );
+    for (const marketplace of ['poshmark', 'mercari', 'depop'] as const) {
+      expect(adapters.capabilities(marketplace, automated), marketplace).toMatchObject({
+        connect: 'session',
+        create: 'automation',
+        delist: 'automation',
+        verifyRead: 'automation',
+      });
+      // Assisted without a session, and while the session waits for a relink.
+      expect(adapters.capabilities(marketplace, null)?.create).toBe('assisted');
+      expect(
+        adapters.capabilities(marketplace, { ...automated, status: 'reauth_required' })?.create,
+      ).toBe('assisted');
+    }
+    expect(adapters.capabilities('depop', api)?.verifyRead).toBe('api');
   });
 
   it('routes eBay to the eBay adapter when EBAY_ENV is set, whatever FAKE_MARKETPLACE_URL says', () => {
@@ -85,9 +126,10 @@ describe('createAdapters', () => {
         markSold: 'api',
         externalSkuReusable: false,
       });
-      expect(adapters.capabilities('depop', { id: api.id, mode: 'assisted' })?.verifyRead).toBe(
-        'user_confirm',
-      );
+      expect(
+        adapters.capabilities('depop', { id: api.id, mode: 'assisted', status: 'connected' })
+          ?.verifyRead,
+      ).toBe('user_confirm');
     }
   });
 });

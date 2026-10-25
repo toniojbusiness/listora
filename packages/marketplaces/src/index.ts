@@ -15,6 +15,8 @@ export type {
   Outcome,
   RemoteListingState,
   RemoteListingStatus,
+  RemoteOrder,
+  RemoteOrderItem,
   UserTaskSpec,
   ValidationIssue,
   WriteOperationKind,

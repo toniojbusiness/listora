@@ -21,6 +21,7 @@ const SHIPPED = [
   '0011_ai_controls',
   '0012_listing_links',
   '0013_trust_metric_indexes',
+  '0014_browser_automation',
 ];
 const LATEST = SHIPPED.at(-1) ?? '';
 
