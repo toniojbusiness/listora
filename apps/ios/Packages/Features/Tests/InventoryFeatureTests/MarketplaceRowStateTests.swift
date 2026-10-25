@@ -77,14 +77,4 @@ struct MarketplaceRowStateTests {
         #expect(poshmark.actions.isEmpty)
         #expect(poshmark.modeLabel == "Assisted")
     }
-
-    @Test
-    func `reads typed amounts as cents`() {
-        #expect(Formatting.cents(from: "39") == 3900)
-        #expect(Formatting.cents(from: "$39.5") == 3950)
-        #expect(Formatting.cents(from: "1,250.05") == 125_005)
-        #expect(Formatting.cents(from: "39.999") == nil)
-        #expect(Formatting.cents(from: "abc") == nil)
-        #expect(Formatting.editableAmount(cents: 3950) == "39.50")
-    }
 }

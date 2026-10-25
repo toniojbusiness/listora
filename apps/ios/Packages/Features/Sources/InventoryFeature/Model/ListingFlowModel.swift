@@ -33,7 +33,8 @@ final class ListingFlowModel {
     var selected: Set<String> = []
     var title = ""
     var description = ""
-    var price = ""
+    /// The price in cents (``PriceField`` edits it); nil while empty.
+    var priceCents: Int?
     /// Why the listing can't be published as it is, from the server or this screen.
     private(set) var problem: String?
     private(set) var isPublishing = false
@@ -112,7 +113,7 @@ final class ListingFlowModel {
         if titleCount > Self.ebayTitleLimit {
             return "The title is \(titleCount) characters; eBay allows \(Self.ebayTitleLimit)."
         }
-        guard let cents = Formatting.cents(from: price), cents > 0 else { return "Enter a price above $0." }
+        guard let priceCents, priceCents > 0 else { return "Enter a price above $0." }
         return nil
     }
 
@@ -145,7 +146,7 @@ final class ListingFlowModel {
         ListingVariant(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: description,
-            price: Money(amountCents: Formatting.cents(from: price) ?? 0, currency: .usd),
+            price: Money(amountCents: Int64(priceCents ?? 0), currency: .usd),
             condition: item.details.condition,
         )
     }
@@ -171,7 +172,7 @@ final class ListingFlowModel {
         if let draft = item.listings.first(where: { $0.id == draftID }), let variant = draft.variant {
             title = variant.title
             description = variant.description
-            price = Formatting.editableAmount(cents: variant.price.amountCents)
+            priceCents = Int(variant.price.amountCents)
             return
         }
         let edited = listingCopy.edits(itemID: item.id)[KnownMarketplace.ebay.rawValue]
@@ -183,7 +184,7 @@ final class ListingFlowModel {
         title = edited?.title ?? suggested?.title ?? item.details.title ?? ""
         description = edited?.description ?? suggested?.description ?? item.details.description ?? ""
         if let listPrice = item.details.listPrice {
-            price = Formatting.editableAmount(cents: listPrice.amountCents)
+            priceCents = Int(listPrice.amountCents)
         }
     }
 }

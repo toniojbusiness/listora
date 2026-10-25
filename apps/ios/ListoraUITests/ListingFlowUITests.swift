@@ -91,7 +91,7 @@ final class ListingFlowUITests: XCTestCase {
     /// A price change to $39, confirmed by eBay. Returns the End button, back once it settled.
     private func changePrice(status: XCUIElement) -> XCUIElement {
         app.buttons["marketplace.ebay.action.changePrice"].tap()
-        let price = app.textFields["price.field"]
+        let price = app.textFields["New price"]
         XCTAssertTrue(price.waitForExistence(timeout: 5))
         price.tap()
         price.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6) + "39")

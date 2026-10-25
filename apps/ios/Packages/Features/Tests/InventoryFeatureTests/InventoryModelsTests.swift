@@ -98,7 +98,7 @@ struct InventoryModelsTests {
         )
         await fromAnalysis.prepare()
         #expect(fromAnalysis.title == "Analysis title")
-        #expect(fromAnalysis.price == "45")
+        #expect(fromAnalysis.priceCents == 4500)
         #expect(fromAnalysis.selected == ["ebay"])
         #expect(fromAnalysis.choices.filter(\.isAvailable).map(\.id) == ["ebay"])
 

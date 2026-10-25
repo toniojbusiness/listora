@@ -2,7 +2,7 @@ import DesignSystem
 import ListoraAPI
 import SwiftUI
 
-/// One row per marketplace: the listing's status as the server words it, how Listora works
+/// One card per marketplace: the listing's status as the server words it, how Listora works
 /// with the marketplace, the actions allowed now, and the listing's history.
 struct MarketplacesSection: View {
     let rows: [MarketplaceRowState]
@@ -13,12 +13,13 @@ struct MarketplacesSection: View {
     let loadEvents: (String) async -> Void
 
     var body: some View {
-        SectionCard(title: "Marketplaces") {
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                if index > 0 {
-                    Divider().overlay(Palette.separator.color)
-                }
-                MarketplaceRowView(
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            SectionHeader(
+                "Marketplaces",
+                subtitle: "A change shows as done only once the marketplace confirms it, or you do.",
+            )
+            ForEach(rows) { row in
+                MarketplaceCard(
                     row: row,
                     history: row.listing.flatMap { histories[$0.id] } ?? [],
                     events: events,
@@ -32,7 +33,7 @@ struct MarketplacesSection: View {
     }
 }
 
-private struct MarketplaceRowView: View {
+private struct MarketplaceCard: View {
     let row: MarketplaceRowState
     let history: [Operation]
     let events: [String: [OperationEvent]]
@@ -42,62 +43,74 @@ private struct MarketplaceRowView: View {
     let loadEvents: (String) async -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .center, spacing: Spacing.sm) {
+                IconTile(
+                    monogram: String(row.name.prefix(1)),
+                    tone: row.tone == .success ? .success : nil,
+                    size: .card,
+                )
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(row.name)
-                        .font(Typography.headline)
+                        .font(Typography.title3)
                         .foregroundStyle(Palette.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
                     Text(row.modeLabel)
-                        .font(Typography.caption)
+                        .font(Typography.footnote)
                         .foregroundStyle(Palette.textSecondary)
                 }
                 Spacer(minLength: Spacing.xs)
                 if let price = row.priceLabel {
                     Text(price)
-                        .font(Typography.callout.weight(.semibold).monospacedDigit())
+                        .font(Typography.price)
                         .foregroundStyle(Palette.textPrimary)
                         .accessibilityLabel("Listed at \(price)")
                         .accessibilityIdentifier("marketplace.\(row.id).price")
                 }
             }
             HStack(spacing: Spacing.xs) {
-                StatusLabel(row.statusLabel, tone: StatusLabel.Tone(row.tone))
+                StatusBadge(row.statusLabel, tone: StatusTone(row.tone))
                     .accessibilityIdentifier("marketplace.\(row.id).status")
-                if row.isWorking || isBusy {
-                    ProgressView().controlSize(.small)
+                if row.isWorking {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Palette.info.color)
+                        .accessibilityLabel("Working on it")
                 }
             }
             if let detail = row.statusDetail {
                 Text(detail)
-                    .font(Typography.callout)
+                    .font(Typography.subheadline)
                     .foregroundStyle(Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("marketplace.\(row.id).detail")
             }
             if !row.actions.isEmpty {
-                ActionButtons(row: row, isEnabled: isEnabled && !isBusy, perform: perform)
+                ActionButtons(row: row, isBusy: isBusy, isEnabled: isEnabled, perform: perform)
             }
             if !history.isEmpty {
                 HistoryView(marketplace: row.id, operations: history, events: events, loadEvents: loadEvents)
             }
         }
-        .padding(.vertical, Spacing.xs)
+        .cardStyle(row.tone == .failed ? .tinted(.failed) : .elevated)
         .accessibilityElement(children: .contain)
     }
 }
 
-/// The row's actions: the first is the primary one (List, or Retry after a failure), the rest
-/// sit side by side below it when they fit.
+/// The card's actions: the first is the primary one (List, or Retry after a failure), the rest
+/// are compact buttons beside each other, or stacked when they do not fit.
 private struct ActionButtons: View {
     let row: MarketplaceRowState
+    let isBusy: Bool
     let isEnabled: Bool
     let perform: (MarketplaceRowState.Action) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             if let primary = row.actions.first {
-                button(primary).buttonStyle(.listoraPrimary)
+                button(primary)
+                    .buttonStyle(.listoraPrimary)
+                    .loading(isBusy)
             }
             let others = Array(row.actions.dropFirst())
             if !others.isEmpty {
@@ -112,14 +125,28 @@ private struct ActionButtons: View {
 
     private func secondary(_ actions: [MarketplaceRowState.Action]) -> some View {
         ForEach(actions, id: \.self) { action in
-            button(action).buttonStyle(.listoraSecondary)
+            button(action)
+                .buttonStyle(.listora(action == .end ? .destructive : .secondary, size: .compact))
         }
     }
 
     private func button(_ action: MarketplaceRowState.Action) -> some View {
-        Button(action.title) { perform(action) }
+        Button(action.title, systemImage: action.systemImage) { perform(action) }
             .disabled(!isEnabled)
             .accessibilityIdentifier("marketplace.\(row.id).action.\(action.identifier)")
+    }
+}
+
+extension MarketplaceRowState.Action {
+    var systemImage: String {
+        switch self {
+        case .list: "tag.fill"
+        case .changePrice: "dollarsign.circle"
+        case .end: "xmark.circle"
+        case .relist: "arrow.counterclockwise"
+        case .check: "magnifyingglass"
+        case .retry: "arrow.clockwise"
+        }
     }
 }
 
@@ -141,10 +168,11 @@ private struct HistoryView: View {
             .padding(.top, Spacing.xs)
         } label: {
             Text("History (\(operations.count))")
-                .font(Typography.callout.weight(.semibold))
+                .font(Typography.subheadline.weight(.semibold))
                 .foregroundStyle(Palette.textSecondary)
         }
         .tint(Palette.textSecondary.color)
+        .padding(.top, Spacing.xxs)
         .accessibilityIdentifier("marketplace.\(marketplace).history")
     }
 }
@@ -164,51 +192,51 @@ private struct OperationRow: View {
                 }
             } label: {
                 HStack(alignment: .firstTextBaseline) {
-                    StatusLabel(operation.statusDisplay.label, tone: StatusLabel.Tone(operation.statusDisplay.tone))
+                    StatusLabel(operation.statusDisplay.label, tone: StatusTone(operation.statusDisplay.tone))
                     Spacer(minLength: Spacing.xs)
                     Text(Formatting.timestamp(operation.createdAt))
-                        .font(Typography.caption)
+                        .font(Typography.footnote)
                         .foregroundStyle(Palette.textSecondary)
                 }
+                .frame(minHeight: Layout.minimumTapTarget)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityHint(showsSteps ? "Hides the steps" : "Shows the steps")
             if let detail = operation.statusDisplay.detail {
                 Text(detail)
-                    .font(Typography.caption)
+                    .font(Typography.footnote)
                     .foregroundStyle(Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if showsSteps {
-                if let events {
-                    ForEach(events, id: \.id) { event in
-                        HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                            Text(Formatting.timestamp(event.occurredAt))
-                                .font(Typography.caption.monospacedDigit())
-                                .foregroundStyle(Palette.textSecondary)
-                            Text(event.message ?? "")
-                                .font(Typography.caption)
-                                .foregroundStyle(Palette.textPrimary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                } else {
-                    ProgressView().controlSize(.small)
-                }
+                steps
             }
         }
     }
-}
 
-extension StatusLabel.Tone {
-    init(_ tone: MarketplaceRowState.Tone) {
-        switch tone {
-        case .success: self = .success
-        case .inProgress: self = .inProgress
-        case .checking: self = .checking
-        case .failed: self = .failed
-        case .actionNeeded: self = .actionNeeded
-        case .neutral: self = .neutral
+    @ViewBuilder
+    private var steps: some View {
+        if let events {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                ForEach(events, id: \.id) { event in
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                        Text(Formatting.timestamp(event.occurredAt))
+                            .font(Typography.caption.monospacedDigit())
+                            .foregroundStyle(Palette.textSecondary)
+                        Text(event.message ?? "")
+                            .font(Typography.footnote)
+                            .foregroundStyle(Palette.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .padding(Spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.surfaceSecondary, in: RoundedRectangle(cornerRadius: Radius.medium, style: .continuous))
+        } else {
+            SkeletonBlock(height: 12)
         }
     }
 }

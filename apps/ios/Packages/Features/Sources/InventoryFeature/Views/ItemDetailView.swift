@@ -67,15 +67,14 @@ struct ItemDetailView: View {
     private var content: some View {
         switch model.phase {
         case .loading where model.item == nil:
-            ProgressView("Loading item")
-                .foregroundStyle(Palette.textSecondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            loading
         case let .failed(message) where model.item == nil:
             EmptyStateView(
                 systemImage: "exclamationmark.triangle",
+                tone: .failed,
                 title: "Item unavailable",
                 message: message,
-                action: .init("Try again") { Task { await model.load() } },
+                action: .init("Try again", systemImage: "arrow.clockwise") { Task { await model.load() } },
             )
         default:
             if let item = model.item {
@@ -84,13 +83,37 @@ struct ItemDetailView: View {
         }
     }
 
-    private func details(of item: Item) -> some View {
+    private var loading: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                PhotoCarousel(photos: item.photos)
-                ItemHeader(item: item)
+                SkeletonBlock(height: 240, cornerRadius: Radius.large)
+                SkeletonBlock(width: 220, height: 22)
+                SkeletonRow().cardStyle()
+                SkeletonRow().cardStyle()
+            }
+            .padding(Spacing.md)
+        }
+        .scrollDisabled(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading item")
+    }
+
+    private func details(of item: Item) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.lg) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    PhotoCarousel(photos: item.photos)
+                    ItemHeader(item: item)
+                }
                 if let notice = model.notice {
-                    NoticeBanner(message: notice) { model.notice = nil }
+                    Banner(
+                        "That didn't go through",
+                        message: notice,
+                        tone: .failed,
+                        onDismiss: { model.notice = nil },
+                        identifier: "item.notice",
+                    )
+                    .transition(.rise)
                 }
                 MarketplacesSection(
                     rows: model.rows,
@@ -104,6 +127,10 @@ struct ItemDetailView: View {
                 DetailsSection(item: item)
             }
             .padding(Spacing.md)
+            .frame(maxWidth: Layout.readableWidth)
+            .frame(maxWidth: .infinity)
+            .motion(value: model.notice)
+            .motion(value: model.rows)
         }
     }
 
@@ -170,28 +197,29 @@ private struct ItemHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(item.details.title ?? "Untitled item")
-                .font(Typography.title)
-                .foregroundStyle(Palette.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("item.title")
-            HStack(spacing: Spacing.sm) {
-                Text(item.sku)
-                    .font(Typography.callout.monospacedDigit())
-                    .foregroundStyle(Palette.textSecondary)
-                    .textSelection(.enabled)
-                    .accessibilityIdentifier("item.sku")
-                Text(item.status.label)
-                    .font(Typography.callout.weight(.semibold))
-                    .foregroundStyle(Palette.textSecondary)
-                    .accessibilityIdentifier("item.status")
-                Spacer(minLength: 0)
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                Text(item.details.title ?? "Untitled item")
+                    .font(Typography.title)
+                    .foregroundStyle(Palette.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("item.title")
                 if let price = item.details.listPrice {
                     Text(Formatting.money(price))
                         .font(Typography.price)
                         .foregroundStyle(Palette.brand)
                         .accessibilityLabel("List price \(Formatting.money(price))")
                 }
+            }
+            HStack(spacing: Spacing.xs) {
+                Text(item.sku)
+                    .font(Typography.subheadline.monospacedDigit())
+                    .foregroundStyle(Palette.textSecondary)
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("item.sku")
+                Chip(item.status.label)
+                    .accessibilityIdentifier("item.status")
             }
         }
     }
@@ -203,7 +231,7 @@ private struct MoneySection: View {
     let item: Item
 
     var body: some View {
-        SectionCard(title: "Cost and profit") {
+        DetailSection(title: "Cost and profit") {
             LabeledRow("List price", value: item.details.listPrice.map(Formatting.money) ?? "Not set")
             LabeledRow("Cost", value: item.details.cost.map(Formatting.money) ?? "Not set")
                 .accessibilityIdentifier("item.cost")
@@ -230,7 +258,7 @@ private struct DetailsSection: View {
     let item: Item
 
     var body: some View {
-        SectionCard(title: "Details") {
+        DetailSection(title: "Details") {
             LabeledRow(
                 "Storage location",
                 value: item.storageLocation.map { "\($0.label) (\($0.code))" } ?? "Not set",
@@ -253,7 +281,7 @@ private struct DetailsSection: View {
             }
             if let description = item.details.description, !description.isEmpty {
                 Text(description)
-                    .font(Typography.body)
+                    .font(Typography.subheadline)
                     .foregroundStyle(Palette.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, Spacing.xxs)

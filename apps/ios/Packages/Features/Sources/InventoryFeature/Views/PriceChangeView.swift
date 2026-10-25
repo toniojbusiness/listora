@@ -20,56 +20,49 @@ struct PriceChange: Identifiable, Equatable {
 struct PriceChangeView: View {
     let change: PriceChange
     let save: (Money) -> Void
-    @State private var text: String
+    @State private var cents: Int?
     @Environment(\.dismiss) private var dismiss
 
     init(change: PriceChange, save: @escaping (Money) -> Void) {
         self.change = change
         self.save = save
-        _text = State(initialValue: change.current.map { Formatting.editableAmount(cents: $0.amountCents) } ?? "")
+        _cents = State(initialValue: change.current.map { Int($0.amountCents) })
     }
 
-    private var cents: Int64? {
-        Formatting.cents(from: text).flatMap { $0 > 0 ? $0 : nil }
+    private var newPrice: Int64? {
+        guard let cents, cents > 0, Int64(cents) != change.current?.amountCents else { return nil }
+        return Int64(cents)
     }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    HStack {
-                        Text("$").foregroundStyle(Palette.textSecondary)
-                        TextField("0.00", text: $text)
-                            .keyboardType(.decimalPad)
-                            .font(Typography.price)
-                            .accessibilityIdentifier("price.field")
-                    }
-                } footer: {
-                    if let current = change.current {
-                        Text("Now \(Formatting.money(current)) on \(change.name).")
+            ScrollView {
+                PriceField(
+                    "New price",
+                    minorUnits: $cents,
+                    hint: change.current.map { "Now \(Formatting.money($0)) on \(change.name)." },
+                )
+                .padding(Spacing.md)
+            }
+            .background(Palette.background)
+            .bottomActionBar {
+                Button("Save price", systemImage: "checkmark") {
+                    if let newPrice {
+                        save(Money(amountCents: newPrice, currency: .usd))
                     }
                 }
-                .listRowBackground(Palette.surface.color)
+                .buttonStyle(.listoraPrimary)
+                .disabled(newPrice == nil)
+                .accessibilityIdentifier("price.save")
             }
-            .scrollContentBackground(.hidden)
-            .background(Palette.background)
             .navigationTitle("\(change.name) price")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        if let cents {
-                            save(Money(amountCents: cents, currency: .usd))
-                        }
-                    }
-                    .disabled(cents == nil || cents == change.current?.amountCents)
-                    .accessibilityIdentifier("price.save")
-                }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 }

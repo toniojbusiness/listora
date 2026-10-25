@@ -21,6 +21,7 @@ struct ListingFlowView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Cancel", action: onDone)
+                        .disabled(model.isPublishing)
                         .accessibilityIdentifier("listing.cancel")
                 }
             }
@@ -30,10 +31,19 @@ struct ListingFlowView: View {
     }
 
     private var chooser: some View {
-        List {
-            Section {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionHeader(
+                    "Where to list",
+                    subtitle: "You review each marketplace's version of the listing before it goes live.",
+                )
+                if model.isPreparing, model.choices.isEmpty {
+                    ForEach(0 ..< 4, id: \.self) { _ in
+                        SkeletonRow().cardStyle(.outlined)
+                    }
+                }
                 ForEach(model.choices) { choice in
-                    Toggle(isOn: Binding(
+                    ChoiceRow(choice: choice, isOn: Binding(
                         get: { model.selected.contains(choice.id) },
                         set: { isOn in
                             if isOn {
@@ -42,40 +52,17 @@ struct ListingFlowView: View {
                                 model.selected.remove(choice.id)
                             }
                         },
-                    )) {
-                        VStack(alignment: .leading, spacing: Spacing.xxs) {
-                            Text(choice.name)
-                                .font(Typography.headline)
-                                .foregroundStyle(Palette.textPrimary)
-                            Text(choice.detail)
-                                .font(Typography.callout)
-                                .foregroundStyle(Palette.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .tint(Palette.brand.color)
-                    .disabled(!choice.isAvailable)
-                    .accessibilityIdentifier("listing.choose.\(choice.id)")
-                    .listRowBackground(Palette.surface.color)
+                    ))
                 }
-            } footer: {
-                Text("Listora lists on each marketplace once you review its version of the listing.")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.textSecondary)
             }
+            .padding(Spacing.md)
+            .frame(maxWidth: Layout.readableWidth)
+            .frame(maxWidth: .infinity)
         }
-        .scrollContentBackground(.hidden)
-        .overlay {
-            if model.isPreparing, model.choices.isEmpty {
-                ProgressView()
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            Button("Review eBay listing") { model.next() }
+        .bottomActionBar {
+            Button("Review eBay listing", systemImage: "arrow.right") { model.next() }
                 .buttonStyle(.listoraPrimary)
                 .disabled(!model.canContinue)
-                .padding(Spacing.md)
-                .background(Palette.background)
                 .accessibilityIdentifier("listing.next")
         }
         .navigationTitle("List on")
@@ -83,67 +70,51 @@ struct ListingFlowView: View {
     }
 
     private var review: some View {
-        Form {
-            Section {
-                TextField("Title", text: $model.title, axis: .vertical)
-                    .font(Typography.body)
-                    .accessibilityIdentifier("listing.title")
-                Text("\(model.titleCount) of \(ListingFlowModel.ebayTitleLimit) characters")
-                    .font(Typography.caption)
-                    .foregroundStyle(model.titleCount > ListingFlowModel.ebayTitleLimit ? Palette.danger : Palette
-                        .textSecondary)
-                    .accessibilityIdentifier("listing.titleCount")
-            } header: {
-                Text("Title")
-            }
-            .listRowBackground(Palette.surface.color)
-            Section("Description") {
-                TextField("Description", text: $model.description, axis: .vertical)
-                    .lineLimit(4 ... 12)
-                    .font(Typography.body)
-                    .accessibilityIdentifier("listing.description")
-            }
-            .listRowBackground(Palette.surface.color)
-            Section("Price") {
-                HStack {
-                    Text("$").foregroundStyle(Palette.textSecondary)
-                    TextField("0.00", text: $model.price)
-                        .keyboardType(.decimalPad)
-                        .font(Typography.price)
-                        .accessibilityIdentifier("listing.price")
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                if let problem = model.problem {
+                    Banner(
+                        "eBay won't take it like this yet",
+                        message: problem,
+                        tone: .failed,
+                        identifier: "listing.problem",
+                    )
+                    .transition(.rise)
                 }
-            }
-            .listRowBackground(Palette.surface.color)
-            if let problem = model.problem {
-                Section {
-                    Label(problem, systemImage: "exclamationmark.triangle.fill")
-                        .font(Typography.callout)
-                        .foregroundStyle(Palette.danger)
-                        .accessibilityIdentifier("listing.problem")
+                ListoraTextField(
+                    "Title",
+                    hint: "\(model.titleCount) of \(ListingFlowModel.ebayTitleLimit) characters",
+                    error: model.titleCount > ListingFlowModel.ebayTitleLimit
+                        ? "\(model.titleCount) of \(ListingFlowModel.ebayTitleLimit) characters: shorten it"
+                        : nil,
+                ) {
+                    TextField("Title", text: $model.title, axis: .vertical)
+                        .accessibilityIdentifier("listing.title")
                 }
-                .listRowBackground(Palette.surface.color)
+                ListoraTextField("Description") {
+                    TextField("Description", text: $model.description, axis: .vertical)
+                        .lineLimit(4 ... 12)
+                        .accessibilityIdentifier("listing.description")
+                }
+                PriceField("Price", minorUnits: $model.priceCents, hint: "What buyers pay on eBay.")
             }
+            .padding(Spacing.md)
+            .frame(maxWidth: Layout.readableWidth)
+            .frame(maxWidth: .infinity)
+            .motion(value: model.problem)
         }
-        .scrollContentBackground(.hidden)
-        .safeAreaInset(edge: .bottom) {
-            Button {
+        .scrollDismissesKeyboard(.interactively)
+        .bottomActionBar {
+            Button(model.isPublishing ? "Publishing..." : "Publish to eBay", systemImage: "paperplane.fill") {
                 Task {
                     if await model.publish() {
                         onDone()
                     }
                 }
-            } label: {
-                HStack(spacing: Spacing.xs) {
-                    if model.isPublishing {
-                        ProgressView().tint(Palette.onBrand.color)
-                    }
-                    Text(model.isPublishing ? "Publishing..." : "Publish to eBay")
-                }
             }
             .buttonStyle(.listoraPrimary)
+            .loading(model.isPublishing)
             .disabled(model.isPublishing)
-            .padding(Spacing.md)
-            .background(Palette.background)
             .accessibilityIdentifier("listing.publish")
         }
         .navigationTitle("eBay listing")
@@ -154,5 +125,32 @@ struct ListingFlowView: View {
                     .disabled(model.isPublishing)
             }
         }
+    }
+}
+
+/// One marketplace in the picker: its tile, how Listora works with it, and the switch.
+private struct ChoiceRow: View {
+    let choice: ListingFlowModel.Choice
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            HStack(alignment: .center, spacing: Spacing.sm) {
+                IconTile(monogram: String(choice.name.prefix(1)), tone: choice.isAvailable ? nil : .neutral)
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(choice.name)
+                        .font(Typography.headline)
+                        .foregroundStyle(Palette.textPrimary)
+                    Text(choice.detail)
+                        .font(Typography.subheadline)
+                        .foregroundStyle(Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .tint(Palette.brand.color)
+        .disabled(!choice.isAvailable)
+        .cardStyle(.outlined)
+        .accessibilityIdentifier("listing.choose.\(choice.id)")
     }
 }

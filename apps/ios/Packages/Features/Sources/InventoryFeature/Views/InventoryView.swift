@@ -43,24 +43,23 @@ public struct InventoryView: View {
     private var content: some View {
         switch model.phase {
         case .loading where model.items.isEmpty:
-            ProgressView("Loading inventory")
-                .foregroundStyle(Palette.textSecondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            loading
         case .signedOut:
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.questionmark",
                 title: "Sign in to see your inventory",
                 message: "Your items and their status on every marketplace show up here once you sign in. "
                     + "You can take photos for a new item now.",
-                action: .init("Add item", handler: onAddItem),
+                action: .init("Add item", systemImage: "camera.fill", handler: onAddItem),
             )
             .accessibilityIdentifier("inventory.signedOut")
         case let .failed(message) where model.items.isEmpty:
             EmptyStateView(
                 systemImage: "exclamationmark.triangle",
+                tone: .failed,
                 title: "Inventory unavailable",
                 message: message,
-                action: .init("Try again") { Task { await model.load() } },
+                action: .init("Try again", systemImage: "arrow.clockwise") { Task { await model.load() } },
             )
         default:
             if model.items.isEmpty {
@@ -71,6 +70,20 @@ public struct InventoryView: View {
         }
     }
 
+    private var loading: some View {
+        ScrollView {
+            VStack(spacing: Spacing.sm) {
+                ForEach(0 ..< 5, id: \.self) { _ in
+                    SkeletonRow().cardStyle(.outlined)
+                }
+            }
+            .padding(Spacing.md)
+        }
+        .scrollDisabled(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading inventory")
+    }
+
     @ViewBuilder
     private var empty: some View {
         if model.isFiltered {
@@ -78,45 +91,51 @@ public struct InventoryView: View {
                 systemImage: "line.3.horizontal.decrease.circle",
                 title: "No matching items",
                 message: "No item matches this search or these filters.",
-                action: .init("Clear filters") { model.clearFilters() },
+                action: .init("Clear filters", systemImage: "xmark.circle") { model.clearFilters() },
             )
             .accessibilityIdentifier("inventory.noMatches")
         } else {
             EmptyStateView(
                 systemImage: "shippingbox",
                 title: "No items yet",
-                message: "Take photos once and create the item once. "
-                    + "It shows up here with its status on every marketplace.",
-                action: .init("Add item", handler: onAddItem),
+                message: "Create an item once, and see where it's listed and what sold on every marketplace.",
+                steps: [
+                    "Take photos of the item",
+                    "Check the details Listora suggests",
+                    "List it on your marketplaces",
+                ],
+                action: .init("Add item", systemImage: "camera.fill", handler: onAddItem),
             )
             .accessibilityIdentifier("inventory.empty")
         }
     }
 
     private var list: some View {
-        List {
-            if model.isFiltered {
-                ActiveFiltersRow(model: model)
-                    .listRowBackground(Palette.background.color)
-            }
-            ForEach(model.items, id: \.id) { item in
-                NavigationLink(value: ItemRoute(itemID: item.id)) {
-                    InventoryRow(item: item)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: Spacing.sm) {
+                if model.isFiltered {
+                    ActiveFilters(model: model)
                 }
-                .accessibilityIdentifier("inventory.row.\(item.sku)")
-                .listRowBackground(Palette.surface.color)
-                .task {
-                    if item.id == model.items.last?.id {
-                        await model.loadMore()
+                ForEach(model.items, id: \.id) { item in
+                    NavigationLink(value: ItemRoute(itemID: item.id)) {
+                        InventoryRow(item: item)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("inventory.row.\(item.sku)")
+                    .task {
+                        if item.id == model.items.last?.id {
+                            await model.loadMore()
+                        }
                     }
                 }
+                if model.isLoadingMore {
+                    SkeletonRow().cardStyle(.outlined)
+                }
             }
-            if model.isLoadingMore {
-                ProgressView().frame(maxWidth: .infinity)
-                    .listRowBackground(Palette.background.color)
-            }
+            .padding(Spacing.md)
+            .frame(maxWidth: Layout.readableWidth)
+            .frame(maxWidth: .infinity)
         }
-        .scrollContentBackground(.hidden)
         .refreshable { await model.load() }
     }
 }
@@ -126,100 +145,101 @@ struct ItemRoute: Hashable {
     let itemID: String
 }
 
-/// One item: cover photo, title, SKU, price, status, and its status on each marketplace.
+/// One item: cover photo, title, SKU, status, price, and its status on each marketplace.
 struct InventoryRow: View {
     let item: ItemSummary
 
     var body: some View {
         HStack(alignment: .top, spacing: Spacing.sm) {
             PhotoView(url: item.coverPhoto?.urls?.thumbnail, cornerRadius: Radius.small)
-                .frame(width: 64, height: 64)
+                .frame(width: 72, height: 72)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(item.title ?? "Untitled item")
-                    .font(Typography.headline)
-                    .foregroundStyle(Palette.textPrimary)
-                    .lineLimit(2)
-                HStack(spacing: Spacing.xs) {
-                    Text(item.sku)
-                        .font(Typography.caption.monospacedDigit())
-                        .foregroundStyle(Palette.textSecondary)
-                    Text(item.status.label)
-                        .font(Typography.caption.weight(.semibold))
-                        .foregroundStyle(Palette.textSecondary)
-                        .accessibilityIdentifier("inventory.row.status")
-                    Spacer(minLength: 0)
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                    Text(item.title ?? "Untitled item")
+                        .font(Typography.headline)
+                        .foregroundStyle(Palette.textPrimary)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     if let price = item.listPrice {
                         Text(Formatting.money(price))
-                            .font(Typography.callout.weight(.semibold).monospacedDigit())
+                            .font(Typography.price)
                             .foregroundStyle(Palette.brand)
                     }
                 }
-                ForEach(item.listings, id: \.listingId) { listing in
-                    MarketplaceBadge(listing: listing)
+                Text("\(item.sku) · \(item.status.label)")
+                    .font(Typography.footnote.monospacedDigit())
+                    .foregroundStyle(Palette.textSecondary)
+                if !item.listings.isEmpty {
+                    FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
+                        ForEach(item.listings, id: \.listingId) { listing in
+                            MarketplaceBadge(listing: listing)
+                        }
+                    }
+                    .padding(.top, Spacing.xxs)
                 }
             }
+            Image(systemName: "chevron.right")
+                .font(Typography.footnote.weight(.semibold))
+                .foregroundStyle(Palette.textSecondary)
+                .padding(.top, Spacing.xxs)
+                .accessibilityHidden(true)
         }
-        .padding(.vertical, Spacing.xxs)
+        .cardStyle(.outlined, padding: Spacing.sm)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 }
 
-/// "eBay: Active (confirmed by eBay)", in the status's tone.
+/// "eBay" and the listing's status pill, exactly as the server words it.
 struct MarketplaceBadge: View {
     let listing: Components.Schemas.ListingStatusSummary
 
     var body: some View {
-        let tone = StatusLabel.Tone(listing.statusDisplay.tone)
         HStack(spacing: Spacing.xxs) {
             Text(Formatting.marketplaceName(listing.marketplace.id))
-                .font(Typography.caption.weight(.semibold))
+                .font(Typography.label)
                 .foregroundStyle(Palette.textPrimary)
-            StatusLabel(listing.statusDisplay.label, tone: tone)
-                .font(Typography.caption)
+            StatusBadge(listing.statusDisplay.label, tone: StatusTone(listing.statusDisplay.tone))
         }
         .accessibilityElement(children: .combine)
     }
 }
 
-/// The filters in effect, each with a way to clear it.
-private struct ActiveFiltersRow: View {
+/// The filters in effect as chips, with a way to clear them.
+private struct ActiveFilters: View {
     let model: InventoryListModel
 
     var body: some View {
-        HStack(spacing: Spacing.xs) {
-            Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                .foregroundStyle(Palette.brand)
-                .accessibilityHidden(true)
-            Text(summary)
-                .font(Typography.callout)
-                .foregroundStyle(Palette.textSecondary)
-                .lineLimit(2)
-            Spacer(minLength: 0)
+        HStack(alignment: .center, spacing: Spacing.xs) {
+            FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
+                ForEach(chips, id: \.self) { chip in
+                    Chip(chip, prominent: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             Button("Clear") { model.clearFilters() }
-                .font(Typography.callout.weight(.semibold))
-                .foregroundStyle(Palette.brand)
-                .buttonStyle(.borderless)
+                .buttonStyle(.listora(.tertiary, size: .compact))
+                .fixedSize()
                 .accessibilityIdentifier("inventory.clearFilters")
         }
+        .accessibilityElement(children: .contain)
     }
 
-    private var summary: String {
-        var parts: [String] = []
+    private var chips: [String] {
+        var chips: [String] = []
         if !model.query.search.isEmpty {
-            parts.append("\"\(model.query.search)\"")
+            chips.append("\"\(model.query.search)\"")
         }
         if let status = model.query.status {
-            parts.append(status.label)
+            chips.append(status.label)
         }
-        if let marketplace = model.query
-            .marketplace
-        {
-            parts.append("On \(Formatting.marketplaceName(marketplace.rawValue))")
+        if let marketplace = model.query.marketplace {
+            chips.append("On \(Formatting.marketplaceName(marketplace.rawValue))")
         }
         if let brand = model.query.brand {
-            parts.append(brand)
+            chips.append(brand)
         }
-        return parts.joined(separator: " · ")
+        return chips
     }
 }
 
@@ -260,8 +280,8 @@ struct InventoryFilterMenu: View {
     }
 }
 
-extension StatusLabel.Tone {
-    /// The design system's style for a server tone; an unknown tone looks neutral.
+extension StatusTone {
+    /// The design system's tone for a server tone; an unknown tone looks neutral.
     init(_ tone: Components.Schemas.StatusTone) {
         switch tone.value1 {
         case .success: self = .success
@@ -270,6 +290,17 @@ extension StatusLabel.Tone {
         case .failed: self = .failed
         case .actionNeeded: self = .actionNeeded
         case .neutral, nil: self = .neutral
+        }
+    }
+
+    init(_ tone: MarketplaceRowState.Tone) {
+        switch tone {
+        case .success: self = .success
+        case .inProgress: self = .inProgress
+        case .checking: self = .checking
+        case .failed: self = .failed
+        case .actionNeeded: self = .actionNeeded
+        case .neutral: self = .neutral
         }
     }
 }

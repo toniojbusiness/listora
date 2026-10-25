@@ -70,12 +70,7 @@ public struct AppDependencies {
         let meter = InteractionMeter(storage: interactionStorage)
         interactionMeter = meter
         let listingCopy = ListingCopyStore(directory: listingCopyDirectory)
-        let review = ReviewEnvironment(
-            apiClient: apiClient,
-            meter: meter,
-            listingCopy: listingCopy,
-            defaults: defaults,
-        )
+        let review = ReviewEnvironment(apiClient: apiClient, meter: meter, listingCopy: listingCopy, defaults: defaults)
         inventory = InventoryEnvironment(apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy)
         self.review = review
         addItem = AddItemEnvironment(
