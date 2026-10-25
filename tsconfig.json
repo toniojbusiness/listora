@@ -18,6 +18,7 @@
     { "path": "packages/eval" },
     { "path": "apps/api" },
     { "path": "apps/worker" },
-    { "path": "infra" }
+    { "path": "infra" },
+    { "path": "apps/admin" }
   ]
 }

@@ -76,6 +76,7 @@ the user pool settings, and in-app account deletion (`DELETE /v1/account`).
 | `npm run dev:worker`           | Run the worker with reload on change                                                                                                             |
 | `npm run dev:fake-marketplace` | Run the fake marketplace at `FAKE_MARKETPLACE_URL`, for the worker in development                                                                |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
+| `npm run admin -- --help`      | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail)                                   |
 | `npm run eval`                 | Score the tag parsers, AI tag reading, and the full item analysis on the synthetic corpus (fake AI); `-- --provider anthropic` uses the real API |
 | `npm run corpus:render`        | Regenerate the synthetic tag corpus and its fake AI fixtures after changing the corpus generator                                                 |
 | `scripts/dev-db.sh start`      | Initialize if needed and start the cluster; create the `listora` and `listora_test` databases (the default command)                              |
@@ -103,6 +104,7 @@ one runs at the same time.
 ```text
 apps/api/               Fastify HTTP API (@listora/api)
 apps/worker/            Background worker (@listora/worker)
+apps/admin/             Operator CLI: AI cost reports, spend check, kill switch, blocks (@listora/admin)
 apps/ios/               iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift packages
 packages/ai/            AI provider layer: providers, price table, metering, budget guards, quota counter (@listora/ai)
 packages/analysis/      Item analysis: prompt, output schema, provenance, marketplace copy, the job (@listora/analysis)

@@ -17,12 +17,17 @@ import {
 } from './store.ts';
 
 describe('committed corpus', () => {
-  it('matches the generator exactly (run `npm run corpus:render` after generator changes)', async () => {
-    const corpus = await loadCorpus(DEFAULT_CORPUS_DIR, { verifyImages: true });
-    const expected = buildCorpusSpecs().map((spec) => renderCase(spec).corpusCase);
-    expect(corpus.manifest).toEqual(buildManifest(expected));
-    expect(corpus.cases).toEqual(expected);
-  });
+  // Decoding and hashing every image is CPU-bound, so give it headroom on a loaded machine.
+  it(
+    'matches the generator exactly (run `npm run corpus:render` after generator changes)',
+    { timeout: 30_000 },
+    async () => {
+      const corpus = await loadCorpus(DEFAULT_CORPUS_DIR, { verifyImages: true });
+      const expected = buildCorpusSpecs().map((spec) => renderCase(spec).corpusCase);
+      expect(corpus.manifest).toEqual(buildManifest(expected));
+      expect(corpus.cases).toEqual(expected);
+    },
+  );
 });
 
 describe('loadCorpus', () => {

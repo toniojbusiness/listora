@@ -11,7 +11,8 @@
     "packages/*",
     "apps/api",
     "apps/worker",
-    "infra"
+    "infra",
+    "apps/admin"
   ],
   "scripts": {
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run contract:check && npm run infra:synth && npm run test:unit && npm run test:integration",
@@ -28,6 +29,7 @@
     "dev:worker": "npm run dev --workspace @listora/worker",
     "dev:fake-marketplace": "npm run fake --workspace @listora/marketplaces",
     "db:migrate": "npm run migrate --workspace @listora/db --",
+    "admin": "npm run admin --workspace @listora/admin --",
     "eval": "npm run eval --workspace @listora/eval --",
     "corpus:render": "npm run corpus:render --workspace @listora/eval"
   },

@@ -65,6 +65,11 @@ Gates: **G-eBay** (developer keys), **G-AI** (Anthropic key), **G-Apple** (devel
 | T-34 | Release pipeline: signing, TestFlight upload workflow                                    | T-02       | K     | G-Apple           |
 | T-35 | eBay production readiness: Growth Check packet, deletion endpoint live on staging        | T-17, T-30 | L     | G-eBay, G-AWS     |
 
+T-29 ships the AI cost reports, the kill switch, and account blocks as the admin CLI
+(`npm run admin`), and the spend alerts as the worker's hourly spend check. Admin HTTP
+endpoints are deferred: Listora is for personal use for now, and the CLI is enough. The
+CloudWatch alarm that notifies on AI daily cost comes with T-32.
+
 ## Phase 4 - Import, matching, profit, organization
 
 | ID   | Task                                                                                 | Deps       | Group   |

@@ -19,6 +19,7 @@ import type { CurrencyCode } from '@listora/shared';
 import type { JsonArray, JsonObject, JsonValue } from './json.ts';
 import type {
   AccountDeletionGrantOutcome,
+  AiControlAction,
   AiProvider,
   AiUsageOutcome,
   AnalysisStatus,
@@ -284,6 +285,39 @@ export interface AiUsageDailyTable {
   created_at: CreatedAt;
   updated_at: UpdatedAt;
   failed_calls: Generated<number>;
+}
+
+/**
+ * The global AI kill switch: exactly one row, created by the migration and only updated.
+ * A platform setting, so it has no `account_id`.
+ */
+export interface AiKillSwitchTable {
+  singleton: DatabaseManaged<boolean>;
+  engaged: ColumnType<boolean, never, boolean>;
+  /** Who made the last change and why; both null until the first change. */
+  changed_by: ColumnType<string | null, never, string>;
+  reason: ColumnType<string | null, never, string>;
+  created_at: DatabaseManaged<Date>;
+  updated_at: UpdatedAt;
+}
+
+/** An account blocked from AI by an operator; unblocking deletes the row. */
+export interface AiAccountBlockTable {
+  account_id: ColumnType<string, string, never>;
+  blocked_by: ColumnType<string, string, never>;
+  reason: ColumnType<string, string, never>;
+  created_at: CreatedAt;
+}
+
+/** Append-only: the database rejects updates and deletes. */
+export interface AiControlAuditTable {
+  id: Id;
+  action: ColumnType<AiControlAction, AiControlAction, never>;
+  /** Null for the kill switch. */
+  account_id: ColumnType<string | null, string | null | undefined, never>;
+  actor: ColumnType<string, string, never>;
+  reason: ColumnType<string, string, never>;
+  created_at: CreatedAt;
 }
 
 // Marketplaces --------------------------------------------------------------------------------
@@ -622,6 +656,9 @@ export interface Database {
   ai_analysis: AiAnalysisTable;
   ai_usage_event: AiUsageEventTable;
   ai_usage_daily: AiUsageDailyTable;
+  ai_kill_switch: AiKillSwitchTable;
+  ai_account_block: AiAccountBlockTable;
+  ai_control_audit: AiControlAuditTable;
   marketplace_connection: MarketplaceConnectionTable;
   marketplace_listing: MarketplaceListingTable;
   marketplace_operation: MarketplaceOperationTable;

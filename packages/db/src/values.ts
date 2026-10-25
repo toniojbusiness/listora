@@ -65,6 +65,15 @@ export type AiProvider = (typeof AI_PROVIDERS)[number];
 export const AI_USAGE_OUTCOMES = ['succeeded', 'failed'] as const;
 export type AiUsageOutcome = (typeof AI_USAGE_OUTCOMES)[number];
 
+/** Operator changes to the AI controls, as recorded in `ai_control_audit`. */
+export const AI_CONTROL_ACTIONS = [
+  'kill_switch_on',
+  'kill_switch_off',
+  'account_block_on',
+  'account_block_off',
+] as const;
+export type AiControlAction = (typeof AI_CONTROL_ACTIONS)[number];
+
 export const CONNECTION_MODES = ['api', 'assisted'] as const;
 export type ConnectionMode = (typeof CONNECTION_MODES)[number];
 

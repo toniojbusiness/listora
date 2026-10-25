@@ -1,4 +1,9 @@
-import { createAiClient, PostgresQuotaPolicy, PostgresUsageStore } from '@listora/ai';
+import {
+  createAiClient,
+  PostgresAiControls,
+  PostgresQuotaPolicy,
+  PostgresUsageStore,
+} from '@listora/ai';
 import { graphileAnalysisJobs } from '@listora/analysis';
 import { createDatabase, createPool } from '@listora/db';
 import { graphilePhotoJobs } from '@listora/photos';
@@ -23,6 +28,7 @@ const app = buildApp({
   photoJobs: graphilePhotoJobs,
   ai: createAiClient(config.ai, {
     usageStore: new PostgresUsageStore(db),
+    controls: new PostgresAiControls(db),
     quota: new PostgresQuotaPolicy(db),
     logger,
   }),

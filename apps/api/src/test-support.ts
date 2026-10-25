@@ -22,6 +22,7 @@ import {
   CURRENT_PRICE_TABLE,
   FakeAiProvider,
   inMemoryFixtures,
+  PostgresAiControls,
   PostgresQuotaPolicy,
   PostgresUsageStore,
   staticKillSwitch,
@@ -236,6 +237,7 @@ function testAiClient(options: {
   fixtures: Record<string, FakeFixture>;
   quota?: PostgresQuotaPolicy;
   killSwitch?: KillSwitch;
+  accountBlocks?: PostgresAiControls;
   dailyBudgetMicros?: number;
 }): AiClient {
   return new AiClient({
@@ -245,6 +247,7 @@ function testAiClient(options: {
     killSwitch: options.killSwitch ?? staticKillSwitch(false),
     dailyBudgetMicros: options.dailyBudgetMicros ?? 1_000_000,
     ...(options.quota === undefined ? {} : { quota: options.quota }),
+    ...(options.accountBlocks === undefined ? {} : { accountBlocks: options.accountBlocks }),
   });
 }
 
@@ -347,6 +350,7 @@ export async function createTestApi(
     fixtures: aiControls.fixtures,
     quota: new PostgresQuotaPolicy(db),
     killSwitch: { isEngaged: () => Promise.resolve(aiControls.killed) },
+    accountBlocks: new PostgresAiControls(db),
   });
   const analysisJobs: RecordingAnalysisJobs = new RecordingAnalysisJobs(() => ({
     db,

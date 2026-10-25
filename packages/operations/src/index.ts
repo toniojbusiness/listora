@@ -40,4 +40,9 @@ export type { OperationChange, OperationError, OperationRow } from './transition
 export { describeListingStatus } from './status-display.ts';
 export type { ListingStatusInput, StatusDisplay, StatusTone } from './status-display.ts';
 export { startOperationWorker } from './worker.ts';
-export type { OperationWorker, OperationWorkerOptions, WorkerTask } from './worker.ts';
+export type {
+  OperationWorker,
+  OperationWorkerOptions,
+  ScheduledTask,
+  WorkerTask,
+} from './worker.ts';

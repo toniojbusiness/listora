@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { sql } from 'kysely';
 import sharp from 'sharp';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { startAccountDeletion } from '@listora/accounts';
 import {
@@ -24,6 +24,8 @@ import { graphilePhotoJobs, itemPhotoSet, storageKeys } from '@listora/photos';
 import { photoSetHash, sha256Hex } from '@listora/shared';
 import { createStorage, type ObjectStorage } from '@listora/storage';
 import { startNodeProcess, type StartedProcess } from '@listora/testing';
+
+import { AI_SPEND_CHECK_TASK } from './ai-spend-check.ts';
 
 const entry = fileURLToPath(new URL('main.ts', import.meta.url));
 const LIFECYCLE = new Set(['worker ready', 'shutting down', 'shutdown complete']);
@@ -379,6 +381,39 @@ describe('worker process (real Postgres)', () => {
     expect(await worker.waitForExit(10_000)).toBe(1);
     expect(worker.logs).toContainEqual(
       expect.objectContaining({ msg: 'worker cannot continue safely; exiting' }),
+    );
+  });
+
+  it('schedules the hourly AI spend check and logs its alerts', async () => {
+    const worker = await startWorker({ AI_DAILY_BUDGET_USD: '1.00' });
+    await vi.waitFor(
+      async () => {
+        const crontabs = await sql<{ identifier: string }>`
+          select identifier from graphile_worker._private_known_crontabs
+        `.execute(database.db);
+        expect(crontabs.rows.map((row) => row.identifier)).toContain(AI_SPEND_CHECK_TASK);
+      },
+      { timeout: 10_000, interval: 50 },
+    );
+
+    await sql`
+      insert into ai_usage_daily (account_id, usage_date, calls, cost_micros)
+      values (${accountId}, (now() at time zone 'UTC')::date, 3, 1200000)
+      on conflict (account_id, usage_date) do update set cost_micros = excluded.cost_micros
+    `.execute(database.db);
+    await sql`select graphile_worker.add_job(${AI_SPEND_CHECK_TASK})`.execute(database.db);
+
+    const summary = await worker.waitForLog((line) => line['event'] === 'ai_spend_check', 20_000);
+    expect(summary).toMatchObject({ service: 'worker', accountsOverDailyBudget: 1 });
+    expect(worker.logs).toContainEqual(
+      expect.objectContaining({
+        event: 'ai_spend_alert',
+        alert: 'account_daily_budget',
+        severity: 'over',
+        accountId,
+        spentMicros: 1_200_000,
+        limitMicros: 1_000_000,
+      }),
     );
   });
 

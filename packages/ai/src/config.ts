@@ -3,9 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { AI_PROVIDERS } from '@listora/db';
 import { assertNever } from '@listora/shared';
 
+import type { AiAlertThresholds } from './alerts.ts';
 import { AnthropicProvider } from './anthropic-provider.ts';
 import { directoryFixtures, FakeAiProvider } from './fake-provider.ts';
-import { staticKillSwitch, type QuotaPolicy } from './guards.ts';
+import { anyKillSwitch, staticKillSwitch, type AiControls, type QuotaPolicy } from './guards.ts';
 import { AiClient } from './client.ts';
 import { AI_TIERS, createModelRegistry, DEFAULT_MODEL_REGISTRY } from './models.ts';
 import { CURRENT_PRICE_TABLE, isPriced, type PriceTable } from './prices.ts';
@@ -81,10 +82,7 @@ export function loadAiConfig(
     }),
   ) as Record<AiTier, string>;
 
-  const dailyBudgetMicros = parseDollarsToMicros(env['AI_DAILY_BUDGET_USD'] ?? '1.00');
-  if (dailyBudgetMicros === undefined) {
-    issues.push('AI_DAILY_BUDGET_USD must be a dollar amount such as 1.00 (up to 6 decimals)');
-  }
+  const dailyBudgetMicros = parseDailyBudget(env, issues);
 
   const killSwitch = env['AI_KILL_SWITCH'] ?? 'off';
   if (killSwitch !== 'on' && killSwitch !== 'off') issues.push('AI_KILL_SWITCH must be on or off');
@@ -112,6 +110,50 @@ export function loadAiConfig(
   };
 }
 
+/** Default for `AI_GLOBAL_DAILY_ALERT_USD`: AI spend by every account together per UTC day. */
+export const DEFAULT_GLOBAL_DAILY_ALERT_USD = '25.00';
+/** Default for `AI_ALERT_WARN_PERCENT`. */
+export const DEFAULT_ALERT_WARN_PERCENT = 80;
+
+/**
+ * Reads the AI spend check's thresholds from the environment (see `.env.example`). The daily
+ * budget is the same `AI_DAILY_BUDGET_USD` the guard enforces.
+ */
+export function loadAiAlertConfig(env: NodeJS.ProcessEnv = process.env): AiAlertThresholds {
+  const issues: string[] = [];
+  const dailyBudgetMicros = parseDailyBudget(env, issues);
+
+  const globalDailyAlertMicros = parseDollarsToMicros(
+    env['AI_GLOBAL_DAILY_ALERT_USD'] ?? DEFAULT_GLOBAL_DAILY_ALERT_USD,
+  );
+  if (globalDailyAlertMicros === undefined || globalDailyAlertMicros === 0) {
+    issues.push('AI_GLOBAL_DAILY_ALERT_USD must be a dollar amount above zero such as 25.00');
+  }
+
+  const warn = env['AI_ALERT_WARN_PERCENT'] ?? String(DEFAULT_ALERT_WARN_PERCENT);
+  const warnPercent = Number(warn);
+  if (!/^\d{1,3}$/.test(warn) || warnPercent < 1 || warnPercent > 100) {
+    issues.push('AI_ALERT_WARN_PERCENT must be an integer from 1 to 100');
+  }
+
+  if (
+    issues.length > 0 ||
+    dailyBudgetMicros === undefined ||
+    globalDailyAlertMicros === undefined
+  ) {
+    throw new AiConfigError(issues);
+  }
+  return { dailyBudgetMicros, globalDailyAlertMicros, warnPercent };
+}
+
+function parseDailyBudget(env: NodeJS.ProcessEnv, issues: string[]): number | undefined {
+  const micros = parseDollarsToMicros(env['AI_DAILY_BUDGET_USD'] ?? '1.00');
+  if (micros === undefined) {
+    issues.push('AI_DAILY_BUDGET_USD must be a dollar amount such as 1.00 (up to 6 decimals)');
+  }
+  return micros;
+}
+
 /** "1", "1.5", or "0.000001" dollars as integer micro-dollars, without floating point. */
 export function parseDollarsToMicros(value: string): number | undefined {
   const match = /^(\d{1,9})(?:\.(\d{1,6}))?$/.exec(value);
@@ -137,11 +179,16 @@ export function createAiProvider(config: AiConfig): AiProvider {
   }
 }
 
-/** The client a process uses, wired from its configuration. */
+/**
+ * The client a process uses, wired from its configuration. With `controls` (the operator's
+ * kill switch and account blocks), a call is refused when either `AI_KILL_SWITCH` or the
+ * operator's kill switch is on.
+ */
 export function createAiClient(
   config: AiConfig,
   dependencies: {
     readonly usageStore: UsageStore;
+    readonly controls?: AiControls;
     readonly quota?: QuotaPolicy;
     readonly logger?: Logger;
     readonly provider?: AiProvider;
@@ -151,7 +198,11 @@ export function createAiClient(
     provider: dependencies.provider ?? createAiProvider(config),
     registry: createModelRegistry(config.models, CURRENT_PRICE_TABLE),
     usageStore: dependencies.usageStore,
-    killSwitch: staticKillSwitch(config.killSwitch),
+    killSwitch:
+      dependencies.controls === undefined
+        ? staticKillSwitch(config.killSwitch)
+        : anyKillSwitch(staticKillSwitch(config.killSwitch), dependencies.controls),
+    ...(dependencies.controls === undefined ? {} : { accountBlocks: dependencies.controls }),
     dailyBudgetMicros: config.dailyBudgetMicros,
     prices: CURRENT_PRICE_TABLE,
     ...(dependencies.quota === undefined ? {} : { quota: dependencies.quota }),

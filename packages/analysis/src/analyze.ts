@@ -150,6 +150,12 @@ export function analysisFailure(error: unknown): {
           message: 'AI analysis is paused right now. Try again later.',
           retryable: true,
         };
+      case 'account_blocked':
+        return {
+          code: 'ai_account_blocked',
+          message: 'AI analysis is turned off for this account. Contact support.',
+          retryable: false,
+        };
       case 'daily_budget':
         return {
           code: 'ai_budget_exceeded',
