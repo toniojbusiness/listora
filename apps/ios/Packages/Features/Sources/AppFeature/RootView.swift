@@ -56,7 +56,7 @@ public struct RootView: View {
         switch tab {
         case .settings: dependencies.marketplaces.attention?.count ?? 0
         case .tasks: dependencies.tasks.inbox.openCount
-        case .inventory, .addItem: 0
+        case .inventory, .sales, .addItem: 0
         }
     }
 
