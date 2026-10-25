@@ -1110,6 +1110,8 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Item/doubleSale`.
             public var doubleSale: Components.Schemas.DoubleSale?
+            /// - Remark: Generated from `#/components/schemas/Item/relistPrompt`.
+            public var relistPrompt: Components.Schemas.ItemRelistPrompt?
             /// - Remark: Generated from `#/components/schemas/Item/createdAt`.
             public var createdAt: Components.Schemas.Timestamp
             /// - Remark: Generated from `#/components/schemas/Item/updatedAt`.
@@ -1129,6 +1131,7 @@ extension Components {
             ///   - saleSummary:
             ///   - delistRun: The delist run of the item's latest sale (the "Sold" banner and the delist results),
             ///   - doubleSale: The item's newest double sale that is still open; absent when there is none.
+            ///   - relistPrompt:
             ///   - createdAt:
             ///   - updatedAt:
             public init(
@@ -1144,6 +1147,7 @@ extension Components {
                 saleSummary: Components.Schemas.ItemSaleSummary? = nil,
                 delistRun: Components.Schemas.DelistRun? = nil,
                 doubleSale: Components.Schemas.DoubleSale? = nil,
+                relistPrompt: Components.Schemas.ItemRelistPrompt? = nil,
                 createdAt: Components.Schemas.Timestamp,
                 updatedAt: Components.Schemas.Timestamp
             ) {
@@ -1159,6 +1163,7 @@ extension Components {
                 self.saleSummary = saleSummary
                 self.delistRun = delistRun
                 self.doubleSale = doubleSale
+                self.relistPrompt = relistPrompt
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
             }
@@ -1175,6 +1180,7 @@ extension Components {
                 case saleSummary
                 case delistRun
                 case doubleSale
+                case relistPrompt
                 case createdAt
                 case updatedAt
             }
@@ -1214,6 +1220,41 @@ extension Components {
                 case label
             }
         }
+        /// The item's sale was canceled or returned and the seller has not decided whether to
+        /// relist it. The app asks, with the options in the sale's `items[].relist`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemRelistPrompt`.
+        public struct ItemRelistPrompt: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemRelistPrompt/saleId`.
+            public var saleId: Components.Schemas.Id
+            /// `canceled` or `returned`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemRelistPrompt/saleStatus`.
+            public var saleStatus: Components.Schemas.SaleStatus
+            /// - Remark: Generated from `#/components/schemas/ItemRelistPrompt/soldOn`.
+            public var soldOn: Components.Schemas.Marketplace
+            /// Creates a new `ItemRelistPrompt`.
+            ///
+            /// - Parameters:
+            ///   - saleId:
+            ///   - saleStatus: `canceled` or `returned`.
+            ///   - soldOn:
+            public init(
+                saleId: Components.Schemas.Id,
+                saleStatus: Components.Schemas.SaleStatus,
+                soldOn: Components.Schemas.Marketplace
+            ) {
+                self.saleId = saleId
+                self.saleStatus = saleStatus
+                self.soldOn = soldOn
+            }
+            public enum CodingKeys: String, CodingKey {
+                case saleId
+                case saleStatus
+                case soldOn
+            }
+        }
         /// Read-only result of the item's sale. Present only when the item has sold (status
         /// `sold_pending_delist`, `sold`, or `shipped`). For an item sold in a bundle, the
         /// order's fees and shipping cost are split across its items in proportion to each
@@ -1224,6 +1265,14 @@ extension Components {
         public struct ItemSaleSummary: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/saleId`.
             public var saleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/soldOn`.
+            public var soldOn: Components.Schemas.Marketplace?
+            /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/saleStatus`.
+            public var saleStatus: Components.Schemas.SaleStatus?
+            /// True while any of the sale's fees is an estimate; `netProceeds` and `profit` are estimates then.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/feesEstimated`.
+            public var feesEstimated: Swift.Bool?
             /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/soldAt`.
             public var soldAt: Components.Schemas.Timestamp
             /// - Remark: Generated from `#/components/schemas/ItemSaleSummary/salePrice`.
@@ -1246,6 +1295,9 @@ extension Components {
             ///
             /// - Parameters:
             ///   - saleId:
+            ///   - soldOn:
+            ///   - saleStatus:
+            ///   - feesEstimated: True while any of the sale's fees is an estimate; `netProceeds` and `profit` are estimates then.
             ///   - soldAt:
             ///   - salePrice:
             ///   - netProceeds: This item's share of the sale's `netProceeds`.
@@ -1253,6 +1305,9 @@ extension Components {
             ///   - roiBasisPoints: Return on investment, `profit` divided by the item's `cost`, in basis points
             public init(
                 saleId: Components.Schemas.Id,
+                soldOn: Components.Schemas.Marketplace? = nil,
+                saleStatus: Components.Schemas.SaleStatus? = nil,
+                feesEstimated: Swift.Bool? = nil,
                 soldAt: Components.Schemas.Timestamp,
                 salePrice: Components.Schemas.Money,
                 netProceeds: Components.Schemas.Money? = nil,
@@ -1260,6 +1315,9 @@ extension Components {
                 roiBasisPoints: Swift.Int64? = nil
             ) {
                 self.saleId = saleId
+                self.soldOn = soldOn
+                self.saleStatus = saleStatus
+                self.feesEstimated = feesEstimated
                 self.soldAt = soldAt
                 self.salePrice = salePrice
                 self.netProceeds = netProceeds
@@ -1268,6 +1326,9 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case saleId
+                case soldOn
+                case saleStatus
+                case feesEstimated
                 case soldAt
                 case salePrice
                 case netProceeds
@@ -5018,10 +5079,16 @@ extension Components {
                 ])
             }
         }
+        /// `detected`: Listora recorded the sale (from the marketplace, or "Mark sold").
+        /// `confirmed`: the seller confirmed it. `shipped`: the seller shipped it. `canceled` and
+        /// `returned`: the sale no longer stands; Listora asks whether to relist (`SaleItem.relist`).
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/KnownSaleStatus`.
         @frozen public enum KnownSaleStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case detected = "detected"
             case confirmed = "confirmed"
+            case shipped = "shipped"
             case canceled = "canceled"
             case returned = "returned"
         }
@@ -5440,12 +5507,18 @@ extension Components {
                 case resolvedAt
             }
         }
-        /// One item of an order.
+        /// One item of an order. For a bundle, the order's shipping, order-level fees, and
+        /// shipping cost are split across its items in proportion to each item's `salePrice`.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/SaleItem`.
         public struct SaleItem: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/SaleItem/itemId`.
             public var itemId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/SaleItem/sku`.
+            public var sku: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SaleItem/title`.
+            public var title: Swift.String?
             /// The listing the item sold through, when known. Absent for a sale recorded without one.
             ///
             /// - Remark: Generated from `#/components/schemas/SaleItem/listingId`.
@@ -5454,12 +5527,101 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/SaleItem/salePrice`.
             public var salePrice: Components.Schemas.Money
+            /// What the item cost the seller. Absent when they never entered it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleItem/cost`.
+            public var cost: Components.Schemas.Money?
+            /// This item's share of the sale's fees. Absent until the sale has fee lines.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleItem/fees`.
+            public var fees: Components.Schemas.Money?
+            /// This item's share of the payout.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleItem/netProceeds`.
+            public var netProceeds: Components.Schemas.Money?
+            /// This item's share of the payout minus its share of `shippingCost` minus its `cost`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleItem/profit`.
+            public var profit: Components.Schemas.Money?
+            /// `profit` over `cost` in basis points (12550 is 125.5%). Absent without a profit or for a zero cost.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleItem/roiBasisPoints`.
+            public var roiBasisPoints: Swift.Int64?
+            /// - Remark: Generated from `#/components/schemas/SaleItem/relist`.
+            public var relist: Components.Schemas.SaleRelist?
             /// Creates a new `SaleItem`.
             ///
             /// - Parameters:
             ///   - itemId:
+            ///   - sku:
+            ///   - title:
             ///   - listingId: The listing the item sold through, when known. Absent for a sale recorded without one.
             ///   - salePrice: This item's part of the order's sale price (for a bundle, its share of the bundle price).
+            ///   - cost: What the item cost the seller. Absent when they never entered it.
+            ///   - fees: This item's share of the sale's fees. Absent until the sale has fee lines.
+            ///   - netProceeds: This item's share of the payout.
+            ///   - profit: This item's share of the payout minus its share of `shippingCost` minus its `cost`.
+            ///   - roiBasisPoints: `profit` over `cost` in basis points (12550 is 125.5%). Absent without a profit or for a zero cost.
+            ///   - relist:
+            public init(
+                itemId: Components.Schemas.Id,
+                sku: Swift.String,
+                title: Swift.String? = nil,
+                listingId: Components.Schemas.Id? = nil,
+                salePrice: Components.Schemas.Money,
+                cost: Components.Schemas.Money? = nil,
+                fees: Components.Schemas.Money? = nil,
+                netProceeds: Components.Schemas.Money? = nil,
+                profit: Components.Schemas.Money? = nil,
+                roiBasisPoints: Swift.Int64? = nil,
+                relist: Components.Schemas.SaleRelist? = nil
+            ) {
+                self.itemId = itemId
+                self.sku = sku
+                self.title = title
+                self.listingId = listingId
+                self.salePrice = salePrice
+                self.cost = cost
+                self.fees = fees
+                self.netProceeds = netProceeds
+                self.profit = profit
+                self.roiBasisPoints = roiBasisPoints
+                self.relist = relist
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case sku
+                case title
+                case listingId
+                case salePrice
+                case cost
+                case fees
+                case netProceeds
+                case profit
+                case roiBasisPoints
+                case relist
+            }
+        }
+        /// One item of a sale recorded by hand.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleCreateItem`.
+        public struct SaleCreateItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleCreateItem/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// The item's listing on the sale's marketplace; defaults to its newest one there.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleCreateItem/listingId`.
+            public var listingId: Components.Schemas.Id?
+            /// What this item sold for, before shipping.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleCreateItem/salePrice`.
+            public var salePrice: Components.Schemas.Money
+            /// Creates a new `SaleCreateItem`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - listingId: The item's listing on the sale's marketplace; defaults to its newest one there.
+            ///   - salePrice: What this item sold for, before shipping.
             public init(
                 itemId: Components.Schemas.Id,
                 listingId: Components.Schemas.Id? = nil,
@@ -5473,6 +5635,277 @@ extension Components {
                 case itemId
                 case listingId
                 case salePrice
+            }
+        }
+        /// A `KnownSaleAction`, or an action added after this client was built. Clients hide
+        /// actions they do not know.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleAction`.
+        public struct SaleAction: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleAction/value1`.
+            public var value1: Components.Schemas.KnownSaleAction?
+            /// - Remark: Generated from `#/components/schemas/SaleAction/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SaleAction`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSaleAction? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `confirm` (`confirmSale`), `mark_shipped` (`markSaleShipped`), `cancel` (`cancelSale`),
+        /// `record_return` (`recordSaleReturn`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownSaleAction`.
+        @frozen public enum KnownSaleAction: String, Codable, Hashable, Sendable, CaseIterable {
+            case confirm = "confirm"
+            case markShipped = "mark_shipped"
+            case cancel = "cancel"
+            case recordReturn = "record_return"
+        }
+        /// A `KnownRelistDecision`, or a decision added after this client was built.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/RelistDecision`.
+        public struct RelistDecision: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/RelistDecision/value1`.
+            public var value1: Components.Schemas.KnownRelistDecision?
+            /// - Remark: Generated from `#/components/schemas/RelistDecision/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `RelistDecision`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownRelistDecision? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `pending`: the sale was canceled or returned and the seller has not decided yet whether
+        /// to relist the item. `relisted`: the seller chose marketplaces to relist on (each relist
+        /// is an operation; see the item's listings). `declined`: the seller chose not to relist.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownRelistDecision`.
+        @frozen public enum KnownRelistDecision: String, Codable, Hashable, Sendable, CaseIterable {
+            case pending = "pending"
+            case relisted = "relisted"
+            case declined = "declined"
+        }
+        /// One of the item's listings, and whether Listora can relist it now.
+        ///
+        /// - Remark: Generated from `#/components/schemas/RelistOption`.
+        public struct RelistOption: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/RelistOption/listingId`.
+            public var listingId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/RelistOption/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// `api`: Listora relists it. `assisted`: the user relists it in the marketplace's app.
+            ///
+            /// - Remark: Generated from `#/components/schemas/RelistOption/mode`.
+            public var mode: Components.Schemas.IntegrationMode
+            /// The listing's status now, for example `Delisted (confirmed by eBay)` or `Active (confirmed by Depop)`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/RelistOption/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// False while the listing is still live or a change on it is still running; the
+            /// seller can relist it from the item later.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/RelistOption/canRelist`.
+            public var canRelist: Swift.Bool
+            /// Creates a new `RelistOption`.
+            ///
+            /// - Parameters:
+            ///   - listingId:
+            ///   - marketplace:
+            ///   - mode: `api`: Listora relists it. `assisted`: the user relists it in the marketplace's app.
+            ///   - statusDisplay: The listing's status now, for example `Delisted (confirmed by eBay)` or `Active (confirmed by Depop)`.
+            ///   - canRelist: False while the listing is still live or a change on it is still running; the
+            public init(
+                listingId: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                mode: Components.Schemas.IntegrationMode,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                canRelist: Swift.Bool
+            ) {
+                self.listingId = listingId
+                self.marketplace = marketplace
+                self.mode = mode
+                self.statusDisplay = statusDisplay
+                self.canRelist = canRelist
+            }
+            public enum CodingKeys: String, CodingKey {
+                case listingId
+                case marketplace
+                case mode
+                case statusDisplay
+                case canRelist
+            }
+        }
+        /// Present once the sale was canceled or returned and the item has no other sale that
+        /// stands. Listora never relists by itself: it asks, and relists only where the user
+        /// chooses (`decideSaleRelist`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleRelist`.
+        public struct SaleRelist: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleRelist/decision`.
+            public var decision: Components.Schemas.RelistDecision
+            /// The item's newest listing on each marketplace.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleRelist/options`.
+            public var options: [Components.Schemas.RelistOption]
+            /// - Remark: Generated from `#/components/schemas/SaleRelist/decidedAt`.
+            public var decidedAt: Components.Schemas.Timestamp?
+            /// Creates a new `SaleRelist`.
+            ///
+            /// - Parameters:
+            ///   - decision:
+            ///   - options: The item's newest listing on each marketplace.
+            ///   - decidedAt:
+            public init(
+                decision: Components.Schemas.RelistDecision,
+                options: [Components.Schemas.RelistOption],
+                decidedAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.decision = decision
+                self.options = options
+                self.decidedAt = decidedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case decision
+                case options
+                case decidedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SaleShipment`.
+        public struct SaleShipment: Codable, Hashable, Sendable {
+            /// What the seller paid for the label outside the payout, when known.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleShipment/shippingCost`.
+            public var shippingCost: Components.Schemas.Money?
+            /// Creates a new `SaleShipment`.
+            ///
+            /// - Parameters:
+            ///   - shippingCost: What the seller paid for the label outside the payout, when known.
+            public init(shippingCost: Components.Schemas.Money? = nil) {
+                self.shippingCost = shippingCost
+            }
+            public enum CodingKeys: String, CodingKey {
+                case shippingCost
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SaleRelistChoice`.
+        public struct SaleRelistChoice: Codable, Hashable, Sendable {
+            /// One entry per item to decide for.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleRelistChoice/items`.
+            public var items: [Components.Schemas.SaleRelistItemChoice]
+            /// Creates a new `SaleRelistChoice`.
+            ///
+            /// - Parameters:
+            ///   - items: One entry per item to decide for.
+            public init(items: [Components.Schemas.SaleRelistItemChoice]) {
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case items
+            }
+        }
+        /// One item's answer; an empty `listingIds` means "don't relist".
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleRelistItemChoice`.
+        public struct SaleRelistItemChoice: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleRelistItemChoice/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// The listings to relist, from the item's `relist.options` with `canRelist`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleRelistItemChoice/listingIds`.
+            public var listingIds: [Components.Schemas.Id]
+            /// Creates a new `SaleRelistItemChoice`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - listingIds: The listings to relist, from the item's `relist.options` with `canRelist`.
+            public init(
+                itemId: Components.Schemas.Id,
+                listingIds: [Components.Schemas.Id]
+            ) {
+                self.itemId = itemId
+                self.listingIds = listingIds
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case listingIds
             }
         }
         /// - Remark: Generated from `#/components/schemas/KnownFeeType`.
@@ -5554,25 +5987,41 @@ extension Components {
             public var amount: Components.Schemas.Money
             /// - Remark: Generated from `#/components/schemas/FeeLine/source`.
             public var source: Components.Schemas.FeeSource
+            /// What the marketplace or Listora's fee table calls it, for example "Final value fee".
+            ///
+            /// - Remark: Generated from `#/components/schemas/FeeLine/description`.
+            public var description: Swift.String?
+            /// For an estimated fee, the fee table it was computed with (for example `ebay-us-2026-10-24`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/FeeLine/feeTableVersion`.
+            public var feeTableVersion: Swift.String?
             /// Creates a new `FeeLine`.
             ///
             /// - Parameters:
             ///   - _type:
             ///   - amount: A positive amount the seller pays.
             ///   - source:
+            ///   - description: What the marketplace or Listora's fee table calls it, for example "Final value fee".
+            ///   - feeTableVersion: For an estimated fee, the fee table it was computed with (for example `ebay-us-2026-10-24`).
             public init(
                 _type: Components.Schemas.FeeType,
                 amount: Components.Schemas.Money,
-                source: Components.Schemas.FeeSource
+                source: Components.Schemas.FeeSource,
+                description: Swift.String? = nil,
+                feeTableVersion: Swift.String? = nil
             ) {
                 self._type = _type
                 self.amount = amount
                 self.source = source
+                self.description = description
+                self.feeTableVersion = feeTableVersion
             }
             public enum CodingKeys: String, CodingKey {
                 case _type = "type"
                 case amount
                 case source
+                case description
+                case feeTableVersion
             }
         }
         /// - Remark: Generated from `#/components/schemas/SaleCreate`.
@@ -5582,7 +6031,7 @@ extension Components {
             /// The items of the order, each at most once; more than one for a bundle.
             ///
             /// - Remark: Generated from `#/components/schemas/SaleCreate/items`.
-            public var items: [Components.Schemas.SaleItem]
+            public var items: [Components.Schemas.SaleCreateItem]
             /// - Remark: Generated from `#/components/schemas/SaleCreate/shippingCharged`.
             public var shippingCharged: Components.Schemas.Money?
             /// Defaults to now.
@@ -5601,7 +6050,7 @@ extension Components {
             ///   - externalOrderId:
             public init(
                 marketplace: Components.Schemas.KnownMarketplace,
-                items: [Components.Schemas.SaleItem],
+                items: [Components.Schemas.SaleCreateItem],
                 shippingCharged: Components.Schemas.Money? = nil,
                 soldAt: Components.Schemas.Timestamp? = nil,
                 externalOrderId: Swift.String? = nil
@@ -5644,10 +6093,17 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Sale/shippingCharged`.
             public var shippingCharged: Components.Schemas.Money?
-            /// Every fee deducted from the payout. Absent until known.
+            /// Every fee deducted from the payout. Estimated from Listora's fee table when the sale
+            /// is recorded, and replaced by the marketplace's actual fees once it reports them.
+            /// Absent for a sale without fee lines.
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/Sale/fees`.
             public var fees: [Components.Schemas.FeeLine]?
+            /// True while any fee is an estimate; `netProceeds` and `profit` are estimates then too.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sale/feesEstimated`.
+            public var feesEstimated: Swift.Bool?
             /// What the seller paid to ship outside the payout, for example a label bought
             /// separately. A label the marketplace deducts is a `shipping_label` fee instead.
             ///
@@ -5664,12 +6120,32 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Sale/profit`.
             public var profit: Components.Schemas.Money?
+            /// The items' total cost. Absent when an item has none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sale/cost`.
+            public var cost: Components.Schemas.Money?
+            /// `profit` over `cost` in basis points. Absent without a profit or for a zero cost.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sale/roiBasisPoints`.
+            public var roiBasisPoints: Swift.Int64?
             /// - Remark: Generated from `#/components/schemas/Sale/detectionSource`.
             public var detectionSource: Components.Schemas.SaleDetectionSource
             /// - Remark: Generated from `#/components/schemas/Sale/status`.
             public var status: Components.Schemas.SaleStatus
             /// - Remark: Generated from `#/components/schemas/Sale/shipBy`.
             public var shipBy: Components.Schemas.Timestamp?
+            /// What the seller can do with the sale now, in display order.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sale/availableActions`.
+            public var availableActions: [Components.Schemas.SaleAction]
+            /// - Remark: Generated from `#/components/schemas/Sale/confirmedAt`.
+            public var confirmedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Sale/shippedAt`.
+            public var shippedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Sale/canceledAt`.
+            public var canceledAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Sale/returnedAt`.
+            public var returnedAt: Components.Schemas.Timestamp?
             /// True when an item of the order had already sold; the user must cancel one sale (`doubleSales`).
             ///
             /// - Remark: Generated from `#/components/schemas/Sale/isDoubleSale`.
@@ -5696,13 +6172,21 @@ extension Components {
             ///   - soldAt:
             ///   - salePrice: The order's sale price before fees, the sum of `items[].salePrice`.
             ///   - shippingCharged: What the buyer paid for shipping.
-            ///   - fees: Every fee deducted from the payout. Absent until known.
+            ///   - fees: Every fee deducted from the payout. Estimated from Listora's fee table when the sale
+            ///   - feesEstimated: True while any fee is an estimate; `netProceeds` and `profit` are estimates then too.
             ///   - shippingCost: What the seller paid to ship outside the payout, for example a label bought
             ///   - netProceeds: The payout, `salePrice` plus `shippingCharged` minus `fees`. Absent until the fees are known.
             ///   - profit: `netProceeds` minus `shippingCost` minus the items' `cost`. Absent until
+            ///   - cost: The items' total cost. Absent when an item has none.
+            ///   - roiBasisPoints: `profit` over `cost` in basis points. Absent without a profit or for a zero cost.
             ///   - detectionSource:
             ///   - status:
             ///   - shipBy:
+            ///   - availableActions: What the seller can do with the sale now, in display order.
+            ///   - confirmedAt:
+            ///   - shippedAt:
+            ///   - canceledAt:
+            ///   - returnedAt:
             ///   - isDoubleSale: True when an item of the order had already sold; the user must cancel one sale (`doubleSales`).
             ///   - delistRuns: One per item of the order that this sale started a delist for; none for an item that had already sold.
             ///   - doubleSales: One per item of the order that had already sold.
@@ -5717,12 +6201,20 @@ extension Components {
                 salePrice: Components.Schemas.Money,
                 shippingCharged: Components.Schemas.Money? = nil,
                 fees: [Components.Schemas.FeeLine]? = nil,
+                feesEstimated: Swift.Bool? = nil,
                 shippingCost: Components.Schemas.Money? = nil,
                 netProceeds: Components.Schemas.Money? = nil,
                 profit: Components.Schemas.Money? = nil,
+                cost: Components.Schemas.Money? = nil,
+                roiBasisPoints: Swift.Int64? = nil,
                 detectionSource: Components.Schemas.SaleDetectionSource,
                 status: Components.Schemas.SaleStatus,
                 shipBy: Components.Schemas.Timestamp? = nil,
+                availableActions: [Components.Schemas.SaleAction],
+                confirmedAt: Components.Schemas.Timestamp? = nil,
+                shippedAt: Components.Schemas.Timestamp? = nil,
+                canceledAt: Components.Schemas.Timestamp? = nil,
+                returnedAt: Components.Schemas.Timestamp? = nil,
                 isDoubleSale: Swift.Bool,
                 delistRuns: [Components.Schemas.DelistRun],
                 doubleSales: [Components.Schemas.DoubleSale],
@@ -5737,12 +6229,20 @@ extension Components {
                 self.salePrice = salePrice
                 self.shippingCharged = shippingCharged
                 self.fees = fees
+                self.feesEstimated = feesEstimated
                 self.shippingCost = shippingCost
                 self.netProceeds = netProceeds
                 self.profit = profit
+                self.cost = cost
+                self.roiBasisPoints = roiBasisPoints
                 self.detectionSource = detectionSource
                 self.status = status
                 self.shipBy = shipBy
+                self.availableActions = availableActions
+                self.confirmedAt = confirmedAt
+                self.shippedAt = shippedAt
+                self.canceledAt = canceledAt
+                self.returnedAt = returnedAt
                 self.isDoubleSale = isDoubleSale
                 self.delistRuns = delistRuns
                 self.doubleSales = doubleSales
@@ -5758,12 +6258,20 @@ extension Components {
                 case salePrice
                 case shippingCharged
                 case fees
+                case feesEstimated
                 case shippingCost
                 case netProceeds
                 case profit
+                case cost
+                case roiBasisPoints
                 case detectionSource
                 case status
                 case shipBy
+                case availableActions
+                case confirmedAt
+                case shippedAt
+                case canceledAt
+                case returnedAt
                 case isDoubleSale
                 case delistRuns
                 case doubleSales

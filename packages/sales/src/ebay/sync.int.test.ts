@@ -21,6 +21,7 @@ import {
 import { sampleListingContent } from '@listora/marketplaces/testing';
 import { createLogger } from '@listora/shared';
 
+import { checkSaleFees, SALE_FEES_TASK } from '../fees.ts';
 import { recordInboundEvent } from '../inbound.ts';
 import { pollEbayConnectionOrders, scheduleEbayOrderPolls } from './poll.ts';
 import { processEbayNotification, type SellerTokens } from './process.ts';
@@ -285,6 +286,110 @@ describe('eBay order sync', () => {
     expect(await jobs('ebay_connection_order_poll')).toEqual([
       expect.objectContaining({ key: `ebay-order-poll:${connectionId}` }),
     ]);
+  });
+
+  it("estimates a sale's fees at once, then replaces them with eBay's actual fees", async () => {
+    const { ebayId } = await listedItem();
+    const order = fake.sell(ebayId, { shipping: '5.0' });
+    expect((await pollEbayConnectionOrders(deps(), { connectionId }, signal())).recorded).toBe(1);
+    const [sale] = await sales(order.orderId);
+    if (sale === undefined) throw new Error('no sale');
+    const lines = () =>
+      db
+        .selectFrom('fee_line')
+        .select(['kind', 'amount_cents', 'source', 'description', 'fee_table_version'])
+        .where('sale_id', '=', sale.id)
+        .orderBy('id')
+        .execute();
+    // The fake's listing sells at $45.00: eBay's table, on the item price.
+    expect(await lines()).toEqual([
+      {
+        kind: 'marketplace',
+        amount_cents: 612,
+        source: 'estimated',
+        description: 'Final value fee',
+        fee_table_version: 'ebay-us-2026-10-24',
+      },
+      {
+        kind: 'marketplace',
+        amount_cents: 40,
+        source: 'estimated',
+        description: 'Per-order fee',
+        fee_table_version: 'ebay-us-2026-10-24',
+      },
+    ]);
+    const job = (await jobs(SALE_FEES_TASK)).find((entry) => entry.key === `sale_fees:${sale.id}`);
+    expect(job?.payload).toEqual({ accountId, saleId: sale.id, check: '1' });
+
+    // eBay is down for the first check: another follows, and the estimate stays meanwhile.
+    fake.inject({ action: 'finances', fault: { type: 'server_error' } });
+    const now = new Date('2026-10-25T12:00:00Z');
+    const retry = await checkSaleFees(
+      { db, adapters, logger, now: () => now },
+      { accountId, saleId: sale.id, check: '1' },
+      signal(),
+    );
+    expect(retry).toEqual({
+      type: 'rescheduled',
+      check: 2,
+      runAt: new Date(now.getTime() + 2 * 60_000),
+    });
+    expect((await lines()).every((line) => line.source === 'estimated')).toBe(true);
+
+    // eBay charges on the total with shipping: 13.6% of $50.00 and the per-order fee.
+    expect(
+      await checkSaleFees(
+        { db, adapters, logger },
+        { accountId, saleId: sale.id, check: '2' },
+        signal(),
+      ),
+    ).toEqual({ type: 'recorded', fees: 2 });
+    expect(await lines()).toEqual([
+      {
+        kind: 'marketplace',
+        amount_cents: 680,
+        source: 'actual',
+        description: 'Final value fee',
+        fee_table_version: null,
+      },
+      {
+        kind: 'marketplace',
+        amount_cents: 40,
+        source: 'actual',
+        description: 'Per-order fee',
+        fee_table_version: null,
+      },
+    ]);
+  });
+
+  it('keeps the estimate after the last check, and when eBay will not report the fees', async () => {
+    const { ebayId } = await listedItem();
+    const order = fake.sell(ebayId);
+    await pollEbayConnectionOrders(deps(), { connectionId }, signal());
+    const [sale] = await sales(order.orderId);
+    if (sale === undefined) throw new Error('no sale');
+    fake.inject({ action: 'finances', fault: { type: 'server_error' } });
+    expect(
+      await checkSaleFees(
+        { db, adapters, logger },
+        { accountId, saleId: sale.id, check: '6' },
+        signal(),
+      ),
+    ).toMatchObject({ type: 'kept_estimate' });
+    fake.inject({ action: 'finances', fault: { type: 'unauthorized' }, times: 2 });
+    expect(
+      await checkSaleFees(
+        { db, adapters, logger },
+        { accountId, saleId: sale.id, check: '1' },
+        signal(),
+      ),
+    ).toEqual({ type: 'kept_estimate', reason: 'no_finances_access' });
+    const sources = await db
+      .selectFrom('fee_line')
+      .select('source')
+      .where('sale_id', '=', sale.id)
+      .execute();
+    expect(sources.map((line) => line.source)).toEqual(['estimated', 'estimated']);
   });
 
   it('ignores an order with no Listora listing, and fails one it cannot read for reconnect', async () => {

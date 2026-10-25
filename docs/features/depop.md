@@ -57,6 +57,8 @@ other Depop listing runs assisted. Its rules:
   `X-Depop-Signature` (HMAC-SHA256 of `<timestamp>.<raw body>`, five minutes' tolerance) and
   reads `v1:order.*` and `v1:product.*` events, keyed for deduplication by id, type, and time.
   The inbound endpoint and the auto-delist that use them are later tasks (T-17, T-23).
+  `readOrderFees` reads one order's `seller_fee_breakdown` (`DEPOP_FEE`, `PAYMENT_FEE`,
+  `SHIPPING_FEE`, `BOOSTING_FEE`) as a sale's actual fee lines ([sales.md](sales.md#fee-lines)).
 
 The fake Depop (`depop/fake`, `npm run dev:fake-depop`) checks every request and response against
 a byte-for-byte copy of Depop's published `openapi.yaml`, follows Depop's documented rules, OAuth

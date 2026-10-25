@@ -195,7 +195,7 @@ describe('the delist SLA', () => {
     const { saleId, runId } = await soldItem();
     await harness.db
       .updateTable('sale')
-      .set({ status: 'canceled' })
+      .set({ status: 'canceled', canceled_at: new Date() })
       .where('id', '=', saleId)
       .execute();
     await ago(runId, 40);

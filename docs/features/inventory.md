@@ -20,8 +20,11 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   ("Through eBay's API" or "Assisted"), the listing's own price, the actions the server allows
   (`availableActions`) plus Retry when the newest operation failed, and the listing's history
   (every operation, newest first; opening one shows its steps from `listOperationEvents`). Then
-  cost and profit (the sale's profit once sold; before that "Profit at list price", labeled as
-  before fees and shipping), and the details with the storage location.
+  cost and profit (the sale's profit once sold, "with estimated fees" until the marketplace
+  reports them; before that "Profit at list price", labeled as before fees and shipping), Mark as
+  sold, and the details with the storage location. A sold item shows its sale (profit, ROI, the
+  delist run), and after a canceled or returned sale, "Relist it?" ([sales.md](sales.md)). Relist
+  is offered only while the item is not sold or archived.
 - **List flow**: List opens the marketplace choice. eBay is offered when the account's eBay
   connection is usable; the other marketplaces show their mode (assisted, finished in the
   marketplace's app; listing them from here comes with the task inbox, T-21). The eBay review

@@ -28,11 +28,13 @@ export interface BackgroundJob {
   readonly payload: Readonly<Record<string, string>>;
   /** One pending job per key: adding the job again replaces the pending one. */
   readonly jobKey: string;
+  /** When the job may run; now when absent. */
+  readonly runAt?: Date;
 }
 
 /**
  * Adds a job on the caller's connection, so it commits or rolls back together with the row
- * that needs it. The worker runs it as soon as it commits.
+ * that needs it. The worker runs it as soon as it commits, or at `runAt`.
  */
 export async function addJob(executor: DbExecutor, job: BackgroundJob): Promise<void> {
   await sql`
@@ -40,7 +42,8 @@ export async function addJob(executor: DbExecutor, job: BackgroundJob): Promise<
       identifier => ${job.task},
       payload => ${JSON.stringify(job.payload)}::json,
       max_attempts => ${JOB_MAX_ATTEMPTS},
-      job_key => ${job.jobKey}
+      job_key => ${job.jobKey},
+      run_at => ${job.runAt ?? null}::timestamptz
     )
   `.execute(executor);
 }

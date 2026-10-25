@@ -34,6 +34,7 @@ import type {
   MarketplaceAdapter,
   MarketplaceCapabilities,
   OperationRequest,
+  OrderFeesResult,
   Outcome,
   RemoteListingState,
   RemoteListingStatus,
@@ -44,6 +45,7 @@ import type { CallPriority, TradingCallBudget } from './budget.ts';
 import { mapEbayCategory, type EbayCategory } from './categories.ts';
 import type { EbayEndpoints } from './config.ts';
 import { descriptionText } from './description.ts';
+import { getOrderTransactions, orderFeesFrom } from './finances.ts';
 import {
   EbayReauthRequiredError,
   EbayTokenUnavailableError,
@@ -652,6 +654,91 @@ export class EbayAdapter implements MarketplaceAdapter<EbayListingPayload> {
       code: result.status === 429 ? 'rate_limited' : `http_${String(result.status)}`,
       message: `${NAME} isn't answering normally right now.`,
     };
+  }
+
+  // Order fees -------------------------------------------------------------------------------
+
+  /**
+   * The fees eBay charged on one of the seller's orders, from the Finances API (finances.ts).
+   * A connection granted before Listora asked for `sell.finances` gets 403: its sales keep the
+   * fee table's estimate until the seller connects again.
+   */
+  async readOrderFees(orderId: string, ctx: AdapterContext): Promise<OrderFeesResult> {
+    const token = await this.#token(ctx);
+    if (token.type !== 'ok') {
+      return token.code === 'reauth_required'
+        ? {
+            type: 'unavailable',
+            code: 'reauth_required',
+            message: `Reconnect ${NAME} to read its fees.`,
+          }
+        : {
+            type: 'transient',
+            code: token.code,
+            message: `Listora couldn't sign in to ${NAME} right now.`,
+          };
+    }
+    const answer = await this.#withSellerToken(ctx, token.token, (fresh) =>
+      getOrderTransactions(this.#options.endpoints.finances, orderId, {
+        token: fresh,
+        signal: ctx.signal,
+        timeoutMs: this.#timeoutMs(),
+      }),
+    );
+    if (answer.type === 'token_failed') {
+      return answer.code === 'reauth_required'
+        ? {
+            type: 'unavailable',
+            code: 'reauth_required',
+            message: `Reconnect ${NAME} to read its fees.`,
+          }
+        : {
+            type: 'transient',
+            code: answer.code,
+            message: `Listora couldn't sign in to ${NAME} right now.`,
+          };
+    }
+    const { result } = answer;
+    switch (result.type) {
+      case 'ok': {
+        const fees = orderFeesFrom(result.value);
+        if (fees.type === 'not_usd') {
+          return {
+            type: 'unavailable',
+            code: 'not_usd',
+            message: `${NAME} reported fees in a currency Listora doesn't record.`,
+          };
+        }
+        return fees;
+      }
+      case 'error':
+        if (result.status === 401 || result.status === 403) {
+          return {
+            type: 'unavailable',
+            code: 'no_finances_access',
+            message: `Listora can't read ${NAME} fees yet. Connect ${NAME} again to allow it.`,
+          };
+        }
+        if (result.status === 404) {
+          return {
+            type: 'unavailable',
+            code: 'order_not_found',
+            message: `${NAME} doesn't know this order.`,
+          };
+        }
+        return {
+          type: 'transient',
+          code: result.status === 429 ? 'rate_limited' : `http_${String(result.status)}`,
+          message: `${NAME} isn't answering normally right now.`,
+          ...(result.retryAfterMs === undefined ? {} : { retryAfterMs: result.retryAfterMs }),
+        };
+      case 'not_sent':
+      case 'maybe_sent':
+        // A read: trying again is always safe.
+        return { type: 'transient', code: result.code, message: `Listora couldn't reach ${NAME}.` };
+      default:
+        return assertNever(result);
+    }
   }
 
   // Prepare ----------------------------------------------------------------------------------

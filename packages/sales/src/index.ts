@@ -1,5 +1,27 @@
 export { finishInboundEvent, recordInboundEvent } from './inbound.ts';
 export type { NewInboundEvent, RecordedInboundEvent } from './inbound.ts';
+export {
+  checkSaleFees,
+  isSaleFeesPayload,
+  recordEstimatedFees,
+  replaceWithActualFees,
+  SALE_FEE_CHECK_DELAYS_MS,
+  SALE_FEES_TASK,
+  scheduleFeeCheck,
+} from './fees.ts';
+export type { SaleFeesDependencies, SaleFeesOutcome, SaleFeesPayload } from './fees.ts';
+export {
+  availableSaleActions,
+  changeSale,
+  recordRelistDecision,
+  SALE_ACTIONS,
+  SaleNotFoundError,
+  SaleStateError,
+  STANDING_SALE_STATUSES,
+} from './lifecycle.ts';
+export type { SaleAction, SaleChange, SaleChangeResult } from './lifecycle.ts';
+export { saleMoney, splitByWeight } from './money.ts';
+export type { MoneyBreakdown, SaleMoney, SaleMoneyInput } from './money.ts';
 export { recordSale } from './sales.ts';
 export type {
   ItemSaleLine,

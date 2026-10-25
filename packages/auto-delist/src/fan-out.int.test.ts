@@ -300,7 +300,7 @@ describe('the delist fan-out', () => {
     const canceled = await harness.sale('ebay', [{ itemId: item.id, listingId: ebay }]);
     await harness.db
       .updateTable('sale')
-      .set({ status: 'canceled' })
+      .set({ status: 'canceled', canceled_at: new Date() })
       .where('id', '=', canceled)
       .execute();
     const saleId = await harness.sale('depop', [{ itemId: item.id, listingId: depop }]);

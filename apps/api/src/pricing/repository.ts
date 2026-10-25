@@ -22,6 +22,7 @@ import {
   type SoldDataPayload,
   type SoldDataSnapshot,
 } from '@listora/pricing';
+import { STANDING_SALE_STATUSES } from '@listora/sales';
 import { sql } from 'kysely';
 import { z } from 'zod';
 
@@ -226,7 +227,7 @@ export async function recentObservedSales(
             .onRef('fee_line.sale_id', '=', 'sale.id'),
         )
         .where('sale.account_id', '=', tenant.accountId)
-        .where('sale.status', 'in', ['detected', 'confirmed'])
+        .where('sale.status', 'in', STANDING_SALE_STATUSES)
         .where('sale.sold_at', '>=', since)
         .where('fee_line.source', '=', 'actual')
         .where('fee_line.kind', 'in', ['marketplace', 'payment'])

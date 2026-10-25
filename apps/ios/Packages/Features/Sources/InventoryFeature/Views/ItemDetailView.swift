@@ -1,3 +1,4 @@
+import Core
 import DesignSystem
 import ListoraAPI
 import SwiftUI
@@ -11,6 +12,8 @@ struct ItemDetailView: View {
     @State private var listingFlow: ListingFlowModel?
     @State private var priceChange: PriceChange?
     @State private var ending: MarketplaceRowState?
+    @State private var markingSold: MarkSoldRequest?
+    @State private var openSale: SaleLink?
 
     init(environment: InventoryEnvironment, itemID: String) {
         self.environment = environment
@@ -32,6 +35,17 @@ struct ItemDetailView: View {
                 onDismiss: { Task { await model.refresh() } },
                 content: { flow in ListingFlowView(model: flow) { listingFlow = nil } },
             )
+            .sheet(
+                item: $markingSold,
+                onDismiss: { Task { await model.refresh() } },
+                content: { request in
+                    environment.saleScreens?.markSold(request) { saleID in openSale = SaleLink(id: saleID) }
+                },
+            )
+            .navigationDestination(item: $openSale) { link in
+                environment.saleScreens?.sale(link.id)
+                    .onDisappear { Task { await model.refresh() } }
+            }
             .sheet(item: $priceChange) { change in
                 PriceChangeView(change: change) { price in
                     priceChange = nil
@@ -115,6 +129,7 @@ struct ItemDetailView: View {
                     )
                     .transition(.rise)
                 }
+                saleBanners(of: item)
                 MarketplacesSection(
                     rows: model.rows,
                     histories: model.histories,
@@ -124,6 +139,7 @@ struct ItemDetailView: View {
                     loadEvents: { id in await model.loadEvents(operationID: id) },
                 )
                 MoneySection(item: item)
+                markSoldButton(for: item)
                 DetailsSection(item: item)
             }
             .padding(Spacing.md)
@@ -131,6 +147,49 @@ struct ItemDetailView: View {
             .frame(maxWidth: .infinity)
             .motion(value: model.notice)
             .motion(value: model.rows)
+        }
+    }
+
+    /// After a cancel or return, the relist question; once sold, the sale and its delist.
+    @ViewBuilder
+    private func saleBanners(of item: Item) -> some View {
+        if let prompt = item.relistPrompt, environment.saleScreens != nil {
+            Banner(
+                "The sale was \(prompt.saleStatus.value1 == .returned ? "returned" : "canceled"). Relist it?",
+                message: "Listora relists only where you choose.",
+                tone: .actionNeeded,
+                action: .init("Choose", identifier: "item.relistPrompt.open") {
+                    openSale = SaleLink(id: prompt.saleId)
+                },
+                identifier: "item.relistPrompt",
+            )
+        }
+        if let summary = item.saleSummary {
+            SoldSection(summary: summary, run: item.delistRun) {
+                if environment.saleScreens != nil {
+                    openSale = SaleLink(id: summary.saleId)
+                }
+            }
+        }
+    }
+
+    /// "Mark as sold", for an item that is not sold yet.
+    @ViewBuilder
+    private func markSoldButton(for item: Item) -> some View {
+        if environment.saleScreens != nil, item.canBeMarkedSold {
+            Button("Mark as sold", systemImage: "dollarsign.circle") {
+                markingSold = MarkSoldRequest(
+                    itemID: item.id,
+                    sku: item.sku,
+                    title: item.details.title,
+                    listPriceCents: item.details.listPrice?.amountCents,
+                    listedOn: item.listings
+                        .filter { $0.status.value1 == .active }
+                        .compactMap { $0.marketplace.value1?.rawValue },
+                )
+            }
+            .buttonStyle(.listoraSecondary)
+            .accessibilityIdentifier("item.markSold")
         }
     }
 
@@ -236,8 +295,12 @@ private struct MoneySection: View {
             LabeledRow("Cost", value: item.details.cost.map(Formatting.money) ?? "Not set")
                 .accessibilityIdentifier("item.cost")
             if let profit = item.saleSummary?.profit {
-                LabeledRow("Profit", value: Formatting.money(profit))
-                    .accessibilityIdentifier("item.profit")
+                LabeledRow(
+                    "Profit",
+                    value: Formatting.money(profit),
+                    note: item.saleSummary?.feesEstimated == true ? "With estimated fees" : nil,
+                )
+                .accessibilityIdentifier("item.profit")
             } else if let price = item.details.listPrice, let cost = item.details.cost {
                 LabeledRow(
                     "Profit at list price",

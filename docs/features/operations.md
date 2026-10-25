@@ -134,7 +134,7 @@ in [inventory.md](inventory.md).
   it sold, one per item (an order can be a bundle), each with its price and, when known, the
   item's listing on the sale's marketplace. `delist_run` is one per sold item and must point
   at an item of its sale; the `delist_run_listing` view lists its operations and user tasks.
-  `fee_line` belongs to a sale and optionally to one of its items. Also `user_task` (its
+  `fee_line` belongs to a sale and optionally to one of its items ([sales.md](sales.md#fee-lines)). Also `user_task` (its
   `sale_id` names the sale a task is about: the later sale of a `resolve_double_sale`) and
   `expense`. Auto-delist operations have `origin = 'auto_delist'` and reference their
   `delist_run`.

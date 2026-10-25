@@ -18,7 +18,8 @@
  * Imports, webhooks, and emails join this interface with the tasks that first use them (T-17,
  * T-23, T-36), as optional members; orders joined with the browser runner's sale checks
  * (`listOrdersSince`), and the seller's listings with the Poshmark automation adapter
- * (`listListings`, for imports and drift checks). Credentials are not members: an adapter gets
+ * (`listListings`, for imports and drift checks), and an order's fees with the sale lifecycle
+ * (`readOrderFees`, T-26). Credentials are not members: an adapter gets
  * a connection's tokens or browser session at use time from its own source (eBay's
  * `EbaySellerSource`, which `@listora/connections` implements over the token vault; the browser
  * runner's session vault).
@@ -26,6 +27,7 @@
 import type {
   ConnectionMode,
   ConnectionStatus,
+  FeeKind,
   JsonObject,
   Marketplace,
   OperationKind,
@@ -267,6 +269,30 @@ export type Health =
       message: string;
     };
 
+/** One fee the marketplace charged the seller on an order, as `readOrderFees` reports it. */
+export interface OrderFee {
+  kind: FeeKind;
+  /** What the marketplace calls it, for example "Final value fee". */
+  description: string;
+  /** Positive for a fee the seller pays, negative for a refunded fee. Never zero. */
+  amountCents: number;
+  currency: CurrencyCode;
+}
+
+/** What the marketplace reports of an order's fees. Never thrown: every answer is one of these. */
+export type OrderFeesResult =
+  /** Every fee the marketplace charged on the order, so far. */
+  | { type: 'fees'; fees: OrderFee[] }
+  /** The marketplace does not report the order's fees yet; ask again later. */
+  | { type: 'not_yet' }
+  /** A temporary failure (429, 5xx, network); ask again later. */
+  | { type: 'transient'; code: string; message: string; retryAfterMs?: number }
+  /**
+   * The marketplace won't report them (the connection lacks access, an unknown order, an amount
+   * in another currency); the sale keeps its estimated fees.
+   */
+  | { type: 'unavailable'; code: string; message: string };
+
 export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
   readonly id: Marketplace;
   /**
@@ -308,6 +334,13 @@ export interface MarketplaceAdapter<P extends ListingPayload = ListingPayload> {
     usedIds: readonly string[],
     connection: ConnectionRef | null,
   ): string | null;
+  /**
+   * The fees the marketplace charged on one of the seller's orders (eBay: the Finances API;
+   * Depop: the order's fee breakdown), under `ctx.connection`, so a sale's estimated fee lines
+   * can be replaced by the actual ones. No such member: the marketplace doesn't report fees, and
+   * sales keep the fee table's estimate.
+   */
+  readOrderFees?(externalOrderId: string, ctx: AdapterContext): Promise<OrderFeesResult>;
   /**
    * The seller's orders sold at or after `since` (all recent ones when `null`), for a scheduled
    * sale check. Only adapters that can read orders have it. Throws when the marketplace cannot
