@@ -52,6 +52,27 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `DELETE /v1/account`.
     /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)`.
     func deleteAccount(_ input: Operations.DeleteAccount.Input) async throws -> Operations.DeleteAccount.Output
+    /// Get my profile
+    ///
+    /// What Settings shows about the signed-in person: their email from the sign-in provider
+    /// (read-only), the name they go by, and the business they sell as. A name absent from the
+    /// response was never entered (or was cleared).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/account/profile`.
+    /// - Remark: Generated from `#/paths//v1/account/profile/get(getProfile)`.
+    func getProfile(_ input: Operations.GetProfile.Input) async throws -> Operations.GetProfile.Output
+    /// Replace my profile
+    ///
+    /// Saves the person's name and the account's business name. The body replaces both: a name
+    /// left out is cleared. The server trims each name; one that is blank after trimming is
+    /// `422 validation_failed`. The email cannot be changed here. The business name belongs to
+    /// the account, so a member who is not its owner or an admin gets `403 forbidden`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/account/profile`.
+    /// - Remark: Generated from `#/paths//v1/account/profile/put(replaceProfile)`.
+    func replaceProfile(_ input: Operations.ReplaceProfile.Input) async throws -> Operations.ReplaceProfile.Output
     /// List items
     ///
     /// Newest first. Filters combine with AND.
@@ -864,6 +885,37 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)`.
     public func deleteAccount(headers: Operations.DeleteAccount.Input.Headers = .init()) async throws -> Operations.DeleteAccount.Output {
         try await deleteAccount(Operations.DeleteAccount.Input(headers: headers))
+    }
+    /// Get my profile
+    ///
+    /// What Settings shows about the signed-in person: their email from the sign-in provider
+    /// (read-only), the name they go by, and the business they sell as. A name absent from the
+    /// response was never entered (or was cleared).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/account/profile`.
+    /// - Remark: Generated from `#/paths//v1/account/profile/get(getProfile)`.
+    public func getProfile(headers: Operations.GetProfile.Input.Headers = .init()) async throws -> Operations.GetProfile.Output {
+        try await getProfile(Operations.GetProfile.Input(headers: headers))
+    }
+    /// Replace my profile
+    ///
+    /// Saves the person's name and the account's business name. The body replaces both: a name
+    /// left out is cleared. The server trims each name; one that is blank after trimming is
+    /// `422 validation_failed`. The email cannot be changed here. The business name belongs to
+    /// the account, so a member who is not its owner or an admin gets `403 forbidden`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/account/profile`.
+    /// - Remark: Generated from `#/paths//v1/account/profile/put(replaceProfile)`.
+    public func replaceProfile(
+        headers: Operations.ReplaceProfile.Input.Headers = .init(),
+        body: Operations.ReplaceProfile.Input.Body
+    ) async throws -> Operations.ReplaceProfile.Output {
+        try await replaceProfile(Operations.ReplaceProfile.Input(
+            headers: headers,
+            body: body
+        ))
     }
     /// List items
     ///

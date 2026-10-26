@@ -122,6 +122,27 @@ struct AppConfigurationTests {
         }
     }
 
+    @Test(arguments: [nil, "", "$(SUPPORT_EMAIL)"])
+    func `names no support address unless the build sets one`(value: String?) throws {
+        var dictionary = info()
+        dictionary[AppConfiguration.InfoKey.supportEmail] = value
+        #expect(try AppConfiguration(infoDictionary: dictionary).supportEmail == nil)
+    }
+
+    @Test
+    func `reads the support address, and rejects one that is not an email`() throws {
+        var dictionary = info()
+        dictionary[AppConfiguration.InfoKey.supportEmail] = "help@listora.example"
+        #expect(try AppConfiguration(infoDictionary: dictionary).supportEmail == "help@listora.example")
+        dictionary[AppConfiguration.InfoKey.supportEmail] = "help desk"
+        #expect(throws: ConfigurationError.invalid(
+            key: AppConfiguration.InfoKey.supportEmail,
+            reason: "must be an email address",
+        )) {
+            try AppConfiguration(infoDictionary: dictionary)
+        }
+    }
+
     @Test
     func `trims surrounding whitespace`() throws {
         let config = try AppConfiguration(infoDictionary: info(environment: " dev\n", url: " http://localhost:3000 "))

@@ -12,6 +12,7 @@ public struct AppConfiguration: Equatable, Sendable {
         public static let sessionKeychainGroup = "ListoraSessionKeychainGroup"
         public static let cognitoRegion = "ListoraCognitoRegion"
         public static let cognitoClientID = "ListoraCognitoClientID"
+        public static let supportEmail = "ListoraSupportEmail"
     }
 
     public let environment: AppEnvironment
@@ -26,6 +27,9 @@ public struct AppConfiguration: Equatable, Sendable {
     /// The Cognito user pool client the app signs in with outside Dev, or nil when the build has
     /// none (`COGNITO_CLIENT_ID` in the xcconfig is empty).
     public let cognito: CognitoConfiguration?
+    /// Where Settings > Help and contact sends the seller's email, or nil when the build names no
+    /// address (`SUPPORT_EMAIL` in the xcconfig is empty); Help then says so.
+    public let supportEmail: String?
 
     public init(
         environment: AppEnvironment,
@@ -33,8 +37,12 @@ public struct AppConfiguration: Equatable, Sendable {
         appGroupIdentifier: String,
         sessionKeychainGroup: String? = nil,
         cognito: CognitoConfiguration? = nil,
+        supportEmail: String? = nil,
     ) throws(ConfigurationError) {
         try Self.validate(apiBaseURL, key: InfoKey.apiBaseURL, for: environment)
+        if let supportEmail, supportEmail.wholeMatch(of: /[^@\s]+@[^@\s]+\.[^@\s]+/) == nil {
+            throw .invalid(key: InfoKey.supportEmail, reason: "must be an email address")
+        }
         guard appGroupIdentifier.hasPrefix("group."), appGroupIdentifier.count > "group.".count else {
             throw .invalid(key: InfoKey.appGroup, reason: "must be an App Group identifier starting with group.")
         }
@@ -43,6 +51,7 @@ public struct AppConfiguration: Equatable, Sendable {
         self.appGroupIdentifier = appGroupIdentifier
         self.sessionKeychainGroup = sessionKeychainGroup ?? appGroupIdentifier
         self.cognito = cognito
+        self.supportEmail = supportEmail
     }
 
     /// Parses and validates the configuration. Errors name the bad key but never echo its value.
@@ -63,6 +72,7 @@ public struct AppConfiguration: Equatable, Sendable {
             appGroupIdentifier: appGroup,
             sessionKeychainGroup: sessionKeychainGroup,
             cognito: Self.cognito(in: infoDictionary),
+            supportEmail: Self.optionalString(for: InfoKey.supportEmail, in: infoDictionary),
         )
     }
 

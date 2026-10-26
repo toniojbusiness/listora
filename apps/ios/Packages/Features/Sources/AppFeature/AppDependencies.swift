@@ -27,7 +27,7 @@ public struct AppDependencies {
     public let accessTokens: AccessTokenStore
     public let apiClient: APIClient
     /// Reads text and barcodes on tag photos on the device, for the capture flow to upload.
-    public let tagReader: any TagReader
+    public let tagReader: any TagReader = VisionTagReader()
     /// Measures each new item's active interaction time and taps, from the first photo to the
     /// saved item. The root view feeds it the app's taps and foreground state.
     public let interactionMeter: InteractionMeter
@@ -46,8 +46,8 @@ public struct AppDependencies {
     /// The session and the sign-in screens, the root while nobody is signed in: the local API's dev
     /// driver in Dev builds, otherwise the environment's Cognito user pool, with an emailed code.
     public let signIn: SignInModel
-    /// Settings > Delete account.
-    public let accountDeletion: AccountDeletionModel
+    /// The seller's profile, the sale emails, and deleting the account (Settings).
+    public let settings: SettingsModels
     /// The Marketplaces screen (in Settings): connection status and connecting eBay.
     public let marketplaces: MarketplacesModel
     /// Link accounts: sign in on Poshmark, Mercari, Depop, and eBay for Listora to automate them.
@@ -62,6 +62,7 @@ public struct AppDependencies {
         configuration: AppConfiguration,
         version: AppVersion,
         dataDirectory: URL = AddItemEnvironment.defaultDataDirectory(),
+        profileDirectory: URL = FileAvatarStore.defaultDirectory(),
         listingCopyDirectory: URL = ListingCopyStore.defaultDirectory(),
         defaults: UserDefaults = .standard,
         accessGrantStorage: (any AccessGrantStorage)? = nil,
@@ -85,7 +86,6 @@ public struct AppDependencies {
         // A screen that finds itself signed out (its server answered 401) opens the sign-in.
         let showSignIn: @MainActor () -> Void = { signIn.showSignIn() }
         apiClient = APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens)
-        tagReader = VisionTagReader()
         interactionMeter = InteractionMeter(storage: interactionStorage)
         let listingCopy = ListingCopyStore(directory: listingCopyDirectory)
         let review = ReviewEnvironment(
@@ -116,27 +116,8 @@ public struct AppDependencies {
         marketplaces = Self.makeMarketplaces(apiClient, accessTokens, phone)
         linkAccounts = Self.makeLinkAccounts(apiClient, phone, configuration)
         today = Self.makeToday(apiClient, accessTokens, (inventory, sales), marketplaces, showSignIn)
-        accountDeletion = Self.makeAccountDeletion(apiClient, accessTokens, signIn, phone.sessions)
+        settings = SettingsModels(apiClient, accessTokens, signIn, phone, profileDirectory, launchOptions)
         gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
-    }
-
-    /// Deleting the account (Settings). It signs out, but its result (the marketplaces to revoke by
-    /// hand) stays on screen until Settings closes; then the sign-in shows. It also removes the
-    /// marketplace sessions this phone kept for the account.
-    private static func makeAccountDeletion(
-        _ apiClient: APIClient,
-        _ accessTokens: AccessTokenStore,
-        _ signIn: SignInModel,
-        _ sessions: any MarketplaceSessionStore,
-    ) -> AccountDeletionModel {
-        AccountDeletionModel(
-            service: APIAccountDeletionService(client: apiClient.client),
-            isSignedIn: { accessTokens.grant != nil },
-            signOut: {
-                signIn.signOutKeepingScreen()
-                sessions.removeAll()
-            },
-        )
     }
 
     /// Marketplaces: each connection's health, and where its automated steps run.
@@ -153,8 +134,8 @@ public struct AppDependencies {
         return model
     }
 
-    /// Link accounts: the marketplaces linked by signing in, and the sale email forwarding. A
-    /// sign-in's cookies stay on this phone too, and a sign-in link shared to the extension reaches it.
+    /// Link accounts: the marketplaces linked by signing in. A sign-in's cookies stay on this phone
+    /// too, and a sign-in link shared to the extension reaches it.
     private static func makeLinkAccounts(
         _ apiClient: APIClient,
         _ phone: PhoneExecutionEnvironment,
@@ -162,7 +143,6 @@ public struct AppDependencies {
     ) -> LinkAccountsModel {
         LinkAccountsModel(
             service: APIMarketplaceSessionService(api: apiClient),
-            saleEmails: SaleEmailsModel(service: APISaleEmailsService(api: apiClient)),
             sessions: phone.sessions,
             signInLinks: KeychainSignInLinkHandoff(accessGroup: configuration.sessionKeychainGroup),
             phoneWork: phone.runner,

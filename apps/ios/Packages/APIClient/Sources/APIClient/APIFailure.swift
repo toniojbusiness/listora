@@ -166,3 +166,12 @@ extension Operations.DeleteAccount.Output.Forbidden: ErrorResponseCarrying {
         }
     }
 }
+
+/// `replaceProfile`'s `403`: a member may not change the account's business name.
+extension Operations.ReplaceProfile.Output.Forbidden: ErrorResponseCarrying {
+    public var errorResponse: Components.Schemas.ErrorResponse {
+        switch body {
+        case let .json(response): response
+        }
+    }
+}

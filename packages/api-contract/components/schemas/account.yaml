@@ -27,3 +27,33 @@ MarketplaceAccessRevocation:
         access is revoked. False means it is not confirmed, so the user must revoke it
         manually in the marketplace's settings (Listora also keeps asking the marketplace
         for up to 7 days when it still holds the connection's tokens).
+Profile:
+  type: object
+  description: The signed-in person as Settings shows them.
+  properties:
+    email:
+      type: string
+      maxLength: 254
+      description: The email the person signs in with; absent when the sign-in provider gave none.
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: The name the person goes by.
+    businessName:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: The business the account sells as.
+ProfileReplace:
+  type: object
+  description: Both names; one left out is cleared.
+  properties:
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 200
+    businessName:
+      type: string
+      minLength: 1
+      maxLength: 200

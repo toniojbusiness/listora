@@ -618,6 +618,68 @@ extension Components {
                 case revoked
             }
         }
+        /// The signed-in person as Settings shows them.
+        ///
+        /// - Remark: Generated from `#/components/schemas/Profile`.
+        public struct Profile: Codable, Hashable, Sendable {
+            /// The email the person signs in with; absent when the sign-in provider gave none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Profile/email`.
+            public var email: Swift.String?
+            /// The name the person goes by.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Profile/displayName`.
+            public var displayName: Swift.String?
+            /// The business the account sells as.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Profile/businessName`.
+            public var businessName: Swift.String?
+            /// Creates a new `Profile`.
+            ///
+            /// - Parameters:
+            ///   - email: The email the person signs in with; absent when the sign-in provider gave none.
+            ///   - displayName: The name the person goes by.
+            ///   - businessName: The business the account sells as.
+            public init(
+                email: Swift.String? = nil,
+                displayName: Swift.String? = nil,
+                businessName: Swift.String? = nil
+            ) {
+                self.email = email
+                self.displayName = displayName
+                self.businessName = businessName
+            }
+            public enum CodingKeys: String, CodingKey {
+                case email
+                case displayName
+                case businessName
+            }
+        }
+        /// Both names; one left out is cleared.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ProfileReplace`.
+        public struct ProfileReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProfileReplace/displayName`.
+            public var displayName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ProfileReplace/businessName`.
+            public var businessName: Swift.String?
+            /// Creates a new `ProfileReplace`.
+            ///
+            /// - Parameters:
+            ///   - displayName:
+            ///   - businessName:
+            public init(
+                displayName: Swift.String? = nil,
+                businessName: Swift.String? = nil
+            ) {
+                self.displayName = displayName
+                self.businessName = businessName
+            }
+            public enum CodingKeys: String, CodingKey {
+                case displayName
+                case businessName
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/HealthCheckStatus`.
         @frozen public enum HealthCheckStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case ok = "ok"

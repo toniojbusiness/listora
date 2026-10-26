@@ -85,7 +85,12 @@ final class SignInUITests: XCTestCase {
         let email = app.staticTexts["signIn.signedInEmail"]
         XCTAssertTrue(email.waitForExistence(timeout: 5))
         XCTAssertEqual(email.value as? String, "seller@listora.test")
-        app.buttons["signIn.signOut"].tap()
+        // Sign out is near the bottom of Settings, which builds only the rows on screen.
+        let signOut = app.buttons["signIn.signOut"]
+        for _ in 0 ..< 6 where !(signOut.exists && signOut.isHittable) {
+            app.collectionViews.firstMatch.swipeUp()
+        }
+        signOut.tap()
         XCTAssertTrue(welcome.waitForExistence(timeout: 10))
         XCTAssertFalse(tabBar.exists)
     }

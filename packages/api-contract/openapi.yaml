@@ -34,7 +34,7 @@ tags:
   - name: health
     description: Liveness and readiness probes for load balancers and containers.
   - name: account
-    description: The signed-in person's Listora account.
+    description: The signed-in person's Listora account and profile.
   - name: items
     description: Master inventory items. Each physical item has one item and one SKU.
   - name: photos
@@ -75,6 +75,8 @@ paths:
     $ref: './paths/health.yaml#/~1health~1ready'
   /v1/account:
     $ref: './paths/account.yaml#/~1v1~1account'
+  /v1/account/profile:
+    $ref: './paths/account.yaml#/~1v1~1account~1profile'
   /v1/items:
     $ref: './paths/items.yaml#/~1v1~1items'
   /v1/items/{itemId}:
@@ -327,6 +329,10 @@ components:
       $ref: './components/schemas/account.yaml#/AccountDeletion'
     MarketplaceAccessRevocation:
       $ref: './components/schemas/account.yaml#/MarketplaceAccessRevocation'
+    Profile:
+      $ref: './components/schemas/account.yaml#/Profile'
+    ProfileReplace:
+      $ref: './components/schemas/account.yaml#/ProfileReplace'
     # ---------------------------------------------------------------- health
     HealthCheckStatus:
       $ref: './components/schemas/health.yaml#/HealthCheckStatus'
