@@ -218,6 +218,42 @@ final class AddItemModel {
         }
     }
 
+    /// Lifts the item off the photo's background onto the plain backdrop (``BackgroundCleanup``),
+    /// keeping the original on this iPhone for ``undoBackgroundCleanup(_:)``. Returns the cleaned
+    /// photo's id, or a message to show when it could not be done.
+    func cleanBackground(_ photo: DraftPhotoRecord) async -> Result<String, PhotoEditFailure> {
+        await replace(photo) { store in
+            let cleaned = try BackgroundCleanup.clean(store.imageData(of: photo))
+            return try store.cleanBackground(of: photo.id, with: cleaned)
+        }
+    }
+
+    /// Puts the photo back as it was before its background cleanup.
+    func undoBackgroundCleanup(_ photo: DraftPhotoRecord) async -> Result<String, PhotoEditFailure> {
+        await replace(photo) { store in try store.restoreOriginal(of: photo.id) }
+    }
+
+    /// Runs a photo replacement off the main actor, then stops the old photo's transfer and wakes
+    /// the upload queue for the new one.
+    private func replace(
+        _: DraftPhotoRecord,
+        _ change: @escaping @Sendable (DraftStore) throws -> (old: DraftPhotoRecord, new: DraftPhotoRecord),
+    ) async -> Result<String, PhotoEditFailure> {
+        let store = store
+        let result = await Task.detached(priority: .userInitiated) {
+            Result { try change(store) }
+        }.value
+        switch result {
+        case let .success(replaced):
+            cancelTransfers(of: [replaced.old.id])
+            await uploader.wake()
+            return .success(replaced.new.id)
+        case let .failure(error):
+            log.error("Photo edit failed: \(String(describing: error), privacy: .public)")
+            return .failure(PhotoEditFailure(error))
+        }
+    }
+
     private func perform(_ change: (DraftStore) throws -> Void) {
         do {
             try change(store)
@@ -245,6 +281,24 @@ final class AddItemModel {
             "One of the photos could not be read. Try a different photo."
         default:
             "Listora couldn't save the photos on this iPhone. Free up some storage and try again."
+        }
+    }
+}
+
+/// Why a background cleanup, or undoing one, did not happen, in words for the seller.
+struct PhotoEditFailure: Error, Equatable {
+    let message: String
+
+    init(_ error: any Error) {
+        message = switch error {
+        case BackgroundCleanupError.noSubject:
+            "Listora couldn't find the item in this photo. Try a photo with the item clearly in front."
+        case BackgroundCleanupError.failed, PhotoPreparationError.unreadableImage, PhotoPreparationError.encodingFailed:
+            "Listora couldn't clean up this photo. The photo is unchanged."
+        case DraftStoreError.notFound:
+            "This photo changed meanwhile. Try again."
+        default:
+            "Listora couldn't save the photo on this iPhone. Free up some storage and try again."
         }
     }
 }

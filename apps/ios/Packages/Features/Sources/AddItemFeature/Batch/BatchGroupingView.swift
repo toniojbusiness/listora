@@ -23,7 +23,7 @@ struct BatchGroupingView: View {
             if let batch = model.batch {
                 content(batch)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                SkeletonList(count: 4, label: "Loading the batch")
             }
         }
         .background(Palette.background)
@@ -155,7 +155,7 @@ struct BatchGroupingView: View {
     private func closeCall(_ stack: Batch.Stack, index: Int) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Label("Item \(index + 1) may be the same item as item \(index)", systemImage: "questionmark.circle.fill")
-                .font(Typography.subheadline.weight(.semibold))
+                .font(Typography.emphasis)
                 .foregroundStyle(Palette.textPrimary)
             AdaptiveStack {
                 Button("Same item - merge") { model.mergeIntoPrevious(stack.id) }
@@ -253,7 +253,7 @@ private struct StackCard: View {
             {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Label("Photo \(number + 1) may start a new item", systemImage: "questionmark.circle.fill")
-                        .font(Typography.subheadline.weight(.semibold))
+                        .font(Typography.emphasis)
                         .foregroundStyle(Palette.textPrimary)
                     AdaptiveStack {
                         Button("New item from here") { onSplit(uncertain) }

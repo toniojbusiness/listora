@@ -17,9 +17,13 @@ public struct LinkAccountsView: View {
         List {
             switch model.loadState {
             case .loading where model.links.isEmpty:
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
+                Section {
+                    ForEach(0 ..< 4, id: \.self) { _ in
+                        SkeletonRow()
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Loading your marketplaces")
             case let .failed(error) where model.links.isEmpty:
                 loadFailure(error)
             case .loading, .loaded, .failed:

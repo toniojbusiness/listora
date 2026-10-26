@@ -108,7 +108,7 @@ struct FieldRow: View {
                 }
                 if let note = attentionNote {
                     Label(note, systemImage: field.isMissing ? "plus.circle.fill" : "exclamationmark.circle.fill")
-                        .font(Typography.footnote.weight(.semibold))
+                        .font(Typography.smallEmphasis)
                         .foregroundStyle(Palette.warning)
                 }
             }

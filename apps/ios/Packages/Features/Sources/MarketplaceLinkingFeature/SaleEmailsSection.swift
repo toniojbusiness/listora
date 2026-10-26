@@ -25,8 +25,12 @@ struct SaleEmailsSection: View {
                         .accessibilityIdentifier("saleEmails.reload")
                 }
             } else {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    SkeletonBlock(width: 220, height: 16)
+                    SkeletonBlock(height: 12)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Loading the forwarding address")
             }
         } header: {
             Text("Sale emails")
@@ -85,7 +89,7 @@ struct SaleEmailsSection: View {
                 ForEach(Array(forwarding.steps.enumerated()), id: \.offset) { index, step in
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                         Text("\(index + 1).")
-                            .font(Typography.callout.monospacedDigit())
+                            .font(Typography.callout)
                             .foregroundStyle(Palette.brand)
                         Text(step)
                             .font(Typography.callout)
@@ -124,7 +128,7 @@ struct SaleEmailsSection: View {
                     .font(Typography.caption)
                     .foregroundStyle(Palette.textSecondary)
                 Text(value)
-                    .font(Typography.callout.monospaced())
+                    .font(Typography.code)
                     .foregroundStyle(Palette.textPrimary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)

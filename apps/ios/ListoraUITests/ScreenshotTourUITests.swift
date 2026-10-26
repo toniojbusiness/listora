@@ -108,8 +108,9 @@ final class ScreenshotTourUITests: XCTestCase {
         size.tap()
         let editor = app.textFields["review.editor.sizeLabel"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
-        editor.typeText("M")
-        app.buttons["review.editor.done"].tap()
+        // Return commits it: at the largest text sizes the keyboard scrolls the row's Done button
+        // under the navigation bar.
+        editor.typeText("M\n")
         XCTAssertTrue(app.buttons["review.continue"].wait(for: \.isEnabled, toEqual: true, timeout: 5))
     }
 
@@ -176,6 +177,9 @@ final class ScreenshotTourUITests: XCTestCase {
         tab("Tasks")
         try shot("09-tasks")
 
+        tab("Sales")
+        try shot("35-sales-offline")
+
         tab("Today")
         app.buttons["settings.open"].tap()
         XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
@@ -209,6 +213,12 @@ final class ScreenshotTourUITests: XCTestCase {
         // Done is on the Settings screen, under Marketplaces.
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.buttons["settings.done"].tap()
+
+        // The stub has no item or sale endpoints, so both lists fail to load.
+        tab("Inventory")
+        try shot("36-inventory-unavailable", settle: 3)
+        tab("Sales")
+        try shot("37-sales-unavailable", settle: 3)
 
         tab("Add")
         XCTAssertTrue(app.buttons["draft.row"].waitForExistence(timeout: 5))

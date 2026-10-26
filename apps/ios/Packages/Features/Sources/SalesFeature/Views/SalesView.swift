@@ -8,11 +8,18 @@ import SwiftUI
 public struct SalesView<Settings: View>: View {
     private let environment: SalesEnvironment
     private let settings: Settings
+    private let onOpenInventory: (@MainActor () -> Void)?
     @State private var model: SalesListModel
 
-    /// `settings` is the header's button that opens Settings.
-    public init(environment: SalesEnvironment, @ViewBuilder settings: () -> Settings) {
+    /// `settings` is the header's button that opens Settings; `onOpenInventory` opens Inventory,
+    /// the empty list's action.
+    public init(
+        environment: SalesEnvironment,
+        onOpenInventory: (@MainActor () -> Void)? = nil,
+        @ViewBuilder settings: () -> Settings,
+    ) {
         self.environment = environment
+        self.onOpenInventory = onOpenInventory
         self.settings = settings()
         _model = State(initialValue: environment.makeListModel())
     }
@@ -40,23 +47,18 @@ public struct SalesView<Settings: View>: View {
                 .task { await model.load() }
                 .refreshable { await model.load() }
         }
+        .celebration(trigger: model.newSaleID)
+    }
+
+    private var content: some View {
+        phaseContent.motion(value: model.phase)
     }
 
     @ViewBuilder
-    private var content: some View {
+    private var phaseContent: some View {
         switch model.phase {
         case .loading where model.sales.isEmpty:
-            ScrollView {
-                VStack(spacing: Spacing.sm) {
-                    ForEach(0 ..< 4, id: \.self) { _ in
-                        SkeletonRow().cardStyle(.outlined)
-                    }
-                }
-                .padding(Spacing.md)
-            }
-            .scrollDisabled(true)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Loading sales")
+            SkeletonList(count: 4, label: "Loading sales")
         case .signedOut:
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.questionmark",
@@ -79,6 +81,7 @@ public struct SalesView<Settings: View>: View {
                     title: "No sales yet",
                     message: "When an item sells, Listora delists it everywhere else and shows the sale and "
                         + "its profit here. Sold somewhere Listora doesn't see? Open the item and tap Mark as sold.",
+                    action: onOpenInventory.map { .init("Go to Inventory", systemImage: "shippingbox", handler: $0) },
                 )
                 .accessibilityIdentifier("sales.empty")
             } else {
@@ -103,8 +106,10 @@ public struct SalesView<Settings: View>: View {
                     .accessibilityIdentifier("sales.row.\(sale.items.first?.sku ?? sale.id)")
                 }
                 if model.hasMore {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
+                    SkeletonRow()
+                        .cardStyle(.flat)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Loading more sales")
                         .task { await model.loadMore() }
                 }
             }
@@ -136,7 +141,7 @@ private struct ProfitEntryRow: View {
             }
             Spacer(minLength: Spacing.sm)
             Image(systemName: "chevron.right")
-                .font(Typography.subheadline.weight(.semibold))
+                .font(Typography.emphasis)
                 .foregroundStyle(Palette.textSecondary)
                 .accessibilityHidden(true)
         }
@@ -176,13 +181,13 @@ private struct SaleRow: View {
             Spacer(minLength: Spacing.sm)
             VStack(alignment: .trailing, spacing: Spacing.xxs) {
                 Text(SaleFormatting.money(sale.salePrice))
-                    .font(Typography.headline.monospacedDigit())
+                    .font(Typography.number)
                     .foregroundStyle(Palette.textPrimary)
                 profit
             }
         }
         .contentShape(Rectangle())
-        .cardStyle(.outlined)
+        .cardStyle(.flat)
         .accessibilityElement(children: .combine)
     }
 
@@ -194,7 +199,7 @@ private struct SaleRow: View {
                 .foregroundStyle(Palette.textSecondary)
         } else if let profit = sale.profit {
             Text("\(sale.feesEstimated == true ? "Est. profit" : "Profit") \(SaleFormatting.money(profit))")
-                .font(Typography.footnote.weight(.semibold).monospacedDigit())
+                .font(Typography.smallEmphasis)
                 .foregroundStyle(profit.amountCents < 0 ? Palette.danger : Palette.success)
         } else {
             Text("Add cost for profit")

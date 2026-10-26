@@ -77,6 +77,10 @@ final class AccessibilityAuditUITests: XCTestCase {
         try audit("Code")
         code.typeText(StubAPIServer.devSignInCode)
         app.buttons["signIn.signIn"].tap()
+        let skipGuide = app.buttons["gettingStarted.skip"]
+        XCTAssertTrue(skipGuide.waitForExistence(timeout: 10))
+        try audit("Getting started")
+        skipGuide.tap()
 
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["today.count"].waitForExistence(timeout: 10))

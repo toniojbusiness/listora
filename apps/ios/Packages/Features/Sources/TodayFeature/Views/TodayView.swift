@@ -8,21 +8,24 @@ import SwiftUI
 public struct TodayView<Settings: View>: View {
     private let environment: TodayEnvironment
     private let onOpenDrafts: @MainActor () -> Void
+    private let onAddItem: (@MainActor () -> Void)?
     private let settings: Settings
     @State private var model: TodayModel
     @State private var path: [TodayDestination] = []
     @State private var summarySettings: SummarySettingsModel?
     @Environment(\.scenePhase) private var scenePhase
 
-    /// `onOpenDrafts` shows the drafts, which live in another tab; `settings` is the header's
-    /// button that opens Settings.
+    /// `onOpenDrafts` shows the drafts, which live in another tab, as `onAddItem` opens Add (the
+    /// caught-up screen's action); `settings` is the header's button that opens Settings.
     public init(
         environment: TodayEnvironment,
         onOpenDrafts: @escaping @MainActor () -> Void,
+        onAddItem: (@MainActor () -> Void)? = nil,
         @ViewBuilder settings: () -> Settings,
     ) {
         self.environment = environment
         self.onOpenDrafts = onOpenDrafts
+        self.onAddItem = onAddItem
         self.settings = settings()
         _model = State(initialValue: environment.makeModel())
     }
@@ -67,8 +70,12 @@ public struct TodayView<Settings: View>: View {
         }
     }
 
-    @ViewBuilder
     private var content: some View {
+        phaseContent.motion(value: model.phase)
+    }
+
+    @ViewBuilder
+    private var phaseContent: some View {
         switch model.phase {
         case .loading:
             loading
@@ -97,6 +104,7 @@ public struct TodayView<Settings: View>: View {
                     title: "You're all caught up",
                     message: "Nothing needs you right now. Items to ship, delists, and listings "
                         + "that could use a nudge show up here.",
+                    action: onAddItem.map { .init("Add an item", systemImage: "camera.fill", handler: $0) },
                 )
                 .refreshable { await model.load() }
                 .accessibilityIdentifier("today.caughtUp")
@@ -106,23 +114,20 @@ public struct TodayView<Settings: View>: View {
         }
     }
 
+    /// Shaped like the cards: a photo, two lines, and the action button.
     private var loading: some View {
-        ScrollView {
-            VStack(spacing: Spacing.sm) {
-                ForEach(0 ..< 4, id: \.self) { _ in
-                    SkeletonRow().cardStyle(.outlined)
-                }
+        SkeletonList(count: 3, label: "Loading today") {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SkeletonRow()
+                SkeletonBlock(height: Layout.buttonHeight, cornerRadius: Radius.medium)
             }
-            .padding(Spacing.md)
+            .cardStyle()
         }
-        .scrollDisabled(true)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Loading today")
     }
 
     private var summary: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Spacing.md) {
+            LazyVStack(alignment: .leading, spacing: Spacing.lg) {
                 if model.cards.isEmpty {
                     CaughtUpCard()
                 } else {
