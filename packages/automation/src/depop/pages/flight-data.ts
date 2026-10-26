@@ -20,6 +20,7 @@ const ROW = /^[0-9a-f]+:[A-Z]{0,2}(?=[[{"])/;
 /** Bounds on the search through a page's rows, which are a few hundred kilobytes. */
 const MAX_DEPTH = 48;
 const MAX_NODES = 400_000;
+const MAX_EMBEDDED = 2_000_000;
 
 /** The JSON values of the page's payload rows, in order; empty for a page without one. */
 export async function flightRows(page: PageDriver): Promise<unknown[]> {
@@ -55,6 +56,16 @@ export function flightChunk(script: string): string | null {
   }
 }
 
+/** A string that holds JSON (an object or an array), parsed; `undefined` for any other string. */
+function embeddedJson(text: string): unknown {
+  if (text.length < 2 || text.length > MAX_EMBEDDED || !/^[[{]/.test(text)) return undefined;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Every object in the rows that `matches` says is the one wanted, in the order found. */
 export function findRecords(
   rows: readonly unknown[],
@@ -63,6 +74,12 @@ export function findRecords(
   const found: Record<string, unknown>[] = [];
   let nodes = 0;
   const walk = (node: unknown, depth: number): void => {
+    // Some pages pass a query's data on as a JSON string (the seller's own product page does).
+    if (typeof node === 'string') {
+      const embedded = embeddedJson(node);
+      if (embedded !== undefined) walk(embedded, depth + 1);
+      return;
+    }
     if (node === null || typeof node !== 'object' || depth > MAX_DEPTH) return;
     nodes += 1;
     if (nodes > MAX_NODES) return;

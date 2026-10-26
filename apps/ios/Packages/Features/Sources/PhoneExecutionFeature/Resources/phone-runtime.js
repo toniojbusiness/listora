@@ -5870,18 +5870,44 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/depop/pages/edit-page.ts
-	const EDIT_PAGE$1 = { delete: "button[data-testid=\"listingForm__delete\"]" };
+/**
+	* Read on the captain's session (2026-10-26): the seller's own product page has "Delete listing",
+	* which opens a dialog ("Are you sure you want to delete this listing? You will lose all the
+	* likes.") with Cancel and its own "Delete listing".
+	*/
+	const EDIT_PAGE$1 = {
+		delete: "button:text-is(\"Delete listing\")",
+		dialog: "aside[role=\"dialog\"]",
+		confirm: "aside[role=\"dialog\"] button:text-is(\"Delete listing\")"
+	};
+	/** How long Depop gets to show its dialog and to close it once the listing is deleted. */
+	const DIALOG_MS = 2e4;
 	/** Opens the editor; `not_editable` when Depop showed something else (a sold listing). */
 	async function openEditor$1(page, site, slug) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.edit(slug)));
 		return await page.exists(LISTING_FORM$2.form) ? "editing" : "not_editable";
 	}
-	/** Deletes the listing the editor shows, confirming Depop's prompt, and waits for its page. */
+	/** Checks the product page has its Delete listing button, before the step that deletes. */
+	async function expectDelete(page) {
+		await expectElement$2(page, EDIT_PAGE$1.delete, "product page", "Delete listing button");
+	}
+	/**
+	* Deletes the listing the product page shows: Delete listing, then the dialog's own Delete
+	* listing. The operation's check reads the product afterwards.
+	*/
 	async function deleteListing(page) {
-		await expectElement$2(page, EDIT_PAGE$1.delete, "edit page", "Delete button");
-		page.acceptNextDialog();
 		await page.click(EDIT_PAGE$1.delete);
-		await page.waitForPath(/^\/products\/[^/]+\/?$/);
+		if (!await within(page, () => page.exists(EDIT_PAGE$1.confirm))) throw changed$2("product page", "shows no Delete listing dialog");
+		await page.click(EDIT_PAGE$1.confirm);
+		if (!await within(page, async () => !await page.exists(EDIT_PAGE$1.dialog))) throw changed$2("product page", "kept its Delete listing dialog open");
+	}
+	async function within(page, done) {
+		const end = Date.now() + DIALOG_MS;
+		for (;;) {
+			if (await done()) return true;
+			if (Date.now() >= end) return false;
+			await lookAgain(page, 500);
+		}
 	}
 
 // src/depop/pages/hub-page.ts
@@ -5900,6 +5926,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Bounds on the search through a page's rows, which are a few hundred kilobytes. */
 	const MAX_DEPTH$1 = 48;
 	const MAX_NODES = 4e5;
+	const MAX_EMBEDDED = 2e6;
 	/** The JSON values of the page's payload rows, in order; empty for a page without one. */
 	async function flightRows(page) {
 		const stream = (await page.texts(INLINE_SCRIPTS)).flatMap((script) => {
@@ -5927,11 +5954,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			return null;
 		}
 	}
+	/** A string that holds JSON (an object or an array), parsed; `undefined` for any other string. */
+	function embeddedJson(text) {
+		if (text.length < 2 || text.length > MAX_EMBEDDED || !/^[[{]/.test(text)) return void 0;
+		try {
+			return JSON.parse(text);
+		} catch {
+			return;
+		}
+	}
 	/** Every object in the rows that `matches` says is the one wanted, in the order found. */
 	function findRecords(rows, matches) {
 		const found = [];
 		let nodes = 0;
 		const walk = (node, depth) => {
+			if (typeof node === "string") {
+				const embedded = embeddedJson(node);
+				if (embedded !== void 0) walk(embedded, depth + 1);
+				return;
+			}
 			if (node === null || typeof node !== "object" || depth > MAX_DEPTH$1) return;
 			nodes += 1;
 			if (nodes > MAX_NODES) return;
@@ -6376,10 +6417,19 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				await fillListing$2(page, payload, sku, files);
 				await expectSubmit(page, "post");
 			});
-			return step("post", {
+			const result = await step("post", {
 				mutates: true,
 				timeoutMs: 6e4
 			}, async (page) => submitted(await submitListing$2(page, "post")));
+			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
+			try {
+				const found = await findBySku(step, sku);
+				if (found?.state.found === true) return {
+					...result,
+					externalListingId: found.state.externalListingId
+				};
+			} catch {}
+			return result;
 		}
 		/** Opens the editor of a listing on sale; a result instead when it can't be edited. */
 		async function editor(op, step) {
@@ -6437,9 +6487,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				const shown = await step("open the listing", { mutates: false }, (page) => readProduct(page, site, slug));
 				if (!shown.state.found) return notListed();
 				if (shown.state.status !== "active") return { type: "applied" };
-				const opened = await editor(op, step);
-				if (!("slug" in opened)) return opened;
-				return step("delete", { mutates: true }, async (page) => {
+				await step("find Delete listing", { mutates: false }, (page) => expectDelete(page));
+				return step("delete", {
+					mutates: true,
+					timeoutMs: 6e4
+				}, async (page) => {
 					await deleteListing(page);
 					return { type: "applied" };
 				});
@@ -8644,7 +8696,16 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 					await fillSku(page, sku);
 					await setAvailability(page, "for_sale");
 				});
-				return save(step, "list");
+				const result = await save(step, "list");
+				if (result.type !== "applied" || result.externalListingId !== void 0) return result;
+				try {
+					const id = await findBySku(step, sku, payload.title);
+					if (id !== null) return {
+						...result,
+						externalListingId: id
+					};
+				} catch {}
+				return result;
 			},
 			revise: async (op, step) => {
 				const payload = op.payload;

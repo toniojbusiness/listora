@@ -228,7 +228,13 @@ type Resolution =
    * Read the listing back later. With `unknownResult`, a send may have taken effect, so the
    * read-back happens even when no attempts remain.
    */
-  | { type: 'verify'; error: OperationError; unknownResult: boolean }
+  | {
+      type: 'verify';
+      error: OperationError;
+      unknownResult: boolean;
+      /** The read must be repeated to confirm a match: it follows soon, not after the backoff. */
+      soon?: boolean;
+    }
   | { type: 'failed'; error: OperationError }
   | { type: 'user'; task: UserTaskSpec };
 
@@ -1325,7 +1331,7 @@ function undecidedRead(
     case 'stale':
       return { type: 'verify', error: notCurrent(ctx.name), unknownResult };
     case 'unrepeated':
-      return { type: 'verify', error: confirmingAgain(ctx.name), unknownResult };
+      return { type: 'verify', error: confirmingAgain(ctx.name), unknownResult, soon: true };
     case 'not_found':
     case 'mismatch':
     case 'nothing_desired':
@@ -1613,7 +1619,10 @@ async function applyResolution(
         );
         return 'failed';
       }
-      const delayMs = delayAfterAttempt(deps.policy, attempts);
+      // A send whose result is unknown, or a match that must be read again, is checked soon:
+      // the seller is waiting to see it listed, and nothing is sent again meanwhile.
+      const soon = resolution.soon === true || (resolution.unknownResult && step.type === 'send');
+      const delayMs = soon ? CHECK_SOON_MS : delayAfterAttempt(deps.policy, attempts);
       await transitionOperation(
         trx,
         op,
@@ -1831,6 +1840,9 @@ function notCurrent(name: string): OperationError {
     message: `${name} showed an older version of the listing. Listora is checking again.`,
   };
 }
+
+/** How soon a check follows a send with an unknown result, or a match that must be repeated. */
+export const CHECK_SOON_MS = 15_000;
 
 function cannotCheck(name: string): OperationError {
   return { code: 'read_failed', message: `Listora couldn't check the listing on ${name}.` };

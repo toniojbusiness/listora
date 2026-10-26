@@ -15,7 +15,7 @@ import type { PhotoSource } from '../adapter/photos.ts';
 import { listingSku } from '../adapter/sku-line.ts';
 import type { StepRunner } from '../runner/types.ts';
 import { changed, type DepopSite } from './pages/common.ts';
-import { deleteListing, openEditor } from './pages/edit-page.ts';
+import { deleteListing, expectDelete, openEditor } from './pages/edit-page.ts';
 import { openHub } from './pages/hub-page.ts';
 import {
   expectSubmit,
@@ -128,9 +128,21 @@ export function createDepopScripts(
       await fillListing(page, payload, sku, files);
       await expectSubmit(page, 'post');
     });
-    return step('post', { mutates: true, timeoutMs: 60_000 }, async (page) =>
+    const result = await step('post', { mutates: true, timeoutMs: 60_000 }, async (page) =>
       submitted(await submitListing(page, 'post')),
     );
+    if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
+    // Depop's Done page doesn't name the new listing: it is found by its SKU in the same run,
+    // so it shows as listed at once. Not finding it yet leaves it to the operation's check.
+    try {
+      const found = await findBySku(step, sku);
+      if (found?.state.found === true) {
+        return { ...result, externalListingId: found.state.externalListingId };
+      }
+    } catch {
+      // The check reads it back later.
+    }
+    return result;
   }
 
   /** Opens the editor of a listing on sale; a result instead when it can't be edited. */
@@ -200,9 +212,9 @@ export function createDepopScripts(
       if (!shown.state.found) return notListed();
       // Deleted or sold: nothing is live, and the read-back decides.
       if (shown.state.status !== 'active') return { type: 'applied' };
-      const opened = await editor(op, step);
-      if (!('slug' in opened)) return opened;
-      return step('delete', { mutates: true }, async (page) => {
+      // The seller's own product page has Delete listing, which asks to confirm in a dialog.
+      await step('find Delete listing', { mutates: false }, (page) => expectDelete(page));
+      return step('delete', { mutates: true, timeoutMs: 60_000 }, async (page) => {
         await deleteListing(page);
         return { type: 'applied' };
       });

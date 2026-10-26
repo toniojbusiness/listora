@@ -252,7 +252,17 @@ export function createPoshmarkScripts(
         await fillSku(page, sku);
         await setAvailability(page, 'for_sale');
       });
-      return save(step, 'list');
+      const result = await save(step, 'list');
+      if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
+      // After List, Poshmark shows the closet: the new listing is found by its SKU in the same
+      // run, so it shows as listed at once. Not finding it yet leaves it to the operation's check.
+      try {
+        const id = await findBySku(step, sku, payload.title);
+        if (id !== null) return { ...result, externalListingId: id };
+      } catch {
+        // The check reads it back later.
+      }
+      return result;
     },
     revise: async (op, step) => {
       const payload = op.payload;
