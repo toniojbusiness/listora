@@ -109,7 +109,7 @@ looks the same on every screen. The table with each style's use is in `Typograph
 | `EmptyStateView`                           | Illustration, title, message, optional numbered steps, one action                                                                                 |
 | `SpotIllustration`                         | The empty-state art: two tilted cards with an SF Symbol on a soft circle, drawn from the palette; fixed size, so the action stays on screen       |
 | `SkeletonBlock`, `SkeletonRow`             | Loading placeholders with a shimmer (a pulse with Reduce Motion)                                                                                  |
-| `SkeletonPhotoTile`, `SkeletonList`        | A photo grid cell that is loading; a screen of placeholders shaped like its rows, read once by VoiceOver. Screens load with these, not spinners  |
+| `SkeletonPhotoTile`, `SkeletonList`        | A photo grid cell that is loading; a screen of placeholders shaped like its rows, read once by VoiceOver. Screens load with these, not spinners   |
 | `celebration(trigger:)`                    | The sold celebration (above)                                                                                                                      |
 | `Banner`, `toast(_:)`                      | Inline status message with Retry or dismiss; a passing confirmation                                                                               |
 | `BottomActionBar`, `bottomActionBar(_:)`   | The pinned bar for a screen's main actions                                                                                                        |
@@ -177,15 +177,15 @@ and the largest text size, and the iPhone 17e and iPhone 17 Pro Max at both size
   cards, 16 between grid rows), fewer borders and boxes (borderless cards in light mode, the
   empty states' steps without a box).
 
-| Screen                  | What looked off                                                                                         | What changed                                                                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Inventory               | Small 72-point thumbnails in boxed rows; an item was hard to find by its photo.                         | A grid of large photos with the status on the photo and every marketplace's status in full; the list a tap away.                   |
-| Empty and failed states | A lone icon tile; several (Today and Tasks caught up, no sales) had no button at all.                   | The illustration and one clear action on every one.                                                                                |
-| Loading                 | Tasks, a task, the morning summary, Link accounts, the sale email address, and a batch showed spinners. | Skeletons shaped like the content.                                                                                                 |
-| Cards                   | Every card had a hairline border as well as a shadow, so stacked cards read as a grid of boxes.         | Light mode drops the border; the surface and a softer shadow carry the card.                                                       |
-| Type                    | Card headings ("eBay", "Take photos once") were serif next to SF row titles; views tweaked weights.     | Serif only for screen-level display text; named styles for values, metadata, and tag text instead of per-view weights.             |
-| Photo detail            | No way to make a photo's background consistent.                                                         | Clean background, with Undo.                                                                                                       |
-| Selling                 | A sale landed silently.                                                                                 | A short celebration and a success haptic.                                                                                          |
+| Screen                  | What looked off                                                                                         | What changed                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Inventory               | Small 72-point thumbnails in boxed rows; an item was hard to find by its photo.                         | A grid of large photos with the status on the photo and every marketplace's status in full; the list a tap away.       |
+| Empty and failed states | A lone icon tile; several (Today and Tasks caught up, no sales) had no button at all.                   | The illustration and one clear action on every one.                                                                    |
+| Loading                 | Tasks, a task, the morning summary, Link accounts, the sale email address, and a batch showed spinners. | Skeletons shaped like the content.                                                                                     |
+| Cards                   | Every card had a hairline border as well as a shadow, so stacked cards read as a grid of boxes.         | Light mode drops the border; the surface and a softer shadow carry the card.                                           |
+| Type                    | Card headings ("eBay", "Take photos once") were serif next to SF row titles; views tweaked weights.     | Serif only for screen-level display text; named styles for values, metadata, and tag text instead of per-view weights. |
+| Photo detail            | No way to make a photo's background consistent.                                                         | Clean background, with Undo.                                                                                           |
+| Selling                 | A sale landed silently.                                                                                 | A short celebration and a success haptic.                                                                              |
 
 ## UI audit (before design system v2)
 
