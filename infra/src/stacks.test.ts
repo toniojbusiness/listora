@@ -29,6 +29,21 @@ import { stackList, synthesize } from './test-support.ts';
 
 type Resource = { Type: string; Properties?: Record<string, unknown> } & Record<string, unknown>;
 
+/** The Dockerfile's `runner` stage: the paths it declares volumes and the ones its user owns. */
+function runnerImageStage(): { volumes: string[]; owned: string[] } {
+  const dockerfile = readFileSync(new URL('../../Dockerfile', import.meta.url), 'utf8');
+  const stage = dockerfile.split(/^FROM /m).find((part) => /^\S+ AS runner\b/.test(part));
+  if (stage === undefined) throw new Error('the Dockerfile has no runner stage');
+  const user = /^USER (\S+)$/m.exec(stage)?.[1];
+  const volumes = [...stage.matchAll(/^VOLUME \[(.*)\]$/gm)].flatMap(
+    (match) => JSON.parse(`[${match[1] ?? ''}]`) as string[],
+  );
+  const owned = [...stage.matchAll(/^RUN chown (\S+):\S+ (.+)$/gm)]
+    .filter((match) => match[1] === user)
+    .flatMap((match) => (match[2] ?? '').split(' '));
+  return { volumes, owned };
+}
+
 /** Each environment, plus personal with a domain (it deploys without one until then). */
 const synthesized = new Map(
   PLACEHOLDER_SHAPES.map((shape) => [shape.name, synthesize(shape.environment, shape.overrides)]),
@@ -636,6 +651,15 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       expect(runner['MountPoints']).toEqual([
         { ContainerPath: '/tmp', ReadOnly: false, SourceVolume: 'tmp' },
       ]);
+      // Fargate creates each bind mount owned by root (0755) unless the image declares its path
+      // a VOLUME; the runner runs unprivileged, so it could not write /tmp and Chromium would
+      // not start (as on 2026-10-25: EACCES on mkdtemp). The runner image declares every
+      // mount and owns it.
+      const stage = runnerImageStage();
+      for (const mount of runner['MountPoints'] as { ContainerPath: string }[]) {
+        expect(stage.volumes).toContain(mount.ContainerPath);
+        expect(stage.owned).toContain(mount.ContainerPath);
+      }
       // The runner image repository's, not the application's.
       expect(JSON.stringify(runner['Image'])).toMatch(/OutputFnGetAttRunner/);
       expect(JSON.stringify(runner['Image'])).not.toMatch(/OutputFnGetAttApp/);

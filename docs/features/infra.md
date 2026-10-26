@@ -18,7 +18,8 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
   ([automation.md](automation.md)) is a third service (`runner`, sized by `browserRunner`) from
   the Dockerfile's `runner` stage (the same sources with headless Chromium, its own
   repository), with no task while idle: the worker sets its desired count to 1 and the runner
-  sets it back to 0. It never runs two tasks at once, and its role alone may decrypt sellers'
+  sets it back to 0. Its writable `/tmp` is a volume the image declares and owns, because
+  Fargate otherwise creates it root-owned and the unprivileged runner's Chromium cannot start. It never runs two tasks at once, and its role alone may decrypt sellers'
   browser sessions.
 - **Configuration.** Containers get exactly the environment in `infra/src/containers.ts`, and
   a test runs the API's, the worker's, and the runner's config loaders on it. A task that adds a required config

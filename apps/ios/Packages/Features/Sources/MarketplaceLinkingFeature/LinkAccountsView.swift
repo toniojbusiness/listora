@@ -28,6 +28,7 @@ public struct LinkAccountsView: View {
                             link: link,
                             progress: model.progress[link.marketplace],
                             onLink: { model.startLinking(link) },
+                            onCheckAgain: { Task { await model.checkAgain(link) } },
                             onRetry: { Task { await model.retry(link.marketplace) } },
                         )
                     }
@@ -84,7 +85,12 @@ private struct LinkAccountRow: View {
     let link: MarketplaceLink
     let progress: LinkAccountsModel.LinkProgress?
     let onLink: () -> Void
+    let onCheckAgain: () -> Void
     let onRetry: () -> Void
+
+    private var busy: Bool {
+        progress == .sending || progress == .requestingCheck
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -99,7 +105,16 @@ private struct LinkAccountRow: View {
                     }
                 }
                 Spacer()
-                if link.canLink, progress != .sending {
+                if link.canCheckAgain, !busy {
+                    // The session Listora holds may be fine: checking it again needs no sign-in.
+                    Button("Check again", action: onCheckAgain)
+                        .buttonStyle(.borderedProminent)
+                        .tint(Palette.brand.color)
+                        // The list's text color would otherwise override the filled label's.
+                        .foregroundStyle(Palette.onBrand)
+                        .accessibilityIdentifier("linkAccounts.checkAgain.\(link.marketplace)")
+                }
+                if link.canLink, !busy {
                     Button(link.linkActionTitle, action: onLink)
                         .buttonStyle(.bordered)
                         .tint(Palette.brand.color)
@@ -120,6 +135,16 @@ private struct LinkAccountRow: View {
                     .font(Typography.caption)
                     .foregroundStyle(Palette.textSecondary)
                     .accessibilityIdentifier("linkAccounts.sending.\(link.marketplace)")
+            case .requestingCheck:
+                Label("Asking Listora to check again...", systemImage: "arrow.clockwise")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("linkAccounts.requestingCheck.\(link.marketplace)")
+            case let .checkFailed(error):
+                Text(error.message)
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.danger)
+                    .accessibilityIdentifier("linkAccounts.checkError.\(link.marketplace)")
             case let .failed(error):
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(error.message)

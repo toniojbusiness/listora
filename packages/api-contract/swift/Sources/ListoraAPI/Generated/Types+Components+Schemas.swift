@@ -5391,7 +5391,8 @@ extension Components {
         /// `reconnect`: the same, for a connection that needs the seller's consent again (its grant
         /// was revoked, expires within 30 days, or fails); it renews the existing connection.
         /// `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
-        /// Listora may have cleared since.
+        /// Listora may have cleared since, or an automation connection whose sign-in is not
+        /// confirmed.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownConnectionAction`.
@@ -5651,7 +5652,9 @@ extension Components {
         /// `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
         /// `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
         /// cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
-        /// ends within 30 days.
+        /// ends within 30 days. `not_confirmed`: Listora could not confirm that the marketplace
+        /// accepts the sign-in linked for automation (its check failed or did not finish); the
+        /// `check` action checks it again.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownConnectionAttentionReason`.
@@ -5660,6 +5663,7 @@ extension Components {
             case accessRemoved = "access_removed"
             case connectionProblem = "connection_problem"
             case expiring = "expiring"
+            case notConfirmed = "not_confirmed"
         }
         /// One connection that needs the seller's attention.
         ///
@@ -5891,12 +5895,15 @@ extension Components {
                 ])
             }
         }
-        /// `not_linked`: no session. `checking`: a session was just linked and the browser runner
-        /// is checking it. `linked`: the check passed, and Listora automates the marketplace in
-        /// that session. `needs_relink`: the marketplace rejected the session, or showed a check
-        /// automation must not pass; the user signs in again. `check_failed`: Listora could not
-        /// confirm the session works (see `issue`); linking again checks again. `api_connected`:
-        /// the marketplace is connected through its API, so there is nothing to sign in to.
+        /// `not_linked`: no session. `checking`: a session was just linked (or checked again) and
+        /// the browser runner is checking it, for at most 15 minutes. `linked`: the check passed,
+        /// and Listora automates the marketplace in that session. `needs_relink`: the marketplace
+        /// rejected the session, or showed a check automation must not pass; the user signs in
+        /// again. `check_failed`: Listora could not confirm the session works: its check failed or
+        /// did not finish in time (see `issue`). `requestConnectionCheck` checks the same session
+        /// again; linking again checks a new one. `api_connected`: the marketplace is connected
+        /// through its API, so there is nothing to sign in to. The marketplace's `Connection` shows
+        /// the same status in the same words.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownMarketplaceSessionStatus`.

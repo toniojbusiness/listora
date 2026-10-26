@@ -101,10 +101,17 @@ thing.
   ([push.md](push.md)). A connection that is already broken never sends it again; reconnecting
   and breaking anew does. A grant that ran out is recorded by the daily check without asking the
   marketplace, so it notifies too.
-- **Automation sessions** (decision D1, [automation.md](automation.md)) join the same model when
-  the session vault lands: a session the marketplace rejects is a connection that needs relinking,
-  shown and notified like `reauth_required`. Until then Poshmark, Mercari, Depop, and eBay
-  (without its API keys) show Not linked.
+- **Automation sessions** (decision D1, [automation.md](automation.md)). An `automation`
+  connection is shown as its linked session's check says (`describeAutomationSession`,
+  session-status.ts), the same description Link accounts renders
+  ([marketplace-linking.md](marketplace-linking.md)), so the two screens never disagree: Checking...,
+  Linked (only after the browser runner's check passed; `lastOkAt` is that check, or a later run
+  whose refreshed cookies the marketplace sent), Not confirmed (the check failed or did not finish
+  within 15 minutes; attention `not_confirmed`, action `check`), or Sign in again (the marketplace
+  rejected the session, shown and notified like `reauth_required`). Retry check on an automation
+  connection checks the stored session again (`requestSessionRecheck`) instead of queueing the
+  API health check. Without a linked session, Poshmark, Mercari, Depop, and eBay (without its API
+  keys) show Not linked.
 - **In the app** (`MarketplacesFeature`): one card per marketplace with its mode, status, detail,
   last successful check, and actions (Connect, Reconnect, Retry check; the main one filled); a
   Sale emails card; and `ConnectionAttentionBanner`, which Inventory shows above the list while

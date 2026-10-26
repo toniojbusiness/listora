@@ -1130,12 +1130,15 @@ export interface paths {
         put?: never;
         /**
          * Check a marketplace connection now (Retry check)
-         * @description Queues the same cheap read the daily health check makes, for this connection only. The
-         *     answer is the connection with a `Checking` status; read it again (or
-         *     `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
-         *     connection with a problem. `409 invalid_state_transition` for a connection a check
-         *     cannot change (not connected, or waiting for the seller to reconnect);
-         *     `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+         * @description Queues the same cheap read the daily health check makes, for this connection only. For
+         *     an automation connection it asks the browser runner to check the sign-in already linked
+         *     again, as after linking (`getMarketplaceSession`), without the seller signing in again;
+         *     a check still running is left to finish. The answer is the connection with a `Checking`
+         *     status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
+         *     the check found. Offered as the `check` action on a connection with a problem.
+         *     `409 invalid_state_transition` for a connection a check cannot change (not connected,
+         *     or waiting for the seller to reconnect or link again); `409
+         *     marketplace_action_unavailable` when this server cannot check the marketplace.
          */
         post: operations["requestConnectionCheck"];
         delete?: never;
@@ -2819,7 +2822,8 @@ export interface components {
          *     `reconnect`: the same, for a connection that needs the seller's consent again (its grant
          *     was revoked, expires within 30 days, or fails); it renews the existing connection.
          *     `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
-         *     Listora may have cleared since.
+         *     Listora may have cleared since, or an automation connection whose sign-in is not
+         *     confirmed.
          * @enum {string}
          */
         KnownConnectionAction: "connect" | "reconnect" | "check";
@@ -2877,10 +2881,12 @@ export interface components {
          * @description `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
          *     `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
          *     cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
-         *     ends within 30 days.
+         *     ends within 30 days. `not_confirmed`: Listora could not confirm that the marketplace
+         *     accepts the sign-in linked for automation (its check failed or did not finish); the
+         *     `check` action checks it again.
          * @enum {string}
          */
-        KnownConnectionAttentionReason: "reconnect" | "access_removed" | "connection_problem" | "expiring";
+        KnownConnectionAttentionReason: "reconnect" | "access_removed" | "connection_problem" | "expiring" | "not_confirmed";
         /** @description One connection that needs the seller's attention. */
         ConnectionAttention: {
             marketplace: components["schemas"]["Marketplace"];
@@ -2925,12 +2931,15 @@ export interface components {
          */
         MarketplaceSessionStatus: components["schemas"]["KnownMarketplaceSessionStatus"];
         /**
-         * @description `not_linked`: no session. `checking`: a session was just linked and the browser runner
-         *     is checking it. `linked`: the check passed, and Listora automates the marketplace in
-         *     that session. `needs_relink`: the marketplace rejected the session, or showed a check
-         *     automation must not pass; the user signs in again. `check_failed`: Listora could not
-         *     confirm the session works (see `issue`); linking again checks again. `api_connected`:
-         *     the marketplace is connected through its API, so there is nothing to sign in to.
+         * @description `not_linked`: no session. `checking`: a session was just linked (or checked again) and
+         *     the browser runner is checking it, for at most 15 minutes. `linked`: the check passed,
+         *     and Listora automates the marketplace in that session. `needs_relink`: the marketplace
+         *     rejected the session, or showed a check automation must not pass; the user signs in
+         *     again. `check_failed`: Listora could not confirm the session works: its check failed or
+         *     did not finish in time (see `issue`). `requestConnectionCheck` checks the same session
+         *     again; linking again checks a new one. `api_connected`: the marketplace is connected
+         *     through its API, so there is nothing to sign in to. The marketplace's `Connection` shows
+         *     the same status in the same words.
          * @enum {string}
          */
         KnownMarketplaceSessionStatus: "not_linked" | "checking" | "linked" | "needs_relink" | "check_failed" | "api_connected";
@@ -6621,7 +6630,7 @@ export const knownImportListingsModeValues: ReadonlyArray<FlattenedDeepRequired<
 export const knownImageTransportModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImageTransportMode"]> = ["url_fetch", "upload", "user_saves_photos"];
 export const knownConnectionActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAction"]> = ["connect", "reconnect", "check"];
 export const connectionAuthorizationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ConnectionAuthorizationStatus"]> = ["pending", "completed", "failed", "expired"];
-export const knownConnectionAttentionReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAttentionReason"]> = ["reconnect", "access_removed", "connection_problem", "expiring"];
+export const knownConnectionAttentionReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAttentionReason"]> = ["reconnect", "access_removed", "connection_problem", "expiring", "not_confirmed"];
 export const knownSaleForwardingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleForwardingStatus"]> = ["needs_domain", "not_set_up", "confirming", "working"];
 export const knownMarketplaceSessionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceSessionStatus"]> = ["not_linked", "checking", "linked", "needs_relink", "check_failed", "api_connected"];
 export const sessionCookieSameSiteValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SessionCookie"]["sameSite"]> = ["strict", "lax", "none"];

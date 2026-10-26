@@ -69,7 +69,11 @@ and never a CAPTCHA or bot check solved (it stops and falls back to an assisted 
   deploy workflow builds and pushes it next to the application image, with the same tag.
 - **Task.** Read-only root file system with a writable `/tmp` volume for Chromium, the worker's
   network place and security group (the database, internet egress, no ingress), and
-  `PGPASSWORD` only.
+  `PGPASSWORD` only. Fargate creates that volume owned by root (mode 0755) unless the image
+  declares its path a `VOLUME`, so the runner stage declares `/tmp` one, owned by the
+  unprivileged user the runner runs as; without it Chromium cannot start. A test checks that
+  the image declares every path the task mounts, and the container smoke test runs the runner
+  on the image's own volume instead of a tmpfs.
 
 **The iPhone app.** The personal environment is the production environment for now, so the
 iOS `Prod-Release` configuration's `API_BASE_URL` points at it (there is no separate Personal
