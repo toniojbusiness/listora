@@ -773,8 +773,14 @@ function notFound(): string {
   return '<main data-testid="NotFound"><h1>We couldn’t find that page.</h1></main>';
 }
 
+/**
+ * The login form. Its email field is a text field: an `email` input keeps the app's sign-in web
+ * view from ever going idle in the simulator while it has focus, which slows every UI test step
+ * to the framework's two-minute idle timeout. Listora never reads this form (linking keeps only
+ * the session cookie), so it changes nothing the adapter relies on.
+ */
 function loginForm(): string {
-  return `<main><h1>Log in to Mercari</h1><form method="post" action="/login/"><input name="email" type="email"><input name="password" type="password"><button type="submit">Log in</button></form></main>`;
+  return `<main><h1>Log in to Mercari</h1><form method="post" action="/login/"><input name="email" type="text"><input name="password" type="password"><button type="submit">Log in</button></form></main>`;
 }
 
 function verifyForm(): string {
