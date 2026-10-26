@@ -8138,6 +8138,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		conditionSelector: ".listing-editor__condition-container .dropdown__selector",
 		condition: (title) => `div[data-et-name="listing_condition"] > div.fw--med:text-is("${quote(title)}")`,
 		sku: "input[data-vv-name=\"sku\"]",
+		/** "Additional Details (PRIVATE)", which holds the SKU, shown by its "show details" link. */
+		privateDetailsToggle: ".listing-editor__toggle:has([data-vv-name=\"sku\"]) a.listing-editor-toggle-link",
 		availabilitySelector: "[data-et-name=\"listingEditorAvailabilitySection\"] .dropdown__selector",
 		availability: (code) => `[data-et-name="listingEditorAvailabilitySection"] a.dropdown__link[data-et-name="${code}"]`,
 		/** Goes on from a new listing's form to its share step. */
@@ -8146,8 +8148,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		list: "button[data-et-name=\"list\"]",
 		/** Saves a change to a listing. */
 		update: "button[data-et-name=\"update\"]",
-		/** Poshmark's own validation messages on the form. */
-		errors: ".form__error-message"
+		/**
+		* Poshmark's own validation messages on the form that show. The form keeps every message in
+		* the page and hides the ones that don't apply (`style="display: none;"`, Vue's v-show).
+		*/
+		errors: ".form__error-message:not([style*=\"display: none\"])"
 	};
 	/** Poshmark's own names of the availabilities, which its picker's items carry. */
 	const AVAILABILITY_CODES = {
@@ -8195,11 +8200,16 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		await expectField(page, FORM_SELECTORS.description, "description field");
 		await page.fill(FORM_SELECTORS.description, payload.description);
 	}
-	/** The original price and the listing price. */
+	/**
+	* The listing price, and the original price when the listing has one (the form keeps that
+	* field folded away until it is asked for, and it starts empty).
+	*/
 	async function fillPrices(page, payload) {
-		await expectField(page, FORM_SELECTORS.originalPrice, "original price field");
-		await page.fill(FORM_SELECTORS.originalPrice, payload.originalPrice === null ? "" : wholeDollars(payload.originalPrice.amountCents));
 		await setPrice(page, payload.price.amountCents);
+		if (payload.originalPrice !== null) {
+			await expectField(page, FORM_SELECTORS.originalPrice, "original price field");
+			await page.fill(FORM_SELECTORS.originalPrice, wholeDollars(payload.originalPrice.amountCents));
+		}
 	}
 	/** The brand, typed into the brand field (Poshmark takes a brand its suggestions don't list). */
 	async function fillBrand(page, brand) {
@@ -8229,7 +8239,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		const set = FORM_SELECTORS.sizeSet(size.set);
 		if (await appears(page, set)) await page.click(set);
 		await pick(page, FORM_SELECTORS.size(size.size), `size "${size.size}"`);
-		await pick(page, FORM_SELECTORS.sizeDone, "size Done button");
+		if ((await page.text(FORM_SELECTORS.sizeSelector))?.replace(/\s+/g, " ").trim() !== size.size) await pick(page, FORM_SELECTORS.sizeDone, "size Done button");
 		await expectField(page, FORM_SELECTORS.conditionSelector, "condition picker");
 		await page.click(FORM_SELECTORS.conditionSelector);
 		const title = CONDITION_TITLES[condition.code];
@@ -8258,6 +8268,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	}
 	/** The seller's private SKU, which only the seller sees (how Listora finds its listings). */
 	async function fillSku(page, sku) {
+		await expectField(page, FORM_SELECTORS.sku, "SKU field");
+		if ((await page.text(FORM_SELECTORS.privateDetailsToggle))?.trim().toLowerCase() === "show details") await page.click(FORM_SELECTORS.privateDetailsToggle);
 		await page.fill(FORM_SELECTORS.sku, sku);
 	}
 	async function setPrice(page, priceCents) {

@@ -72,6 +72,9 @@ export const FORM_SELECTORS = {
   condition: (title: string) =>
     `div[data-et-name="listing_condition"] > div.fw--med:text-is("${quote(title)}")`,
   sku: 'input[data-vv-name="sku"]',
+  /** "Additional Details (PRIVATE)", which holds the SKU, shown by its "show details" link. */
+  privateDetailsToggle:
+    '.listing-editor__toggle:has([data-vv-name="sku"]) a.listing-editor-toggle-link',
   availabilitySelector: '[data-et-name="listingEditorAvailabilitySection"] .dropdown__selector',
   availability: (code: string) =>
     `[data-et-name="listingEditorAvailabilitySection"] a.dropdown__link[data-et-name="${code}"]`,
@@ -81,8 +84,11 @@ export const FORM_SELECTORS = {
   list: 'button[data-et-name="list"]',
   /** Saves a change to a listing. */
   update: 'button[data-et-name="update"]',
-  /** Poshmark's own validation messages on the form. */
-  errors: '.form__error-message',
+  /**
+   * Poshmark's own validation messages on the form that show. The form keeps every message in
+   * the page and hides the ones that don't apply (`style="display: none;"`, Vue's v-show).
+   */
+  errors: '.form__error-message:not([style*="display: none"])',
 } as const;
 
 /** Poshmark's own names of the availabilities, which its picker's items carry. */
@@ -142,14 +148,16 @@ export async function fillText(page: PageDriver, payload: PoshmarkListingPayload
   await page.fill(FORM_SELECTORS.description, payload.description);
 }
 
-/** The original price and the listing price. */
+/**
+ * The listing price, and the original price when the listing has one (the form keeps that
+ * field folded away until it is asked for, and it starts empty).
+ */
 export async function fillPrices(page: PageDriver, payload: PoshmarkListingPayload): Promise<void> {
-  await expectField(page, FORM_SELECTORS.originalPrice, 'original price field');
-  await page.fill(
-    FORM_SELECTORS.originalPrice,
-    payload.originalPrice === null ? '' : wholeDollars(payload.originalPrice.amountCents),
-  );
   await setPrice(page, payload.price.amountCents);
+  if (payload.originalPrice !== null) {
+    await expectField(page, FORM_SELECTORS.originalPrice, 'original price field');
+    await page.fill(FORM_SELECTORS.originalPrice, wholeDollars(payload.originalPrice.amountCents));
+  }
 }
 
 /** The brand, typed into the brand field (Poshmark takes a brand its suggestions don't list). */
@@ -195,7 +203,9 @@ export async function chooseSizeAndCondition(
   // A category with one size set may show no tabs.
   if (await appears(page, set)) await page.click(set);
   await pick(page, FORM_SELECTORS.size(size.size), `size "${size.size}"`);
-  await pick(page, FORM_SELECTORS.sizeDone, 'size Done button');
+  // A single item's size applies on the click and closes the picker; Done is for several sizes.
+  const shown = (await page.text(FORM_SELECTORS.sizeSelector))?.replace(/\s+/g, ' ').trim();
+  if (shown !== size.size) await pick(page, FORM_SELECTORS.sizeDone, 'size Done button');
   await expectField(page, FORM_SELECTORS.conditionSelector, 'condition picker');
   await page.click(FORM_SELECTORS.conditionSelector);
   const title = CONDITION_TITLES[condition.code];
@@ -230,6 +240,11 @@ async function appears(page: PageDriver, selector: string): Promise<boolean> {
 
 /** The seller's private SKU, which only the seller sees (how Listora finds its listings). */
 export async function fillSku(page: PageDriver, sku: string): Promise<void> {
+  await expectField(page, FORM_SELECTORS.sku, 'SKU field');
+  const toggle = await page.text(FORM_SELECTORS.privateDetailsToggle);
+  if (toggle?.trim().toLowerCase() === 'show details') {
+    await page.click(FORM_SELECTORS.privateDetailsToggle);
+  }
   await page.fill(FORM_SELECTORS.sku, sku);
 }
 
