@@ -85,8 +85,10 @@ Packages/
     AddItemFeature    Add Item tab: guided capture, library import, drafts (GRDB), upload queue
     ReviewFeature     Analysis progress, confidence-first review, cost, price, and the saved item
     TasksFeature      Tasks tab
-    SettingsFeature   Settings (opened from the gear in the Today and Sales headers): who is
-                      signed in, signing out, marketplaces, and the build's details
+    SettingsFeature   Profile and settings (opened from the avatar in the Today and Sales
+                      headers): the profile (names, photo), help, the legal documents, signing
+                      out, deleting the account, and the hidden Diagnostics
+                      (docs/features/profile.md)
     SignInFeature     The session and the screens that start it, the app's root while nobody is
                       signed in: welcome with the email, then the code (an emailed code, or the
                       developer sign-in in Dev builds)
@@ -100,7 +102,7 @@ Packages/
                       (VisionPhotoSignalReader, implementing Core's PhotoSignalReader); no UI
     ShareLinkFeature  The Share Extension's screen (ShareLinkView, ShareLinkModel)
     MarketplaceLinkingFeature  Settings > Link accounts: sign in on a marketplace's own page
-                      in a web view and hand Listora its session
+                      in a web view and hand Listora its session; Settings > Sale emails
                       (docs/features/marketplace-linking.md)
     PhoneExecutionFeature  The marketplace work Listora hands this phone: the runner, the
                       phone runtime in off-screen web views (Resources/phone-runtime.js, built

@@ -195,6 +195,7 @@ src/
   contract/      Validators compiled from the bundled contract, and contractRoute()
   auth/          AuthDriver interface; the dev driver (with its /dev/auth endpoints) and the
                  Cognito driver
+  profile/       The profile Settings shows (getProfile, replaceProfile)
   account/       Account deletion (deleteAccount); the job that finishes it is in
                  @listora/accounts
   tenancy.ts     Tenant resolution: the tenancy guard
@@ -433,6 +434,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/photos.md](features/photos.md)                           | Uploads, storage drivers, photo processing                                    |
 | [features/items.md](features/items.md)                             | Inventory items, item status, the audit log                                   |
 | [features/auth.md](features/auth.md)                               | Sign-in drivers, the Cognito user pool, account deletion                      |
+| [features/profile.md](features/profile.md)                         | Profile and settings: the avatar, names, the photo, diagnostics, the API      |
 | [features/infra.md](features/infra.md)                             | Hosting and deploys                                                           |
 | [features/costs.md](features/costs.md)                             | The personal environment's monthly cost                                       |
 | [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                  |

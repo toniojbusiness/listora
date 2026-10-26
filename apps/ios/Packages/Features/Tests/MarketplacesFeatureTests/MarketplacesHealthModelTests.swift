@@ -41,6 +41,34 @@ struct MarketplacesHealthModelTests {
     }
 
     @Test
+    func `sums every marketplace up in one line for Settings, in the server's words`() async throws {
+        let service = try FakeConnectionsService(
+            lists: [
+                .success([]),
+                .success(connected() + [connection(
+                    marketplace: "poshmark",
+                    status: "not_connected",
+                    tone: "neutral",
+                    label: "Not linked",
+                )]),
+                .success([connection(status: "not_connected", tone: "neutral", label: "Not linked")]),
+                .success(connected()),
+            ],
+            banners: [nil, nil, nil, BannerSpec(tone: "action_needed", label: "Reconnect eBay", detail: nil)],
+        )
+        let model = MarketplacesModel(service: service)
+        #expect(model.healthLine == nil)
+        await model.load()
+        #expect(model.healthLine == nil)
+        await model.load()
+        #expect(model.healthLine == HealthLine(text: "1 working", needsAttention: false))
+        await model.load()
+        #expect(model.healthLine == HealthLine(text: "None linked yet", needsAttention: false))
+        await model.load()
+        #expect(model.healthLine == HealthLine(text: "Reconnect eBay", needsAttention: true))
+    }
+
+    @Test
     func `a problem Listora keeps checking is a checking banner, and signing out drops it`() async throws {
         let signedOut = APIFailure(statusCode: 401, code: "unauthenticated", message: "Sign in.", retryable: false)
         let service = try FakeConnectionsService(

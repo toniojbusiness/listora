@@ -14,10 +14,10 @@ import TasksFeature
 import TodayFeature
 
 /// The app's root: the welcome and sign-in screens while nobody is signed in, and once someone is,
-/// one tab per top-level area, and Settings over them, opened from the gear in the Today and Sales
-/// headers. The session ending anywhere (sign-out, a `401`, a refresh the pool refuses, expiry)
-/// brings the sign-in back. While a marketplace connection needs attention, Inventory shows the
-/// connection banner, which opens Marketplaces in Settings, and the gear has a dot.
+/// one tab per top-level area, and Settings over them, opened from the seller's avatar in the Today
+/// and Sales headers. The session ending anywhere (sign-out, a `401`, a refresh the pool refuses,
+/// expiry) brings the sign-in back. While a marketplace connection needs attention, Inventory shows
+/// the connection banner, which opens Marketplaces in Settings, and the avatar has a dot.
 public struct RootView: View {
     private let dependencies: AppDependencies
     @State private var selection: AppTab
@@ -72,6 +72,13 @@ public struct RootView: View {
                 showsSettings = false
                 settingsPath = []
                 selection = .today
+                dependencies.settings.profile.signedOut()
+            }
+        }
+        // The avatar in the headers shows the seller's own initials or photo.
+        .task(id: dependencies.signIn.stage.signedInEmail) {
+            if dependencies.signIn.stage.signedInEmail != nil {
+                await dependencies.settings.profile.load()
             }
         }
         .task { await dependencies.signIn.follow() }
@@ -162,7 +169,11 @@ public struct RootView: View {
 
 extension RootView {
     private var settingsButton: some View {
-        SettingsButton(needsAttention: dependencies.marketplaces.attention != nil) {
+        ProfileButton(
+            initials: dependencies.settings.profile.initials,
+            photo: dependencies.settings.profile.photo,
+            needsAttention: dependencies.marketplaces.attention != nil,
+        ) {
             openSettings()
         }
     }
@@ -190,16 +201,33 @@ extension RootView {
 
     private var settings: some View {
         SettingsView(
-            content: SettingsContent(configuration: dependencies.configuration, version: dependencies.version),
+            content: SettingsContent(
+                configuration: dependencies.configuration,
+                version: dependencies.version,
+                installationID: dependencies.linkAccounts.installationID,
+            ),
+            profile: dependencies.settings.profile,
             account: dependencies.signIn.stage.signedInEmail.map { email in
                 SettingsAccount(email: email) { dependencies.signIn.signOut() }
             },
-            accountDeletion: dependencies.accountDeletion,
+            accountDeletion: dependencies.settings.accountDeletion,
+            screens: SettingsScreens(
+                linkAccounts: { AnyView(LinkAccountsView(model: dependencies.linkAccounts)) },
+                marketplaces: { AnyView(MarketplacesView(model: dependencies.marketplaces)) },
+                notifications: {
+                    AnyView(NotificationSettingsView(
+                        today: dependencies.today,
+                        saleEmails: dependencies.settings.saleEmails,
+                    ))
+                },
+                saleEmails: { AnyView(SaleEmailsView(model: dependencies.settings.saleEmails)) },
+            ),
+            marketplacesSummary: dependencies.marketplaces.healthLine.map {
+                SettingsSummary($0.text, needsAttention: $0.needsAttention)
+            },
+            saleEmailsSummary: dependencies.marketplaces.saleForwarding.map { SettingsSummary($0.statusLabel) },
             path: $settingsPath,
-            marketplacesAttention: dependencies.marketplaces.attention == nil ? nil : "Needs attention",
             onDone: { showsSettings = false },
-            marketplaces: { MarketplacesView(model: dependencies.marketplaces) },
-            linkAccounts: { LinkAccountsView(model: dependencies.linkAccounts) },
         )
     }
 }

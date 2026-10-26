@@ -2,9 +2,31 @@ import DesignSystem
 import SwiftUI
 import UIKit
 
-/// Link accounts' sale emails section: the account's forwarding address with one-tap copy, the
-/// setup steps and the forwarding filter, the email provider's confirmation (its code to copy,
-/// and its link to open on a tap), the server's status, and "Ask before delisting".
+/// Settings > Sale emails: the account's forwarding address with one-tap copy, the setup steps and
+/// the forwarding filter, the email provider's confirmation (its code to copy, and its link to open
+/// on a tap), and the server's status, or that this Listora receives no email yet. "Ask before
+/// delisting" is with the notification settings (``AskBeforeDelistToggle``).
+public struct SaleEmailsView: View {
+    private let model: SaleEmailsModel
+
+    public init(model: SaleEmailsModel) {
+        self.model = model
+    }
+
+    public var body: some View {
+        List {
+            SaleEmailsSection(model: model)
+        }
+        .scrollContentBackground(.hidden)
+        .background(Palette.background)
+        .foregroundStyle(Palette.textPrimary)
+        .navigationTitle("Sale emails")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await model.load() }
+        .refreshable { await model.load() }
+    }
+}
+
 struct SaleEmailsSection: View {
     let model: SaleEmailsModel
     @State private var copied: String?
@@ -33,7 +55,7 @@ struct SaleEmailsSection: View {
                 .accessibilityLabel("Loading the forwarding address")
             }
         } header: {
-            Text("Sale emails")
+            Text("Forwarding")
         } footer: {
             Text(
                 "Listora reads only the Poshmark, Mercari, and Depop sold emails sent to this address, "
@@ -52,13 +74,6 @@ struct SaleEmailsSection: View {
                 confirmationRow(confirmation)
             }
             setupSteps(forwarding)
-            askBeforeDelisting(forwarding)
-            if let problem = model.problem {
-                Text(problem.message)
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.danger)
-                    .accessibilityIdentifier("saleEmails.error")
-            }
         }
     }
 
@@ -101,24 +116,6 @@ struct SaleEmailsSection: View {
             .padding(.vertical, Spacing.xxs)
         }
         .accessibilityIdentifier("saleEmails.steps")
-    }
-
-    private func askBeforeDelisting(_ forwarding: SaleEmailForwarding) -> some View {
-        Toggle(isOn: Binding(
-            get: { forwarding.askBeforeDelist },
-            set: { ask in Task { await model.setAskBeforeDelist(ask) } },
-        )) {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("Ask before delisting")
-                Text("A sale email makes a task for you to confirm before Listora delists the item elsewhere.")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .tint(Palette.brand.color)
-        .disabled(model.isSaving)
-        .accessibilityIdentifier("saleEmails.askBeforeDelist")
     }
 
     private func copyRow(label: String, value: String, identifier: String) -> some View {
@@ -169,6 +166,61 @@ struct SaleEmailsSection: View {
                 openURL(url)
             }
             .accessibilityIdentifier("saleEmails.confirmationLink")
+        }
+    }
+}
+
+/// "Ask before delisting": a sale found by email makes a task to confirm before Listora delists
+/// the item elsewhere. The switch shows what the server saved, never a guess; it reads the
+/// setting itself when the server's answer is not there yet.
+public struct AskBeforeDelistToggle: View {
+    private let model: SaleEmailsModel
+
+    public init(model: SaleEmailsModel) {
+        self.model = model
+    }
+
+    public var body: some View {
+        Group {
+            if let forwarding = model.forwarding {
+                Toggle(isOn: Binding(
+                    get: { forwarding.askBeforeDelist },
+                    set: { ask in Task { await model.setAskBeforeDelist(ask) } },
+                )) {
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text("Ask before delisting")
+                        Text("When a sale email arrives, Listora makes a task for you to confirm before it "
+                            + "delists the item elsewhere.")
+                            .font(Typography.caption)
+                            .foregroundStyle(Palette.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .tint(Palette.brand.color)
+                .disabled(model.isSaving)
+                .accessibilityIdentifier("saleEmails.askBeforeDelist")
+            } else if model.problem == nil {
+                SkeletonBlock(height: 16)
+                    .accessibilityLabel("Loading the delisting setting")
+            }
+            if let problem = model.problem {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(problem.message)
+                        .font(Typography.caption)
+                        .foregroundStyle(Palette.danger)
+                        .accessibilityIdentifier("saleEmails.error")
+                    if model.forwarding == nil {
+                        Button("Try again") { Task { await model.load() } }
+                            .font(Typography.callout)
+                            .accessibilityIdentifier("saleEmails.reload")
+                    }
+                }
+            }
+        }
+        .task {
+            if model.forwarding == nil {
+                await model.load()
+            }
         }
     }
 }

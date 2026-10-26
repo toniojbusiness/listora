@@ -19,10 +19,11 @@ address cannot be guessed, and mail reaches an account only through its own toke
 to any other address is dropped. The inbound domain is `in.<domain>` in AWS and
 `in.listora.test` in development (`EMAIL_INBOUND_DOMAIN`).
 
-**Settings > Link accounts > Sale emails** shows the address with one-tap copy, the server's
-setup steps (Gmail: add the address under Forwarding and POP/IMAP, then a filter that forwards
-the marketplaces' sold emails, `from:(poshmark.com OR mercari.com OR depop.com) subject:(sold OR
-sale)`), the status, and the "Ask before delisting" switch. The status is the server's:
+**Settings > Sale emails** shows the address with one-tap copy, the server's setup steps (Gmail:
+add the address under Forwarding and POP/IMAP, then a filter that forwards the marketplaces' sold
+emails, `from:(poshmark.com OR mercari.com OR depop.com) subject:(sold OR sale)`), and the status;
+the "Ask before delisting" switch is in **Settings > Notifications** ([profile.md](profile.md)).
+The status is the server's:
 
 | Status        | When                                                |
 | ------------- | --------------------------------------------------- |

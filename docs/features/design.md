@@ -101,6 +101,7 @@ looks the same on every screen. The table with each style's use is in `Typograph
 | `cardStyle(_:)`                            | `elevated`, `flat`, or `tinted(tone)` surface; no border in light mode                                                                            |
 | `ListRow`                                  | Icon tile, title, subtitle, trailing accessory; stacks at accessibility sizes                                                                     |
 | `IconTile`                                 | An SF Symbol or monogram on a soft square (rows, cards, empty states)                                                                             |
+| `Avatar`                                   | The seller's photo, or initials on brand clay, in a circle: the header button, rows, the profile ([profile.md](profile.md))                       |
 | `StatusTone`, `StatusBadge`, `StatusLabel` | The honest status vocabulary as a pill or as inline text                                                                                          |
 | `Chip`, `ChoiceChip`, `FlowLayout`         | Labels over photos (or `muted`, on a card); single-choice chips that wrap                                                                         |
 | `ListoraTextField`                         | Labeled field with focus outline, hint, and error                                                                                                 |

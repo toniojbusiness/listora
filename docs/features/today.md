@@ -45,8 +45,8 @@ not done, so it is gone from the next summary once the work is finished.
 ### The screen
 
 The Today tab is the first of the five tabs (Today, Inventory, Add in the center, Tasks, Sales)
-and the one the app opens on; its header has the morning summary bell and the Settings gear
-(Settings is not a tab). It loads each time it appears (also
+and the one the app opens on; its header has the morning summary bell and the seller's avatar, which opens Settings
+(Settings is not a tab; [profile.md](profile.md)). It loads each time it appears (also
 back from a card's screen and when the app comes to the front) and on pull to refresh, keeping the
 cards on screen while it loads and when a later load fails. Done cards leave with an animation.
 With nothing to do and no sales in either week it shows "You're all caught up"; with sales, a

@@ -1,36 +1,46 @@
 import DesignSystem
 import SwiftUI
 
-/// The morning summary: one notification a day, at the seller's time, with what needs them.
+/// The morning summary: one notification a day, at the seller's time, with what needs them. Today
+/// opens it as a sheet (the bell); Settings > Notifications pushes it (`isPushed`).
 struct SummarySettingsView: View {
     @Bindable var model: SummarySettingsModel
+    var isPushed = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            content
-                .background(Palette.background)
-                .navigationTitle("Morning summary")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
+        if isPushed {
+            screen
+        } else {
+            NavigationStack { screen }
+                .presentationDetents([.medium, .large])
+        }
+    }
+
+    private var screen: some View {
+        content
+            .background(Palette.background)
+            .navigationTitle("Morning summary")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if !isPushed {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { dismiss() }
                     }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") {
-                            Task {
-                                if await model.save() {
-                                    dismiss()
-                                }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            if await model.save() {
+                                dismiss()
                             }
                         }
-                        .disabled(model.phase != .loaded || model.isSaving)
-                        .accessibilityIdentifier("summarySettings.save")
                     }
+                    .disabled(model.phase != .loaded || model.isSaving)
+                    .accessibilityIdentifier("summarySettings.save")
                 }
-                .task { await model.load() }
-        }
-        .presentationDetents([.medium, .large])
+            }
+            .task { await model.load() }
     }
 
     @ViewBuilder

@@ -34,7 +34,7 @@ tags:
   - name: health
     description: Liveness and readiness probes for load balancers and containers.
   - name: account
-    description: The signed-in person's Listora account.
+    description: The signed-in person's Listora account and profile.
   - name: items
     description: Master inventory items. Each physical item has one item and one SKU.
   - name: photos
@@ -150,6 +150,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/account/profile:
+    get:
+      tags:
+        - account
+      operationId: getProfile
+      summary: Get my profile
+      description: |
+        What Settings shows about the signed-in person: their email from the sign-in provider
+        (read-only), the name they go by, and the business they sell as. A name absent from the
+        response was never entered (or was cleared).
+      responses:
+        '200':
+          description: The profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    put:
+      tags:
+        - account
+      operationId: replaceProfile
+      summary: Replace my profile
+      description: |
+        Saves the person's name and the account's business name. The body replaces both: a name
+        left out is cleared. The server trims each name; one that is blank after trimming is
+        `422 validation_failed`. The email cannot be changed here. The business name belongs to
+        the account, so a member who is not its owner or an admin gets `403 forbidden`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileReplace'
+      responses:
+        '200':
+          description: The saved profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+        '403':
+          description: The person may not change the account's business name (`forbidden`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
   /v1/items:
@@ -2816,6 +2868,36 @@ components:
             access is revoked. False means it is not confirmed, so the user must revoke it
             manually in the marketplace's settings (Listora also keeps asking the marketplace
             for up to 7 days when it still holds the connection's tokens).
+    Profile:
+      type: object
+      description: The signed-in person as Settings shows them.
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          description: The email the person signs in with; absent when the sign-in provider gave none.
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: The name the person goes by.
+        businessName:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: The business the account sells as.
+    ProfileReplace:
+      type: object
+      description: Both names; one left out is cleared.
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        businessName:
+          type: string
+          minLength: 1
+          maxLength: 200
     HealthCheckStatus:
       type: string
       enum:

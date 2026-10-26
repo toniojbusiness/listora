@@ -75,6 +75,22 @@ public final class MarketplacesModel {
         await load()
     }
 
+    /// One line about every marketplace, for Settings: the server's banner while a connection
+    /// needs attention, otherwise how many the server reports working. Nil before the first read.
+    public var healthLine: HealthLine? {
+        if let attention {
+            return HealthLine(text: attention.title, needsAttention: attention.needsAction)
+        }
+        guard !rows.isEmpty else { return nil }
+        let working = rows.count { $0.tone == .success }
+        let text = switch working {
+        case 0: "None linked yet"
+        case 1: "1 working"
+        default: "\(working) working"
+        }
+        return HealthLine(text: text, needsAttention: false)
+    }
+
     /// Loads (or reloads) every marketplace's connection and the attention banner.
     public func load() async {
         if rows.isEmpty {
@@ -286,6 +302,13 @@ public struct AttentionBanner: Equatable, Sendable {
             count: max(count, 1),
         )
     }
+}
+
+/// The marketplaces' health in one line (``MarketplacesModel/healthLine``).
+public struct HealthLine: Equatable, Sendable {
+    public let text: String
+    /// True when the seller has to act on a connection.
+    public let needsAttention: Bool
 }
 
 /// Sale email forwarding, as the server describes it.

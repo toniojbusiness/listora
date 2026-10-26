@@ -58,6 +58,12 @@ targets:
     platform: iOS
     sources:
       - Listora
+      # Settings > Privacy policy and Terms of service read the repository's own drafts
+      # (LegalDocument in SettingsFeature), so the app and docs/legal never disagree.
+      - path: ../../docs/legal/privacy-policy.md
+        buildPhase: resources
+      - path: ../../docs/legal/terms-of-service.md
+        buildPhase: resources
     dependencies:
       - package: Core
       - package: Features
@@ -85,6 +91,7 @@ targets:
         ListoraSessionKeychainGroup: $(SESSION_KEYCHAIN_GROUP)
         ListoraCognitoRegion: $(COGNITO_REGION)
         ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
+        ListoraSupportEmail: $(SUPPORT_EMAIL)
         ITSAppUsesNonExemptEncryption: false
         NSCameraUsageDescription: Listora uses the camera to photograph the items you sell.
         # Assisted tasks save an item's photos to the camera roll, in posting order, for the
