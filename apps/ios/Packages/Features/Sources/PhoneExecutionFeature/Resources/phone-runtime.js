@@ -6140,9 +6140,21 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				});
 				const names = [...new Set(hrefs.map(usernameOf))];
 				if (names.length === 1 && names[0] !== null && names[0] !== void 0) return names[0];
-				throw changed$2("user menu", `has a profile item with ${String(names.length)} shop links, not one`);
+				if (names.length > 1) throw changed$2("user menu", `has a profile item with ${String(names.length)} shop links`);
+				return openedProfile(page);
 			}
 			if (Date.now() >= end) throw changed$2("user menu", "has no profile item");
+			await lookAgain(page, LOOK_EVERY_MS$1);
+		}
+	}
+	/** Opens the menu's "Your profile" and reads the username from the address it opens. */
+	async function openedProfile(page) {
+		await page.click(SHOP_PAGE.profile);
+		const end = Date.now() + APPEAR_MS;
+		for (;;) {
+			const shown = usernameOf(new URL(page.url()).pathname);
+			if (shown !== null) return shown;
+			if (Date.now() >= end) throw changed$2("user menu", "profile item opened no seller's shop");
 			await lookAgain(page, LOOK_EVERY_MS$1);
 		}
 	}

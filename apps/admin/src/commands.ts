@@ -12,6 +12,7 @@ import {
 import { purgeMarketplaceConnections } from '@listora/connections';
 import type { AiControlAction, Db } from '@listora/db';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
+import { tryOperationNow } from '@listora/operations';
 import { assertNever, type Logger } from '@listora/shared';
 
 import { USAGE, type Command } from './args.ts';
@@ -296,6 +297,20 @@ export async function runCommand(command: Command, context: CommandContext): Pro
           ]),
         ),
       );
+      return;
+    }
+
+    case 'operation-try-now': {
+      const moved = await tryOperationNow(db, {
+        accountId: command.accountId,
+        operationId: command.operationId,
+        actor: command.actor,
+      });
+      context.logger.warn(
+        { event: 'operation_try_now', operationId: moved.id, actor: command.actor },
+        'operation brought forward',
+      );
+      print(`Operation ${moved.id} (${moved.status}) runs its next attempt now.`);
       return;
     }
 

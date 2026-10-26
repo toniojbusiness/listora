@@ -8,8 +8,8 @@
  * The seller's username is the shop's address. A signed-in page names it only in the header's
  * user menu (`#userNavItem-button`): read on the captain's real session (2026-10-26), the open
  * menu offers "Your profile" (`actionMenu__nav-profileLinkButton`), "Your selling hub",
- * "Purchases", "Settings", "Resolution Center", and "Log out", so the profile is found by its
- * test id rather than as the only new link.
+ * "Purchases", "Settings", "Resolution Center", and "Log out", none of them a link, so the
+ * profile item is found by its test id and opened, and its address names the seller.
  */
 import type { PageDriver } from '../../runner/types.ts';
 import { DEPOP_PATHS, slugFromPath } from '../site.ts';
@@ -56,12 +56,25 @@ export async function findSeller(page: PageDriver, site: DepopSite): Promise<str
       });
       const names = [...new Set(hrefs.map(usernameOf))];
       if (names.length === 1 && names[0] !== null && names[0] !== undefined) return names[0];
-      throw changed(
-        'user menu',
-        `has a profile item with ${String(names.length)} shop links, not one`,
-      );
+      if (names.length > 1) {
+        throw changed('user menu', `has a profile item with ${String(names.length)} shop links`);
+      }
+      // A menu item that opens the profile with the page's own navigation, not a link.
+      return openedProfile(page);
     }
     if (Date.now() >= end) throw changed('user menu', 'has no profile item');
+    await lookAgain(page, LOOK_EVERY_MS);
+  }
+}
+
+/** Opens the menu's "Your profile" and reads the username from the address it opens. */
+async function openedProfile(page: PageDriver): Promise<string> {
+  await page.click(SHOP_PAGE.profile);
+  const end = Date.now() + APPEAR_MS;
+  for (;;) {
+    const shown = usernameOf(new URL(page.url()).pathname);
+    if (shown !== null) return shown;
+    if (Date.now() >= end) throw changed('user menu', "profile item opened no seller's shop");
     await lookAgain(page, LOOK_EVERY_MS);
   }
 }

@@ -30,6 +30,11 @@ Marketplace data (docs/features/privacy.md):
                        every account, as when the marketplace ends Listora's access (for example
                        Depop's partner API); without --confirm it only counts them
 
+Marketplace operations (docs/features/operations.md):
+  operation-try-now <operation-id> --account <account-id> --actor <name>
+                       run a waiting operation's next attempt now instead of at its scheduled
+                       time (retrying or verifying only; recorded in its history)
+
 Options:
   --day YYYY-MM-DD    a UTC day
   --month YYYY-MM     a UTC calendar month
@@ -97,6 +102,12 @@ export type Command =
       /** Who ran it and why, for the log line (the same as an AI control change's). */
       readonly change: { readonly actor: string; readonly reason: string };
       readonly confirm: boolean;
+    }
+  | {
+      readonly name: 'operation-try-now';
+      readonly accountId: string;
+      readonly operationId: string;
+      readonly actor: string;
     };
 
 const OPTIONS = {
@@ -181,6 +192,26 @@ export function parseCommand(argv: readonly string[], now: Date = new Date()): C
         mode: values.mode,
         change: parseChange(values),
         confirm: values.confirm === true,
+      };
+    }
+    case 'operation-try-now': {
+      expectArgs(
+        'operation-try-now',
+        action === undefined ? rest : [action, ...rest],
+        1,
+        'an operation id',
+      );
+      allowOnly('operation-try-now', values, ['account', 'actor']);
+      const account = optionalAccount(values);
+      if (account === undefined) throw new UsageError('--account is required');
+      if (!UUID.test(action ?? '')) throw new UsageError('the operation id must be a UUID');
+      const actor = typeof values.actor === 'string' ? values.actor.trim() : '';
+      if (actor === '') throw new UsageError('--actor is required');
+      return {
+        name: 'operation-try-now',
+        accountId: account,
+        operationId: (action ?? '').toLowerCase(),
+        actor,
       };
     }
     case undefined:

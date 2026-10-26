@@ -6,6 +6,7 @@ export {
   dismissOperationByUser,
   enqueueOperation,
   retryOperation,
+  tryOperationNow,
 } from './commands.ts';
 export type { EnqueueResult, NewOperation, OperationTarget } from './commands.ts';
 export { validateDesiredState } from './desired.ts';

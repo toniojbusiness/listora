@@ -218,6 +218,53 @@ export async function retryOperation(
 }
 
 /**
+ * Try now: an operation waiting for its next attempt (`retrying`, or `verifying` between
+ * read-backs) runs that attempt at once instead of at its scheduled time. It keeps its status,
+ * attempts, and error, and the attempt runs through the state machine exactly as it would have
+ * later (a retry reads the listing back before sending anything); only the time moves, and the
+ * operation's history records who moved it. Refused for any other status, so it never starts a
+ * step that is running or one the user must do.
+ */
+export async function tryOperationNow(
+  executor: DbExecutor,
+  target: OperationTarget & { actor: string },
+): Promise<OperationRow> {
+  return inTransaction(executor, async (trx) => {
+    const op = await lockOperation(trx, target);
+    if (op.status !== 'retrying' && op.status !== 'verifying') {
+      throw new InvalidTransitionError(op.id, op.status, 'running');
+    }
+    const moved = await trx
+      .updateTable('marketplace_operation')
+      .set({ next_attempt_at: sql<Date>`now()` })
+      .where('account_id', '=', op.account_id)
+      .where('id', '=', op.id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    await trx
+      .insertInto('operation_event')
+      .values({
+        account_id: op.account_id,
+        operation_id: op.id,
+        from_status: op.status,
+        to_status: op.status,
+        attempt: op.attempts,
+        error_code: op.error_code,
+        detail: jsonb(eventDetail({ action: 'try_now', actor: target.actor })),
+      })
+      .execute();
+    await scheduleOperationJob(trx, {
+      accountId: op.account_id,
+      operationId: op.id,
+      listingId: op.listing_id,
+      priority: operationPriority(op),
+      runAt: moved.next_attempt_at ?? new Date(),
+    });
+    return moved;
+  });
+}
+
+/**
  * Cancels an operation that has not started a step (queued, waiting to retry, or waiting for
  * the user). A running or verifying operation may already have reached the marketplace, so it
  * must finish first.
