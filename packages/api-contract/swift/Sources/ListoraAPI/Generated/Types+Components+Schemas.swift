@@ -5937,21 +5937,34 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin/cookieDomains`.
             public var cookieDomains: [Swift.String]
+            /// The marketplace may sign the user in with a link it emails them (Depop). Tapped in
+            /// the email, that link opens the phone's default browser, not the app, so the app asks
+            /// for the link to be copied (or shared to the app) and opens it in its sign-in page,
+            /// but only a link on `url`'s scheme or https and on one of `cookieDomains`. Absent
+            /// means `false`.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin/emailsSignInLinks`.
+            public var emailsSignInLinks: Swift.Bool?
             /// Creates a new `MarketplaceSessionLogin`.
             ///
             /// - Parameters:
             ///   - url: The marketplace's own sign-in page.
             ///   - cookieDomains: The marketplace's own domains (`poshmark.com`). The app sends only cookies whose
+            ///   - emailsSignInLinks: The marketplace may sign the user in with a link it emails them (Depop). Tapped in
             public init(
                 url: Swift.String,
-                cookieDomains: [Swift.String]
+                cookieDomains: [Swift.String],
+                emailsSignInLinks: Swift.Bool? = nil
             ) {
                 self.url = url
                 self.cookieDomains = cookieDomains
+                self.emailsSignInLinks = emailsSignInLinks
             }
             public enum CodingKeys: String, CodingKey {
                 case url
                 case cookieDomains
+                case emailsSignInLinks
             }
         }
         /// A marketplace linked by signing in (`connect: session`). It is shown as linked only

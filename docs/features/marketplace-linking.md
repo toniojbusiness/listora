@@ -13,7 +13,8 @@ flow end to end.
    `Not linked`, `Checking...`, `Linked`, `Sign in again` (with the marketplace's reason), or
    `Not confirmed` (with the reason). Each row has **Link** (or **Relink** once it had a session).
 2. Tapping it opens the marketplace's own sign-in page inside Listora. The user signs in there,
-   including any two-step check, then taps **I'm signed in**.
+   including any two-step check, then taps **I'm signed in**. Depop can sign in with a link it
+   emails instead of a password; see [Emailed sign-in links](#emailed-sign-in-links-depop).
 3. The row shows `Checking...` until the check has confirmed that the marketplace accepts the
    session, then `Linked`. A marketplace that runs on the phone is checked on this iPhone at
    once, and its row says "Runs on this iPhone". If the check fails, or has not finished within 15
@@ -31,6 +32,33 @@ description of the session (`describeAutomationSession` in `@listora/connections
 Below the marketplaces, the **Sale emails** section shows the forwarding address that catches
 their sold emails, how to set forwarding up, the email provider's confirmation code, and "Ask
 before delisting" ([email-sales.md](email-sales.md)).
+
+### Emailed sign-in links (Depop)
+
+Depop may email a "tap to sign in" link. Tapped in the email, it opens the phone's default
+browser (Safari or Chrome) and signs in there, where Listora never gets the session; Listora
+cannot claim Depop's links (its universal links belong to Depop). So Depop's sign-in page in
+Listora shows the steps under the page: "Don't tap it. Press and hold it, tap Copy, then come
+back here and paste it", with the system's **Paste** button (`PasteButton`, so iOS shows no
+paste permission prompt), and "Or press and hold the link, tap Share, then Listora". Either way
+the link opens in the same sign-in page (the same web view and data store), and **I'm signed
+in** hands over its cookies as for any sign-in. Depop's own password or code sign-in, when its
+page offers one, works as before, and nothing the user types is stored.
+
+- Only a genuine sign-in link opens: https (or the sign-in page's own scheme and port, on the
+  local stand-in sites), on one of the marketplace's `login.cookieDomains` or a subdomain of one
+  (never a look-alike such as `notdepop.com`), with no user name or password in it
+  (`SignInLinkRule`, in Core). Anything else is refused with "That isn't a Depop sign-in link".
+- Which marketplaces get the steps comes from the server: `login.emailsSignInLinks` (the
+  profile's `emailsSignInLinks`, `true` for Depop only).
+- **Shared links.** While the page is open (for up to 30 minutes), the app records in the
+  Keychain group it shares with the Share Extension that Depop's page waits for a link
+  (`SignInLinkHandoff`, `KeychainSignInLinkHandoff`). A share of a link the rule accepts goes
+  there instead of the listing flow, and the extension says "Sign-in link sent to Listora. Go
+  back to Listora"; an extension cannot open its app. Coming back opens the link in the page,
+  once. Closing the page clears the record, so a link shared later is treated as any other share.
+- A seller who signed in through the email's link in their browser before this existed relinks
+  Depop once: that browser's session never reached Listora.
 
 Listora never sees the password: it is typed into the marketplace's page, the app never reads
 the page or runs a script in it, and only the site's cookies are handed over. Listora cannot and
@@ -142,6 +170,11 @@ The worker's dispatcher starts the runner when the job waits (within a minute; i
 
 ## Development
 
+The fake Depop site (`npm run dev:fake-depop-site`) also signs in with an emailed link: its
+login page's **Email me a sign-in link** "sends" a one-time link to
+`/login/magic-link/?token=...`, which the site logs (and the local stack's control endpoint
+serves at `GET /depop/sign-in-link`). Paste it into Depop's sign-in page in the app.
+
 With `FAKE_AUTOMATION_SITE_URL` and the same `TOKEN_ENCRYPTION_KEY` set for the API, the
 worker, and the runner, and `npm run dev:fake-site` running, Link accounts opens the fake site's
 `/login` for Poshmark, Mercari, and Depop, and its `/signin/` (eBay's own sign-in path) for eBay.
@@ -163,6 +196,12 @@ and the runner checks the session against the fake site in local headless Chromi
   Chromium against the fake site: passed, rejected, CAPTCHA, retries then failure, a browser that
   cannot start (its temporary directory not writable, as on Fargate on 2026-10-25), no adapter,
   and a replaced link.
+- `CoreTests/SignInLinkTests.swift`: the sign-in link rule (genuine Depop links accepted;
+  look-alikes, other sites, other schemes, user info, other ports, and overlong links refused)
+  and the Share Extension handoff (once only, only while a page waits, only the marketplace's
+  own links, lapsing, cleared on close).
+- `MarketplaceSignInModelTests`: a pasted or shared link opens in the same sign-in page, nothing
+  else does, and a marketplace that emails no link takes none.
 - `MarketplaceLinkingFeatureTests`: the model's linked, needs-relink, failed, and unlink paths, Check
   again, retries, polling that never claims success and outlasts the server's deadline, cookie
   capture, and the API service's request shapes.
@@ -170,7 +209,11 @@ and the runner checks the session against the fake site in local headless Chromi
   `StubAPIServer` and links it; the test checks that the cookie was sent and the password was not,
   then unlinks it.
 - `PhoneExecutionUITests`: on the local stack, the app links Depop on the fake Depop site and the
-  phone checks the session ([phone-execution.md](phone-execution.md#tests)).
+  phone checks the session ([phone-execution.md](phone-execution.md#tests)). One test signs in
+  with the fake Depop's emailed link, pasted into the sign-in page (a look-alike link is refused
+  first), and links Depop.
+- `packages/automation/src/depop/adapter.int.test.ts`: the fake Depop's emailed link signs in
+  once.
 
 ## Follow-ups
 

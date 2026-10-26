@@ -164,6 +164,33 @@ describe('Depop automation adapter on the fake Depop site', () => {
     expect(refused.headers.get('set-cookie')).toBeNull();
   });
 
+  it('signs a seller in with an emailed link, once, as the app does when the link is pasted', async () => {
+    const before = site.signInLinks().length;
+    const asked = await fetch(`${site.url}/login/email-link/`, {
+      method: 'POST',
+      body: new URLSearchParams({ email: 'vintage_finds@example.com' }),
+    });
+    expect(await asked.text()).toContain('Check your email');
+    const links = site.signInLinks();
+    expect(links).toHaveLength(before + 1);
+    const link = links.at(-1) ?? '';
+    expect(new URL(link).pathname).toBe('/login/magic-link/');
+
+    const signedIn = await fetch(link, { redirect: 'manual' });
+    expect(signedIn.status).toBe(303);
+    expect(signedIn.headers.get('location')).toBe('/sellinghub/');
+    const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    const hub = await fetch(`${site.url}/sellinghub/`, { headers: { cookie }, redirect: 'manual' });
+    expect(await hub.text()).toContain('vintage_finds');
+
+    // A link signs in once; a used or made-up one signs nobody in.
+    for (const refused of [link, `${site.url}/login/magic-link/?token=made-up`]) {
+      const again = await fetch(refused, { redirect: 'manual' });
+      expect(again.status).toBe(400);
+      expect(again.headers.get('set-cookie')).toBeNull();
+    }
+  });
+
   it('fills every field of the sell form, uploads photos in posting order, and reads the listing back', async () => {
     const content = sampleListingContent({ variant: { hashtags: ['vintage', 'denim'] } });
     const { ref, outcome } = await create(content);

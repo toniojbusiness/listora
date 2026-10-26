@@ -25,6 +25,8 @@
  * - `GET /depop/products`: the fake Depop's products, `[{ slug, status, priceCents, description }]`.
  * - `POST /depop/sessions` `{ seller? }`: a signed-in session cookie on the fake Depop, as signing
  *   in there would set, answering `{ name, value, domain, path }`.
+ * - `GET /depop/sign-in-link`: the newest sign-in link the fake Depop "emailed" (its Email me a
+ *   sign-in link), answering `{ link }`, or 404 when it emailed none.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
@@ -153,6 +155,12 @@ async function handle(
           description: product.description,
         })),
       };
+    case 'GET /depop/sign-in-link': {
+      const link = deps.fakeDepop.signInLinks().at(-1);
+      return link === undefined
+        ? { status: 404, body: { error: 'the fake Depop emailed no sign-in link' } }
+        : { status: 200, body: { link } };
+    }
     case 'POST /depop/sessions': {
       const body = await readJson(request);
       const seller =

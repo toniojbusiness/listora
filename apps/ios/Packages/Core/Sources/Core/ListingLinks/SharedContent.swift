@@ -73,8 +73,14 @@ public struct SharedContent: Equatable, Sendable {
     /// Left over at a title's edges once links are removed, as in "Check this out: <link>".
     private static let titleEdges = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ":|-–"))
 
-    private var candidateURLs: [URL] {
-        urls + Self.linkMatches(in: text ?? "").compactMap(\.url)
+    /// The shared URLs, then the links in the shared text.
+    var candidateURLs: [URL] {
+        urls + Self.links(in: text ?? "")
+    }
+
+    /// The links in `text`, in order.
+    static func links(in text: String) -> [URL] {
+        linkMatches(in: text).compactMap(\.url)
     }
 
     private static func linkMatches(in text: String) -> [NSTextCheckingResult] {

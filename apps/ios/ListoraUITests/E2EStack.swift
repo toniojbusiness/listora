@@ -117,6 +117,12 @@ struct E2EStack {
         _ = try await control("depop/faults", method: "DELETE", body: nil)
     }
 
+    /// The newest sign-in link the fake Depop "emailed" (`GET /depop/sign-in-link`).
+    func depopSignInLink() async throws -> String {
+        let data = try await control("depop/sign-in-link", method: "GET", body: nil)
+        return try JSONDecoder().decode([String: String].self, from: data)["link"] ?? ""
+    }
+
     /// The fake Depop's products (`GET /depop/products`).
     func depopProducts() async throws -> [DepopProduct] {
         let data = try await control("depop/products", method: "GET", body: nil)

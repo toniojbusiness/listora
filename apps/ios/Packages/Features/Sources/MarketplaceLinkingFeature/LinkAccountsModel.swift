@@ -48,6 +48,7 @@ public final class LinkAccountsModel {
     public let installationID: String
     private let service: any MarketplaceSessionService
     private let sessions: (any MarketplaceSessionStore)?
+    private let signInLinks: (any SignInLinkHandoff)?
     private weak var phoneWork: (any PhoneWorkTrigger)?
     private let makeIdempotencyKey: @Sendable () -> String
     private let sleep: @Sendable (Duration) async throws -> Void
@@ -63,11 +64,13 @@ public final class LinkAccountsModel {
     /// the server has an answer.
     /// `sessions` keeps each sign-in's cookies on this phone too, which runs the marketplace when
     /// it runs on the phone (docs/features/phone-execution.md); `phoneWork` runs the session's
-    /// check there at once.
+    /// check there at once. `signInLinks` brings a sign-in link the user shares to Listora (the
+    /// Share Extension) to the open sign-in page.
     public init(
         service: any MarketplaceSessionService,
         saleEmails: SaleEmailsModel? = nil,
         sessions: (any MarketplaceSessionStore)? = nil,
+        signInLinks: (any SignInLinkHandoff)? = nil,
         phoneWork: (any PhoneWorkTrigger)? = nil,
         installationID: String = Installation.id(),
         makeIdempotencyKey: @escaping @Sendable () -> String = { UUID().uuidString },
@@ -79,6 +82,7 @@ public final class LinkAccountsModel {
         self.service = service
         self.saleEmails = saleEmails
         self.sessions = sessions
+        self.signInLinks = signInLinks
         self.phoneWork = phoneWork
         self.installationID = installationID
         self.makeIdempotencyKey = makeIdempotencyKey
@@ -175,6 +179,12 @@ public final class LinkAccountsModel {
         case .sending, .requestingCheck, .unlinking: true
         case .failed, .checkFailed, .unlinkFailed, nil: false
         }
+    }
+
+    /// The sign-in page for `link`, which takes an emailed sign-in link when the marketplace
+    /// sends one.
+    public func signInPage(for link: MarketplaceLink) -> MarketplaceSignInModel {
+        MarketplaceSignInModel(link: link, handoff: signInLinks, now: now)
     }
 
     public func cancelSignIn() {
