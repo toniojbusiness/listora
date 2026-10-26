@@ -107,8 +107,9 @@ final class ScreenshotTourUITests: XCTestCase {
         size.tap()
         let editor = app.textFields["review.editor.sizeLabel"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
-        editor.typeText("M")
-        app.buttons["review.editor.done"].tap()
+        // Return commits it: at the largest text sizes the keyboard scrolls the row's Done button
+        // under the navigation bar.
+        editor.typeText("M\n")
         XCTAssertTrue(app.buttons["review.continue"].wait(for: \.isEnabled, toEqual: true, timeout: 5))
     }
 
