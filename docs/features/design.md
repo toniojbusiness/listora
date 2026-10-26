@@ -151,8 +151,9 @@ Today ("before" only in light and dark), and the code screen.
 ## Design pass: layout and feel
 
 Built on Forest and clay, without changing what any screen does. Before and after sheets of each
-screen are in [design/pass3/](design/pass3/): the iPhone 17 in light and dark mode at the default
-and the largest text size, and the iPhone 17e and iPhone 17 Pro Max at both sizes.
+screen are in [design/pass3/](design/pass3/): before on the iPhone 17 in light and dark mode,
+after on the iPhone 17e (the smallest current iPhone) in light mode and at the largest text size
+in dark mode, and on the iPhone 17 Pro Max in dark mode.
 
 - **Photo first.** Inventory opens as a grid of large, square cover photos (two columns on every
   iPhone, one at accessibility sizes) with the item's status on the photo, the title, price, SKU,
