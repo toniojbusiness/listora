@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 /// Depop runs on this iPhone (docs/features/phone-execution.md), against the local stack: the
@@ -46,6 +47,58 @@ final class PhoneExecutionUITests: XCTestCase {
         await fulfillment(of: [ranEverything], timeout: 60)
         XCTAssertFalse(app.buttons["linkAccounts.checkAgain.depop"].exists)
         snapshot("1-linked-on-this-iphone")
+    }
+
+    /// Depop emails a sign-in link. Tapped in the email it would sign in the phone's browser, so
+    /// the seller copies it and pastes it into Listora's sign-in page, where it signs in and the
+    /// session lands in Listora.
+    func testLinksDepopWithTheSignInLinkItEmailedPastedIntoListora() async throws {
+        let stack = try await freshStack()
+        launch(stack, reset: true)
+        openLinkAccounts()
+
+        app.buttons["linkAccounts.link.depop"].tap()
+        XCTAssertTrue(
+            element("signIn.emailedLink").waitForExistence(timeout: 20),
+            "no emailed link steps\n\(app.debugDescription)",
+        )
+        XCTAssertTrue(app.staticTexts["Depop emailed you a sign-in link?"].exists)
+        let web = app.webViews.firstMatch
+        let email = web.textFields.element(boundBy: 1)
+        XCTAssertTrue(email.waitForExistence(timeout: 20), "the sign-in page did not load\n\(app.debugDescription)")
+        email.tap()
+        email.typeText("e2e-seller@example.com\n")
+        XCTAssertTrue(
+            web.staticTexts["Check your email"].waitForExistence(timeout: 30),
+            "the fake Depop emailed no link\n\(app.debugDescription)",
+        )
+        snapshot("1-emailed-link-steps")
+
+        // A look-alike link is refused, and the page stays where it was.
+        UIPasteboard.general.string = "https://notdepop.com/login/magic-link/?token=abc"
+        pasteButton().tap()
+        XCTAssertTrue(element("signIn.linkProblem").waitForExistence(timeout: 10))
+        XCTAssertTrue(web.staticTexts["Check your email"].exists)
+
+        // The seller copies the link in Depop's email and pastes it here.
+        UIPasteboard.general.string = try await stack.depopSignInLink()
+        pasteButton().tap()
+        XCTAssertTrue(
+            web.staticTexts["Selling hub"].waitForExistence(timeout: 30),
+            "the emailed link did not sign in\n\(app.debugDescription)",
+        )
+        XCTAssertTrue(element("signIn.linkOpened").exists)
+        XCTAssertFalse(element("signIn.linkProblem").exists)
+        snapshot("2-signed-in-with-the-link")
+        app.buttons["signIn.done"].tap()
+        await waitForLinked()
+        snapshot("3-linked")
+    }
+
+    /// The system's paste button on the sign-in page.
+    private func pasteButton() -> XCUIElement {
+        let byIdentifier = app.buttons["signIn.pasteLink"]
+        return byIdentifier.waitForExistence(timeout: 5) ? byIdentifier : app.buttons["Paste"].firstMatch
     }
 
     func testHandsABotCheckToTheSellerAndGoesOnOnceTheyAreDone() async throws {

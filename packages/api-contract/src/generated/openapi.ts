@@ -3065,6 +3065,14 @@ export interface components {
              *     domain is one of these or a subdomain of one; the server refuses any other.
              */
             cookieDomains: string[];
+            /**
+             * @description The marketplace may sign the user in with a link it emails them (Depop). Tapped in
+             *     the email, that link opens the phone's default browser, not the app, so the app asks
+             *     for the link to be copied (or shared to the app) and opens it in its sign-in page,
+             *     but only a link on `url`'s scheme or https and on one of `cookieDomains`. Absent
+             *     means `false`.
+             */
+            emailsSignInLinks?: boolean;
         };
         /**
          * @description A marketplace linked by signing in (`connect: session`). It is shown as linked only
