@@ -28,24 +28,27 @@ or numbers.
 
 ### Color (`Palette`)
 
-Blush and plum: soft blush tints, a deep plum brand, warm ivory surfaces, and deep plum-black
-in dark mode. It was chosen from three directions (with Sage and sand, and Terracotta and cream)
-for an audience that is mostly women and also men: refined rather than pastel, and no generic
-tech blue.
+Forest and clay: a terracotta-clay brand, forest-green text on warm off-white surfaces, and deep
+forest surfaces in dark mode. It replaced Blush and plum, which read as too feminine, and was
+chosen from three gender-neutral directions (with Sage and sand, and Ink and teal) for an
+audience of women and men: warm and earthy rather than pastel, and no generic tech blue.
 
 | Token                                   | Light                         | Dark                              | Use                                       |
 | --------------------------------------- | ----------------------------- | --------------------------------- | ----------------------------------------- |
-| `background`                            | `#FBF7F4`                     | `#161013`                         | Behind everything                         |
-| `surface`                               | `#FFFDFB`                     | `#211A1E`                         | Cards, rows, sheets                       |
-| `surfaceSecondary`                      | `#F5ECEA`                     | `#2D2429`                         | Wells inside a card: fields, placeholders |
-| `separator`                             | `#EADCD8`                     | `#3A2F35`                         | Hairlines and card borders                |
-| `textPrimary` / `textSecondary`         | `#2A1B26` / `#6B5864`         | `#F7EEF2` / `#C4B3BD`             | Text                                      |
-| `brand` / `brandSoft` / `onBrand`       | `#6E2A5C` / `#F6E3EC` / white | `#E7A3C9` / `#43213A` / `#2E0F25` | Primary actions, selection                |
-| `success` / `successSoft`               | `#2E6B4A` / `#E5F1E9`         | `#86D3A6` / `#173224`             | Confirmed                                 |
-| `info` / `infoSoft`                     | `#3D5585` / `#E7ECF6`         | `#A9BCF0` / `#1E2A45`             | Running, checking                         |
-| `warning` / `warningSoft`               | `#8F4A12` / `#FBEEDD`         | `#F2C27A` / `#3B2A12`             | Needs the user                            |
-| `danger` / `dangerSoft` / `onDanger`    | `#A8243B` / `#FBE6EA` / white | `#FF8A7A` / `#47161F` / `#3A0A14` | Failed, destructive                       |
+| `background`                            | `#F7F4EE`                     | `#0F1913`                         | Behind everything                         |
+| `surface`                               | `#FFFDF9`                     | `#16231B`                         | Cards, rows, sheets                       |
+| `surfaceSecondary`                      | `#EEE9DF`                     | `#1F2E25`                         | Wells inside a card: fields, placeholders |
+| `separator`                             | `#E0D9CC`                     | `#2C3D32`                         | Hairlines and card borders                |
+| `textPrimary` / `textSecondary`         | `#17281E` / `#4C5D52`         | `#EEF2EC` / `#ADBDB2`             | Text                                      |
+| `brand` / `brandSoft` / `onBrand`       | `#9C472A` / `#F5E2D8` / white | `#EFA484` / `#43271B` / `#34150A` | Primary actions, selection                |
+| `success` / `successSoft`               | `#1F6A3E` / `#E1F0E5`         | `#8CD6A6` / `#16311F`             | Confirmed                                 |
+| `info` / `infoSoft`                     | `#37587A` / `#E4EBF2`         | `#A7C2DE` / `#1B2A36`             | Running, checking                         |
+| `warning` / `warningSoft`               | `#7F5000` / `#F6ECD5`         | `#EDC476` / `#382C12`             | Needs the user                            |
+| `danger` / `dangerSoft` / `onDanger`    | `#A8203F` / `#F9E2E7` / white | `#FF9DB0` / `#461723` / `#3A0A16` | Failed, destructive                       |
 | `mediaBackground` / `onMedia` / `scrim` | black / white / black         | same                              | Camera and crop, always dark              |
+
+The palette sheets that compared the three directions (Today, inventory, item, Add Item,
+review, price, and Settings, in light and dark mode) are in [design/palette/](design/palette/).
 
 `PaletteTests` checks every text color on every background, every strong color and
 `textPrimary` on its soft background, the labels on `brand` and `danger`, and that the brand and

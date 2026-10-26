@@ -92,7 +92,24 @@ final class ScreenshotTourUITests: XCTestCase {
         app.swipeUp()
         app.swipeUp()
         try shot("18-review-copy")
+        enterSize()
         app.buttons["review.continue"].tap()
+    }
+
+    /// The tag doesn't show the shirt's size, and Continue waits for it. The size leads the
+    /// review's list, so it is back at the top.
+    private func enterSize() {
+        let size = app.buttons["review.field.sizeLabel"]
+        let barTop = app.buttons["voice.talk"].frame.minY
+        for _ in 0 ..< 8 where !(size.exists && size.isHittable && size.frame.maxY < barTop) {
+            app.swipeDown()
+        }
+        size.tap()
+        let editor = app.textFields["review.editor.sizeLabel"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("M")
+        app.buttons["review.editor.done"].tap()
+        XCTAssertTrue(app.buttons["review.continue"].wait(for: \.isEnabled, toEqual: true, timeout: 5))
     }
 
     private func costTour() throws {
