@@ -64,7 +64,7 @@ export function registerOperationRoutes(app: FastifyInstance, deps: RouteDepende
     return {
       status: 200,
       body: {
-        data: page.map((row) => eventView(row, operation.marketplace)),
+        data: page.map((row) => eventView(row, operation)),
         ...(rows.length > limit && last ? { nextCursor: encodeCursor(last.id) } : {}),
       },
     };
