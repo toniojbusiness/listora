@@ -835,6 +835,26 @@ export interface TodaySummarySettingTable {
   updated_at: UpdatedAt;
 }
 
+// Sale emails ---------------------------------------------------------------------------------
+
+/** An account's forwarding address and email sale settings (docs/features/email-sales.md). */
+export interface SaleEmailInboxTable {
+  account_id: string;
+  /** The private part of `sales+<token>@<inbound domain>`. */
+  address_token: string;
+  ask_before_delist: Generated<boolean>;
+  last_email_at: NullableTimestamp;
+  /** The latest marketplace email that passed DKIM and SPF. */
+  last_verified_email_at: NullableTimestamp;
+  last_sale_email_at: NullableTimestamp;
+  confirmation_provider: Nullable<string>;
+  confirmation_code: Nullable<string>;
+  confirmation_url: Nullable<string>;
+  confirmation_received_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
 // Batch listing -------------------------------------------------------------------------------
 
 /** A haul photographed in one session (docs/features/batch.md). */
@@ -917,6 +937,7 @@ export interface Database {
   sale_check_schedule: SaleCheckScheduleTable;
   session_check: SessionCheckTable;
   today_summary_setting: TodaySummarySettingTable;
+  sale_email_inbox: SaleEmailInboxTable;
   item_batch: ItemBatchTable;
   item_batch_item: ItemBatchItemTable;
 }

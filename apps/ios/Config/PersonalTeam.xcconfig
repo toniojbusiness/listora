@@ -1,0 +1,14 @@
+// The settings `make ios-install-device` (scripts/ios-install-device.sh) applies over the
+// configuration it builds, with `xcodebuild -xcconfig`, to sign with a free Apple ID's Personal
+// Team. No committed configuration includes this file, so Dev, Staging, and Prod stay as they are
+// for the paid Apple Developer account. Guide: "Installing on your iPhone" in apps/ios/README.md.
+
+// The team id and bundle id prefix of whoever installs (gitignored; see Device.xcconfig.example).
+#include "Device.xcconfig"
+
+// A Personal Team cannot register App Groups: its provisioning profiles carry an empty
+// application-groups list. The app and the Share Extension share the signed-in session through a
+// Keychain Sharing group of the team instead, which the profiles allow (TEAMID.*). No App Group
+// entitlement is signed in, so what needs one (the Dev-only DevOverrides) is off in these builds.
+CODE_SIGN_ENTITLEMENTS = Config/PersonalTeam.entitlements
+SESSION_KEYCHAIN_GROUP = $(DEVELOPMENT_TEAM).$(BASE_BUNDLE_IDENTIFIER).session

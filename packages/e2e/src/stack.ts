@@ -82,6 +82,9 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       STORAGE_LOCAL_DIR: storageDir,
       STORAGE_LOCAL_BASE_URL: apiUrl,
       STORAGE_LOCAL_SIGNING_SECRET: randomBytes(32).toString('base64'),
+      // Forwarded sale emails: dropped by the API's POST /dev/email, read by the worker.
+      EMAIL_INGEST: 'folder',
+      EMAIL_INBOX_DIR: join(storageDir, 'inbox'),
       AI_PROVIDER: 'fake',
       AI_FAKE_FIXTURES_DIR: options.fakeAiFixturesDir,
       EBAY_ENV: 'fake',

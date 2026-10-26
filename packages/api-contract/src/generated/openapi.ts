@@ -1134,12 +1134,15 @@ export interface paths {
         put?: never;
         /**
          * Check a marketplace connection now (Retry check)
-         * @description Queues the same cheap read the daily health check makes, for this connection only. The
-         *     answer is the connection with a `Checking` status; read it again (or
-         *     `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
-         *     connection with a problem. `409 invalid_state_transition` for a connection a check
-         *     cannot change (not connected, or waiting for the seller to reconnect);
-         *     `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+         * @description Queues the same cheap read the daily health check makes, for this connection only. For
+         *     an automation connection it asks the browser runner to check the sign-in already linked
+         *     again, as after linking (`getMarketplaceSession`), without the seller signing in again;
+         *     a check still running is left to finish. The answer is the connection with a `Checking`
+         *     status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
+         *     the check found. Offered as the `check` action on a connection with a problem.
+         *     `409 invalid_state_transition` for a connection a check cannot change (not connected,
+         *     or waiting for the seller to reconnect or link again); `409
+         *     marketplace_action_unavailable` when this server cannot check the marketplace.
          */
         post: operations["requestConnectionCheck"];
         delete?: never;
@@ -1512,6 +1515,47 @@ export interface paths {
          *     a Retry action), not `succeeded`.
          */
         post: operations["dismissTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sale-emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the sale email forwarding address and its status
+         * @description The account's forwarding address (created on first use), the setup steps, the provider's
+         *     forwarding confirmation while it waits, and the "ask before auto-delist" setting.
+         */
+        get: operations["getSaleEmails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sale-emails/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the sale email setting
+         * @description Turns "ask before auto-delist" on or off for sales found by email.
+         */
+        put: operations["replaceSaleEmailSettings"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2782,7 +2826,8 @@ export interface components {
          *     `reconnect`: the same, for a connection that needs the seller's consent again (its grant
          *     was revoked, expires within 30 days, or fails); it renews the existing connection.
          *     `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
-         *     Listora may have cleared since.
+         *     Listora may have cleared since, or an automation connection whose sign-in is not
+         *     confirmed.
          * @enum {string}
          */
         KnownConnectionAction: "connect" | "reconnect" | "check";
@@ -2840,10 +2885,12 @@ export interface components {
          * @description `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
          *     `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
          *     cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
-         *     ends within 30 days.
+         *     ends within 30 days. `not_confirmed`: Listora could not confirm that the marketplace
+         *     accepts the sign-in linked for automation (its check failed or did not finish); the
+         *     `check` action checks it again.
          * @enum {string}
          */
-        KnownConnectionAttentionReason: "reconnect" | "access_removed" | "connection_problem" | "expiring";
+        KnownConnectionAttentionReason: "reconnect" | "access_removed" | "connection_problem" | "expiring" | "not_confirmed";
         /** @description One connection that needs the seller's attention. */
         ConnectionAttention: {
             marketplace: components["schemas"]["Marketplace"];
@@ -2857,11 +2904,13 @@ export interface components {
          */
         SaleForwardingStatus: components["schemas"]["KnownSaleForwardingStatus"];
         /**
-         * @description `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
-         *     email domain, which this deployment does not have yet.
+         * @description - `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+         *       email domain, which this deployment does not have yet.
+         *     - `not_set_up`, `confirming`, `working`: as `KnownSaleEmailStatus` (`getSaleEmails`, which
+         *       has the address and the setup steps).
          * @enum {string}
          */
-        KnownSaleForwardingStatus: "needs_domain";
+        KnownSaleForwardingStatus: "needs_domain" | "not_set_up" | "confirming" | "working";
         /** @description Forwarding marketplace sale emails to Listora, which detects sales sooner. */
         SaleForwarding: {
             status: components["schemas"]["SaleForwardingStatus"];
@@ -2886,12 +2935,15 @@ export interface components {
          */
         MarketplaceSessionStatus: components["schemas"]["KnownMarketplaceSessionStatus"];
         /**
-         * @description `not_linked`: no session. `checking`: a session was just linked and the browser runner
-         *     is checking it. `linked`: the check passed, and Listora automates the marketplace in
-         *     that session. `needs_relink`: the marketplace rejected the session, or showed a check
-         *     automation must not pass; the user signs in again. `check_failed`: Listora could not
-         *     confirm the session works (see `issue`); linking again checks again. `api_connected`:
-         *     the marketplace is connected through its API, so there is nothing to sign in to.
+         * @description `not_linked`: no session. `checking`: a session was just linked (or checked again) and
+         *     the browser runner is checking it, for at most 15 minutes. `linked`: the check passed,
+         *     and Listora automates the marketplace in that session. `needs_relink`: the marketplace
+         *     rejected the session, or showed a check automation must not pass; the user signs in
+         *     again. `check_failed`: Listora could not confirm the session works: its check failed or
+         *     did not finish in time (see `issue`). `requestConnectionCheck` checks the same session
+         *     again; linking again checks a new one. `api_connected`: the marketplace is connected
+         *     through its API, so there is nothing to sign in to. The marketplace's `Connection` shows
+         *     the same status in the same words.
          * @enum {string}
          */
         KnownMarketplaceSessionStatus: "not_linked" | "checking" | "linked" | "needs_relink" | "check_failed" | "api_connected";
@@ -3484,8 +3536,12 @@ export interface components {
             item?: components["schemas"]["UserTaskItem"];
             listingId?: components["schemas"]["Id"];
             operationId?: components["schemas"]["Id"];
-            /** @description For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale. */
+            /**
+             * @description For a completed `confirm_sale` or `review_match` of a sale email, the sale it recorded;
+             *     for `resolve_double_sale`, the later sale.
+             */
             saleId?: components["schemas"]["Id"];
+            saleEmail?: components["schemas"]["UserTaskSaleEmail"];
             /**
              * Format: uri
              * @description Opens the right screen in the marketplace app or site.
@@ -3503,6 +3559,36 @@ export interface components {
             title?: string;
             coverPhoto?: components["schemas"]["Photo"];
         };
+        /** @description A `KnownUserTaskSaleEmailReason`, or one added after this client was built. */
+        UserTaskSaleEmailReason: components["schemas"]["KnownUserTaskSaleEmailReason"];
+        /**
+         * @description Why a sale email waits for the user:
+         *
+         *     - `ask_before_delist`: it matched `item`, and the user asked to confirm sale emails first
+         *       (a `confirm_sale` task). Completing it records the sale and delists the item everywhere
+         *       else; dismissing it records nothing.
+         *     - `ambiguous_match`: it could be any of `candidates` (a `review_match` task).
+         *     - `unknown_format`: Listora cannot read it (a `review_match` task, no `candidates`).
+         * @enum {string}
+         */
+        KnownUserTaskSaleEmailReason: "ask_before_delist" | "ambiguous_match" | "unknown_format";
+        /**
+         * @description What a forwarded sale email said, for a `confirm_sale` or `review_match` task: its parsed
+         *     details and a short excerpt with the buyer's details removed (Listora keeps nothing more of
+         *     the email).
+         */
+        UserTaskSaleEmail: {
+            reason: components["schemas"]["UserTaskSaleEmailReason"];
+            receivedAt: components["schemas"]["Timestamp"];
+            excerpt: string;
+            /** @description The item's title as the email gave it. */
+            title?: string;
+            salePrice?: components["schemas"]["Money"];
+            soldAt?: components["schemas"]["Timestamp"];
+            orderNumber?: string;
+            /** @description The items an ambiguous email could be; the user picks one with `matchedItemId`. */
+            candidates: components["schemas"]["UserTaskItem"][];
+        };
         /**
          * @description The user's confirmation and, for some kinds, their decision. Which properties apply
          *     depends on the task's `kind`; a property that does not apply is
@@ -3513,8 +3599,11 @@ export interface components {
          *       it is not a listing on that marketplace, and `409 already_exists` when another listing
          *       already has it.
          *     - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
-         *       `rejectMatch: true` when nothing matches. Exactly one of the two is required.
-         *     - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+         *       `rejectMatch: true` when nothing matches. Exactly one of the two is required. For a sale
+         *       email, the chosen item's sale is recorded and delisted everywhere else; `422` when the
+         *       email shows no price and the item has no listing price on that marketplace.
+         *     - `confirm_sale`: optional `saleCorrection` when the detected details are wrong. For a sale
+         *       email, completing it records the sale and delists the item everywhere else.
          *     - `delist_manually`, `edit_manually`, `reconnect`, `resolve_double_sale`: nothing besides
          *       `note`.
          *     - Every kind: optional `note`.
@@ -3539,6 +3628,62 @@ export interface components {
             data: components["schemas"]["UserTask"][];
             /** @description Present when there are more results. */
             nextCursor?: string;
+        };
+        /**
+         * @description A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show
+         *     `statusDisplay` as given.
+         */
+        SaleEmailStatus: components["schemas"]["KnownSaleEmailStatus"];
+        /**
+         * @description - `unavailable`: this Listora receives no email yet (no `address`).
+         *     - `not_set_up`: no email has reached the address yet.
+         *     - `confirming`: the email provider sent its forwarding confirmation (`confirmation`); the
+         *       user confirms it in their provider's settings.
+         *     - `working`: a marketplace email passed Listora's sender checks, so forwarding works.
+         * @enum {string}
+         */
+        KnownSaleEmailStatus: "unavailable" | "not_set_up" | "confirming" | "working";
+        /**
+         * @description The email provider's forwarding confirmation, sent to the Listora address: the user types
+         *     the `code` into their provider's settings, or opens `url` (always on the provider's own
+         *     domain, from a message whose sender checks passed). Listora never opens the link itself.
+         */
+        SaleEmailConfirmation: {
+            /** @description For example "Gmail". */
+            provider: string;
+            code?: string;
+            /** Format: uri */
+            url?: string;
+            receivedAt: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description Email sale detection: the account's private forwarding address, how to forward the
+         *     marketplaces' sold emails to it, what has arrived, and the "ask before auto-delist"
+         *     setting. A sold email from Poshmark, Mercari, or Depop that passes Listora's sender checks
+         *     (SPF and the marketplace's DKIM signature) records the sale and delists the item everywhere
+         *     else within minutes, or with `askBeforeDelist` makes a confirm task first.
+         */
+        SaleEmails: {
+            /** @description The account's own forwarding address; absent while `status` is `unavailable`. */
+            address?: string;
+            status: components["schemas"]["SaleEmailStatus"];
+            statusDisplay: components["schemas"]["StatusDisplay"];
+            /**
+             * @description When true, a sale email makes a `confirm_sale` task instead of recording the sale and
+             *     delisting at once. False by default.
+             */
+            askBeforeDelist: boolean;
+            /** @description How to set forwarding up, in order, worded for the user. */
+            steps: string[];
+            /** @description The email search that finds the marketplaces' sold emails, for the forwarding filter. */
+            filter: string;
+            /** @description Present while the provider's confirmation waits for the user (`confirming`). */
+            confirmation?: components["schemas"]["SaleEmailConfirmation"];
+            lastSaleEmailAt?: components["schemas"]["Timestamp"];
+            lastEmailAt?: components["schemas"]["Timestamp"];
+        };
+        SaleEmailSettingsReplace: {
+            askBeforeDelist: boolean;
         };
         /**
          * @description A `KnownTodayCardKind`, or a card added after this client was built. Clients show an
@@ -4083,9 +4228,17 @@ export type CopyField = components['schemas']['CopyField'];
 export type CopyAssist = components['schemas']['CopyAssist'];
 export type UserTask = components['schemas']['UserTask'];
 export type UserTaskItem = components['schemas']['UserTaskItem'];
+export type UserTaskSaleEmailReason = components['schemas']['UserTaskSaleEmailReason'];
+export type KnownUserTaskSaleEmailReason = components['schemas']['KnownUserTaskSaleEmailReason'];
+export type UserTaskSaleEmail = components['schemas']['UserTaskSaleEmail'];
 export type UserTaskCompletion = components['schemas']['UserTaskCompletion'];
 export type SaleCorrection = components['schemas']['SaleCorrection'];
 export type UserTaskPage = components['schemas']['UserTaskPage'];
+export type SaleEmailStatus = components['schemas']['SaleEmailStatus'];
+export type KnownSaleEmailStatus = components['schemas']['KnownSaleEmailStatus'];
+export type SaleEmailConfirmation = components['schemas']['SaleEmailConfirmation'];
+export type SaleEmails = components['schemas']['SaleEmails'];
+export type SaleEmailSettingsReplace = components['schemas']['SaleEmailSettingsReplace'];
 export type TodayCardKind = components['schemas']['TodayCardKind'];
 export type KnownTodayCardKind = components['schemas']['KnownTodayCardKind'];
 export type TodayUrgency = components['schemas']['TodayUrgency'];
@@ -6315,6 +6468,53 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    getSaleEmails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's sale email forwarding. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleEmails"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceSaleEmailSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaleEmailSettingsReplace"];
+            };
+        };
+        responses: {
+            /** @description The account's sale email forwarding, with the saved setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleEmails"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     getToday: {
         parameters: {
             query?: never;
@@ -6434,8 +6634,8 @@ export const knownImportListingsModeValues: ReadonlyArray<FlattenedDeepRequired<
 export const knownImageTransportModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImageTransportMode"]> = ["url_fetch", "upload", "user_saves_photos"];
 export const knownConnectionActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAction"]> = ["connect", "reconnect", "check"];
 export const connectionAuthorizationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ConnectionAuthorizationStatus"]> = ["pending", "completed", "failed", "expired"];
-export const knownConnectionAttentionReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAttentionReason"]> = ["reconnect", "access_removed", "connection_problem", "expiring"];
-export const knownSaleForwardingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleForwardingStatus"]> = ["needs_domain"];
+export const knownConnectionAttentionReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAttentionReason"]> = ["reconnect", "access_removed", "connection_problem", "expiring", "not_confirmed"];
+export const knownSaleForwardingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleForwardingStatus"]> = ["needs_domain", "not_set_up", "confirming", "working"];
 export const knownMarketplaceSessionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceSessionStatus"]> = ["not_linked", "checking", "linked", "needs_relink", "check_failed", "api_connected"];
 export const sessionCookieSameSiteValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SessionCookie"]["sameSite"]> = ["strict", "lax", "none"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
@@ -6450,6 +6650,8 @@ export const knownProfitGranularityValues: ReadonlyArray<FlattenedDeepRequired<c
 export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "edit_manually", "confirm_sale", "reconnect", "review_match", "resolve_double_sale"];
 export const userTaskStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskStatus"]> = ["open", "completed", "dismissed"];
 export const userTaskUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskUrgency"]> = ["normal", "urgent"];
+export const knownUserTaskSaleEmailReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskSaleEmailReason"]> = ["ask_before_delist", "ambiguous_match", "unknown_format"];
+export const knownSaleEmailStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleEmailStatus"]> = ["unavailable", "not_set_up", "confirming", "working"];
 export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayCardKind"]> = ["delist", "ship", "reconnect", "review_drafts", "stale_listing"];
 export const knownTodayUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayUrgency"]> = ["urgent", "high", "normal"];
 export const knownTodayDestinationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayDestination"]> = ["item", "sale", "marketplaces", "drafts"];

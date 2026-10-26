@@ -73,6 +73,7 @@ import type { ConnectionsDependencies } from './connections/routes.ts';
 import { operationSpec, responseContractErrors } from './contract/contract.ts';
 import type { ContractReply, OperationId } from './contract/routes.ts';
 import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
+import type { SaleEmailsDependencies } from './sale-emails/routes.ts';
 import { resolveTenant, type Tenant } from './tenancy.ts';
 import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
@@ -336,6 +337,8 @@ export interface TestApiOptions {
   ebayWebhook?: EbayWebhookDependencies;
   /** The session vault and profiles linking uses (default: `vault`, under a random key). */
   marketplaceSessions?: MarketplaceSessionsDependencies;
+  /** Email sale detection's settings (default: no mail is read). */
+  saleEmails?: SaleEmailsDependencies;
 }
 
 export interface TestApi {
@@ -457,6 +460,7 @@ export async function createTestApi(
     auth: options.auth ?? devAuth,
     ...(options.connections === undefined ? {} : { connections: options.connections }),
     ...(options.ebayWebhook === undefined ? {} : { ebayWebhook: options.ebayWebhook }),
+    ...(options.saleEmails === undefined ? {} : { saleEmails: options.saleEmails }),
     storage,
     photoJobs,
     ai,

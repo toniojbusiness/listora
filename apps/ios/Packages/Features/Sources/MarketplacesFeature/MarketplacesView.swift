@@ -259,7 +259,7 @@ struct SaleForwardingCard: View {
                         .font(Typography.title3)
                         .foregroundStyle(Palette.textPrimary)
                         .accessibilityAddTraits(.isHeader)
-                    StatusBadge(row.statusLabel, tone: .neutral)
+                    StatusBadge(row.statusLabel, tone: row.tone)
                         .accessibilityIdentifier("marketplaces.saleForwarding.status")
                 }
                 Spacer(minLength: 0)

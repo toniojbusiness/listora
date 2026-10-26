@@ -6,6 +6,8 @@
  */
 import type { FieldError, UserTaskCompletion } from '@listora/api-contract';
 import type { DbTransaction } from '@listora/db';
+import { emailSaleOfTask } from '@listora/email-sales';
+import type { AdapterLookup } from '@listora/marketplaces';
 import { confirmOperationByUser, dismissOperationByUser } from '@listora/operations';
 
 import { writeAudit } from '../audit.ts';
@@ -17,6 +19,7 @@ import { findListingByIdentity, type ListingIdentity } from '../listings/reposit
 import { marketplaceName } from '../listings/views.ts';
 import type { Tenant } from '../tenancy.ts';
 import { findTask, lockTask, settleTask, type TaskRow } from './repository.ts';
+import { finishSaleEmailTask } from './sale-email-tasks.ts';
 
 /** The completion properties each kind takes besides `note` (the contract's table). */
 const COMPLETION_FIELDS = {
@@ -37,13 +40,16 @@ function isKnownKind(kind: string): kind is KnownKind {
 
 /**
  * The user confirms they did the task. For a list task, the listing's URL (pasted, or shared
- * from the marketplace) links the listing first, so later tasks open the listing itself.
+ * from the marketplace) links the listing first, so later tasks open the listing itself. A sale
+ * email's confirm or review task records the sale the user confirmed (sale-email-tasks.ts),
+ * which starts its auto-delist; `adapters` decide each delist.
  */
 export async function completeUserTask(
   trx: DbTransaction,
   tenant: Tenant,
   taskId: string,
   completion: UserTaskCompletion,
+  adapters: AdapterLookup,
 ): Promise<TaskRow> {
   const task = await openTask(trx, tenant, taskId);
   if (!isKnownKind(task.kind)) {
@@ -59,7 +65,15 @@ export async function completeUserTask(
       : undefined;
 
   const operationId = task.operation_id;
-  if (operationId !== null) {
+  const email =
+    task.kind === 'confirm_sale' || task.kind === 'review_match'
+      ? emailSaleOfTask(task.payload)
+      : undefined;
+  let saleId: string | null = null;
+  if (email !== undefined) {
+    saleId = await finishSaleEmailTask(trx, tenant, task, email, completion, adapters);
+    await settleTask(trx, tenant, task.id, 'done', saleId ?? undefined);
+  } else if (operationId !== null) {
     await engineCommand(() =>
       confirmOperationByUser(trx, {
         accountId: tenant.accountId,
@@ -71,8 +85,8 @@ export async function completeUserTask(
     // The user's word that they reconnected, or canceled the second order.
     await settleTask(trx, tenant, task.id, 'done');
   } else {
-    // Sale confirmations and match reviews finish with their own decisions, which land with the
-    // features that create those tasks; until then nothing can mark one done.
+    // Match reviews of imported listings finish with their own decisions, which land with the
+    // import feature; until then nothing can mark one done.
     throw new ApiError(
       'invalid_state_transition',
       'This task cannot be finished in this version of Listora yet.',
@@ -87,6 +101,8 @@ export async function completeUserTask(
       kind: task.kind,
       ...(task.marketplace === null ? {} : { marketplace: task.marketplace }),
       ...(linked === undefined ? {} : { url: linked.url }),
+      ...(saleId === null ? {} : { saleId }),
+      ...(email !== undefined && saleId === null ? { rejectedMatch: true } : {}),
       ...(completion.note === undefined ? {} : { note: completion.note }),
     },
   });

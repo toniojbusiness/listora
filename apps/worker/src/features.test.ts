@@ -8,6 +8,7 @@ import { AUTO_DELIST_SLA_TASK } from '@listora/auto-delist';
 import { SALE_ORDER_TASK } from '@listora/automation';
 import { BATCH_ITEM_ANALYSIS_TASK } from '@listora/batches';
 import { CONNECTION_DELETION_TASK } from '@listora/connections';
+import { EMAIL_INGEST_TASK } from '@listora/email-sales';
 import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observability';
 import { LISTING_RESYNC_TASK } from '@listora/operations';
 import { PHOTO_PROCESSING_TASK } from '@listora/photos';
@@ -47,6 +48,7 @@ const context = {
     analysis: { autoEscalate: false },
     marketplaces: { ebay: undefined },
     push: { driver: 'fake' },
+    emailIngest: { driver: 'folder', inboundDomain: 'in.listora.test', inboxDir: '/nonexistent' },
   },
   connections: {
     tokens: undefined,
@@ -76,6 +78,7 @@ describe('worker feature discovery', () => {
       'connection-health',
       'data-retention',
       'ebay-sync',
+      'email-sales',
       'photos',
       'push',
       'sale-fees',
@@ -104,6 +107,7 @@ describe('worker feature discovery', () => {
       AI_SPEND_CHECK_TASK,
       AUTO_DELIST_SLA_TASK,
       DATA_RETENTION_TASK,
+      EMAIL_INGEST_TASK,
       TODAY_SUMMARY_TASK,
     ]);
     expect(crontab).toEqual([TRUST_METRICS_CRONTAB]);

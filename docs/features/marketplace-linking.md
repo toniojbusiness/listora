@@ -10,15 +10,25 @@ flow end to end.
 
 1. Link accounts lists every marketplace linked by signing in, with the server's status:
    `Not linked`, `Checking...`, `Linked`, `Sign in again` (with the marketplace's reason), or
-   `Not confirmed - Link again`. Each row has **Link** (or **Relink** once it had a session).
+   `Not confirmed` (with the reason). Each row has **Link** (or **Relink** once it had a session).
 2. Tapping it opens the marketplace's own sign-in page inside Listora. The user signs in there,
    including any two-step check, then taps **I'm signed in**.
 3. The row shows `Checking...` until the browser runner has confirmed that the marketplace
-   accepts the session, then `Linked`. If it does not, the row says why and offers Relink.
+   accepts the session, then `Linked`. If the check fails, or has not finished within 15
+   minutes, the row says `Not confirmed` and why, and offers **Check again** (the same session,
+   no sign-in) next to Relink. A session the marketplace rejected says `Sign in again`.
 4. **Unlink** (on every row with a session, or with eBay's API connection) asks to confirm, then
    deletes what Listora holds for that marketplace (`disconnectConnection`,
    [privacy.md](privacy.md)): the row shows `Not linked` once the server answered. Items,
    listings, and sales stay, and listings stay on the marketplace.
+
+Marketplaces (Settings > Marketplaces) shows the same status in the same words for the same
+connection, with Retry check where Link accounts offers Check again: both screens render one
+description of the session (`describeAutomationSession` in `@listora/connections`).
+
+Below the marketplaces, the **Sale emails** section shows the forwarding address that catches
+their sold emails, how to set forwarding up, the email provider's confirmation code, and "Ask
+before delisting" ([email-sales.md](email-sales.md)).
 
 Listora never sees the password: it is typed into the marketplace's page, the app never reads
 the page or runs a script in it, and only the site's cookies are handed over. Listora cannot and
@@ -37,11 +47,13 @@ does not read sessions from the marketplaces' own iPhone apps.
   nothing is sent and the row says so.
 - `LinkAccountsModel` sends the cookies with one Idempotency-Key per sign-in (Try again resends
   the same cookies with the same key), then polls `getMarketplaceSession` every 3 seconds while
-  the server says `checking`. A failed poll changes nothing; the row stays `Checking...`. The
-  model never decides on its own that a marketplace is linked: every status and label is the
-  server's. Unlink waits for the confirmation, keeps the row as it was when the unlink fails (with
-  Try again), and reads the row back afterwards; a `404` (nothing linked any more, an earlier try
-  whose answer was lost) counts as unlinked.
+  the server says `checking`, for up to 16 minutes, past the server's 15-minute deadline, so a
+  row never stays `Checking...` while the server has an answer. A failed poll changes nothing;
+  the row stays `Checking...`. Check again calls the connection's `requestConnectionCheck` and
+  follows that check the same way. The model never decides on its own that a marketplace is
+  linked: every status and label is the server's. Unlink waits for the confirmation, keeps the
+  row as it was when the unlink fails (with Try again), and reads the row back afterwards; a
+  `404` (nothing linked any more, an earlier try whose answer was lost) counts as unlinked.
 - The sign-in page and cookie domains come from the server (`login`), so the app has no
   marketplace URLs of its own; in development they point at the fake site.
 
@@ -75,9 +87,20 @@ marketplace_action_unavailable`, and lists as `api_connected`: the API takes pre
   `@listora/connections`) nothing can be linked: `linkMarketplaceSession` answers `409
 marketplace_action_unavailable`.
 
-Status (`marketplace-sessions/views.ts`): no connection is `not_linked`; a connection waiting
-for a relink (`reauth_required`) is `needs_relink` with the reason; a working connection is
-`checking` until its check passed (`linked`) or failed (`check_failed`).
+Status (`marketplace-sessions/views.ts`, from `describeAutomationSession`, which Marketplaces'
+`Connection` view renders too): no connection is `not_linked`; a connection waiting for a relink
+(`reauth_required`) is `needs_relink` with the reason; a working connection is `checking` until
+its check passed (`linked`) or failed (`check_failed`). A check still pending 15 minutes after it
+was asked for (`SESSION_CHECK_DEADLINE_MS`: a runner that never started, a lost job) is
+`check_failed` too, code `check_timed_out`, so nothing stays `checking` forever; so is a session
+that was never checked (`check_missing`). `linkedAt` is the connection's `granted_at` (when the
+session was linked); a just-linked session has no `lastOkAt` until its check passed.
+
+**Check again** is the connection's Retry check, `requestConnectionCheck`
+(`POST /v1/connections/{marketplace}/checks`): for an automation connection that holds a session
+it starts a new check of that same session (`requestSessionRecheck`: a new check id and job, the
+stored cookies untouched), unless a check is still running within its deadline, which is left to
+finish. A connection without a session (`needs_relink`) answers `409 invalid_state_transition`.
 
 ## The session check (`packages/automation/src/session-checks/`)
 
@@ -96,7 +119,10 @@ marketplace adapter's read-only health script (an `automation_run` with purpose 
 - **Failed, can't check** when the marketplace could not be read (a rate limit, an error page,
   a timeout) on three attempts, 30 seconds and 2 minutes apart; the session is kept. Also when
   no automation adapter serves the marketplace yet: its assisted adapter would report healthy
-  without opening the session, so the check never asks it.
+  without opening the session, so the check never asks it. And when the runner's browser could
+  not start or open the session (`browser_unavailable`): the marketplace was never asked, and
+  the reason says the problem is on Listora's side. The recorded message is the reason only;
+  the view adds what the seller can do (check again, or link again).
 
 The worker's dispatcher starts the runner when the job waits (within a minute; it is one of
 `RUNNER_TASKS`), and the session check is queued before the first sale check.
@@ -115,13 +141,18 @@ and the runner checks the session against the fake site in local headless Chromi
   included, and its API taking over), the vault
   write (encrypted at rest, readable by the vault), the check job, the statuses, relink,
   idempotent replay, tenancy, every refused session, and that no cookie value is logged,
-  returned, or stored in the idempotency record.
+  returned, or stored in the idempotency record. Its "a linked session on both screens" block:
+  Link accounts, `getConnection`, and the health summary say the same thing in every state, a
+  check past its deadline is not confirmed, and Retry check checks the same session again.
+- `packages/connections/src/session-status.test.ts`: the shared description, its deadline, and
+  that Marketplaces renders it exactly.
 - `packages/automation/src/session-checks/session-checks.int.test.ts`: the runner's check in real
-  Chromium against the fake site: passed, rejected, CAPTCHA, retries then failure, no adapter,
+  Chromium against the fake site: passed, rejected, CAPTCHA, retries then failure, a browser that
+  cannot start (its temporary directory not writable, as on Fargate on 2026-10-25), no adapter,
   and a replaced link.
-- `MarketplaceLinkingFeatureTests`: the model's linked, needs-relink, failed, and unlink paths,
-  retries, polling that never claims success, cookie capture, and the API service's request
-  shapes.
+- `MarketplaceLinkingFeatureTests`: the model's linked, needs-relink, failed, and unlink paths, Check
+  again, retries, polling that never claims success and outlasts the server's deadline, cookie
+  capture, and the API service's request shapes.
 - `LinkAccountsUITests`: the real app signs in on a fake marketplace page served by
   `StubAPIServer` and links it; the test checks that the cookie was sent and the password was not,
   then unlinks it.

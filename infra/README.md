@@ -24,7 +24,7 @@ staging and prod; personal swaps a few pieces for cheaper ones (below).
 | `data`          | RDS PostgreSQL 18: encrypted, private, TLS required, daily backups (7 days staging, 30 prod), storage autoscaling, Multi-AZ and deletion protection in prod, a final snapshot on removal. The password is generated into `listora/<env>/database`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `migrate`       | The schema migration task `listora-<env>-migrate` (its own cluster, log group `/listora/<env>/migrate`, and roles): the worker's database access running `node packages/db/src/cli.ts latest` from the deployed image. Outputs the task subnets, worker security group, and public IP setting for `ecs run-task`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `storage`       | Private photo bucket (versioned, TLS only, old versions expire after 30 days, the browser runner's `automation/` screenshots after 30 days at most) and a CloudFront distribution that serves only `public/` objects by exact key, for marketplace image fetch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `email`         | SES domain identity (Easy DKIM), MX for `in.<domain>`, and a receipt rule that scans each message and stores it under `inbound/` in a private bucket (kept 90 days). Without a domain, only the empty bucket.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `email`         | SES domain identity (Easy DKIM), MX for `in.<domain>`, a receipt rule that scans each message, stores it under `inbound/` in a private bucket, and notifies an SNS topic that feeds the worker's encrypted SQS queue (with a dead-letter queue); the worker deletes each message once processed, and a lifecycle rule removes any left after 14 days. Without a domain, only the empty bucket. See docs/features/email-sales.md.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `compute`       | ECS cluster with Fargate services `api` and `worker` (one image, private subnets, CPU autoscaling, rollback on a failed deploy), an HTTPS ALB at `api.<domain>` health-checked on `/health/live`, service log groups, and a task role per service; and the browser runner's `runner` service (its own image, 0 tasks while idle, at most 1, `/listora/<env>/runner` logs).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `observability` | Alarm topic (optional email subscription) and baseline alarms: API 5xx, ALB 5xx, unhealthy tasks, p95 latency, running tasks (below desired with Container Insights, below the minimum without), CPU, and memory per service, database CPU, storage, and memory, plus RDS low-storage events (including storage autoscaling at its ceiling) and an EventBridge rule that sends unplanned ECS task stops (crash loops) to the topic. Trust alarms on the worker's metrics (namespace `Listora`): an operation unverified for 30 minutes, any failed delist, an account's AI cost today over `aiDailyCostAlarmUsd`, a connection that needs relinking (a level alarm that suits one seller; multi-seller environments should switch to alarming on increases), and per marketplace, p95 delist latency over an hour above `delistLatencyAlarmMinutes` and a verified-success rate below 90% over a day. Behind the HTTP API (personal), `api-5xx` fires on any server error in 2 of 3 five-minute periods. Log groups sit with the stacks that write them; retention is 30 days in staging and 90 in prod. |
 
@@ -69,7 +69,11 @@ and never a CAPTCHA or bot check solved (it stops and falls back to an assisted 
   deploy workflow builds and pushes it next to the application image, with the same tag.
 - **Task.** Read-only root file system with a writable `/tmp` volume for Chromium, the worker's
   network place and security group (the database, internet egress, no ingress), and
-  `PGPASSWORD` only.
+  `PGPASSWORD` only. Fargate creates that volume owned by root (mode 0755) unless the image
+  declares its path a `VOLUME`, so the runner stage declares `/tmp` one, owned by the
+  unprivileged user the runner runs as; without it Chromium cannot start. A test checks that
+  the image declares every path the task mounts, and the container smoke test runs the runner
+  on the image's own volume instead of a tmpfs.
 
 **The iPhone app.** The personal environment is the production environment for now, so the
 iOS `Prod-Release` configuration's `API_BASE_URL` points at it (there is no separate Personal
@@ -90,10 +94,12 @@ load balancer serves only `api.<domain>`. Without a domain:
   `*.cloudfront.net` domain (the storage stack's `PhotoCdnDomain` output), with or without a
   domain.
 - **Sales.** SES receives mail only for a verified domain, so email-forwarded sale detection
-  is off: the email stack holds only its empty bucket, with no SES identity, MX record, or
-  receipt rules. Sales are still detected by the scheduled automation checks (about every 12
-  hours) and by marketplace API webhooks; forwarded sale emails are enabled once a domain is
-  added.
+  is off: the email stack holds only its empty bucket, with no SES identity, MX record, receipt
+  rules, topic, or queue, and the containers run with `EMAIL_INGEST=off` (the app shows the
+  sale emails section as not available yet). Sales are still detected by the scheduled
+  automation checks (about every 12 hours) and by marketplace API webhooks; forwarded sale
+  emails are enabled once a domain is added
+  ([docs/features/email-sales.md](../docs/features/email-sales.md)).
 
 **Adding a domain later.** Without a domain, every URL registered with a third party points
 at the execute-api URL: the marketplace OAuth redirect (`/v1/connections/{marketplace}/callback`,
@@ -108,8 +114,9 @@ them breaks; turning it off is a separate, later step:
    URL, the Depop redirect URI, each marketplace's webhook endpoints, the Stripe webhook
    endpoint, and the App Store Server Notifications URL.
 3. Set the new `ApiUrl` in the app (step 8) and ship a TestFlight build.
-4. Activate the receipt rule set (step 6) and point the marketplaces' sale emails at
-   `in.<domain>`.
+4. Activate the receipt rule set (step 6). Each account's forwarding address (Settings > Link
+   accounts > Sale emails) is then at `in.<domain>`, and the containers read sale emails
+   (`EMAIL_INGEST=ses`).
 5. Confirm everything works at the new URL: connect a marketplace, see a webhook and a Stripe
    and App Store notification arrive, and check that the app in use is the new build.
 6. Only then, optionally, set `disableDefaultEndpoint: true` in personal's `ingress`
@@ -136,8 +143,9 @@ them breaks; turning it off is a separate, later step:
 - **Task roles (least privilege).** Both services: read and write the photo bucket, and
   `kms:GenerateDataKey` on the token key (`TOKEN_KMS_KEY_ID`), to seal marketplace credentials.
   Worker only: `kms:Decrypt` on the token key for OAuth tokens only (the encryption context
-  purpose `listora-marketplace-tokens`; only the worker opens tokens, at use time), read raw
-  sale email under `inbound/`, and start the browser runner (`ecs:UpdateService` on the
+  purpose `listora-marketplace-tokens`; only the worker opens tokens, at use time), read and
+  delete raw sale email under `inbound/` and consume the sale email queue (with a domain), and
+  start the browser runner (`ecs:UpdateService` on the
   `runner` service). The runner: `kms:Decrypt` and `kms:GenerateDataKey` for browser sessions
   only (the purpose `listora-marketplace-session`), put objects under `automation/`
   (screenshots), and scale its own service to zero. A combined task's role holds both

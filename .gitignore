@@ -11,10 +11,12 @@ node_modules/
 .build/
 .swiftpm/
 
-# iOS: XcodeGen output (regenerate with `make ios-generate`) and per-checkout Dev overrides
+# iOS: XcodeGen output (regenerate with `make ios-generate`), per-checkout Dev overrides, and
+# personal device signing (`make ios-install-device`)
 apps/ios/Listora.xcodeproj/
 apps/ios/Generated/
 apps/ios/Config/Local.xcconfig
+apps/ios/Config/Device.xcconfig
 
 # Test output
 coverage/

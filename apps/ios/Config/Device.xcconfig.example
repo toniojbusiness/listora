@@ -1,0 +1,17 @@
+// Signing for `make ios-install-device`, which installs a build on your own iPhone with a free
+// Apple ID (Xcode's "Personal Team"). Copy to Device.xcconfig (gitignored) and fill in both
+// values; see "Installing on your iPhone" in apps/ios/README.md.
+//
+// Only that command reads this file, and it applies these values over the configuration it
+// builds (Prod-Release by default), so the committed Dev, Staging, and Prod settings stay as
+// they are for the paid Apple Developer account.
+
+// Your Personal Team id: 10 characters, shown in Xcode > Settings > Accounts > your Apple ID
+// (the team "Your Name (Personal Team)"), or printed by `make ios-install-device` when unset.
+DEVELOPMENT_TEAM =
+
+// A bundle id prefix only your Apple ID uses. A free team cannot register an id another team
+// owns, such as com.listora.app. The app is this id, the Share Extension this id plus ".share",
+// and the App Group "group." plus this id, all derived from it.
+// For example: com.yourname.listora
+BASE_BUNDLE_IDENTIFIER =

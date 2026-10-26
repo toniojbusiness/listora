@@ -40,6 +40,7 @@ export const SERVICE_PREFIXES: Readonly<Record<string, string>> = {
   SES: 'ses',
   SNS: 'sns',
   SecretsManager: 'secretsmanager',
+  SQS: 'sqs',
   ServiceDiscovery: 'servicediscovery',
 };
 

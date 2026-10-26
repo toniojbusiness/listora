@@ -4,7 +4,8 @@ import SwiftUI
 
 /// Link accounts: Poshmark, Mercari, Depop, and eBay (until its API is connected), each with the
 /// server's status, a one-tap Link or Relink that opens the marketplace's own sign-in page, and
-/// Unlink (after a confirmation), which deletes what Listora holds for that marketplace.
+/// Unlink (after a confirmation), which deletes what Listora holds for that marketplace; then the
+/// sale emails section (the forwarding address that catches their sold emails).
 public struct LinkAccountsView: View {
     @Bindable private var model: LinkAccountsModel
 
@@ -28,6 +29,7 @@ public struct LinkAccountsView: View {
                             link: link,
                             progress: model.progress[link.marketplace],
                             onLink: { model.startLinking(link) },
+                            onCheckAgain: { Task { await model.checkAgain(link) } },
                             onRetry: { Task { await model.retry(link.marketplace) } },
                             onUnlink: { model.requestUnlink(link) },
                             onRetryUnlink: { Task { await model.retryUnlink(link.marketplace) } },
@@ -49,6 +51,9 @@ public struct LinkAccountsView: View {
                     )
                 }
                 .listRowBackground(Palette.surface.color)
+                if let saleEmails = model.saleEmails {
+                    SaleEmailsSection(model: saleEmails)
+                }
             }
         }
         .scrollContentBackground(.hidden)
@@ -56,7 +61,12 @@ public struct LinkAccountsView: View {
         .foregroundStyle(Palette.textPrimary)
         .navigationTitle("Link accounts")
         .task { await model.load() }
-        .refreshable { await model.load() }
+        .task { await model.saleEmails?.load() }
+        .refreshable {
+            async let links: Void = model.load()
+            async let emails: Void? = model.saleEmails?.load()
+            _ = await (links, emails)
+        }
         .sheet(item: $model.signingIn) { link in
             MarketplaceSignInView(
                 link: link,
@@ -87,6 +97,7 @@ private struct LinkAccountRow: View {
     let link: MarketplaceLink
     let progress: LinkAccountsModel.LinkProgress?
     let onLink: () -> Void
+    let onCheckAgain: () -> Void
     let onRetry: () -> Void
     let onUnlink: () -> Void
     let onRetryUnlink: () -> Void
@@ -95,7 +106,7 @@ private struct LinkAccountRow: View {
     let onConfirmUnlink: () -> Void
 
     private var busy: Bool {
-        progress == .sending || progress == .unlinking
+        progress == .sending || progress == .requestingCheck || progress == .unlinking
     }
 
     var body: some View {
@@ -111,6 +122,15 @@ private struct LinkAccountRow: View {
                     }
                 }
                 Spacer()
+                if link.canCheckAgain, !busy {
+                    // The session Listora holds may be fine: checking it again needs no sign-in.
+                    Button("Check again", action: onCheckAgain)
+                        .buttonStyle(.borderedProminent)
+                        .tint(Palette.brand.color)
+                        // The list's text color would otherwise override the filled label's.
+                        .foregroundStyle(Palette.onBrand)
+                        .accessibilityIdentifier("linkAccounts.checkAgain.\(link.marketplace)")
+                }
                 if link.canLink, !busy {
                     Button(link.linkActionTitle, action: onLink)
                         .buttonStyle(.bordered)
@@ -132,6 +152,16 @@ private struct LinkAccountRow: View {
                     .font(Typography.caption)
                     .foregroundStyle(Palette.textSecondary)
                     .accessibilityIdentifier("linkAccounts.sending.\(link.marketplace)")
+            case .requestingCheck:
+                Label("Asking Listora to check again...", systemImage: "arrow.clockwise")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("linkAccounts.requestingCheck.\(link.marketplace)")
+            case let .checkFailed(error):
+                Text(error.message)
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.danger)
+                    .accessibilityIdentifier("linkAccounts.checkError.\(link.marketplace)")
             case .unlinking:
                 Label("Unlinking \(link.name)...", systemImage: "minus.circle")
                     .font(Typography.caption)

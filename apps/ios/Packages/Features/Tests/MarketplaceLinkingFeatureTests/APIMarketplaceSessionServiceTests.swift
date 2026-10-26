@@ -106,6 +106,25 @@ struct APIMarketplaceSessionServiceTests {
     }
 
     @Test
+    func `asks for a check of the session Listora holds as the connection's Retry check`() async throws {
+        let server = CannedServer(status: 202, body: """
+        {"marketplace":"depop","mode":"automation","status":"connected",
+         "statusDisplay":{"tone":"checking","label":"Checking..."},
+         "capabilities":{"connect":"none","create":"automation","updatePrice":"automation",
+           "updateDetails":"automation","delist":"automation","relist":"automation",
+           "markSold":"automation","verifyRead":"automation","importListings":"none",
+           "saleDetection":[],"imageTransport":"upload"},
+         "availableActions":[]}
+        """)
+        try await service(server).requestCheck("depop", idempotencyKey: "check-1")
+
+        let request = try #require(server.requests.first)
+        #expect(request.method == "POST")
+        #expect(request.path == "/v1/connections/depop/checks")
+        #expect(request.header("Idempotency-Key") == "check-1")
+    }
+
+    @Test
     func `reports a refused session with the server's message`() async throws {
         let server = CannedServer(status: 422, body: """
         {"error":{"code":"validation_failed","message":"Listora couldn't use this Poshmark sign-in. Sign in again.",

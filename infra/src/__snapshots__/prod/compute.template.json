@@ -207,6 +207,38 @@
                     "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
                   }
                 }
+              },
+              {
+                "Name": "EMAIL_INGEST",
+                "Value": "ses"
+              },
+              {
+                "Name": "EMAIL_INBOUND_DOMAIN",
+                "Value": "in.example.com"
+              },
+              {
+                "Name": "EMAIL_SES_QUEUE_URL",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-prod-email",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefSaleEmailQueueB61ACB28FF1A6111"
+                  }
+                }
+              },
+              {
+                "Name": "EMAIL_SES_BUCKET",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-prod-email",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefInboundMailDA244C947E76FD7D"
+                  }
+                }
+              },
+              {
+                "Name": "EMAIL_SES_REGION",
+                "Value": "us-east-1"
               }
             ],
             "Essential": true,
@@ -521,6 +553,42 @@
               ]
             },
             {
+              "Action": "s3:DeleteObject*",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-prod-email",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputFnGetAttInboundMailDA244C94Arn018032F9"
+                      }
+                    },
+                    "/inbound/*"
+                  ]
+                ]
+              }
+            },
+            {
+              "Action": [
+                "sqs:ChangeMessageVisibility",
+                "sqs:DeleteMessage",
+                "sqs:GetQueueAttributes",
+                "sqs:GetQueueUrl",
+                "sqs:ReceiveMessage"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-prod-email",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputFnGetAttSaleEmailQueueB61ACB28ArnA6B166F6"
+                }
+              }
+            },
+            {
               "Action": "ecs:UpdateService",
               "Effect": "Allow",
               "Resource": "arn:aws:ecs:us-east-1:222222222222:service/listora-prod/runner",
@@ -655,6 +723,38 @@
                     "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
                   }
                 }
+              },
+              {
+                "Name": "EMAIL_INGEST",
+                "Value": "ses"
+              },
+              {
+                "Name": "EMAIL_INBOUND_DOMAIN",
+                "Value": "in.example.com"
+              },
+              {
+                "Name": "EMAIL_SES_QUEUE_URL",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-prod-email",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefSaleEmailQueueB61ACB28FF1A6111"
+                  }
+                }
+              },
+              {
+                "Name": "EMAIL_SES_BUCKET",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-prod-email",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefInboundMailDA244C947E76FD7D"
+                  }
+                }
+              },
+              {
+                "Name": "EMAIL_SES_REGION",
+                "Value": "us-east-1"
               },
               {
                 "Name": "BROWSER_RUNNER_LAUNCH",

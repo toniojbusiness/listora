@@ -42,7 +42,7 @@ require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Ins
 
 .PHONY: ios-generate ios-build ios-test ios-e2e-ready ios-check-ats ios-screenshots ios-lint ios-format ios-open ios-clean \
 	ios-simulator \
-	ios-tag-fixtures ios-batch-fixtures ios-app-icon ios-archive ios-testflight
+	ios-tag-fixtures ios-batch-fixtures ios-app-icon ios-archive ios-testflight ios-install-device
 
 ## Generate Listora.xcodeproj from apps/ios/project.yml.
 ios-generate:
@@ -172,6 +172,17 @@ ios-testflight:
 	$(IOS_RELEASE) check-credentials
 	$(MAKE) ios-generate ios-check-ats
 	$(IOS_RELEASE) testflight '$(IOS_RELEASE_CONFIGURATION)' '$(IOS_BUILD_NUMBER)'
+
+## Build, install, and launch the app on the iPhone connected to this Mac, signed with the Apple
+## ID in Xcode (a free Personal Team works). Signing: Config/Device.xcconfig (gitignored).
+## IOS_DEVICE_CONFIGURATION defaults to Prod-Release; IOS_DEVICE picks one of several iPhones.
+IOS_DEVICE_CONFIGURATION ?= Prod-Release
+IOS_DEVICE ?=
+
+ios-install-device: ios-generate
+	$(call require,node,node)
+	IOS_BUILD_DIR='$(IOS_BUILD_DIR)' IOS_DEVICE_CONFIGURATION='$(IOS_DEVICE_CONFIGURATION)' \
+		IOS_DEVICE='$(IOS_DEVICE)' scripts/ios-install-device.sh
 
 ## Generate the project and open it in Xcode.
 ios-open: ios-generate

@@ -4,8 +4,9 @@
 #
 # Builds both images from the root Dockerfile, then runs the schema migration task and starts
 # the API, the worker, and the browser runner the way ECS does: read-only root file system
-# (with a writable /tmp for the runner), the exact container environment from
-# infra/src/containers.ts, and the database password only in PGPASSWORD, against a real
+# (the runner's writable /tmp is the volume its image declares, filled from the image as Fargate
+# fills the task's bind mount, not a tmpfs any user may write), the exact container environment
+# from infra/src/containers.ts, and the database password only in PGPASSWORD, against a real
 # PostgreSQL 18 that requires that password. Passes when the migrations apply, the runner's
 # headless Chromium starts, the API reports ready (database reachable), the worker and the
 # runner stay up, and all three stop cleanly on SIGTERM.
@@ -45,7 +46,7 @@ docker build --target runner --tag "$runner_image" .
 docker network create "$network" >/dev/null
 
 # The browser starts in the runner image as the task runs it.
-docker run --name listora-smoke-runner-test --read-only --tmpfs /tmp \
+docker run --name listora-smoke-runner-test --read-only \
   "$runner_image" node apps/worker/src/runner/main.ts self-test >/dev/null ||
   fail "the runner image's browser did not start"
 echo "container-smoke: runner browser self-test passed"
@@ -80,7 +81,7 @@ docker run --detach --name listora-smoke-api --network "$network" --read-only \
 docker run --detach --name listora-smoke-worker --network "$network" --read-only \
   --env-file "$workdir/worker.env" \
   "$image" node apps/worker/src/main.ts >/dev/null
-docker run --detach --name listora-smoke-runner --network "$network" --read-only --tmpfs /tmp \
+docker run --detach --name listora-smoke-runner --network "$network" --read-only \
   --env-file "$workdir/runner.env" \
   "$runner_image" node apps/worker/src/runner/main.ts >/dev/null
 

@@ -1,0 +1,26 @@
+{
+  "name": "@listora/email-sales",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Email sale detection: each account's forwarding address, the folder and SES ingest drivers, DKIM and SPF verification, the Poshmark, Mercari, and Depop sold-email parsers, matching a sale to an item, and handing it to the sale intake (or a confirm or review task).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1156.0",
+    "@aws-sdk/client-sqs": "^3.1156.0",
+    "@listora/automation": "*",
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/push": "*",
+    "@listora/sales": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7",
+    "postal-mime": "^4.1.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

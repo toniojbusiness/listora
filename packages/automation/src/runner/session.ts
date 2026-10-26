@@ -31,6 +31,7 @@ import {
   SCREENSHOT_MASK_SELECTORS,
 } from '../safety/redaction.ts';
 import { PageChangedError } from './errors.ts';
+import type { NetworkLog } from './network-log.ts';
 import type { ScreenshotStore } from './screenshots.ts';
 import type {
   AutomationSession,
@@ -75,6 +76,8 @@ export interface SessionDependencies {
   stepTimeoutMs: number;
   accountId: string;
   runId: string;
+  /** What the session's network did, logged when a run stops (network-log.ts). */
+  network: NetworkLog;
   /** Called once when the session closes, whatever happened (frees the runner's slot). */
   onClosed: () => void;
 }
@@ -111,6 +114,10 @@ export class PlaywrightSession implements AutomationSession {
     this.#inspection = inspectionScript(challengeSelectors(deps.profile));
     page.on('response', (response) => {
       this.#noteResponse(response);
+      deps.network.response(response.url(), response.status());
+    });
+    page.on('requestfailed', (request) => {
+      deps.network.failed(request.url(), request.failure()?.errorText ?? 'failed');
     });
     page.on('dialog', (dialog) => {
       void this.#answerDialog(dialog);
@@ -200,6 +207,7 @@ export class PlaywrightSession implements AutomationSession {
           ...(failure.kind === 'error' ? { code: failure.code, reason: failure.message } : {}),
           origin: originForLog(this.#safeUrl()),
           mutated,
+          network: this.#deps.network.summary(),
         },
         'automation script stopped',
       );

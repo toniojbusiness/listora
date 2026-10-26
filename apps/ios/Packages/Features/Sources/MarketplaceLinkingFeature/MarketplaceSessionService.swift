@@ -15,7 +15,8 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
         case linked
         /// The marketplace rejected the session or showed a check; the user signs in again.
         case needsRelink(message: String)
-        /// Listora could not confirm the session works; linking again checks again.
+        /// Listora could not confirm the session works (its check failed or did not finish);
+        /// Check again checks the same session, and linking again checks a new one.
         case checkFailed(message: String)
         /// Connected through the marketplace's API: nothing to sign in to.
         case apiConnected
@@ -72,6 +73,30 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
         state == .notLinked ? "Link" : "Relink"
     }
 
+    /// Whether Listora can check the session it holds again, without the user signing in.
+    public var canCheckAgain: Bool {
+        if case .checkFailed = state {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// This link while the server checks it again, as the server words it, for when the check
+    /// was accepted but the session could not be read back yet.
+    var checking: MarketplaceLink {
+        MarketplaceLink(
+            marketplace: marketplace,
+            name: name,
+            state: .checking,
+            statusLabel: "Checking...",
+            statusTone: .checking,
+            loginURL: loginURL,
+            cookieDomains: cookieDomains,
+            displayName: displayName,
+        )
+    }
+
     public init(
         marketplace: String,
         name: String,
@@ -109,6 +134,9 @@ public protocol MarketplaceSessionService: Sendable {
     /// tokens and the data that came through them, and asks the marketplace to revoke access.
     /// Unlinking one that is no longer linked succeeds, so a retry after a lost answer is safe.
     func unlink(_ marketplace: String) async throws(APIFailure)
+    /// Asks Listora to check the session it already holds again (the connection's Retry check);
+    /// read the session afterwards for the check's status.
+    func requestCheck(_ marketplace: String, idempotencyKey: String) async throws(APIFailure)
 }
 
 /// `MarketplaceSessionService` on the Listora API.
@@ -181,6 +209,26 @@ public struct APIMarketplaceSessionService: MarketplaceSessionService {
         case .notFound:
             // Nothing is linked: already unlinked (an earlier try whose answer was lost).
             return
+        case let .default(status, response):
+            throw APIFailure(statusCode: status, response: response)
+        }
+    }
+
+    public func requestCheck(_ marketplace: String, idempotencyKey: String) async throws(APIFailure) {
+        let path = try pathMarketplace(marketplace)
+        let output = try await call {
+            try await api.client.requestConnectionCheck(
+                path: .init(marketplace: path),
+                headers: .init(idempotencyKey: idempotencyKey),
+            )
+        }
+        switch output {
+        case .accepted:
+            return
+        case let .notFound(response):
+            throw APIFailure(statusCode: 404, response: response)
+        case let .conflict(response):
+            throw APIFailure(statusCode: 409, response: response)
         case let .default(status, response):
             throw APIFailure(statusCode: status, response: response)
         }

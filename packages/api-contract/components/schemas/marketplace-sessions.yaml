@@ -9,12 +9,15 @@ MarketplaceSessionStatus:
 KnownMarketplaceSessionStatus:
   type: string
   description: |
-    `not_linked`: no session. `checking`: a session was just linked and the browser runner
-    is checking it. `linked`: the check passed, and Listora automates the marketplace in
-    that session. `needs_relink`: the marketplace rejected the session, or showed a check
-    automation must not pass; the user signs in again. `check_failed`: Listora could not
-    confirm the session works (see `issue`); linking again checks again. `api_connected`:
-    the marketplace is connected through its API, so there is nothing to sign in to.
+    `not_linked`: no session. `checking`: a session was just linked (or checked again) and
+    the browser runner is checking it, for at most 15 minutes. `linked`: the check passed,
+    and Listora automates the marketplace in that session. `needs_relink`: the marketplace
+    rejected the session, or showed a check automation must not pass; the user signs in
+    again. `check_failed`: Listora could not confirm the session works: its check failed or
+    did not finish in time (see `issue`). `requestConnectionCheck` checks the same session
+    again; linking again checks a new one. `api_connected`: the marketplace is connected
+    through its API, so there is nothing to sign in to. The marketplace's `Connection` shows
+    the same status in the same words.
   enum: [not_linked, checking, linked, needs_relink, check_failed, api_connected]
 MarketplaceSessionLogin:
   type: object

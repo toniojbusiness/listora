@@ -75,6 +75,17 @@ export {
   notifyConnectionBroken,
 } from './notifications.ts';
 export type { BrokenConnection } from './notifications.ts';
+export {
+  accountSessionChecks,
+  describeAutomationSession,
+  SESSION_CHECK_DEADLINE_MS,
+} from './session-status.ts';
+export type {
+  AutomationSessionInput,
+  AutomationSessionState,
+  AutomationSessionView,
+  SessionCheckState,
+} from './session-status.ts';
 export { describeConnection, EXPIRY_WARNING_MS } from './status-display.ts';
 export type {
   ConnectionAction,

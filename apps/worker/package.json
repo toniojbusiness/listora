@@ -18,6 +18,7 @@
     "@listora/batches": "*",
     "@listora/connections": "*",
     "@listora/db": "*",
+    "@listora/email-sales": "*",
     "@listora/marketplaces": "*",
     "@listora/observability": "*",
     "@listora/operations": "*",

@@ -88,6 +88,7 @@ const app = buildApp({
     vault: tokenVault === undefined ? undefined : new SessionVault({ vault: tokenVault, logger }),
     profiles: config.automation.profiles,
   },
+  saleEmails: { ingest: config.emailIngest },
   pingDatabase: () => pingDatabase(pool),
 });
 

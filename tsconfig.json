@@ -20,6 +20,7 @@
     { "path": "packages/sales" },
     { "path": "packages/today" },
     { "path": "packages/automation" },
+    { "path": "packages/email-sales" },
     { "path": "packages/tag-parse" },
     { "path": "packages/analysis" },
     { "path": "packages/batches" },

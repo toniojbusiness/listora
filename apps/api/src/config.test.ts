@@ -1,5 +1,6 @@
 import { loadAiConfig } from '@listora/ai';
 import { loadAutomationSettings } from '@listora/automation';
+import { loadEmailIngestConfig } from '@listora/email-sales';
 import { DEFAULT_LOCAL_STORAGE_BASE_URL, DEFAULT_LOCAL_STORAGE_DIR } from '@listora/storage';
 import { describe, expect, it } from 'vitest';
 
@@ -30,6 +31,7 @@ describe('loadApiConfig', () => {
         tokenVault: undefined,
       },
       automation: loadAutomationSettings({}),
+      emailIngest: loadEmailIngestConfig({}),
     });
   });
 

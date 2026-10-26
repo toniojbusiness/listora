@@ -25,6 +25,10 @@ struct TaskPresentation: Equatable, Sendable {
     /// "Poshmark", or "the marketplace" when the task names none.
     let marketplaceName: String
     let isUrgent: Bool
+    /// A confirm or review task made from a forwarded sale email: finishing it records the sale.
+    let isSaleEmail: Bool
+    /// A sale email review's candidate items (none for an email Listora could not read).
+    let hasCandidates: Bool
 
     init(_ task: UserTask) {
         kind = switch task.kind.value1 {
@@ -39,6 +43,8 @@ struct TaskPresentation: Equatable, Sendable {
         }
         marketplaceName = task.marketplace.map { Self.name(of: $0) } ?? "the marketplace"
         isUrgent = task.urgency == .urgent
+        isSaleEmail = task.saleEmail != nil && (kind == .confirmSale || kind == .reviewMatch)
+        hasCandidates = !(task.saleEmail?.candidates.isEmpty ?? true)
     }
 
     /// The confirmation button. A delist says what the user did, so it is never mistaken for
@@ -50,8 +56,23 @@ struct TaskPresentation: Equatable, Sendable {
         case .delist: "Done - I removed it"
         case .reconnect: "Done"
         case .resolveDoubleSale: "Done - I canceled it"
-        case .confirmSale, .reviewMatch, .unknown: nil
+        case .confirmSale: isSaleEmail ? "Confirm - it sold" : nil
+        // A review is answered by picking the item (the candidates' buttons) or `rejectTitle`.
+        case .reviewMatch, .unknown: nil
         }
+    }
+
+    /// A sale email review's "none of them" answer, which records nothing.
+    var rejectTitle: String? {
+        guard kind == .reviewMatch, isSaleEmail else { return nil }
+        return hasCandidates ? "None of these sold" : "Done - nothing to record"
+    }
+
+    /// What dismissing says it does; a sale email's task records nothing, an operation's fails.
+    var dismissMessage: String {
+        isSaleEmail
+            ? "Listora won't record the sale or delist the item anywhere."
+            : "Listora won't count it as done. The item shows this step as not done, with a Retry."
     }
 
     /// The button that opens the marketplace's app or site.
@@ -77,6 +98,10 @@ struct TaskPresentation: Equatable, Sendable {
         case open(title: String)
         case pasteLink
         case removeListing
+        /// What a forwarded sale email said.
+        case saleEmail
+        /// A sale email review's candidates, each with "This one sold".
+        case pickItem
     }
 
     /// The task screen's steps, in order: a list task saves the photos, copies the details,
@@ -93,6 +118,8 @@ struct TaskPresentation: Equatable, Sendable {
             [.open(title: "Open the listing"), .removeListing]
         case .resolveDoubleSale:
             hasLink ? [.open(title: "Cancel the order")] : []
+        case .confirmSale where isSaleEmail, .reviewMatch where isSaleEmail:
+            [.saleEmail] + (hasCandidates ? [.pickItem] : [])
         case .confirmSale, .reconnect, .reviewMatch, .unknown:
             hasLink ? [.open(title: "Open \(marketplaceName)")] : []
         }

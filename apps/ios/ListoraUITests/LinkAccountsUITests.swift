@@ -57,7 +57,12 @@ final class LinkAccountsUITests: XCTestCase {
             "Mercari logged Listora out. Log in again.",
         )
         XCTAssertEqual(app.buttons["linkAccounts.link.mercari"].label, "Relink")
-        XCTAssertEqual(element("linkAccounts.status.depop").label, "Not linked")
+        XCTAssertEqual(element("linkAccounts.status.depop").label, "Not confirmed")
+        XCTAssertEqual(
+            element("linkAccounts.detail.depop").label,
+            "Listora's browser didn't start, so it couldn't check your Depop sign-in. The problem is on "
+                + "Listora's side, not Depop's. Check again, or link Depop again if it keeps failing.",
+        )
         XCTAssertEqual(element("linkAccounts.status.ebay").label, "Not linked")
         snapshot("1-link-accounts")
 
@@ -118,6 +123,107 @@ final class LinkAccountsUITests: XCTestCase {
             1,
         )
         snapshot("2-unlinked")
+    }
+
+    func testChecksASignInAgainWithoutSigningInAgain() throws {
+        let server = try StubAPIServer()
+        try server.start()
+        self.server = server
+        app.launchEnvironment = [
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
+            "LISTORA_DEV_API_BASE_URL": server.baseURL,
+        ]
+        app.launch()
+
+        let settings = app.buttons["settings.open"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        app.buttons["settings.linkAccounts"].tap()
+
+        let depopStatus = element("linkAccounts.status.depop")
+        XCTAssertTrue(depopStatus.waitForExistence(timeout: 10), "no list\n\(app.debugDescription)")
+        XCTAssertEqual(depopStatus.label, "Not confirmed")
+        // The sign-in Listora holds may be fine: Check again needs no sign-in, Relink stays.
+        let checkAgain = app.buttons["linkAccounts.checkAgain.depop"]
+        XCTAssertTrue(checkAgain.exists)
+        XCTAssertEqual(app.buttons["linkAccounts.link.depop"].label, "Relink")
+        XCTAssertFalse(app.buttons["linkAccounts.checkAgain.poshmark"].exists)
+        snapshot("1-not-confirmed")
+
+        checkAgain.tap()
+
+        let linked = NSPredicate(format: "label == %@", "Linked")
+        expectation(for: linked, evaluatedWith: depopStatus)
+        waitForExpectations(timeout: 20)
+        snapshot("2-checked-again")
+        XCTAssertFalse(app.webViews.firstMatch.exists, "Check again opened a sign-in page")
+        let check = try XCTUnwrap(server.requests.first {
+            $0.method == "POST" && $0.path == "/v1/connections/depop/checks"
+        })
+        XCTAssertNotNil(check.headers["idempotency-key"])
+        let relinked = server.requests.contains { $0.method == "POST" && $0.path.hasPrefix("/v1/marketplace-sessions") }
+        XCTAssertFalse(relinked, "Check again sent a new sign-in")
+    }
+
+    /// The sale emails section: the account's own forwarding address, Gmail's confirmation code
+    /// to copy, the setup steps, and "Ask before delisting", saved on the server.
+    func testShowsTheSaleEmailAddressConfirmationAndSetting() throws {
+        let server = try StubAPIServer()
+        try server.start()
+        self.server = server
+        app.launchEnvironment = [
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
+            "LISTORA_DEV_API_BASE_URL": server.baseURL,
+        ]
+        app.launch()
+        let settings = app.buttons["settings.open"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        app.buttons["settings.linkAccounts"].tap()
+
+        let list = app.collectionViews.firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 10))
+        // A list builds only the rows on screen: scroll each one into view before reading it.
+        func reveal(_ target: XCUIElement) {
+            for _ in 0 ..< 6 where !(target.exists && target.isHittable) {
+                list.swipeUp()
+            }
+        }
+        let status = element("saleEmails.status")
+        reveal(status)
+        XCTAssertTrue(status.waitForExistence(timeout: 10), "no sale emails\n\(app.debugDescription)")
+        XCTAssertEqual(status.label, "Confirm forwarding")
+        let address = element("saleEmails.address")
+        reveal(address)
+        XCTAssertEqual(address.label, StubAPIServer.forwardingAddress)
+        let confirmation = element("saleEmails.confirmation")
+        reveal(confirmation)
+        XCTAssertTrue(confirmation.exists)
+        let code = element("saleEmails.code")
+        reveal(code)
+        XCTAssertEqual(code.label, StubAPIServer.forwardingCode)
+        let link = app.buttons["saleEmails.confirmationLink"]
+        reveal(link)
+        XCTAssertTrue(link.exists)
+        snapshot("4-sale-emails")
+
+        let copyCode = app.buttons["saleEmails.copy.code"]
+        copyCode.tap()
+        XCTAssertEqual(copyCode.label, "Confirmation code copied")
+
+        let ask = app.switches["saleEmails.askBeforeDelist"]
+        reveal(ask)
+        XCTAssertEqual(ask.value as? String, "0")
+        // The control itself, at the row's trailing edge (a tap on the label does not toggle it).
+        ask.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        let saved = NSPredicate(format: "value == %@", "1")
+        expectation(for: saved, evaluatedWith: ask)
+        waitForExpectations(timeout: 10)
+        let put = try XCTUnwrap(server.requests.last { $0.method == "PUT" && $0.path == "/v1/sale-emails/settings" })
+        XCTAssertTrue(put.body.replacingOccurrences(of: " ", with: "").contains(#""askBeforeDelist":true"#), put.body)
+        snapshot("5-ask-before-delisting")
     }
 
     /// Signs in on the fake marketplace's page in the app's own web view, then taps

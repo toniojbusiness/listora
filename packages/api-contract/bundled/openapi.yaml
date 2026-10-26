@@ -57,6 +57,8 @@ tags:
     description: The profit dashboard over the seller's sales and inventory.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
+  - name: sale-emails
+    description: The forwarding address that catches Poshmark, Mercari, and Depop sale emails.
   - name: usage
     description: How much of the plan's quotas the account has used this period.
   - name: today
@@ -1564,12 +1566,15 @@ paths:
       operationId: requestConnectionCheck
       summary: Check a marketplace connection now (Retry check)
       description: |
-        Queues the same cheap read the daily health check makes, for this connection only. The
-        answer is the connection with a `Checking` status; read it again (or
-        `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
-        connection with a problem. `409 invalid_state_transition` for a connection a check
-        cannot change (not connected, or waiting for the seller to reconnect);
-        `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+        Queues the same cheap read the daily health check makes, for this connection only. For
+        an automation connection it asks the browser runner to check the sign-in already linked
+        again, as after linking (`getMarketplaceSession`), without the seller signing in again;
+        a check still running is left to finish. The answer is the connection with a `Checking`
+        status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
+        the check found. Offered as the `check` action on a connection with a problem.
+        `409 invalid_state_transition` for a connection a check cannot change (not connected,
+        or waiting for the seller to reconnect or link again); `409
+        marketplace_action_unavailable` when this server cannot check the marketplace.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       responses:
@@ -2103,6 +2108,48 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/sale-emails:
+    get:
+      tags:
+        - sale-emails
+      operationId: getSaleEmails
+      summary: Get the sale email forwarding address and its status
+      description: |
+        The account's forwarding address (created on first use), the setup steps, the provider's
+        forwarding confirmation while it waits, and the "ask before auto-delist" setting.
+      responses:
+        '200':
+          description: The account's sale email forwarding.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleEmails'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/sale-emails/settings:
+    put:
+      tags:
+        - sale-emails
+      operationId: replaceSaleEmailSettings
+      summary: Replace the sale email setting
+      description: Turns "ask before auto-delist" on or off for sales found by email.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaleEmailSettingsReplace'
+      responses:
+        '200':
+          description: The account's sale email forwarding, with the saved setting.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleEmails'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
   /v1/today:
@@ -4818,7 +4865,8 @@ components:
         `reconnect`: the same, for a connection that needs the seller's consent again (its grant
         was revoked, expires within 30 days, or fails); it renews the existing connection.
         `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
-        Listora may have cleared since.
+        Listora may have cleared since, or an automation connection whose sign-in is not
+        confirmed.
       enum:
         - connect
         - reconnect
@@ -4935,12 +4983,15 @@ components:
         `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
         `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
         cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
-        ends within 30 days.
+        ends within 30 days. `not_confirmed`: Listora could not confirm that the marketplace
+        accepts the sign-in linked for automation (its check failed or did not finish); the
+        `check` action checks it again.
       enum:
         - reconnect
         - access_removed
         - connection_problem
         - expiring
+        - not_confirmed
     ConnectionAttention:
       type: object
       description: One connection that needs the seller's attention.
@@ -4967,10 +5018,15 @@ components:
     KnownSaleForwardingStatus:
       type: string
       description: |
-        `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
-        email domain, which this deployment does not have yet.
+        - `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+          email domain, which this deployment does not have yet.
+        - `not_set_up`, `confirming`, `working`: as `KnownSaleEmailStatus` (`getSaleEmails`, which
+          has the address and the setup steps).
       enum:
         - needs_domain
+        - not_set_up
+        - confirming
+        - working
     SaleForwarding:
       type: object
       description: Forwarding marketplace sale emails to Listora, which detects sales sooner.
@@ -5023,12 +5079,15 @@ components:
     KnownMarketplaceSessionStatus:
       type: string
       description: |
-        `not_linked`: no session. `checking`: a session was just linked and the browser runner
-        is checking it. `linked`: the check passed, and Listora automates the marketplace in
-        that session. `needs_relink`: the marketplace rejected the session, or showed a check
-        automation must not pass; the user signs in again. `check_failed`: Listora could not
-        confirm the session works (see `issue`); linking again checks again. `api_connected`:
-        the marketplace is connected through its API, so there is nothing to sign in to.
+        `not_linked`: no session. `checking`: a session was just linked (or checked again) and
+        the browser runner is checking it, for at most 15 minutes. `linked`: the check passed,
+        and Listora automates the marketplace in that session. `needs_relink`: the marketplace
+        rejected the session, or showed a check automation must not pass; the user signs in
+        again. `check_failed`: Listora could not confirm the session works: its check failed or
+        did not finish in time (see `issue`). `requestConnectionCheck` checks the same session
+        again; linking again checks a new one. `api_connected`: the marketplace is connected
+        through its API, so there is nothing to sign in to. The marketplace's `Connection` shows
+        the same status in the same words.
       enum:
         - not_linked
         - checking
@@ -6156,7 +6215,11 @@ components:
           $ref: '#/components/schemas/Id'
         saleId:
           $ref: '#/components/schemas/Id'
-          description: For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
+          description: |
+            For a completed `confirm_sale` or `review_match` of a sale email, the sale it recorded;
+            for `resolve_double_sale`, the later sale.
+        saleEmail:
+          $ref: '#/components/schemas/UserTaskSaleEmail'
         deepLink:
           type: string
           format: uri
@@ -6185,6 +6248,61 @@ components:
           maxLength: 200
         coverPhoto:
           $ref: '#/components/schemas/Photo'
+    UserTaskSaleEmailReason:
+      description: A `KnownUserTaskSaleEmailReason`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownUserTaskSaleEmailReason'
+        - type: string
+          maxLength: 64
+    KnownUserTaskSaleEmailReason:
+      type: string
+      description: |
+        Why a sale email waits for the user:
+
+        - `ask_before_delist`: it matched `item`, and the user asked to confirm sale emails first
+          (a `confirm_sale` task). Completing it records the sale and delists the item everywhere
+          else; dismissing it records nothing.
+        - `ambiguous_match`: it could be any of `candidates` (a `review_match` task).
+        - `unknown_format`: Listora cannot read it (a `review_match` task, no `candidates`).
+      enum:
+        - ask_before_delist
+        - ambiguous_match
+        - unknown_format
+    UserTaskSaleEmail:
+      type: object
+      description: |
+        What a forwarded sale email said, for a `confirm_sale` or `review_match` task: its parsed
+        details and a short excerpt with the buyer's details removed (Listora keeps nothing more of
+        the email).
+      required:
+        - reason
+        - receivedAt
+        - excerpt
+        - candidates
+      properties:
+        reason:
+          $ref: '#/components/schemas/UserTaskSaleEmailReason'
+        receivedAt:
+          $ref: '#/components/schemas/Timestamp'
+        excerpt:
+          type: string
+          maxLength: 500
+        title:
+          type: string
+          maxLength: 200
+          description: The item's title as the email gave it.
+        salePrice:
+          $ref: '#/components/schemas/Money'
+        soldAt:
+          $ref: '#/components/schemas/Timestamp'
+        orderNumber:
+          type: string
+          maxLength: 64
+        candidates:
+          type: array
+          description: The items an ambiguous email could be; the user picks one with `matchedItemId`.
+          items:
+            $ref: '#/components/schemas/UserTaskItem'
     UserTaskCompletion:
       type: object
       description: |
@@ -6197,8 +6315,11 @@ components:
           it is not a listing on that marketplace, and `409 already_exists` when another listing
           already has it.
         - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
-          `rejectMatch: true` when nothing matches. Exactly one of the two is required.
-        - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+          `rejectMatch: true` when nothing matches. Exactly one of the two is required. For a sale
+          email, the chosen item's sale is recorded and delisted everywhere else; `422` when the
+          email shows no price and the item has no listing price on that marketplace.
+        - `confirm_sale`: optional `saleCorrection` when the detected details are wrong. For a sale
+          email, completing it records the sale and delists the item everywhere else.
         - `delist_manually`, `edit_manually`, `reconnect`, `resolve_double_sale`: nothing besides
           `note`.
         - Every kind: optional `note`.
@@ -6241,6 +6362,102 @@ components:
         nextCursor:
           type: string
           description: Present when there are more results.
+    SaleEmailStatus:
+      description: |
+        A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show
+        `statusDisplay` as given.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSaleEmailStatus'
+        - type: string
+          maxLength: 64
+    KnownSaleEmailStatus:
+      type: string
+      description: |
+        - `unavailable`: this Listora receives no email yet (no `address`).
+        - `not_set_up`: no email has reached the address yet.
+        - `confirming`: the email provider sent its forwarding confirmation (`confirmation`); the
+          user confirms it in their provider's settings.
+        - `working`: a marketplace email passed Listora's sender checks, so forwarding works.
+      enum:
+        - unavailable
+        - not_set_up
+        - confirming
+        - working
+    SaleEmailConfirmation:
+      type: object
+      description: |
+        The email provider's forwarding confirmation, sent to the Listora address: the user types
+        the `code` into their provider's settings, or opens `url` (always on the provider's own
+        domain, from a message whose sender checks passed). Listora never opens the link itself.
+      required:
+        - provider
+        - receivedAt
+      properties:
+        provider:
+          type: string
+          maxLength: 64
+          description: For example "Gmail".
+        code:
+          type: string
+          maxLength: 64
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+        receivedAt:
+          $ref: '#/components/schemas/Timestamp'
+    SaleEmails:
+      type: object
+      description: |
+        Email sale detection: the account's private forwarding address, how to forward the
+        marketplaces' sold emails to it, what has arrived, and the "ask before auto-delist"
+        setting. A sold email from Poshmark, Mercari, or Depop that passes Listora's sender checks
+        (SPF and the marketplace's DKIM signature) records the sale and delists the item everywhere
+        else within minutes, or with `askBeforeDelist` makes a confirm task first.
+      required:
+        - status
+        - statusDisplay
+        - askBeforeDelist
+        - steps
+        - filter
+      properties:
+        address:
+          type: string
+          maxLength: 254
+          description: The account's own forwarding address; absent while `status` is `unavailable`.
+        status:
+          $ref: '#/components/schemas/SaleEmailStatus'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+        askBeforeDelist:
+          type: boolean
+          description: |
+            When true, a sale email makes a `confirm_sale` task instead of recording the sale and
+            delisting at once. False by default.
+        steps:
+          type: array
+          description: How to set forwarding up, in order, worded for the user.
+          items:
+            type: string
+            maxLength: 500
+        filter:
+          type: string
+          maxLength: 500
+          description: The email search that finds the marketplaces' sold emails, for the forwarding filter.
+        confirmation:
+          $ref: '#/components/schemas/SaleEmailConfirmation'
+          description: Present while the provider's confirmation waits for the user (`confirming`).
+        lastSaleEmailAt:
+          $ref: '#/components/schemas/Timestamp'
+        lastEmailAt:
+          $ref: '#/components/schemas/Timestamp'
+    SaleEmailSettingsReplace:
+      type: object
+      required:
+        - askBeforeDelist
+      properties:
+        askBeforeDelist:
+          type: boolean
     TodayCardKind:
       description: |
         A `KnownTodayCardKind`, or a card added after this client was built. Clients show an

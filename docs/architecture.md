@@ -82,7 +82,7 @@ apps/
                 src/features/ (account deletion, connection deletion, data retention, AI spend
                 check, item analysis, batch items' analysis start, photo processing, trust
                 metrics, the daily connection health check, the delist SLA, push delivery, sale
-                fees, the morning summary); and the
+                fees, the morning summary, sale email ingest); and the
                 on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
@@ -124,6 +124,9 @@ packages/
   sales/        Sale intake: inbound events, recording sales (which starts their auto-delist);
                 the sale lifecycle, fee lines, payout and profit, the profit dashboard's math;
                 eBay notifications, the order poll, eBay account deletion (@listora/sales)
+  email-sales/  Email sale detection: forwarding addresses, the folder and SES ingest drivers,
+                DKIM and SPF checks, the sold-email parsers, matching, confirm and review tasks
+                (@listora/email-sales)
   auto-delist/  The auto-delist orchestrator: the fan-out after a sale, delist runs and their
                 per-marketplace truth, SLA re-alerts, double-sale incidents (@listora/auto-delist)
   push/         Push notifications: the notification, the sender interface and its recording
@@ -207,7 +210,9 @@ src/
   listings/      Draft listings, the listing actions (publish, price, revise, end, relist,
                  verify) queued on the operation engine, honest views, shared-listing links
   operations/    Operations, their history, Retry, and Cancel
-  tasks/         The task inbox: assisted steps, and the user's confirmation or dismissal
+  tasks/         The task inbox: assisted steps, and the user's confirmation or dismissal;
+                 a sale email's confirm and review tasks
+  sale-emails/   The sale email forwarding address, its status and setting, `POST /dev/email`
   connections/   Marketplace connections, the health summary and Retry check, connect attempts,
                  and the public OAuth callback
   marketplace-sessions/  Linking marketplaces by signing in: stores the session the app hands
@@ -272,7 +277,7 @@ lands with the task that introduces that dependency, and its keys are added to `
 | AI               | `FakeAiProvider` (fixtures keyed by photo-set hash, `default.json` for any other photo set)                                                                             | Anthropic API              | `AI_PROVIDER=fake\|anthropic`                 |
 | eBay             | `fake-ebay` server (OAuth consent, Commerce Identity, Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`          |
 | Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`)              | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production`         |
-| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                                                    | SES inbound                | `EMAIL_INGEST=folder\|ses`                    |
+| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email` ([email-sales.md](features/email-sales.md))                                                                        | SES inbound → S3 + SQS     | `EMAIL_INGEST=folder\|ses\|off`               |
 | Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                                      | Cognito                    | `AUTH_DRIVER=dev\|cognito`                    |
 | Payments         | Fake Stripe client + StoreKit configuration file                                                                                                                        | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`                 |
 | Push             | Recording fake that logs each notification (`packages/push`)                                                                                                            | APNs (with device tokens)  | `PUSH_DRIVER=fake`                            |
@@ -337,7 +342,8 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   [sales.md](features/sales.md#data), the profit dashboard's index in
   [profit.md](features/profit.md#data)); pricing in [pricing.md](features/pricing.md#data);
   deleted identities and account deletion in [auth.md](features/auth.md#data); the morning
-  summary setting in [today.md](features/today.md#data). Billing
+  summary setting in [today.md](features/today.md#data); sale email inboxes in
+  [email-sales.md](features/email-sales.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
@@ -433,6 +439,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/design.md](features/design.md)                           | The iPhone app's design system, screenshots, and UI audit                     |
 | [features/inventory.md](features/inventory.md)                     | The Inventory tab, the item screen, the listing flow and its API              |
 | [features/sales.md](features/sales.md)                             | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI   |
+| [features/email-sales.md](features/email-sales.md)                 | Sale emails: forwarding address, SES ingest, DKIM/SPF, parsers, matching      |
 | [features/tasks.md](features/tasks.md)                             | Assisted mode: the task inbox, copy-assist, confirmations, reminders          |
 | [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule  |
 | [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push  |

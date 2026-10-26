@@ -1,0 +1,40 @@
+/v1/sale-emails:
+  get:
+    tags: [sale-emails]
+    operationId: getSaleEmails
+    summary: Get the sale email forwarding address and its status
+    description: |
+      The account's forwarding address (created on first use), the setup steps, the provider's
+      forwarding confirmation while it waits, and the "ask before auto-delist" setting.
+    responses:
+      '200':
+        description: The account's sale email forwarding.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sale-emails.yaml#/SaleEmails'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/sale-emails/settings:
+  put:
+    tags: [sale-emails]
+    operationId: replaceSaleEmailSettings
+    summary: Replace the sale email setting
+    description: Turns "ask before auto-delist" on or off for sales found by email.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/sale-emails.yaml#/SaleEmailSettingsReplace'
+    responses:
+      '200':
+        description: The account's sale email forwarding, with the saved setting.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/sale-emails.yaml#/SaleEmails'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

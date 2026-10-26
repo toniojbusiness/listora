@@ -1,12 +1,17 @@
 /**
  * Session checks end to end on real Postgres, headless Chromium, and the fake site: linking
  * asks for a check, the runner's check passes only when the marketplace shows the seller's
- * account, a rejected session fails and waits for a relink, a marketplace that can't be read is
- * tried again and then fails visibly, and a job for an older link records nothing.
+ * account, a rejected session fails and waits for a relink, a marketplace that can't be read
+ * (or a browser that can't start) is tried again and then fails visibly, a check of the same
+ * session can be asked for again, and a job for an older link records nothing.
  */
 import { randomBytes } from 'node:crypto';
+import { chmod, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { sql } from 'kysely';
+import type { BrowserType } from 'playwright-core';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
@@ -18,6 +23,9 @@ import { createFakeSiteAdapter } from '../fake-site/fake-site-adapter.ts';
 import { FakeAutomationSite } from '../fake-site/fake-site.ts';
 import { linkAutomationSession } from '../link.ts';
 import type { AutomationProfile } from '../profiles.ts';
+import { PlaywrightBrowserRunner } from '../runner/browser-runner.ts';
+import { loadChromium } from '../runner/playwright.ts';
+import { MemoryScreenshotStore } from '../runner/screenshots.ts';
 import { fakeSiteProfile, silentLogger, stubPhotos, testRunner } from '../test-support.ts';
 import { runSessionCheck, SESSION_CHECK_ATTEMPTS, type SessionCheckDependencies } from './job.ts';
 import { SESSION_CHECK_TASK, sessionCheckJobKey } from './schedule.ts';
@@ -197,10 +205,84 @@ describe('session checks (real Postgres, headless Chromium)', () => {
     await run(linked);
     const check = await checkRow(linked.connectionId);
     expect(check).toMatchObject({ status: 'failed', attempts: SESSION_CHECK_ATTEMPTS });
-    expect(check.failure_message).toBe(
-      "Listora couldn't check your Poshmark login just now. Link it again to retry.",
-    );
+    expect(check.failure_message).toBe("Listora couldn't check your Poshmark sign-in just now.");
     expect((await connection(linked.connectionId)).status).toBe('connected');
+  });
+
+  it("fails visibly, on Listora's side, when the runner's browser cannot start, keeping the session", async () => {
+    // As on Fargate on 2026-10-25: /tmp belonged to root and the runner runs unprivileged, so
+    // Chromium could not make its temporary directory (EACCES on mkdtemp) and never started.
+    const unwritable = await mkdtemp(join(tmpdir(), 'listora-unwritable-tmp-'));
+    await chmod(unwritable, 0o555);
+    const broken = new PlaywrightBrowserRunner({
+      logger: silentLogger,
+      screenshots: new MemoryScreenshotStore(),
+      chromium: async () => {
+        const chromium = await loadChromium();
+        return {
+          launch: async (options: Parameters<BrowserType['launch']>[0]) => {
+            const saved = process.env['TMPDIR'];
+            process.env['TMPDIR'] = unwritable;
+            try {
+              return await chromium.launch(options);
+            } finally {
+              if (saved === undefined) delete process.env['TMPDIR'];
+              else process.env['TMPDIR'] = saved;
+            }
+          },
+        } as unknown as BrowserType;
+      },
+    });
+    const automation = {
+      poshmark: createFakeSiteAdapter({
+        marketplace: 'poshmark',
+        siteUrl: site.url,
+        profile,
+        sessions: new RunnerSessions({
+          db: database.db,
+          vault,
+          runner: broken,
+          profile: () => profile,
+          logger: silentLogger,
+        }),
+        photos: stubPhotos,
+        logger: silentLogger,
+      }),
+    };
+    try {
+      const linked = await link();
+      const before = site.requests.length;
+      for (let attempt = 1; attempt <= SESSION_CHECK_ATTEMPTS; attempt += 1) {
+        await run(linked, { automation });
+      }
+      const check = await checkRow(linked.connectionId);
+      expect(check).toMatchObject({
+        status: 'failed',
+        attempts: SESSION_CHECK_ATTEMPTS,
+        failure_code: 'browser_unavailable',
+        failure_message:
+          "Listora's browser didn't start, so it couldn't check your Poshmark sign-in. The problem is on Listora's side, not Poshmark's.",
+      });
+      // The marketplace was never asked, and the session is kept for a check again.
+      expect(site.requests.slice(before)).toEqual([]);
+      expect(await connection(linked.connectionId)).toMatchObject({ status: 'connected' });
+      expect((await connection(linked.connectionId)).token_ciphertext).not.toBeNull();
+      const runs = await database.db
+        .selectFrom('automation_run')
+        .select(['failed_step', 'error_code'])
+        .where('account_id', '=', accountId)
+        .execute();
+      expect(runs).toEqual(
+        Array.from({ length: SESSION_CHECK_ATTEMPTS }, () => ({
+          failed_step: 'open session',
+          error_code: 'browser_unavailable',
+        })),
+      );
+    } finally {
+      await broken.close();
+      await chmod(unwritable, 0o755);
+      await rm(unwritable, { recursive: true, force: true });
+    }
   });
 
   it('never reports a marketplace without an automation adapter as linked', async () => {

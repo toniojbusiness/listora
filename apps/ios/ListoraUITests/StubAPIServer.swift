@@ -26,7 +26,12 @@ final class StubAPIServer: @unchecked Sendable {
     private var startFailure: NWError?
     /// Poshmark's link: nil until the app links it, then how many times its check was read.
     private var poshmarkChecks: Int?
+    /// Depop's sign-in, whose check did not confirm it: nil until the app asks to check it again,
+    /// then how many times that check was read.
+    private var depopRechecks: Int?
     private var todayState = TodayState.busy
+    /// "Ask before delisting", as the last `PUT /v1/sale-emails/settings` saved it.
+    private var askBeforeDelist = false
 
     /// What `GET /v1/today` answers.
     enum TodayState: Sendable {
@@ -160,7 +165,7 @@ final class StubAPIServer: @unchecked Sendable {
             // Saved as sent.
             return Self.http(status: "200 OK", body: request.body)
         default:
-            if let linking = respondToLinkAccounts(method: request.method, path: path) {
+            if let linking = respondToLinkAccounts(method: request.method, path: path, body: request.body) {
                 return linking
             }
             return Self.http(
@@ -223,49 +228,27 @@ final class StubAPIServer: @unchecked Sendable {
     "externalUrl":"https://poshmark.com/listing/Lululemon-Align-Pant-25-64f1a2b3c4d5e6f7a8b9c0d1",
     "availableActions":[],"createdAt":"2026-10-24T12:00:00Z","updatedAt":"2026-10-24T12:00:00Z"}
     """
-
-    /// The Marketplaces screen before eBay is connected: the health summary, nothing needing
-    /// attention (`packages/connections/src/health-summary.ts`).
-    private static let connectionHealth = #"{"needsAttention":false,"attention":[],"#
-        + #""connections":\#(connections),"saleForwarding":{"status":"needs_domain","statusDisplay":"#
-        + #"{"tone":"neutral","label":"Set up when you add a domain","detail":"Forwarding your "#
-        + #"marketplaces' sale emails to Listora lets it spot sales sooner. It needs Listora's email "#
-        + #"domain, which isn't set up yet."}}}"#
-
-    /// Every marketplace's connection before eBay is connected, as a JSON array, in the words the
-    /// server uses (`packages/connections/src/status-display.ts`).
-    private static func capabilities(_ mode: String, connect: String) -> String {
-        let verify = mode == "api" ? "api" : "user_confirm"
-        return #"{"connect":"\#(connect)","create":"\#(mode)","updatePrice":"\#(mode)","#
-            + #""updateDetails":"\#(mode)","delist":"\#(mode)","relist":"\#(mode)","markSold":"\#(mode)","#
-            + #""verifyRead":"\#(verify)","importListings":"none","saleDetection":["manual"],"#
-            + #""imageTransport":"url_fetch"}"#
-    }
-
-    /// A marketplace Listora works with in assisted mode, with no account linked.
-    static func assistedConnection(_ id: String, _ name: String) -> String {
-        #"{"marketplace":"\#(id)","mode":"assisted","status":"not_connected","#
-            + #""statusDisplay":{"tone":"neutral","label":"Not linked","detail":"Listora works with "#
-            + #"\#(name) in assisted mode: it prepares each listing and change, and you finish it in the "#
-            + #"\#(name) app, then confirm it."},"#
-            + #""capabilities":\#(capabilities("assisted", connect: "none")),"availableActions":[]}"#
-    }
-
-    private static let connections: String = {
-        let ebay = #"{"marketplace":"ebay","mode":"api","status":"not_connected","#
-            + #""statusDisplay":{"tone":"neutral","label":"Not connected","detail":"Connect your eBay "#
-            + #"account so Listora can list, update, and end your items there, and confirm every change "#
-            + #"with eBay."},"capabilities":\#(StubAPIServer.capabilities("api", connect: "oauth")),"#
-            + #""availableActions":["connect"]}"#
-        let assisted = [("depop", "Depop"), ("poshmark", "Poshmark"), ("mercari", "Mercari")]
-        let all = [ebay] + assisted.map { StubAPIServer.assistedConnection($0.0, $0.1) }
-        return "[\(all.joined(separator: ","))]"
-    }()
 }
 
 /// Link accounts: a fake marketplace's sign-in page and the marketplace-sessions endpoints.
 extension StubAPIServer {
-    private func respondToLinkAccounts(method: String, path: String) -> Data? {
+    /// The actions on a connection: unlinking Poshmark and checking Depop's sign-in again.
+    private func respondToConnectionActions(method: String, path: String) -> Data? {
+        switch (method, path) {
+        case ("DELETE", "/v1/connections/poshmark"):
+            // Unlinked: the session is gone, and Poshmark is back to assisted.
+            poshmarkChecks = nil
+            return Self.http(status: "200 OK", body: Self.assistedConnection("poshmark", "Poshmark"))
+        case ("POST", "/v1/connections/depop/checks"):
+            // Retry check of the sign-in the server holds: the connection, checking.
+            depopRechecks = 0
+            return Self.http(status: "202 Accepted", body: Self.depopConnectionChecking)
+        default:
+            return nil
+        }
+    }
+
+    private func respondToLinkAccounts(method: String, path: String, body: String) -> Data? {
         switch (method, path) {
         case ("GET", Self.loginPath):
             return Self.http(status: "200 OK", contentType: "text/html; charset=utf-8", body: Self.loginPage)
@@ -283,7 +266,7 @@ extension StubAPIServer {
         case ("GET", Self.accountPath):
             return Self.http(status: "200 OK", contentType: "text/html; charset=utf-8", body: Self.accountPage)
         case ("GET", "/v1/marketplace-sessions"):
-            let sessions = [poshmarkSession(), Self.mercariSession, Self.depopSession, Self.ebaySession]
+            let sessions = [poshmarkSession(), Self.mercariSession, depopSession(), Self.ebaySession]
             return Self.http(status: "200 OK", body: #"{"data":["# + sessions.joined(separator: ",") + "]}")
         case ("POST", "/v1/marketplace-sessions/poshmark"):
             poshmarkChecks = 0
@@ -291,13 +274,41 @@ extension StubAPIServer {
         case ("GET", "/v1/marketplace-sessions/poshmark"):
             poshmarkChecks = poshmarkChecks.map { $0 + 1 }
             return Self.http(status: "200 OK", body: poshmarkSession())
-        case ("DELETE", "/v1/connections/poshmark"):
-            // Unlinked: the session is gone, and Poshmark is back to assisted.
-            poshmarkChecks = nil
-            return Self.http(status: "200 OK", body: Self.assistedConnection("poshmark", "Poshmark"))
+        case ("GET", "/v1/marketplace-sessions/depop"):
+            depopRechecks = depopRechecks.map { $0 + 1 }
+            return Self.http(status: "200 OK", body: depopSession())
+        case ("GET", "/v1/sale-emails"):
+            return Self.http(status: "200 OK", body: saleEmails())
+        case ("PUT", "/v1/sale-emails/settings"):
+            return respondToSaleEmailSettings(body: body)
         default:
-            return nil
+            return respondToConnectionActions(method: method, path: path)
         }
+    }
+
+    /// `PUT /v1/sale-emails/settings`: saved as sent (the request is already recorded).
+    private func respondToSaleEmailSettings(body: String) -> Data {
+        askBeforeDelist = body.replacingOccurrences(of: " ", with: "").contains(#""askBeforeDelist":true"#)
+        return Self.http(status: "200 OK", body: saleEmails())
+    }
+
+    static let forwardingAddress = "sales+k7q2m4x9p3r6t8w2y5z7@in.listora.test"
+    static let forwardingCode = "418273645"
+
+    /// The forwarding setup while Gmail's confirmation waits for the user.
+    private func saleEmails() -> String {
+        """
+        {"address":"\(Self.forwardingAddress)","status":"confirming",
+        "statusDisplay":{"tone":"action_needed","label":"Confirm forwarding",
+        "detail":"Your email provider sent a confirmation. Enter its code in your email settings, or open its link."},
+        "askBeforeDelist":\(askBeforeDelist),
+        "steps":["Copy your Listora address.","In Gmail on a computer, open Settings > See all settings > \
+        Forwarding and POP/IMAP. Choose Add a forwarding address and paste it."],
+        "filter":"from:(poshmark.com OR mercari.com OR depop.com) subject:(sold OR sale)",
+        "confirmation":{"provider":"Gmail","code":"\(Self.forwardingCode)",
+        "url":"https://mail-settings.google.com/mail/vf-stub","receivedAt":"2026-10-24T12:00:00Z"},
+        "lastEmailAt":"2026-10-24T12:00:00Z"}
+        """
     }
 
     // The fake marketplace's sign-in page, standing in for Poshmark's own.
@@ -353,10 +364,26 @@ extension StubAPIServer {
     "occurredAt":"2026-10-24T12:00:00Z"}}
     """
 
-    private static let depopSession = """
-    {"marketplace":"depop","status":"not_linked","statusDisplay":{"tone":"neutral","label":"Not linked"},
-    "login":{"url":"https://www.depop.com/login/","cookieDomains":["depop.com"]}}
-    """
+    /// Not confirmed (its check failed, as when the cloud browser could not start) until the app
+    /// asks to check it again; then checking, and linked from the second read on.
+    private func depopSession() -> String {
+        let login = #""login":{"url":"https://www.depop.com/login/","cookieDomains":["depop.com"]}"#
+        switch depopRechecks {
+        case nil:
+            let reason = "Listora's browser didn't start, so it couldn't check your Depop sign-in. "
+                + "The problem is on Listora's side, not Depop's."
+            return #"{"marketplace":"depop","status":"check_failed","statusDisplay":{"tone":"action_needed","#
+                + #""label":"Not confirmed","detail":"\#(reason) Check again, or link Depop again if it "#
+                + #"keeps failing."},\#(login),"issue":{"code":"browser_unavailable","message":"\#(reason)","#
+                + #""occurredAt":"2026-10-25T23:39:46Z"}}"#
+        case let .some(reads) where reads < 2:
+            return #"{"marketplace":"depop","status":"checking","statusDisplay":{"tone":"checking","#
+                + #""label":"Checking..."},\#(login)}"#
+        case .some:
+            return #"{"marketplace":"depop","status":"linked","statusDisplay":{"tone":"success","#
+                + #""label":"Linked"},\#(login)}"#
+        }
+    }
 
     private static let ebaySession = """
     {"marketplace":"ebay","status":"not_linked","statusDisplay":{"tone":"neutral","label":"Not linked"},
