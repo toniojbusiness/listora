@@ -100,7 +100,9 @@ export function createDepopScripts(
     if (outcome.type === 'refused') {
       return { type: 'rejected', code: 'validation_failed', message: outcome.message };
     }
-    return { type: 'applied', externalListingId: outcome.slug };
+    return outcome.slug === null
+      ? { type: 'applied' }
+      : { type: 'applied', externalListingId: outcome.slug };
   }
 
   /** Posts a new listing (a create, or a relist); a later attempt first looks for it. */

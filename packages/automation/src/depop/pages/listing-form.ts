@@ -62,6 +62,9 @@ export const LISTING_FORM = {
 /** How long Depop gets to fill in item info from the photos before Listora fills the form. */
 const ITEM_INFO_MS = 15_000;
 
+/** Depop's Done page after a post: under the sell page's path, with one more segment. */
+const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
+
 /** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 const ANSWER_MS = 45_000;
 const LOOK_EVERY_MS = 500;
@@ -156,8 +159,11 @@ export async function fillPrice(page: PageDriver, cents: number): Promise<void> 
 export type Submitted =
   /** The form showed Depop's validation message; nothing was posted or saved. */
   | { type: 'refused'; message: string }
-  /** Depop opened the product's page. */
-  | { type: 'posted'; slug: string };
+  /**
+   * Depop took it: it opened the product's page, or its own Done page after a post, which
+   * doesn't say the product's slug (`null`; the operation's check finds it by its SKU).
+   */
+  | { type: 'posted'; slug: string | null };
 
 /**
  * Submits the form with its Post (sell) or Save (edit) button, and waits for Depop's answer:
@@ -174,8 +180,18 @@ export async function submitListing(page: PageDriver, button: 'post' | 'save'): 
   await page.click(selector);
   const end = Date.now() + ANSWER_MS;
   for (;;) {
-    const slug = slugFromPath(new URL(page.url()).pathname);
+    const path = new URL(page.url()).pathname;
+    const slug = slugFromPath(path);
     if (slug !== null) return { type: 'posted', slug };
+    if (button === 'post' && DONE_PAGE.test(path)) {
+      // Read on the captain's session (2026-10-26): after Post, Depop opens "Done - Depop" under
+      // the sell page's path, with "List another item".
+      const named = DONE_PAGE.exec(path)?.[1];
+      return {
+        type: 'posted',
+        slug: named === undefined ? null : slugFromPath(`/products/${named}/`),
+      };
+    }
     const shown = await messages(page);
     if (shown.length > 0) return { type: 'refused', message: shown.join(' ') };
     if ((await page.count(LISTING_FORM.invalid)) > 0) {

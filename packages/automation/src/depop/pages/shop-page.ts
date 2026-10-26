@@ -22,7 +22,8 @@ export const SHOP_PAGE = {
   profile: '[data-testid="actionMenu__nav-profileLinkButton"]',
   profileLink:
     'a[data-testid="actionMenu__nav-profileLinkButton"], [data-testid="actionMenu__nav-profileLinkButton"] a',
-  productLinks: 'a[href*="/products/"]',
+  /** Links to products, not the header's Sell link (`/products/create/`), which every page has. */
+  productLinks: 'a[href*="/products/"]:not([href*="/products/create"])',
 } as const;
 
 /** A Depop username, the one segment of a shop's path. */

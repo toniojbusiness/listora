@@ -5685,6 +5685,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	};
 	/** How long Depop gets to fill in item info from the photos before Listora fills the form. */
 	const ITEM_INFO_MS = 15e3;
+	/** Depop's Done page after a post: under the sell page's path, with one more segment. */
+	const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
 	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 	const ANSWER_MS = 45e3;
 	const LOOK_EVERY_MS$2 = 500;
@@ -5764,11 +5766,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		await page.click(selector);
 		const end = Date.now() + ANSWER_MS;
 		for (;;) {
-			const slug = slugFromPath(new URL(page.url()).pathname);
+			const path = new URL(page.url()).pathname;
+			const slug = slugFromPath(path);
 			if (slug !== null) return {
 				type: "posted",
 				slug
 			};
+			if (button === "post" && DONE_PAGE.test(path)) {
+				const named = DONE_PAGE.exec(path)?.[1];
+				return {
+					type: "posted",
+					slug: named === void 0 ? null : slugFromPath(`/products/${named}/`)
+				};
+			}
 			const shown = await messages(page);
 			if (shown.length > 0) return {
 				type: "refused",
@@ -6170,7 +6180,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		/** The open menu's "Your profile": a link, or a holder of one. */
 		profile: "[data-testid=\"actionMenu__nav-profileLinkButton\"]",
 		profileLink: "a[data-testid=\"actionMenu__nav-profileLinkButton\"], [data-testid=\"actionMenu__nav-profileLinkButton\"] a",
-		productLinks: "a[href*=\"/products/\"]"
+		/** Links to products, not the header's Sell link (`/products/create/`), which every page has. */
+		productLinks: "a[href*=\"/products/\"]:not([href*=\"/products/create\"])"
 	};
 	/** A Depop username, the one segment of a shop's path. */
 	const USERNAME = /^[a-z0-9][a-z0-9._]{1,29}$/i;
@@ -6339,7 +6350,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				code: "validation_failed",
 				message: outcome.message
 			};
-			return {
+			return outcome.slug === null ? { type: "applied" } : {
 				type: "applied",
 				externalListingId: outcome.slug
 			};
