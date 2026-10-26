@@ -13,8 +13,7 @@
  * cover-photo editor (`ImageEditModal`, drawn only while open), which keeps the photos only once
  * its Apply (`data-et-name="apply"`) confirms them, and the listing price field is
  * `data-vv-name="listingPrice"`; there is no `data-vv-name="brand"` field. The pickers (catalog, size,
- * condition, availability) and the brand field are Listora's model still, confirmed on a real
- * session from the evidence a stopped run logs. A selector that no longer matches ends the step
+ * condition, availability) and the brand field are read in the same code (FORM_SELECTORS). A selector that no longer matches ends the step
  * as `element_missing` before anything is submitted, so the step goes to the user. The fake
  * Poshmark (fake/) mirrors exactly what this file expects.
  *
@@ -41,20 +40,41 @@ export const FORM_SELECTORS = {
   photos: 'input#img-file-input[type="file"]',
   title: 'input[data-vv-name="title"]',
   description: 'textarea[data-vv-name="description"]',
-  brand: 'input[data-vv-name="brand"]',
+  brand: '[data-et-name="listingEditorBrandSection"] input[type="text"]',
   originalPrice: 'input[data-vv-name="originalPrice"]',
   /** The listing price, as the form a seller's session shows names it. */
   listingPrice: 'input[data-vv-name="listingPrice"]',
   /**
    * The cover-photo editor (`.image-edit-modal`, in one of Poshmark's modals) and its Apply, in
-   * the modal's footer; the form has another Apply of its own.
+   * the modal's footer; the size picker's Done is an `apply` too.
    */
   photoEditor: '.image-edit-modal',
-  applyPhoto: '.modal:has(.image-edit-modal) .modal__footer button[data-et-name="apply"]',
+  applyPhoto: '[data-test="modal-footer"] button[data-et-name="apply"]:text-is("Apply")',
+  /**
+   * The pickers, from Poshmark's listing-editor code (2026-10-26): each a dropdown opened by its
+   * `.dropdown__selector`. The catalog lists departments, then the chosen department's
+   * categories, then opens the subcategory dropdown; the size dropdown has a tab per size set,
+   * a button per size, and Done; the condition dropdown has an item per condition.
+   */
+  categorySelector: '.listing-editor__category-container .dropdown__selector',
+  department: (name: string) =>
+    `.listing-editor__category-container a.dropdown__menu__item:text-is("${quote(name)}")`,
+  category: (name: string) =>
+    `.listing-editor__category-container li.dropdown__menu__item:text-is("${quote(name)}")`,
+  subcategory: (name: string) =>
+    `.listing-editor__subcategory-container a[data-et-name="sub_category"]:text-is("${quote(name)}")`,
+  sizeSelector: '[data-test="size"]',
+  sizeSet: (name: string) =>
+    `[data-test="horizontal-list"] li.navigation--horizontal__tab span:text-is("${quote(name)}")`,
+  size: (name: string) => `button.multi-size-selector__button:text-is("${quote(name)}")`,
+  sizeDone: 'button[data-et-name="apply"][data-et-on-name="multi_item_quantity_tile"]',
+  conditionSelector: '.listing-editor__condition-container .dropdown__selector',
+  condition: (title: string) =>
+    `div[data-et-name="listing_condition"] > div.fw--med:text-is("${quote(title)}")`,
   sku: 'input[data-vv-name="sku"]',
-  /** A picker: `[data-test="<name>"]`, opened by its summary, with labeled choices. */
-  picker: (name: Picker) => `details[data-test="${name}"]`,
-  choice: (list: string, text: string) => `[data-test="${list}"] label:text-is("${quote(text)}")`,
+  availabilitySelector: '[data-et-name="listingEditorAvailabilitySection"] .dropdown__selector',
+  availability: (code: string) =>
+    `[data-et-name="listingEditorAvailabilitySection"] a.dropdown__link[data-et-name="${code}"]`,
   /** Goes on from a new listing's form to its share step. */
   next: 'button[data-et-name="next"]',
   /** Publishes a new listing, on the share step. */
@@ -65,7 +85,11 @@ export const FORM_SELECTORS = {
   errors: '.form__error-message',
 } as const;
 
-type Picker = 'catalog' | 'size' | 'condition' | 'availability';
+/** Poshmark's own names of the availabilities, which its picker's items carry. */
+const AVAILABILITY_CODES = {
+  for_sale: 'available',
+  not_for_sale: 'not_for_sale',
+} as const satisfies Record<Availability, string>;
 
 /**
  * Opens a form and waits until it is there; `false` for a listing Poshmark has no form for (a
@@ -137,12 +161,18 @@ async function expectField(page: PageDriver, selector: string, what: string): Pr
 
 /** The department, category, and (when the form offers it) subcategory. */
 export async function chooseCatalog(page: PageDriver, catalog: PoshmarkCatalog): Promise<void> {
-  await choose(page, 'catalog', 'catalog-departments', catalog.department);
-  await choose(page, 'catalog', 'catalog-categories', catalog.category);
+  await expectField(page, FORM_SELECTORS.categorySelector, 'category picker');
+  await page.click(FORM_SELECTORS.categorySelector);
+  await pick(
+    page,
+    FORM_SELECTORS.department(catalog.department),
+    `department "${catalog.department}"`,
+  );
+  await pick(page, FORM_SELECTORS.category(catalog.category), `category "${catalog.category}"`);
   if (catalog.subcategory !== null) {
     // Poshmark's subcategory is optional: one its form no longer offers is left out.
-    const offered = FORM_SELECTORS.choice('catalog-subcategories', catalog.subcategory);
-    if (await page.exists(offered)) await page.click(offered);
+    const offered = FORM_SELECTORS.subcategory(catalog.subcategory);
+    if (await appears(page, offered)) await page.click(offered);
   }
 }
 
@@ -152,9 +182,43 @@ export async function chooseSizeAndCondition(
   size: PoshmarkSize,
   condition: PoshmarkCondition,
 ): Promise<void> {
-  await choose(page, 'size', 'size-sets', size.set);
-  await choose(page, 'size', 'size-options', size.size);
-  await choose(page, 'condition', 'condition-options', condition.label);
+  await expectField(page, FORM_SELECTORS.sizeSelector, 'size picker');
+  await page.click(FORM_SELECTORS.sizeSelector);
+  const set = FORM_SELECTORS.sizeSet(size.set);
+  // A category with one size set may show no tabs.
+  if (await appears(page, set)) await page.click(set);
+  await pick(page, FORM_SELECTORS.size(size.size), `size "${size.size}"`);
+  await pick(page, FORM_SELECTORS.sizeDone, 'size Done button');
+  await expectField(page, FORM_SELECTORS.conditionSelector, 'condition picker');
+  await page.click(FORM_SELECTORS.conditionSelector);
+  const title = CONDITION_TITLES[condition.code];
+  await pick(page, FORM_SELECTORS.condition(title), `condition "${title}"`);
+}
+
+/** The titles the condition picker shows (Poshmark's `listingEditor.condition.dropdownOptions`). */
+const CONDITION_TITLES = {
+  nwt: 'New With Tags',
+  uln: 'Like New',
+  ug: 'Good',
+  uf: 'Fair',
+} as const satisfies Record<PoshmarkCondition['code'], string>;
+
+/** Waits briefly for a choice the page draws once its picker opens, then clicks it. */
+async function pick(page: PageDriver, selector: string, what: string): Promise<void> {
+  if (!(await appears(page, selector))) {
+    throw new PageChangedError(`Poshmark's listing form offers no ${what}`);
+  }
+  await page.click(selector);
+}
+
+/** Whether `selector` is on the page within a moment (a picker's menu draws itself). */
+async function appears(page: PageDriver, selector: string): Promise<boolean> {
+  const end = Date.now() + EDITOR_OPENS_MS;
+  for (;;) {
+    if (await page.exists(selector)) return true;
+    if (Date.now() >= end) return false;
+    await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
+  }
 }
 
 /** The seller's private SKU, which only the seller sees (how Listora finds its listings). */
@@ -168,7 +232,15 @@ export async function setPrice(page: PageDriver, priceCents: number): Promise<vo
 }
 
 export async function setAvailability(page: PageDriver, availability: Availability): Promise<void> {
-  await choose(page, 'availability', 'availability-options', AVAILABILITY_LABELS[availability]);
+  await expectField(page, FORM_SELECTORS.availabilitySelector, 'availability picker');
+  const shown = await page.text(FORM_SELECTORS.availabilitySelector);
+  if (shown?.replace(/\s+/g, ' ').trim() === AVAILABILITY_LABELS[availability]) return;
+  await page.click(FORM_SELECTORS.availabilitySelector);
+  await pick(
+    page,
+    FORM_SELECTORS.availability(AVAILABILITY_CODES[availability]),
+    `availability "${AVAILABILITY_LABELS[availability]}"`,
+  );
 }
 
 /**
@@ -206,13 +278,6 @@ async function saved(page: PageDriver): Promise<{ type: 'saved'; path: string }>
 export async function privateSku(page: PageDriver): Promise<string | null> {
   const value = await page.attribute(FORM_SELECTORS.sku, 'value');
   return value === null || value.trim() === '' ? null : value.trim();
-}
-
-/** Opens a picker unless it is open, then clicks the choice with this text in one of its lists. */
-async function choose(page: PageDriver, picker: Picker, list: string, text: string): Promise<void> {
-  const selector = FORM_SELECTORS.picker(picker);
-  if (!(await page.exists(`${selector}[open]`))) await page.click(`${selector} > summary`);
-  await page.click(FORM_SELECTORS.choice(list, text));
 }
 
 function wholeDollars(cents: number): string {

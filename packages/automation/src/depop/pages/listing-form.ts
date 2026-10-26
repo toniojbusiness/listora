@@ -89,7 +89,8 @@ export async function fillListing(
 ): Promise<void> {
   await awaitElement(page, LISTING_FORM.form, FORM, FORM);
   if (photos !== null) {
-    await expectElement(page, LISTING_FORM.photos, FORM, 'photo input');
+    // Drawn with the rest of the form, a moment after its description field.
+    await awaitElement(page, LISTING_FORM.photos, FORM, 'photo input');
     await page.upload(LISTING_FORM.photos, photos);
   }
   await page.fill(LISTING_FORM.description, depopListingText(payload, sku));
