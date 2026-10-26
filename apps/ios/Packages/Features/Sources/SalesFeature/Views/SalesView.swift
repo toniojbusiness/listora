@@ -26,7 +26,7 @@ public struct SalesView<Settings: View>: View {
                     SaleDetailView(environment: environment, saleID: route.saleID)
                 }
                 .navigationDestination(for: ProfitRoute.self) { _ in
-                    ProfitView(model: environment.makeProfitModel())
+                    ProfitView(model: environment.makeProfitModel(), onSignIn: environment.onSignIn)
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -62,6 +62,7 @@ public struct SalesView<Settings: View>: View {
                 systemImage: "person.crop.circle.badge.questionmark",
                 title: "Sign in to see your sales",
                 message: "Every sale, its fees, and its profit show up here once you sign in.",
+                action: .init("Sign in", systemImage: "person.crop.circle", handler: environment.onSignIn),
             )
         case let .failed(message) where model.sales.isEmpty:
             EmptyStateView(

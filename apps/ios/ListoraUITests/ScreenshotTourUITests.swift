@@ -5,7 +5,7 @@ import XCTest
 /// `LISTORA_SCREENSHOT_DIR` (from `TEST_RUNNER_LISTORA_SCREENSHOT_DIR`), so `make ios-test` skips it.
 ///
 /// The screenshots land in `<dir>/<LISTORA_SCREENSHOT_VARIANT>/NN-screen.png`. The API is
-/// `StubAPIServer`; the first pass is signed out, as on a fresh install.
+/// `StubAPIServer`; the first pass starts signed out, as on a fresh install.
 @MainActor
 final class ScreenshotTourUITests: XCTestCase {
     let app = XCUIApplication()
@@ -39,7 +39,8 @@ final class ScreenshotTourUITests: XCTestCase {
     }
 
     func testTour() throws {
-        try signedOutTour()
+        try signInTour(server: XCTUnwrap(server))
+        try offlineTour()
         try signedInTour(server: XCTUnwrap(server))
     }
 
@@ -149,16 +150,18 @@ final class ScreenshotTourUITests: XCTestCase {
         XCTAssertTrue(recommended.isSelected)
     }
 
-    /// Signed out, as on a fresh install: drafts stay on the phone.
-    private func signedOutTour() throws {
+    /// Signed in with no server answering: drafts stay on the phone, and the screens that load
+    /// from the server say they could not.
+    private func offlineTour() throws {
         app.launchEnvironment = try [
             "LISTORA_FIXTURE_PHOTOS": fixturesPath,
             "LISTORA_FAKE_CAMERA": fixturesPath,
             "LISTORA_RESET_LOCAL_DATA": "1",
         ]
+        app.signInWithoutServer()
         app.launch()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
-        try shot("00-today-signed-out")
+        try shot("00-today-offline")
 
         tab("Inventory")
         try shot("01-inventory")
@@ -178,7 +181,7 @@ final class ScreenshotTourUITests: XCTestCase {
         XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
         try shot("10-settings")
 
-        // Nothing answers at the Dev API, so the list cannot load.
+        // Nothing answers at the API, so the list cannot load.
         app.buttons["settings.marketplaces"].tap()
         XCTAssertTrue(app.navigationBars["Marketplaces"].waitForExistence(timeout: 5))
         try shot("11-marketplaces-unavailable", settle: 3)
@@ -269,7 +272,7 @@ final class ScreenshotTourUITests: XCTestCase {
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.buttons["draft.row"].waitForExistence(timeout: 5))
-        try shot("08-drafts-signed-out")
+        try shot("08-drafts-offline")
     }
 
     func tab(_ title: String) {

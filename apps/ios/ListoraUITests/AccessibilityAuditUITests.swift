@@ -65,15 +65,28 @@ final class AccessibilityAuditUITests: XCTestCase {
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
         app.launch()
+        // Signed out, the app opens on the welcome screen; the stub's dev sign-in signs in.
+        let email = app.textFields["signIn.email"]
+        XCTAssertTrue(email.waitForExistence(timeout: 10))
+        try audit("Welcome")
+        email.tap()
+        email.typeText("seller@listora.test")
+        app.buttons["signIn.continue"].tap()
+        let code = app.textFields["signIn.code"]
+        XCTAssertTrue(code.waitForExistence(timeout: 10))
+        try audit("Code")
+        code.typeText(StubAPIServer.devSignInCode)
+        app.buttons["signIn.signIn"].tap()
+
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.descendants(matching: .any)["today.signedOut"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["today.count"].waitForExistence(timeout: 10))
         try audit("Today")
 
         app.tabBars.buttons["Inventory"].tap()
         try audit("Inventory")
 
         app.tabBars.buttons["Sales"].tap()
-        XCTAssertTrue(app.staticTexts["Sign in to see your sales"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Sales"].waitForExistence(timeout: 5))
         try audit("Sales")
 
         app.tabBars.buttons["Add"].tap()

@@ -12,12 +12,19 @@ public final class SalesEnvironment {
     let timing: SalesTiming
     /// Whether a session exists; signed out, the sales list never calls the API.
     let isSignedIn: @MainActor () -> Bool
+    /// Opens the sign-in, for a signed-out screen's Sign in button.
+    let onSignIn: @MainActor () -> Void
 
-    public convenience init(apiClient: APIClient, accessTokens: AccessTokenStore) {
+    public convenience init(
+        apiClient: APIClient,
+        accessTokens: AccessTokenStore,
+        onSignIn: @escaping @MainActor () -> Void = {},
+    ) {
         self.init(
             service: APISalesService(client: apiClient.client),
             profitService: APIProfitService(client: apiClient.client),
             isSignedIn: { accessTokens.grant != nil },
+            onSignIn: onSignIn,
         )
     }
 
@@ -26,11 +33,13 @@ public final class SalesEnvironment {
         profitService: any ProfitService,
         timing: SalesTiming = .standard,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
+        onSignIn: @escaping @MainActor () -> Void = {},
     ) {
         self.service = service
         self.profitService = profitService
         self.timing = timing
         self.isSignedIn = isSignedIn
+        self.onSignIn = onSignIn
     }
 
     /// The "Mark as sold" sheet for an item; `onRecorded` gets the new sale's id.
