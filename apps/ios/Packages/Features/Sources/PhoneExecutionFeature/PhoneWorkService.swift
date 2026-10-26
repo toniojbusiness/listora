@@ -17,6 +17,20 @@ public struct PhoneRun: Equatable, Sendable {
     public let call: Call?
 }
 
+/// What a claim found: the run to start, or nothing, and then when to ask again.
+public struct PhoneClaim: Equatable, Sendable {
+    /// The run to start; `nil` when nothing waits for this phone now.
+    public let run: PhoneRun?
+    /// With nothing to run: how long the app waits, while it is open, before it asks again
+    /// (sooner when work for this phone is due then); `nil` when Listora didn't say.
+    public let nextClaimIn: Duration?
+
+    public init(run: PhoneRun?, nextClaimIn: Duration? = nil) {
+        self.run = run
+        self.nextClaimIn = nextClaimIn
+    }
+}
+
 /// This device, as it registers with Listora.
 public struct DeviceRegistration: Equatable, Sendable {
     public var name: String
@@ -31,8 +45,8 @@ public struct DeviceRegistration: Equatable, Sendable {
 /// The API calls of phone runs (docs/features/phone-execution.md).
 public protocol PhoneWorkService: Sendable {
     func register(installationID: String, _ device: DeviceRegistration) async throws(APIFailure)
-    /// Claims the next work waiting for this device; `nil` when there is none.
-    func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneRun?
+    /// Claims the next work waiting for this device, or says when to ask again.
+    func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneClaim
     /// Answers the run's call; the run's next call, or `nil` once it is over.
     func answer(
         runID: String,
@@ -71,7 +85,7 @@ public struct APIPhoneWorkService: PhoneWorkService {
         }
     }
 
-    public func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneRun? {
+    public func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneClaim {
         let output = try await call {
             try await api.client.claimPhoneRun(
                 headers: .init(idempotencyKey: UUID().uuidString),
@@ -80,7 +94,11 @@ public struct APIPhoneWorkService: PhoneWorkService {
         }
         switch output {
         case let .ok(response):
-            return try PhoneRun(decode { try response.body.json }.run)
+            let result = try decode { try response.body.json }
+            return try PhoneClaim(
+                run: PhoneRun(result.run),
+                nextClaimIn: result.nextClaimInSeconds.map { .seconds(Int($0)) },
+            )
         case let .notFound(response):
             throw APIFailure(statusCode: 404, response: response)
         case let .conflict(response):

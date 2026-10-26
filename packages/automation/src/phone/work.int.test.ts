@@ -39,7 +39,14 @@ import { phoneWorkAdapters } from './adapters.ts';
 import type { HandOffAnswer } from './host.ts';
 import { PHONE_RUNTIME_VERSION, runPhoneCall, type PhoneCallInput } from './runtime.ts';
 import { PlaywrightPhoneHost } from './test-host.ts';
-import { answerPhoneCall, claimPhoneRun, type PhoneWorkDependencies } from './work.ts';
+import {
+  answerPhoneCall,
+  claimPhoneRun,
+  nextPhoneClaimSeconds,
+  PHONE_IDLE_CLAIM_SECONDS,
+  PHONE_UNUSED_CLAIM_SECONDS,
+  type PhoneWorkDependencies,
+} from './work.ts';
 
 const FAST_POLICY = { delaysMs: [10, 20, 30, 40, 50, 60], jitter: 0, random: () => 0.5 };
 
@@ -251,6 +258,49 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
       { host: 'phone', purpose: 'sale_check', outcome: 'succeeded' },
     ]);
     expect(await work()).toEqual([]);
+  });
+
+  it('tries a check again once it is due, and tells the phone when to ask for it', async () => {
+    // The phone's first attempt finds a page Listora no longer understands. The check waits 30
+    // seconds for its next attempt, which the phone must claim by itself while the app is
+    // open: a phone with nothing to run is told when to ask again, never left to a push.
+    site.inject({ action: 'health', fault: { type: 'redesigned' } });
+    expect(await runPhone()).toBe(2);
+    const check = () =>
+      db
+        .selectFrom('session_check')
+        .select(['status', 'attempts', 'failure_code', 'failure_message'])
+        .where('connection_id', '=', connectionId)
+        .executeTakeFirstOrThrow();
+    expect(await check()).toEqual({
+      status: 'pending',
+      attempts: 1,
+      failure_code: null,
+      failure_message: null,
+    });
+    const device = { accountId, deviceId };
+    expect(await nextPhoneClaimSeconds(db, device)).toBe(PHONE_IDLE_CLAIM_SECONDS);
+    const due = (interval: string) =>
+      db
+        .updateTable('phone_work')
+        .set({ due_at: sql<Date>`now() + ${interval}::interval` })
+        .where('account_id', '=', accountId)
+        .where('purpose', '=', 'session_check')
+        .execute();
+    await due('3 seconds');
+    expect(await nextPhoneClaimSeconds(db, device)).toBeLessThanOrEqual(3);
+    await due('0 seconds');
+    expect(await nextPhoneClaimSeconds(db, device)).toBe(1);
+    expect(await runPhone()).toBe(1);
+    expect(await check()).toEqual({
+      status: 'passed',
+      attempts: 2,
+      failure_code: null,
+      failure_message: null,
+    });
+    // A device that runs no marketplace asks only rarely.
+    await setExecutionLocation(db, { accountId, connectionId }, 'cloud');
+    expect(await nextPhoneClaimSeconds(db, device)).toBe(PHONE_UNUSED_CLAIM_SECONDS);
   });
 
   it('publishes and delists on the phone, each confirmed by a read-back there', async () => {

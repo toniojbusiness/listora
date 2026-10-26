@@ -17,7 +17,7 @@ ConnectionExecution:
   description: |
     Where the connection's automated steps run, and what waits for the phone. Present for a
     marketplace that is automated in a linked session.
-  required: [location, label]
+  required: [location, label, cloudAllowed]
   properties:
     location:
       $ref: '#/ExecutionLocation'
@@ -41,6 +41,18 @@ ConnectionExecution:
     waitingSince:
       $ref: './common.yaml#/Timestamp'
       description: Since when the oldest of them waits.
+    cloudAllowed:
+      type: boolean
+      description: |
+        Whether the connection may run in Listora's cloud. False for a marketplace that
+        refuses Listora's cloud servers: the app does not offer the cloud, and
+        `setConnectionExecution` refuses a move there.
+    cloudBlockedReason:
+      type: string
+      maxLength: 200
+      description: |
+        Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
+        blocks cloud servers, so Listora runs it from your phone").
 ConnectionExecutionChange:
   type: object
   additionalProperties: false
@@ -163,6 +175,15 @@ PhoneRunResult:
   properties:
     run:
       $ref: '#/PhoneRun'
+    nextClaimInSeconds:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 3600
+      description: |
+        Present on a claim that found nothing to run: how long the app waits, while it is open,
+        before it claims again. Sooner when work for this phone is due then (a check tried
+        again after a failed attempt), so work never waits for a push or for the app to reopen.
 PhoneCallAnswer:
   type: object
   additionalProperties: false

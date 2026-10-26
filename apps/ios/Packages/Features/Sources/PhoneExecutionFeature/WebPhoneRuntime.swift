@@ -32,9 +32,9 @@ public enum PhoneRuntimeError: Error, Equatable {
 /// The phone runtime in the app's own web views. A hidden controller page runs the bundle; it
 /// reaches the marketplace page, an off-screen web view holding the seller's session (the
 /// cookies this phone keeps), through the `listora` message handler, whose every message is
-/// answered. The app only relays: it loads pages, evaluates the runtime's page functions,
-/// reports the main frame's navigations, answers dialogs, fetches listing photos, and hands a
-/// check to the seller. Every rule stays in the runtime.
+/// answered. The app only relays: it loads pages, evaluates the runtime's page functions, reads
+/// the page's own data, reports the main frame's navigations, answers dialogs, fetches listing
+/// photos, and hands a check to the seller. Every rule stays in the runtime.
 ///
 /// The marketplace page asks for desktop pages at a desktop size, as Safari's "Request Desktop
 /// Website" does, so the marketplaces serve the same pages the browser runner's scripts read.
@@ -169,9 +169,8 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
             return try await page.settle(timeout: timeout)
         case "state":
             return page.state()
-        case "evaluate":
-            let source = args["body"] as? String ?? ""
-            return try await page.evaluate(source, args["args"] as? [String: Any] ?? [:], timeout: timeout)
+        case "evaluate", "pageData":
+            return try await script(method, args, on: page, timeout: timeout)
         case "acceptNextDialog":
             page.acceptNextDialog()
             return true
@@ -188,6 +187,20 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         default:
             throw PageFailure("unknown method \(method)")
         }
+    }
+
+    /// Runs script in the page: one of the runtime's page functions, or the page's own data.
+    private func script(
+        _ method: String,
+        _ args: [String: Any],
+        on page: MarketplacePage,
+        timeout: Duration,
+    ) async throws -> Any {
+        if method == "pageData" {
+            return try await page.pageData(args["name"] as? String ?? "", timeout: timeout)
+        }
+        let source = args["body"] as? String ?? ""
+        return try await page.evaluate(source, args["args"] as? [String: Any] ?? [:], timeout: timeout)
     }
 
     /// Shows the check to the seller, when the app is open to show it.

@@ -151,6 +151,10 @@ export class PhoneCallConflictError extends Error {
 }
 
 const DEFAULT_LEASE_MS = 10 * 60_000;
+/** The longest a phone that runs marketplaces waits between looks while the app is open. */
+export const PHONE_IDLE_CLAIM_SECONDS = 10;
+/** How often a phone that runs no marketplace looks (linking one runs its work at once). */
+export const PHONE_UNUSED_CLAIM_SECONDS = 300;
 /** Candidates one claim looks at before it says there is nothing to run. */
 const MAX_CLAIM_CANDIDATES = 20;
 const SILENT = createLogger({ service: 'phone-replay', level: 'silent' });
@@ -193,6 +197,41 @@ export async function claimPhoneRun(
   });
 }
 
+/**
+ * How long a phone with nothing to run waits before it asks again while the app is open
+ * (docs/features/phone-execution.md, "When the phone runs"): until its next work is due (a
+ * check tried again after a failed attempt), and never longer than `PHONE_IDLE_CLAIM_SECONDS`
+ * while marketplaces run on it, so work queued meanwhile (a sale check, a delist after a sale)
+ * starts within seconds without a push; a phone that runs none asks rarely.
+ */
+export async function nextPhoneClaimSeconds(
+  executor: DbExecutor,
+  device: { accountId: string; deviceId: string },
+): Promise<number> {
+  // Work is claimable once it is due and no run holds it.
+  const claimableAt = sql<Date>`greatest(work.due_at, coalesce(work.lease_expires_at, work.due_at))`;
+  const found = await executor
+    .selectFrom('marketplace_connection as connection')
+    .leftJoin('phone_work as work', (join) =>
+      join
+        .onRef('work.account_id', '=', 'connection.account_id')
+        .onRef('work.connection_id', '=', 'connection.id'),
+    )
+    .select([
+      sql<number>`count(distinct connection.id)::int`.as('connections'),
+      sql<number | null>`extract(epoch from min(${claimableAt}) - now())::float8`.as(
+        'dueInSeconds',
+      ),
+    ])
+    .where('connection.account_id', '=', device.accountId)
+    .where('connection.runs_on', '=', 'phone')
+    .where('connection.phone_device_id', '=', device.deviceId)
+    .executeTakeFirst();
+  if (found === undefined || found.connections === 0) return PHONE_UNUSED_CLAIM_SECONDS;
+  if (found.dueInSeconds === null) return PHONE_IDLE_CLAIM_SECONDS;
+  return Math.min(PHONE_IDLE_CLAIM_SECONDS, Math.max(1, Math.ceil(found.dueInSeconds)));
+}
+
 /** Takes the phone's answer for the run's current call and returns the next call, if any. */
 export async function answerPhoneCall(
   deps: PhoneWorkDependencies,
@@ -223,6 +262,7 @@ export async function answerPhoneCall(
       throw new PhoneCallConflictError();
     }
     const run = readPhoneAnswer(pending.input.call, answer.answer);
+    logStopped(deps.logger, work, pending, run);
     await finishRun(trx, work, pending.runId, run);
     if (run.type === 'ran' && !run.result.ok && run.result.failure.kind === 'challenge') {
       await discardSession(deps, trx, work, run.result.failure.challenge);
@@ -674,6 +714,35 @@ function profileFor(deps: PhoneWorkDependencies, request: SessionRequest): Autom
   return configured.origins.includes(new URL(siteUrl).origin)
     ? configured
     : standInProfile(configured, siteUrl);
+}
+
+/**
+ * A call the phone's run stopped, logged as the runner logs its own (`automation script
+ * stopped`): the phone keeps no screenshot, so its step and reason are the run's evidence.
+ */
+function logStopped(
+  logger: Logger,
+  work: WorkRow,
+  pending: PendingState,
+  run: ReturnType<typeof readPhoneAnswer>,
+): void {
+  if (run.type !== 'ran' || run.result.ok) return;
+  const { failure, mutated } = run.result;
+  logger.warn(
+    {
+      host: 'phone',
+      runId: pending.runId,
+      connectionId: work.connection_id,
+      marketplace: work.marketplace,
+      script: pending.input.name,
+      step: failure.step,
+      failure: failure.kind,
+      ...(failure.kind === 'challenge' ? { challenge: failure.challenge } : {}),
+      ...(failure.kind === 'error' ? { code: failure.code, reason: failure.message } : {}),
+      mutated,
+    },
+    'automation script stopped',
+  );
 }
 
 /** Finishes the call's `automation_run` with how it went. */

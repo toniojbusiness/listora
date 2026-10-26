@@ -5937,21 +5937,34 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin/cookieDomains`.
             public var cookieDomains: [Swift.String]
+            /// The marketplace may sign the user in with a link it emails them (Depop). Tapped in
+            /// the email, that link opens the phone's default browser, not the app, so the app asks
+            /// for the link to be copied (or shared to the app) and opens it in its sign-in page,
+            /// but only a link on `url`'s scheme or https and on one of `cookieDomains`. Absent
+            /// means `false`.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin/emailsSignInLinks`.
+            public var emailsSignInLinks: Swift.Bool?
             /// Creates a new `MarketplaceSessionLogin`.
             ///
             /// - Parameters:
             ///   - url: The marketplace's own sign-in page.
             ///   - cookieDomains: The marketplace's own domains (`poshmark.com`). The app sends only cookies whose
+            ///   - emailsSignInLinks: The marketplace may sign the user in with a link it emails them (Depop). Tapped in
             public init(
                 url: Swift.String,
-                cookieDomains: [Swift.String]
+                cookieDomains: [Swift.String],
+                emailsSignInLinks: Swift.Bool? = nil
             ) {
                 self.url = url
                 self.cookieDomains = cookieDomains
+                self.emailsSignInLinks = emailsSignInLinks
             }
             public enum CodingKeys: String, CodingKey {
                 case url
                 case cookieDomains
+                case emailsSignInLinks
             }
         }
         /// A marketplace linked by signing in (`connect: session`). It is shown as linked only
@@ -6314,6 +6327,19 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ConnectionExecution/waitingSince`.
             public var waitingSince: Components.Schemas.Timestamp?
+            /// Whether the connection may run in Listora's cloud. False for a marketplace that
+            /// refuses Listora's cloud servers: the app does not offer the cloud, and
+            /// `setConnectionExecution` refuses a move there.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/cloudAllowed`.
+            public var cloudAllowed: Swift.Bool
+            /// Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
+            /// blocks cloud servers, so Listora runs it from your phone").
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/cloudBlockedReason`.
+            public var cloudBlockedReason: Swift.String?
             /// Creates a new `ConnectionExecution`.
             ///
             /// - Parameters:
@@ -6323,13 +6349,17 @@ extension Components {
             ///   - deviceName:
             ///   - waiting: Changes and checks waiting for that phone to run them.
             ///   - waitingSince: Since when the oldest of them waits.
+            ///   - cloudAllowed: Whether the connection may run in Listora's cloud. False for a marketplace that
+            ///   - cloudBlockedReason: Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
             public init(
                 location: Components.Schemas.ExecutionLocation,
                 label: Swift.String,
                 deviceInstallationId: Components.Schemas.Id? = nil,
                 deviceName: Swift.String? = nil,
                 waiting: Swift.Int32? = nil,
-                waitingSince: Components.Schemas.Timestamp? = nil
+                waitingSince: Components.Schemas.Timestamp? = nil,
+                cloudAllowed: Swift.Bool,
+                cloudBlockedReason: Swift.String? = nil
             ) {
                 self.location = location
                 self.label = label
@@ -6337,6 +6367,8 @@ extension Components {
                 self.deviceName = deviceName
                 self.waiting = waiting
                 self.waitingSince = waitingSince
+                self.cloudAllowed = cloudAllowed
+                self.cloudBlockedReason = cloudBlockedReason
             }
             public enum CodingKeys: String, CodingKey {
                 case location
@@ -6345,6 +6377,8 @@ extension Components {
                 case deviceName
                 case waiting
                 case waitingSince
+                case cloudAllowed
+                case cloudBlockedReason
             }
         }
         /// - Remark: Generated from `#/components/schemas/ConnectionExecutionChange`.
@@ -6710,15 +6744,28 @@ extension Components {
         public struct PhoneRunResult: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PhoneRunResult/run`.
             public var run: Components.Schemas.PhoneRun?
+            /// Present on a claim that found nothing to run: how long the app waits, while it is open,
+            /// before it claims again. Sooner when work for this phone is due then (a check tried
+            /// again after a failed attempt), so work never waits for a push or for the app to reopen.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneRunResult/nextClaimInSeconds`.
+            public var nextClaimInSeconds: Swift.Int32?
             /// Creates a new `PhoneRunResult`.
             ///
             /// - Parameters:
             ///   - run:
-            public init(run: Components.Schemas.PhoneRun? = nil) {
+            ///   - nextClaimInSeconds: Present on a claim that found nothing to run: how long the app waits, while it is open,
+            public init(
+                run: Components.Schemas.PhoneRun? = nil,
+                nextClaimInSeconds: Swift.Int32? = nil
+            ) {
                 self.run = run
+                self.nextClaimInSeconds = nextClaimInSeconds
             }
             public enum CodingKeys: String, CodingKey {
                 case run
+                case nextClaimInSeconds
             }
         }
         /// - Remark: Generated from `#/components/schemas/PhoneCallAnswer`.

@@ -4,12 +4,13 @@
  * then say (where it runs, and the phone-side state, never "Sign in again" for a session the
  * phone has not checked), claiming and answering the session check's phone run, the refusals
  * (an unknown device, an app that needs an update, a call the run is not waiting for), and
- * moving a connection to the cloud. The phone runtime's own runs against the fake marketplace
+ * where a connection may run: a marketplace that refuses Listora's cloud stays on the phone
+ * unless configured back, and then moves to the cloud and back. The phone runtime's own runs against the fake marketplace
  * sites are in @listora/automation (phone/work.int.test.ts).
  */
 import { randomUUID } from 'node:crypto';
 
-import { PHONE_RUNTIME_VERSION } from '@listora/automation';
+import { PHONE_RUNTIME_VERSION, PHONE_UNUSED_CLAIM_SECONDS } from '@listora/automation';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestApi, type TestApi } from '../test-support.ts';
@@ -94,6 +95,8 @@ describe('the phone API (real Postgres)', () => {
       label: 'Runs on your iPhone',
       deviceInstallationId: installationId,
       deviceName: "Tonio's iPhone",
+      cloudAllowed: false,
+      cloudBlockedReason: 'Depop blocks cloud servers, so Listora runs it from your phone',
     };
     expect(linked.body).toMatchObject({
       status: 'checking',
@@ -149,7 +152,10 @@ describe('the phone API (real Postgres)', () => {
     expect(outdated.error.code).toBe('app_update_required');
     const otherPhone = randomUUID();
     await register({ name: 'iPad', platform: 'ios' }, otherPhone);
-    expect((await claim(PHONE_RUNTIME_VERSION, otherPhone)).body).toEqual({});
+    // Nothing runs on it, so it is told to look again only rarely.
+    expect((await claim(PHONE_RUNTIME_VERSION, otherPhone)).body).toEqual({
+      nextClaimInSeconds: PHONE_UNUSED_CLAIM_SECONDS,
+    });
   });
 
   it('asks to link on the phone a marketplace no phone holds a session for', async () => {
@@ -167,24 +173,22 @@ describe('the phone API (real Postgres)', () => {
     });
   });
 
-  it('moves a connection to the cloud and back', async () => {
-    const moved = await api.call('setConnectionExecution', {
+  it('refuses to move a marketplace that blocks cloud servers to the cloud', async () => {
+    const refused = await api.call('setConnectionExecution', {
       token,
       params: { marketplace: 'depop' },
       body: { location: 'cloud' },
     });
-    expect(moved.status).toBe(200);
-    expect(moved.body).toMatchObject({
-      execution: { location: 'cloud', label: "Runs in Listora's cloud" },
+    expect(refused.status).toBe(409);
+    expect(refused.error).toMatchObject({
+      code: 'marketplace_action_unavailable',
+      message: 'Depop blocks cloud servers, so Listora runs it from your phone.',
     });
-    expect((await claim()).body).toEqual({});
-    const back = await api.call('setConnectionExecution', {
-      token,
-      params: { marketplace: 'depop' },
-      body: { location: 'phone' },
+    expect((await connection()).body).toMatchObject({
+      execution: { location: 'phone', label: 'Runs on your iPhone', cloudAllowed: false },
     });
-    expect(back.body).toMatchObject({
-      execution: { location: 'phone', label: 'Runs on your iPhone' },
+    expect((await session()).body).toMatchObject({
+      execution: { location: 'phone', cloudAllowed: false },
     });
     expect(
       (
@@ -195,5 +199,60 @@ describe('the phone API (real Postgres)', () => {
         })
       ).status,
     ).toBe(409);
+  });
+});
+
+describe('a marketplace configured back to the cloud (real Postgres)', () => {
+  let api: TestApi;
+
+  beforeAll(async () => {
+    api = await createTestApi('phone_cloud', {
+      automationEnv: { AUTOMATION_DEPOP_CLOUD_ALLOWED: 'true' },
+    });
+  });
+
+  afterAll(async () => {
+    await api.close();
+  });
+
+  it('offers the cloud, and moves the connection there and back', async () => {
+    const token = await api.signIn('phone-cloud@example.com');
+    const installationId = randomUUID();
+    await api.call('registerDevice', {
+      token,
+      params: { installationId },
+      body: { name: "Sam's iPhone", platform: 'ios', runtimeVersion: PHONE_RUNTIME_VERSION },
+    });
+    const linked = await api.call('linkMarketplaceSession', {
+      token,
+      params: { marketplace: 'depop' },
+      body: { cookies: [depopCookie], installationId },
+    });
+    expect(linked.body).toMatchObject({ execution: { location: 'phone', cloudAllowed: true } });
+    expect(linked.body.execution).not.toHaveProperty('cloudBlockedReason');
+
+    const moved = await api.call('setConnectionExecution', {
+      token,
+      params: { marketplace: 'depop' },
+      body: { location: 'cloud' },
+    });
+    expect(moved.status).toBe(200);
+    expect(moved.body).toMatchObject({
+      execution: { location: 'cloud', label: "Runs in Listora's cloud", cloudAllowed: true },
+    });
+    const claimed = await api.call('claimPhoneRun', {
+      token,
+      body: { installationId, runtimeVersion: PHONE_RUNTIME_VERSION },
+    });
+    // Nothing runs on the phone now, so it is told to look again only rarely.
+    expect(claimed.body).toEqual({ nextClaimInSeconds: PHONE_UNUSED_CLAIM_SECONDS });
+    const back = await api.call('setConnectionExecution', {
+      token,
+      params: { marketplace: 'depop' },
+      body: { location: 'phone' },
+    });
+    expect(back.body).toMatchObject({
+      execution: { location: 'phone', label: 'Runs on your iPhone' },
+    });
   });
 });

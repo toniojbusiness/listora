@@ -89,6 +89,27 @@ final class MarketplacePage: NSObject {
     /// Runs one of the runtime's page functions (`dom.ts`) in an isolated script world: the page's
     /// own scripts can't see or change it, and they share the page's elements and events.
     func evaluate(_ body: String, _ arguments: [String: Any], timeout: Duration) async throws -> Any {
+        try await run(body, arguments, in: .defaultClient, timeout: timeout)
+    }
+
+    /// The page's own global `name`, serialized by the page as JSON (`null` when it has none).
+    /// This one fixed read runs in the page's own script world, the only place a page's own data
+    /// lives (Poshmark's script that embeds it removes itself once it ran).
+    func pageData(_ name: String, timeout: Duration) async throws -> Any {
+        try await run(
+            "const value = globalThis[name]; return value === undefined ? null : JSON.stringify(value);",
+            ["name": name],
+            in: .page,
+            timeout: timeout,
+        )
+    }
+
+    private func run(
+        _ body: String,
+        _ arguments: [String: Any],
+        in world: WKContentWorld,
+        timeout: Duration,
+    ) async throws -> Any {
         let result = OneShot<PageValue>()
         let webView = webView
         Task { @MainActor in
@@ -97,7 +118,7 @@ final class MarketplacePage: NSObject {
                     body,
                     arguments: arguments,
                     in: nil,
-                    contentWorld: .defaultClient,
+                    contentWorld: world,
                 )
                 result.finish(.success(PageValue(value: value ?? NSNull())))
             } catch {

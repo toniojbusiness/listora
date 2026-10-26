@@ -57,6 +57,12 @@ export interface AutomationProfile {
    * seller signs in there (with any two-step check) and the app hands Listora the cookies.
    */
   readonly loginUrl: string;
+  /**
+   * The marketplace may sign the seller in with a link it emails them (Depop does). Tapped in
+   * the email, the link signs in the phone's default browser, not Listora, so the app asks the
+   * seller to copy it (or share it to Listora) instead and opens it in its own sign-in page.
+   */
+  readonly emailsSignInLinks: boolean;
   readonly pacing: PacingSettings;
   readonly limits: RunLimits;
   readonly challenges: ChallengeSigns;
@@ -69,6 +75,13 @@ export interface AutomationProfile {
    * own location afterwards.
    */
   readonly runsOn: ExecutionLocation;
+  /**
+   * Whether its automated steps may run in Listora's cloud at all: false for the marketplaces
+   * that refuse the cloud runner, so the app does not offer the cloud and the API refuses a
+   * move there. `AUTOMATION_<MARKETPLACE>_CLOUD_ALLOWED` changes it, so a marketplace can go
+   * back to the cloud without an app update.
+   */
+  readonly cloudAllowed: boolean;
 }
 
 /** The pace of a careful person: a second or two between actions, a run every few seconds. */
@@ -105,36 +118,42 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     origins: ['https://poshmark.com', 'https://www.poshmark.com'],
     cookieDomains: ['poshmark.com'],
     loginUrl: 'https://poshmark.com/login',
+    emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: COMMON_SIGNS,
     privateSelectors: [],
     // Poshmark serves the cloud runner its pages without their data.
     runsOn: 'phone',
+    cloudAllowed: false,
   },
   mercari: {
     marketplace: 'mercari',
     origins: ['https://www.mercari.com', 'https://mercari.com'],
     cookieDomains: ['mercari.com'],
     loginUrl: 'https://www.mercari.com/login/',
+    emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: MERCARI_CHALLENGE_SIGNS,
     privateSelectors: MERCARI_PRIVATE_SELECTORS,
     // Mercari shows the cloud runner a bot check.
     runsOn: 'phone',
+    cloudAllowed: false,
   },
   depop: {
     marketplace: 'depop',
     origins: ['https://www.depop.com', 'https://depop.com'],
     cookieDomains: ['depop.com'],
     loginUrl: 'https://www.depop.com/login/',
+    emailsSignInLinks: true,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: DEPOP_CHALLENGE_SIGNS,
     privateSelectors: DEPOP_PRIVATE_SELECTORS,
     // Depop blocks the cloud runner's address.
     runsOn: 'phone',
+    cloudAllowed: false,
   },
   ebay: {
     marketplace: 'ebay',
@@ -143,11 +162,13 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     origins: ['https://www.ebay.com', 'https://ebay.com', 'https://signin.ebay.com'],
     cookieDomains: ['ebay.com'],
     loginUrl: 'https://signin.ebay.com/signin/',
+    emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: EBAY_CHALLENGE_SIGNS,
     privateSelectors: EBAY_PRIVATE_SELECTORS,
     runsOn: 'cloud',
+    cloudAllowed: true,
   },
 };
 

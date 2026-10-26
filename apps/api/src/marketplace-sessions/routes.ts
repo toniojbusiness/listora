@@ -9,6 +9,7 @@
 import type { SessionCookie as ContractSessionCookie } from '@listora/api-contract';
 import {
   AUTOMATED_MARKETPLACES,
+  cloudAccess,
   isAutomatedMarketplace,
   linkAutomationSession,
   type AutomatedMarketplace,
@@ -54,7 +55,7 @@ export function registerMarketplaceSessionRoutes(
   deps: MarketplaceSessionRouteDependencies,
 ): void {
   contractRoute(app, deps, 'listMarketplaceSessions', async ({ tenant, db }) => {
-    const rows = await sessionRows(db, tenant, AUTOMATED_MARKETPLACES);
+    const rows = await sessionRows(db, tenant, deps.profiles, AUTOMATED_MARKETPLACES);
     const now = deps.now();
     return {
       status: 200,
@@ -68,7 +69,7 @@ export function registerMarketplaceSessionRoutes(
 
   contractRoute(app, deps, 'getMarketplaceSession', async ({ tenant, db, params }) => {
     const marketplace = sessionMarketplace(params.marketplace);
-    const rows = await sessionRows(db, tenant, [marketplace]);
+    const rows = await sessionRows(db, tenant, deps.profiles, [marketplace]);
     return {
       status: 200,
       body: marketplaceSessionView(
@@ -130,7 +131,7 @@ export function registerMarketplaceSessionRoutes(
       }
       throw error;
     }
-    const rows = await sessionRows(db, tenant, [marketplace]);
+    const rows = await sessionRows(db, tenant, deps.profiles, [marketplace]);
     return {
       status: 201,
       body: marketplaceSessionView(rowFor(rows, marketplace), profile, deps.now()),
@@ -178,6 +179,7 @@ function rowFor(rows: readonly SessionRow[], marketplace: Marketplace): SessionR
 async function sessionRows(
   db: DbExecutor,
   tenant: Tenant,
+  profiles: Readonly<Record<AutomatedMarketplace, AutomationProfile>>,
   marketplaces: readonly Marketplace[],
 ): Promise<SessionRow[]> {
   const execution = await accountExecutionState(db, tenant.accountId);
@@ -202,6 +204,7 @@ async function sessionRows(
       'connection.granted_at',
       'connection.updated_at',
       'check.status as check_status',
+      'check.attempts',
       'check.failure_code',
       'check.failure_message',
       'check.requested_at',
@@ -215,7 +218,7 @@ async function sessionRows(
     connection: {
       mode: row.mode,
       status: row.status,
-      execution: describeExecution(row, execution),
+      execution: describeExecution(row, execution, cloudAccess(profiles, row.marketplace)),
       phone: phoneSessionState(row, execution),
       displayName: row.display_name,
       lastError: row.last_error,
@@ -229,6 +232,7 @@ async function sessionRows(
         ? null
         : {
             status: row.check_status,
+            attempts: row.attempts ?? 0,
             failureCode: row.failure_code,
             failureMessage: row.failure_message,
             requestedAt: row.requested_at,

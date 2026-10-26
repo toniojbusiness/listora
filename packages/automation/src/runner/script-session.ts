@@ -64,6 +64,20 @@ export class PageBackendError extends Error {
   }
 }
 
+/**
+ * A page's data as a backend's `pageData` reads it: the JSON its global serializes to (the page
+ * serializes it, so only JSON values cross), or `null` when the page has none.
+ */
+export function parsePageData(text: unknown): unknown {
+  if (text === null || text === undefined) return null;
+  if (typeof text !== 'string') throw new PageBackendError('other', 'the page sent no data');
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new PageBackendError('other', "the page's data is not JSON");
+  }
+}
+
 /** What the inspection script reads in the page (`inspectionScript`). */
 export type InspectedPage = Omit<PageSignals, 'url' | 'status' | 'retryAfterSeconds'>;
 
@@ -105,6 +119,11 @@ export interface PageBackend {
   texts(selector: string): Promise<string[]>;
   attribute(selector: string, name: string): Promise<string | null>;
   attributes(selector: string, name: string): Promise<(string | null)[]>;
+  /**
+   * The page's global `name` as JSON (`null` when it has none), read in the page's own script
+   * world, the only place a page's own data lives.
+   */
+  pageData(name: string): Promise<unknown>;
   /** Evaluates `inspectionScript`'s source in the page. */
   inspect(script: string): Promise<InspectedPage>;
   /**
@@ -584,6 +603,10 @@ class Driver implements PageDriver {
 
   attributes(selector: string, name: string): Promise<(string | null)[]> {
     return this.#query((backend) => backend.attributes(selector, name));
+  }
+
+  pageData(name: string): Promise<unknown> {
+    return this.#query((backend) => backend.pageData(name));
   }
 
   /** A paced action, inspected afterwards. */

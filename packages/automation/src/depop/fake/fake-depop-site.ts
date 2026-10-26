@@ -10,6 +10,8 @@
  *
  *   GET  /login/                       the login page (a password field: no session needs it)
  *   POST /login/                       log in by hand: any username and password; sets the session cookie
+ *   POST /login/email-link/            email me a sign-in link: "sends" a one-time link (`signInLinks()`)
+ *   GET  /login/magic-link/?token=     the emailed link: signs in once and sets the session cookie
  *   GET  /login/verify/                a login code step
  *   GET  /sellinghub/                  the selling hub ([data-testid="sellingHub"])
  *   GET  /products/create/             the sell form; POST lists (multipart, photos)
@@ -118,6 +120,8 @@ export interface FakeDepopSiteOptions {
    * Shipping); `null` for a seller who has set none up.
    */
   defaultShipping?: string | null;
+  /** Called with each sign-in link the site "emails" (the dev CLI prints it). */
+  onSignInLink?: (link: string) => void;
 }
 
 /** The brands Depop's brand search offers (a sample of its list). */
@@ -190,6 +194,10 @@ export class FakeDepopSite {
   readonly #defaultShipping: string | null;
   readonly #products = new Map<string, StoredProduct>();
   readonly #sessions = new Map<string, Session>();
+  /** Emailed sign-in links not used yet, by token: the seller each one signs in. */
+  readonly #signInTokens = new Map<string, string>();
+  readonly #signInLinks: string[] = [];
+  readonly #onSignInLink: ((link: string) => void) | undefined;
   readonly #faults: (FakeDepopSiteFaultRule & { remaining: number })[] = [];
   readonly #timers = new Set<NodeJS.Timeout>();
   readonly requests: FakeDepopSiteRequest[] = [];
@@ -200,6 +208,7 @@ export class FakeDepopSite {
     this.#pageSize = options.pageSize ?? 10;
     this.#defaultShipping =
       options.defaultShipping === undefined ? 'depop_shipping' : options.defaultShipping;
+    this.#onSignInLink = options.onSignInLink;
     this.#server = createServer((request, response) => {
       void this.#handle(request, response).catch((error: unknown) => {
         if (!response.headersSent) {
@@ -241,6 +250,11 @@ export class FakeDepopSite {
       secure: false,
       sameSite: 'Lax',
     };
+  }
+
+  /** Every sign-in link the site emailed, oldest first (used ones included). */
+  signInLinks(): string[] {
+    return [...this.#signInLinks];
   }
 
   inject(rule: FakeDepopSiteFaultRule): void {
@@ -361,6 +375,42 @@ export class FakeDepopSite {
         }
       }
       send({ status: 200, body: page('Log in | Depop', loginForm(), {}) });
+      return;
+    }
+    if (url.pathname === '/login/email-link/' && method === 'POST') {
+      // Depop's passwordless sign-in: the seller asks for a link, which arrives by email. Here
+      // it is kept (and handed to `onSignInLink`) instead.
+      const form = await readForm(request);
+      const email = form.text('email');
+      if (email === '') {
+        send({ status: 200, body: page('Log in | Depop', loginForm(), {}) });
+        return;
+      }
+      const token = randomBytes(16).toString('hex');
+      this.#signInTokens.set(token, email.split('@')[0] ?? email);
+      const link = new URL(`/login/magic-link/?token=${token}`, this.#url).href;
+      this.#signInLinks.push(link);
+      this.#onSignInLink?.(link);
+      send({ status: 200, body: page('Check your email | Depop', emailLinkSent(), {}) });
+      return;
+    }
+    if (url.pathname === '/login/magic-link/') {
+      // The emailed link signs in once, in the browser that opens it.
+      const token = url.searchParams.get('token') ?? '';
+      const seller = this.#signInTokens.get(token);
+      if (seller === undefined) {
+        send({ status: 400, body: page('Link expired | Depop', expiredLink(), {}) });
+        return;
+      }
+      this.#signInTokens.delete(token);
+      const { value } = this.issueSession(seller);
+      send({
+        status: 303,
+        headers: {
+          location: '/sellinghub/',
+          'set-cookie': `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
+        },
+      });
       return;
     }
     if (url.pathname === '/login/verify/') {
@@ -757,7 +807,15 @@ function plainPage(title: string, body: string): string {
 }
 
 function loginForm(): string {
-  return `<main><h1>Log in to Depop</h1><form method="post" action="/login/"><input name="username"><input name="password" type="password"><button type="submit">Log in</button></form></main>`;
+  return `<main><h1>Log in to Depop</h1><form method="post" action="/login/"><input name="username"><input name="password" type="password"><button type="submit">Log in</button></form><form method="post" action="/login/email-link/"><input name="email" type="email" placeholder="Email"><button type="submit">Email me a sign-in link</button></form></main>`;
+}
+
+function emailLinkSent(): string {
+  return `<main><h1>Check your email</h1><p>We emailed you a link to log in.</p></main>`;
+}
+
+function expiredLink(): string {
+  return `<main><h1>This link has expired</h1><p>Ask for a new link to log in.</p></main>`;
 }
 
 function verifyForm(): string {

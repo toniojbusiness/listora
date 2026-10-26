@@ -68,7 +68,7 @@ export {
   scaleRunnerServiceToZero,
 } from './launcher.ts';
 export type { LauncherDependencies, RunnerLauncher, RunnerLaunchConfig } from './launcher.ts';
-export { setExecutionLocation } from './execution.ts';
+export { cloudAccess, setExecutionLocation } from './execution.ts';
 export { linkAutomationSession } from './link.ts';
 export type { LinkAutomationInput } from './link.ts';
 export {
@@ -97,6 +97,9 @@ export type { PhoneWatchOptions } from './phone/watch.ts';
 export {
   answerPhoneCall,
   claimPhoneRun,
+  nextPhoneClaimSeconds,
+  PHONE_IDLE_CLAIM_SECONDS,
+  PHONE_UNUSED_CLAIM_SECONDS,
   PhoneCallConflictError,
   PhoneRunGoneError,
   PhoneRuntimeMismatchError,

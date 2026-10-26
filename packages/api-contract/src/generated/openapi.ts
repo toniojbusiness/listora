@@ -1166,7 +1166,9 @@ export interface paths {
          * @description Moves the connection's automated steps to Listora's cloud browser runner or to the
          *     iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
          *     moves to the cloud with it; a run the phone is in the middle of finishes there.
-         *     `409 invalid_state_transition` for a marketplace that is not linked by signing in.
+         *     `409 invalid_state_transition` for a marketplace that is not linked by signing in;
+         *     `409 marketplace_action_unavailable` for a move to the cloud of a marketplace that
+         *     refuses Listora's cloud servers (`execution.cloudAllowed` false).
          */
         put: operations["setConnectionExecution"];
         post?: never;
@@ -3065,6 +3067,14 @@ export interface components {
              *     domain is one of these or a subdomain of one; the server refuses any other.
              */
             cookieDomains: string[];
+            /**
+             * @description The marketplace may sign the user in with a link it emails them (Depop). Tapped in
+             *     the email, that link opens the phone's default browser, not the app, so the app asks
+             *     for the link to be copied (or shared to the app) and opens it in its sign-in page,
+             *     but only a link on `url`'s scheme or https and on one of `cookieDomains`. Absent
+             *     means `false`.
+             */
+            emailsSignInLinks?: boolean;
         };
         /**
          * @description A marketplace linked by signing in (`connect: session`). It is shown as linked only
@@ -3153,6 +3163,17 @@ export interface components {
             waiting?: number;
             /** @description Since when the oldest of them waits. */
             waitingSince?: components["schemas"]["Timestamp"];
+            /**
+             * @description Whether the connection may run in Listora's cloud. False for a marketplace that
+             *     refuses Listora's cloud servers: the app does not offer the cloud, and
+             *     `setConnectionExecution` refuses a move there.
+             */
+            cloudAllowed: boolean;
+            /**
+             * @description Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
+             *     blocks cloud servers, so Listora runs it from your phone").
+             */
+            cloudBlockedReason?: string;
         };
         ConnectionExecutionChange: {
             location: components["schemas"]["KnownExecutionLocation"];
@@ -3227,6 +3248,13 @@ export interface components {
         /** @description The run to continue, absent when there is nothing (more) to run. */
         PhoneRunResult: {
             run?: components["schemas"]["PhoneRun"];
+            /**
+             * Format: int32
+             * @description Present on a claim that found nothing to run: how long the app waits, while it is open,
+             *     before it claims again. Sooner when work for this phone is due then (a check tried
+             *     again after a failed attempt), so work never waits for a push or for the app to reopen.
+             */
+            nextClaimInSeconds?: number;
         };
         PhoneCallAnswer: {
             installationId: components["schemas"]["Id"];

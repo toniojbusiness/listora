@@ -13,8 +13,11 @@ import { createTestApi, fieldsOf, type TestApi } from '../test-support.ts';
  */
 const IN_THE_CLOUD = {
   automationEnv: {
+    AUTOMATION_POSHMARK_CLOUD_ALLOWED: 'true',
     AUTOMATION_POSHMARK_RUNS_ON: 'cloud',
+    AUTOMATION_MERCARI_CLOUD_ALLOWED: 'true',
     AUTOMATION_MERCARI_RUNS_ON: 'cloud',
+    AUTOMATION_DEPOP_CLOUD_ALLOWED: 'true',
     AUTOMATION_DEPOP_RUNS_ON: 'cloud',
   },
 };
@@ -105,25 +108,41 @@ describe('marketplace sessions (real Postgres)', () => {
         marketplace: 'poshmark',
         status: 'not_linked',
         statusDisplay: { tone: 'neutral', label: 'Not linked' },
-        login: { url: 'https://poshmark.com/login', cookieDomains: ['poshmark.com'] },
+        login: {
+          url: 'https://poshmark.com/login',
+          cookieDomains: ['poshmark.com'],
+          emailsSignInLinks: false,
+        },
       },
       {
         marketplace: 'mercari',
         status: 'not_linked',
         statusDisplay: { tone: 'neutral', label: 'Not linked' },
-        login: { url: 'https://www.mercari.com/login/', cookieDomains: ['mercari.com'] },
+        login: {
+          url: 'https://www.mercari.com/login/',
+          cookieDomains: ['mercari.com'],
+          emailsSignInLinks: false,
+        },
       },
       {
         marketplace: 'depop',
         status: 'not_linked',
         statusDisplay: { tone: 'neutral', label: 'Not linked' },
-        login: { url: 'https://www.depop.com/login/', cookieDomains: ['depop.com'] },
+        login: {
+          url: 'https://www.depop.com/login/',
+          cookieDomains: ['depop.com'],
+          emailsSignInLinks: true,
+        },
       },
       {
         marketplace: 'ebay',
         status: 'not_linked',
         statusDisplay: { tone: 'neutral', label: 'Not linked' },
-        login: { url: 'https://signin.ebay.com/signin/', cookieDomains: ['ebay.com'] },
+        login: {
+          url: 'https://signin.ebay.com/signin/',
+          cookieDomains: ['ebay.com'],
+          emailsSignInLinks: false,
+        },
       },
     ]);
   });
@@ -139,7 +158,11 @@ describe('marketplace sessions (real Postgres)', () => {
     expect(linked.body).toMatchObject({
       marketplace: 'ebay',
       status: 'checking',
-      login: { url: 'https://signin.ebay.com/signin/', cookieDomains: ['ebay.com'] },
+      login: {
+        url: 'https://signin.ebay.com/signin/',
+        cookieDomains: ['ebay.com'],
+        emailsSignInLinks: false,
+      },
     });
     const connection = await connectionOf(EBAY_SELLER, 'ebay');
     expect(connection).toMatchObject({ mode: 'automation', status: 'connected' });
@@ -176,7 +199,11 @@ describe('marketplace sessions (real Postgres)', () => {
       status: 'checking',
       statusDisplay: { tone: 'checking', label: 'Checking...' },
       displayName: 'closet_queen',
-      login: { url: 'https://poshmark.com/login', cookieDomains: ['poshmark.com'] },
+      login: {
+        url: 'https://poshmark.com/login',
+        cookieDomains: ['poshmark.com'],
+        emailsSignInLinks: false,
+      },
     });
     expect(response.body.linkedAt).toBeDefined();
     expect(response.body.checkedAt).toBeUndefined();

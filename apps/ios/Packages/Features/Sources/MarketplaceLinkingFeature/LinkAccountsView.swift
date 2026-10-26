@@ -78,7 +78,7 @@ public struct LinkAccountsView: View {
         }
         .sheet(item: $model.signingIn) { link in
             MarketplaceSignInView(
-                link: link,
+                model: model.signInPage(for: link),
                 onCancel: { model.cancelSignIn() },
                 onSignedIn: { cookies in Task { await model.finishSignIn(link, cookies: cookies) } },
             )

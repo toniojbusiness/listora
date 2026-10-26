@@ -114,7 +114,7 @@ public struct AppDependencies {
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
         marketplaces = Self.makeMarketplaces(apiClient, accessTokens, phone)
-        linkAccounts = Self.makeLinkAccounts(apiClient, phone)
+        linkAccounts = Self.makeLinkAccounts(apiClient, phone, configuration)
         today = Self.makeToday(apiClient, accessTokens, (inventory, sales), marketplaces, showSignIn)
         accountDeletion = Self.makeAccountDeletion(apiClient, accessTokens, signIn, phone.sessions)
         gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
@@ -154,15 +154,17 @@ public struct AppDependencies {
     }
 
     /// Link accounts: the marketplaces linked by signing in, and the sale email forwarding. A
-    /// sign-in's cookies stay on this phone too, which runs the marketplace when it runs here.
+    /// sign-in's cookies stay on this phone too, and a sign-in link shared to the extension reaches it.
     private static func makeLinkAccounts(
         _ apiClient: APIClient,
         _ phone: PhoneExecutionEnvironment,
+        _ configuration: AppConfiguration,
     ) -> LinkAccountsModel {
         LinkAccountsModel(
             service: APIMarketplaceSessionService(api: apiClient),
             saleEmails: SaleEmailsModel(service: APISaleEmailsService(api: apiClient)),
             sessions: phone.sessions,
+            signInLinks: KeychainSignInLinkHandoff(accessGroup: configuration.sessionKeychainGroup),
             phoneWork: phone.runner,
         )
     }
