@@ -2,7 +2,7 @@ import APIClient
 import AppFeature
 import Core
 import Foundation
-import SettingsFeature
+import SignInFeature
 import Testing
 
 struct AppTabTests {

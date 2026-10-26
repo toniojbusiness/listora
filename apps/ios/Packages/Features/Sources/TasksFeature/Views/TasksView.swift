@@ -49,6 +49,7 @@ public struct TasksView: View {
                 systemImage: "person.crop.circle.badge.questionmark",
                 title: "Sign in to see your tasks",
                 message: "Marketplace steps that need you show up here once you're signed in.",
+                action: .init("Sign in", systemImage: "person.crop.circle", handler: environment.onSignIn),
             )
         case let .failed(message) where inbox.tasks.isEmpty:
             EmptyStateView(
