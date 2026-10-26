@@ -64,14 +64,25 @@ export const listingRecordSchema = z.object({
 });
 export type ListingRecord = z.infer<typeof listingRecordSchema>;
 
-/** Who is logged in, on every page. */
+/**
+ * Who is logged in, on every page, as Poshmark's own app reads it (its store getters, read in its
+ * public bundles 2026-10-26): `auth.isUserLoggedIn`, `auth.identity` the user's id (`null`
+ * signed out), and the handle closets are addressed by in `userCookies.userInfo`, its
+ * `username` or else its `dh` (display handle); signed out, `userCookies` has no `userInfo`.
+ */
 export const authSchema = z.object({
   auth: z.object({
     isUserLoggedIn: z.boolean(),
-    identity: z
-      .object({ username: z.string().optional(), display_handle: z.string().optional() })
-      .nullable(),
+    identity: z.unknown(),
   }),
+  userCookies: z
+    .object({
+      userInfo: z
+        .object({ username: z.string().optional(), dh: z.string().optional() })
+        .nullable()
+        .optional(),
+    })
+    .optional(),
 });
 
 const INVENTORY_STATUSES: Readonly<Record<string, RemoteListingStatus>> = {

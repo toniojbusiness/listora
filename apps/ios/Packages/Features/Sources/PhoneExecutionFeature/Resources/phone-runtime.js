@@ -7380,14 +7380,22 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		}),
 		creator_username: string().optional()
 	});
-	/** Who is logged in, on every page. */
-	const authSchema = object({ auth: object({
-		isUserLoggedIn: boolean(),
-		identity: object({
+	/**
+	* Who is logged in, on every page, as Poshmark's own app reads it (its store getters, read in its
+	* public bundles 2026-10-26): `auth.isUserLoggedIn`, `auth.identity` the user's id (`null`
+	* signed out), and the handle closets are addressed by in `userCookies.userInfo`, its
+	* `username` or else its `dh` (display handle); signed out, `userCookies` has no `userInfo`.
+	*/
+	const authSchema = object({
+		auth: object({
+			isUserLoggedIn: boolean(),
+			identity: unknown()
+		}),
+		userCookies: object({ userInfo: object({
 			username: string().optional(),
-			display_handle: string().optional()
-		}).nullable()
-	}) });
+			dh: string().optional()
+		}).nullable().optional() }).optional()
+	});
 	const INVENTORY_STATUSES = {
 		available: "active",
 		reserved: "active",
@@ -7440,14 +7448,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* Which seller the session belongs to. Closet pages are addressed by the seller's username, which
 	* the session's cookies do not say, so scripts that read the closet first open the listing form:
 	* a page only a logged-in seller sees (without a session Poshmark sends the browser to `/login`,
-	* where the runner stops for a relink), whose data names the seller (`auth.identity`).
+	* where the runner stops for a relink), whose data says the seller is logged in
+	* (`auth.isUserLoggedIn`) and names their handle (`userCookies.userInfo`, state.ts).
 	*/
 	const PAGE$2 = "listing form";
 	/** Opens the listing form and returns the logged-in seller's username. */
 	async function loggedInSeller(page, site) {
 		await page.goto(site.createListing());
-		const { auth } = expectShape(authSchema, await readPageState(page, PAGE$2), PAGE$2);
-		const username = auth.identity?.username ?? auth.identity?.display_handle;
+		const { auth, userCookies } = expectShape(authSchema, await readPageState(page, PAGE$2), PAGE$2);
+		const info = userCookies?.userInfo;
+		const username = info?.username !== void 0 && info.username !== "" ? info.username : info?.dh;
 		if (!auth.isUserLoggedIn || username === void 0 || username === "") throw new PageChangedError(`Poshmark's ${PAGE$2} no longer says which seller is logged in`);
 		return username;
 	}

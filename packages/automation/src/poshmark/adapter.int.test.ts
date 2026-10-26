@@ -229,6 +229,28 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     });
   });
 
+  it('finds the seller where Poshmark keeps them: an id in auth, the handle in userCookies', async () => {
+    // Read 2026-10-26 in Poshmark's own app: `auth.identity` is the user's id, and the handle
+    // closets are addressed by is `userCookies.userInfo` (`username`, else `dh`). Reading a
+    // handle from `auth.identity` failed every check on a real Poshmark session.
+    const body = new URLSearchParams({
+      'login_form[username_email]': 'shape_check',
+      'login_form[password]': 'x',
+    });
+    const login = await fetch(`${site.url}/login`, { method: 'POST', body, redirect: 'manual' });
+    const cookie = login.headers.get('set-cookie')?.split(';')[0] ?? '';
+    const html = await (await fetch(`${site.url}/create-listing`, { headers: { cookie } })).text();
+    const marker = 'window.__INITIAL_STATE__=';
+    const start = html.indexOf(marker) + marker.length;
+    const state = JSON.parse(html.slice(start, html.indexOf(';(function()', start))) as {
+      auth: { identity: unknown };
+      userCookies: { userInfo?: { dh?: string } };
+    };
+    expect(typeof state.auth.identity).toBe('string');
+    expect(state.userCookies.userInfo?.dh).toBe('shape_check');
+    expect(await adapter.healthCheck(ctx())).toEqual({ status: 'ok' });
+  });
+
   it("reads each page's data from its global once the script that embedded it removed itself", async () => {
     // Poshmark's embedding script takes itself out of the page as soon as it ran, so a ready
     // page has no trace of it in its markup (the fake does the same). Reading the markup made

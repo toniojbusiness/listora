@@ -111,12 +111,19 @@ variant's `Brand`, `Size`, and `Original Price` aspects win over the item's valu
 The listing form and the edit form are behind Poshmark's login, so their markup in
 `pages/listing-form.ts` is modeled on Poshmark's web form (inputs by `data-vv-name`, buttons by
 `data-et-name`, pickers listing choices by their display text) and is confirmed on the first run
-against a real session. The same goes for `auth.identity.username` on logged-in pages, the private
-SKU field, the closet's `sort_by=added_desc` and `query` parameters, and the order of sold
-items. A selector or data key that no longer matches ends the step as `element_missing` before
-anything is submitted (`PageChangedError` for data), so the step goes to the user, and the fix
-is in the one page module that names it. The fake Poshmark mirrors exactly what those modules
-expect.
+against a real session. The same goes for the private SKU field, the closet's
+`sort_by=added_desc` and `query` parameters, and the order of sold items. A selector or data key
+that no longer matches ends the step as `element_missing` before anything is submitted
+(`PageChangedError` for data), so the step goes to the user, the run logs what the page has
+instead ([automation.md](automation.md#how-it-works), "When a page changes"), and the fix is in
+the one page module that names it. The fake Poshmark mirrors exactly what those modules expect.
+
+Checked against Poshmark itself (2026-10-26, read-only, public pages and Poshmark's own public
+code): who is logged in comes from Poshmark's own store, as its app reads it. That is
+`auth.isUserLoggedIn`, `auth.identity` (the user's id, not their handle), and the handle in
+`userCookies.userInfo` (`username`, else `dh`). A real session's check had failed reading a
+handle from `auth.identity`. A closet page's records (`$_closet.listingsPostData`, its `data`
+and `more`) match what `pages/closet-page.ts` reads.
 
 ## Development and tests
 
