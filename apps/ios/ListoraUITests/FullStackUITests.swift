@@ -177,7 +177,7 @@ final class FullStackUITests: XCTestCase {
         XCTAssertEqual(relink.label, "Relink")
         try await full.clearAllFaults()
         relink.tap()
-        signInOnFakeSite(username: "e2e-second-seller")
+        signInOnFakeSite(username: "e2e_second_seller")
         XCTAssertTrue(waitForLabel(of: linkStatus, "Linked", timeout: 120), linkStatus.label)
         keepScreenshot("Relinked")
     }

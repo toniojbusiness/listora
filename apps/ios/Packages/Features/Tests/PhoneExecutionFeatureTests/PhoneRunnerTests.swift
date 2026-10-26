@@ -55,6 +55,29 @@ struct PhoneRunnerTests {
     }
 
     @Test
+    func `while the app is open, a run started during the wait ends it, so the next look follows that run`() async {
+        // Nothing ran here when the app opened, so Listora said to look again in 5 minutes. The
+        // seller then links a marketplace: its run learns to look again in 10 seconds, which
+        // brings work queued meanwhile (a sale's delists) within seconds, not minutes.
+        let service = FakeWorkService(claims: [
+            .wait(.seconds(300)),
+            .run(PhoneRun(id: "run-1", purpose: "session_check", marketplace: "poshmark", call: .call(0))),
+            .wait(.seconds(10)),
+        ])
+        await service.script(answers: ["run-1": [.over]])
+        let runtime = FakeRuntime()
+        var runner: PhoneRunner?
+        let sleeps = InterruptedSleeps { runner?.runPhoneWork(.userAction) }
+        runner = makeRunner(service, runtime, sleep: { try await sleeps.sleep($0) })
+
+        await runner?.follow()
+
+        #expect(sleeps.slept == [.seconds(300), .seconds(10)])
+        #expect(runtime.ran == ["poshmark:0"])
+        #expect(await service.claims == 3)
+    }
+
+    @Test
     func `while the app is open, it keeps looking while Listora can't be reached`() async {
         let service = FakeWorkService(claims: [.unreachable, .none])
         let sleeps = Sleeps(until: 2)
@@ -202,6 +225,28 @@ struct PhoneRunnerTests {
             device: { DeviceRegistration(name: "Test iPhone", appVersion: "1.0", runtimeVersion: 0) },
             sleep: sleep,
         )
+    }
+}
+
+/// The runner's waits, recorded: the first waits until it is canceled, after `during` starts a
+/// run (as linking a marketplace does while the app waits); the second ends the follow loop, as
+/// the app leaving the foreground cancels it.
+@MainActor
+final class InterruptedSleeps {
+    private(set) var slept: [Duration] = []
+    private let during: @MainActor () -> Void
+
+    init(during: @escaping @MainActor () -> Void) {
+        self.during = during
+    }
+
+    func sleep(_ duration: Duration) async throws {
+        slept.append(duration)
+        guard slept.count == 1 else {
+            throw CancellationError()
+        }
+        during()
+        try await Task.sleep(for: .seconds(60))
     }
 }
 

@@ -1,15 +1,16 @@
 # Full-stack end-to-end suite
 
 Plan task T-27. One suite drives the iPhone app on the simulator against everything the backend
-has, with every external service on its fake: photos to an AI draft, review, price, and save;
-listing on eBay and Depop through their APIs and on Poshmark and Mercari by browser automation;
-a sale from eBay's notification and the auto-delist after it; a delist that fails and its Retry;
-a CAPTCHA that stops automation; marking an item sold by hand; and a connection that needs the
-seller. It is the definition of "working" end to end, so it runs nightly and on demand, not on
+has, with every external service on its fake: signing in with an emailed code, linking
+Poshmark and Mercari on the iPhone, photos to an AI draft, review, price, and save; listing on
+eBay and Depop through their APIs and on Poshmark and Mercari from the iPhone
+([phone-execution.md](phone-execution.md)); a sale from eBay's notification and the auto-delist
+after it; a delist that fails and its Retry; a check (a CAPTCHA) that stops automation, on the
+phone and in the cloud; marking an item sold by hand; and a connection that needs relinking. It is the definition of "working" end to end, so it runs nightly and on demand, not on
 every pull request.
 
-Code: `apps/ios/ListoraUITests/FullStackUITests.swift` (the tests), `E2EStack.swift` (their
-handle on the stack), `apps/ios/ListoraUITests/FullStack/FakeAI/` (the fake AI's answer), and
+Code: `apps/ios/ListoraUITests/FullStackUITests.swift` (the tests) and `+Steps.swift` (their
+shared steps), `E2EStack+FullStack.swift` (their handle on the stack), `apps/ios/ListoraUITests/FullStack/FakeAI/` (the fake AI's answer), and
 `packages/e2e` (the stack: `stack.ts`, `marketplaces.ts`, `control.ts`, `seed.ts`).
 
 ## Running it
@@ -40,16 +41,17 @@ It prints the API URL, both sellers' session tokens, and the control URL, and ru
 `startLocalStack({ marketplaces: 'all' })` is the stack `make ios-test` uses
 ([architecture.md](../architecture.md#7-testing-and-ci)) with every marketplace added:
 
-| Part                    | What it is                                                                                                                                                   |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Database                | A scratch database on the `scripts/dev-db.sh` cluster, migrated, dropped at the end                                                                          |
-| API, worker             | `apps/api` and `apps/worker` from this checkout, as child processes                                                                                          |
-| Browser runner          | Started by the worker as its child (`BROWSER_RUNNER_LAUNCH=process`), kept up for the run                                                                    |
-| eBay                    | The fake eBay, with the seller connected through its consent page, delivering eBay's signed notifications to the API's `/webhooks/ebay`                      |
-| Depop API               | The fake Depop, with the seller's `api` connection bound to its development seller (`DEPOP_USER_CONNECTION_ID`, until Depop connect exists)                  |
-| Poshmark, Mercari       | The fake Poshmark and the fake Mercari site, with sessions linked as the app's linking does (`linkAutomationSession`)                                        |
-| Depop automation        | The fake Depop site, for a second seller whose Depop is a linked session (an API connection always takes precedence, so the first seller's Depop is the API) |
-| AI, storage, auth, push | The fake AI provider, local photo storage, dev sign-in for both sellers, the recording push sender                                                           |
+| Part                    | What it is                                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Database                | A scratch database on the `scripts/dev-db.sh` cluster, migrated, dropped at the end                                                                    |
+| API, worker             | `apps/api` and `apps/worker` from this checkout, as child processes                                                                                    |
+| Browser runner          | Started by the worker as its child (`BROWSER_RUNNER_LAUNCH=process`), kept up for the run, for the one marketplace automated in the cloud              |
+| eBay                    | The fake eBay, with the seller connected through its consent page, delivering eBay's signed notifications to the API's `/webhooks/ebay`                |
+| Depop API               | The fake Depop, with the seller's `api` connection bound to its development seller (`DEPOP_USER_CONNECTION_ID`, until Depop connect exists)            |
+| Poshmark, Mercari       | The fake Poshmark and the fake Mercari site, which the app's phone runtime acts on: the tests link them in Link accounts, so they run on the simulator |
+| eBay automation         | The fake eBay site, for a second seller without eBay's API whose eBay session is linked for the cloud (eBay automation runs in the cloud)              |
+| Depop site              | The fake Depop site every stack has, for Depop on the phone (`PhoneExecutionUITests`); the full stack's seller has Depop's API, which takes precedence |
+| AI, storage, auth, push | The fake AI provider, local photo storage, dev sign-in for both sellers, the recording push sender                                                     |
 
 Automation runs at the fastest pace and the most runs the safety rules allow (`PACING_FLOOR`,
 `LIMITS_CEILING` in `@listora/automation`), so a listing takes seconds; no setting goes past them.
@@ -59,25 +61,27 @@ Operation delays are a tenth of production's (`OPERATION_RETRY_DELAY_SCALE`).
 
 The tests run in the simulator and cannot reach the fakes' in-process controls, so the stack
 serves the few they need on 127.0.0.1 (`packages/e2e/src/control.ts` lists every route): seeded
-items (ready, or live on chosen marketplaces and confirmed there), faults on the fake eBay, the
-fake Depop, and each fake site (a CAPTCHA, a login challenge, a refusal, a server error), a buyer
-buying an item's eBay listing (which makes the fake eBay send its notification), and a fresh
-linked session. Nothing in the app calls it.
+items (ready, or published on chosen marketplaces), faults on the fake eBay, the fake Depop, and
+each fake site (a CAPTCHA, a login challenge, a refusal, a server error), a buyer buying an item's
+eBay listing (which makes the fake eBay send its notification), a fresh linked session for the
+second seller's eBay, and the code dev sign-in printed (what the seller's email would show). Nothing in the app calls it.
 
 ## The scenarios
 
 Every status a test waits for is the server's label, which says "confirmed by" only after the
 marketplace was read back.
 
-| Test                                                                 | Scenario                                                                                                                                                                                                    |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `testPhotosToListedEverywhereThenAnEbaySaleDelistsTheRest`           | 1, 2: fixture photos, the AI draft, review, cost, price, save; List with all four chosen; each "Active (confirmed by ...)"; an eBay sale by notification; eBay sold, Depop marked sold, the others delisted |
-| `testADelistThatFailsOnOneMarketplaceShowsRetryAndTheRetryDelistsIt` | 3: Poshmark refuses the delist after an eBay sale: "Delist failed - Retry" with Poshmark's reason; Retry delists it and the run is "Delisted everywhere"                                                    |
-| `testACaptchaStopsAutomationForATaskAndTheConnectionNeedsRelinking`  | 4, 6: a CAPTCHA on Depop's sell form: the listing is "Action needed - list on Depop" with tasks to list by hand and reconnect; the banner and Marketplaces say Depop needs relinking                        |
-| `testMarkSoldFromTheItemScreenDelistsEverywhereElse`                 | 5: Mark as sold on Mercari from the item screen; eBay, Depop, and Poshmark each confirm the delist                                                                                                          |
+| Test                                                                 | Scenario                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `testSignInPhotosToListedEverywhereThenAnEbaySaleDelistsTheRest`     | 1, 2: sign in from the welcome screen with the code; link Poshmark and Mercari on this iPhone; photos, the AI draft, review, cost, price, save; List with all four; each "Active (confirmed by ...)"; an eBay sale by notification; each marketplace's truth |
+| `testADelistThatFailsOnOneMarketplaceShowsRetryAndTheRetryDelistsIt` | 3: Poshmark refuses the delist the phone sends after an eBay sale: "Delist failed - Retry" with Poshmark's reason; Retry delists it and the run is "Delisted everywhere"                                                                                     |
+| `testACheckOnThisIPhoneIsHandedToTheSellerAndNeverPassedForThem`     | 4 on the phone: a CAPTCHA on Mercari's sell form is handed to the seller ("Mercari wants to check it's you"); Not now stops the step, and it goes live once Mercari stops asking                                                                             |
+| `testACaptchaInTheCloudBecomesATaskAndRelinkFixesTheConnection`      | 4, 6 in the cloud: a CAPTCHA on eBay's sell form for the second seller: "Action needed - list on eBay", tasks to list by hand and reconnect, Marketplaces says "Sign in again"; Relink in Link accounts signs in again and the check passes                  |
+| `testMarkSoldFromTheItemScreenDelistsEverywhereElse`                 | 5: Mark as sold on Mercari from the item screen; eBay, Depop, and Poshmark each confirm the delist                                                                                                                                                           |
 
-The tests are independent: each seeds its own items, clears every fault first, and the CAPTCHA
-test links a fresh Depop session before and after itself.
+The tests are independent: each starts with fresh local data, unlinks Poshmark and Mercari and
+links them again on this phone where it needs them, seeds its own items, and clears every fault
+first; the cloud test links a fresh eBay session for the second seller before and after itself.
 
 ## CI
 
@@ -89,14 +93,10 @@ backend check of every pull request still catches a broken stack.
 
 ## Open items
 
-- Relinking an automation connection from the app (Settings > Link accounts) is a separate task
-  ([pull request 72](https://github.com/toniojbusiness/listora/pull/72)); until it lands the
-  Marketplaces screen shows a connection that needs relinking with no button, so the CAPTCHA test
-  checks the status, the detail, the banner, and the reconnect task, not a Relink button. When it
-  lands, the test should tap Relink and finish the link.
-- The API builds no automation adapters, so for an automation connection it reports the assisted
-  adapter's capabilities (`Connection.capabilities` and each listing action's `mode` say
-  `assisted`). The app decides from the connection's mode, so nothing it shows is wrong today.
+- The API builds no automation adapters for its connection views, so for an automation connection
+  it reports the assisted adapter's capabilities (`Connection.capabilities` and each listing
+  action's `mode` say `assisted`). The app decides from the connection's mode, so nothing it shows
+  is wrong today.
 - After a sale the item reads "Sold, delisting" for up to a minute after its delist run is
   "Delisted everywhere": only the delist SLA job, which runs every minute (`auto_delist_sla`),
   moves a finished item to `sold`. Finishing the item when its run completes would close the gap.

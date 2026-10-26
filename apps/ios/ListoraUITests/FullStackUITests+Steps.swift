@@ -64,7 +64,9 @@ extension FullStackUITests {
         }
     }
 
+    /// Settings opens from the avatar on Today.
     func openSettings() {
+        app.tabBars.buttons["Today"].tap()
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 15), "no Settings\n\(app.debugDescription)")
         settings.tap()
@@ -81,7 +83,8 @@ extension FullStackUITests {
             let status = element("linkAccounts.status.\(marketplace)")
             XCTAssertTrue(status.waitForExistence(timeout: 20), "no \(marketplace) row")
             app.buttons["linkAccounts.link.\(marketplace)"].tap()
-            signInOnFakeSite(username: "e2e-seller")
+            // Mercari signs in with an email; Poshmark with a username, which has no "@".
+            signInOnFakeSite(username: marketplace == "mercari" ? "e2e-seller@listora.test" : "e2e_seller")
             XCTAssertTrue(
                 waitForLabel(of: status, "Linked", timeout: 120),
                 "\(marketplace): \(status.label) \(element("linkAccounts.detail.\(marketplace)").label)",
@@ -100,7 +103,7 @@ extension FullStackUITests {
         let name = web.textFields.firstMatch
         XCTAssertTrue(name.waitForExistence(timeout: 20), "the sign-in page did not load\n\(app.debugDescription)")
         name.tap()
-        name.typeText(username.contains("@") ? username : "\(username)@listora.test")
+        name.typeText(username)
         let password = web.secureTextFields.firstMatch
         password.tap()
         // Return submits the form: WebKit zooms into a focused field, which can leave the button
