@@ -20,9 +20,13 @@ public final class LinkAccountsModel {
     public enum LinkProgress: Equatable {
         /// Sending the session to Listora.
         case sending
+        /// Asking Listora to check the session it holds again.
+        case requestingCheck
         /// The session did not reach Listora (or was refused). Retry resends the same sign-in
         /// with the same Idempotency-Key when `error.retryable`; otherwise the user signs in again.
         case failed(APIFailure)
+        /// Listora could not be asked to check again; Check again asks again.
+        case checkFailed(APIFailure)
     }
 
     public private(set) var links: [MarketplaceLink] = []
@@ -40,11 +44,15 @@ public final class LinkAccountsModel {
     /// The sign-in each failed link would resend: its cookies and its Idempotency-Key.
     private var unsent: [String: (cookies: [CapturedCookie], key: String)] = [:]
 
+    /// `pollInterval` and `maxPolls`: how often and how long a running check is read again. The
+    /// server decides every check within 15 minutes (it then says the check didn't finish), so
+    /// the default polls a little longer than that and never leaves a row on Checking... while
+    /// the server has an answer.
     public init(
         service: any MarketplaceSessionService,
         makeIdempotencyKey: @escaping @Sendable () -> String = { UUID().uuidString },
         pollInterval: Duration = .seconds(3),
-        maxPolls: Int = 100,
+        maxPolls: Int = 320,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
         now: @escaping @Sendable () -> Date = { Date() },
     ) {
@@ -77,7 +85,8 @@ public final class LinkAccountsModel {
 
     /// Opens the marketplace's sign-in page.
     public func startLinking(_ link: MarketplaceLink) {
-        guard link.canLink, progress[link.marketplace] != .sending else { return }
+        guard link.canLink, progress[link.marketplace] != .sending,
+              progress[link.marketplace] != .requestingCheck else { return }
         signingIn = link
     }
 
@@ -103,6 +112,28 @@ public final class LinkAccountsModel {
         let attempt = (cookies: captured, key: makeIdempotencyKey())
         unsent[link.marketplace] = attempt
         await send(link.marketplace, attempt)
+    }
+
+    /// Check again: asks Listora to check the session it already holds, then follows that check.
+    /// The user does not sign in again.
+    public func checkAgain(_ link: MarketplaceLink) async {
+        guard link.canCheckAgain, progress[link.marketplace] != .requestingCheck,
+              progress[link.marketplace] != .sending else { return }
+        progress[link.marketplace] = .requestingCheck
+        do {
+            try await service.requestCheck(link.marketplace, idempotencyKey: makeIdempotencyKey())
+        } catch {
+            progress[link.marketplace] = .checkFailed(error)
+            return
+        }
+        progress[link.marketplace] = nil
+        do {
+            try await replace(service.get(link.marketplace))
+        } catch {
+            // The check was asked for: show it as the server would until a poll reads it.
+            replace(link.checking)
+        }
+        await followCheck(link.marketplace)
     }
 
     /// Resends a sign-in that did not reach Listora, with the same Idempotency-Key.

@@ -4,11 +4,13 @@
  * script, so the app shows the marketplace as linked only once the marketplace accepted the
  * session (docs/features/marketplace-linking.md). One `session_check` row per automation
  * connection holds the newest link's check; each link starts a new one (`requestSessionCheck`,
- * in the linking transaction) and the runner records its result (job.ts).
+ * in the linking transaction), the seller can check the same session again
+ * (`requestSessionRecheck`, Retry check), and the runner records the result (job.ts).
  */
 import { sql } from 'kysely';
 
-import type { DbExecutor, Marketplace } from '@listora/db';
+import { SESSION_CHECK_DEADLINE_MS } from '@listora/connections';
+import { inTransaction, type DbExecutor, type Marketplace } from '@listora/db';
 
 /** The browser runner's task that checks one newly linked session (job.ts). */
 export const SESSION_CHECK_TASK = 'automation_session_check';
@@ -69,6 +71,47 @@ export async function requestSessionCheck(
     .executeTakeFirstOrThrow();
   await addSessionCheckJob(executor, { ...target, checkId }, null);
   return { checkId };
+}
+
+/**
+ * Checks the session already stored on the connection again (Retry check), so a check that
+ * failed or did not finish can be repeated without the seller signing in again. Only an
+ * automation connection that holds a session can be checked; a check still running within its
+ * deadline is left to finish rather than started over. Returns false when there is no session
+ * to check (none was linked, or the marketplace rejected it and it waits for a relink).
+ */
+export async function requestSessionRecheck(
+  executor: DbExecutor,
+  target: { accountId: string; connectionId: string },
+  now: Date,
+): Promise<boolean> {
+  return inTransaction(executor, async (trx) => {
+    // The connection's row lock orders this after any session write in flight (a relink).
+    const connection = await trx
+      .selectFrom('marketplace_connection')
+      .select('marketplace')
+      .where('account_id', '=', target.accountId)
+      .where('id', '=', target.connectionId)
+      .where('mode', '=', 'automation')
+      .where('status', 'in', ['connected', 'degraded'])
+      .where('token_ciphertext', 'is not', null)
+      .forUpdate()
+      .executeTakeFirst();
+    if (connection === undefined) return false;
+    const current = await trx
+      .selectFrom('session_check')
+      .select(['status', 'requested_at'])
+      .where('account_id', '=', target.accountId)
+      .where('connection_id', '=', target.connectionId)
+      .executeTakeFirst();
+    const running =
+      current?.status === 'pending' &&
+      now.getTime() - current.requested_at.getTime() < SESSION_CHECK_DEADLINE_MS;
+    if (!running) {
+      await requestSessionCheck(trx, { ...target, marketplace: connection.marketplace });
+    }
+    return true;
+  });
 }
 
 /** Adds (or replaces) the connection's check job, to run now or after `delayMs`. */

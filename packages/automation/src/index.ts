@@ -139,6 +139,7 @@ export type { SessionCheckDependencies } from './session-checks/job.ts';
 export {
   isSessionCheckJobPayload,
   requestSessionCheck,
+  requestSessionRecheck,
   SESSION_CHECK_TASK,
   sessionCheckJobKey,
 } from './session-checks/schedule.ts';

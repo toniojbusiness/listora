@@ -94,6 +94,11 @@ export type ScriptErrorCode =
   | 'element_missing'
   /** The run was aborted (the engine's deadline, or the runner stopping). */
   | 'aborted'
+  /**
+   * The runner's browser could not start or open the session, so the marketplace was never
+   * asked: a failure on Listora's side, never the marketplace's answer.
+   */
+  | 'browser_unavailable'
   /** The script itself failed (a bug, or a page it does not understand). */
   | 'script_error';
 

@@ -10,8 +10,9 @@
  *   not pass. The runner's session handling has already discarded the session and asked the
  *   seller to log in again (the vault's `markNeedsRelink`).
  * - **Failed, can't check**: no automation adapter serves the marketplace yet, or the
- *   marketplace could not be read (rate limit, timeout, an error page) on any of
- *   `SESSION_CHECK_ATTEMPTS` attempts. The session is kept; linking again checks again.
+ *   marketplace could not be read (rate limit, timeout, an error page, or the runner's browser
+ *   did not start) on any of `SESSION_CHECK_ATTEMPTS` attempts. The session is kept: the
+ *   seller can check it again (`requestSessionRecheck`) without signing in, or link again.
  *
  * Only a database failure throws, and the job queue then runs the job again.
  */
@@ -133,11 +134,8 @@ export async function runSessionCheck(
     log.info({ code: failure.code, attempt, delayMs }, 'session check will try again');
     return;
   }
-  await record(
-    health.status === 'degraded'
-      ? { code: failure.code, message: `${failure.message} Link it again to retry.` }
-      : failure,
-  );
+  // What the seller can do about it is the view's to say (`describeAutomationSession`).
+  await record(failure);
 }
 
 function healthFailure(health: Health): Failure | null {

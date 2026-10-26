@@ -364,10 +364,12 @@ export class ComputeStack extends ListoraStack {
 
   /**
    * The browser runner: a task of the configured size (`browserRunner`) from the runner image,
-   * with a writable `/tmp` for Chromium on an otherwise read-only file system, in the worker's
-   * network place and security group (database access, internet egress, no ingress), and a
-   * role that may decrypt sellers' sessions (and only those), store the screenshots of failed
-   * runs, and scale its own service to zero.
+   * with a writable `/tmp` for Chromium on an otherwise read-only file system (the image
+   * declares it a volume its unprivileged user owns, or Fargate would create it root-owned and
+   * read-only for that user; the Dockerfile's runner stage), in the worker's network place and
+   * security group (database access, internet egress, no ingress), and a role that may decrypt
+   * sellers' sessions (and only those), store the screenshots of failed runs, and scale its own
+   * service to zero.
    */
   private runner(
     {

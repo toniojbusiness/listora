@@ -359,6 +359,7 @@ export class AutomationAdapter<
             return this.#assistedTask(op, { ...excerpt, automation: 'page_changed' });
           case 'unreachable':
           case 'aborted':
+          case 'browser_unavailable':
           case 'script_error':
             return mutated ? unknown() : transient();
           default:
@@ -416,7 +417,10 @@ export class AutomationAdapter<
     return {
       status: 'degraded',
       code,
-      message: `Listora couldn't check your ${this.#name} login just now.`,
+      message:
+        code === 'browser_unavailable'
+          ? `Listora's browser didn't start, so it couldn't check your ${this.#name} sign-in. The problem is on Listora's side, not ${this.#name}'s.`
+          : `Listora couldn't check your ${this.#name} sign-in just now.`,
     };
   }
 }

@@ -26,6 +26,9 @@ final class StubAPIServer: @unchecked Sendable {
     private var startFailure: NWError?
     /// Poshmark's link: nil until the app links it, then how many times its check was read.
     private var poshmarkChecks: Int?
+    /// Depop's sign-in, whose check did not confirm it: nil until the app asks to check it again,
+    /// then how many times that check was read.
+    private var depopRechecks: Int?
     private var todayState = TodayState.busy
 
     /// What `GET /v1/today` answers.
@@ -274,7 +277,7 @@ extension StubAPIServer {
         case ("GET", Self.accountPath):
             return Self.http(status: "200 OK", contentType: "text/html; charset=utf-8", body: Self.accountPage)
         case ("GET", "/v1/marketplace-sessions"):
-            let sessions = [poshmarkSession(), Self.mercariSession, Self.depopSession, Self.ebaySession]
+            let sessions = [poshmarkSession(), Self.mercariSession, depopSession(), Self.ebaySession]
             return Self.http(status: "200 OK", body: #"{"data":["# + sessions.joined(separator: ",") + "]}")
         case ("POST", "/v1/marketplace-sessions/poshmark"):
             poshmarkChecks = 0
@@ -282,6 +285,13 @@ extension StubAPIServer {
         case ("GET", "/v1/marketplace-sessions/poshmark"):
             poshmarkChecks = poshmarkChecks.map { $0 + 1 }
             return Self.http(status: "200 OK", body: poshmarkSession())
+        case ("POST", "/v1/connections/depop/checks"):
+            // Retry check of the sign-in the server holds: the connection, checking.
+            depopRechecks = 0
+            return Self.http(status: "202 Accepted", body: Self.depopConnectionChecking)
+        case ("GET", "/v1/marketplace-sessions/depop"):
+            depopRechecks = depopRechecks.map { $0 + 1 }
+            return Self.http(status: "200 OK", body: depopSession())
         default:
             return nil
         }
@@ -340,10 +350,33 @@ extension StubAPIServer {
     "occurredAt":"2026-10-24T12:00:00Z"}}
     """
 
-    private static let depopSession = """
-    {"marketplace":"depop","status":"not_linked","statusDisplay":{"tone":"neutral","label":"Not linked"},
-    "login":{"url":"https://www.depop.com/login/","cookieDomains":["depop.com"]}}
-    """
+    /// Not confirmed (its check failed, as when the cloud browser could not start) until the app
+    /// asks to check it again; then checking, and linked from the second read on.
+    private func depopSession() -> String {
+        let login = #""login":{"url":"https://www.depop.com/login/","cookieDomains":["depop.com"]}"#
+        switch depopRechecks {
+        case nil:
+            let reason = "Listora's browser didn't start, so it couldn't check your Depop sign-in. "
+                + "The problem is on Listora's side, not Depop's."
+            return #"{"marketplace":"depop","status":"check_failed","statusDisplay":{"tone":"action_needed","#
+                + #""label":"Not confirmed","detail":"\#(reason) Check again, or link Depop again if it "#
+                + #"keeps failing."},\#(login),"issue":{"code":"browser_unavailable","message":"\#(reason)","#
+                + #""occurredAt":"2026-10-25T23:39:46Z"}}"#
+        case let .some(reads) where reads < 2:
+            return #"{"marketplace":"depop","status":"checking","statusDisplay":{"tone":"checking","#
+                + #""label":"Checking..."},\#(login)}"#
+        case .some:
+            return #"{"marketplace":"depop","status":"linked","statusDisplay":{"tone":"success","#
+                + #""label":"Linked"},\#(login)}"#
+        }
+    }
+
+    private static let depopConnectionChecking = #"{"marketplace":"depop","mode":"automation","#
+        + #""status":"connected","statusDisplay":{"tone":"checking","label":"Checking..."},"#
+        + #""capabilities":{"connect":"none","create":"automation","updatePrice":"automation","#
+        + #""updateDetails":"automation","delist":"automation","relist":"automation","#
+        + #""markSold":"automation","verifyRead":"automation","importListings":"none","#
+        + #""saleDetection":["poll"],"imageTransport":"upload"},"availableActions":[]}"#
 
     private static let ebaySession = """
     {"marketplace":"ebay","status":"not_linked","statusDisplay":{"tone":"neutral","label":"Not linked"},

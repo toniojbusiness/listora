@@ -160,7 +160,8 @@ KnownConnectionAction:
     `reconnect`: the same, for a connection that needs the seller's consent again (its grant
     was revoked, expires within 30 days, or fails); it renews the existing connection.
     `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
-    Listora may have cleared since.
+    Listora may have cleared since, or an automation connection whose sign-in is not
+    confirmed.
   enum: [connect, reconnect, check]
 Connection:
   type: object
@@ -257,8 +258,10 @@ KnownConnectionAttentionReason:
     `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
     `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
     cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
-    ends within 30 days.
-  enum: [reconnect, access_removed, connection_problem, expiring]
+    ends within 30 days. `not_confirmed`: Listora could not confirm that the marketplace
+    accepts the sign-in linked for automation (its check failed or did not finish); the
+    `check` action checks it again.
+  enum: [reconnect, access_removed, connection_problem, expiring, not_confirmed]
 ConnectionAttention:
   type: object
   description: One connection that needs the seller's attention.

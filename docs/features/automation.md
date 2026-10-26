@@ -127,11 +127,14 @@ from the app
   cookies the app captured (on the marketplace's domains only), revives the connection, moves the
   marketplace's unconnected listings to it, asks the runner for a read-only **session check**
   (`session-checks/`), and makes a first sale check due at once; relinking takes the same way.
-  The app shows a marketplace as linked only after its session check passed. The flow, from the
-  app's sign-in web view to the check, is in [marketplace-linking.md](marketplace-linking.md).
+  The app shows a marketplace as linked only after its session check passed, on Link accounts and
+  Marketplaces alike. The flow, from the app's sign-in web view to the check, is in
+  [marketplace-linking.md](marketplace-linking.md).
 - **Hosting.** The runner is the compute stack's `runner` service, from the Dockerfile's
   `runner` stage (the application's files on top of headless Chromium, its own ECR repository),
-  with no task while idle and never two at once ([infra.md](infra.md)).
+  with no task while idle and never two at once ([infra.md](infra.md)). A session the runner's
+  browser cannot open (Chromium did not start) ends as `browser_unavailable`: a failure on
+  Listora's side, never reported as the marketplace's answer.
 
 ## Local development
 

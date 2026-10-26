@@ -41,7 +41,9 @@ export interface MarketplaceSessionsDependencies {
 }
 
 export interface MarketplaceSessionRouteDependencies
-  extends RouteDependencies, MarketplaceSessionsDependencies {}
+  extends RouteDependencies, MarketplaceSessionsDependencies {
+  now: () => Date;
+}
 
 export function registerMarketplaceSessionRoutes(
   app: FastifyInstance,
@@ -49,11 +51,12 @@ export function registerMarketplaceSessionRoutes(
 ): void {
   contractRoute(app, deps, 'listMarketplaceSessions', async ({ tenant, db }) => {
     const rows = await sessionRows(db, tenant, AUTOMATED_MARKETPLACES);
+    const now = deps.now();
     return {
       status: 200,
       body: {
         data: AUTOMATED_MARKETPLACES.map((marketplace) =>
-          marketplaceSessionView(rowFor(rows, marketplace), deps.profiles[marketplace]),
+          marketplaceSessionView(rowFor(rows, marketplace), deps.profiles[marketplace], now),
         ),
       },
     };
@@ -64,7 +67,11 @@ export function registerMarketplaceSessionRoutes(
     const rows = await sessionRows(db, tenant, [marketplace]);
     return {
       status: 200,
-      body: marketplaceSessionView(rowFor(rows, marketplace), deps.profiles[marketplace]),
+      body: marketplaceSessionView(
+        rowFor(rows, marketplace),
+        deps.profiles[marketplace],
+        deps.now(),
+      ),
     };
   });
 
@@ -107,7 +114,10 @@ export function registerMarketplaceSessionRoutes(
       throw error;
     }
     const rows = await sessionRows(db, tenant, [marketplace]);
-    return { status: 201, body: marketplaceSessionView(rowFor(rows, marketplace), profile) };
+    return {
+      status: 201,
+      body: marketplaceSessionView(rowFor(rows, marketplace), profile, deps.now()),
+    };
   });
 }
 
@@ -166,6 +176,9 @@ async function sessionRows(
       'connection.status',
       'connection.display_name',
       'connection.last_error',
+      'connection.last_error_code',
+      'connection.last_error_at',
+      'connection.granted_at',
       'connection.updated_at',
       'check.status as check_status',
       'check.failure_code',
@@ -183,6 +196,9 @@ async function sessionRows(
       status: row.status,
       displayName: row.display_name,
       lastError: row.last_error,
+      lastErrorCode: row.last_error_code,
+      lastErrorAt: row.last_error_at,
+      linkedAt: row.granted_at,
       updatedAt: row.updated_at,
     },
     check:

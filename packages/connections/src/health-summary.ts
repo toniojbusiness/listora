@@ -121,6 +121,8 @@ function bannerLabel(reason: ConnectionAttentionReason, name: string): string {
       return `Reconnect ${name} soon`;
     case 'connection_problem':
       return `${name} connection problem`;
+    case 'not_confirmed':
+      return `${name} sign-in not confirmed`;
     default:
       return assertNever(reason, 'connection attention reason');
   }
@@ -132,6 +134,7 @@ function urgency(reason: ConnectionAttentionReason): number {
     case 'access_removed':
       return 0;
     case 'expiring':
+    case 'not_confirmed':
       return 1;
     case 'connection_problem':
       return 2;

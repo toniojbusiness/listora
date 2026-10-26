@@ -40,13 +40,16 @@ public final class MarketplacesModel {
     private let sleep: @Sendable (Duration) async throws -> Void
     private let isSignedIn: @MainActor () -> Bool
 
-    /// `pollInterval` and `maxPolls`: how often and how long a requested check is read again.
+    /// `pollInterval` and `maxPolls`: how often and how long a requested check is read again. An
+    /// API connection's check takes seconds; the browser runner's check of a linked sign-in can
+    /// take minutes, and the server decides it within 15, so the default reads a little longer
+    /// than that and never leaves a row on Checking... while the server has an answer.
     /// `isSignedIn`: whether there is a session; the banner never asks the API without one.
     public init(
         service: any ConnectionsService,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
-        pollInterval: Duration = .seconds(2),
-        maxPolls: Int = 15,
+        pollInterval: Duration = .seconds(3),
+        maxPolls: Int = 320,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
     ) {
         self.service = service
@@ -83,7 +86,7 @@ public final class MarketplacesModel {
     }
 
     /// Retry check: asks the server to check the row's connection, shows its "Checking" status,
-    /// and reads the summary again until that status changes (or a minute or so has passed).
+    /// and reads the summary again until that status changes (or `maxPolls` reads have passed).
     public func check(_ row: MarketplaceRow) async {
         guard requestingCheck == nil, connecting == nil, let marketplace = row.marketplace,
               row.actions.contains(.check)
