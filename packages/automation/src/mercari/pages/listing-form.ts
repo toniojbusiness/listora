@@ -49,11 +49,25 @@ export const LISTING_FORM = {
 
 const FORM = 'listing form';
 
-/** Opens the sell page's empty form. */
-export async function openSellForm(page: PageDriver, site: MercariSite): Promise<void> {
+/**
+ * Mercari's dialog on the sell page for a seller it wants verified first (read 2026-10-26:
+ * `VerificationExceptionDialog`, listing the verifications it requires, with a Verify button).
+ * Only the seller can do that, in Mercari; Listora never clicks it.
+ */
+export const VERIFICATION_DIALOG = '[data-testid="VerificationExceptionDialog"]';
+
+/**
+ * Opens the sell page's empty form; `verification_required` when Mercari asks the seller to
+ * verify their account before they can list.
+ */
+export async function openSellForm(
+  page: PageDriver,
+  site: MercariSite,
+): Promise<'form' | 'verification_required'> {
   await page.goto(absolute(site, MERCARI_PATHS.sell));
   // Drawn by the site's own scripts once the document is ready.
-  await awaitElement(page, LISTING_FORM.form, 'sell page', FORM);
+  await awaitElement(page, `${LISTING_FORM.form}, ${VERIFICATION_DIALOG}`, 'sell page', FORM);
+  return (await page.exists(VERIFICATION_DIALOG)) ? 'verification_required' : 'form';
 }
 
 /**

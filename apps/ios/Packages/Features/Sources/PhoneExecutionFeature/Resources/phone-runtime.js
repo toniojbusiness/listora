@@ -7225,10 +7225,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		error: "[data-testid=\"FormError\"]"
 	};
 	const FORM = "listing form";
-	/** Opens the sell page's empty form. */
+	/**
+	* Mercari's dialog on the sell page for a seller it wants verified first (read 2026-10-26:
+	* `VerificationExceptionDialog`, listing the verifications it requires, with a Verify button).
+	* Only the seller can do that, in Mercari; Listora never clicks it.
+	*/
+	const VERIFICATION_DIALOG = "[data-testid=\"VerificationExceptionDialog\"]";
+	/**
+	* Opens the sell page's empty form; `verification_required` when Mercari asks the seller to
+	* verify their account before they can list.
+	*/
 	async function openSellForm(page, site) {
 		await page.goto(absolute(site, MERCARI_PATHS.sell));
-		await awaitElement(page, LISTING_FORM.form, "sell page", FORM);
+		await awaitElement(page, `${LISTING_FORM.form}, ${VERIFICATION_DIALOG}`, "sell page", FORM);
+		return await page.exists("[data-testid=\"VerificationExceptionDialog\"]") ? "verification_required" : "form";
 	}
 	/**
 	* Fills the whole form from the payload, ending the description with the SKU line. `photos`
@@ -7448,10 +7458,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					};
 				}
 				const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-				await step("fill in the listing", { mutates: false }, async (page) => {
-					await openSellForm(page, site);
-					await fillListing(page, payload, sku, files);
-				});
+				if (await step("open the sell page", { mutates: false }, (page) => openSellForm(page, site)) === "verification_required") return {
+					type: "rejected",
+					code: "account_verification_required",
+					message: "Mercari asks you to verify your account before you can list.",
+					fixHint: "Open Mercari, start a listing, tap Verify, and finish its steps. Then list again."
+				};
+				await step("fill in the listing", { mutates: false }, (page) => fillListing(page, payload, sku, files));
 				return step("list", { mutates: true }, async (page) => submitted(page, await submitListing(page, "list")));
 			},
 			revise: async (op, step) => {

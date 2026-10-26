@@ -129,10 +129,21 @@ export function createMercariScripts(
       const files = await step('get the photos', { mutates: false }, (_page, signal) =>
         Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
       );
-      await step('fill in the listing', { mutates: false }, async (page) => {
-        await openSellForm(page, site);
-        await fillListing(page, payload, sku, files);
-      });
+      const opened = await step('open the sell page', { mutates: false }, (page) =>
+        openSellForm(page, site),
+      );
+      if (opened === 'verification_required') {
+        return {
+          type: 'rejected',
+          code: 'account_verification_required',
+          message: 'Mercari asks you to verify your account before you can list.',
+          fixHint:
+            'Open Mercari, start a listing, tap Verify, and finish its steps. Then list again.',
+        };
+      }
+      await step('fill in the listing', { mutates: false }, (page) =>
+        fillListing(page, payload, sku, files),
+      );
       return step('list', { mutates: true }, async (page) =>
         submitted(page, await submitListing(page, 'list')),
       );
