@@ -117,10 +117,12 @@ private struct EmailedLinkSteps: View {
                     .font(Typography.headline)
                 Text(
                     "Don't tap it: it would sign you in to your browser, not Listora. "
-                        + "Press and hold it, tap Copy, then come back here and paste it.",
+                        + "Press and hold the \(name) link. If a preview opens, tap Hide preview, then Copy link. "
+                        + "Then come back and tap Paste sign-in link.",
                 )
                 .font(Typography.subheadline)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("signIn.emailedLinkSteps")
             }
             HStack(spacing: Spacing.sm) {
                 PasteButton(supportedContentTypes: [.url, .plainText]) { providers in
