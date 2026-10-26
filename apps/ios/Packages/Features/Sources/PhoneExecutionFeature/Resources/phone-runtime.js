@@ -7112,6 +7112,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 
 // src/mercari/pages/listings-page.ts
 	const LISTINGS_PAGE = {
+		/** What an empty tab shows instead of its rows. */
+		empty: "[data-testid=\"ZeroListings\"]",
 		list: "[data-testid=\"ListingList\"]",
 		row: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"]",
 		link: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"] a[data-testid=\"ListingLink\"]",
@@ -7124,7 +7126,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function readListingsPage(page, site, tab, pageNumber) {
 		await page.goto(absolute(site, MERCARI_PATHS.listings(tab, pageNumber)));
 		const name = `${tab.replace("_", " ")} listings page`;
-		if (!await page.exists(LISTINGS_PAGE.list)) throw changed(name, "has no listing list");
+		await awaitElement(page, `${LISTINGS_PAGE.empty}, ${LISTINGS_PAGE.list}`, name, "listing list");
+		if (await page.exists(LISTINGS_PAGE.empty)) return {
+			rows: [],
+			hasNext: false
+		};
 		const sold = tab === "in_progress" || tab === "sold";
 		const [links, titles, prices, soldAts] = await Promise.all([
 			page.attributes(LISTINGS_PAGE.link, "href"),

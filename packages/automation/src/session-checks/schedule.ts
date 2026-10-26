@@ -12,6 +12,8 @@ import { sql } from 'kysely';
 import { SESSION_CHECK_DEADLINE_MS } from '@listora/connections';
 import { inTransaction, jsonb, type DbExecutor, type Marketplace } from '@listora/db';
 
+import { enqueueSaleCheck, scheduleSaleCheck } from '../sale-checks/schedule.ts';
+
 /** The browser runner's task that checks one newly linked session (job.ts). */
 export const SESSION_CHECK_TASK = 'automation_session_check';
 
@@ -154,8 +156,10 @@ async function removeSessionCheckJob(executor: DbExecutor, connectionId: string)
  * Checks the session already stored on the connection again (Retry check), so a check that
  * failed or did not finish can be repeated without the seller signing in again. Only an
  * automation connection that holds a session can be checked; a check still running within its
- * deadline is left to finish rather than started over. Returns false when there is no session
- * to check (none was linked, or the marketplace rejected it and it waits for a relink).
+ * deadline is left to finish rather than started over. Its sales are checked again at once too,
+ * as after a link: a sale check that failed waits hours for its retry otherwise, and sales are
+ * what start delists. Returns false when there is no session to check (none was linked, or the
+ * marketplace rejected it and it waits for a relink).
  */
 export async function requestSessionRecheck(
   executor: DbExecutor,
@@ -184,9 +188,10 @@ export async function requestSessionRecheck(
     const running =
       current?.status === 'pending' &&
       now.getTime() - current.requested_at.getTime() < SESSION_CHECK_DEADLINE_MS;
-    if (!running) {
-      await requestSessionCheck(trx, { ...target, marketplace: connection.marketplace });
-    }
+    const check = { ...target, marketplace: connection.marketplace };
+    if (!running) await requestSessionCheck(trx, check);
+    await scheduleSaleCheck(trx, { ...check, at: 'now', reason: 'linked' });
+    await enqueueSaleCheck(trx, check);
     return true;
   });
 }
