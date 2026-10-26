@@ -7,6 +7,7 @@ import type { ListingRef, OperationRequest, RemoteOrder } from '@listora/marketp
 
 import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
+import { PageChangedError } from '../runner/errors.ts';
 import type { StepRunner } from '../runner/types.ts';
 import { loggedInSeller } from './pages/account.ts';
 import { readClosetPage } from './pages/closet-page.ts';
@@ -223,7 +224,8 @@ export function createPoshmarkScripts(
       const opened = await step('open the listing form', { mutates: false }, (page) =>
         openForm(page, site.createListing()),
       );
-      if (!opened) throw new Error('Poshmark showed no listing form');
+      // Poshmark sends a seller to the form, never to a 404, so a missing one is a changed page.
+      if (!opened) throw new PageChangedError("Poshmark's listing form isn't there");
       await step('add the photos', { mutates: false }, (page) => addPhotos(page, files));
       await fillListing(step, payload);
       await step('set the SKU and availability', { mutates: false }, async (page) => {

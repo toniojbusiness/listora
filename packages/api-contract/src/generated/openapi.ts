@@ -684,6 +684,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/items/{itemId}/marketplace-categories/{marketplace}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The categories an item can be listed in on an automated marketplace
+         * @description For Poshmark, Mercari, and Depop: the category Listora maps the item to (`suggested`),
+         *     or none when the seller has to pick (a unisex or kids' item, or one Listora can't place),
+         *     the likely ones first, and every category in that marketplace's own names. A listing
+         *     names the seller's pick in `variant.categoryRef`, as `ref` gives it.
+         *     `404` for another marketplace.
+         */
+        get: operations["getItemMarketplaceCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/listing-imports": {
         parameters: {
             query?: never;
@@ -1712,6 +1739,29 @@ export interface paths {
          *     speaks another version of calls than the server's.
          */
         post: operations["claimPhoneRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/phone-runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the phone runtime the server runs its phone work with
+         * @description The phone runtime (`listoraPhone`, built from the server's own automation code), so the
+         *     app runs exactly the marketplace scripts the server replays its answers through, and a
+         *     fix to a marketplace's pages reaches the phone with the server, without an app update.
+         *     With `have` naming the digest the app already runs, the answer leaves out `source`.
+         */
+        get: operations["getPhoneRuntime"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2775,6 +2825,17 @@ export interface components {
             listing: components["schemas"]["Listing"];
             operation: components["schemas"]["Operation"];
         };
+        MarketplaceCategory: {
+            /** @description What `variant.categoryRef` takes for this category. */
+            ref: string;
+            /** @description The marketplace's own names, top level first. */
+            path: string[];
+        };
+        MarketplaceCategories: {
+            suggested?: components["schemas"]["MarketplaceCategory"];
+            likely: components["schemas"]["MarketplaceCategory"][];
+            choices: components["schemas"]["MarketplaceCategory"][];
+        };
         /**
          * @description A `KnownOperationKind`, or a kind added after this client was built. Clients describe
          *     an unknown kind generically using the operation's `statusDisplay`.
@@ -3305,6 +3366,17 @@ export interface components {
             answer: {
                 [key: string]: unknown;
             };
+        };
+        PhoneRuntime: {
+            /**
+             * Format: int32
+             * @description The version of phone calls the runtime speaks.
+             */
+            runtimeVersion: number;
+            /** @description The runtime's SHA-256, hex. */
+            digest: string;
+            /** @description The runtime's script; absent when the app already has this digest. */
+            source?: string;
         };
         /**
          * @description A `KnownSaleStatus`, or a status added after this client was built. Clients show an
@@ -4435,6 +4507,8 @@ export type ListingStatusSummary = components['schemas']['ListingStatusSummary']
 export type ListingList = components['schemas']['ListingList'];
 export type ListingPage = components['schemas']['ListingPage'];
 export type ListingOperationAccepted = components['schemas']['ListingOperationAccepted'];
+export type MarketplaceCategory = components['schemas']['MarketplaceCategory'];
+export type MarketplaceCategories = components['schemas']['MarketplaceCategories'];
 export type OperationKind = components['schemas']['OperationKind'];
 export type KnownOperationKind = components['schemas']['KnownOperationKind'];
 export type OperationStatus = components['schemas']['OperationStatus'];
@@ -4498,6 +4572,7 @@ export type PhoneCall = components['schemas']['PhoneCall'];
 export type PhoneRun = components['schemas']['PhoneRun'];
 export type PhoneRunResult = components['schemas']['PhoneRunResult'];
 export type PhoneCallAnswer = components['schemas']['PhoneCallAnswer'];
+export type PhoneRuntime = components['schemas']['PhoneRuntime'];
 export type SaleStatus = components['schemas']['SaleStatus'];
 export type KnownSaleStatus = components['schemas']['KnownSaleStatus'];
 export type SaleDetectionSource = components['schemas']['SaleDetectionSource'];
@@ -5628,6 +5703,31 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getItemMarketplaceCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item's categories on the marketplace. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceCategories"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -7054,6 +7154,30 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getPhoneRuntime: {
+        parameters: {
+            query?: {
+                /** @description The digest of the runtime the app already runs. */
+                have?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The runtime, or only its digest when the app has it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneRuntime"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };

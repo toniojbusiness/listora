@@ -32,6 +32,8 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 COPY apps/api/src apps/api/src
 COPY apps/worker/src apps/worker/src
+# The phone runtime the API hands the app, built from packages/automation (npm run phone:bundle).
+COPY apps/ios/Packages/Features/Sources/PhoneExecutionFeature/Resources/phone-runtime.js apps/ios/Packages/Features/Sources/PhoneExecutionFeature/Resources/
 
 # Headless Chromium at the build the locked playwright-core pins, with the system libraries
 # and fonts it needs. It depends only on the lockfile, so its large layers are rebuilt, pushed,

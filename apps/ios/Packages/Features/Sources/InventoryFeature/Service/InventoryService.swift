@@ -52,6 +52,11 @@ protocol InventoryService: Sendable {
         idempotencyKey: String,
     ) async throws(APIFailure) -> Listing
     func replaceDraft(listingID: String, variant: ListingVariant) async throws(APIFailure) -> Listing
+    /// The item's categories on Poshmark, Mercari, or Depop (`getItemMarketplaceCategories`).
+    func marketplaceCategories(
+        itemID: String,
+        marketplace: String,
+    ) async throws(APIFailure) -> Components.Schemas.MarketplaceCategories
     func perform(_ action: ListingRequest, idempotencyKey: String) async throws(APIFailure) -> Listing
     func retry(operationID: String, idempotencyKey: String) async throws(APIFailure) -> Operation
 }
@@ -197,6 +202,23 @@ struct APIInventoryService: InventoryService {
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .conflict(response): throw APIFailure(statusCode: 409, response: response)
         case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func marketplaceCategories(
+        itemID: String,
+        marketplace: String,
+    ) async throws(APIFailure) -> Components.Schemas.MarketplaceCategories {
+        guard let known = Components.Schemas.KnownMarketplace(rawValue: marketplace) else {
+            throw APIFailure(statusCode: 404, code: "not_found", message: "No categories here.", retryable: false)
+        }
+        let output = try await call {
+            try await client.getItemMarketplaceCategories(path: .init(itemId: itemID, marketplace: known))
+        }
+        switch output {
+        case let .ok(response): return try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }
     }

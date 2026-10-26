@@ -162,6 +162,15 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
         return Fixtures.listing(status: .draft, label: "Draft", tone: .neutral, actions: [.publish], variant: variant)
     }
 
+    func marketplaceCategories(
+        itemID _: String,
+        marketplace _: String,
+    ) async throws(APIFailure) -> Schemas.MarketplaceCategories {
+        // Listora maps the item, as for most items: nothing to pick.
+        let mapped = Schemas.MarketplaceCategory(ref: "Men > Tops > T-shirts", path: ["Men", "Tops", "T-shirts"])
+        return Schemas.MarketplaceCategories(suggested: mapped, likely: [mapped], choices: [mapped])
+    }
+
     func replaceDraft(listingID _: String, variant: Schemas.ListingVariant) async throws(APIFailure) -> Schemas
         .Listing
     {

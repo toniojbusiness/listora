@@ -21,6 +21,26 @@ describe('page evidence', () => {
           'https://www.google-analytics.com/collect?uid=janedoe',
         ],
         scripts: [{ id: '__NEXT_DATA__', type: 'application/json' }],
+        controls: [
+          { tag: 'input', type: 'file', names: [['id', 'img-file-input']], text: null },
+          {
+            tag: 'input',
+            type: 'text',
+            names: [
+              ['data-vv-name', 'title'],
+              ['placeholder', 'What are you selling, Jane?'],
+            ],
+            text: null,
+          },
+          { tag: 'button', type: null, names: [['data-et-name', 'list']], text: 'List' },
+        ],
+        choices: [
+          'Women',
+          'Tops & blouses',
+          'Ships from 94110',
+          'jane@example.com',
+          'New With Tags',
+        ],
       },
       {
         __INITIAL_STATE__: {
@@ -41,6 +61,12 @@ describe('page evidence', () => {
         '+1 elsewhere',
       ],
       scripts: ['#__NEXT_DATA__ application/json'],
+      controls: [
+        'input[file] id:img-file-input',
+        'input[text] data-vv-name:title placeholder:<x> are you selling, <x>',
+        'button data-et-name:list text:List',
+      ],
+      choices: ['Women', 'Tops & blouses', 'New With Tags'],
       data: [
         '__INITIAL_STATE__: object',
         '__INITIAL_STATE__.auth: object',

@@ -4217,6 +4217,115 @@ public struct Client: APIProtocol {
             }
         )
     }
+    /// The categories an item can be listed in on an automated marketplace
+    ///
+    /// For Poshmark, Mercari, and Depop: the category Listora maps the item to (`suggested`),
+    /// or none when the seller has to pick (a unisex or kids' item, or one Listora can't place),
+    /// the likely ones first, and every category in that marketplace's own names. A listing
+    /// names the seller's pick in `variant.categoryRef`, as `ref` gives it.
+    /// `404` for another marketplace.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/marketplace-categories/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-categories/{marketplace}/get(getItemMarketplaceCategories)`.
+    public func getItemMarketplaceCategories(_ input: Operations.GetItemMarketplaceCategories.Input) async throws -> Operations.GetItemMarketplaceCategories.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetItemMarketplaceCategories.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/items/{}/marketplace-categories/{}",
+                    parameters: [
+                        input.path.itemId,
+                        input.path.marketplace
+                    ]
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetItemMarketplaceCategories.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.MarketplaceCategories.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 404:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.NotFound.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .notFound(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
     /// Create an item for a shared listing and link the listing to it
     ///
     /// For a listing the user shared that has no item in Listora yet. Creates an import
@@ -10142,6 +10251,96 @@ public struct Client: APIProtocol {
                         preconditionFailure("bestContentType chose an invalid content type.")
                     }
                     return .conflict(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.DefaultError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ErrorResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
+    /// Get the phone runtime the server runs its phone work with
+    ///
+    /// The phone runtime (`listoraPhone`, built from the server's own automation code), so the
+    /// app runs exactly the marketplace scripts the server replays its answers through, and a
+    /// fix to a marketplace's pages reaches the phone with the server, without an app update.
+    /// With `have` naming the digest the app already runs, the answer leaves out `source`.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/phone-runtime`.
+    /// - Remark: Generated from `#/paths//v1/phone-runtime/get(getPhoneRuntime)`.
+    public func getPhoneRuntime(_ input: Operations.GetPhoneRuntime.Input) async throws -> Operations.GetPhoneRuntime.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetPhoneRuntime.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/phone-runtime",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "have",
+                    value: input.query.have
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetPhoneRuntime.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.PhoneRuntime.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
                 default:
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
                     let body: Components.Responses.DefaultError.Body

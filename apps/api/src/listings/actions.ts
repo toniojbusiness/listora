@@ -7,6 +7,7 @@
  * verified it ("Active (confirmed by eBay)").
  */
 import type { KnownListingAction, ListingVariant } from '@listora/api-contract';
+import { marketplaceCategories } from '@listora/automation';
 import { accountConnections } from '@listora/connections';
 import {
   inTransaction,
@@ -73,6 +74,21 @@ export function registerListingActionRoutes(
     if (!item) throw notFound('Item');
     const rows = (await itemListingRows(db, tenant, [item.id])).get(item.id) ?? [];
     return { status: 200, body: { data: await listingViews(db, tenant, rows, views) } };
+  });
+
+  contractRoute(app, deps, 'getItemMarketplaceCategories', async ({ tenant, db, params }) => {
+    const item = await findItem(db, tenant, params.itemId);
+    if (!item) throw notFound('Item');
+    const categories = marketplaceCategories(params.marketplace as Marketplace, item);
+    if (categories === null) throw notFound('Marketplace categories');
+    return {
+      status: 200,
+      body: {
+        ...(categories.suggested === null ? {} : { suggested: categories.suggested }),
+        likely: categories.likely,
+        choices: categories.choices,
+      },
+    };
   });
 
   contractRoute(app, deps, 'listListings', async ({ tenant, db, query }) => {

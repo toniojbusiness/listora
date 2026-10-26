@@ -4324,6 +4324,62 @@ extension Components {
                 case operation
             }
         }
+        /// - Remark: Generated from `#/components/schemas/MarketplaceCategory`.
+        public struct MarketplaceCategory: Codable, Hashable, Sendable {
+            /// What `variant.categoryRef` takes for this category.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceCategory/ref`.
+            public var ref: Swift.String
+            /// The marketplace's own names, top level first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceCategory/path`.
+            public var path: [Swift.String]
+            /// Creates a new `MarketplaceCategory`.
+            ///
+            /// - Parameters:
+            ///   - ref: What `variant.categoryRef` takes for this category.
+            ///   - path: The marketplace's own names, top level first.
+            public init(
+                ref: Swift.String,
+                path: [Swift.String]
+            ) {
+                self.ref = ref
+                self.path = path
+            }
+            public enum CodingKeys: String, CodingKey {
+                case ref
+                case path
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MarketplaceCategories`.
+        public struct MarketplaceCategories: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceCategories/suggested`.
+            public var suggested: Components.Schemas.MarketplaceCategory?
+            /// - Remark: Generated from `#/components/schemas/MarketplaceCategories/likely`.
+            public var likely: [Components.Schemas.MarketplaceCategory]
+            /// - Remark: Generated from `#/components/schemas/MarketplaceCategories/choices`.
+            public var choices: [Components.Schemas.MarketplaceCategory]
+            /// Creates a new `MarketplaceCategories`.
+            ///
+            /// - Parameters:
+            ///   - suggested:
+            ///   - likely:
+            ///   - choices:
+            public init(
+                suggested: Components.Schemas.MarketplaceCategory? = nil,
+                likely: [Components.Schemas.MarketplaceCategory],
+                choices: [Components.Schemas.MarketplaceCategory]
+            ) {
+                self.suggested = suggested
+                self.likely = likely
+                self.choices = choices
+            }
+            public enum CodingKeys: String, CodingKey {
+                case suggested
+                case likely
+                case choices
+            }
+        }
         /// A `KnownOperationKind`, or a kind added after this client was built. Clients describe
         /// an unknown kind generically using the operation's `statusDisplay`.
         ///
@@ -6888,6 +6944,41 @@ extension Components {
                     "installationId",
                     "answer"
                 ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhoneRuntime`.
+        public struct PhoneRuntime: Codable, Hashable, Sendable {
+            /// The version of phone calls the runtime speaks.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneRuntime/runtimeVersion`.
+            public var runtimeVersion: Swift.Int32
+            /// The runtime's SHA-256, hex.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneRuntime/digest`.
+            public var digest: Swift.String
+            /// The runtime's script; absent when the app already has this digest.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneRuntime/source`.
+            public var source: Swift.String?
+            /// Creates a new `PhoneRuntime`.
+            ///
+            /// - Parameters:
+            ///   - runtimeVersion: The version of phone calls the runtime speaks.
+            ///   - digest: The runtime's SHA-256, hex.
+            ///   - source: The runtime's script; absent when the app already has this digest.
+            public init(
+                runtimeVersion: Swift.Int32,
+                digest: Swift.String,
+                source: Swift.String? = nil
+            ) {
+                self.runtimeVersion = runtimeVersion
+                self.digest = digest
+                self.source = source
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runtimeVersion
+                case digest
+                case source
             }
         }
         /// A `KnownSaleStatus`, or a status added after this client was built. Clients show an

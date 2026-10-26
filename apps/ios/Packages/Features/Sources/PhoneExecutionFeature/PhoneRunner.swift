@@ -154,6 +154,8 @@ public final class PhoneRunner: PhoneWorkTrigger {
         // Only a claim that found nothing says when to look next.
         nextLook = nil
         guard isSignedIn() else { return }
+        // The scripts the server runs its answers through, when they changed since the last run.
+        await runtime.refresh()
         let id = installationID()
         let version: Int
         do {

@@ -18,7 +18,14 @@ import { withSkuLine } from '../payload.ts';
 import { weightLabel } from '../shipping.ts';
 import { sizeOptionMatches } from '../sizes.ts';
 import { itemIdFromPath, MERCARI_PATHS } from '../site.ts';
-import { absolute, changed, expectElement, priceField, type MercariSite } from './common.ts';
+import {
+  absolute,
+  awaitElement,
+  changed,
+  expectElement,
+  priceField,
+  type MercariSite,
+} from './common.ts';
 import { ITEM_PAGE } from './item-page.ts';
 
 export const LISTING_FORM = {
@@ -45,7 +52,8 @@ const FORM = 'listing form';
 /** Opens the sell page's empty form. */
 export async function openSellForm(page: PageDriver, site: MercariSite): Promise<void> {
   await page.goto(absolute(site, MERCARI_PATHS.sell));
-  await expectElement(page, LISTING_FORM.form, 'sell page', FORM);
+  // Drawn by the site's own scripts once the document is ready.
+  await awaitElement(page, LISTING_FORM.form, 'sell page', FORM);
 }
 
 /**

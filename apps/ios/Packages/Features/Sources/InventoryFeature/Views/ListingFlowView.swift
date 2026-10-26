@@ -1,4 +1,5 @@
 import DesignSystem
+import ListoraAPI
 import SwiftUI
 
 extension ListingFlowModel: Identifiable {}
@@ -115,6 +116,14 @@ struct ListingFlowView: View {
                     minorUnits: $model.priceCents,
                     hint: "What buyers pay on \(model.current?.name ?? "the marketplace").",
                 )
+                if let categories = model.categories {
+                    CategoryRow(
+                        marketplace: model.current?.name ?? "the marketplace",
+                        category: model.category,
+                        categories: categories,
+                        onChoose: model.chooseCategory,
+                    )
+                }
             }
             .padding(Spacing.md)
             .frame(maxWidth: Layout.readableWidth)
@@ -187,5 +196,79 @@ private struct ChoiceRow: View {
         // A toggle reads every text in its label, the tile's letter too; name what matters.
         .accessibilityLabel("\(choice.name), \(choice.detail)")
         .accessibilityIdentifier("listing.choose.\(choice.id)")
+    }
+}
+
+/// The listing's category on the marketplace: the one Listora maps the item to, or the seller's
+/// pick from that marketplace's own categories when Listora can't tell (a unisex item).
+private struct CategoryRow: View {
+    let marketplace: String
+    let category: Components.Schemas.MarketplaceCategory?
+    let categories: Components.Schemas.MarketplaceCategories
+    let onChoose: (Components.Schemas.MarketplaceCategory) -> Void
+
+    var body: some View {
+        NavigationLink {
+            CategoryPicker(marketplace: marketplace, categories: categories, onChoose: onChoose)
+        } label: {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("\(marketplace) category")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                Text(category.map { $0.path.joined(separator: " > ") } ?? "Choose one")
+                    .font(Typography.body)
+                    .foregroundStyle(category == nil ? Palette.danger : Palette.textPrimary)
+                    .multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Spacing.sm)
+            .background(Palette.surface.color, in: RoundedRectangle(cornerRadius: Radius.medium))
+        }
+        .accessibilityIdentifier("listing.category")
+    }
+}
+
+/// The marketplace's categories to pick from, the likely ones first, with a search.
+private struct CategoryPicker: View {
+    let marketplace: String
+    let categories: Components.Schemas.MarketplaceCategories
+    let onChoose: (Components.Schemas.MarketplaceCategory) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    var body: some View {
+        List {
+            if query.isEmpty, !categories.likely.isEmpty {
+                Section("Likely") {
+                    ForEach(categories.likely, id: \.ref) { row($0) }
+                }
+            }
+            Section(query.isEmpty ? "All \(marketplace) categories" : "Matches") {
+                ForEach(matching, id: \.ref) { row($0) }
+            }
+        }
+        .searchable(text: $query, prompt: "Search \(marketplace) categories")
+        .navigationTitle("\(marketplace) category")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var matching: [Components.Schemas.MarketplaceCategory] {
+        let words = query.lowercased().split(separator: " ").map(String.init)
+        guard !words.isEmpty else { return categories.choices }
+        return categories.choices.filter { choice in
+            let text = choice.path.joined(separator: " ").lowercased()
+            return words.allSatisfy { text.contains($0) }
+        }
+    }
+
+    private func row(_ choice: Components.Schemas.MarketplaceCategory) -> some View {
+        Button {
+            onChoose(choice)
+            dismiss()
+        } label: {
+            Text(choice.path.joined(separator: " > "))
+                .foregroundStyle(Palette.textPrimary)
+        }
+        .accessibilityIdentifier("listing.category.\(choice.ref)")
     }
 }

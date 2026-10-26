@@ -29,6 +29,9 @@ final class ListingFlowModel {
 
     /// eBay's title limit (`EBAY_LIMITS.title` on the server).
     static let ebayTitleLimit = 80
+    /// The marketplaces whose listing names one of their categories, which Listora maps or the
+    /// seller picks.
+    static let categorized: Set<String> = ["poshmark", "mercari", "depop"]
 
     private(set) var step: Step = .choose
     private(set) var choices: [Choice] = []
@@ -62,6 +65,11 @@ final class ListingFlowModel {
     /// Why the listing can't be sent as it is, from the server or this screen; it clears once the
     /// seller edits the listing.
     private(set) var problem: String?
+    /// The categories of the marketplace on screen, for Poshmark, Mercari, and Depop: the one
+    /// Listora maps the item to, or none, and then the seller picks (`chooseCategory`).
+    private(set) var categories: Components.Schemas.MarketplaceCategories?
+    /// What the seller picked, by marketplace (a `variant.categoryRef`).
+    private var chosenCategories: [String: Components.Schemas.MarketplaceCategory] = [:]
     private(set) var isPublishing = false
     private(set) var isPreparing = true
     /// The marketplaces being reviewed, in picker order, and the one on screen.
@@ -142,10 +150,31 @@ final class ListingFlowModel {
         title.utf16.count
     }
 
+    /// The category the listing goes in on the marketplace on screen: the seller's pick, else
+    /// the one Listora maps the item to; `nil` while there is neither.
+    var category: Components.Schemas.MarketplaceCategory? {
+        guard let marketplace = current?.id else { return nil }
+        return chosenCategories[marketplace] ?? categories?.suggested
+    }
+
+    /// Whether the seller has to pick the category before this marketplace can take it.
+    var needsCategory: Bool {
+        categories != nil && category == nil
+    }
+
+    func chooseCategory(_ choice: Components.Schemas.MarketplaceCategory) {
+        guard let marketplace = current?.id else { return }
+        chosenCategories[marketplace] = choice
+        problem = nil
+    }
+
     /// What this screen already knows the marketplace would refuse; the server checks again.
     var localProblem: String? {
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "Add a title."
+        }
+        if needsCategory {
+            return "Choose a \(current?.name ?? "marketplace") category."
         }
         if let titleLimit, titleCount > titleLimit {
             return "The title is \(titleCount) characters; \(current?.name ?? "the marketplace") allows \(titleLimit)."
@@ -229,6 +258,7 @@ final class ListingFlowModel {
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: description,
             price: Money(amountCents: Int64(priceCents ?? 0), currency: .usd),
+            categoryRef: current.flatMap { chosenCategories[$0.id]?.ref },
             condition: item.details.condition,
         )
     }
@@ -264,6 +294,10 @@ final class ListingFlowModel {
     private func fillCopy() async {
         guard let marketplace = current?.id else { return }
         problem = nil
+        categories = nil
+        if Self.categorized.contains(marketplace) {
+            categories = try? await service.marketplaceCategories(itemID: item.id, marketplace: marketplace)
+        }
         if let draftID = draftIDs[marketplace],
            let variant = item.listings.first(where: { $0.id == draftID })?.variant
         {

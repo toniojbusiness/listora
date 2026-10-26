@@ -306,6 +306,10 @@ actor FakeWorkService: PhoneWorkService {
         registrations.append(device)
     }
 
+    func runtime(have _: String?) async throws(APIFailure) -> RemoteRuntime {
+        RemoteRuntime(digest: "bundled", source: nil)
+    }
+
     func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneClaim {
         #expect(installationID == "install-1")
         #expect(runtimeVersion == 1)

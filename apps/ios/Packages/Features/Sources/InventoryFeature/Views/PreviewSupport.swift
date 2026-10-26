@@ -46,6 +46,13 @@ private struct EmptyInventoryService: InventoryService {
         throw .networkUnavailable
     }
 
+    func marketplaceCategories(
+        itemID _: String,
+        marketplace _: String,
+    ) async throws(APIFailure) -> Components.Schemas.MarketplaceCategories {
+        Components.Schemas.MarketplaceCategories(likely: [], choices: [])
+    }
+
     func replaceDraft(listingID _: String, variant _: ListingVariant) async throws(APIFailure) -> Listing {
         throw .networkUnavailable
     }

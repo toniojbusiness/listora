@@ -1031,6 +1031,32 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/items/{itemId}/marketplace-categories/{marketplace}:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+      - $ref: '#/components/parameters/MarketplacePath'
+    get:
+      tags:
+        - listings
+      operationId: getItemMarketplaceCategories
+      summary: The categories an item can be listed in on an automated marketplace
+      description: |
+        For Poshmark, Mercari, and Depop: the category Listora maps the item to (`suggested`),
+        or none when the seller has to pick (a unisex or kids' item, or one Listora can't place),
+        the likely ones first, and every category in that marketplace's own names. A listing
+        names the seller's pick in `variant.categoryRef`, as `ref` gives it.
+        `404` for another marketplace.
+      responses:
+        '200':
+          description: The item's categories on the marketplace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketplaceCategories'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/listing-imports:
     post:
       tags:
@@ -2366,6 +2392,33 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/phone-runtime:
+    get:
+      tags:
+        - phone
+      operationId: getPhoneRuntime
+      summary: Get the phone runtime the server runs its phone work with
+      description: |
+        The phone runtime (`listoraPhone`, built from the server's own automation code), so the
+        app runs exactly the marketplace scripts the server replays its answers through, and a
+        fix to a marketplace's pages reaches the phone with the server, without an app update.
+        With `have` naming the digest the app already runs, the answer leaves out `source`.
+      parameters:
+        - name: have
+          in: query
+          description: The digest of the runtime the app already runs.
+          schema:
+            type: string
+            maxLength: 128
+      responses:
+        '200':
+          description: The runtime, or only its digest when the app has it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhoneRuntime'
         default:
           $ref: '#/components/responses/DefaultError'
   /v1/phone-runs/{runId}/calls/{index}:
@@ -4697,6 +4750,39 @@ components:
           $ref: '#/components/schemas/Listing'
         operation:
           $ref: '#/components/schemas/Operation'
+    MarketplaceCategory:
+      type: object
+      required:
+        - ref
+        - path
+      properties:
+        ref:
+          type: string
+          maxLength: 64
+          description: What `variant.categoryRef` takes for this category.
+        path:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+          maxItems: 4
+          description: The marketplace's own names, top level first.
+    MarketplaceCategories:
+      type: object
+      required:
+        - likely
+        - choices
+      properties:
+        suggested:
+          $ref: '#/components/schemas/MarketplaceCategory'
+        likely:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketplaceCategory'
+        choices:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketplaceCategory'
     OperationKind:
       description: |
         A `KnownOperationKind`, or a kind added after this client was built. Clients describe
@@ -5709,6 +5795,25 @@ components:
           type: object
           additionalProperties: true
           description: What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged.
+    PhoneRuntime:
+      type: object
+      required:
+        - runtimeVersion
+        - digest
+      properties:
+        runtimeVersion:
+          type: integer
+          format: int32
+          minimum: 1
+          description: The version of phone calls the runtime speaks.
+        digest:
+          type: string
+          maxLength: 128
+          description: The runtime's SHA-256, hex.
+        source:
+          type: string
+          maxLength: 10000000
+          description: The runtime's script; absent when the app already has this digest.
     SaleStatus:
       description: |
         A `KnownSaleStatus`, or a status added after this client was built. Clients show an

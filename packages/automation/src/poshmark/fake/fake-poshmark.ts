@@ -832,9 +832,9 @@ function listingForm(
   const errorList = errors
     .map((error) => `<p class="form__error-message">${escape(error)}</p>`)
     .join('');
-  return `<form data-test="listing-form" method="post" action="${action}" enctype="multipart/form-data">
+  return `<form id="listing-editor" method="post" action="${action}" enctype="multipart/form-data">
 ${errorList}
-${editing ? '' : '<section><h2>Photos</h2><input type="file" data-test="photo-input" name="photos" multiple accept="image/jpeg"></section>'}
+${editing ? '' : '<section><h2>Photos</h2><input type="file" id="img-file-input" name="photos" aria-label="img-file-input" multiple accept="image/jpeg"></section>'}
 <section><h2>Listing details</h2>
 <input data-vv-name="title" name="title" placeholder="What are you selling? (required)" value="${value(values?.title)}">
 <textarea data-vv-name="description" name="description" placeholder="Describe it! (required)">${value(values?.description)}</textarea>
@@ -858,7 +858,7 @@ ${editing ? '' : '<section><h2>Photos</h2><input type="file" data-test="photo-in
 </section>
 <section><h2>Pricing</h2>
 <input data-vv-name="originalPrice" name="originalPrice" placeholder="Original Price" value="${value(values?.originalPrice)}">
-<input data-vv-name="listingPrice" name="listingPrice" placeholder="Listing Price (required)" value="${value(values?.listingPrice)}">
+<input data-vv-name="inputPrice" name="listingPrice" type="number" aria-label="form__text" value="${value(values?.listingPrice)}">
 </section>
 <section><h2>Seller private info</h2>
 <input data-vv-name="sku" name="sku" placeholder="SKU" value="${value(values?.sku)}">
@@ -873,7 +873,7 @@ ${editing ? '' : '<section><h2>Photos</h2><input type="file" data-test="photo-in
     values?.availability ?? 'for_sale',
   )}</div>
 </details>
-${editing ? '<button type="submit" data-et-name="update">Update</button>' : '<button type="submit" data-et-name="list_item">List</button>'}
+${editing ? '<button type="submit" data-et-name="update">Update</button>' : '<button type="button" data-et-name="next">Next</button><section id="share-step" hidden><h2>Share</h2><button type="submit" data-et-name="list">List</button></section>'}
 </form>
 <script type="application/json" id="catalog-data">${json(catalogData())}</script>
 <script type="application/json" id="selection-data">${json(selection)}</script>
@@ -884,7 +884,10 @@ ${editing ? '<button type="submit" data-et-name="update">Update</button>' : '<bu
 const PICKER_SCRIPT = `(() => {
   const catalog = JSON.parse(document.getElementById('catalog-data').textContent);
   const state = JSON.parse(document.getElementById('selection-data').textContent);
-  const form = document.querySelector('form[data-test="listing-form"]');
+  const form = document.getElementById('listing-editor');
+  const next = form.querySelector('button[data-et-name="next"]');
+  // As on Poshmark: Next goes on to the share step, whose List publishes the listing.
+  if (next) next.addEventListener('click', () => { form.querySelector('#share-step').hidden = false; });
   const list = (name) => form.querySelector('[data-test="' + name + '"]');
   const radios = (container, name, values, selected) => {
     container.replaceChildren(...values.map((value) => {

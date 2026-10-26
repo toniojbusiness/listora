@@ -47,6 +47,8 @@ public protocol PhoneWorkService: Sendable {
     func register(installationID: String, _ device: DeviceRegistration) async throws(APIFailure)
     /// Claims the next work waiting for this device, or says when to ask again.
     func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneClaim
+    /// The runtime the server runs with (`have`: the digest the app already runs).
+    func runtime(have: String?) async throws(APIFailure) -> RemoteRuntime
     /// Answers the run's call; the run's next call, or `nil` once it is over.
     func answer(
         runID: String,
@@ -103,6 +105,19 @@ public struct APIPhoneWorkService: PhoneWorkService {
             throw APIFailure(statusCode: 404, response: response)
         case let .conflict(response):
             throw APIFailure(statusCode: 409, response: response)
+        case let .default(status, response):
+            throw APIFailure(statusCode: status, response: response)
+        }
+    }
+
+    public func runtime(have: String?) async throws(APIFailure) -> RemoteRuntime {
+        let output = try await call {
+            try await api.client.getPhoneRuntime(query: .init(have: have))
+        }
+        switch output {
+        case let .ok(response):
+            let body = try decode { try response.body.json }
+            return RemoteRuntime(digest: body.digest, source: body.source)
         case let .default(status, response):
             throw APIFailure(statusCode: status, response: response)
         }

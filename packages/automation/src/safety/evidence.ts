@@ -27,6 +27,16 @@ export interface PageEvidence {
   requests: string[];
   /** Data scripts the page keeps (`#__NEXT_DATA__ application/json`). */
   scripts: string[];
+  /**
+   * The page's form controls and buttons, by what names them (`input[file] #photos`,
+   * `textarea data-vv-name:description`, `button testid:Submit`), never their values.
+   */
+  controls: string[];
+  /**
+   * The choices and labels a form offers (a category list, conditions, a field's label): the
+   * site's own words. Any with a digit or an `@` are left out, so no address, price, or id is.
+   */
+  choices: string[];
   /** The page's own data: `__INITIAL_STATE__.auth.isUserLoggedIn: true`. */
   data: string[];
 }
@@ -71,7 +81,19 @@ export const EVIDENCE_SCRIPT = `(() => {
   const scripts = [...document.querySelectorAll('script[id], script[type]:not([src])')]
     .map((script) => ({ id: script.id || null, type: script.type || null }))
     .slice(0, 40);
-  return { path: location.pathname, title: document.title, testIds, links, requests, scripts };
+  const named = ['data-testid', 'data-test', 'data-vv-name', 'data-et-name', 'name', 'id', 'role', 'aria-label', 'placeholder'];
+  const controls = [...document.querySelectorAll('input, textarea, select, button, [role="button"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"], [contenteditable="true"]')]
+    .slice(0, 120)
+    .map((element) => ({
+      tag: element.tagName.toLowerCase(),
+      type: element.getAttribute('type'),
+      names: named.flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
+      text: element.tagName === 'BUTTON' || element.getAttribute('role') === 'button' ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : null,
+    }));
+  const choices = [...new Set([...document.querySelectorAll('option, [role="option"], [role="menuitem"], [role="radio"], label, legend')]
+    .map((element) => (element.textContent || '').replace(/\\s+/g, ' ').trim())
+    .filter((text) => text !== '' && text.length <= 40 && !/[0-9@]/.test(text)))].slice(0, 150);
+  return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices };
 })()`;
 
 /** Words of paths, titles, and labels that say what a page is, never whose it is. */
@@ -129,7 +151,29 @@ const rawSchema = z.object({
   ),
   requests: z.array(z.string()),
   scripts: z.array(z.object({ id: z.string().nullable(), type: z.string().nullable() })),
+  controls: z
+    .array(
+      z.object({
+        tag: z.string(),
+        type: z.string().nullable(),
+        names: z.array(z.tuple([z.string(), z.string()])),
+        text: z.string().nullable(),
+      }),
+    )
+    .default([]),
+  choices: z.array(z.string()).default([]),
 });
+
+/** Attributes that name a control as the site's code does, kept as they are (digits reduced). */
+const CODE_NAMES = new Set([
+  'data-testid',
+  'data-test',
+  'data-vv-name',
+  'data-et-name',
+  'name',
+  'id',
+  'role',
+]);
 
 /**
  * The evidence of what `EVIDENCE_SCRIPT` read and of the page's data globals (`data`, by name),
@@ -190,6 +234,26 @@ export function redactEvidence(
       .flatMap(([name, value]) => dataSkeleton(name, value))
       .slice(0, MAX_DATA_LINES)
       .map(clean),
+    controls: distinct(
+      read.controls.map((control) =>
+        clean(
+          [
+            control.type === null ? control.tag : `${control.tag}[${reducedId(control.type)}]`,
+            ...control.names.map(([name, value]) =>
+              CODE_NAMES.has(name)
+                ? `${name}:${reducedId(value)}`
+                : `${name}:${reducedWords(value)}`,
+            ),
+            control.text === null || control.text === ''
+              ? null
+              : `text:${reducedWords(control.text)}`,
+          ]
+            .filter((part) => part !== null)
+            .join(' '),
+        ),
+      ),
+    ),
+    choices: distinct(read.choices.filter((text) => !/[0-9@]/.test(text)).map(clean)),
   };
 }
 
@@ -289,4 +353,6 @@ export const pageEvidenceSchema = z.object({
   requests: z.array(z.string().max(MAX_ITEM_LENGTH)).max(121),
   scripts: z.array(z.string().max(MAX_ITEM_LENGTH)).max(40),
   data: z.array(z.string().max(MAX_ITEM_LENGTH)).max(MAX_DATA_LINES),
+  controls: z.array(z.string().max(MAX_ITEM_LENGTH)).max(120).default([]),
+  choices: z.array(z.string().max(MAX_ITEM_LENGTH)).max(150).default([]),
 }) satisfies z.ZodType<PageEvidence>;

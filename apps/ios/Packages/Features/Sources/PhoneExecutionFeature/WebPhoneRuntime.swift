@@ -13,6 +13,25 @@ public protocol PhoneRuntime: AnyObject {
     /// Runs the call (`PhoneCall.input`, JSON) in the marketplace's session on this phone and
     /// returns what the runtime answered (`PhoneCallOutput`, JSON).
     func run(_ input: Data, marketplace: String) async throws -> Data
+    /// Takes the runtime the server runs with when it changed, so the phone runs the scripts the
+    /// server replays its answers through; call it between runs.
+    func refresh() async
+}
+
+extension PhoneRuntime {
+    public func refresh() async {}
+}
+
+/// The runtime as the server hands it out (`getPhoneRuntime`): its digest, and its script when
+/// it is not the one the app already runs.
+public struct RemoteRuntime: Sendable {
+    public let digest: String
+    public let source: String?
+
+    public init(digest: String, source: String?) {
+        self.digest = digest
+        self.source = source
+    }
 }
 
 /// What a check the run stopped at needs from the seller: the page, shown in a visible in-app
@@ -49,15 +68,31 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
     private var controllerLoad: ControllerLoad?
     private var loaded: Task<Int, any Error>?
     private var page: MarketplacePage?
+    /// The server's runtime, once it handed one out; the app's own copy runs until then.
+    private var served: (digest: String, source: String)?
+    private let fetchRuntime: @Sendable (_ have: String?) async -> RemoteRuntime?
 
     public init(
         sessions: any MarketplaceSessionStore,
         handOff: (any ChallengeHandOff)?,
         notifier: CheckNeededNotifier = CheckNeededNotifier(),
+        fetchRuntime: @escaping @Sendable (_ have: String?) async -> RemoteRuntime? = { _ in nil },
     ) {
         self.sessions = sessions
         self.handOff = handOff
         self.notifier = notifier
+        self.fetchRuntime = fetchRuntime
+    }
+
+    public func refresh() async {
+        guard let remote = await fetchRuntime(served?.digest), remote.digest != served?.digest,
+              let source = remote.source
+        else { return }
+        served = (remote.digest, source)
+        // The next run loads it into a new controller page.
+        controller = nil
+        controllerLoad = nil
+        loaded = nil
     }
 
     public func runtimeVersion() async throws -> Int {
@@ -99,10 +134,9 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         if let loaded {
             return try await loaded.value
         }
+        let served = served?.source
         let task = Task<Int, any Error> { @MainActor in
-            guard let url = Bundle.module.url(forResource: "phone-runtime", withExtension: "js"),
-                  let source = try? String(contentsOf: url, encoding: .utf8)
-            else {
+            guard let source = served ?? Self.bundledSource() else {
                 throw PhoneRuntimeError.bundleMissing
             }
             let configuration = WKWebViewConfiguration()
@@ -136,6 +170,12 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
             loaded = nil
             throw error
         }
+    }
+
+    /// The runtime the app was built with, which runs until the server hands out its own.
+    private static func bundledSource() -> String? {
+        guard let url = Bundle.module.url(forResource: "phone-runtime", withExtension: "js") else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
     }
 
     /// One message from the runtime; the reply is its answer, or the failure's message.

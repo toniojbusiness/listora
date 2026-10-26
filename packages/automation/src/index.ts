@@ -179,3 +179,9 @@ export {
 export type { SessionCheckJobPayload, SessionCheckTarget } from './session-checks/schedule.ts';
 export { AutomationConfigError, loadAutomationSettings } from './settings.ts';
 export type { AutomationSettings, SaleCheckSettings } from './settings.ts';
+export { readPhoneBundle, type PhoneBundle } from './phone/bundle-file.ts';
+export {
+  marketplaceCategories,
+  type CategoryChoice,
+  type MarketplaceCategories,
+} from './categories.ts';

@@ -3,16 +3,20 @@
  * change (the same form, filled in). Every selector the adapter uses on it is here, so a change
  * to Poshmark's form is fixed in this one file.
  *
- * The form's markup is modeled on Poshmark's web form: inputs named by their validation names
- * (`data-vv-name`), pickers that open on a click and list choices by their display text
- * (catalog, size, condition, availability), and buttons named by their event names
- * (`data-et-name`). Listora reads Poshmark's public pages only; the form itself is behind the
- * login, so its markup is confirmed on the first run against a real session, and the fake
- * Poshmark (fake/) mirrors exactly what this file expects. A selector that no longer matches
- * ends the step as `element_missing` before anything is submitted, so the step goes to the user.
+ * Read in Poshmark's own public listing-editor code (2026-10-26): the form's text inputs are
+ * named by their validation names (`data-vv-name`: `title`, `description`, `originalPrice`,
+ * `inputPrice` for the listing price, `sku`), the photos input is `#img-file-input`, and a new
+ * listing is published in two steps, Next (`data-et-name="next"`) and then List on the share
+ * step (`data-et-name="list"`), while a change is saved with Update (`data-et-name="update"`).
+ * Poshmark's validation messages are `.form__error-message`. The pickers (catalog, size,
+ * condition, availability) and the brand field are Listora's model still, confirmed on a real
+ * session from the evidence a stopped run logs. A selector that no longer matches ends the step
+ * as `element_missing` before anything is submitted, so the step goes to the user. The fake
+ * Poshmark (fake/) mirrors exactly what this file expects.
  *
  * Only `submit` changes anything: filling the form is not saved until it is submitted.
  */
+import { PageChangedError } from '../../runner/errors.ts';
 import type { PageDriver, UploadFile } from '../../runner/types.ts';
 import type { PoshmarkCatalog } from '../catalog.ts';
 import type { PoshmarkCondition } from '../conditions.ts';
@@ -28,19 +32,23 @@ const AVAILABILITY_LABELS = {
 } as const satisfies Record<Availability, string>;
 
 export const FORM_SELECTORS = {
-  form: 'form[data-test="listing-form"]',
-  photos: 'input[type="file"][data-test="photo-input"]',
+  /** The form is there once its title field is: Poshmark's scripts draw it. */
+  form: 'input[data-vv-name="title"]',
+  photos: 'input#img-file-input[type="file"]',
   title: 'input[data-vv-name="title"]',
   description: 'textarea[data-vv-name="description"]',
   brand: 'input[data-vv-name="brand"]',
   originalPrice: 'input[data-vv-name="originalPrice"]',
-  listingPrice: 'input[data-vv-name="listingPrice"]',
+  /** The listing price (the suggested-price dialog's own field is `inputMinimumPrice`). */
+  listingPrice: 'input[data-vv-name="inputPrice"]:not([name="inputMinimumPrice"])',
   sku: 'input[data-vv-name="sku"]',
   /** A picker: `[data-test="<name>"]`, opened by its summary, with labeled choices. */
   picker: (name: Picker) => `details[data-test="${name}"]`,
   choice: (list: string, text: string) => `[data-test="${list}"] label:text-is("${quote(text)}")`,
-  /** Publishes a new listing. */
-  list: 'button[data-et-name="list_item"]',
+  /** Goes on from a new listing's form to its share step. */
+  next: 'button[data-et-name="next"]',
+  /** Publishes a new listing, on the share step. */
+  list: 'button[data-et-name="list"]',
   /** Saves a change to a listing. */
   update: 'button[data-et-name="update"]',
   /** Poshmark's own validation messages on the form. */
@@ -49,11 +57,21 @@ export const FORM_SELECTORS = {
 
 type Picker = 'catalog' | 'size' | 'condition' | 'availability';
 
-/** Opens a form and waits until it is there. */
+/**
+ * Opens a form and waits until it is there; `false` for a listing Poshmark has no form for (a
+ * 404). A form that never comes is a page Listora no longer understands (`PageChangedError`).
+ */
 export async function openForm(page: PageDriver, url: string): Promise<boolean> {
   await page.goto(url);
   if (page.status() === 404) return false;
-  return page.exists(FORM_SELECTORS.form);
+  try {
+    await page.waitFor(FORM_SELECTORS.form, 'attached');
+  } catch {
+    if (!(await page.exists(FORM_SELECTORS.form))) {
+      throw new PageChangedError("Poshmark's listing form has no title field");
+    }
+  }
+  return true;
 }
 
 /** Adds the photos in posting order; the first is the cover. */
@@ -116,10 +134,25 @@ export async function submit(
   page: PageDriver,
   button: 'list' | 'update',
 ): Promise<{ type: 'saved'; path: string } | { type: 'refused'; message: string }> {
+  if (button === 'list') {
+    // A new listing's Next checks the form and shows the share step, whose List publishes it.
+    await page.click(FORM_SELECTORS.next);
+    const refused = await refusal(page);
+    if (refused !== null) return refused;
+  }
   await page.click(FORM_SELECTORS[button]);
+  return (await refusal(page)) ?? saved(page);
+}
+
+/** Poshmark's validation messages on the form, when it shows any. */
+async function refusal(page: PageDriver): Promise<{ type: 'refused'; message: string } | null> {
   const messages = await page.texts(FORM_SELECTORS.errors);
   const message = messages.filter((text) => text !== '').join(' ');
-  if (message !== '') return { type: 'refused', message };
+  return message === '' ? null : { type: 'refused', message };
+}
+
+/** Waits for the listing's page, where Poshmark goes once it saved the listing. */
+async function saved(page: PageDriver): Promise<{ type: 'saved'; path: string }> {
   await page.waitForPath(/^\/listing\//);
   return { type: 'saved', path: new URL(page.url()).pathname };
 }

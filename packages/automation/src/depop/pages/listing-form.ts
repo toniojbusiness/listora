@@ -20,7 +20,7 @@ import type { PageDriver, UploadFile } from '../../runner/types.ts';
 import { depopListingText, depopPriceField, type DepopAutomationPayload } from '../payload.ts';
 import { DEPOP_PATHS, slugFromPath } from '../site.ts';
 import { sizeOptionMatches } from '../sizes.ts';
-import { absolute, changed, expectElement, type DepopSite } from './common.ts';
+import { absolute, awaitElement, changed, expectElement, type DepopSite } from './common.ts';
 import { PRODUCT_PAGE } from './product-page.ts';
 
 export const LISTING_FORM = {
@@ -44,7 +44,8 @@ const FORM = 'listing form';
 /** Opens the sell page's empty form. */
 export async function openSellForm(page: PageDriver, site: DepopSite): Promise<void> {
   await page.goto(absolute(site, DEPOP_PATHS.sell));
-  await expectElement(page, LISTING_FORM.form, 'sell page', FORM);
+  // Drawn by the site's own scripts once the document is ready.
+  await awaitElement(page, LISTING_FORM.form, 'sell page', FORM);
 }
 
 /**

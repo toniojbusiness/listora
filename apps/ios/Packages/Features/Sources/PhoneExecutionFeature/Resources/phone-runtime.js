@@ -2454,6 +2454,114 @@
 		result.value = merged.data;
 		return result;
 	}
+	const $ZodTuple = /*@__PURE__*/ $constructor("$ZodTuple", (inst, def) => {
+		$ZodType.init(inst, def);
+		const items = def.items;
+		const memo = globalConfig.memoizer;
+		memo?.attach(inst);
+		inst._zod.parse = (payload, ctx) => {
+			const input = payload.value;
+			if (!Array.isArray(input)) {
+				payload.issues.push({
+					input,
+					inst,
+					expected: "tuple",
+					code: "invalid_type"
+				});
+				return payload;
+			}
+			payload.value = memo ? memo.alloc(inst, payload, [], ctx) : [];
+			const proms = [];
+			const optinStart = getTupleOptStart(items, "optin");
+			const optoutStart = getTupleOptStart(items, "optout");
+			if (!def.rest) {
+				if (input.length < optinStart) {
+					payload.issues.push({
+						code: "too_small",
+						minimum: optinStart,
+						inclusive: true,
+						input,
+						inst,
+						origin: "array"
+					});
+					return payload;
+				}
+				if (input.length > items.length) payload.issues.push({
+					code: "too_big",
+					maximum: items.length,
+					inclusive: true,
+					input,
+					inst,
+					origin: "array"
+				});
+			}
+			const itemResults = new Array(items.length);
+			const abortEarly = def.rest ? ctx?.abortEarly : void 0;
+			let itemAborted = false;
+			for (let i = 0; i < items.length; i++) {
+				const r = items[i]._zod.run({
+					value: input[i],
+					issues: []
+				}, ctx);
+				if (r instanceof Promise) proms.push(r.then((rr) => {
+					itemResults[i] = rr;
+				}));
+				else {
+					itemResults[i] = r;
+					if (abortEarly && !itemAborted && r.issues.length) itemAborted = aborted(r);
+				}
+			}
+			if (def.rest && !itemAborted) {
+				let i = items.length - 1;
+				const rest = input.slice(items.length);
+				let seen = payload.issues.length;
+				for (const el of rest) {
+					if (abortEarly && payload.issues.length !== seen) {
+						if (aborted(payload, seen)) break;
+						seen = payload.issues.length;
+					}
+					i++;
+					const result = def.rest._zod.run({
+						value: el,
+						issues: []
+					}, ctx);
+					if (result instanceof Promise) proms.push(result.then((r) => handleTupleResult(r, payload, i)));
+					else handleTupleResult(result, payload, i);
+				}
+			}
+			if (proms.length) return Promise.all(proms).then(() => handleTupleResults(itemResults, payload, items, input, optoutStart));
+			return handleTupleResults(itemResults, payload, items, input, optoutStart);
+		};
+	});
+	function getTupleOptStart(items, key) {
+		for (let i = items.length - 1; i >= 0; i--) if (!(key === "optin" ? items[i]._zod.optin !== void 0 : items[i]._zod.optout === "optional")) return i + 1;
+		return 0;
+	}
+	function handleTupleResult(result, final, index) {
+		if (result.issues.length) final.issues.push(...prefixIssues(index, result.issues));
+		final.value[index] = result.value;
+	}
+	function handleTupleResults(itemResults, final, items, input, optoutStart) {
+		for (let i = 0; i < items.length; i++) {
+			const r = itemResults[i];
+			const isPresent = i < input.length;
+			if (!isPresent && i >= optoutStart && items[i]._zod.optin === "optional") {
+				final.value.length = i;
+				break;
+			}
+			if (r.issues.length) {
+				if (!isPresent && i >= optoutStart) {
+					final.value.length = i;
+					break;
+				}
+				final.issues.push(...prefixIssues(i, r.issues));
+			}
+			final.value[i] = r.value;
+		}
+		for (let i = final.value.length - 1; i >= input.length; i--) if (items[i]._zod.optout === "optional" && final.value[i] === void 0) final.value.length = i;
+		else break;
+		return final;
+	}
 	const $ZodEnum = /*@__PURE__*/ $constructor("$ZodEnum", (inst, def) => {
 		$ZodType.init(inst, def);
 		const values = getEnumValues(def.entries);
@@ -4298,6 +4406,58 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		json.allOf = allOf;
 		ctx.intersections.push(allOf);
 	};
+	const tupleProcessor = (schema, ctx, _json, params) => {
+		const json = _json;
+		const def = schema._zod.def;
+		json.type = "array";
+		const prefixPath = ctx.target === "draft-2020-12" ? "prefixItems" : "items";
+		const restPath = ctx.target === "draft-2020-12" ? "items" : ctx.target === "openapi-3.0" ? "items" : "additionalItems";
+		const prefixItems = def.items.map((x, i) => processSchema(x, ctx, {
+			...params,
+			path: [
+				...params.path,
+				prefixPath,
+				i
+			]
+		}));
+		const rest = def.rest ? processSchema(def.rest, ctx, {
+			...params,
+			path: [
+				...params.path,
+				restPath,
+				...ctx.target === "openapi-3.0" ? [def.items.length] : []
+			]
+		}) : null;
+		let minItems = def.items.length;
+		while (minItems > 0) {
+			const item = def.items[minItems - 1];
+			if (!(ctx.io === "input" ? inputOptin(item) !== void 0 : item._zod.optout === "optional")) break;
+			minItems--;
+		}
+		const maxItems = def.items.length;
+		const isClosed = !def.rest;
+		if (ctx.target === "draft-2020-12") {
+			json.prefixItems = prefixItems;
+			if (isClosed) json.items = false;
+			else if (rest) json.items = rest;
+			if (minItems > 0) json.minItems = minItems;
+			if (isClosed) json.maxItems = maxItems;
+		} else if (ctx.target === "openapi-3.0") {
+			json.items = { anyOf: prefixItems };
+			if (rest) json.items.anyOf.push(rest);
+			if (minItems > 0) json.minItems = minItems;
+			if (isClosed) json.maxItems = maxItems;
+		} else {
+			json.items = prefixItems;
+			if (isClosed) json.additionalItems = false;
+			else if (rest) json.additionalItems = rest;
+			if (minItems > 0) json.minItems = minItems;
+			if (isClosed) json.maxItems = maxItems;
+		}
+		const { minimum, maximum } = aggregateChecks(schema);
+		if (typeof minimum === "number") json.minItems = minimum;
+		if (typeof maximum === "number") json.maxItems = maximum;
+	};
 	const nullableProcessor = (schema, ctx, json, params) => {
 		const def = schema._zod.def;
 		const inner = processSchema(def.innerType, ctx, params);
@@ -5073,6 +5233,40 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			right
 		});
 	}
+	const ZodTuple = /*@__PURE__*/ $constructor("ZodTuple", (inst, def) => {
+		_ensureDefaultMemoizer();
+		$ZodTuple.init(inst, def);
+		ZodType.init(inst, def);
+		inst._zod.processJSONSchema = (ctx, json, params) => tupleProcessor(inst, ctx, json, params);
+	}, {
+		rest(rest) {
+			return this.clone({
+				...this._zod.def,
+				rest
+			});
+		},
+		partial() {
+			const def = this._zod.def;
+			if (def.checks?.length) throw new Error(".partial() cannot be used on tuple schemas containing refinements");
+			return this.clone({
+				...def,
+				items: def.items.map((item) => new ZodOptional({
+					type: "optional",
+					innerType: item
+				}))
+			});
+		}
+	});
+	function tuple(items, _paramsOrRest, _params) {
+		const hasRest = _paramsOrRest instanceof $ZodType;
+		const params = hasRest ? _params : _paramsOrRest;
+		return new ZodTuple({
+			type: "tuple",
+			items,
+			rest: hasRest ? _paramsOrRest : null,
+			...normalizeParams(params)
+		});
+	}
 	const ZodEnum = /*@__PURE__*/ $constructor("ZodEnum", (inst, def) => {
 		$ZodEnum.init(inst, def);
 		ZodType.init(inst, def);
@@ -5636,7 +5830,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Opens the sell page's empty form. */
 	async function openSellForm$1(page, site) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.sell));
-		await expectElement$2(page, LISTING_FORM$2.form, "sell page", FORM$2);
+		await awaitElement$1(page, LISTING_FORM$2.form, "sell page", FORM$2);
 	}
 	/**
 	* Fills the whole form from the payload, with the SKU line in the text. `photos` are uploaded
@@ -7007,7 +7201,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Opens the sell page's empty form. */
 	async function openSellForm(page, site) {
 		await page.goto(absolute(site, MERCARI_PATHS.sell));
-		await expectElement(page, LISTING_FORM.form, "sell page", FORM);
+		await awaitElement(page, LISTING_FORM.form, "sell page", FORM);
 	}
 	/**
 	* Fills the whole form from the payload, ending the description with the SKU line. `photos`
@@ -7522,34 +7716,64 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/poshmark/pages/listing-form.ts
+/**
+	* Poshmark's listing form: `/create-listing` for a new listing and `/edit-listing/<id>` for a
+	* change (the same form, filled in). Every selector the adapter uses on it is here, so a change
+	* to Poshmark's form is fixed in this one file.
+	*
+	* Read in Poshmark's own public listing-editor code (2026-10-26): the form's text inputs are
+	* named by their validation names (`data-vv-name`: `title`, `description`, `originalPrice`,
+	* `inputPrice` for the listing price, `sku`), the photos input is `#img-file-input`, and a new
+	* listing is published in two steps, Next (`data-et-name="next"`) and then List on the share
+	* step (`data-et-name="list"`), while a change is saved with Update (`data-et-name="update"`).
+	* Poshmark's validation messages are `.form__error-message`. The pickers (catalog, size,
+	* condition, availability) and the brand field are Listora's model still, confirmed on a real
+	* session from the evidence a stopped run logs. A selector that no longer matches ends the step
+	* as `element_missing` before anything is submitted, so the step goes to the user. The fake
+	* Poshmark (fake/) mirrors exactly what this file expects.
+	*
+	* Only `submit` changes anything: filling the form is not saved until it is submitted.
+	*/
 	const AVAILABILITY_LABELS = {
 		for_sale: "For Sale",
 		not_for_sale: "Not For Sale"
 	};
 	const FORM_SELECTORS = {
-		form: "form[data-test=\"listing-form\"]",
-		photos: "input[type=\"file\"][data-test=\"photo-input\"]",
+		/** The form is there once its title field is: Poshmark's scripts draw it. */
+		form: "input[data-vv-name=\"title\"]",
+		photos: "input#img-file-input[type=\"file\"]",
 		title: "input[data-vv-name=\"title\"]",
 		description: "textarea[data-vv-name=\"description\"]",
 		brand: "input[data-vv-name=\"brand\"]",
 		originalPrice: "input[data-vv-name=\"originalPrice\"]",
-		listingPrice: "input[data-vv-name=\"listingPrice\"]",
+		/** The listing price (the suggested-price dialog's own field is `inputMinimumPrice`). */
+		listingPrice: "input[data-vv-name=\"inputPrice\"]:not([name=\"inputMinimumPrice\"])",
 		sku: "input[data-vv-name=\"sku\"]",
 		/** A picker: `[data-test="<name>"]`, opened by its summary, with labeled choices. */
 		picker: (name) => `details[data-test="${name}"]`,
 		choice: (list, text) => `[data-test="${list}"] label:text-is("${quote(text)}")`,
-		/** Publishes a new listing. */
-		list: "button[data-et-name=\"list_item\"]",
+		/** Goes on from a new listing's form to its share step. */
+		next: "button[data-et-name=\"next\"]",
+		/** Publishes a new listing, on the share step. */
+		list: "button[data-et-name=\"list\"]",
 		/** Saves a change to a listing. */
 		update: "button[data-et-name=\"update\"]",
 		/** Poshmark's own validation messages on the form. */
 		errors: ".form__error-message"
 	};
-	/** Opens a form and waits until it is there. */
+	/**
+	* Opens a form and waits until it is there; `false` for a listing Poshmark has no form for (a
+	* 404). A form that never comes is a page Listora no longer understands (`PageChangedError`).
+	*/
 	async function openForm(page, url) {
 		await page.goto(url);
 		if (page.status() === 404) return false;
-		return page.exists(FORM_SELECTORS.form);
+		try {
+			await page.waitFor(FORM_SELECTORS.form, "attached");
+		} catch {
+			if (!await page.exists(FORM_SELECTORS.form)) throw new PageChangedError("Poshmark's listing form has no title field");
+		}
+		return true;
 	}
 	/** Adds the photos in posting order; the first is the cover. */
 	async function addPhotos(page, photos) {
@@ -7593,12 +7817,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* listing's page, or the form again with Poshmark's validation messages.
 	*/
 	async function submit(page, button) {
+		if (button === "list") {
+			await page.click(FORM_SELECTORS.next);
+			const refused = await refusal(page);
+			if (refused !== null) return refused;
+		}
 		await page.click(FORM_SELECTORS[button]);
+		return await refusal(page) ?? saved(page);
+	}
+	/** Poshmark's validation messages on the form, when it shows any. */
+	async function refusal(page) {
 		const message = (await page.texts(FORM_SELECTORS.errors)).filter((text) => text !== "").join(" ");
-		if (message !== "") return {
+		return message === "" ? null : {
 			type: "refused",
 			message
 		};
+	}
+	/** Waits for the listing's page, where Poshmark goes once it saved the listing. */
+	async function saved(page) {
 		await page.waitForPath(/^\/listing\//);
 		return {
 			type: "saved",
@@ -7846,7 +8082,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					externalListingId: existing
 				};
 				const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-				if (!await step("open the listing form", { mutates: false }, (page) => openForm(page, site.createListing()))) throw new Error("Poshmark showed no listing form");
+				if (!await step("open the listing form", { mutates: false }, (page) => openForm(page, site.createListing()))) throw new PageChangedError("Poshmark's listing form isn't there");
 				await step("add the photos", { mutates: false }, (page) => addPhotos(page, files));
 				await fillListing(step, payload);
 				await step("set the SKU and availability", { mutates: false }, async (page) => {
@@ -8214,7 +8450,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   const scripts = [...document.querySelectorAll('script[id], script[type]:not([src])')]
     .map((script) => ({ id: script.id || null, type: script.type || null }))
     .slice(0, 40);
-  return { path: location.pathname, title: document.title, testIds, links, requests, scripts };
+  const named = ['data-testid', 'data-test', 'data-vv-name', 'data-et-name', 'name', 'id', 'role', 'aria-label', 'placeholder'];
+  const controls = [...document.querySelectorAll('input, textarea, select, button, [role="button"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"], [contenteditable="true"]')]
+    .slice(0, 120)
+    .map((element) => ({
+      tag: element.tagName.toLowerCase(),
+      type: element.getAttribute('type'),
+      names: named.flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
+      text: element.tagName === 'BUTTON' || element.getAttribute('role') === 'button' ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : null,
+    }));
+  const choices = [...new Set([...document.querySelectorAll('option, [role="option"], [role="menuitem"], [role="radio"], label, legend')]
+    .map((element) => (element.textContent || '').replace(/\\s+/g, ' ').trim())
+    .filter((text) => text !== '' && text.length <= 40 && !/[0-9@]/.test(text)))].slice(0, 150);
+  return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices };
 })()`;
 	/** Words of paths, titles, and labels that say what a page is, never whose it is. */
 	const STRUCTURAL_WORDS = new Set("a about access account accounts active and api apps are auth back brand brands bundles buy category categories closet closets config create create-listing current dashboard denied depop drafts ebay edit edit-listing error experiments feature features feed flags for found graphql health home hub human identity in in_progress inactive inbox info item items just likes list listing listings log log-in log-out login logout marketplace me mercari messages moment my my-page mypage new news not notifications of offers on order orders page poshmark product products profile profiles purchases rest robot sales search sell seller selling session sessions settings shipping shop sign sign-in sign-out signin signout sold something status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with wrong www you your address addresses balance bff buyer buyers complete completed count counts details draft feeds followers following gateway inquiries insights internal mobile overview payout payouts pending preferences presentation private public purchase receipt receipts referrals reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary transaction transactions verification verifications".split(" "));
@@ -8246,8 +8494,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		scripts: array(object({
 			id: string().nullable(),
 			type: string().nullable()
-		}))
+		})),
+		controls: array(object({
+			tag: string(),
+			type: string().nullable(),
+			names: array(tuple([string(), string()])),
+			text: string().nullable()
+		})).default([]),
+		choices: array(string()).default([])
 	});
+	/** Attributes that name a control as the site's code does, kept as they are (digits reduced). */
+	const CODE_NAMES = /* @__PURE__ */ new Set([
+		"data-testid",
+		"data-test",
+		"data-vv-name",
+		"data-et-name",
+		"name",
+		"id",
+		"role"
+	]);
 	/**
 	* The evidence of what `EVIDENCE_SCRIPT` read and of the page's data globals (`data`, by name),
 	* reduced to structure; `null` when the page answered something else.
@@ -8283,7 +8548,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			links: distinct(links),
 			requests: distinct(requests),
 			scripts: distinct(read.scripts.map((script) => clean([script.id === null ? null : `#${reducedId(script.id)}`, script.type].filter((part) => part !== null).join(" ")))),
-			data: Object.entries(data).flatMap(([name, value]) => dataSkeleton(name, value)).slice(0, MAX_DATA_LINES).map(clean)
+			data: Object.entries(data).flatMap(([name, value]) => dataSkeleton(name, value)).slice(0, MAX_DATA_LINES).map(clean),
+			controls: distinct(read.controls.map((control) => clean([
+				control.type === null ? control.tag : `${control.tag}[${reducedId(control.type)}]`,
+				...control.names.map(([name, value]) => CODE_NAMES.has(name) ? `${name}:${reducedId(value)}` : `${name}:${reducedWords(value)}`),
+				control.text === null || control.text === "" ? null : `text:${reducedWords(control.text)}`
+			].filter((part) => part !== null).join(" ")))),
+			choices: distinct(read.choices.filter((text) => !/[0-9@]/.test(text)).map(clean))
 		};
 	}
 	/** `/closet/janedoe/edit` → `/closet/<x>/edit`: only structural words stay. */
@@ -8364,7 +8635,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		links: array(string().max(MAX_ITEM_LENGTH)).max(40),
 		requests: array(string().max(MAX_ITEM_LENGTH)).max(121),
 		scripts: array(string().max(MAX_ITEM_LENGTH)).max(40),
-		data: array(string().max(MAX_ITEM_LENGTH)).max(MAX_DATA_LINES)
+		data: array(string().max(MAX_ITEM_LENGTH)).max(MAX_DATA_LINES),
+		controls: array(string().max(MAX_ITEM_LENGTH)).max(120).default([]),
+		choices: array(string().max(MAX_ITEM_LENGTH)).max(150).default([])
 	});
 
 // src/safety/redaction.ts
