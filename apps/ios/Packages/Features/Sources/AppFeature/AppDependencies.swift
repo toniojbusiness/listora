@@ -67,7 +67,7 @@ public struct AppDependencies {
         self.configuration = configuration
         self.version = version
         let accessGrantStorage = accessGrantStorage
-            ?? KeychainAccessGrantStorage.session(appGroup: configuration.appGroupIdentifier)
+            ?? KeychainAccessGrantStorage.session(accessGroup: configuration.sessionKeychainGroup)
         let interactionStorage = UserDefaultsInteractionStorage(defaults: defaults)
         if launchOptions.resetLocalData {
             Self.resetLocalData([dataDirectory, listingCopyDirectory], interactionStorage, defaults, accessGrantStorage)

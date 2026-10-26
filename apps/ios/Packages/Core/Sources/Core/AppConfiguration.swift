@@ -9,6 +9,7 @@ public struct AppConfiguration: Equatable, Sendable {
         public static let environment = "ListoraEnvironment"
         public static let apiBaseURL = "ListoraAPIBaseURL"
         public static let appGroup = "ListoraAppGroup"
+        public static let sessionKeychainGroup = "ListoraSessionKeychainGroup"
         public static let cognitoRegion = "ListoraCognitoRegion"
         public static let cognitoClientID = "ListoraCognitoClientID"
     }
@@ -17,6 +18,11 @@ public struct AppConfiguration: Equatable, Sendable {
     public let apiBaseURL: URL
     /// The App Group the app shares with its Share Extension (the session keychain item).
     public let appGroupIdentifier: String
+    /// The keychain access group of the signed-in session, which the app and its Share Extension
+    /// both read. The App Group in every committed configuration; a team-prefixed Keychain
+    /// Sharing group in personal device builds, whose free team has no App Groups
+    /// (`make ios-install-device`, apps/ios/README.md).
+    public let sessionKeychainGroup: String
     /// The Cognito user pool client the app signs in with outside Dev, or nil when the build has
     /// none (`COGNITO_CLIENT_ID` in the xcconfig is empty).
     public let cognito: CognitoConfiguration?
@@ -25,6 +31,7 @@ public struct AppConfiguration: Equatable, Sendable {
         environment: AppEnvironment,
         apiBaseURL: URL,
         appGroupIdentifier: String,
+        sessionKeychainGroup: String? = nil,
         cognito: CognitoConfiguration? = nil,
     ) throws(ConfigurationError) {
         try Self.validate(apiBaseURL, key: InfoKey.apiBaseURL, for: environment)
@@ -34,6 +41,7 @@ public struct AppConfiguration: Equatable, Sendable {
         self.environment = environment
         self.apiBaseURL = apiBaseURL
         self.appGroupIdentifier = appGroupIdentifier
+        self.sessionKeychainGroup = sessionKeychainGroup ?? appGroupIdentifier
         self.cognito = cognito
     }
 
@@ -48,10 +56,12 @@ public struct AppConfiguration: Equatable, Sendable {
             throw .invalid(key: InfoKey.apiBaseURL, reason: Self.notAnHTTPURL)
         }
         let appGroup = try Self.string(for: InfoKey.appGroup, in: infoDictionary)
+        let sessionKeychainGroup = try Self.string(for: InfoKey.sessionKeychainGroup, in: infoDictionary)
         try self.init(
             environment: environment,
             apiBaseURL: url,
             appGroupIdentifier: appGroup,
+            sessionKeychainGroup: sessionKeychainGroup,
             cognito: Self.cognito(in: infoDictionary),
         )
     }
