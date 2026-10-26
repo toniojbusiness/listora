@@ -26,12 +26,16 @@ struct CodeEntryView: View {
                     ListoraTextField("Code", hint: codeHint) {
                         // No placeholder: sample digits (or the word "Code") at this size read as a
                         // code already entered. The field's label above names it.
-                        TextField("Code", text: Binding(get: { model.code }, set: enter), prompt: Text(verbatim: ""))
-                            .font(Typography.priceLarge)
-                            .textContentType(.oneTimeCode)
-                            .keyboardType(.numberPad)
-                            .focused($codeFocused)
-                            .accessibilityIdentifier("signIn.code")
+                        TextField(
+                            "Code",
+                            text: Binding(get: { model.code }, set: { enter($0) }),
+                            prompt: Text(verbatim: ""),
+                        )
+                        .font(Typography.priceLarge)
+                        .textContentType(.oneTimeCode)
+                        .keyboardType(.numberPad)
+                        .focused($codeFocused)
+                        .accessibilityIdentifier("signIn.code")
                     }
                     // Under the field it fills, so a code copied from the email is one tap away.
                     PasteButton(payloadType: String.self) { strings in

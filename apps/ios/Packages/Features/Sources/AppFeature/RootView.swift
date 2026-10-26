@@ -72,7 +72,7 @@ public struct RootView: View {
         }
         .tint(Palette.brand.color)
         // Deleting the account keeps its result on screen; closing Settings then shows the sign-in.
-        .sheet(isPresented: $showsSettings, onDismiss: dependencies.signIn.finishSignOut, content: { settings })
+        .sheet(isPresented: $showsSettings, onDismiss: { dependencies.signIn.finishSignOut() }, content: { settings })
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active {
                 Task { await dependencies.marketplaces.refreshAttention() }
