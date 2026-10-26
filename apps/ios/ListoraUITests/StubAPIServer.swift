@@ -41,6 +41,11 @@ final class StubAPIServer: @unchecked Sendable {
         queue.sync { todayState = state }
     }
 
+    /// Poshmark reads as linked (its check passed) from the next request on.
+    func linkPoshmark() {
+        queue.sync { poshmarkChecks = 2 }
+    }
+
     private(set) var port: UInt16 = 0
 
     var baseURL: String {

@@ -3,7 +3,7 @@ import XCTest
 /// Links Poshmark from Settings > Link accounts against `StubAPIServer`: the app opens a fake
 /// marketplace's sign-in page in its own web view, the user signs in there, and the app hands
 /// the stub API that site's session cookie, never the password. The marketplace shows as linked
-/// only after the stub's check says so, and unlinking it (after a confirmation) unlinks it.
+/// only after the stub's check says so. A linked marketplace unlinks after a confirmation.
 @MainActor
 final class LinkAccountsUITests: XCTestCase {
     private let app = XCUIApplication()
@@ -73,19 +73,51 @@ final class LinkAccountsUITests: XCTestCase {
         XCTAssertEqual(app.buttons["linkAccounts.link.poshmark"].label, "Relink")
 
         try assertSentTheCookieButNotThePassword(server)
+    }
 
-        // Unlinking asks first, then shows not linked once the server unlinked it.
+    /// A linked Poshmark is unlinked after a confirmation, and shows as not linked once the stub
+    /// API unlinked it. It starts linked, so it needs no sign-in page.
+    func testUnlinksAMarketplaceAfterAConfirmation() throws {
+        let server = try StubAPIServer()
+        try server.start()
+        server.linkPoshmark()
+        self.server = server
+        app.launchEnvironment = [
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
+            "LISTORA_DEV_API_BASE_URL": server.baseURL,
+        ]
+        app.launch()
+
+        let settings = app.buttons["settings.open"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        let linkAccounts = app.buttons["settings.linkAccounts"]
+        XCTAssertTrue(linkAccounts.waitForExistence(timeout: 5), "no Link accounts\n\(app.debugDescription)")
+        linkAccounts.tap()
+
+        let poshmarkStatus = element("linkAccounts.status.poshmark")
+        XCTAssertTrue(poshmarkStatus.waitForExistence(timeout: 10), "no list\n\(app.debugDescription)")
+        XCTAssertEqual(poshmarkStatus.label, "Linked")
+        // Nothing to unlink where nothing is linked.
+        XCTAssertFalse(app.buttons["linkAccounts.unlink.depop"].exists)
+
         app.buttons["linkAccounts.unlink.poshmark"].tap()
         let confirm = app.buttons["linkAccounts.confirmUnlink"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), "no confirmation\n\(app.debugDescription)")
-        snapshot("4-unlink-confirmation")
+        XCTAssertFalse(server.requests.contains { $0.method == "DELETE" })
+        snapshot("1-unlink-confirmation")
         confirm.tap()
+
         expectation(for: NSPredicate(format: "label == %@", "Not linked"), evaluatedWith: poshmarkStatus)
         waitForExpectations(timeout: 10)
         XCTAssertEqual(app.buttons["linkAccounts.link.poshmark"].label, "Link")
         XCTAssertFalse(app.buttons["linkAccounts.unlink.poshmark"].exists)
-        XCTAssertTrue(server.requests.contains { $0.method == "DELETE" && $0.path == "/v1/connections/poshmark" })
-        snapshot("5-unlinked")
+        XCTAssertEqual(
+            server.requests.count { $0.method == "DELETE" && $0.path == "/v1/connections/poshmark" },
+            1,
+        )
+        snapshot("2-unlinked")
     }
 
     /// Signs in on the fake marketplace's page in the app's own web view, then taps
