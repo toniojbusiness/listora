@@ -19,113 +19,113 @@ final class AssistedTasksUITests: XCTestCase {
     func testListOnPoshmarkByTaskThenDelistByTask() async throws {
         let stack = try E2EStack.fromEnvironment()
         let item = try await stack.seedReadyItem()
-        launch(signedInTo: stack)
-        let status = openItem(sku: item.sku)
+        try launch(signedInTo: stack)
+        let status = try openItem(sku: item.sku)
 
-        listOnPoshmark(status: status)
+        try listOnPoshmark(status: status)
         // Waiting for the user, with the task in the badged Tasks tab.
-        XCTAssertTrue(waitForLabel(of: status, "Action needed - list on Poshmark", timeout: 30), status.label)
-        XCTAssertTrue(app.buttons["marketplace.poshmark.action.openTask"].waitForExistence(timeout: 5))
+        try require(waitForLabel(of: status, "Action needed - list on Poshmark", timeout: 30), status.label)
+        try require(app.buttons["marketplace.poshmark.action.openTask"].waitForExistence(timeout: 5))
         // The tab's badge (1) is drawn by the system tab bar, which doesn't expose it to UI
         // tests; the screenshot keeps it for review.
         keepScreenshot("Action needed, Tasks badged")
 
         app.tabBars.buttons["Tasks"].tap()
         let row = app.buttons["tasks.row.list_manually.poshmark.\(item.sku)"]
-        XCTAssertTrue(row.waitForExistence(timeout: 15), "the list task is not in the inbox")
+        try require(row.waitForExistence(timeout: 15), "the list task is not in the inbox")
         keepScreenshot("Task inbox")
         row.tap()
-        finishListTask()
+        try finishListTask()
 
         // The task leaves the inbox (other tests' tasks may remain), and the item reads "you
         // confirmed".
-        XCTAssertTrue(waitForAbsence(of: row, timeout: 15), "the done task is still in the inbox")
+        try require(row.waitForNonExistence(timeout: 15), "the done task is still in the inbox")
         keepScreenshot("Task done")
-        showItem(sku: item.sku, status: status)
-        XCTAssertTrue(waitForLabel(of: status, "Done (you confirmed)", timeout: 20), status.label)
-        XCTAssertFalse(status.label.localizedCaseInsensitiveContains("confirmed by"))
+        try showItem(sku: item.sku, status: status)
+        try require(waitForLabel(of: status, "Done (you confirmed)", timeout: 20), status.label)
+        try require(!status.label.localizedCaseInsensitiveContains("confirmed by"), status.label)
 
-        delistByTask(status: status)
-        XCTAssertTrue(waitForLabel(of: status, "Done (you confirmed)", timeout: 20), status.label)
-        XCTAssertTrue(app.buttons["marketplace.poshmark.action.relist"].waitForExistence(timeout: 10))
+        try delistByTask(status: status)
+        try require(waitForLabel(of: status, "Done (you confirmed)", timeout: 20), status.label)
+        try require(app.buttons["marketplace.poshmark.action.relist"].waitForExistence(timeout: 10))
         keepScreenshot("Delisted by the user")
     }
 
     func testDismissingATaskShowsTheStepFailedWithRetry() async throws {
         let stack = try E2EStack.fromEnvironment()
         let item = try await stack.seedReadyItem()
-        launch(signedInTo: stack)
-        let status = openItem(sku: item.sku)
-        listOnPoshmark(status: status)
-        XCTAssertTrue(waitForLabel(of: status, "Action needed - list on Poshmark", timeout: 30), status.label)
+        try launch(signedInTo: stack)
+        let status = try openItem(sku: item.sku)
+        try listOnPoshmark(status: status)
+        try require(waitForLabel(of: status, "Action needed - list on Poshmark", timeout: 30), status.label)
 
         app.buttons["marketplace.poshmark.action.openTask"].tap()
         let dismiss = app.buttons["task.dismiss"]
-        XCTAssertTrue(dismiss.waitForExistence(timeout: 15))
+        try require(dismiss.waitForExistence(timeout: 15))
         dismiss.tap()
         app.buttons["task.dismiss.confirm"].firstMatch.tap()
 
         // Dismissing is never counted as done: the step failed, and Retry makes a new task.
-        XCTAssertTrue(waitForLabel(of: status, "Publish failed - Retry", timeout: 20), status.label)
+        try require(waitForLabel(of: status, "Publish failed - Retry", timeout: 20), status.label)
         keepScreenshot("Dismissed")
         app.buttons["marketplace.poshmark.action.retry"].tap()
-        XCTAssertTrue(waitForLabel(of: status, "Action needed - list on Poshmark", timeout: 30), status.label)
+        try require(waitForLabel(of: status, "Action needed - list on Poshmark", timeout: 30), status.label)
     }
 
     // MARK: Steps
 
-    private func openItem(sku: String) -> XCUIElement {
+    private func openItem(sku: String) throws -> XCUIElement {
         let row = app.buttons["inventory.row.\(sku)"]
-        XCTAssertTrue(row.waitForExistence(timeout: 15), "the seeded item is not in the inventory")
+        try require(row.waitForExistence(timeout: 15), "the seeded item is not in the inventory")
         row.tap()
         let status = app.descendants(matching: .any)["marketplace.poshmark.status"]
-        XCTAssertTrue(waitForLabel(of: status, "Not listed", timeout: 15), status.label)
+        try require(waitForLabel(of: status, "Not listed", timeout: 15), status.label)
         return status
     }
 
     /// Back to the item screen in the Inventory tab. On CI a tap on the tab once did not switch
     /// tabs while the done task's confirmation was still on screen, so the tab is tapped until it
     /// is selected, and the item opened from the list if the tab is back at its list.
-    private func showItem(sku: String, status: XCUIElement) {
+    private func showItem(sku: String, status: XCUIElement) throws {
         let inventory = app.tabBars.buttons["Inventory"]
         for _ in 0 ..< 3 where !inventory.isSelected {
             inventory.tap()
             _ = status.waitForExistence(timeout: 2)
         }
-        XCTAssertTrue(inventory.isSelected, "the Inventory tab did not open")
+        try require(inventory.isSelected, "the Inventory tab did not open")
         guard !status.waitForExistence(timeout: 3) else { return }
         let row = app.buttons["inventory.row.\(sku)"]
-        XCTAssertTrue(row.waitForExistence(timeout: 15), "the item is not in the inventory")
+        try require(row.waitForExistence(timeout: 15), "the item is not in the inventory")
         row.tap()
-        XCTAssertTrue(status.waitForExistence(timeout: 15), "the item screen did not open")
+        try require(status.waitForExistence(timeout: 15), "the item screen did not open")
     }
 
     /// List on the Poshmark row: Poshmark is chosen, its version reviewed, and a task created.
-    private func listOnPoshmark(status _: XCUIElement) {
+    private func listOnPoshmark(status _: XCUIElement) throws {
         let list = app.buttons["marketplace.poshmark.action.list"]
         list.swipeUpIfHidden(in: app)
         list.tap()
         let next = app.buttons["listing.next"]
-        XCTAssertTrue(next.waitForExistence(timeout: 10))
-        XCTAssertTrue(waitForEnabled(next), "Poshmark is not offered")
+        try require(next.waitForExistence(timeout: 10))
+        try require(waitForEnabled(next), "Poshmark is not offered")
         next.tap()
-        XCTAssertTrue(app.textFields["listing.title"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any)["listing.assistedNote"].exists)
+        try require(app.textFields["listing.title"].waitForExistence(timeout: 5))
+        try require(app.descendants(matching: .any)["listing.assistedNote"].exists)
         let send = app.buttons["listing.publish"]
-        XCTAssertEqual(send.label, "Create Poshmark task")
+        try require(send.label == "Create Poshmark task", send.label)
         keepScreenshot("Poshmark listing")
         send.tap()
-        XCTAssertTrue(waitForAbsence(of: send, timeout: 15), "the task was not created")
+        try require(send.waitForNonExistence(timeout: 30), "the task was not created")
     }
 
     /// Copy, save the photos, open Poshmark, paste the link back, Done.
-    private func finishListTask() {
-        XCTAssertTrue(app.staticTexts["task.title"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.staticTexts["task.title"].label, "List on Poshmark")
+    private func finishListTask() throws {
+        try require(app.staticTexts["task.title"].waitForExistence(timeout: 10))
+        try require(app.staticTexts["task.title"].label == "List on Poshmark", app.staticTexts["task.title"].label)
         keepScreenshot("List task")
 
         app.buttons["task.copy.title"].tap()
-        XCTAssertTrue(waitForLabel(
+        try require(waitForLabel(
             of: app.descendants(matching: .any)["toast"],
             "Title copied",
             timeout: 5,
@@ -139,18 +139,18 @@ final class AssistedTasksUITests: XCTestCase {
         let save = app.buttons["task.savePhotos"]
         save.scrollClear(of: bar, in: app)
         save.tap()
-        allowPhotoAccessIfAsked()
-        XCTAssertTrue(app.descendants(matching: .any)["task.photosSaved"].waitForExistence(timeout: 30))
+        try allowPhotoAccessIfAsked()
+        try require(app.descendants(matching: .any)["task.photosSaved"].waitForExistence(timeout: 30))
 
         // The link opens Poshmark (Safari in the simulator); come back to finish.
         let open = app.buttons["task.open"]
         open.scrollClear(of: bar, in: app)
         open.tap()
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
-        XCTAssertTrue(safari.wait(for: .runningForeground, timeout: 15), "Poshmark did not open")
+        try require(safari.wait(for: .runningForeground, timeout: 15), "Poshmark did not open")
         app.activate()
-        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
-        XCTAssertTrue(bar.waitForExistence(timeout: 5), "the task closed before Done")
+        try require(app.wait(for: .runningForeground, timeout: 10))
+        try require(bar.waitForExistence(timeout: 5), "the task closed before Done")
 
         let link = app.textFields["task.link"]
         link.scrollClear(of: bar, in: app)
@@ -161,51 +161,63 @@ final class AssistedTasksUITests: XCTestCase {
     }
 
     /// End the listing: a delist task that opens the listing itself; the user removes it.
-    private func delistByTask(status: XCUIElement) {
+    private func delistByTask(status: XCUIElement) throws {
         let end = app.buttons["marketplace.poshmark.action.end"]
-        XCTAssertTrue(end.waitForExistence(timeout: 10))
+        try require(end.waitForExistence(timeout: 10))
         end.tap()
         let endButton = app.buttons["End: no longer available"].firstMatch
-        XCTAssertTrue(endButton.waitForExistence(timeout: 5))
+        try require(endButton.waitForExistence(timeout: 5))
         endButton.tap()
-        XCTAssertTrue(waitForLabel(of: status, "Action needed - delist on Poshmark", timeout: 30), status.label)
+        try require(waitForLabel(of: status, "Action needed - delist on Poshmark", timeout: 30), status.label)
 
         app.buttons["marketplace.poshmark.action.openTask"].tap()
         let done = app.buttons["task.done"]
-        XCTAssertTrue(done.waitForExistence(timeout: 15))
-        XCTAssertEqual(done.label, "Done - I removed it")
-        XCTAssertEqual(app.staticTexts["task.title"].label, "Delist on Poshmark")
+        try require(done.waitForExistence(timeout: 15))
+        try require(done.label == "Done - I removed it", done.label)
+        try require(app.staticTexts["task.title"].label == "Delist on Poshmark", app.staticTexts["task.title"].label)
         // The task opens the exact listing that was linked.
-        XCTAssertTrue(app.staticTexts["poshmark.com"].exists)
-        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'confirmed by'")).firstMatch
-            .exists)
+        try require(app.staticTexts["poshmark.com"].exists)
+        try require(
+            !app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'confirmed by'")).firstMatch.exists,
+            "the delist task claims Poshmark confirmed it",
+        )
         keepScreenshot("Delist task")
         done.tap()
-        XCTAssertTrue(waitForAbsence(of: done, timeout: 15))
+        try require(done.waitForNonExistence(timeout: 15))
     }
 
-    /// The first save asks for add-only photo access; the test allows it.
-    private func allowPhotoAccessIfAsked() {
+    /// The first save asks for add-only photo access (every run: `launch` resets it); the test
+    /// allows it. On a slow simulator (CI) a tap while the alert is still animating in is
+    /// dropped and the alert stays up, so the save waits on it forever: the tap is repeated
+    /// until the alert has closed.
+    private func allowPhotoAccessIfAsked() throws {
         let alert = springboard.alerts.firstMatch
-        guard alert.waitForExistence(timeout: 5) else { return }
-        let allow = alert.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Allow'")).firstMatch
-        if allow.exists {
-            allow.tap()
-        } else {
-            alert.buttons.element(boundBy: alert.buttons.count - 1).tap()
+        guard alert.waitForExistence(timeout: 10) else { return }
+        for _ in 0 ..< 3 {
+            let allow = alert.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Allow'")).firstMatch
+            let button = allow.exists ? allow : alert.buttons.element(boundBy: alert.buttons.count - 1)
+            _ = waitForHittable(button)
+            button.tap()
+            if alert.waitForNonExistence(timeout: 3) {
+                return
+            }
         }
+        try require(false, "the photo access alert did not close")
     }
 
-    private func launch(signedInTo stack: E2EStack) {
+    private func launch(signedInTo stack: E2EStack) throws {
         app.launchEnvironment = [
             "LISTORA_RESET_LOCAL_DATA": "1",
             "LISTORA_DEV_API_BASE_URL": stack.apiURL.absoluteString,
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
+        // A simulator that already allowed it never asks; CI's is erased before every run and
+        // always asks. Resetting makes every run take the asking path, the one that can break.
+        app.resetAuthorizationStatus(for: .photos)
         app.launch()
         let inventory = app.tabBars.buttons["Inventory"]
-        XCTAssertTrue(inventory.waitForExistence(timeout: 10))
+        try require(inventory.waitForExistence(timeout: 10))
         inventory.tap()
     }
 
@@ -235,8 +247,11 @@ final class AssistedTasksUITests: XCTestCase {
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 
-    private func waitForAbsence(of element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
-        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+    private func waitForHittable(_ element: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "isHittable == true"),
+            object: element,
+        )
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 }

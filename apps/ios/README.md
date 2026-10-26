@@ -85,8 +85,10 @@ Packages/
     AddItemFeature    Add Item tab: guided capture, library import, drafts (GRDB), upload queue
     ReviewFeature     Analysis progress, confidence-first review, cost, price, and the saved item
     TasksFeature      Tasks tab
-    SettingsFeature   Settings (opened from the gear in the Today and Sales headers): who is
-                      signed in, signing out, marketplaces, and the build's details
+    SettingsFeature   Profile and settings (opened from the avatar in the Today and Sales
+                      headers): the profile (names, photo), help, the legal documents, signing
+                      out, deleting the account, and the hidden Diagnostics
+                      (docs/features/profile.md)
     SignInFeature     The session and the screens that start it, the app's root while nobody is
                       signed in: welcome with the email, then the code (an emailed code, or the
                       developer sign-in in Dev builds)
@@ -100,7 +102,7 @@ Packages/
                       (VisionPhotoSignalReader, implementing Core's PhotoSignalReader); no UI
     ShareLinkFeature  The Share Extension's screen (ShareLinkView, ShareLinkModel)
     MarketplaceLinkingFeature  Settings > Link accounts: sign in on a marketplace's own page
-                      in a web view and hand Listora its session
+                      in a web view and hand Listora its session; Settings > Sale emails
                       (docs/features/marketplace-linking.md)
     PhoneExecutionFeature  The marketplace work Listora hands this phone: the runner, the
                       phone runtime in off-screen web views (Resources/phone-runtime.js, built
@@ -300,6 +302,19 @@ variables, and the tests pass them to the app with the Dev-only launch variables
 `LISTORA_DEV_ACCESS_EMAIL`).
 `ReviewFlowUITests` takes a fixture item from a draft through review and price to a saved item
 with a SKU, then reads it back from the API. The stack's logs are in `.build/ios/e2e-logs`.
+
+Rules for UI tests that hold up on CI's slower, freshly erased simulator:
+
+- An `async` test checks its steps with `try require(...)` (`ListoraUITests/Require.swift`), not
+  `XCTAssert`: `continueAfterFailure = false` does not stop an `async` test, so one failed step
+  otherwise runs every later wait out to its timeout, up to the 5-minute allowance.
+- A system permission alert is tapped until it has closed. A tap while it is still animating in
+  is dropped on CI. A test that meets one resets that permission first (for example
+  `app.resetAuthorizationStatus(for: .photos)`), so a local run takes the same path as CI's
+  erased simulator.
+- Nothing animates forever with `repeatForever`. XCUITest waits up to a minute for the app to
+  be idle before each tap. A looping effect is drawn from a `TimelineView` (the skeleton
+  shimmer).
 
 To run those UI tests from Xcode, start the stack with
 `npm run e2e:stack -- --fake-ai-fixtures apps/ios/ListoraUITests/FakeAI`, which prints the

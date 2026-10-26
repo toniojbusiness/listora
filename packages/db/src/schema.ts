@@ -106,6 +106,8 @@ export interface AccountTable {
   id: Id;
   name: string;
   sku_prefix: string;
+  /** The business the seller sells as, from Settings; null until they enter one. */
+  business_name: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }

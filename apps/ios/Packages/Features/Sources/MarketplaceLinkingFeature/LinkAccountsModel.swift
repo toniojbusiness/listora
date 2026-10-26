@@ -39,8 +39,6 @@ public final class LinkAccountsModel {
     public private(set) var progress: [String: LinkProgress] = [:]
     /// The marketplace whose sign-in page is open.
     public var signingIn: MarketplaceLink?
-    /// The sale emails section; nil where the screen shows none.
-    public let saleEmails: SaleEmailsModel?
     /// The marketplace the user asked to unlink, waiting for them to confirm.
     public var confirmingUnlink: MarketplaceLink?
 
@@ -68,7 +66,6 @@ public final class LinkAccountsModel {
     /// Share Extension) to the open sign-in page.
     public init(
         service: any MarketplaceSessionService,
-        saleEmails: SaleEmailsModel? = nil,
         sessions: (any MarketplaceSessionStore)? = nil,
         signInLinks: (any SignInLinkHandoff)? = nil,
         phoneWork: (any PhoneWorkTrigger)? = nil,
@@ -80,7 +77,6 @@ public final class LinkAccountsModel {
         now: @escaping @Sendable () -> Date = { Date() },
     ) {
         self.service = service
-        self.saleEmails = saleEmails
         self.sessions = sessions
         self.signInLinks = signInLinks
         self.phoneWork = phoneWork

@@ -5,8 +5,8 @@ import SwiftUI
 
 /// Link accounts: Poshmark, Mercari, Depop, and eBay (until its API is connected), each with the
 /// server's status, a one-tap Link or Relink that opens the marketplace's own sign-in page, and
-/// Unlink (after a confirmation), which deletes what Listora holds for that marketplace; then the
-/// sale emails section (the forwarding address that catches their sold emails).
+/// Unlink (after a confirmation), which deletes what Listora holds for that marketplace. Sale emails
+/// have their own screen (``SaleEmailsView``).
 public struct LinkAccountsView: View {
     @Bindable private var model: LinkAccountsModel
 
@@ -57,9 +57,6 @@ public struct LinkAccountsView: View {
                     )
                 }
                 .listRowBackground(Palette.surface.color)
-                if let saleEmails = model.saleEmails {
-                    SaleEmailsSection(model: saleEmails)
-                }
             }
         }
         .scrollContentBackground(.hidden)
@@ -67,15 +64,10 @@ public struct LinkAccountsView: View {
         .foregroundStyle(Palette.textPrimary)
         .navigationTitle("Link accounts")
         .task { await model.load() }
-        .task { await model.saleEmails?.load() }
         .onReceive(NotificationCenter.default.publisher(for: .phoneWorkFinished)) { _ in
             Task { await model.refresh() }
         }
-        .refreshable {
-            async let links: Void = model.load()
-            async let emails: Void? = model.saleEmails?.load()
-            _ = await (links, emails)
-        }
+        .refreshable { await model.load() }
         .sheet(item: $model.signingIn) { link in
             MarketplaceSignInView(
                 model: model.signInPage(for: link),

@@ -22,7 +22,7 @@ final class TabShellUITests: XCTestCase {
         }
         XCTAssertTrue(tabBar.buttons["Today"].isSelected)
         XCTAssertTrue(app.navigationBars["Today"].exists)
-        // Settings is not a tab: the gear in the header opens it.
+        // Settings is not a tab: the avatar in the header opens it.
         XCTAssertFalse(tabBar.buttons["Settings"].exists)
         XCTAssertTrue(app.buttons["settings.open"].exists)
     }
@@ -41,22 +41,14 @@ final class TabShellUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Sign in to see your day"].exists, "signed in, nothing asks to sign in")
     }
 
-    func testSettingsShowsTheDevEnvironmentAndLocalAPI() {
+    func testTheAvatarOpensSettingsAndDoneClosesIt() {
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        XCTAssertEqual(settings.label, "Profile and settings")
         settings.tap()
-        let environment = app.staticTexts["settings.environment"]
-        XCTAssertTrue(environment.waitForExistence(timeout: 5))
-        XCTAssertEqual(environment.label, "Dev")
-        // Local.xcconfig may change the host or port, but Dev always targets a plain-HTTP local API.
-        let apiBaseURL = app.staticTexts["settings.apiBaseURL"]
-        XCTAssertTrue(apiBaseURL.exists)
-        let address = apiBaseURL.value as? String ?? ""
-        XCTAssertTrue(address.hasPrefix("http://"), "API base URL is \(address)")
-
-        // Done closes Settings, back to Today.
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         app.buttons["settings.done"].tap()
-        XCTAssertTrue(environment.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Settings"].waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.navigationBars["Today"].exists)
     }
 

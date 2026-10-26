@@ -32,6 +32,8 @@ final class StubAPIServer: @unchecked Sendable {
     private var todayState = TodayState.busy
     /// "Ask before delisting", as the last `PUT /v1/sale-emails/settings` saved it.
     var askBeforeDelist = false
+    /// The names `GET /v1/account/profile` answers, as the last `PUT` saved them.
+    var profileNames: [String: String] = [:]
 
     /// What `GET /v1/today` answers.
     enum TodayState: Sendable {
@@ -167,6 +169,7 @@ final class StubAPIServer: @unchecked Sendable {
         default:
             return respondToLinkAccounts(method: request.method, path: path)
                 ?? respondToSaleEmails(method: request.method, path: path, body: request.body)
+                ?? respondToProfile(method: request.method, path: path, body: request.body)
                 ?? respondToDevSignIn(request, path: path)
                 ?? Self.http(
                     status: "404 Not Found",

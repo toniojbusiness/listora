@@ -60,4 +60,22 @@ public final class TodayEnvironment {
     func makeSettingsModel() -> SummarySettingsModel {
         SummarySettingsModel(service: service)
     }
+
+    /// The morning summary setting as a pushed screen, for Settings > Notifications.
+    public func morningSummaryScreen() -> some View {
+        MorningSummaryScreen(environment: self)
+    }
+}
+
+/// Holds the setting's model for as long as the pushed screen shows.
+private struct MorningSummaryScreen: View {
+    @State private var model: SummarySettingsModel
+
+    init(environment: TodayEnvironment) {
+        _model = State(initialValue: environment.makeSettingsModel())
+    }
+
+    var body: some View {
+        SummarySettingsView(model: model, isPushed: true)
+    }
 }

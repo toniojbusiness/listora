@@ -166,9 +166,9 @@ final class LinkAccountsUITests: XCTestCase {
         XCTAssertFalse(relinked, "Check again sent a new sign-in")
     }
 
-    /// The sale emails section: the account's own forwarding address, Gmail's confirmation code
-    /// to copy, the setup steps, and "Ask before delisting", saved on the server.
-    func testShowsTheSaleEmailAddressConfirmationAndSetting() throws {
+    /// Settings > Sale emails: the account's own forwarding address, Gmail's confirmation code to
+    /// copy, and the setup steps.
+    func testShowsTheSaleEmailAddressAndConfirmation() throws {
         let server = try StubAPIServer()
         try server.start()
         self.server = server
@@ -181,7 +181,9 @@ final class LinkAccountsUITests: XCTestCase {
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.tap()
-        app.buttons["settings.linkAccounts"].tap()
+        let saleEmails = app.buttons["settings.saleEmails"]
+        XCTAssertTrue(saleEmails.waitForExistence(timeout: 5), "no Sale emails\n\(app.debugDescription)")
+        saleEmails.tap()
 
         let list = app.collectionViews.firstMatch
         XCTAssertTrue(list.waitForExistence(timeout: 10))
@@ -212,9 +214,25 @@ final class LinkAccountsUITests: XCTestCase {
         let copyCode = app.buttons["saleEmails.copy.code"]
         copyCode.tap()
         XCTAssertEqual(copyCode.label, "Confirmation code copied")
+    }
 
+    /// Settings > Notifications: "Ask before delisting", saved on the server.
+    func testSavesAskBeforeDelistingOnTheServer() throws {
+        let server = try StubAPIServer()
+        try server.start()
+        self.server = server
+        app.launchEnvironment = [
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
+            "LISTORA_DEV_API_BASE_URL": server.baseURL,
+        ]
+        app.launch()
+        let settings = app.buttons["settings.open"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        app.buttons["settings.notifications"].tap()
         let ask = app.switches["saleEmails.askBeforeDelist"]
-        reveal(ask)
+        XCTAssertTrue(ask.waitForExistence(timeout: 10), "no setting\n\(app.debugDescription)")
         XCTAssertEqual(ask.value as? String, "0")
         // The control itself, at the row's trailing edge (a tap on the label does not toggle it).
         ask.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()

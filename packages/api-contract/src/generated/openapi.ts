@@ -87,6 +87,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/account/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my profile
+         * @description What Settings shows about the signed-in person: their email from the sign-in provider
+         *     (read-only), the name they go by, and the business they sell as. A name absent from the
+         *     response was never entered (or was cleared).
+         */
+        get: operations["getProfile"];
+        /**
+         * Replace my profile
+         * @description Saves the person's name and the account's business name. The body replaces both: a name
+         *     left out is cleared. The server trims each name; one that is blank after trimming is
+         *     `422 validation_failed`. The email cannot be changed here. The business name belongs to
+         *     the account, so a member who is not its owner or an admin gets `403 forbidden`.
+         */
+        put: operations["replaceProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/items": {
         parameters: {
             query?: never;
@@ -1870,6 +1899,20 @@ export interface components {
              *     for up to 7 days when it still holds the connection's tokens).
              */
             revoked: boolean;
+        };
+        /** @description The signed-in person as Settings shows them. */
+        Profile: {
+            /** @description The email the person signs in with; absent when the sign-in provider gave none. */
+            email?: string;
+            /** @description The name the person goes by. */
+            displayName?: string;
+            /** @description The business the account sells as. */
+            businessName?: string;
+        };
+        /** @description Both names; one left out is cleared. */
+        ProfileReplace: {
+            displayName?: string;
+            businessName?: string;
         };
         /** @enum {string} */
         HealthCheckStatus: "ok" | "unavailable";
@@ -4283,6 +4326,8 @@ export type ErrorCode = components['schemas']['ErrorCode'];
 export type KnownErrorCode = components['schemas']['KnownErrorCode'];
 export type AccountDeletion = components['schemas']['AccountDeletion'];
 export type MarketplaceAccessRevocation = components['schemas']['MarketplaceAccessRevocation'];
+export type Profile = components['schemas']['Profile'];
+export type ProfileReplace = components['schemas']['ProfileReplace'];
 export type HealthCheckStatus = components['schemas']['HealthCheckStatus'];
 export type HealthLive = components['schemas']['HealthLive'];
 export type HealthReady = components['schemas']['HealthReady'];
@@ -4642,6 +4687,62 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileReplace"];
+            };
+        };
+        responses: {
+            /** @description The saved profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description The person may not change the account's business name (`forbidden`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
     };

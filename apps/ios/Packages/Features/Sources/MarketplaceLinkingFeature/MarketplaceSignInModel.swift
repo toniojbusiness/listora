@@ -70,8 +70,8 @@ public final class MarketplaceSignInModel {
         guard let rule else { return }
         guard let pasted = texts.lazy.compactMap(rule.link(in:)).first else {
             linkProblem = texts.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                ? "Nothing to paste. In \(link.name)'s email, press and hold the sign-in link, tap Copy, "
-                + "then paste it here."
+                ? "Nothing to paste. In \(link.name)'s email, press and hold the sign-in link. If a preview opens, "
+                + "tap Hide preview, then Copy link. Then come back and tap Paste sign-in link."
                 : "That isn't a \(link.name) sign-in link. Copy the link in \(link.name)'s email and paste it again."
             return
         }

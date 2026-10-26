@@ -36,3 +36,7 @@ APS_ENVIRONMENT = development
 // no sign-in (Settings says so); Dev signs in with the local API's dev driver instead.
 COGNITO_REGION =
 COGNITO_CLIENT_ID =
+
+// The address Settings > Help and contact emails (docs/features/profile.md). Empty means the build
+// names none, and Help says that contact isn't set up yet.
+SUPPORT_EMAIL =
