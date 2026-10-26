@@ -40,6 +40,63 @@ public struct SkeletonRow: View {
     }
 }
 
+/// A photo grid cell that is loading: a square photo, then a title and a price line, shaped like
+/// the inventory's grid cell.
+public struct SkeletonPhotoTile: View {
+    public init() {}
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            RoundedRectangle(cornerRadius: Radius.large, style: .continuous)
+                .fill(Palette.surfaceSecondary)
+                .aspectRatio(1, contentMode: .fit)
+                .shimmering()
+            SkeletonBlock(height: 14)
+                .padding(.trailing, Spacing.lg)
+            SkeletonBlock(width: 64, height: 14)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// A screen of content that is loading: `count` placeholders made by `placeholder`, stacked as
+/// the loaded screen stacks its rows, read by VoiceOver once as `label`. Scrolling is off, since
+/// there is nothing to scroll to yet.
+public struct SkeletonList<Placeholder: View>: View {
+    private let count: Int
+    private let label: String
+    private let placeholder: () -> Placeholder
+
+    public init(count: Int = 5, label: String, @ViewBuilder placeholder: @escaping () -> Placeholder) {
+        self.count = count
+        self.label = label
+        self.placeholder = placeholder
+    }
+
+    public var body: some View {
+        ScrollView {
+            VStack(spacing: Spacing.md) {
+                ForEach(0 ..< count, id: \.self) { _ in
+                    placeholder()
+                }
+            }
+            .padding(Spacing.md)
+            .frame(maxWidth: Layout.readableWidth)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollDisabled(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+}
+
+extension SkeletonList where Placeholder == AnyView {
+    /// Rows shaped like ``ListRow``s on cards: most lists.
+    public init(count: Int = 5, label: String) {
+        self.init(count: count, label: label) { AnyView(SkeletonRow().cardStyle(.flat)) }
+    }
+}
+
 struct ShimmerModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase: CGFloat = -1

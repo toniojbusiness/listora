@@ -57,7 +57,7 @@ struct PhotoThumbnail: View {
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
             } else {
-                ProgressView()
+                Palette.surfaceSecondary.color.shimmering()
             }
         }
         // Reloads when the size changes: a frame measured as zero on the first layout must not leave

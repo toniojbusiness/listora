@@ -10,7 +10,8 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
 
 - **Inventory** lists the account's items, newest first (`listItems`): cover photo, title, SKU,
   price, item status, and each listing's status on its marketplace, exactly as the server words
-  it. Search goes over SKU, title, brand, and keywords; the filter menu narrows by item status,
+  it. It opens as a grid of large photos; the toolbar button switches to a list of rows and back,
+  and the choice is kept on the iPhone (`InventoryLayout`). Search goes over SKU, title, brand, and keywords; the filter menu narrows by item status,
   marketplace (items with a listing there that is not ended or sold), and brand (exact, ignoring
   case). The list reads the server every time it appears and on pull to refresh, so an item saved
   in the review flow is there when the seller opens the tab. With no items the empty state points

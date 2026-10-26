@@ -180,47 +180,6 @@ final class DraftStore: Sendable {
         return removed
     }
 
-    /// Replaces a photo's image (after cropping) with `photo`, in the same place and role. The new
-    /// image uploads as a new photo; the old one is removed from the server. Returns the old record
-    /// so the caller can stop its transfer, and the new one.
-    @discardableResult
-    func replaceImage(
-        of photoID: String,
-        with photo: PreparedPhoto,
-    ) throws -> (old: DraftPhotoRecord, new: DraftPhotoRecord) {
-        guard let current = try writer.read({ db in try DraftPhotoRecord.fetchOne(db, key: photoID) }) else {
-            throw DraftStoreError.notFound
-        }
-        let replacement = DraftPhotoRecord.new(
-            draftID: current.draftID,
-            position: current.position,
-            role: current.role,
-            photo: photo,
-            now: now(),
-        )
-        try photo.data.write(
-            to: database.fileURL(for: replacement),
-            options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication],
-        )
-        let old: DraftPhotoRecord
-        do {
-            old = try writer.write { db in
-                guard let latest = try DraftPhotoRecord.fetchOne(db, key: photoID) else {
-                    throw DraftStoreError.notFound
-                }
-                try recordServerDeletion(of: latest, in: db)
-                try latest.delete(db)
-                try replacement.insert(db)
-                return latest
-            }
-        } catch {
-            removeFiles(of: [replacement])
-            throw error
-        }
-        removeFiles(of: [old])
-        return (old, replacement)
-    }
-
     /// Deletes a draft and its photos; its server item is deleted by the upload queue. Returns the
     /// removed photos so the caller can stop their transfers.
     @discardableResult
@@ -283,9 +242,13 @@ final class DraftStore: Sendable {
         return records
     }
 
-    private func removeFiles(of photos: [DraftPhotoRecord]) {
+    /// Removes photos' files, with the originals kept for undoing a background cleanup.
+    func removeFiles(of photos: [DraftPhotoRecord]) {
         for photo in photos {
             try? FileManager.default.removeItem(at: database.fileURL(for: photo))
+            if let original = database.originalFileURL(for: photo) {
+                try? FileManager.default.removeItem(at: original)
+            }
         }
     }
 
@@ -300,7 +263,7 @@ final class DraftStore: Sendable {
         try again.update(db)
     }
 
-    private func recordServerDeletion(of photo: DraftPhotoRecord, in db: Database) throws {
+    func recordServerDeletion(of photo: DraftPhotoRecord, in db: Database) throws {
         guard photo.mayBeOnServer,
               let itemID = try DraftRecord.fetchOne(db, key: photo.draftID)?.serverItemID
         else { return }

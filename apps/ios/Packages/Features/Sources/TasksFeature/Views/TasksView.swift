@@ -37,13 +37,15 @@ public struct TasksView: View {
         .toast($toast)
     }
 
-    @ViewBuilder
     private var content: some View {
+        phaseContent.motion(value: inbox.phase)
+    }
+
+    @ViewBuilder
+    private var phaseContent: some View {
         switch inbox.phase {
         case .loading where inbox.tasks.isEmpty:
-            ProgressView("Loading tasks")
-                .foregroundStyle(Palette.textSecondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            SkeletonList(label: "Loading tasks")
         case .signedOut:
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.questionmark",
@@ -57,7 +59,7 @@ public struct TasksView: View {
                 tone: .failed,
                 title: "Tasks didn't load",
                 message: message,
-                action: .init("Try again") { Task { await inbox.load() } },
+                action: .init("Try again", systemImage: "arrow.clockwise") { Task { await inbox.load() } },
             )
         default:
             if inbox.tasks.isEmpty {
@@ -66,6 +68,7 @@ public struct TasksView: View {
                     tone: .success,
                     title: "You're all caught up",
                     message: "Marketplace steps that need you, like finishing a Poshmark listing, show up here.",
+                    action: .init("Check again", systemImage: "arrow.clockwise") { Task { await inbox.load() } },
                 )
                 .accessibilityIdentifier("tasks.empty")
             } else {
@@ -179,7 +182,7 @@ struct TaskThumbnail: View {
             .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
             .overlay(alignment: .bottomTrailing) {
                 Image(systemName: presentation.systemImage)
-                    .font(Typography.caption.weight(.bold))
+                    .font(Typography.label)
                     .imageScale(.small)
                     .foregroundStyle(presentation.isUrgent ? Palette.onDanger : Palette.onBrand)
                     .padding(3)

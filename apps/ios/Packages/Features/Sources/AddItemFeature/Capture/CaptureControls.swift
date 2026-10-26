@@ -19,7 +19,7 @@ struct CaptureStepChip: View {
                     .foregroundStyle(iconColor)
                 Text(taken > 1 ? "\(step.title) \(taken)" : step.title)
             }
-            .font(Typography.subheadline.weight(.semibold))
+            .font(Typography.emphasis)
             .lineLimit(1)
             .padding(.horizontal, Spacing.sm)
             .frame(minHeight: 36)

@@ -51,7 +51,7 @@ struct BatchCostCard: View {
             }
             if batch.hasAppliedCost(model) {
                 Label("Applied to every item still to approve", systemImage: "checkmark.circle.fill")
-                    .font(Typography.subheadline.weight(.semibold))
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.success)
                     .accessibilityIdentifier("batchReview.costApplied.\(number)")
             } else if !model.cost.amount.isEmpty, batch.remaining.count > 1 {
@@ -92,7 +92,7 @@ struct BatchCostCard: View {
         let each = Formatting.money(cents: share)
         return VStack(alignment: .leading, spacing: Spacing.xs) {
             Label("Apply to all \(count) items", systemImage: "square.stack.3d.up.fill")
-                .font(Typography.subheadline.weight(.semibold))
+                .font(Typography.emphasis)
                 .foregroundStyle(Palette.textPrimary)
             AdaptiveStack {
                 Button("Split \(total): \(each) each") {

@@ -135,7 +135,7 @@ private struct HowItWorksCard: View {
                 systemImage: "hand.tap",
             )
         }
-        .cardStyle(.outlined)
+        .cardStyle(.flat)
     }
 
     private func point(_ title: String, _ detail: String, systemImage: String) -> some View {
@@ -143,7 +143,7 @@ private struct HowItWorksCard: View {
             IconTile(systemImage: systemImage)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(Typography.subheadline.weight(.semibold))
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.textPrimary)
                 Text(detail)
                     .font(Typography.subheadline)

@@ -55,6 +55,8 @@ public struct AppDependencies {
     /// The marketplace work Listora hands this phone, run in the seller's own session here
     /// (docs/features/phone-execution.md).
     public let phone: PhoneExecutionEnvironment
+    /// The first-run guide, shown once after the first sign-in.
+    public let gettingStarted: GettingStartedModel
 
     public init(
         configuration: AppConfiguration,
@@ -84,11 +86,10 @@ public struct AppDependencies {
         let showSignIn: @MainActor () -> Void = { signIn.showSignIn() }
         apiClient = APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens)
         tagReader = VisionTagReader()
-        let meter = InteractionMeter(storage: interactionStorage)
-        interactionMeter = meter
+        interactionMeter = InteractionMeter(storage: interactionStorage)
         let listingCopy = ListingCopyStore(directory: listingCopyDirectory)
         let review = ReviewEnvironment(
-            apiClient: apiClient, meter: meter, listingCopy: listingCopy,
+            apiClient: apiClient, meter: interactionMeter, listingCopy: listingCopy,
             transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
         )
         phone = PhoneExecutionEnvironment(apiClient: apiClient, accessTokens: accessTokens, version: version)
@@ -106,7 +107,7 @@ public struct AppDependencies {
         self.review = review
         addItem = AddItemEnvironment(
             dataDirectory: dataDirectory, apiClient: apiClient, accessTokens: accessTokens, tagReader: tagReader,
-            signalReader: VisionPhotoSignalReader(), meter: meter,
+            signalReader: VisionPhotoSignalReader(), meter: interactionMeter,
             reviewDestination: { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) },
             batchReviewDestination: { request, onEvent in AnyView(review.batchFlow(for: request, onEvent: onEvent)) },
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
@@ -116,6 +117,7 @@ public struct AppDependencies {
         linkAccounts = Self.makeLinkAccounts(apiClient, phone)
         today = Self.makeToday(apiClient, accessTokens, (inventory, sales), marketplaces, showSignIn)
         accountDeletion = Self.makeAccountDeletion(apiClient, accessTokens, signIn, phone.sessions)
+        gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
     }
 
     /// Deleting the account (Settings). It signs out, but its result (the marketplaces to revoke by
@@ -239,6 +241,8 @@ public struct AppDependencies {
         KeychainMarketplaceSessionStore().removeAll()
         ReviewEnvironment.resetLocalData(defaults: defaults)
         AddItemEnvironment.resetLocalData(defaults: defaults)
+        GettingStartedModel.resetLocalData(defaults: defaults)
+        InventoryEnvironment.resetLocalData(defaults: defaults)
         accessGrantStorage.save(nil)
     }
 
@@ -323,6 +327,9 @@ public struct DebugLaunchOptions: Equatable, Sendable {
     /// `LISTORA_VOICE_PERMISSION=denied|restricted`: asking for voice permission ends this way
     /// (with ``voiceTranscript``; granted otherwise).
     public var voicePermission: SpeechAuthorization = .authorized
+    /// `LISTORA_SHOW_GETTING_STARTED=1`: show the first-run guide at launch, as after a first
+    /// sign-in (the screenshot tour).
+    public var showsGettingStarted = false
 
     public static let none = DebugLaunchOptions()
 
@@ -334,6 +341,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         accessGrant: AccessGrant? = nil,
         voiceTranscript: String? = nil,
         voicePermission: SpeechAuthorization = .authorized,
+        showsGettingStarted: Bool = false,
     ) {
         self.resetLocalData = resetLocalData
         self.fixturePhotosDirectory = fixturePhotosDirectory
@@ -342,6 +350,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         self.accessGrant = accessGrant
         self.voiceTranscript = voiceTranscript
         self.voicePermission = voicePermission
+        self.showsGettingStarted = showsGettingStarted
     }
 
     /// The options in this process's environment (debug builds), otherwise ``none``.
@@ -375,6 +384,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
             },
             voiceTranscript: environment["LISTORA_VOICE_TRANSCRIPT"],
             voicePermission: voicePermission(environment["LISTORA_VOICE_PERMISSION"]),
+            showsGettingStarted: environment["LISTORA_SHOW_GETTING_STARTED"] == "1",
         )
     }
 

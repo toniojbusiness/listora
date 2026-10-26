@@ -66,9 +66,13 @@ final class SignInUITests: XCTestCase {
         XCTAssertNotEqual(code.value as? String, "000000", "the wrong code is cleared")
         XCTAssertFalse(app.tabBars.firstMatch.exists)
 
-        // The right code opens the app on Today.
+        // The right code opens the app on Today, with the first-run guide over it the first time.
         code.typeText(StubAPIServer.devSignInCode)
         app.buttons["signIn.signIn"].tap()
+        let skipGuide = app.buttons["gettingStarted.skip"]
+        XCTAssertTrue(skipGuide.waitForExistence(timeout: 10), "the first sign-in shows the getting-started guide")
+        XCTAssertTrue(app.staticTexts["Link your marketplaces"].exists)
+        skipGuide.tap()
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.waitForExistence(timeout: 10), "signing in shows the tabs")
         XCTAssertTrue(tabBar.buttons["Today"].isSelected)

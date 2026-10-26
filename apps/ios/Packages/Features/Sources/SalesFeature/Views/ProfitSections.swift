@@ -203,14 +203,14 @@ struct ProfitRankingSection: View {
                         .foregroundStyle(Palette.textSecondary)
                 } else {
                     Text("Best")
-                        .font(Typography.subheadline.weight(.semibold))
+                        .font(Typography.emphasis)
                         .foregroundStyle(Palette.textPrimary)
                     groupRows(ranking.best, kind: "best")
                 }
                 if !ranking.worst.isEmpty {
                     Divider()
                     Text("Worst")
-                        .font(Typography.subheadline.weight(.semibold))
+                        .font(Typography.emphasis)
                         .foregroundStyle(Palette.textPrimary)
                     groupRows(ranking.worst, kind: "worst")
                 }
@@ -226,7 +226,7 @@ struct ProfitRankingSection: View {
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(name(group.key))
-                                .font(Typography.subheadline.weight(.semibold))
+                                .font(Typography.emphasis)
                                 .foregroundStyle(Palette.textPrimary)
                             Text(details(group))
                                 .font(Typography.footnote)
@@ -280,7 +280,7 @@ struct DeadStockSection: View {
                         .foregroundStyle(Palette.textSecondary)
                 } else {
                     Text("Oldest")
-                        .font(Typography.subheadline.weight(.semibold))
+                        .font(Typography.emphasis)
                         .foregroundStyle(Palette.textPrimary)
                     ForEach(deadStock.oldest, id: \.itemId) { item in
                         oldestRow(item)
@@ -323,16 +323,16 @@ struct DeadStockSection: View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title ?? item.sku)
-                    .font(Typography.subheadline.weight(.semibold))
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.textPrimary)
                     .lineLimit(2)
                 Text("\(item.sku) · \(item.ageDays) days")
-                    .font(Typography.footnote.monospacedDigit())
+                    .font(Typography.metadata)
                     .foregroundStyle(Palette.textSecondary)
             }
             Spacer(minLength: Spacing.sm)
             Text(item.cost.map { SaleFormatting.money($0) } ?? "No cost")
-                .font(Typography.subheadline.weight(.semibold).monospacedDigit())
+                .font(Typography.emphasis)
                 .foregroundStyle(item.cost == nil ? Palette.textSecondary : Palette.textPrimary)
         }
         .accessibilityElement(children: .combine)
@@ -365,7 +365,7 @@ private struct ProfitAmount: View {
 
     var body: some View {
         Text(SaleFormatting.money(money))
-            .font(Typography.subheadline.weight(.semibold).monospacedDigit())
+            .font(Typography.emphasis)
             .foregroundStyle(money.amountCents < 0 ? Palette.danger : Palette.textPrimary)
     }
 }

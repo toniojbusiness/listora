@@ -16,7 +16,7 @@ every screen follows, and the UI audit behind design system v2. The code convent
 3. **Camera first.** Adding an item starts with the guided shots (front, back, tag, flaws and
    details); the photo library is the second choice.
 4. **No dead ends.** Every empty, failed, or signed-out screen says what happened and offers the
-   next step.
+   next step as one clear button.
 5. **Readable for everyone.** Every color pair passes WCAG AA (4.5:1) in light and dark mode,
    every style follows Dynamic Type, every control is at least 44 points, and every control has
    a VoiceOver label.
@@ -56,11 +56,14 @@ status colors differ from each other, in both modes.
 
 ### Type (`Typography`)
 
-SF Pro on Dynamic Type text styles, with the three title styles in New York (serif):
-`largeTitle`, `title`, `title3`, `headline`, `body`,
-`callout`, `subheadline`, `footnote`, `caption`, `label` (badges and chips), `eyebrow` (section
-headers, in capitals), `price` and `priceLarge` (tabular digits). The table with each style's
-use is in `Typography.swift`.
+One scale, SF Pro on Dynamic Type text styles. Only the two display styles are New York
+(serif): `largeTitle` and `title`, for a screen's own heading, an empty state, and a welcome
+step. Everything inside cards and rows is SF Pro: `title3` (card headings), `headline`, `number`
+(amounts in rows), `body`, `callout`, `code` (text read off a tag), `subheadline`, `emphasis`
+(values and inline actions), `footnote`, `metadata` (SKUs, counts, dates), `smallEmphasis`,
+`caption`, `label` (badges and chips), `eyebrow` (section headers, in capitals), `price` and
+`priceLarge`. Views never add a weight or a digit style of their own, so the same kind of text
+looks the same on every screen. The table with each style's use is in `Typography.swift`.
 
 ### Space, shape, depth, motion
 
@@ -70,21 +73,32 @@ use is in `Typography.swift`.
   20 (cards, banners), `extraLarge` 28 (hero tiles).
 - `Layout`: `minimumTapTarget` 44, `buttonHeight` 52, `compactButtonHeight` 44, `shutterSize`
   84, `readableWidth` 560.
-- `Elevation`: `low` for cards, `medium` for floating bars, `high` for toasts. In dark mode the
-  lighter surfaces and hairlines carry the separation.
+- `Elevation`: `low` for cards, `medium` for floating bars, `high` for toasts. Cards have no
+  border in light mode: their lighter surface and a soft shadow separate them. In dark mode the
+  lighter surfaces and a faint hairline carry the separation.
 - `Motion`: `standard`, `snappy`, and `gentle` springs that settle without bouncing. The
   `motion(_:value:)` modifier and `Motion.perform` turn them into a short fade when Reduce Motion
-  is on. The photo grid animates reordering, a tapped photo zooms into its detail sheet
-  (`matchedTransitionSource`), and banners rise in.
-- `Haptics`: tap (shutter), selection (chips), success (draft saved, account connected),
-  warning (blurry shot), failure. Views use SwiftUI's `sensoryFeedback` where they can.
+  is on. A screen's loading, empty, and loaded states cross-fade; a tapped draft photo zooms into
+  its detail sheet (`matchedTransitionSource`); the photo grid animates reordering; banners rise
+  in; the empty-state art settles in. An inventory item opens with a standard push, not a zoom:
+  a zoom closes the screen on the same pull-down that refreshes it.
+- `Haptics`: tap (shutter, a listing sent, a price change sent), selection (chips, the
+  inventory layout, the welcome pages), success (draft saved, item saved, account connected, a
+  background cleaned up, an item sold), warning (blurry shot), failure (a change the server
+  refused). Sent is not done: sending a listing or a price change is a light tap, never the
+  success feedback, which is kept for what is confirmed. Views use SwiftUI's `sensoryFeedback`
+  where they can.
+- **Celebration** (`celebration(trigger:)`): when an item sells, a short burst of confetti in
+  the palette's colors and a success haptic, over the screen without blocking it: on the sale
+  screen after "Mark as sold", and on Sales when a new sale arrives while the app is open. With
+  Reduce Motion on, nothing moves; a soft glow fades in and out instead.
 
 ### Components
 
 | Component                                  | What it is                                                                                                                                        |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ListoraButtonStyle`                       | `primary`, `secondary`, `destructive`, `tertiary`, `destructiveText`; large or compact; pressed scale; `.loading(_:)` spinner that keeps the size |
-| `cardStyle(_:)`                            | `elevated`, `outlined`, or `tinted(tone)` surface                                                                                                 |
+| `cardStyle(_:)`                            | `elevated`, `flat`, or `tinted(tone)` surface; no border in light mode                                                                            |
 | `ListRow`                                  | Icon tile, title, subtitle, trailing accessory; stacks at accessibility sizes                                                                     |
 | `IconTile`                                 | An SF Symbol or monogram on a soft square (rows, cards, empty states)                                                                             |
 | `StatusTone`, `StatusBadge`, `StatusLabel` | The honest status vocabulary as a pill or as inline text                                                                                          |
@@ -92,8 +106,11 @@ use is in `Typography.swift`.
 | `ListoraTextField`                         | Labeled field with focus outline, hint, and error                                                                                                 |
 | `PriceField`, `PriceInput`                 | Price entry in minor units on the decimal keypad; input kept valid as typed                                                                       |
 | `SectionHeader`                            | Small-capitals heading with optional explanation and action                                                                                       |
-| `EmptyStateView`                           | Icon, title, message, optional numbered steps, up to two actions                                                                                  |
+| `EmptyStateView`                           | Illustration, title, message, optional numbered steps, one action                                                                                 |
+| `SpotIllustration`                         | The empty-state art: two tilted cards with an SF Symbol on a soft circle, drawn from the palette; fixed size, so the action stays on screen       |
 | `SkeletonBlock`, `SkeletonRow`             | Loading placeholders with a shimmer (a pulse with Reduce Motion)                                                                                  |
+| `SkeletonPhotoTile`, `SkeletonList`        | A photo grid cell that is loading; a screen of placeholders shaped like its rows, read once by VoiceOver. Screens load with these, not spinners   |
+| `celebration(trigger:)`                    | The sold celebration (above)                                                                                                                      |
 | `Banner`, `toast(_:)`                      | Inline status message with Retry or dismiss; a passing confirmation                                                                               |
 | `BottomActionBar`, `bottomActionBar(_:)`   | The pinned bar for a screen's main actions                                                                                                        |
 | `solidBarEdges()`                          | A hard edge under the navigation bar (iOS 26), so content never shows through; set once at the root                                               |
@@ -111,7 +128,11 @@ text size. The PNGs land in `.build/ios/screenshots/<variant>/`. Most of the tou
 API and the debug fake camera (`LISTORA_FAKE_CAMERA`); the review flow (`testReviewTour`,
 screens 15 to 26) and the inventory and item screens (`testInventoryTour`, 27 to 34) go through
 the local stack with the fake AI and fake eBay, as `ReviewFlowUITests` and `ListingFlowUITests`
-do, so the target starts it like `ios-test`. `IOS_SCREENSHOT_TESTS` narrows the tour to one test.
+do, so the target starts it like `ios-test`; the inventory tour also shows Sales and Tasks empty
+(38, 39), the list layout (45), and "Mark as sold" with the celebration (46, 47). The signed-out
+and stub passes show Sales with no server answering (35) and the lists that fail to load (36, 37), and
+`testDesignPassTour` the welcome steps (40 to 42) and a photo before and after its background
+cleanup (43, 44). `IOS_SCREENSHOT_TESTS` narrows the tour to one test.
 The before and after sheets of design system v2 are in [design/](design/), one per screen
 (light, dark, and both at the largest text size). Some "before" cells at the largest text size
 are empty: on the old screens at that size the tour could not reach every screen. The camera
@@ -126,6 +147,46 @@ The tour starts on the signed-out welcome screen (`00a`, then the code screen an
 with no server answering, so screens 00 to 11 show what loads from the phone and the failures
 of what does not. Sheets `00a` and `00b` show the welcome screen against the old signed-out
 Today ("before" only in light and dark), and the code screen.
+
+## Design pass: layout and feel
+
+Built on Forest and clay, without changing what any screen does. Before and after sheets of each
+screen are in [design/pass3/](design/pass3/): before on the iPhone 17 in light and dark mode,
+after on the iPhone 17e (the smallest current iPhone) in light mode and at the largest text size
+in dark mode, and on the iPhone 17 Pro Max in dark mode.
+
+- **Photo first.** Inventory opens as a grid of large, square cover photos (two columns on every
+  iPhone, one at accessibility sizes) with the item's status on the photo, the title, price, SKU,
+  and each marketplace's status as a line in the server's words, in full. The toolbar switches to
+  the list, and the choice is kept ([inventory.md](inventory.md)). Grid cells load the photo's
+  `listing` size, since the 400-pixel thumbnail is soft at a cell's size.
+- **Background cleanup** on a draft's photo: one tap lifts the item onto a plain, light backdrop,
+  on the phone with no AI service, and Undo puts the original back byte for byte (apps/ios/README,
+  Add Item).
+- **Loading and empty states.** Every screen loads with skeletons shaped like its content (the
+  photo grid, cards, rows), not a spinner. Every empty screen has the illustration and one clear
+  button: add an item when Today is caught up, go to Inventory when there are no sales, check
+  again when no task is open, close in the Share Extension.
+- **First-run welcome** (`GettingStartedView`, AppFeature): right after the first sign-in on the
+  iPhone, three short steps, one per page (link your marketplaces, add your first item, see it
+  listed), with Skip always at hand. Its last button opens Add; "Link accounts now" opens
+  Settings > Link accounts. Skipped or finished, it never comes back (`GettingStartedModel`, a
+  `UserDefaults` flag). A session that already exists at launch does not show it, so an update
+  never shows it to someone already selling; `LISTORA_SHOW_GETTING_STARTED=1` shows it at launch
+  in debug builds for the screenshot tour.
+- **Type and spacing.** One scale (above); more room between cards (24 points between Today's
+  cards, 16 between grid rows), fewer borders and boxes (borderless cards in light mode, the
+  empty states' steps without a box).
+
+| Screen                  | What looked off                                                                                         | What changed                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Inventory               | Small 72-point thumbnails in boxed rows; an item was hard to find by its photo.                         | A grid of large photos with the status on the photo and every marketplace's status in full; the list a tap away.       |
+| Empty and failed states | A lone icon tile; several (Today and Tasks caught up, no sales) had no button at all.                   | The illustration and one clear action on every one.                                                                    |
+| Loading                 | Tasks, a task, the morning summary, Link accounts, the sale email address, and a batch showed spinners. | Skeletons shaped like the content.                                                                                     |
+| Cards                   | Every card had a hairline border as well as a shadow, so stacked cards read as a grid of boxes.         | Light mode drops the border; the surface and a softer shadow carry the card.                                           |
+| Type                    | Card headings ("eBay", "Take photos once") were serif next to SF row titles; views tweaked weights.     | Serif only for screen-level display text; named styles for values, metadata, and tag text instead of per-view weights. |
+| Photo detail            | No way to make a photo's background consistent.                                                         | Clean background, with Undo.                                                                                           |
+| Selling                 | A sale landed silently.                                                                                 | A short celebration and a success haptic.                                                                              |
 
 ## UI audit (before design system v2)
 

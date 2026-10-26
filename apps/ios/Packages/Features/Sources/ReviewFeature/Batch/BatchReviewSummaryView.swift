@@ -37,7 +37,7 @@ struct BatchReviewSummaryView: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(item.sku)
-                                        .font(Typography.headline.monospacedDigit())
+                                        .font(Typography.number)
                                         .foregroundStyle(Palette.textPrimary)
                                     if let title = item.title {
                                         Text(title)
@@ -56,7 +56,7 @@ struct BatchReviewSummaryView: View {
                             .accessibilityIdentifier("batchSummary.item.\(index)")
                         }
                     }
-                    .cardStyle(.outlined, padding: 0)
+                    .cardStyle(.flat, padding: 0)
                 }
             }
             .padding(Spacing.md)

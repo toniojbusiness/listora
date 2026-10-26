@@ -53,7 +53,7 @@ public struct Banner: View {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(Typography.subheadline.weight(.semibold))
+                        .font(Typography.emphasis)
                         .foregroundStyle(Palette.textPrimary)
                     if let message {
                         Text(message)
@@ -74,7 +74,7 @@ public struct Banner: View {
             if let onDismiss {
                 Button("Dismiss", systemImage: "xmark", action: onDismiss)
                     .labelStyle(.iconOnly)
-                    .font(Typography.subheadline.weight(.semibold))
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.textSecondary)
                     .frame(width: Layout.minimumTapTarget, height: Layout.minimumTapTarget)
                     .contentShape(Rectangle())
@@ -138,7 +138,7 @@ private struct ToastView: View {
                 .foregroundStyle(toast.tone.color)
                 .accessibilityHidden(true)
             Text(toast.message)
-                .font(Typography.subheadline.weight(.semibold))
+                .font(Typography.emphasis)
                 .foregroundStyle(Palette.textPrimary)
         }
         .padding(.horizontal, Spacing.md)

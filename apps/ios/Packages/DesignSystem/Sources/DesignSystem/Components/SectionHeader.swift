@@ -35,7 +35,7 @@ public struct SectionHeader: View {
                 Spacer(minLength: Spacing.xs)
                 if let action {
                     Button(action.title, action: action.handler)
-                        .font(Typography.subheadline.weight(.semibold))
+                        .font(Typography.emphasis)
                         .foregroundStyle(Palette.brand)
                         .frame(minHeight: Layout.minimumTapTarget)
                 }
