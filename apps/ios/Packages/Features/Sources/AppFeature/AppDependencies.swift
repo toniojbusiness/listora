@@ -107,9 +107,17 @@ public struct AppDependencies {
         let connections = APIConnectionsService(client: apiClient.client)
         let marketplaces = MarketplacesModel(service: connections, isSignedIn: { accessTokens.grant != nil })
         self.marketplaces = marketplaces
-        linkAccounts = LinkAccountsModel(service: APIMarketplaceSessionService(api: apiClient))
+        linkAccounts = Self.makeLinkAccounts(apiClient)
         today = Self.makeToday(apiClient, accessTokens, inventory, sales, marketplaces)
         (signIn, accountDeletion) = Self.makeAccount(configuration, cognito, apiClient, accessTokens)
+    }
+
+    /// Link accounts: the marketplaces linked by signing in, and the sale email forwarding.
+    private static func makeLinkAccounts(_ apiClient: APIClient) -> LinkAccountsModel {
+        LinkAccountsModel(
+            service: APIMarketplaceSessionService(api: apiClient),
+            saleEmails: SaleEmailsModel(service: APISaleEmailsService(api: apiClient)),
+        )
     }
 
     /// The Cognito client of a build with a user pool app client. The Share Extension builds the

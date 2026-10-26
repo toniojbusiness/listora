@@ -282,9 +282,11 @@ SaleForwardingStatus:
 KnownSaleForwardingStatus:
   type: string
   description: |
-    `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
-    email domain, which this deployment does not have yet.
-  enum: [needs_domain]
+    - `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+      email domain, which this deployment does not have yet.
+    - `not_set_up`, `confirming`, `working`: as `KnownSaleEmailStatus` (`getSaleEmails`, which
+      has the address and the setup steps).
+  enum: [needs_domain, not_set_up, confirming, working]
 SaleForwarding:
   type: object
   description: Forwarding marketplace sale emails to Listora, which detects sales sooner.

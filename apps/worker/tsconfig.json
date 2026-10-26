@@ -11,6 +11,7 @@
     { "path": "../../packages/accounts" },
     { "path": "../../packages/testing" },
     { "path": "../../packages/db" },
+    { "path": "../../packages/email-sales" },
     { "path": "../../packages/marketplaces" },
     { "path": "../../packages/observability" },
     { "path": "../../packages/connections" },

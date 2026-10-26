@@ -3,7 +3,8 @@ import DesignSystem
 import SwiftUI
 
 /// Link accounts: Poshmark, Mercari, Depop, and eBay (until its API is connected), each with the
-/// server's status and a one-tap Link or Relink that opens the marketplace's own sign-in page.
+/// server's status and a one-tap Link or Relink that opens the marketplace's own sign-in page;
+/// then the sale emails section (the forwarding address that catches their sold emails).
 public struct LinkAccountsView: View {
     @Bindable private var model: LinkAccountsModel
 
@@ -37,6 +38,9 @@ public struct LinkAccountsView: View {
                     )
                 }
                 .listRowBackground(Palette.surface.color)
+                if let saleEmails = model.saleEmails {
+                    SaleEmailsSection(model: saleEmails)
+                }
             }
         }
         .scrollContentBackground(.hidden)
@@ -44,7 +48,12 @@ public struct LinkAccountsView: View {
         .foregroundStyle(Palette.textPrimary)
         .navigationTitle("Link accounts")
         .task { await model.load() }
-        .refreshable { await model.load() }
+        .task { await model.saleEmails?.load() }
+        .refreshable {
+            async let links: Void = model.load()
+            async let emails: Void? = model.saleEmails?.load()
+            _ = await (links, emails)
+        }
         .sheet(item: $model.signingIn) { link in
             MarketplaceSignInView(
                 link: link,

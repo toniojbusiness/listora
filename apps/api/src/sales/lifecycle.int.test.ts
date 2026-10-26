@@ -452,6 +452,8 @@ describe('mark sold and the sale lifecycle (real Postgres, fake eBay, operation 
     expect(
       (await api.call('confirmSale', { token, params: { saleId: sold.body.id } })).status,
     ).toBe(200);
+    // The worker hands the delist to the seller first; a return while it runs would race it.
+    await runCompleted(sold.body.id);
 
     const returned = await api.call('recordSaleReturn', {
       token,

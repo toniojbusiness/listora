@@ -1,4 +1,5 @@
 import APIClient
+import DesignSystem
 import Foundation
 import ListoraAPI
 import Observation
@@ -256,9 +257,19 @@ public struct AttentionBanner: Equatable, Sendable {
 public struct SaleForwardingRow: Equatable, Sendable {
     public let statusLabel: String
     public let statusDetail: String?
+    /// The server's tone: `success` only once a marketplace email passed Listora's checks.
+    public let tone: StatusTone
 
     init(_ forwarding: Components.Schemas.SaleForwarding) {
         statusLabel = forwarding.statusDisplay.label
         statusDetail = forwarding.statusDisplay.detail
+        tone = switch forwarding.statusDisplay.tone.value1 {
+        case .success: .success
+        case .inProgress: .inProgress
+        case .checking: .checking
+        case .failed: .failed
+        case .actionNeeded: .actionNeeded
+        case .neutral, nil: .neutral
+        }
     }
 }

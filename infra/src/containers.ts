@@ -80,6 +80,17 @@ export interface ServiceResources {
    * tokens and browser sessions.
    */
   readonly tokenKeyArn: string;
+  /**
+   * Where forwarded sale emails arrive (the email stack, with a domain): the forwarding
+   * addresses' domain, the queue of SES's notifications, and the bucket of raw messages.
+   * Undefined without a domain: the API shows no address and the worker reads no mail.
+   */
+  readonly saleEmail?: {
+    readonly inboundDomain: string;
+    readonly queueUrl: string;
+    readonly bucket: string;
+    readonly region: string;
+  };
 }
 
 /**
@@ -123,6 +134,18 @@ export function containerEnvironment(
     STORAGE_S3_REGION: photoStorage.region,
     STORAGE_PUBLIC_BASE_URL: photoStorage.publicBaseUrl,
   });
+  // The worker reads the queue and the bucket; the API reads only the domain, for the address it
+  // shows, and its role has no access to either.
+  const saleEmail = ({ saleEmail: ingest }: ServiceResources): Record<string, string> =>
+    ingest === undefined
+      ? { EMAIL_INGEST: 'off' }
+      : {
+          EMAIL_INGEST: 'ses',
+          EMAIL_INBOUND_DOMAIN: ingest.inboundDomain,
+          EMAIL_SES_QUEUE_URL: ingest.queueUrl,
+          EMAIL_SES_BUCKET: ingest.bucket,
+          EMAIL_SES_REGION: ingest.region,
+        };
   const runnerService = ({ runner }: ServiceResources): Record<string, string> => ({
     BROWSER_RUNNER_LAUNCH: 'ecs',
     BROWSER_RUNNER_CLUSTER: runner.cluster,
@@ -139,6 +162,7 @@ export function containerEnvironment(
     // EBAY_NOTIFICATION_ALERT_EMAIL, and the EBAY_NOTIFICATION_VERIFICATION_TOKEN secret in
     // both containers (docs/features/ebay-notifications.md).
     TOKEN_KMS_KEY_ID: deployed().tokenKeyArn,
+    ...saleEmail(deployed()),
   });
   switch (container) {
     case 'api':

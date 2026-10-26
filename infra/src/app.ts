@@ -105,6 +105,7 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
     photoBucket: storage.photoBucket,
     photoCdnDomain: storage.photoDistribution.distributionDomainName,
     inboundMailBucket: email.inboundMailBucket,
+    ...(email.saleEmail === undefined ? {} : { saleEmail: email.saleEmail }),
     tokenKey: secrets.tokenKey,
     ...(auth === undefined ? {} : { userPool: { pool: auth.userPool, appClient: auth.appClient } }),
   });

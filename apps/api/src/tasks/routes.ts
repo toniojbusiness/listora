@@ -1,4 +1,5 @@
 import type { DbTransaction } from '@listora/db';
+import type { AdapterLookup } from '@listora/marketplaces';
 import type { ObjectStorage } from '@listora/storage';
 import type { FastifyInstance } from 'fastify';
 
@@ -12,6 +13,8 @@ import { STATUS_TO_DB, taskViews } from './views.ts';
 export interface TaskRouteDependencies extends RouteDependencies {
   /** Photo URLs for the copy-assist photos and the item's cover. */
   storage: Pick<ObjectStorage, 'publicUrl'>;
+  /** The adapters a confirmed sale email's auto-delist decides each delist with. */
+  connections: { adapters: { lookup: AdapterLookup } };
 }
 
 /**
@@ -49,7 +52,13 @@ export function registerTaskRoutes(app: FastifyInstance, deps: TaskRouteDependen
   });
 
   contractRoute(app, deps, 'completeTask', async ({ tenant, db, params, body }) => {
-    const row = await completeUserTask(transaction(db), tenant, params.taskId, body);
+    const row = await completeUserTask(
+      transaction(db),
+      tenant,
+      params.taskId,
+      body,
+      deps.connections.adapters.lookup,
+    );
     const [view] = await taskViews(db, tenant, [row], deps.storage);
     if (view === undefined) throw notFound('Task');
     return { status: 200, body: view };

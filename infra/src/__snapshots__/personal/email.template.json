@@ -22,7 +22,7 @@
         "LifecycleConfiguration": {
           "Rules": [
             {
-              "ExpirationInDays": 90,
+              "ExpirationInDays": 14,
               "Id": "expire-raw-mail",
               "Prefix": "inbound/",
               "Status": "Enabled"

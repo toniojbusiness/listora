@@ -6,6 +6,12 @@
  * - **Once per order.** A sale is unique per account, marketplace, and order id, so the
  *   webhook and the poll backstop (or two deliveries of one webhook) racing for the same order
  *   record it once; the later one finds it and changes nothing.
+ * - **One sale email and one sale check are one order.** A forwarded sale email names the order
+ *   by the marketplace's order number, which the automated sale check (reading the listing) may
+ *   not show, so the two cannot meet on the order id. A listing sells once, so when an item
+ *   already has a standing sale on the same marketplace and either sale came from an email, the
+ *   later report is the same order: a duplicate, not a double sale. The items are locked first,
+ *   so an email and a check reporting the sale at once record it once.
  * - **Only Listora's items.** Each order line is matched to the account's listing on that
  *   marketplace by the listing id (the verified or the pending one) or, failing that, the
  *   seller SKU; a line a person or a parser tied to an item names it directly. An order with no
@@ -34,6 +40,7 @@ import {
 import type { CurrencyCode } from '@listora/shared';
 
 import { recordEstimatedFees, scheduleFeeCheck } from './fees.ts';
+import { STANDING_SALE_STATUSES } from './lifecycle.ts';
 
 /** An order line as the marketplace reports it: matched by listing id, else seller SKU. */
 export interface MarketplaceSaleLine {
@@ -100,6 +107,8 @@ export async function recordSale(
       }
     }
     if (items.size === 0) return { type: 'not_listora' };
+    const reported = await findSaleOfSameListing(trx, sale, [...items.keys()]);
+    if (reported !== undefined) return { type: 'duplicate', saleId: reported };
 
     const inserted = await trx
       .insertInto('sale')
@@ -182,6 +191,41 @@ async function findSale(trx: DbTransaction, sale: NewSale): Promise<string | und
     .where('marketplace', '=', sale.marketplace)
     .where('external_order_id', '=', sale.externalOrderId)
     .executeTakeFirst();
+  return row?.id;
+}
+
+/**
+ * A standing sale of one of the items on the sale's marketplace that is this same order seen
+ * from another source: the new or the earlier report came from a sale email. Locks the items
+ * in id order (as the delist fan-out does) before it reads.
+ */
+async function findSaleOfSameListing(
+  trx: DbTransaction,
+  sale: NewSale,
+  itemIds: readonly string[],
+): Promise<string | undefined> {
+  await trx
+    .selectFrom('inventory_item')
+    .select('id')
+    .where('account_id', '=', sale.accountId)
+    .where('id', 'in', itemIds)
+    .orderBy('id')
+    .forNoKeyUpdate()
+    .execute();
+  let query = trx
+    .selectFrom('sale_item')
+    .innerJoin('sale', (join) =>
+      join
+        .onRef('sale.account_id', '=', 'sale_item.account_id')
+        .onRef('sale.id', '=', 'sale_item.sale_id'),
+    )
+    .select('sale.id')
+    .where('sale_item.account_id', '=', sale.accountId)
+    .where('sale_item.marketplace', '=', sale.marketplace)
+    .where('sale_item.item_id', 'in', itemIds)
+    .where('sale.status', 'in', STANDING_SALE_STATUSES);
+  if (sale.detectionSource !== 'email') query = query.where('sale.detection_source', '=', 'email');
+  const row = await query.orderBy('sale.sold_at').limit(1).executeTakeFirst();
   return row?.id;
 }
 

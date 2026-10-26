@@ -1,0 +1,40 @@
+From: Poshmark <orders@poshmark.com>
+To: seller.jane@example.com
+Subject: You made a sale on Poshmark!
+Date: Sat, 24 Oct 2026 18:42:10 +0000
+Message-ID: <sold.6731f0a1c2b3d4e5f6a7b8c9@poshmark.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="posh-boundary"
+DKIM-Signature: v=1; a=rsa-sha256; d=poshmark.com; s=s1; h=from:to:subject:date; bh=c3ludGhldGlj; b=c3ludGhldGljIHNpZ25hdHVyZQ==
+
+--posh-boundary
+Content-Type: text/plain; charset=utf-8
+
+Congratulations, @janes_closet! Your item sold.
+
+Item: Levi's Vintage Trucker Jacket Size M
+Price: $45.00
+Order ID: 6731f0a1c2b3d4e5f6a7b8c9
+
+View your listing: https://poshmark.com/listing/Levis-Vintage-Trucker-Jacket-Size-M-65f1c2a3b4d5e6f7a8b9c0d1
+
+Ship to: Alex Buyer, 123 Main St, Springfield, IL 62701
+
+Ship within 7 days. Your shipping label is in the Poshmark app.
+
+--posh-boundary
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>Congratulations, @janes_closet! Your item sold.</p>
+<table>
+<tr><td>Item: Levi&#39;s Vintage Trucker Jacket Size M</td></tr>
+<tr><td>Price: $45.00</td></tr>
+<tr><td>Order ID: 6731f0a1c2b3d4e5f6a7b8c9</td></tr>
+</table>
+<p><a href="https://poshmark.com/listing/Levis-Vintage-Trucker-Jacket-Size-M-65f1c2a3b4d5e6f7a8b9c0d1">View your listing</a></p>
+<p>Ship to: Alex Buyer, 123 Main St, Springfield, IL 62701</p>
+<p>Ship within 7 days. Your shipping label is in the Poshmark app.</p>
+</body></html>
+
+--posh-boundary--

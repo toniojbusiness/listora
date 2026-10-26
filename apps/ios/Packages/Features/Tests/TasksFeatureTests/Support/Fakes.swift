@@ -22,6 +22,7 @@ enum Fixtures {
             ("Price", "28.00"),
         ],
         photos: [String] = ["front", "back", "tag"],
+        saleEmail: [String: Any]? = nil,
         createdAt: Date = created,
     ) -> UserTask {
         var object: [String: Any] = [
@@ -44,6 +45,9 @@ enum Fixtures {
         if let operationID {
             object["operationId"] = operationID
         }
+        if let saleEmail {
+            object["saleEmail"] = saleEmail
+        }
         if !fields.isEmpty || !photos.isEmpty {
             object["copyAssist"] = [
                 "fields": fields.map { ["label": $0.0, "value": $0.1] },
@@ -54,6 +58,20 @@ enum Fixtures {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try! decoder.decode(UserTask.self, from: data) // swiftlint:disable:this force_try
+    }
+
+    /// What a sale email's task holds: the email's details and, for a review, its candidates.
+    static func saleEmail(reason: String, candidates: [(id: String, sku: String)] = []) -> [String: Any] {
+        [
+            "reason": reason,
+            "receivedAt": created.ISO8601Format(),
+            "excerpt": "Congratulations! Your item sold. Item: Wool Peacoat Navy Price: $45.00",
+            "title": "Wool Peacoat Navy",
+            "salePrice": ["amountCents": 4500, "currency": "USD"],
+            "soldAt": created.ISO8601Format(),
+            "orderNumber": "6731f0a1",
+            "candidates": candidates.map { ["id": $0.id, "sku": $0.sku, "title": "Denim Jacket"] },
+        ]
     }
 
     static func photo(position: Int, role: String) -> [String: Any] {
@@ -85,8 +103,12 @@ actor FakeTasksService: TasksService {
     var answers: [Result<Void, APIFailure>] = []
     struct Completion: Equatable {
         let taskID: String
-        let listingURL: String?
+        let completion: TaskCompletion
         let key: String
+
+        var listingURL: String? {
+            completion.listingURL
+        }
     }
 
     private(set) var completions: [Completion] = []
@@ -118,8 +140,10 @@ actor FakeTasksService: TasksService {
         return task
     }
 
-    func complete(taskID: String, listingURL: String?, idempotencyKey: String) async throws(APIFailure) -> UserTask {
-        completions.append(Completion(taskID: taskID, listingURL: listingURL, key: idempotencyKey))
+    func complete(taskID: String, completion: TaskCompletion, idempotencyKey: String) async throws(APIFailure)
+        -> UserTask
+    {
+        completions.append(Completion(taskID: taskID, completion: completion, key: idempotencyKey))
         try next()
         return try await settled(taskID, status: "completed")
     }

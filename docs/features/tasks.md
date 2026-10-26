@@ -38,9 +38,11 @@ assisted adapters' `pendingUser` outcome ([marketplaces.md](marketplaces.md#adap
 4. Every completion and dismissal is in the item's history (`task.completed`, `task.dismissed`,
    with the linked URL and the user's note).
 
-Confirm-sale and match-review tasks have no producer yet (T-20's sale confirmations, T-23's
-imports); until then `completeTask` refuses them, and a task kind added later is shown with its
-title, instructions, and link and a request to update the app.
+Confirm-sale and match-review tasks come from forwarded sale emails
+([email-sales.md](email-sales.md#the-tasks)): the app shows what the email said, and confirming
+or picking the item records the sale. Such tasks of any other origin (imports) have no producer
+yet, and `completeTask` refuses them; a task kind added later is shown with its title,
+instructions, and link and a request to update the app.
 
 ## The app
 

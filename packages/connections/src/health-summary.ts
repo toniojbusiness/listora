@@ -42,8 +42,9 @@ export interface ConnectionHealthSummaryView {
 }
 
 /**
- * Forwarding marketplace sale emails needs Listora's inbound email domain (SES inbound, plan
- * task T-23's email ingest), which no deployment has yet.
+ * Forwarding marketplace sale emails needs Listora's inbound email domain (SES inbound,
+ * docs/features/email-sales.md). This is the summary's row where there is none; with one, the
+ * API reports the account's own forwarding instead (apps/api/src/sale-emails/views.ts).
  */
 export const SALE_FORWARDING: SaleForwardingView = {
   status: 'needs_domain',
