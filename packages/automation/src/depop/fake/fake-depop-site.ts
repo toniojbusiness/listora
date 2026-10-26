@@ -806,8 +806,14 @@ function plainPage(title: string, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(title)}</title></head><body>${body}</body></html>`;
 }
 
+/**
+ * The sign-in page. Its email field is a text field: an `email` input keeps the app's sign-in web
+ * view from going idle in the simulator while it has focus, which stretches every UI test step to
+ * the framework's two-minute idle timeout (it made PhoneExecutionUITests time out on CI). Listora
+ * never reads this form.
+ */
 function loginForm(): string {
-  return `<main><h1>Log in to Depop</h1><form method="post" action="/login/"><input name="username"><input name="password" type="password"><button type="submit">Log in</button></form><form method="post" action="/login/email-link/"><input name="email" type="email" placeholder="Email"><button type="submit">Email me a sign-in link</button></form></main>`;
+  return `<main><h1>Log in to Depop</h1><form method="post" action="/login/"><input name="username"><input name="password" type="password"><button type="submit">Log in</button></form><form method="post" action="/login/email-link/"><input name="email" placeholder="Email"><button type="submit">Email me a sign-in link</button></form></main>`;
 }
 
 function emailLinkSent(): string {
