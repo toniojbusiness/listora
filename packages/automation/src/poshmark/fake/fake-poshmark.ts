@@ -22,7 +22,7 @@
  *   GET  /closet/<username>          a closet: ?availability=all|available|sold_out|not_for_sale,
  *                                    &sort_by=added_desc, &query=, &max_id=
  */
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -980,14 +980,26 @@ function page(
   seller: string | null,
   data: Record<string, unknown> = {},
 ): string {
+  // As Poshmark's pages have it: the user's id in `auth.identity`, the handle closets are
+  // addressed by in `userCookies.userInfo.dh`, and no `userInfo` signed out.
   const state = {
     auth: {
       isUserLoggedIn: seller !== null,
-      identity: seller === null ? null : { username: seller, display_handle: seller },
+      identity: seller === null ? null : userId(seller),
+      isGuestLoggedIn: false,
+    },
+    userCookies: {
+      permanentSession: {},
+      ...(seller === null ? {} : { userInfo: { uid: userId(seller), dh: seller } }),
     },
     ...data,
   };
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape(title)}</title></head><body>${body}<script>window.__INITIAL_STATE__=${json(state)};${REMOVE_SELF}</script></body></html>`;
+}
+
+/** A seller's id, as Poshmark's 24-hex ids look. */
+function userId(seller: string): string {
+  return createHash('sha256').update(seller).digest('hex').slice(0, 24);
 }
 
 function notFound(seller: string | null): string {

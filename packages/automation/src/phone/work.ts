@@ -68,6 +68,7 @@ import {
   type AutomationProfile,
 } from '../profiles.ts';
 import { challengeMessage } from '../safety/challenges.ts';
+import type { PageEvidence } from '../safety/evidence.ts';
 import { Pacing } from '../safety/pacing.ts';
 import {
   prepareSaleCheck,
@@ -78,7 +79,7 @@ import {
 import type { SaleCheckSettings } from '../settings.ts';
 import { prepareSessionCheck, recordSessionCheck } from '../session-checks/job.ts';
 import { queueSessionCheckForPhone } from '../session-checks/schedule.ts';
-import { readPhoneAnswer } from './answers.ts';
+import { readPhoneAnswer, readPhoneEvidence } from './answers.ts';
 import { PHONE_RUNTIME_VERSION, type PhoneCallInput } from './runtime.ts';
 import {
   callKey,
@@ -262,7 +263,7 @@ export async function answerPhoneCall(
       throw new PhoneCallConflictError();
     }
     const run = readPhoneAnswer(pending.input.call, answer.answer);
-    logStopped(deps.logger, work, pending, run);
+    logStopped(deps.logger, work, pending, run, readPhoneEvidence(answer.answer));
     await finishRun(trx, work, pending.runId, run);
     if (run.type === 'ran' && !run.result.ok && run.result.failure.kind === 'challenge') {
       await discardSession(deps, trx, work, run.result.failure.challenge);
@@ -718,13 +719,15 @@ function profileFor(deps: PhoneWorkDependencies, request: SessionRequest): Autom
 
 /**
  * A call the phone's run stopped, logged as the runner logs its own (`automation script
- * stopped`): the phone keeps no screenshot, so its step and reason are the run's evidence.
+ * stopped`): the phone keeps no screenshot, so its step, its reason, and what a page it no
+ * longer understood had instead (structure only) are the run's evidence.
  */
 function logStopped(
   logger: Logger,
   work: WorkRow,
   pending: PendingState,
   run: ReturnType<typeof readPhoneAnswer>,
+  evidence: PageEvidence | null,
 ): void {
   if (run.type !== 'ran' || run.result.ok) return;
   const { failure, mutated } = run.result;
@@ -739,6 +742,7 @@ function logStopped(
       failure: failure.kind,
       ...(failure.kind === 'challenge' ? { challenge: failure.challenge } : {}),
       ...(failure.kind === 'error' ? { code: failure.code, reason: failure.message } : {}),
+      ...(evidence === null ? {} : { evidence }),
       mutated,
     },
     'automation script stopped',

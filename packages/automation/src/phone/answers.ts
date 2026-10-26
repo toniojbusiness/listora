@@ -15,6 +15,7 @@ import type { ScriptCall } from '../adapter/script-call.ts';
 import { isWriteCall } from '../adapter/script-call.ts';
 import type { SessionRun } from '../adapter/sessions.ts';
 import type { ScriptErrorCode, ScriptResult } from '../runner/types.ts';
+import { pageEvidenceSchema, type PageEvidence } from '../safety/evidence.ts';
 
 const SCRIPT_ERROR_CODES = [
   'rate_limited',
@@ -161,6 +162,18 @@ export function readPhoneAnswer(call: ScriptCall, answer: unknown): SessionRun<u
     failure: { ...result.failure, screenshotKey: null },
   };
   return { type: 'ran', result: stopped };
+}
+
+/**
+ * What the page had instead, when the phone's run stopped at a page its script no longer
+ * understands (safety/evidence.ts): only for the log line, so it is read apart from the answer
+ * and never kept with the run.
+ */
+export function readPhoneEvidence(answer: unknown): PageEvidence | null {
+  const read = z
+    .object({ result: z.object({ failure: z.object({ evidence: pageEvidenceSchema }) }) })
+    .safeParse(answer);
+  return read.success ? read.data.result.failure.evidence : null;
 }
 
 /** An answer the server can't read: the phone's failure, and maybe a change (for a write). */

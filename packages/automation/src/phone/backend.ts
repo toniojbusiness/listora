@@ -158,6 +158,12 @@ export class BridgeBackend implements PageBackend {
     )) as InspectedPage;
   }
 
+  read(script: string): Promise<unknown> {
+    return this.#call('element', () =>
+      this.#host.evaluate(`return ${script};`, {}, this.#waitMs + HOST_MARGIN_MS),
+    );
+  }
+
   screenshot(): Promise<string | null> {
     return Promise.resolve(null);
   }
