@@ -69,4 +69,6 @@ some precondition, or a gap with real impact. **Low** is defense in depth.
 - **iPhone app.** The session token is a Keychain item (`AfterFirstUnlockThisDeviceOnly`), never
   in UserDefaults or files; App Transport Security exceptions exist only in the Dev
   configuration; the bundle holds no secrets; the marketplace sign-in view uses a non-persistent
-  data store and keeps captured cookies in memory only.
+  data store and keeps captured cookies in memory only. It opens a pasted or shared sign-in
+  link only on the marketplace's own domains over https; a shared one waits in the Keychain
+  (`AfterFirstUnlockThisDeviceOnly`) only until the sign-in page takes it or closes.

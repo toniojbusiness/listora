@@ -43,11 +43,15 @@ export interface SessionRow {
 
 export function marketplaceSessionView(
   row: SessionRow,
-  profile: Pick<AutomationProfile, 'loginUrl' | 'cookieDomains'>,
+  profile: Pick<AutomationProfile, 'loginUrl' | 'cookieDomains' | 'emailsSignInLinks'>,
   now: Date,
 ): MarketplaceSession {
   const name = marketplaceName(row.marketplace);
-  const login = { url: profile.loginUrl, cookieDomains: [...profile.cookieDomains] };
+  const login = {
+    url: profile.loginUrl,
+    cookieDomains: [...profile.cookieDomains],
+    emailsSignInLinks: profile.emailsSignInLinks,
+  };
   const base = { marketplace: row.marketplace, login };
   const { connection, check } = row;
   if (connection === null || connection.mode === 'assisted') {

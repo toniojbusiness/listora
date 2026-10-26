@@ -57,6 +57,12 @@ export interface AutomationProfile {
    * seller signs in there (with any two-step check) and the app hands Listora the cookies.
    */
   readonly loginUrl: string;
+  /**
+   * The marketplace may sign the seller in with a link it emails them (Depop does). Tapped in
+   * the email, the link signs in the phone's default browser, not Listora, so the app asks the
+   * seller to copy it (or share it to Listora) instead and opens it in its own sign-in page.
+   */
+  readonly emailsSignInLinks: boolean;
   readonly pacing: PacingSettings;
   readonly limits: RunLimits;
   readonly challenges: ChallengeSigns;
@@ -105,6 +111,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     origins: ['https://poshmark.com', 'https://www.poshmark.com'],
     cookieDomains: ['poshmark.com'],
     loginUrl: 'https://poshmark.com/login',
+    emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: COMMON_SIGNS,
@@ -117,6 +124,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     origins: ['https://www.mercari.com', 'https://mercari.com'],
     cookieDomains: ['mercari.com'],
     loginUrl: 'https://www.mercari.com/login/',
+    emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: MERCARI_CHALLENGE_SIGNS,
@@ -129,6 +137,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     origins: ['https://www.depop.com', 'https://depop.com'],
     cookieDomains: ['depop.com'],
     loginUrl: 'https://www.depop.com/login/',
+    emailsSignInLinks: true,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: DEPOP_CHALLENGE_SIGNS,
@@ -143,6 +152,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     origins: ['https://www.ebay.com', 'https://ebay.com', 'https://signin.ebay.com'],
     cookieDomains: ['ebay.com'],
     loginUrl: 'https://signin.ebay.com/signin/',
+    emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: EBAY_CHALLENGE_SIGNS,

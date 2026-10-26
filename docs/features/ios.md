@@ -18,7 +18,9 @@ The details and commands are in [apps/ios/README.md](../../apps/ios/README.md).
   (`APP_GROUP_IDENTIFIER` in `Base.xcconfig`): the session is a keychain item in the group's
   access group (`SESSION_KEYCHAIN_GROUP`, `KeychainAccessGrantStorage.session(accessGroup:)`).
   Personal device builds, signed by a free team that has no App Groups, use a Keychain Sharing
-  group instead (apps/ios/README.md, Installing on your iPhone).
+  group instead (apps/ios/README.md, Installing on your iPhone). The same access group carries
+  a marketplace's emailed sign-in link from the extension to the app's open sign-in page
+  (`KeychainSignInLinkHandoff`, [marketplace-linking.md](marketplace-linking.md#emailed-sign-in-links-depop)).
 - Configuration comes only from the build configuration's xcconfig file (`Dev-Debug`,
   `Staging-Release`, `Prod-Release`) through Info.plist. `AppConfiguration` validates it at
   launch and stops the app with an error that names the bad key. Only Dev may use plain HTTP.
