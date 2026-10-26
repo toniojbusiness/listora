@@ -99,6 +99,62 @@ struct E2EStack {
         _ = try await control("ebay/faults", method: "DELETE", body: nil)
     }
 
+    /// A ready item whose Depop listing is being published (`POST /items/depop`): the publish
+    /// waits for the phone, which runs Depop.
+    func seedQueuedDepopListing() async throws -> SeededListing {
+        let data = try await control("items/depop", method: "POST", body: [:])
+        return try JSONDecoder().decode(SeededListing.self, from: data)
+    }
+
+    /// Makes the fake Depop show a check on the next matching page (`POST /depop/faults`):
+    /// `captcha`, `bot_check`, `login_challenge`, or `session_expired`.
+    func injectDepopCheck(action: String, type: String) async throws {
+        _ = try await control("depop/faults", method: "POST", body: ["action": action, "fault": ["type": type]])
+    }
+
+    /// Removes every check a test asked the fake Depop for (`DELETE /depop/faults`).
+    func clearDepopChecks() async throws {
+        _ = try await control("depop/faults", method: "DELETE", body: nil)
+    }
+
+    /// The fake Depop's products (`GET /depop/products`).
+    func depopProducts() async throws -> [DepopProduct] {
+        let data = try await control("depop/products", method: "GET", body: nil)
+        return try JSONDecoder().decode([DepopProduct].self, from: data)
+    }
+
+    /// Unlinks the marketplace through the API (`disconnectConnection`), so a test starts with
+    /// nothing linked there and no work waiting for a phone; nothing to unlink is fine.
+    func unlink(_ marketplace: String) async throws {
+        var request = URLRequest(url: apiURL.appending(path: "v1/connections/\(marketplace)"))
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        XCTAssertTrue([200, 404].contains(status), String(bytes: data, encoding: .utf8) ?? "")
+    }
+
+    /// The listing as the API reports it (`getListing`).
+    func listing(id: String) async throws -> SavedListing {
+        var request = URLRequest(url: apiURL.appending(path: "v1/listings/\(id)"))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200, String(bytes: data, encoding: .utf8) ?? "")
+        return try JSONDecoder().decode(SavedListing.self, from: data)
+    }
+
+    /// Ends the listing through the API (`endListing`), as the item screen's End listing does.
+    func endListing(id: String) async throws {
+        var request = URLRequest(url: apiURL.appending(path: "v1/listings/\(id)/end"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["reason": "not_available"])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 202, String(bytes: data, encoding: .utf8) ?? "")
+    }
+
     private func control(_ path: String, method: String, body: [String: Any]?) async throws -> Data {
         let base = try XCTUnwrap(controlURL, "the local stack has no control endpoint")
         var request = URLRequest(url: base.appending(path: path))
@@ -116,6 +172,31 @@ struct E2EStack {
 struct SeededItem: Decodable {
     let id: String
     let sku: String
+}
+
+struct SeededListing: Decodable {
+    let id: String
+    let sku: String
+    let listingId: String
+}
+
+/// A product on the fake Depop site.
+struct DepopProduct: Decodable {
+    let slug: String
+    /// `ONSALE`, `SOLD`, or `DELETED`.
+    let status: String
+    let priceCents: Int
+    let description: String
+}
+
+/// The parts of the contract's `Listing` the tests check.
+struct SavedListing: Decodable {
+    struct StatusDisplay: Decodable {
+        let label: String
+    }
+
+    let status: String
+    let statusDisplay: StatusDisplay
 }
 
 struct SoldItem: Decodable {

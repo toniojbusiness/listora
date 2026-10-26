@@ -51,7 +51,7 @@ struct PriceOption: View {
                 .foregroundStyle(Palette.textPrimary)
             if let warning {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
-                    .font(Typography.footnote.weight(.semibold))
+                    .font(Typography.smallEmphasis)
                     .foregroundStyle(Palette.warning)
             }
         }
@@ -97,7 +97,7 @@ struct FloorRow: View {
                                 .foregroundStyle(Palette.textPrimary)
                             if isBelow {
                                 Text("Your price is below this")
-                                    .font(Typography.footnote.weight(.semibold))
+                                    .font(Typography.smallEmphasis)
                                     .foregroundStyle(Palette.warning)
                             }
                         }
@@ -109,7 +109,7 @@ struct FloorRow: View {
                             .foregroundStyle(Palette.textPrimary)
                             .fixedSize()
                         Image(systemName: "chevron.down")
-                            .font(Typography.footnote.weight(.semibold))
+                            .font(Typography.smallEmphasis)
                             .foregroundStyle(Palette.textSecondary)
                             .rotationEffect(.degrees(isExpanded ? 180 : 0))
                             .accessibilityHidden(true)
@@ -151,7 +151,7 @@ struct FloorRow: View {
                 Spacer()
                 Text(floor.price).monospacedDigit()
             }
-            .font(Typography.subheadline.weight(.semibold))
+            .font(Typography.emphasis)
             .foregroundStyle(Palette.textPrimary)
             .accessibilityElement(children: .combine)
             Text(floor.feeNote)
@@ -178,7 +178,7 @@ struct PriceSkeleton: View {
                         Spacer()
                         SkeletonBlock(width: 72, height: 20)
                     }
-                    .cardStyle(.outlined)
+                    .cardStyle(.flat)
                 }
                 SectionHeader("Don't sell below").padding(.top, Spacing.sm)
                 VStack(spacing: Spacing.md) {
@@ -191,7 +191,7 @@ struct PriceSkeleton: View {
                         }
                     }
                 }
-                .cardStyle(.outlined)
+                .cardStyle(.flat)
             }
             .padding(Spacing.md)
         }

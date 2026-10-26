@@ -71,6 +71,20 @@ enum TestImages {
         return image
     }
 
+    /// A JPEG of one flat gray: nothing in it to lift off a background.
+    static func solid(width: Int, height: Int) -> Data {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                  data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
+              )
+        else { fatalError("Could not create a bitmap context") }
+        context.setFillColor(red: 0.6, green: 0.6, blue: 0.6, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        guard let image = context.makeImage() else { fatalError("Could not draw the image") }
+        return encode(image)
+    }
+
     static func encode(_ image: CGImage, properties: [CFString: Any] = [:]) -> Data {
         let data = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil)

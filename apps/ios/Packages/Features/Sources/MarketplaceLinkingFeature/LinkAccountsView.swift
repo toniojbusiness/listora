@@ -1,4 +1,5 @@
 import APIClient
+import Core
 import DesignSystem
 import SwiftUI
 
@@ -17,9 +18,13 @@ public struct LinkAccountsView: View {
         List {
             switch model.loadState {
             case .loading where model.links.isEmpty:
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
+                Section {
+                    ForEach(0 ..< 4, id: \.self) { _ in
+                        SkeletonRow()
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Loading your marketplaces")
             case let .failed(error) where model.links.isEmpty:
                 loadFailure(error)
             case .loading, .loaded, .failed:
@@ -27,6 +32,7 @@ public struct LinkAccountsView: View {
                     ForEach(model.links) { link in
                         LinkAccountRow(
                             link: link,
+                            installationID: model.installationID,
                             progress: model.progress[link.marketplace],
                             onLink: { model.startLinking(link) },
                             onCheckAgain: { Task { await model.checkAgain(link) } },
@@ -62,6 +68,9 @@ public struct LinkAccountsView: View {
         .navigationTitle("Link accounts")
         .task { await model.load() }
         .task { await model.saleEmails?.load() }
+        .onReceive(NotificationCenter.default.publisher(for: .phoneWorkFinished)) { _ in
+            Task { await model.refresh() }
+        }
         .refreshable {
             async let links: Void = model.load()
             async let emails: Void? = model.saleEmails?.load()
@@ -95,6 +104,7 @@ public struct LinkAccountsView: View {
 
 private struct LinkAccountRow: View {
     let link: MarketplaceLink
+    let installationID: String
     let progress: LinkAccountsModel.LinkProgress?
     let onLink: () -> Void
     let onCheckAgain: () -> Void
@@ -145,6 +155,10 @@ private struct LinkAccountRow: View {
                     .font(Typography.caption)
                     .foregroundStyle(Palette.textSecondary)
                     .accessibilityIdentifier("linkAccounts.detail.\(link.marketplace)")
+            }
+            if let runsOn = link.runsOn {
+                RunsOnLabel(runsOn: runsOn, installationID: installationID)
+                    .accessibilityIdentifier("linkAccounts.runsOn.\(link.marketplace)")
             }
             switch progress {
             case .sending:
@@ -221,5 +235,23 @@ private struct LinkAccountRow: View {
         .padding(.vertical, Spacing.xxs)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("linkAccounts.row.\(link.marketplace)")
+    }
+}
+
+/// Where a marketplace's automated steps run, and what waits for this phone.
+struct RunsOnLabel: View {
+    let runsOn: RunsOn
+    let installationID: String
+
+    var body: some View {
+        let waiting = runsOn.waiting == 1 ? "1 waiting" : "\(runsOn.waiting) waiting"
+        let text = runsOn.text(thisInstallation: installationID)
+        let shown = runsOn.waiting > 0 ? "\(text) · \(waiting)" : text
+        Label(shown, systemImage: runsOn.phone ? "iphone" : "cloud")
+            .font(Typography.caption)
+            .foregroundStyle(Palette.textSecondary)
+            // One element that reads the words, not the symbol's name.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(shown)
     }
 }

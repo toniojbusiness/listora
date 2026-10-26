@@ -5,6 +5,7 @@ import DesignSystem
 import InventoryFeature
 import MarketplaceLinkingFeature
 import MarketplacesFeature
+import PhoneExecutionFeature
 import SalesFeature
 import SettingsFeature
 import SignInFeature
@@ -22,6 +23,8 @@ public struct RootView: View {
     @State private var selection: AppTab
     @State private var settingsPath: [SettingsDestination] = []
     @State private var showsSettings = false
+    /// What to open once the first-run guide has closed (a sheet cannot open while it closes).
+    @State private var afterGettingStarted: [SettingsDestination]?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -49,6 +52,20 @@ public struct RootView: View {
                 dependencies.signIn.refresh()
             }
         }
+        // The first-run guide follows the session from launch, so it shows after a sign-in only.
+        .onChange(of: dependencies.signIn.isSignedIn, initial: true) { _, signedIn in
+            dependencies.gettingStarted.signedInChanged(signedIn)
+        }
+        .fullScreenCover(
+            isPresented: Bindable(dependencies.gettingStarted).isPresented,
+            onDismiss: {
+                if let path = afterGettingStarted {
+                    afterGettingStarted = nil
+                    openSettings(at: path)
+                }
+            },
+            content: { gettingStarted },
+        )
         .onChange(of: dependencies.signIn.isSignedIn) { _, signedIn in
             // The next person (or the same one, again) starts on Today with nothing open.
             if !signedIn {
@@ -76,6 +93,11 @@ public struct RootView: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active {
                 Task { await dependencies.marketplaces.refreshAttention() }
+                // Opening the app runs the marketplace work waiting for this phone (a sale's
+                // delists among it) at once.
+                dependencies.phone.runner.runPhoneWork(.opened)
+            } else if phase == .background {
+                PhoneBackgroundWork.schedule()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: TaskNotificationRouter.openTasks)) { _ in
@@ -111,6 +133,7 @@ public struct RootView: View {
                         selection = .inventory
                     }
                 },
+                onAddItem: { selection = .addItem },
                 settings: { settingsButton },
             )
         case .inventory:
@@ -119,13 +142,16 @@ public struct RootView: View {
                 onAddItem: { selection = .addItem },
                 header: {
                     ConnectionAttentionBanner(model: dependencies.marketplaces) {
-                        settingsPath = [.marketplaces]
-                        showsSettings = true
+                        openSettings(at: [.marketplaces])
                     }
                 },
             )
         case .sales:
-            SalesView(environment: dependencies.sales) { settingsButton }
+            SalesView(
+                environment: dependencies.sales,
+                onOpenInventory: { selection = .inventory },
+                settings: { settingsButton },
+            )
         case .addItem:
             AddItemView(environment: dependencies.addItem)
         case .tasks:
@@ -137,9 +163,29 @@ public struct RootView: View {
 extension RootView {
     private var settingsButton: some View {
         SettingsButton(needsAttention: dependencies.marketplaces.attention != nil) {
-            settingsPath = []
-            showsSettings = true
+            openSettings()
         }
+    }
+
+    private func openSettings(at path: [SettingsDestination] = []) {
+        settingsPath = path
+        showsSettings = true
+    }
+
+    /// The first-run guide; each of its ways out ends it for good.
+    private var gettingStarted: some View {
+        let guide = dependencies.gettingStarted
+        return GettingStartedView(
+            onLinkAccounts: {
+                afterGettingStarted = [.linkAccounts]
+                guide.finish()
+            },
+            onAddItem: {
+                guide.finish()
+                selection = .addItem
+            },
+            onSkip: { guide.finish() },
+        )
     }
 
     private var settings: some View {

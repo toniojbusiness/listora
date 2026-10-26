@@ -106,7 +106,21 @@ enum PhotoPreparation {
         return image
     }
 
-    private static func encode(_ image: CGImage) throws(PhotoPreparationError) -> PreparedPhoto {
+    /// A photo this app prepared earlier, as it is: its size, checksum, and sharpness, without
+    /// encoding it again (undoing a background cleanup puts the original back byte for byte).
+    static func describe(_ imageData: Data) throws(PhotoPreparationError) -> PreparedPhoto {
+        let image = try decodeUpright(imageData, maxLongEdge: nil)
+        return PreparedPhoto(
+            data: imageData,
+            width: image.width,
+            height: image.height,
+            sha256: SHA256.hash(data: imageData).map { String(format: "%02x", $0) }.joined(),
+            sharpness: BlurDetector.sharpness(of: image),
+        )
+    }
+
+    /// Encodes `image` as the upload's JPEG, with no metadata.
+    static func encode(_ image: CGImage) throws(PhotoPreparationError) -> PreparedPhoto {
         let output = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil)
         else {

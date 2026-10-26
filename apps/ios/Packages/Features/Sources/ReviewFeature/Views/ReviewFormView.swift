@@ -159,7 +159,7 @@ struct ReviewFormView: View {
                         .accessibilityIdentifier("review.copy.\(copy.marketplace)")
                     }
                 }
-                .cardStyle(.outlined, padding: 0)
+                .cardStyle(.flat, padding: 0)
             }
         }
     }
@@ -198,7 +198,7 @@ struct ReviewFormView: View {
                 "Add \(missing.map(\.inlineTitle).formatted(.list(type: .and))) to continue.",
                 systemImage: "exclamationmark.triangle.fill",
             )
-            .font(Typography.footnote.weight(.semibold))
+            .font(Typography.smallEmphasis)
             .foregroundStyle(Palette.warning)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("review.missing")
@@ -350,13 +350,13 @@ struct CopyRow: View {
                     .lineLimit(2)
                 if let problem = copy.problems.first {
                     Label(problem, systemImage: StatusTone.failed.systemImage)
-                        .font(Typography.footnote.weight(.semibold))
+                        .font(Typography.smallEmphasis)
                         .foregroundStyle(Palette.danger)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right")
-                .font(Typography.footnote.weight(.semibold))
+                .font(Typography.smallEmphasis)
                 .foregroundStyle(Palette.textSecondary)
                 .frame(minHeight: 36)
                 .accessibilityHidden(true)

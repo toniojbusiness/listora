@@ -9,6 +9,7 @@
   "references": [
     { "path": "../ai" },
     { "path": "../analysis" },
+    { "path": "../automation" },
     { "path": "../db" },
     { "path": "../marketplaces" },
     { "path": "../testing" }

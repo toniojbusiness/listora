@@ -65,6 +65,8 @@ tags:
     description: The Today screen (what needs the seller, and the money summary) and its morning summary.
   - name: voice
     description: Spoken corrections on the review screen that the app could not parse itself.
+  - name: phone
+    description: The seller's devices, and the marketplace work their iPhone runs (docs/features/phone-execution.md).
 
 paths:
   /health/live:
@@ -159,6 +161,8 @@ paths:
     $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1callback'
   /v1/connections/{marketplace}/checks:
     $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1checks'
+  /v1/connections/{marketplace}/execution:
+    $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1execution'
   /v1/connection-health:
     $ref: './paths/connections.yaml#/~1v1~1connection-health'
   /v1/marketplace-sessions:
@@ -197,6 +201,12 @@ paths:
     $ref: './paths/today.yaml#/~1v1~1today'
   /v1/today/settings:
     $ref: './paths/today.yaml#/~1v1~1today~1settings'
+  /v1/devices/{installationId}:
+    $ref: './paths/phone.yaml#/~1v1~1devices~1{installationId}'
+  /v1/phone-runs:
+    $ref: './paths/phone.yaml#/~1v1~1phone-runs'
+  /v1/phone-runs/{runId}/calls/{index}:
+    $ref: './paths/phone.yaml#/~1v1~1phone-runs~1{runId}~1calls~1{index}'
 
 components:
   securitySchemes:
@@ -238,6 +248,12 @@ components:
       $ref: './components/parameters.yaml#/TaskId'
     MarketplacePath:
       $ref: './components/parameters.yaml#/MarketplacePath'
+    InstallationId:
+      $ref: './components/parameters.yaml#/InstallationId'
+    RunId:
+      $ref: './components/parameters.yaml#/RunId'
+    CallIndex:
+      $ref: './components/parameters.yaml#/CallIndex'
 
   responses:
     DefaultError:
@@ -633,6 +649,37 @@ components:
       $ref: './components/schemas/marketplace-sessions.yaml#/SessionCookie'
     MarketplaceSessionLink:
       $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSessionLink'
+    # ---------------------------------------------------------------- phone
+    ExecutionLocation:
+      $ref: './components/schemas/phone.yaml#/ExecutionLocation'
+    KnownExecutionLocation:
+      $ref: './components/schemas/phone.yaml#/KnownExecutionLocation'
+    ConnectionExecution:
+      $ref: './components/schemas/phone.yaml#/ConnectionExecution'
+    ConnectionExecutionChange:
+      $ref: './components/schemas/phone.yaml#/ConnectionExecutionChange'
+    DevicePlatform:
+      $ref: './components/schemas/phone.yaml#/DevicePlatform'
+    PushEnvironment:
+      $ref: './components/schemas/phone.yaml#/PushEnvironment'
+    DeviceRegistration:
+      $ref: './components/schemas/phone.yaml#/DeviceRegistration'
+    Device:
+      $ref: './components/schemas/phone.yaml#/Device'
+    PhoneWorkPurpose:
+      $ref: './components/schemas/phone.yaml#/PhoneWorkPurpose'
+    KnownPhoneWorkPurpose:
+      $ref: './components/schemas/phone.yaml#/KnownPhoneWorkPurpose'
+    PhoneRunClaim:
+      $ref: './components/schemas/phone.yaml#/PhoneRunClaim'
+    PhoneCall:
+      $ref: './components/schemas/phone.yaml#/PhoneCall'
+    PhoneRun:
+      $ref: './components/schemas/phone.yaml#/PhoneRun'
+    PhoneRunResult:
+      $ref: './components/schemas/phone.yaml#/PhoneRunResult'
+    PhoneCallAnswer:
+      $ref: './components/schemas/phone.yaml#/PhoneCallAnswer'
     # ---------------------------------------------------------------- sales
     SaleStatus:
       $ref: './components/schemas/sales.yaml#/SaleStatus'

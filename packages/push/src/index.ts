@@ -1,5 +1,16 @@
+export { APNS_ENDPOINTS, ApnsPushSender } from './apns.ts';
+export type { ApnsConfig } from './apns.ts';
+export {
+  BACKGROUND_PUSH_TASK,
+  deliverBackgroundPush,
+  enqueueBackgroundPush,
+  parseBackgroundPush,
+} from './background.ts';
+export type { BackgroundPush } from './background.ts';
 export { createPushSender, loadPushConfig, PUSH_DRIVERS, PushConfigError } from './config.ts';
 export type { PushConfig, PushDriver } from './config.ts';
+export { PostgresDeviceDirectory } from './devices.ts';
+export type { DeviceDirectory, DeviceToken } from './devices.ts';
 export {
   InvalidPushNotificationError,
   parsePushNotification,

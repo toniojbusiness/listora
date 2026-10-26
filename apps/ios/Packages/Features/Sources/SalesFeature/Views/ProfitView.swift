@@ -163,7 +163,7 @@ private struct ProfitPeriodPicker: View {
         .font(Typography.subheadline)
         .foregroundStyle(Palette.textPrimary)
         .tint(Palette.brand.color)
-        .cardStyle(.outlined)
+        .cardStyle(.flat)
     }
 }
 
@@ -323,7 +323,7 @@ private struct ProfitStat: View {
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle(.outlined)
+        .cardStyle(.flat)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("profit.\(identifier)")
     }

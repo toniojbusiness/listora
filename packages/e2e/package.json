@@ -13,6 +13,7 @@
   "dependencies": {
     "@listora/ai": "*",
     "@listora/analysis": "*",
+    "@listora/automation": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",
     "@listora/testing": "*",

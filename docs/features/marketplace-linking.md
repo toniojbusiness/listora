@@ -1,8 +1,9 @@
 # Linking marketplaces from the iPhone
 
 Poshmark, Mercari, Depop (until its partner API), and eBay (until its API is connected,
-[ebay-automation.md](ebay-automation.md)) are automated by the cloud browser runner in the
-seller's own session (decision D1, [automation.md](automation.md)).
+[ebay-automation.md](ebay-automation.md)) are automated in the seller's own session (decision D1,
+[automation.md](automation.md)): Poshmark, Mercari, and Depop by the iPhone app that linked them,
+eBay by the cloud browser runner ([phone-execution.md](phone-execution.md)).
 The seller links each one from the app: **Settings > Link accounts**. This page describes that
 flow end to end.
 
@@ -13,8 +14,9 @@ flow end to end.
    `Not confirmed` (with the reason). Each row has **Link** (or **Relink** once it had a session).
 2. Tapping it opens the marketplace's own sign-in page inside Listora. The user signs in there,
    including any two-step check, then taps **I'm signed in**.
-3. The row shows `Checking...` until the browser runner has confirmed that the marketplace
-   accepts the session, then `Linked`. If the check fails, or has not finished within 15
+3. The row shows `Checking...` until the check has confirmed that the marketplace accepts the
+   session, then `Linked`. A marketplace that runs on the phone is checked on this iPhone at
+   once, and its row says "Runs on this iPhone". If the check fails, or has not finished within 15
    minutes, the row says `Not confirmed` and why, and offers **Check again** (the same session,
    no sign-in) next to Relink. A session the marketplace rejected says `Sign in again`.
 4. **Unlink** (on every row with a session, or with eBay's API connection) asks to confirm, then
@@ -56,6 +58,11 @@ does not read sessions from the marketplaces' own iPhone apps.
   `404` (nothing linked any more, an earlier try whose answer was lost) counts as unlinked.
 - The sign-in page and cookie domains come from the server (`login`), so the app has no
   marketplace URLs of its own; in development they point at the fake site.
+- **On the phone.** Before it sends a sign-in, the model makes sure Listora knows this device
+  (`registerDevice`), and the link names this installation (`installationId`). It also keeps
+  the sign-in's own cookies on the phone, then has the phone run the session's check at once
+  when the marketplace runs there ([phone-execution.md](phone-execution.md)). Each session's
+  `execution` says where it runs.
 
 ## The API
 
@@ -110,7 +117,12 @@ row and its job (`automation_session_check`, job key `session-check:<connection>
 an older link records nothing.
 
 The browser runner runs the job (`runSessionCheck`): it opens the session once and runs the
-marketplace adapter's read-only health script (an `automation_run` with purpose `health`).
+marketplace adapter's read-only health script (an `automation_run` with purpose `health`). For a
+connection that runs on the phone, the job hands the check to the phone instead (`phone_work`),
+which runs the same script in the seller's session there. The outcomes below are the same. A
+check that waits for the phone says `Checking on your iPhone...` (it is waiting, not stuck, so the
+15-minute deadline does not apply), and a check the phone meets is handed to the seller to
+complete ([phone-execution.md](phone-execution.md#the-phone-runtime)).
 
 - **Passed** when the script read the seller's account page.
 - **Failed, relink** when the marketplace rejected the session or showed a CAPTCHA, a bot check,
@@ -156,6 +168,8 @@ and the runner checks the session against the fake site in local headless Chromi
 - `LinkAccountsUITests`: the real app signs in on a fake marketplace page served by
   `StubAPIServer` and links it; the test checks that the cookie was sent and the password was not,
   then unlinks it.
+- `PhoneExecutionUITests`: on the local stack, the app links Depop on the fake Depop site and the
+  phone checks the session ([phone-execution.md](phone-execution.md#tests)).
 
 ## Follow-ups
 

@@ -208,6 +208,29 @@ export async function createListedItem(
   }
 }
 
+/**
+ * A ready item with a Depop listing that is being published: the publish is only queued, for
+ * the phone that runs Depop to take (docs/features/phone-execution.md), so nothing waits for it.
+ */
+export async function createQueuedDepopListing(
+  api: StackApi,
+  details: Record<string, unknown> = {},
+  timeoutMs = 30_000,
+): Promise<SeededListedItem> {
+  const item = await createReadyItem(api, details, timeoutMs);
+  const merged = { ...READY_ITEM_DETAILS, ...details };
+  const listing = await call<{ id: string }>(api, 'POST', `/v1/items/${item.id}/listings`, {
+    marketplace: 'depop',
+    variant: {
+      title: merged.title,
+      description: merged.description,
+      price: merged.listPrice,
+    },
+  });
+  await call(api, 'POST', `/v1/listings/${listing.id}/publish`);
+  return { ...item, listingId: listing.id };
+}
+
 /** An 800 x 600 JPEG of one color. */
 async function jpeg(red: number): Promise<Uint8Array> {
   return new Uint8Array(

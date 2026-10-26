@@ -65,7 +65,7 @@ struct CustomPriceView: View {
         if let presentation, let highest = presentation.highestFloor {
             if let cents = entry.cents, let warning = presentation.shortWarning(for: cents) {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
-                    .font(Typography.subheadline.weight(.semibold))
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.warning)
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("price.customBelowFloor")

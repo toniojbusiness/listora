@@ -18,7 +18,12 @@
  */
 import { sql } from 'kysely';
 
-import type { Db, Marketplace } from '@listora/db';
+import {
+  inTransaction,
+  type DbExecutor,
+  type ExecutionLocation,
+  type Marketplace,
+} from '@listora/db';
 import {
   MARKETPLACE_NAMES,
   type ConnectionRef,
@@ -28,13 +33,17 @@ import {
 import { assertNever, type Logger } from '@listora/shared';
 
 import { isAutomatedMarketplace, type AutomatedMarketplace } from '../profiles.ts';
-import { addSessionCheckJob, type SessionCheckJobPayload } from './schedule.ts';
+import {
+  addSessionCheckJob,
+  queueSessionCheckForPhone,
+  type SessionCheckJobPayload,
+} from './schedule.ts';
 
 /** Attempts a check gets when the marketplace can't be read, before it fails. */
 export const SESSION_CHECK_ATTEMPTS = 3;
 
 export interface SessionCheckDependencies {
-  db: Db;
+  db: DbExecutor;
   /**
    * The runner's automation adapters (with a browser). A marketplace without one can't be
    * checked: its assisted adapter would report healthy without ever opening the session.
@@ -57,8 +66,47 @@ export async function runSessionCheck(
   payload: SessionCheckJobPayload,
   signal: AbortSignal,
 ): Promise<void> {
+  const prepared = await prepareSessionCheck(deps, payload);
+  if (prepared === null) return;
+  if (prepared.runsOn === 'phone') {
+    // The connection's checks run on the phone now: the check waits for it there.
+    await queueSessionCheckForPhone(deps.db, {
+      accountId: payload.accountId,
+      connectionId: payload.connectionId,
+      marketplace: prepared.marketplace,
+      checkId: payload.checkId,
+    });
+    return;
+  }
+  const health = await prepared.adapter.healthCheck({
+    connection: prepared.connection,
+    signal: AbortSignal.any([signal, AbortSignal.timeout(deps.timeoutMs ?? 120_000)]),
+  });
+  // The runner is stopping: the job runs again on the next runner, attempt not counted.
+  if (signal.aborted) throw new Error('the session check stopped with the runner');
+  await recordSessionCheck(deps, payload, prepared, health, (delayMs) =>
+    retryLater(deps.db, payload, prepared.marketplace, prepared.attempt, delayMs),
+  );
+}
+
+/** A pending check ready to run: the session's connection, and the adapter that checks it. */
+export interface PreparedSessionCheck {
+  marketplace: Marketplace;
+  attempt: number;
+  connection: ConnectionRef;
+  adapter: MarketplaceAdapter;
+  runsOn: ExecutionLocation;
+}
+
+/**
+ * The check to run, or `null` when there is none to run: already decided, replaced by a newer
+ * link, or recorded here as failed because its connection or marketplace can't be checked.
+ */
+export async function prepareSessionCheck(
+  deps: Pick<SessionCheckDependencies, 'db' | 'automation' | 'logger'>,
+  payload: SessionCheckJobPayload,
+): Promise<PreparedSessionCheck | null> {
   const { db } = deps;
-  const log = deps.logger.child({ task: 'session_check', connectionId: payload.connectionId });
   const found = await db
     .selectFrom('session_check as check')
     .innerJoin('marketplace_connection as connection', (join) =>
@@ -72,6 +120,7 @@ export async function runSessionCheck(
       'connection.mode',
       'connection.status',
       'connection.last_error',
+      'connection.runs_on',
     ])
     .where('check.account_id', '=', payload.accountId)
     .where('check.connection_id', '=', payload.connectionId)
@@ -79,63 +128,82 @@ export async function runSessionCheck(
     .where('check.status', '=', 'pending')
     .executeTakeFirst();
   // Already decided, or the seller linked again since (that link has its own job).
-  if (found === undefined) return;
+  if (found === undefined) return null;
 
   const attempt = found.attempts + 1;
   const name = MARKETPLACE_NAMES[found.marketplace];
-  const record = (result: 'passed' | Failure): Promise<void> =>
-    finish(db, payload, attempt, result).then((recorded) => {
-      log.info(
-        { result: result === 'passed' ? 'passed' : result.code, attempt, recorded },
-        'session check finished',
-      );
-    });
-
   if (
     found.mode !== 'automation' ||
     (found.status !== 'connected' && found.status !== 'degraded')
   ) {
-    await record({
+    await record(deps, payload, attempt, {
       code: 'session_rejected',
       message: found.last_error ?? `Log in to ${name} again to link it.`,
     });
-    return;
+    return null;
   }
   const adapter = isAutomatedMarketplace(found.marketplace)
     ? deps.automation[found.marketplace]
     : undefined;
   if (adapter === undefined) {
-    await record({
+    await record(deps, payload, attempt, {
       code: 'automation_unavailable',
       message: `Listora can't automate ${name} yet, so it can't check this login. Your listings there stay assisted.`,
     });
-    return;
+    return null;
   }
-
-  const connection: ConnectionRef = {
-    id: payload.connectionId,
-    mode: found.mode,
-    status: found.status,
+  return {
+    marketplace: found.marketplace,
+    attempt,
+    connection: { id: payload.connectionId, mode: found.mode, status: found.status },
+    adapter,
+    runsOn: found.runs_on,
   };
-  const health = await adapter.healthCheck({
-    connection,
-    signal: AbortSignal.any([signal, AbortSignal.timeout(deps.timeoutMs ?? 120_000)]),
-  });
-  // The runner is stopping: the job runs again on the next runner, attempt not counted.
-  if (signal.aborted) throw new Error('the session check stopped with the runner');
+}
+
+/**
+ * Records what the health script found: passed, failed, or (when the marketplace could not be
+ * read and attempts remain) tried again after `retry`'s delay, wherever the check runs.
+ */
+export async function recordSessionCheck(
+  deps: Pick<SessionCheckDependencies, 'db' | 'logger' | 'retryDelayMs'>,
+  payload: SessionCheckJobPayload,
+  prepared: Pick<PreparedSessionCheck, 'attempt'>,
+  health: Health,
+  retry: (delayMs: number) => Promise<void>,
+): Promise<'passed' | 'retry' | 'failed'> {
+  const { attempt } = prepared;
   const failure = healthFailure(health);
   if (failure === null) {
-    await record('passed');
-    return;
+    await record(deps, payload, attempt, 'passed');
+    return 'passed';
   }
   if (health.status === 'degraded' && attempt < SESSION_CHECK_ATTEMPTS) {
     const delayMs = (deps.retryDelayMs ?? defaultRetryDelayMs)(attempt);
-    await retryLater(db, payload, found.marketplace, attempt, delayMs);
-    log.info({ code: failure.code, attempt, delayMs }, 'session check will try again');
-    return;
+    await retry(delayMs);
+    deps.logger
+      .child({ task: 'session_check', connectionId: payload.connectionId })
+      .info({ code: failure.code, attempt, delayMs }, 'session check will try again');
+    return 'retry';
   }
   // What the seller can do about it is the view's to say (`describeAutomationSession`).
-  await record(failure);
+  await record(deps, payload, attempt, failure);
+  return 'failed';
+}
+
+async function record(
+  deps: Pick<SessionCheckDependencies, 'db' | 'logger'>,
+  payload: SessionCheckJobPayload,
+  attempt: number,
+  result: 'passed' | Failure,
+): Promise<void> {
+  const recorded = await finish(deps.db, payload, attempt, result);
+  deps.logger
+    .child({ task: 'session_check', connectionId: payload.connectionId })
+    .info(
+      { result: result === 'passed' ? 'passed' : result.code, attempt, recorded },
+      'session check finished',
+    );
 }
 
 function healthFailure(health: Health): Failure | null {
@@ -157,7 +225,7 @@ function defaultRetryDelayMs(attempt: number): number {
 
 /** Records the check's result, unless it is no longer the pending check the job was for. */
 async function finish(
-  db: Db,
+  db: DbExecutor,
   payload: SessionCheckJobPayload,
   attempt: number,
   result: 'passed' | Failure,
@@ -180,13 +248,13 @@ async function finish(
 }
 
 async function retryLater(
-  db: Db,
+  db: DbExecutor,
   payload: SessionCheckJobPayload,
   marketplace: Marketplace,
   attempt: number,
   delayMs: number,
 ): Promise<void> {
-  await db.transaction().execute(async (trx) => {
+  await inTransaction(db, async (trx) => {
     const updated = await trx
       .updateTable('session_check')
       .set({ attempts: attempt })

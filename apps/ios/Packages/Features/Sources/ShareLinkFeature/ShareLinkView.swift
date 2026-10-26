@@ -29,12 +29,18 @@ public struct ShareLinkView: View {
     private var content: some View {
         switch model.phase {
         case let .unsupported(title, message):
-            EmptyStateView(systemImage: "link.badge.plus", title: title, message: message)
+            EmptyStateView(
+                systemImage: "link.badge.plus",
+                title: title,
+                message: message,
+                action: .init("Close", handler: onClose),
+            )
         case .signedOut:
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.exclamationmark",
                 title: "Sign in to Listora",
                 message: "Open Listora and sign in, then share this listing again.",
+                action: .init("Close", handler: onClose),
             )
         case .choosing:
             ChooseItemView(model: model)

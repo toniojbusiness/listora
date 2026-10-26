@@ -128,3 +128,5 @@ export type {
 } from './session-vault.ts';
 export { CREDENTIAL_PURPOSES, sealOnly, TokenVaultError } from './vault.ts';
 export type { CredentialKind, TokenContext, TokenSealer, TokenVault } from './vault.ts';
+export { accountExecutionState, describeExecution, phoneSessionState } from './execution.ts';
+export type { ExecutionState, ExecutionView } from './execution.ts';

@@ -34,11 +34,11 @@ export class HttpPhotoSource implements PhotoSource {
     if (!response.ok) throw new Error(`the photo answered ${String(response.status)}`);
     const mimeType = response.headers.get('content-type')?.split(';')[0]?.trim() ?? '';
     if (mimeType !== 'image/jpeg') throw new Error('the photo is not a JPEG');
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.length === 0 || buffer.length > MAX_PHOTO_BYTES) {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > MAX_PHOTO_BYTES) {
       throw new Error('the photo is empty or too large');
     }
     const name = target.pathname.split('/').at(-1) ?? 'photo.jpg';
-    return { name: name.endsWith('.jpg') ? name : `${name}.jpg`, mimeType, buffer };
+    return { name: name.endsWith('.jpg') ? name : `${name}.jpg`, mimeType, bytes };
   }
 }

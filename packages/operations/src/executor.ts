@@ -50,9 +50,11 @@ import type { Selectable } from 'kysely';
 import { sql } from 'kysely';
 
 import {
+  inTransaction,
   jsonb,
-  type Db,
+  type DbExecutor,
   type DbTransaction,
+  type ExecutionLocation,
   type MarketplaceListingTable,
   type OperationStatus,
 } from '@listora/db';
@@ -92,6 +94,14 @@ import { AUTOMATION_OPERATION_TASK, removeOperationJob, scheduleOperationJob } f
 import { wasSentThroughApi } from './history.ts';
 import { createdBefore } from './ordering.ts';
 import { syncItemListedStatus } from './item-status.ts';
+import {
+  DEFAULT_PHONE_QUEUE,
+  PHONE_UNAVAILABLE_ERROR,
+  phoneWorkOf,
+  queueOperationForPhone,
+  removePhoneWork,
+  type PhoneQueueSettings,
+} from './phone-queue.ts';
 import { delayAfterAttempt, maxAttempts, type RetryPolicy } from './policy.ts';
 import { dismissOpenTasks } from './commands.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
@@ -104,7 +114,8 @@ import {
 } from './transitions.ts';
 
 export interface StepDependencies {
-  db: Db;
+  /** The database; a phone step's claim may run in the API request's own transaction. */
+  db: DbExecutor;
   adapters: AdapterLookup;
   logger: Logger;
   policy: RetryPolicy;
@@ -119,7 +130,24 @@ export interface StepDependencies {
   runsAutomation?: boolean;
   /** Called after a step was handed over to the browser runner, to make sure one is running. */
   onAutomationHandover?: () => void;
+  /** How steps handed to the phone are rechecked and how long they may wait (phone-queue.ts). */
+  phone?: PhoneQueueSettings;
+  /** Called after a step was handed to the phone, so the host can ask the phone to run it. */
+  onPhoneHandover?: () => void;
 }
+
+/**
+ * Who runs a claimed step: the worker (which hands every automated step on), the browser
+ * runner, or the phone (docs/features/phone-execution.md), which runs the automated steps of a
+ * connection whose steps run on it.
+ */
+export type StepHost = 'worker' | 'runner' | 'phone';
+
+/** What a claim found: a step to run, nothing to do now, or a step handed to another host. */
+export type Claim =
+  | { type: 'step'; step: ClaimedStep }
+  | { type: 'none' }
+  | { type: 'handed_over'; to: 'runner' | 'phone' };
 
 type ListingRow = Selectable<MarketplaceListingTable>;
 type FoundRemote = Extract<RemoteListingState, { found: true }>;
@@ -166,6 +194,25 @@ type Step =
   /** Read the listing back to learn whether the desired state holds. */
   | { type: 'check'; ctx: StepContext; attempt: number };
 
+/** A claimed step, for a host that runs its calls itself (the phone). */
+export type ClaimedStep = Step;
+
+/**
+ * A claimed step as data, so a host that runs it over several requests (the phone) can load
+ * it again for each (`loadClaimedStep`): which step, and the operation exactly as the claim left
+ * it, which every later load and the record phase require unchanged.
+ */
+export interface ClaimedStepRef {
+  accountId: string;
+  operationId: string;
+  type: Step['type'];
+  attempt: number;
+  precheck: boolean;
+  status: OperationStatus;
+  attempts: number;
+  namedListingId: string | null;
+}
+
 type Resolution =
   | {
       type: 'succeeded';
@@ -185,6 +232,12 @@ type Resolution =
   | { type: 'failed'; error: OperationError }
   | { type: 'user'; task: UserTaskSpec };
 
+/** What a step's calls found, and the revisions they saw, for the record phase. */
+export interface CalledStep {
+  result: StepResult;
+  seen: SeenRevisions;
+}
+
 interface StepResult {
   resolution: Resolution;
   /** A listing id the marketplace returned, kept even when the result is not yet verified. */
@@ -200,28 +253,192 @@ export async function runOperationStep(
   payload: OperationJobPayload,
   signal: AbortSignal,
 ): Promise<void> {
-  const step = await claimStep(deps, payload);
-  if (step === 'handed_over') {
-    deps.onAutomationHandover?.();
+  const claim = await claimOperationStep(
+    deps,
+    payload,
+    deps.runsAutomation === true ? 'runner' : 'worker',
+  );
+  if (claim.type === 'handed_over') {
+    if (claim.to === 'runner') deps.onAutomationHandover?.();
+    else deps.onPhoneHandover?.();
     return;
   }
-  if (step === null) return;
+  if (claim.type === 'none') return;
+  const called = await callOperationStep(deps, claim.step, signal);
+  await recordOperationStep(deps, claim.step, called);
+}
+
+/** Claims the operation's next step for `host` (phase 1). */
+export async function claimOperationStep(
+  deps: StepDependencies,
+  payload: OperationJobPayload,
+  host: StepHost,
+): Promise<Claim> {
+  const step = await claimStep(deps, payload, host);
+  if (step === null) return { type: 'none' };
+  if (step === 'handed_over_to_runner') return { type: 'handed_over', to: 'runner' };
+  if (step === 'handed_over_to_phone') return { type: 'handed_over', to: 'phone' };
+  return { type: 'step', step };
+}
+
+/**
+ * Runs a claimed step's marketplace calls (phase 2), with no transaction open. It is a pure
+ * function of the step and of what the adapter's calls answer, so the phone's host runs it again
+ * with every answer it has (each phone call is one more answer) and gets the same calls.
+ */
+export async function callOperationStep(
+  deps: StepDependencies,
+  step: ClaimedStep,
+  signal: AbortSignal,
+): Promise<CalledStep> {
   const seen = storedRevisions(step.ctx);
   const result =
     step.type === 'send'
       ? await performSend(deps, step, seen, signal)
       : await performCheck(deps, step, seen, signal);
-  await recordResult(deps, step, result, seen);
+  return { result, seen };
+}
+
+/**
+ * Records a step's result (phase 3), if the operation is still exactly as the claim left it.
+ * `onRecorded` runs in the recording transaction (the phone's host removes its work there).
+ */
+export async function recordOperationStep(
+  deps: StepDependencies,
+  step: ClaimedStep,
+  called: CalledStep,
+  onRecorded?: (trx: DbTransaction) => Promise<void>,
+): Promise<void> {
+  await recordResult(deps, step, called.result, called.seen, onRecorded);
+}
+
+/** The claimed step as data (`ClaimedStepRef`). */
+export function claimedStepRef(step: ClaimedStep): ClaimedStepRef {
+  return {
+    accountId: step.ctx.op.account_id,
+    operationId: step.ctx.op.id,
+    type: step.type,
+    attempt: step.attempt,
+    precheck: step.type === 'send' && step.precheck,
+    status: step.ctx.op.status,
+    attempts: step.ctx.op.attempts,
+    namedListingId: step.ctx.namedListingId,
+  };
+}
+
+/**
+ * Loads a claimed step again from its ref, without changing anything; `null` when the
+ * operation is no longer as the claim left it (another host took it over, the user canceled
+ * it) or can no longer be run, which ends the claim.
+ */
+export async function loadClaimedStep(
+  deps: StepDependencies,
+  ref: ClaimedStepRef,
+): Promise<ClaimedStep | null> {
+  return inTransaction(deps.db, async (trx) => {
+    const op = await trx
+      .selectFrom('marketplace_operation')
+      .selectAll()
+      .where('account_id', '=', ref.accountId)
+      .where('id', '=', ref.operationId)
+      .executeTakeFirst();
+    if (op?.status !== ref.status || op.attempts !== ref.attempts) return null;
+    const loaded = await loadStepBase(trx, deps, op);
+    if (loaded.type !== 'ok') return null;
+    const listing =
+      ref.namedListingId === null
+        ? loaded.base.listing
+        : { ...loaded.base.listing, pending_external_listing_id: ref.namedListingId };
+    const ctx: StepContext = {
+      ...loaded.base,
+      op,
+      listing,
+      namedListingId: ref.namedListingId,
+      targets: listingTargets(listing, loaded.base.desired),
+    };
+    return ref.type === 'send'
+      ? { type: 'send', ctx, precheck: ref.precheck, attempt: ref.attempt }
+      : { type: 'check', ctx, attempt: ref.attempt };
+  });
 }
 
 // Claim -----------------------------------------------------------------------------------
 
-/** The step to run, `null` when there is none, or `handed_over` to the browser runner. */
+type Base = Omit<StepContext, 'op'>;
+
+type LoadedBase =
+  | {
+      type: 'ok';
+      base: Base;
+      /** Where the connection's automated steps run, and the phone that runs them. */
+      runsOn: ExecutionLocation;
+    }
+  | { type: 'no_adapter'; name: string }
+  | { type: 'invalid'; name: string; reason: string };
+
+/** Everything a step of `op` needs that the claim does not change. */
+async function loadStepBase(
+  trx: DbTransaction,
+  deps: StepDependencies,
+  op: OperationRow,
+): Promise<LoadedBase> {
+  const listing = await trx
+    .selectFrom('marketplace_listing')
+    .selectAll()
+    .where('account_id', '=', op.account_id)
+    .where('id', '=', op.listing_id)
+    .executeTakeFirstOrThrow();
+  const name = MARKETPLACE_NAMES[listing.marketplace];
+  const adapter = deps.adapters(listing.marketplace);
+  if (adapter === undefined) return { type: 'no_adapter', name };
+  let desired: DesiredListingState;
+  let content: ListingContent | null = null;
+  try {
+    desired = validateDesiredState(op.kind, op.desired);
+    if (isContentKind(op.kind)) content = parseListingContent(op.content);
+  } catch (error) {
+    return {
+      type: 'invalid',
+      name,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+  const loaded = await loadConnection(trx, listing);
+  const connection = loaded?.ref ?? null;
+  const capabilities = adapter.capabilities(connection);
+  const mode = operationMode(capabilities, op.kind);
+  return {
+    type: 'ok',
+    runsOn: loaded?.runsOn ?? 'cloud',
+    base: {
+      listing,
+      adapter,
+      connection,
+      desired,
+      checked: readBackState(desired, capabilities),
+      namedListingId: null,
+      content,
+      mode,
+      canReadBack: mode === 'api' || mode === 'automation',
+      freshness: capabilities.readFreshness,
+      targets: listingTargets(listing, desired),
+      name,
+    },
+  };
+}
+
+/**
+ * The step to run, `null` when there is none, or the host it was handed to. A worker hands
+ * every automated step on: to the browser runner, or to the phone when the connection's steps
+ * run there. The runner and the phone each run the automated steps that are theirs and hand on
+ * one whose connection moved to the other.
+ */
 async function claimStep(
   deps: StepDependencies,
   payload: OperationJobPayload,
-): Promise<Step | null | 'handed_over'> {
-  return deps.db.transaction().execute(async (trx) => {
+  host: StepHost,
+): Promise<Step | null | 'handed_over_to_runner' | 'handed_over_to_phone'> {
+  return inTransaction(deps.db, async (trx) => {
     const op = await trx
       .selectFrom('marketplace_operation')
       .selectAll()
@@ -243,6 +460,7 @@ async function claimStep(
       case 'canceled':
       case 'needs_user_action':
         log.debug({ status: op.status }, 'operation has no step to run');
+        await removePhoneWork(trx, op);
         return null;
       case 'queued':
       case 'retrying':
@@ -253,74 +471,117 @@ async function claimStep(
         return assertNever(op.status, 'operation status');
     }
 
-    const listing = await trx
-      .selectFrom('marketplace_listing')
-      .selectAll()
-      .where('account_id', '=', op.account_id)
-      .where('id', '=', op.listing_id)
-      .executeTakeFirstOrThrow();
-    const name = MARKETPLACE_NAMES[listing.marketplace];
-    const adapter = deps.adapters(listing.marketplace);
-    if (adapter === undefined) {
-      // Without an adapter nothing can be sent or read back. An operation that may already
-      // have been sent fails as unconfirmed, so Retry knows to read it back first.
-      const mayHaveBeenSent = op.status === 'running' || op.status === 'verifying';
-      await transitionOperation(trx, op, {
-        to: 'failed',
-        error: mayHaveBeenSent
-          ? cannotConfirm(name)
-          : { code: 'marketplace_unavailable', message: `Listora can't connect to ${name} yet.` },
-      });
-      return null;
-    }
-    let desired: DesiredListingState;
-    let content: ListingContent | null = null;
-    try {
-      desired = validateDesiredState(op.kind, op.desired);
-      if (isContentKind(op.kind)) content = parseListingContent(op.content);
-    } catch (error) {
+    const loaded = await loadStepBase(trx, deps, op);
+    if (loaded.type !== 'ok') {
+      await removePhoneWork(trx, op);
+      if (loaded.type === 'no_adapter') {
+        // Without an adapter nothing can be sent or read back. An operation that may already
+        // have been sent fails as unconfirmed, so Retry knows to read it back first.
+        const mayHaveBeenSent = op.status === 'running' || op.status === 'verifying';
+        await transitionOperation(trx, op, {
+          to: 'failed',
+          error: mayHaveBeenSent
+            ? cannotConfirm(loaded.name)
+            : {
+                code: 'marketplace_unavailable',
+                message: `Listora can't connect to ${loaded.name} yet.`,
+              },
+        });
+        return null;
+      }
       await transitionOperation(
         trx,
         op,
         {
           to: 'failed',
-          error: { code: 'invalid_operation', message: `This change can't be sent to ${name}.` },
+          error: {
+            code: 'invalid_operation',
+            message: `This change can't be sent to ${loaded.name}.`,
+          },
         },
-        { reason: error instanceof Error ? error.message : String(error) },
+        { reason: loaded.reason },
       );
       return null;
     }
-    const connection = await loadConnection(trx, listing);
-    const capabilities = adapter.capabilities(connection);
-    const mode = operationMode(capabilities, op.kind);
-    const canReadBack = mode === 'api' || mode === 'automation';
-    // Only the browser runner can act in a browser session; it takes the step from here.
-    const handOver = async (): Promise<'handed_over'> => {
+    const { base, runsOn } = loaded;
+    const { listing, name, mode, canReadBack } = base;
+
+    // An automated step runs where its connection's steps run; everything else on the worker.
+    const runsAt: 'runner' | 'phone' | null =
+      mode === 'automation' ? (runsOn === 'phone' ? 'phone' : 'runner') : null;
+    const handOverTo: 'runner' | 'phone' | null =
+      runsAt !== null && runsAt !== host ? runsAt : null;
+    if (runsAt !== 'phone' || host === 'phone') {
+      // A step the phone no longer runs (its connection moved to the cloud) waits there no more.
+      if (host !== 'phone') await removePhoneWork(trx, op);
+    } else {
+      const work = await phoneWorkOf(trx, op);
+      if (work !== undefined && work.leaseExpiresAt !== null) {
+        if (work.leaseExpiresAt.getTime() > Date.now()) {
+          // The phone is running this step: look again once its lease would have run out.
+          await scheduleOperationJob(trx, {
+            accountId: op.account_id,
+            operationId: op.id,
+            listingId: op.listing_id,
+            priority: operationPriority(op),
+            runAt: new Date(work.leaseExpiresAt.getTime() + 1_000),
+          });
+          return 'handed_over_to_phone';
+        }
+        // The phone stopped in the middle of the step: it is recovered like any other.
+        await removePhoneWork(trx, op);
+        log.warn('a phone run of the step stopped before it finished');
+      }
+    }
+
+    const handOver = async (): Promise<'handed_over_to_runner' | 'handed_over_to_phone' | null> => {
+      if (handOverTo === 'runner') {
+        await removePhoneWork(trx, op);
+        await scheduleOperationJob(trx, {
+          accountId: op.account_id,
+          operationId: op.id,
+          listingId: op.listing_id,
+          priority: operationPriority(op),
+          runAt: null,
+          task: AUTOMATION_OPERATION_TASK,
+        });
+        log.debug({ status: op.status }, 'automated step handed over to the browser runner');
+        return 'handed_over_to_runner';
+      }
+      // To the phone. A connection reaches the phone only through a listing that has one.
+      const settings = deps.phone ?? DEFAULT_PHONE_QUEUE;
+      const connectionId = listing.connection_id;
+      if (connectionId === null) throw new Error('an automated step has a connection');
+      const waitingSince = await queueOperationForPhone(trx, op, {
+        connectionId,
+        marketplace: listing.marketplace,
+        priority: operationPriority(op),
+      });
+      const waited = Date.now() - waitingSince.getTime();
+      if (waited >= settings.maxWaitMs) {
+        await removePhoneWork(trx, op);
+        await transitionOperation(trx, op, {
+          to: 'failed',
+          error:
+            op.status === 'verifying'
+              ? cannotConfirm(name)
+              : {
+                  code: PHONE_UNAVAILABLE_ERROR,
+                  message: `Your iPhone hasn't run this on ${name} for ${String(Math.round(settings.maxWaitMs / 3_600_000))} hours. Open Listora on your iPhone, then tap Retry.`,
+                },
+        });
+        log.warn({ waitedMs: waited }, 'an operation waited for the phone too long');
+        return null;
+      }
       await scheduleOperationJob(trx, {
         accountId: op.account_id,
         operationId: op.id,
         listingId: op.listing_id,
         priority: operationPriority(op),
-        runAt: null,
-        task: AUTOMATION_OPERATION_TASK,
+        runAt: new Date(Date.now() + Math.min(settings.recheckMs, settings.maxWaitMs - waited)),
       });
-      log.debug({ status: op.status }, 'automated step handed over to the browser runner');
-      return 'handed_over';
-    };
-    const needsRunner = mode === 'automation' && deps.runsAutomation !== true;
-    const base = {
-      listing,
-      adapter,
-      connection,
-      desired,
-      checked: readBackState(desired, capabilities),
-      namedListingId: null,
-      content,
-      mode,
-      canReadBack,
-      freshness: capabilities.readFreshness,
-      targets: listingTargets(listing, desired),
-      name,
+      log.debug({ status: op.status }, 'automated step handed to the phone');
+      return 'handed_over_to_phone';
     };
     const max = maxAttempts(deps.policy);
 
@@ -369,7 +630,7 @@ async function claimStep(
         });
         return null;
       }
-      if (needsRunner) return handOver();
+      if (handOverTo !== null) return handOver();
       return { type: 'check', ctx: { op, ...base }, attempt: op.attempts + 1 };
     }
 
@@ -379,6 +640,7 @@ async function claimStep(
       await supersedeUserSteps(trx, op, log);
     }
     if (await hasOlderUnfinishedOperation(trx, op)) {
+      await removePhoneWork(trx, op);
       await scheduleOperationJob(trx, {
         accountId: op.account_id,
         operationId: op.id,
@@ -410,7 +672,7 @@ async function claimStep(
       return null;
     }
 
-    if (needsRunner) return handOver();
+    if (handOverTo !== null) return handOver();
 
     const named = await nameNewListing(trx, op, base);
     if (named.type === 'taken') {
@@ -422,7 +684,7 @@ async function claimStep(
         ? {
             listing: named.listing,
             namedListingId: named.id,
-            targets: listingTargets(named.listing, desired),
+            targets: listingTargets(named.listing, base.desired),
           }
         : {};
     const precheck = op.kind !== 'verify' && canReadBack && (await wasSentBefore(trx, op));
@@ -434,6 +696,7 @@ async function claimStep(
         step: op.kind === 'verify' ? 'check' : 'send',
         precheck,
         mode,
+        ...(host === 'worker' ? {} : { host }),
         ...(named.type === 'named' ? { [NAMED_LISTING_KEY]: named.id } : {}),
       },
     );
@@ -447,15 +710,19 @@ async function claimStep(
 async function loadConnection(
   trx: DbTransaction,
   listing: ListingRow,
-): Promise<ConnectionRef | null> {
+): Promise<{ ref: ConnectionRef; runsOn: ExecutionLocation } | null> {
   if (listing.connection_id === null) return null;
   const connection = await trx
     .selectFrom('marketplace_connection')
-    .select(['id', 'mode', 'status'])
+    .select(['id', 'mode', 'status', 'runs_on'])
     .where('account_id', '=', listing.account_id)
     .where('id', '=', listing.connection_id)
     .executeTakeFirst();
-  return connection ?? null;
+  if (connection === undefined) return null;
+  return {
+    ref: { id: connection.id, mode: connection.mode, status: connection.status },
+    runsOn: connection.runs_on,
+  };
 }
 
 /**
@@ -1183,10 +1450,17 @@ async function recordResult(
   step: Step,
   result: StepResult,
   seen: SeenRevisions,
+  onRecorded?: (trx: DbTransaction) => Promise<void>,
 ): Promise<void> {
   const { ctx } = step;
   const log = deps.logger.child({ accountId: ctx.op.account_id, operationId: ctx.op.id });
-  await deps.db.transaction().execute(async (trx) => {
+  await inTransaction(deps.db, async (trx) => {
+    await recordIn(trx);
+    // Whether or not the result counted, the step is over for its host.
+    await onRecorded?.(trx);
+  });
+
+  async function recordIn(trx: DbTransaction): Promise<void> {
     const op = await trx
       .selectFrom('marketplace_operation')
       .selectAll()
@@ -1270,7 +1544,7 @@ async function recordResult(
       { kind: op.kind, from: op.status, to, attempt: step.attempt },
       'operation step recorded',
     );
-  });
+  }
 }
 
 async function applyResolution(

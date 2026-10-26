@@ -71,6 +71,8 @@ describe('RunnerSessions (real Postgres, headless Chromium)', () => {
     purpose: 'health',
     operationId: null,
     script,
+    scriptSet: { name: 'mercari', marketplace: 'mercari', siteUrl: 'https://www.mercari.com' },
+    call: { script: 'health' },
   });
 
   const account: Script<string | null> = (step) =>

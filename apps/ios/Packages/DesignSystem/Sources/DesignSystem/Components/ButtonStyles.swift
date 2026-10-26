@@ -51,7 +51,7 @@ private struct ListoraButtonBody: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
         configuration.label
-            .font(size == .large ? Typography.headline : Typography.subheadline.weight(.semibold))
+            .font(size == .large ? Typography.headline : Typography.emphasis)
             .lineLimit(3)
             .multilineTextAlignment(.center)
             .foregroundStyle(foreground)

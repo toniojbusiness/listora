@@ -102,6 +102,10 @@ Packages/
     MarketplaceLinkingFeature  Settings > Link accounts: sign in on a marketplace's own page
                       in a web view and hand Listora its session
                       (docs/features/marketplace-linking.md)
+    PhoneExecutionFeature  The marketplace work Listora hands this phone: the runner, the
+                      phone runtime in off-screen web views (Resources/phone-runtime.js, built
+                      by `npm run phone:bundle`), handing a check to the seller, and the
+                      background tasks (docs/features/phone-execution.md)
 ```
 
 Dependency rules:
@@ -236,6 +240,16 @@ audit on the main screens as part of `make ios-test`.
   asks "Retake or keep?" for a blurry shot; the editor marks it.
 - **Editing.** The draft editor reorders (drag, or "Make cover"), removes, crops, and sets each
   photo's role. Cropping replaces the photo with a new one.
+- **Background cleanup.** "Clean background" on a photo (not a tag photo) lifts the item onto a
+  plain, light backdrop (#F7F7F5) on the phone, with no AI service (`BackgroundCleanup`): Vision's
+  foreground instance mask (the Photos app's subject lifting) finds the item, which keeps its
+  place and size in the frame. Like a crop, the cleaned image replaces the photo and uploads as a
+  new one, but the original stays on this iPhone (`draftPhoto.originalFileName`), so Undo puts it
+  back byte for byte, and uploads it again. A crop, or removing the photo, removes the original.
+  The simulator cannot run Vision's segmentation models ("Could not create inference context"),
+  so there `EdgeColorSubjectMasker`, a stand-in with no model, lifts what does not match the
+  colors along the photo's edge; devices always use Vision, which the simulator tests therefore
+  do not exercise (`BackgroundCleanupTests` has a device-only test for it).
 - **Drafts** live in a GRDB (SQLite) database with the photo files in Application Support
   (`DraftDatabase`; schema changes only through new migrations). A draft and its upload progress
   survive the app being closed.

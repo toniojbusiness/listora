@@ -167,8 +167,8 @@
     summary: Check a marketplace connection now (Retry check)
     description: |
       Queues the same cheap read the daily health check makes, for this connection only. For
-      an automation connection it asks the browser runner to check the sign-in already linked
-      again, as after linking (`getMarketplaceSession`), without the seller signing in again;
+      an automation connection it asks for a check of the sign-in already linked again, where
+      the connection runs (the browser runner or the seller's iPhone), as after linking (`getMarketplaceSession`), without the seller signing in again;
       a check still running is left to finish. The answer is the connection with a `Checking`
       status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
       the check found. Offered as the `check` action on a connection with a problem.
@@ -188,6 +188,39 @@
         $ref: '../components/responses.yaml#/NotFound'
       '409':
         $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/connections/{marketplace}/execution:
+  parameters:
+    - $ref: '../components/parameters.yaml#/MarketplacePath'
+  put:
+    tags: [connections]
+    operationId: setConnectionExecution
+    summary: Choose where a connection's automated steps run
+    description: |
+      Moves the connection's automated steps to Listora's cloud browser runner or to the
+      iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
+      moves to the cloud with it; a run the phone is in the middle of finishes there.
+      `409 invalid_state_transition` for a marketplace that is not linked by signing in.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/phone.yaml#/ConnectionExecutionChange'
+    responses:
+      '200':
+        description: The connection.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/connections.yaml#/Connection'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
       default:
         $ref: '../components/responses.yaml#/DefaultError'
 /v1/connection-health:
@@ -259,8 +292,9 @@
       in a web view with its own data store, including any two-step check. The app sends
       that site's cookies (only those on `login.cookieDomains`), never the password, which
       Listora never sees. The server stores them encrypted with the token key (KMS envelope
-      encryption) on the account's automation connection for the marketplace, and asks the
-      browser runner for one read-only check that the marketplace accepts them. The reply is
+      encryption) on the account's automation connection for the marketplace, and asks for one
+      read-only check that the marketplace accepts them, where the connection runs: the
+      browser runner, or the iPhone that linked it (`installationId`). The reply is
       `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
       takes the same way and replaces the earlier session. Cookie values are never logged
       or returned.

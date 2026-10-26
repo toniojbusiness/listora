@@ -14,8 +14,8 @@ import { sql } from 'kysely';
 
 import {
   inTransaction,
-  type Db,
   type DbExecutor,
+  type ExecutionLocation,
   type Marketplace,
   type SaleCheckReason,
 } from '@listora/db';
@@ -31,10 +31,10 @@ import type { Logger } from '@listora/shared';
 import type { SaleCheckSettings } from '../settings.ts';
 import { nextSaleCheckDelay, SALE_HISTORY_DAYS } from './interval.ts';
 import { orderEventPayload, queueSaleOrder } from './orders.ts';
-import type { SaleCheckJobPayload } from './schedule.ts';
+import { queueSaleCheckForPhone, type SaleCheckJobPayload } from './schedule.ts';
 
 export interface SaleCheckDependencies {
-  db: Db;
+  db: DbExecutor;
   adapters: AdapterLookup;
   settings: SaleCheckSettings;
   logger: Logger;
@@ -50,6 +50,49 @@ export async function runSaleCheck(
   payload: SaleCheckJobPayload,
   signal: AbortSignal,
 ): Promise<void> {
+  const prepared = await prepareSaleCheck(deps, payload);
+  if (prepared === null) return;
+  if (prepared.runsOn === 'phone') {
+    // The connection's automated steps moved to the phone: its sales are checked there now.
+    await queueSaleCheckForPhone(deps.db, {
+      ...prepared.key,
+      marketplace: prepared.marketplace,
+    });
+    return;
+  }
+  let orders: RemoteOrder[];
+  try {
+    orders = await prepared.adapter.listOrdersSince(prepared.since, {
+      signal: AbortSignal.any([signal, AbortSignal.timeout(deps.timeoutMs ?? 300_000)]),
+      connection: prepared.connection,
+    });
+  } catch (error) {
+    await recordSaleCheckFailure(deps, prepared, error);
+    return;
+  }
+  await recordSaleCheckOrders(deps, prepared, orders);
+}
+
+/** A sale check ready to read the seller's orders. */
+export interface PreparedSaleCheck {
+  key: { accountId: string; connectionId: string };
+  marketplace: Marketplace;
+  connection: ConnectionRef;
+  adapter: MarketplaceAdapter & Required<Pick<MarketplaceAdapter, 'listOrdersSince'>>;
+  /** Orders sold at or after this time (a little before the last check), or every one shown. */
+  since: Date | null;
+  checkedThrough: Date | null;
+  runsOn: ExecutionLocation;
+}
+
+/**
+ * The check to run, started (`last_started_at`), or `null` when there is none now: the
+ * connection can't be checked, or no adapter reads its orders (put off, and recorded).
+ */
+export async function prepareSaleCheck(
+  deps: Pick<SaleCheckDependencies, 'db' | 'adapters' | 'settings' | 'logger'>,
+  payload: SaleCheckJobPayload,
+): Promise<PreparedSaleCheck | null> {
   const { db } = deps;
   const log = deps.logger.child({ task: 'sale_check', connectionId: payload.connectionId });
   const found = await db
@@ -63,24 +106,25 @@ export async function runSaleCheck(
       'connection.id',
       'connection.mode',
       'connection.status',
+      'connection.runs_on',
       'schedule.marketplace',
       'schedule.checked_through',
     ])
     .where('schedule.account_id', '=', payload.accountId)
     .where('schedule.connection_id', '=', payload.connectionId)
     .executeTakeFirst();
-  if (found === undefined) return;
+  if (found === undefined) return null;
   const connection: ConnectionRef = { id: found.id, mode: found.mode, status: found.status };
   if (
     found.mode !== 'automation' ||
     (found.status !== 'connected' && found.status !== 'degraded')
   ) {
     log.debug({ status: found.status }, 'the connection cannot be checked now');
-    return;
+    return null;
   }
   const key = { accountId: payload.accountId, connectionId: payload.connectionId };
   const adapter = deps.adapters(found.marketplace);
-  if (!readsOrders(adapter, connection)) {
+  if (adapter?.listOrdersSince === undefined || !readsOrders(adapter, connection)) {
     // Until the marketplace's automation adapter can read orders, check again only rarely.
     log.warn({ marketplace: found.marketplace }, 'no adapter reads orders on this marketplace');
     await finish(db, key, {
@@ -89,7 +133,7 @@ export async function runSaleCheck(
       reason: 'retry',
       checkedThrough: null,
     });
-    return;
+    return null;
   }
   await db
     .updateTable('sale_check_schedule')
@@ -97,39 +141,56 @@ export async function runSaleCheck(
     .where('account_id', '=', key.accountId)
     .where('connection_id', '=', key.connectionId)
     .execute();
+  return {
+    key,
+    marketplace: found.marketplace,
+    connection,
+    adapter: adapter as PreparedSaleCheck['adapter'],
+    since:
+      found.checked_through === null
+        ? null
+        : new Date(found.checked_through.getTime() - OVERLAP_MS),
+    checkedThrough: found.checked_through,
+    runsOn: found.runs_on,
+  };
+}
 
-  const since =
-    found.checked_through === null ? null : new Date(found.checked_through.getTime() - OVERLAP_MS);
-  let orders: RemoteOrder[];
-  try {
-    if (adapter?.listOrdersSince === undefined) throw new Error('the adapter reads no orders');
-    orders = await adapter.listOrdersSince(since, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(deps.timeoutMs ?? 300_000)]),
-      connection,
-    });
-  } catch (error) {
-    const status = await connectionStatus(db, key);
-    const challenged = status === 'reauth_required' || status === 'revoked';
-    log.warn(
-      {
-        err: error instanceof Error ? { name: error.name, message: error.message } : error,
-        challenged,
-      },
-      'sale check failed',
-    );
-    await finish(db, key, {
-      outcome: challenged ? 'challenge' : 'failed',
-      // A relink checks at once; until then the dispatcher skips the connection.
-      delayMs: challenged ? deps.settings.maxIntervalMs : deps.settings.minIntervalMs,
-      reason: 'retry',
-      checkedThrough: null,
-    });
-    return;
-  }
+/** A check that could not read the orders: tried again soon, or after the relink it needs. */
+export async function recordSaleCheckFailure(
+  deps: Pick<SaleCheckDependencies, 'db' | 'settings' | 'logger'>,
+  prepared: PreparedSaleCheck,
+  error: unknown,
+): Promise<void> {
+  const { db } = deps;
+  const status = await connectionStatus(db, prepared.key);
+  const challenged = status === 'reauth_required' || status === 'revoked';
+  deps.logger.child({ task: 'sale_check', connectionId: prepared.key.connectionId }).warn(
+    {
+      err: error instanceof Error ? { name: error.name, message: error.message } : error,
+      challenged,
+    },
+    'sale check failed',
+  );
+  await finish(db, prepared.key, {
+    outcome: challenged ? 'challenge' : 'failed',
+    // A relink checks at once; until then the dispatcher skips the connection.
+    delayMs: challenged ? deps.settings.maxIntervalMs : deps.settings.minIntervalMs,
+    reason: 'retry',
+    checkedThrough: null,
+  });
+}
 
-  const added = await recordOrders(db, key, found.marketplace, orders);
+/** Hands the new orders to the sale intake and schedules the next check from the history. */
+export async function recordSaleCheckOrders(
+  deps: Pick<SaleCheckDependencies, 'db' | 'settings' | 'logger'>,
+  prepared: PreparedSaleCheck,
+  orders: readonly RemoteOrder[],
+): Promise<void> {
+  const { db } = deps;
+  const { key } = prepared;
+  const added = await recordOrders(db, key, prepared.marketplace, orders);
   // The new orders count as sales already: the worker records them as sales right after.
-  const history = await saleTimes(db, payload.accountId, found.marketplace);
+  const history = await saleTimes(db, key.accountId, prepared.marketplace);
   const now = new Date();
   const next = nextSaleCheckDelay(
     now,
@@ -138,7 +199,7 @@ export async function runSaleCheck(
   );
   const newest = orders.reduce<Date | null>(
     (latest, order) => (latest === null || order.soldAt > latest ? order.soldAt : latest),
-    found.checked_through,
+    prepared.checkedThrough,
   );
   await finish(db, key, {
     outcome: 'succeeded',
@@ -146,7 +207,7 @@ export async function runSaleCheck(
     reason: 'scheduled',
     checkedThrough: newest ?? now,
   });
-  log.info(
+  deps.logger.child({ task: 'sale_check', connectionId: key.connectionId }).info(
     {
       orders: orders.length,
       added: added.length,
@@ -174,7 +235,7 @@ export function readsOrders(
  * (orders.ts). Returns the orders that were new.
  */
 async function recordOrders(
-  db: Db,
+  db: DbExecutor,
   key: { accountId: string; connectionId: string },
   marketplace: Marketplace,
   orders: readonly RemoteOrder[],
@@ -202,7 +263,11 @@ async function recordOrders(
 }
 
 /** When the seller's recorded sales on the marketplace happened, within the history window. */
-async function saleTimes(db: Db, accountId: string, marketplace: Marketplace): Promise<Date[]> {
+async function saleTimes(
+  db: DbExecutor,
+  accountId: string,
+  marketplace: Marketplace,
+): Promise<Date[]> {
   const rows = await db
     .selectFrom('sale')
     .select('sold_at')
@@ -214,7 +279,7 @@ async function saleTimes(db: Db, accountId: string, marketplace: Marketplace): P
 }
 
 async function connectionStatus(
-  db: Db,
+  db: DbExecutor,
   key: { accountId: string; connectionId: string },
 ): Promise<string | undefined> {
   const row = await db

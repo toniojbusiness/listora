@@ -22,6 +22,7 @@ let package = Package(
         .library(name: "PhotoSignalsFeature", targets: ["PhotoSignalsFeature"]),
         .library(name: "ShareLinkFeature", targets: ["ShareLinkFeature"]),
         .library(name: "MarketplaceLinkingFeature", targets: ["MarketplaceLinkingFeature"]),
+        .library(name: "PhoneExecutionFeature", targets: ["PhoneExecutionFeature"]),
     ],
     dependencies: [
         .package(path: "../Core"),
@@ -50,6 +51,7 @@ let package = Package(
                 "MarketplacesFeature",
                 "TagReadingFeature",
                 "MarketplaceLinkingFeature",
+                "PhoneExecutionFeature",
                 "VoiceInputFeature",
                 "PhotoSignalsFeature",
             ],
@@ -98,7 +100,7 @@ let package = Package(
         .target(name: "SignInFeature", dependencies: ["DesignSystem", "APIClient"]),
         .target(
             name: "MarketplacesFeature",
-            dependencies: ["DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+            dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .target(name: "TagReadingFeature", dependencies: ["Core"]),
         .target(name: "VoiceInputFeature", dependencies: ["Core"]),
@@ -117,10 +119,23 @@ let package = Package(
         .target(
             name: "MarketplaceLinkingFeature",
             dependencies: [
+                "Core",
                 "DesignSystem",
                 "APIClient",
                 .product(name: "ListoraAPI", package: "swift"),
             ],
+        ),
+        // On-phone execution: the phone runtime (bundled from packages/automation) runs the
+        // marketplace work Listora hands this phone, in the seller's own session.
+        .target(
+            name: "PhoneExecutionFeature",
+            dependencies: [
+                "Core",
+                "DesignSystem",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+            ],
+            resources: [.copy("Resources/phone-runtime.js")],
         ),
         .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient", "SignInFeature"]),
         .testTarget(
@@ -166,7 +181,7 @@ let package = Package(
         .testTarget(name: "SignInFeatureTests", dependencies: ["SignInFeature", "APIClient"]),
         .testTarget(
             name: "MarketplacesFeatureTests",
-            dependencies: ["MarketplacesFeature", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+            dependencies: ["MarketplacesFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .testTarget(
             name: "TagReadingFeatureTests",
@@ -192,6 +207,16 @@ let package = Package(
             name: "MarketplaceLinkingFeatureTests",
             dependencies: [
                 "MarketplaceLinkingFeature",
+                "Core",
+                "APIClient",
+                .product(name: "ListoraAPI", package: "swift"),
+            ],
+        ),
+        .testTarget(
+            name: "PhoneExecutionFeatureTests",
+            dependencies: [
+                "PhoneExecutionFeature",
+                "Core",
                 "APIClient",
                 .product(name: "ListoraAPI", package: "swift"),
             ],

@@ -10,6 +10,7 @@ import type { AutomationRunPurpose } from '@listora/db';
 import type { ConnectionRef } from '@listora/marketplaces';
 
 import type { AutomationSession, ScriptResult } from '../runner/types.ts';
+import type { ScriptCall, ScriptSet } from './script-call.ts';
 
 export interface SessionRequest {
   connection: ConnectionRef;
@@ -18,6 +19,13 @@ export interface SessionRequest {
   operationId: string | null;
   /** What runs, for the run record and logs: `create`, `read listing`. */
   script: string;
+  /** Whose scripts run, on which site. */
+  scriptSet: ScriptSet;
+  /**
+   * The script and its input, as data: `body` runs exactly this, so a host that runs scripts
+   * elsewhere (the phone, docs/features/phone-execution.md) runs the same call without `body`.
+   */
+  call: ScriptCall;
 }
 
 export type SessionRun<T> =

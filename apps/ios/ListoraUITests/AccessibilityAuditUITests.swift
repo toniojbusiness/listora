@@ -58,7 +58,7 @@ final class AccessibilityAuditUITests: XCTestCase {
     // allowance on CI, where an audit takes up to 45 seconds and the first launch on the fresh
     // simulator about a minute.
 
-    /// The welcome and code screens, signed out.
+    /// The welcome, code, and getting started screens.
     func testSignInScreensPassTheAudit() throws {
         try launch()
         let email = app.textFields["signIn.email"]
@@ -67,6 +67,10 @@ final class AccessibilityAuditUITests: XCTestCase {
         let code = enterEmail(email)
         try audit("Code")
         signIn(code: code)
+        let skipGuide = app.buttons["gettingStarted.skip"]
+        XCTAssertTrue(skipGuide.waitForExistence(timeout: 10))
+        try audit("Getting started")
+        skipGuide.tap()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
     }
 
@@ -125,12 +129,15 @@ final class AccessibilityAuditUITests: XCTestCase {
         app.launch()
     }
 
-    /// Signed in through the stub's dev sign-in.
+    /// Signed in through the stub's dev sign-in, past the getting started guide.
     private func launchSignedIn() throws {
         try launch()
         let email = app.textFields["signIn.email"]
         XCTAssertTrue(email.waitForExistence(timeout: 10))
         signIn(code: enterEmail(email))
+        let skipGuide = app.buttons["gettingStarted.skip"]
+        XCTAssertTrue(skipGuide.waitForExistence(timeout: 10))
+        skipGuide.tap()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
     }
 

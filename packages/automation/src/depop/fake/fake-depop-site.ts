@@ -742,14 +742,18 @@ function listingFields(
 // Pages ---------------------------------------------------------------------------------------
 
 /** A page with Depop's embedded data, `props.pageProps`. */
+/**
+ * A page as depop.com serves it: responsive (the app's sign-in page shows it at phone size), with
+ * its data.
+ */
 function page(title: string, body: string, pageProps: Record<string, unknown>): string {
   const data = scriptJson({ props: { pageProps }, page: '/', buildId: 'fake' });
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape(title)}</title></head><body>${body}<script id="__NEXT_DATA__" type="application/json">${data}</script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(title)}</title></head><body>${body}<script id="__NEXT_DATA__" type="application/json">${data}</script></body></html>`;
 }
 
 /** A page without embedded data. */
 function plainPage(title: string, body: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape(title)}</title></head><body>${body}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(title)}</title></head><body>${body}</body></html>`;
 }
 
 function loginForm(): string {

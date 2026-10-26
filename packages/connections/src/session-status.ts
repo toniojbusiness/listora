@@ -45,6 +45,12 @@ export interface AutomationSessionInput {
   };
   check: SessionCheckState | null;
   now: Date;
+  /**
+   * Present when the connection's automated steps run on the phone
+   * (docs/features/phone-execution.md): whether a phone linked it (only that phone holds the
+   * session it runs with), and whether its session check waits for that phone.
+   */
+  phone?: { linked: boolean; checkWaiting: boolean };
 }
 
 export interface AutomationSessionView {
@@ -57,8 +63,19 @@ export interface AutomationSessionView {
 }
 
 export function describeAutomationSession(input: AutomationSessionInput): AutomationSessionView {
-  const { connection, check, now } = input;
+  const { connection, check, now, phone } = input;
   const name = MARKETPLACE_NAMES[input.marketplace];
+  if (phone?.linked === false) {
+    // It runs from the phone, and no phone holds a session for it: whatever the cloud found,
+    // linking it on the phone is what makes it work.
+    const message = `Listora runs ${name} from your iPhone, in your own session. Link ${name} on your iPhone to start.`;
+    return {
+      state: 'needs_relink',
+      statusDisplay: { tone: 'action_needed', label: 'Link on your iPhone', detail: message },
+      issue: { code: 'phone_link_needed', message, occurredAt: connection.updatedAt },
+      canCheck: false,
+    };
+  }
   switch (connection.status) {
     case 'reauth_required':
     case 'revoked': {
@@ -88,14 +105,30 @@ export function describeAutomationSession(input: AutomationSessionInput): Automa
   }
 
   if (check?.status === 'passed') {
+    const signedIn =
+      connection.displayName === null ? null : `Signed in as ${connection.displayName}.`;
+    const detail =
+      phone === undefined
+        ? signedIn
+        : [signedIn, 'Runs from your iPhone.'].filter(Boolean).join(' ');
     return {
       state: 'linked',
       statusDisplay: {
         tone: 'success',
         label: 'Linked',
-        ...(connection.displayName === null
-          ? {}
-          : { detail: `Signed in as ${connection.displayName}.` }),
+        ...(detail === null || detail === '' ? {} : { detail }),
+      },
+      canCheck: false,
+    };
+  }
+  if (check?.status === 'pending' && phone?.checkWaiting === true) {
+    // The phone checks it the next time Listora runs there; it is waiting, not stuck.
+    return {
+      state: 'checking',
+      statusDisplay: {
+        tone: 'checking',
+        label: 'Checking on your iPhone...',
+        detail: `Open Listora on your iPhone to finish checking your ${name} sign-in.`,
       },
       canCheck: false,
     };

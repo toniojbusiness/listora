@@ -23,7 +23,7 @@ struct DetailsSection: View {
                 HStack(spacing: Spacing.xs) {
                     LabeledRow("Size", value: item.details.sizeLabel ?? "Add size")
                     Image(systemName: "chevron.forward")
-                        .font(Typography.footnote.weight(.semibold))
+                        .font(Typography.smallEmphasis)
                         .foregroundStyle(Palette.textSecondary)
                         .accessibilityHidden(true)
                 }

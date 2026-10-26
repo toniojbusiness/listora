@@ -58,6 +58,9 @@ protocol SalesService: Sendable {
 /// ``SalesService`` over the generated client.
 struct APISalesService: SalesService {
     let client: Client
+    /// Runs once the server queued marketplace changes (a sale's delists, relists): the phone
+    /// takes at once the ones that run on it (docs/features/phone-execution.md).
+    var queued: @MainActor @Sendable () -> Void = {}
 
     func sales(cursor: String?) async throws(APIFailure) -> SalePage {
         switch try await call({ try await client.listSales(query: .init(cursor: cursor, limit: 50)) }) {
@@ -107,7 +110,10 @@ struct APISalesService: SalesService {
             try await client.createSale(headers: .init(idempotencyKey: idempotencyKey), body: .json(request))
         }
         switch output {
-        case let .created(response): return try body { try response.body.json }
+        case let .created(response):
+            let sale = try body { try response.body.json }
+            await queued()
+            return sale
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .conflict(response): throw APIFailure(statusCode: 409, response: response)
         case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
@@ -198,7 +204,10 @@ struct APISalesService: SalesService {
             )
         }
         switch output {
-        case let .ok(response): return try body { try response.body.json }
+        case let .ok(response):
+            let sale = try body { try response.body.json }
+            await queued()
+            return sale
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .conflict(response): throw APIFailure(statusCode: 409, response: response)
         case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)

@@ -52,6 +52,13 @@ after their retention period (7 days for personal, 30 for production).
 
 In the app, a person deletes their account in Settings > Delete account ([auth.md](auth.md#account-deletion)) and unlinks a marketplace with Unlink in Settings > Link accounts ([marketplace-linking.md](marketplace-linking.md)).
 
+The marketplaces that run on the seller's iPhone ([phone-execution.md](phone-execution.md)) add
+two things. An unlink also deletes the connection's work waiting for the phone (`phone_work`), and
+an account deletion deletes the account's devices (`app_device`: name, app version, push token).
+The sign-in the phone keeps in its Keychain is removed by the app when the seller unlinks the
+marketplace or deletes the account there, and when another Listora account signs in on the
+phone.
+
 An operator runs the last one with
 `npm run admin -- marketplace-purge depop --mode api --actor <name> --reason <text>`, which only
 counts the connections until it is run again with `--confirm`; the log line names the actor and

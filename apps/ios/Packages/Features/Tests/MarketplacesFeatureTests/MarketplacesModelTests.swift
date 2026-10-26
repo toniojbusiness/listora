@@ -1,4 +1,5 @@
 import APIClient
+import Core
 import Foundation
 import ListoraAPI
 import Testing
@@ -187,5 +188,90 @@ struct MarketplacesModelTests {
         let url = try #require(URL(string: "listora://connections/ebay?authorizationId=abc"))
         #expect(MarketplacesModel.authorizationID(in: url) == "abc")
         #expect(try MarketplacesModel.authorizationID(in: #require(URL(string: "listora://connections/ebay"))) == nil)
+    }
+
+    private func depop(onPhone: Bool, waiting: Int = 0) throws -> Components.Schemas.Connection {
+        try connection(
+            marketplace: "depop",
+            mode: "assisted",
+            status: "connected",
+            tone: "success",
+            label: "Linked",
+            connect: "none",
+            execution: onPhone
+                ? [
+                    "location": "phone", "label": "Runs on your iPhone", "deviceName": "Sam's iPhone",
+                    "waiting": waiting,
+                ]
+                : ["location": "cloud", "label": "Runs in Listora's cloud"],
+        )
+    }
+
+    @Test
+    func `shows where each marketplace runs and what waits for the phone`() async throws {
+        let service = try FakeConnectionsService(lists: [.success([depop(onPhone: true, waiting: 2)])])
+        let model = MarketplacesModel(service: service)
+        await model.load()
+        let row = try #require(model.rows.first)
+        #expect(row.execution?.onPhone == true)
+        #expect(row.execution?.text == "Runs on Sam's iPhone · 2 waiting")
+        #expect(row.statusLabel == "Linked")
+    }
+
+    @Test
+    func `moves a marketplace to the cloud, and back to this iPhone, which takes its work at once`() async throws {
+        let toCloud = try FakeConnectionsService(
+            lists: [.success([depop(onPhone: true)])],
+            move: .success(depop(onPhone: false)),
+        )
+        let trigger = FakeTrigger()
+        let model = MarketplacesModel(service: toCloud)
+        model.phoneWork = trigger
+        await model.load()
+        try await model.move(#require(model.rows.first), toPhone: false)
+        #expect(toCloud.moves == ["depop:cloud"])
+        #expect(model.rows.first?.execution?.text == "Runs in Listora's cloud")
+        #expect(model.notice == .init(tone: .success, message: "Depop runs in Listora's cloud now."))
+        #expect(trigger.reasons.isEmpty)
+        #expect(model.moving == nil)
+
+        let toPhone = try FakeConnectionsService(
+            lists: [.success([depop(onPhone: false)])],
+            move: .success(depop(onPhone: true, waiting: 1)),
+        )
+        let back = MarketplacesModel(service: toPhone)
+        back.phoneWork = trigger
+        await back.load()
+        try await back.move(#require(back.rows.first), toPhone: true)
+        #expect(toPhone.moves == ["depop:phone"])
+        #expect(back.rows.first?.execution?.onPhone == true)
+        #expect(back.notice == .init(tone: .success, message: "Depop runs on this iPhone now."))
+        #expect(trigger.reasons == [.userAction])
+    }
+
+    @Test
+    func `a move the server refused leaves the row where it runs, with the reason`() async throws {
+        let refused = APIFailure(
+            statusCode: 409,
+            code: "phone_not_linked",
+            message: "Link Depop on this iPhone to run it here.",
+            retryable: false,
+        )
+        let service = try FakeConnectionsService(lists: [.success([depop(onPhone: false)])], move: .failure(refused))
+        let model = MarketplacesModel(service: service)
+        await model.load()
+        try await model.move(#require(model.rows.first), toPhone: true)
+        #expect(model.rows.first?.execution?.onPhone == false)
+        #expect(model.notice == .init(tone: .failure, message: "Link Depop on this iPhone to run it here."))
+    }
+}
+
+/// Records what asked the phone to run its work.
+@MainActor
+final class FakeTrigger: PhoneWorkTrigger {
+    private(set) var reasons: [PhoneWorkReason] = []
+
+    func runPhoneWork(_ reason: PhoneWorkReason) {
+        reasons.append(reason)
     }
 }

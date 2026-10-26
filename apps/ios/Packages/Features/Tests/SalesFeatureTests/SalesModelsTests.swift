@@ -347,6 +347,25 @@ struct SalesModelsTests {
     }
 
     @Test
+    func `a sale that arrives while the app is open is the one to celebrate, not the ones already there`() async {
+        var newer = sale()
+        newer.id = "sale-2"
+        let service = FakeSalesService(sale: sale())
+        service.pages = [
+            SalePage(sales: [sale()], nextCursor: nil),
+            SalePage(sales: [sale()], nextCursor: nil),
+            SalePage(sales: [newer, sale()], nextCursor: nil),
+        ]
+        let list = SalesListModel(service: service)
+        await list.load()
+        #expect(list.newSaleID == nil, "the first load celebrates nothing")
+        await list.load()
+        #expect(list.newSaleID == nil, "nothing new")
+        await list.load()
+        #expect(list.newSaleID == "sale-2")
+    }
+
+    @Test
     func `formats ROI with its sign`() {
         #expect(SaleFormatting.roi(basisPoints: 16667) == "+166.7%")
         #expect(SaleFormatting.roi(basisPoints: -9333) == "-93.3%")

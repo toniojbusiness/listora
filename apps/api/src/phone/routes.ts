@@ -1,0 +1,107 @@
+/**
+ * On-phone execution (docs/features/phone-execution.md): the app registers its device, then
+ * claims the marketplace work waiting for it and answers each script call its runtime ran. The
+ * server runs the work itself with those answers (`claimPhoneRun`, `answerPhoneCall` in
+ * `@listora/automation`), so every rule of the engine holds exactly as on the cloud runner.
+ */
+import type { PhoneRunResult } from '@listora/api-contract';
+import {
+  answerPhoneCall,
+  claimPhoneRun,
+  PhoneCallConflictError,
+  PhoneRunGoneError,
+  PhoneRuntimeMismatchError,
+  type PhoneRunState,
+  type PhoneWorkDependencies,
+} from '@listora/automation';
+import type { FastifyInstance } from 'fastify';
+
+import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
+import { ApiError, notFound } from '../errors.ts';
+import { deviceView, findDevice, registerDevice, touchDevice } from './devices.ts';
+
+export interface PhoneRouteDependencies extends RouteDependencies {
+  /** The work handed to phones and how it runs; undefined where phones run nothing. */
+  phone: PhoneWorkDependencies | undefined;
+}
+
+export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDependencies): void {
+  contractRoute(app, deps, 'registerDevice', async ({ tenant, db, params, body }) => {
+    const row = await registerDevice(db, tenant, params.installationId, body);
+    return { status: 200, body: deviceView(row) };
+  });
+
+  contractRoute(app, deps, 'claimPhoneRun', async ({ tenant, db, body }) => {
+    const phone = available(deps);
+    const device = await findDevice(db, tenant, body.installationId);
+    if (device === undefined) throw notFound('Device');
+    await touchDevice(db, device, body.runtimeVersion);
+    try {
+      const run = await claimPhoneRun(phone, db, {
+        accountId: tenant.accountId,
+        deviceId: device.id,
+        runtimeVersion: body.runtimeVersion,
+      });
+      return { status: 200, body: runResult(run) };
+    } catch (error) {
+      throw apiError(error);
+    }
+  });
+
+  contractRoute(app, deps, 'answerPhoneCall', async ({ tenant, db, params, body }) => {
+    const phone = available(deps);
+    const device = await findDevice(db, tenant, body.installationId);
+    if (device === undefined) throw notFound('Device');
+    try {
+      const run = await answerPhoneCall(phone, {
+        accountId: tenant.accountId,
+        deviceId: device.id,
+        runId: params.runId,
+        index: Number(params.index),
+        answer: body.answer,
+      });
+      return { status: 200, body: runResult(run) };
+    } catch (error) {
+      throw apiError(error);
+    }
+  });
+}
+
+function available(deps: PhoneRouteDependencies): PhoneWorkDependencies {
+  if (deps.phone === undefined) {
+    throw new ApiError(
+      'marketplace_action_unavailable',
+      "Listora can't run marketplace changes on your iPhone here.",
+    );
+  }
+  return deps.phone;
+}
+
+/** A run with a call goes on; one without is over, so the app claims the next. */
+function runResult(run: PhoneRunState | null): PhoneRunResult {
+  const call = run?.call ?? null;
+  if (run === null || call === null) return {};
+  return {
+    run: {
+      id: run.id,
+      purpose: run.purpose,
+      marketplace: run.marketplace,
+      ...(run.operationId === null ? {} : { operationId: run.operationId }),
+      call: {
+        index: call.index,
+        input: call.input as unknown as Record<string, unknown>,
+      },
+    },
+  };
+}
+
+function apiError(error: unknown): unknown {
+  if (error instanceof PhoneRuntimeMismatchError) {
+    return new ApiError('app_update_required', error.message, { cause: error });
+  }
+  if (error instanceof PhoneRunGoneError) return notFound('Phone run');
+  if (error instanceof PhoneCallConflictError) {
+    return new ApiError('invalid_state_transition', error.message, { cause: error });
+  }
+  return error;
+}

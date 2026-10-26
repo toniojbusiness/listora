@@ -14,7 +14,7 @@ import type { AutomationProfile } from '../profiles.ts';
 export interface UploadFile {
   name: string;
   mimeType: string;
-  buffer: Buffer;
+  bytes: Uint8Array;
 }
 
 /**
@@ -100,7 +100,14 @@ export type ScriptErrorCode =
    */
   | 'browser_unavailable'
   /** The script itself failed (a bug, or a page it does not understand). */
-  | 'script_error';
+  | 'script_error'
+  /**
+   * On the phone (docs/features/phone-execution.md): the page showed a check that the seller
+   * completes themselves in the app, and the run stopped there; nothing after it ran. The step
+   * runs again once they have, or the read-back decides when the run had already changed
+   * something.
+   */
+  | 'stopped_for_check';
 
 export type ScriptResult<T> =
   | { ok: true; value: T; mutated: boolean; steps: string[] }

@@ -37,6 +37,8 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
     /// The marketplace's domains; only their cookies are handed over.
     public let cookieDomains: [String]
     public let displayName: String?
+    /// Where its automated steps run, as the server says it (`Runs on your iPhone`).
+    public let runsOn: RunsOn?
 
     public var id: String {
         marketplace
@@ -94,6 +96,7 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
             loginURL: loginURL,
             cookieDomains: cookieDomains,
             displayName: displayName,
+            runsOn: runsOn,
         )
     }
 
@@ -107,7 +110,9 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
         loginURL: URL,
         cookieDomains: [String],
         displayName: String? = nil,
+        runsOn: RunsOn? = nil,
     ) {
+        self.runsOn = runsOn
         self.marketplace = marketplace
         self.name = name
         self.state = state
@@ -120,14 +125,46 @@ public struct MarketplaceLink: Identifiable, Equatable, Sendable {
     }
 }
 
+/// Where a linked marketplace's automated steps run (docs/features/phone-execution.md).
+public struct RunsOn: Equatable, Sendable {
+    /// The server's words: `Runs on your iPhone`, `Runs in Listora's cloud`.
+    public let label: String
+    /// It runs on a phone (this one, when `installationID` is this app's).
+    public let phone: Bool
+    public let installationID: String?
+    public let deviceName: String?
+    /// Changes and checks waiting for that phone.
+    public let waiting: Int
+
+    public init(label: String, phone: Bool, installationID: String?, deviceName: String?, waiting: Int) {
+        self.label = label
+        self.phone = phone
+        self.installationID = installationID
+        self.deviceName = deviceName
+        self.waiting = waiting
+    }
+
+    /// What the row shows, for this installation: "Runs on this iPhone", or the other phone's name.
+    public func text(thisInstallation: String) -> String {
+        guard phone, let installationID else { return label }
+        if installationID == thisInstallation {
+            return "Runs on this iPhone"
+        }
+        return deviceName.map { "Runs on \($0)" } ?? label
+    }
+}
+
 /// The API calls of the Link accounts screen. A link takes the caller's Idempotency-Key, so a
 /// retry after a lost answer stores the session once.
 public protocol MarketplaceSessionService: Sendable {
     func list() async throws(APIFailure) -> [MarketplaceLink]
     func get(_ marketplace: String) async throws(APIFailure) -> MarketplaceLink
+    /// Links the session; `installationID` names this device, which then runs the marketplace
+    /// when it runs on the phone.
     func link(
         _ marketplace: String,
         cookies: [CapturedCookie],
+        installationID: String?,
         idempotencyKey: String,
     ) async throws(APIFailure) -> MarketplaceLink
     /// Unlinks the marketplace (`disconnectConnection`): the server deletes the session or
@@ -174,6 +211,7 @@ public struct APIMarketplaceSessionService: MarketplaceSessionService {
     public func link(
         _ marketplace: String,
         cookies: [CapturedCookie],
+        installationID: String?,
         idempotencyKey: String,
     ) async throws(APIFailure) -> MarketplaceLink {
         let path = try pathMarketplace(marketplace)
@@ -181,7 +219,10 @@ public struct APIMarketplaceSessionService: MarketplaceSessionService {
             try await api.client.linkMarketplaceSession(
                 path: .init(marketplace: path),
                 headers: .init(idempotencyKey: idempotencyKey),
-                body: .json(.init(cookies: cookies.map(Components.Schemas.SessionCookie.init))),
+                body: .json(.init(
+                    cookies: cookies.map(Components.Schemas.SessionCookie.init),
+                    installationId: installationID,
+                )),
             )
         }
         switch output {
@@ -295,6 +336,7 @@ extension MarketplaceLink {
             loginURL: loginURL,
             cookieDomains: session.login.cookieDomains,
             displayName: session.displayName,
+            runsOn: session.execution.map(RunsOn.init),
         )
     }
 
@@ -340,5 +382,17 @@ extension StatusLabel.Tone {
         case .actionNeeded: self = .actionNeeded
         case .neutral, nil: self = .neutral
         }
+    }
+}
+
+extension RunsOn {
+    init(_ execution: Components.Schemas.ConnectionExecution) {
+        self.init(
+            label: execution.label,
+            phone: execution.location.value1 == .phone,
+            installationID: execution.deviceInstallationId,
+            deviceName: execution.deviceName,
+            waiting: Int(execution.waiting ?? 0),
+        )
     }
 }

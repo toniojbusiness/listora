@@ -37,6 +37,7 @@ describe('API feature discovery', () => {
       'listings',
       'marketplace-sessions',
       'operations',
+      'phone',
       'photos',
       'pricing',
       'profit',

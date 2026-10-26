@@ -41,6 +41,8 @@ struct ItemDetailView: View {
                 await model.followChanges()
             }
             .refreshable { await model.load() }
+            // A change the server refused (the notice) is felt as well as shown.
+            .sensoryFeedback(trigger: model.notice) { _, notice in notice == nil ? nil : .error }
             .sheet(
                 item: $listingFlow,
                 onDismiss: { Task { await model.refresh() } },
@@ -50,7 +52,8 @@ struct ItemDetailView: View {
                 item: $markingSold,
                 onDismiss: { Task { await model.refresh() } },
                 content: { request in
-                    environment.saleScreens?.markSold(request) { saleID in openSale = SaleLink(id: saleID) }
+                    environment.saleScreens?
+                        .markSold(request) { saleID in openSale = SaleLink(id: saleID, isNew: true) }
                 },
             )
             .navigationDestination(isPresented: $reviewing) {
@@ -63,6 +66,7 @@ struct ItemDetailView: View {
             }
             .navigationDestination(item: $openSale) { link in
                 environment.saleScreens?.sale(link.id)
+                    .celebration(trigger: link.isNew ? link.id : nil)
                     .onDisappear { Task { await model.refresh() } }
             }
             .sheet(item: $openTask, onDismiss: { Task { await model.refresh() } }, content: { task in
@@ -79,6 +83,7 @@ struct ItemDetailView: View {
                 PriceChangeView(change: change) {
                     await model.floor(on: change.marketplace)
                 } save: { price in
+                    Haptics.play(.tap)
                     priceChange = nil
                     Task {
                         await model.perform(
@@ -283,7 +288,7 @@ private struct ItemHeader: View {
             // The chip wraps under the SKU rather than breaking it.
             FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
                 Text(item.sku)
-                    .font(Typography.subheadline.monospacedDigit())
+                    .font(Typography.metadata)
                     .foregroundStyle(Palette.textSecondary)
                     .textSelection(.enabled)
                     .accessibilityIdentifier("item.sku")

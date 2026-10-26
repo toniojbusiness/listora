@@ -1,5 +1,6 @@
 import type { Logger } from '@listora/shared';
 
+import type { BackgroundPush } from './background.ts';
 import type { PushNotification } from './notification.ts';
 
 /**
@@ -8,6 +9,8 @@ import type { PushNotification } from './notification.ts';
  */
 export interface PushSender {
   send(notification: PushNotification, signal: AbortSignal): Promise<void>;
+  /** Wakes the account's devices in the background, showing nothing (background.ts). */
+  sendBackground(push: BackgroundPush, signal: AbortSignal): Promise<void>;
 }
 
 /**
@@ -16,6 +19,7 @@ export interface PushSender {
  */
 export class RecordingPushSender implements PushSender {
   readonly sent: PushNotification[] = [];
+  readonly sentBackground: BackgroundPush[] = [];
   readonly #logger: Pick<Logger, 'info'> | undefined;
   #failures = 0;
 
@@ -40,8 +44,22 @@ export class RecordingPushSender implements PushSender {
         category: notification.category,
         title: notification.title,
         body: notification.body,
+        wakesApp: notification.wakesApp === true,
       },
       'push notification (fake driver)',
+    );
+    return Promise.resolve();
+  }
+
+  sendBackground(push: BackgroundPush): Promise<void> {
+    if (this.#failures > 0) {
+      this.#failures -= 1;
+      return Promise.reject(new Error('the fake push service is unavailable'));
+    }
+    this.sentBackground.push(push);
+    this.#logger?.info(
+      { accountId: push.accountId, reason: push.reason },
+      'background push (fake driver)',
     );
     return Promise.resolve();
   }

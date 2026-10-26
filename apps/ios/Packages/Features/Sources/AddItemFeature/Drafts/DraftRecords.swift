@@ -126,6 +126,9 @@ struct DraftPhotoRecord: Codable, Equatable, Identifiable, Sendable, FetchableRe
     var role: PhotoRole
     /// The prepared JPEG in the store's photo directory.
     var fileName: String
+    /// After a background cleanup, the photo as it was before, kept on this iPhone so the cleanup
+    /// can be undone. Nil for a photo that was not cleaned up (or was cropped since).
+    var originalFileName: String?
     var width: Int
     var height: Int
     var byteSize: Int

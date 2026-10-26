@@ -5,14 +5,14 @@ import { join } from 'node:path';
 import { ACCOUNT_DELETION_TASK } from '@listora/accounts';
 import { ITEM_ANALYSIS_TASK } from '@listora/analysis';
 import { AUTO_DELIST_SLA_TASK } from '@listora/auto-delist';
-import { SALE_ORDER_TASK } from '@listora/automation';
+import { PHONE_WATCH_TASK, SALE_ORDER_TASK } from '@listora/automation';
 import { BATCH_ITEM_ANALYSIS_TASK } from '@listora/batches';
 import { CONNECTION_DELETION_TASK } from '@listora/connections';
 import { EMAIL_INGEST_TASK } from '@listora/email-sales';
 import { TRUST_METRICS_CRONTAB, TRUST_METRICS_TASK } from '@listora/observability';
 import { LISTING_RESYNC_TASK } from '@listora/operations';
 import { PHOTO_PROCESSING_TASK } from '@listora/photos';
-import { PUSH_TASK } from '@listora/push';
+import { BACKGROUND_PUSH_TASK, PUSH_TASK } from '@listora/push';
 import { DATA_RETENTION_TASK } from '@listora/retention';
 import { SALE_FEES_TASK } from '@listora/sales';
 import { createLogger } from '@listora/shared';
@@ -79,6 +79,7 @@ describe('worker feature discovery', () => {
       'data-retention',
       'ebay-sync',
       'email-sales',
+      'phone-work',
       'photos',
       'push',
       'sale-fees',
@@ -98,6 +99,7 @@ describe('worker feature discovery', () => {
         LISTING_RESYNC_TASK,
         PHOTO_PROCESSING_TASK,
         PUSH_TASK,
+        BACKGROUND_PUSH_TASK,
         SALE_ORDER_TASK,
         SALE_FEES_TASK,
         TRUST_METRICS_TASK,
@@ -108,6 +110,7 @@ describe('worker feature discovery', () => {
       AUTO_DELIST_SLA_TASK,
       DATA_RETENTION_TASK,
       EMAIL_INGEST_TASK,
+      PHONE_WATCH_TASK,
       TODAY_SUMMARY_TASK,
     ]);
     expect(crontab).toEqual([TRUST_METRICS_CRONTAB]);

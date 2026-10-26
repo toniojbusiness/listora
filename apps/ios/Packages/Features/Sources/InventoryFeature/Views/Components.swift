@@ -47,7 +47,7 @@ struct LabeledRow: View {
             }
             VStack(alignment: stacked ? .leading : .trailing, spacing: 2) {
                 Text(value)
-                    .font(Typography.subheadline.weight(.semibold).monospacedDigit())
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.textPrimary)
                     .multilineTextAlignment(stacked ? .leading : .trailing)
                 if let note {

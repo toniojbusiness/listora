@@ -37,6 +37,13 @@ The details and commands are in [apps/ios/README.md](../../apps/ios/README.md).
   and card styling, so light and dark mode stay consistent. A test checks WCAG AA contrast for
   every text and background pair. The design system and its rules are in
   [design.md](design.md).
+- Work outside a screen: the photo upload queue's background `URLSession`, and the marketplace
+  work this phone runs ([phone-execution.md](phone-execution.md)) on a push, on background app
+  refresh, and in an overnight `BGProcessingTask` (`UIBackgroundModes` and
+  `BGTaskSchedulerPermittedIdentifiers` in `project.yml`). `ListoraAppDelegate` exists only for
+  what UIKit alone reports: the APNs token and a push that wakes the app. The installation id and
+  the marketplace sessions the phone keeps are Keychain items readable after the first unlock,
+  never synced (`Core/Phone`).
 - Tests use Swift Testing; UI tests use XCTest. `make ios-lint` (SwiftLint and SwiftFormat)
   must be clean.
 - Releases are plain `xcodebuild`, no fastlane: `scripts/ios-release.sh` archives

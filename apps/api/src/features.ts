@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { AiClient } from '@listora/ai';
+import type { PhoneWorkDependencies } from '@listora/automation';
 import type { AnalysisJobQueue } from '@listora/analysis';
 import type { BatchJobQueue } from '@listora/batches';
 import type { PhotoJobQueue } from '@listora/photos';
@@ -47,6 +48,8 @@ export interface ApiRouteContext extends RouteDependencies {
   ebayWebhook?: EbayWebhookDependencies;
   /** Email sale detection: the forwarding addresses' domain and the dev drop folder. */
   saleEmails: SaleEmailsDependencies;
+  /** The marketplace work phones run (docs/features/phone-execution.md); none without it. */
+  phone: PhoneWorkDependencies | undefined;
   /** The clock upload sessions expire by. */
   now: () => Date;
 }

@@ -5,6 +5,8 @@ import SwiftUI
 /// A sale the item screen opens.
 struct SaleLink: Identifiable, Hashable {
     let id: String
+    /// The seller recorded this sale a moment ago ("Mark as sold"): its screen celebrates.
+    var isNew = false
 }
 
 extension Item {
