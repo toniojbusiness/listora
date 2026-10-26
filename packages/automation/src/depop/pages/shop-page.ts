@@ -36,7 +36,9 @@ const SITE_PATHS = new Set(
   ).split(' '),
 );
 /** How long the menu and the shop's product list get to appear, and how often they are looked at. */
-const APPEAR_MS = 8_000;
+const APPEAR_MS = 15_000;
+/** How long the user menu gets to open before its button is clicked again. */
+const MENU_RETRY_MS = 3_000;
 const LOOK_EVERY_MS = 500;
 
 /** The signed-in seller's username, from the profile link in the header's user menu. */
@@ -45,6 +47,8 @@ export async function findSeller(page: PageDriver, site: DepopSite): Promise<str
   await awaitElement(page, HUB_PAGE.signedInUser, 'selling hub', "signed-in user's avatar");
   await page.click(SHOP_PAGE.userMenu);
   const end = Date.now() + APPEAR_MS;
+  // A click before the page's scripts are ready opens nothing, so the menu is asked again.
+  let reopenAt = Date.now() + MENU_RETRY_MS;
   for (;;) {
     // The menu's button may also open the profile itself.
     const shown = usernameOf(new URL(page.url()).pathname);
@@ -63,6 +67,10 @@ export async function findSeller(page: PageDriver, site: DepopSite): Promise<str
       return openedProfile(page);
     }
     if (Date.now() >= end) throw changed('user menu', 'has no profile item');
+    if (Date.now() >= reopenAt) {
+      await page.click(SHOP_PAGE.userMenu);
+      reopenAt = Date.now() + MENU_RETRY_MS;
+    }
     await lookAgain(page, LOOK_EVERY_MS);
   }
 }

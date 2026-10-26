@@ -45,6 +45,18 @@ export const FORM_SELECTORS = {
   /** The listing price, as the form a seller's session shows names it. */
   listingPrice: 'input[data-vv-name="listingPrice"]',
   /**
+   * The Listing Price dialog the price field opens (read on the captain's session, 2026-10-26):
+   * the price again, Automate Offers (on by default, and then a lowest price is required), the
+   * original price, and Done. Listora sets no automatic offers, so it turns them off.
+   */
+  /** The dialog while it shows (`modal--in`); it stays in the page once closed. */
+  priceDialog: '.listing-price-suggestion-modal.modal--in',
+  priceDialogPrice: '.listing-price-suggestion-modal #listing-price-modal-listing-price-input',
+  priceDialogOriginal: '.listing-price-suggestion-modal #listing-price-modal-original-price-input',
+  priceDialogLowest: '.listing-price-suggestion-modal [data-vv-name="inputPrice"]',
+  priceDialogOffers: '.listing-price-suggestion-modal label[data-test="toggle-switch"]',
+  priceDialogDone: '.listing-price-suggestion-modal button.btn--primary:text-is("Done")',
+  /**
    * The cover-photo editor (`.image-edit-modal`, in one of Poshmark's modals) and its Apply, in
    * the modal's footer; the size picker's Done is an `apply` too.
    */
@@ -153,11 +165,7 @@ export async function fillText(page: PageDriver, payload: PoshmarkListingPayload
  * field folded away until it is asked for, and it starts empty).
  */
 export async function fillPrices(page: PageDriver, payload: PoshmarkListingPayload): Promise<void> {
-  await setPrice(page, payload.price.amountCents);
-  if (payload.originalPrice !== null) {
-    await expectField(page, FORM_SELECTORS.originalPrice, 'original price field');
-    await page.fill(FORM_SELECTORS.originalPrice, wholeDollars(payload.originalPrice.amountCents));
-  }
+  await setPrice(page, payload.price.amountCents, payload.originalPrice?.amountCents ?? null);
 }
 
 /** The brand, typed into the brand field (Poshmark takes a brand its suggestions don't list). */
@@ -248,9 +256,55 @@ export async function fillSku(page: PageDriver, sku: string): Promise<void> {
   await page.fill(FORM_SELECTORS.sku, sku);
 }
 
-export async function setPrice(page: PageDriver, priceCents: number): Promise<void> {
+/**
+ * Sets the listing price (and the original price, when given) through the price field and the
+ * Listing Price dialog it opens: the price, Automate Offers off, the original price, Done.
+ */
+export async function setPrice(
+  page: PageDriver,
+  priceCents: number,
+  originalCents: number | null = null,
+): Promise<void> {
   await expectField(page, FORM_SELECTORS.listingPrice, 'listing price field');
   await page.fill(FORM_SELECTORS.listingPrice, wholeDollars(priceCents));
+  if (!(await appears(page, FORM_SELECTORS.priceDialog))) {
+    // A form without the dialog takes both prices in its own fields.
+    if (originalCents !== null) {
+      await expectField(page, FORM_SELECTORS.originalPrice, 'original price field');
+      await page.fill(FORM_SELECTORS.originalPrice, wholeDollars(originalCents));
+    }
+    return;
+  }
+  await expectField(page, FORM_SELECTORS.priceDialogPrice, 'Listing Price dialog price');
+  await page.fill(FORM_SELECTORS.priceDialogPrice, wholeDollars(priceCents));
+  if (await page.exists(FORM_SELECTORS.priceDialogLowest)) {
+    await page.click(FORM_SELECTORS.priceDialogOffers);
+    if (!(await disappears(page, FORM_SELECTORS.priceDialogLowest))) {
+      throw new PageChangedError("Poshmark's Listing Price dialog kept Automate Offers on");
+    }
+  }
+  if (originalCents !== null) {
+    await expectField(
+      page,
+      FORM_SELECTORS.priceDialogOriginal,
+      'Listing Price dialog original price',
+    );
+    await page.fill(FORM_SELECTORS.priceDialogOriginal, wholeDollars(originalCents));
+  }
+  await pick(page, FORM_SELECTORS.priceDialogDone, 'Listing Price dialog Done button');
+  if (!(await disappears(page, FORM_SELECTORS.priceDialog))) {
+    throw new PageChangedError("Poshmark's Listing Price dialog didn't close on Done");
+  }
+}
+
+/** Whether `selector` is gone from the page within a moment. */
+async function disappears(page: PageDriver, selector: string): Promise<boolean> {
+  const end = Date.now() + EDITOR_OPENS_MS;
+  for (;;) {
+    if (!(await page.exists(selector))) return true;
+    if (Date.now() >= end) return false;
+    await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
+  }
 }
 
 export async function setAvailability(page: PageDriver, availability: Availability): Promise<void> {

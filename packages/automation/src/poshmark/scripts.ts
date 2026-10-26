@@ -171,8 +171,11 @@ export function createPoshmarkScripts(
 
   /** Saves the open form; Poshmark's validation messages are a rejection in its own words. */
   async function save(step: StepRunner, button: 'list' | 'update'): Promise<WriteResult> {
-    const result = await step(button === 'list' ? 'list' : 'update', { mutates: true }, (page) =>
-      submit(page, button),
+    // Next uploads the photos and creates the listing before the share step's List shows.
+    const result = await step(
+      button === 'list' ? 'list' : 'update',
+      { mutates: true, timeoutMs: 120_000 },
+      (page) => submit(page, button),
     );
     if (result.type === 'refused') {
       return { type: 'rejected', code: 'validation_failed', message: result.message };

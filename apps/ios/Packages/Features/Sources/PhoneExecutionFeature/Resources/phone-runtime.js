@@ -6177,7 +6177,9 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	/** Depop's own top-level pages, which a single-name path may also be. */
 	const SITE_PATHS = new Set("about app blog brand brands category checkout cookies discover download explore help legal likes login messages news privacy products safety search sell sellinghub settings shop signup sitemap terms".split(" "));
 	/** How long the menu and the shop's product list get to appear, and how often they are looked at. */
-	const APPEAR_MS = 8e3;
+	const APPEAR_MS = 15e3;
+	/** How long the user menu gets to open before its button is clicked again. */
+	const MENU_RETRY_MS = 3e3;
 	const LOOK_EVERY_MS$1 = 500;
 	/** The signed-in seller's username, from the profile link in the header's user menu. */
 	async function findSeller(page, site) {
@@ -6185,6 +6187,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
 		await page.click(SHOP_PAGE.userMenu);
 		const end = Date.now() + APPEAR_MS;
+		let reopenAt = Date.now() + MENU_RETRY_MS;
 		for (;;) {
 			const shown = usernameOf(new URL(page.url()).pathname);
 			if (shown !== null) return shown;
@@ -6199,6 +6202,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				return openedProfile(page);
 			}
 			if (Date.now() >= end) throw changed$2("user menu", "has no profile item");
+			if (Date.now() >= reopenAt) {
+				await page.click(SHOP_PAGE.userMenu);
+				reopenAt = Date.now() + MENU_RETRY_MS;
+			}
 			await lookAgain(page, LOOK_EVERY_MS$1);
 		}
 	}
@@ -8116,6 +8123,18 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		/** The listing price, as the form a seller's session shows names it. */
 		listingPrice: "input[data-vv-name=\"listingPrice\"]",
 		/**
+		* The Listing Price dialog the price field opens (read on the captain's session, 2026-10-26):
+		* the price again, Automate Offers (on by default, and then a lowest price is required), the
+		* original price, and Done. Listora sets no automatic offers, so it turns them off.
+		*/
+		/** The dialog while it shows (`modal--in`); it stays in the page once closed. */
+		priceDialog: ".listing-price-suggestion-modal.modal--in",
+		priceDialogPrice: ".listing-price-suggestion-modal #listing-price-modal-listing-price-input",
+		priceDialogOriginal: ".listing-price-suggestion-modal #listing-price-modal-original-price-input",
+		priceDialogLowest: ".listing-price-suggestion-modal [data-vv-name=\"inputPrice\"]",
+		priceDialogOffers: ".listing-price-suggestion-modal label[data-test=\"toggle-switch\"]",
+		priceDialogDone: ".listing-price-suggestion-modal button.btn--primary:text-is(\"Done\")",
+		/**
 		* The cover-photo editor (`.image-edit-modal`, in one of Poshmark's modals) and its Apply, in
 		* the modal's footer; the size picker's Done is an `apply` too.
 		*/
@@ -8205,11 +8224,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	* field folded away until it is asked for, and it starts empty).
 	*/
 	async function fillPrices(page, payload) {
-		await setPrice(page, payload.price.amountCents);
-		if (payload.originalPrice !== null) {
-			await expectField(page, FORM_SELECTORS.originalPrice, "original price field");
-			await page.fill(FORM_SELECTORS.originalPrice, wholeDollars(payload.originalPrice.amountCents));
-		}
+		await setPrice(page, payload.price.amountCents, payload.originalPrice?.amountCents ?? null);
 	}
 	/** The brand, typed into the brand field (Poshmark takes a brand its suggestions don't list). */
 	async function fillBrand(page, brand) {
@@ -8272,9 +8287,41 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		if ((await page.text(FORM_SELECTORS.privateDetailsToggle))?.trim().toLowerCase() === "show details") await page.click(FORM_SELECTORS.privateDetailsToggle);
 		await page.fill(FORM_SELECTORS.sku, sku);
 	}
-	async function setPrice(page, priceCents) {
+	/**
+	* Sets the listing price (and the original price, when given) through the price field and the
+	* Listing Price dialog it opens: the price, Automate Offers off, the original price, Done.
+	*/
+	async function setPrice(page, priceCents, originalCents = null) {
 		await expectField(page, FORM_SELECTORS.listingPrice, "listing price field");
 		await page.fill(FORM_SELECTORS.listingPrice, wholeDollars(priceCents));
+		if (!await appears(page, FORM_SELECTORS.priceDialog)) {
+			if (originalCents !== null) {
+				await expectField(page, FORM_SELECTORS.originalPrice, "original price field");
+				await page.fill(FORM_SELECTORS.originalPrice, wholeDollars(originalCents));
+			}
+			return;
+		}
+		await expectField(page, FORM_SELECTORS.priceDialogPrice, "Listing Price dialog price");
+		await page.fill(FORM_SELECTORS.priceDialogPrice, wholeDollars(priceCents));
+		if (await page.exists(FORM_SELECTORS.priceDialogLowest)) {
+			await page.click(FORM_SELECTORS.priceDialogOffers);
+			if (!await disappears(page, FORM_SELECTORS.priceDialogLowest)) throw new PageChangedError("Poshmark's Listing Price dialog kept Automate Offers on");
+		}
+		if (originalCents !== null) {
+			await expectField(page, FORM_SELECTORS.priceDialogOriginal, "Listing Price dialog original price");
+			await page.fill(FORM_SELECTORS.priceDialogOriginal, wholeDollars(originalCents));
+		}
+		await pick(page, FORM_SELECTORS.priceDialogDone, "Listing Price dialog Done button");
+		if (!await disappears(page, FORM_SELECTORS.priceDialog)) throw new PageChangedError("Poshmark's Listing Price dialog didn't close on Done");
+	}
+	/** Whether `selector` is gone from the page within a moment. */
+	async function disappears(page, selector) {
+		const end = Date.now() + EDITOR_OPENS_MS;
+		for (;;) {
+			if (!await page.exists(selector)) return true;
+			if (Date.now() >= end) return false;
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
+		}
 	}
 	async function setAvailability(page, availability) {
 		await expectField(page, FORM_SELECTORS.availabilitySelector, "availability picker");
@@ -8514,7 +8561,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		}
 		/** Saves the open form; Poshmark's validation messages are a rejection in its own words. */
 		async function save(step, button) {
-			const result = await step(button === "list" ? "list" : "update", { mutates: true }, (page) => submit(page, button));
+			const result = await step(button === "list" ? "list" : "update", {
+				mutates: true,
+				timeoutMs: 12e4
+			}, (page) => submit(page, button));
 			if (result.type === "refused") return {
 				type: "rejected",
 				code: "validation_failed",
