@@ -121,6 +121,66 @@ final class LinkAccountsUITests: XCTestCase {
         XCTAssertFalse(relinked, "Check again sent a new sign-in")
     }
 
+    /// The sale emails section: the account's own forwarding address, Gmail's confirmation code
+    /// to copy, the setup steps, and "Ask before delisting", saved on the server.
+    func testShowsTheSaleEmailAddressConfirmationAndSetting() throws {
+        let server = try StubAPIServer()
+        try server.start()
+        self.server = server
+        app.launchEnvironment = [
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
+            "LISTORA_DEV_API_BASE_URL": server.baseURL,
+        ]
+        app.launch()
+        let settings = app.buttons["settings.open"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        app.buttons["settings.linkAccounts"].tap()
+
+        let list = app.collectionViews.firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 10))
+        // A list builds only the rows on screen: scroll each one into view before reading it.
+        func reveal(_ target: XCUIElement) {
+            for _ in 0 ..< 6 where !(target.exists && target.isHittable) {
+                list.swipeUp()
+            }
+        }
+        let status = element("saleEmails.status")
+        reveal(status)
+        XCTAssertTrue(status.waitForExistence(timeout: 10), "no sale emails\n\(app.debugDescription)")
+        XCTAssertEqual(status.label, "Confirm forwarding")
+        let address = element("saleEmails.address")
+        reveal(address)
+        XCTAssertEqual(address.label, StubAPIServer.forwardingAddress)
+        let confirmation = element("saleEmails.confirmation")
+        reveal(confirmation)
+        XCTAssertTrue(confirmation.exists)
+        let code = element("saleEmails.code")
+        reveal(code)
+        XCTAssertEqual(code.label, StubAPIServer.forwardingCode)
+        let link = app.buttons["saleEmails.confirmationLink"]
+        reveal(link)
+        XCTAssertTrue(link.exists)
+        snapshot("4-sale-emails")
+
+        let copyCode = app.buttons["saleEmails.copy.code"]
+        copyCode.tap()
+        XCTAssertEqual(copyCode.label, "Confirmation code copied")
+
+        let ask = app.switches["saleEmails.askBeforeDelist"]
+        reveal(ask)
+        XCTAssertEqual(ask.value as? String, "0")
+        // The control itself, at the row's trailing edge (a tap on the label does not toggle it).
+        ask.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        let saved = NSPredicate(format: "value == %@", "1")
+        expectation(for: saved, evaluatedWith: ask)
+        waitForExpectations(timeout: 10)
+        let put = try XCTUnwrap(server.requests.last { $0.method == "PUT" && $0.path == "/v1/sale-emails/settings" })
+        XCTAssertTrue(put.body.replacingOccurrences(of: " ", with: "").contains(#""askBeforeDelist":true"#), put.body)
+        snapshot("5-ask-before-delisting")
+    }
+
     /// Signs in on the fake marketplace's page in the app's own web view, then taps
     /// "I'm signed in".
     private func signInOnTheFakeMarketplace() {

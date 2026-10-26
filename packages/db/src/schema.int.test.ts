@@ -535,6 +535,20 @@ const COLUMNS = {
     'created_at',
     'updated_at',
   ],
+  sale_email_inbox: [
+    'account_id',
+    'address_token',
+    'ask_before_delist',
+    'last_email_at',
+    'last_verified_email_at',
+    'last_sale_email_at',
+    'confirmation_provider',
+    'confirmation_code',
+    'confirmation_url',
+    'confirmation_received_at',
+    'created_at',
+    'updated_at',
+  ],
 } as const satisfies { [Table in keyof Database]: readonly (keyof Database[Table])[] };
 
 type MissingColumns = {

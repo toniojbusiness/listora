@@ -1,0 +1,20 @@
+From: Gmail Team <forwarding-noreply@google.com>
+To: sales+{{token}}@in.listora.test
+Subject: (#418273645) Gmail Forwarding Confirmation - Receive Mail from seller.jane@example.com
+Date: Sat, 24 Oct 2026 16:00:00 +0000
+Message-ID: <forwarding.0001@google.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+seller.jane@example.com has requested to automatically forward mail to your email address
+sales+{{token}}@in.listora.test.
+
+Confirmation code: 418273645
+
+To allow seller.jane@example.com to automatically forward mail to your address, please click
+the link below to confirm the request:
+
+https://mail-settings.google.com/mail/vf-%5BANGjdJ-synthetic-confirmation-link%5D-fixture
+
+If you click the link and it appears to be broken, please copy and paste it into a new browser
+window.

@@ -187,11 +187,12 @@ public struct KeychainAccessGrantStorage: AccessGrantStorage {
         self.accessGroup = accessGroup
     }
 
-    /// The signed-in session the app and its Share Extension share. An App Group identifier works
-    /// as a keychain access group for every target with the group's entitlement, without a
-    /// team-prefixed keychain-access-groups entry, so signing in to the app signs the extension in.
-    public static func session(appGroup: String) -> Self {
-        Self(service: "com.listora.app.session", accessGroup: appGroup)
+    /// The signed-in session the app and its Share Extension share, in an access group both are
+    /// entitled to (`AppConfiguration.sessionKeychainGroup`), so signing in to the app signs the
+    /// extension in. An App Group identifier works as one for every target with the group's
+    /// entitlement; so does a team-prefixed keychain-access-groups entry.
+    public static func session(accessGroup: String) -> Self {
+        Self(service: "com.listora.app.session", accessGroup: accessGroup)
     }
 
     /// Reads the session. With an access group, a session that an earlier build saved under the

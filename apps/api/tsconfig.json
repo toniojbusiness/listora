@@ -16,6 +16,7 @@
     { "path": "../../packages/batches" },
     { "path": "../../packages/connections" },
     { "path": "../../packages/db" },
+    { "path": "../../packages/email-sales" },
     { "path": "../../packages/marketplaces" },
     { "path": "../../packages/operations" },
     { "path": "../../packages/photos" },

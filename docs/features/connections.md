@@ -80,8 +80,9 @@ thing.
   when its grant ends within 30 days ("Reconnect within N days"), or while Listora cannot reach
   the marketplace (`degraded`: "Connection problem"). What only the seller can fix comes first,
   and the banner is `action_needed` unless every entry is a problem Listora keeps checking. Sale
-  email forwarding is "Set up when you add a domain" until Listora has an inbound email domain
-  (email ingest, T-23).
+  email forwarding (`saleForwarding`) is "Set up when you add a domain" until Listora has an
+  inbound email domain, and then the account's own forwarding status
+  ([email-sales.md](email-sales.md)).
 - **Statuses in plain words.** API connections show Connected, Reconnect needed, Access removed,
   or Connection problem; an assisted marketplace with no linked account shows Not linked, and its
   card says it works in assisted mode. The card also shows the mode (API, Automation, Assisted)

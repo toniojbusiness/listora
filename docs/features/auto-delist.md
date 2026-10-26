@@ -12,10 +12,14 @@ not confirm ([operations.md](operations.md)). Code: `packages/auto-delist` (the 
 ## Sale intake: one entry point
 
 Every sale source ends in `recordSale` (`@listora/sales`): eBay's `ORDER_CONFIRMATION` webhook
-and the 5-minute order poll today ([ebay-notifications.md](ebay-notifications.md)), and Depop
-webhooks, automation sale checks, and forwarded emails (T-23) as they arrive, and the manual
-"Mark as sold" ([sales.md](sales.md)). A sale is one marketplace order, recorded once per account, marketplace, and
-order id, whichever source reports it first. Each order line is matched to the item by the
+and the 5-minute order poll ([ebay-notifications.md](ebay-notifications.md)), automation sale
+checks ([automation.md](automation.md)), forwarded sale emails
+([email-sales.md](email-sales.md)), Depop webhooks as they arrive, and the manual "Mark as sold"
+([sales.md](sales.md)). A sale is one marketplace order, recorded once per account, marketplace, and
+order id, whichever source reports it first. A sale email and a sale check cannot meet on the
+order id (the email shows the marketplace's order number, the check reads the listing), so a
+sale of an item that already has a standing sale on the same marketplace is that same order
+when either report came from an email: a duplicate, not a double sale. Each order line is matched to the item by the
 marketplace's listing id, else the seller SKU; a manual or parsed line can name the item (and
 its listing) directly. A bundle records one `sale_item` per item, and each item gets its own
 delist run.

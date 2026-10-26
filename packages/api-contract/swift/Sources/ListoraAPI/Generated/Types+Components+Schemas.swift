@@ -5749,13 +5749,18 @@ extension Components {
                 ])
             }
         }
-        /// `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
-        /// email domain, which this deployment does not have yet.
+        /// - `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+        ///   email domain, which this deployment does not have yet.
+        /// - `not_set_up`, `confirming`, `working`: as `KnownSaleEmailStatus` (`getSaleEmails`, which
+        ///   has the address and the setup steps).
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownSaleForwardingStatus`.
         @frozen public enum KnownSaleForwardingStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case needsDomain = "needs_domain"
+            case notSetUp = "not_set_up"
+            case confirming = "confirming"
+            case working = "working"
         }
         /// Forwarding marketplace sale emails to Listora, which detects sales sooner.
         ///
@@ -8217,10 +8222,14 @@ extension Components {
             public var listingId: Components.Schemas.Id?
             /// - Remark: Generated from `#/components/schemas/UserTask/operationId`.
             public var operationId: Components.Schemas.Id?
-            /// For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
+            /// For a completed `confirm_sale` or `review_match` of a sale email, the sale it recorded;
+            /// for `resolve_double_sale`, the later sale.
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/UserTask/saleId`.
             public var saleId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/UserTask/saleEmail`.
+            public var saleEmail: Components.Schemas.UserTaskSaleEmail?
             /// Opens the right screen in the marketplace app or site.
             ///
             /// - Remark: Generated from `#/components/schemas/UserTask/deepLink`.
@@ -8247,7 +8256,8 @@ extension Components {
             ///   - item:
             ///   - listingId:
             ///   - operationId:
-            ///   - saleId: For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
+            ///   - saleId: For a completed `confirm_sale` or `review_match` of a sale email, the sale it recorded;
+            ///   - saleEmail:
             ///   - deepLink: Opens the right screen in the marketplace app or site.
             ///   - copyAssist:
             ///   - dueAt:
@@ -8266,6 +8276,7 @@ extension Components {
                 listingId: Components.Schemas.Id? = nil,
                 operationId: Components.Schemas.Id? = nil,
                 saleId: Components.Schemas.Id? = nil,
+                saleEmail: Components.Schemas.UserTaskSaleEmail? = nil,
                 deepLink: Swift.String? = nil,
                 copyAssist: Components.Schemas.CopyAssist? = nil,
                 dueAt: Components.Schemas.Timestamp? = nil,
@@ -8284,6 +8295,7 @@ extension Components {
                 self.listingId = listingId
                 self.operationId = operationId
                 self.saleId = saleId
+                self.saleEmail = saleEmail
                 self.deepLink = deepLink
                 self.copyAssist = copyAssist
                 self.dueAt = dueAt
@@ -8303,6 +8315,7 @@ extension Components {
                 case listingId
                 case operationId
                 case saleId
+                case saleEmail
                 case deepLink
                 case copyAssist
                 case dueAt
@@ -8347,6 +8360,138 @@ extension Components {
                 case coverPhoto
             }
         }
+        /// A `KnownUserTaskSaleEmailReason`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmailReason`.
+        public struct UserTaskSaleEmailReason: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmailReason/value1`.
+            public var value1: Components.Schemas.KnownUserTaskSaleEmailReason?
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmailReason/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `UserTaskSaleEmailReason`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownUserTaskSaleEmailReason? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Why a sale email waits for the user:
+        ///
+        /// - `ask_before_delist`: it matched `item`, and the user asked to confirm sale emails first
+        ///   (a `confirm_sale` task). Completing it records the sale and delists the item everywhere
+        ///   else; dismissing it records nothing.
+        /// - `ambiguous_match`: it could be any of `candidates` (a `review_match` task).
+        /// - `unknown_format`: Listora cannot read it (a `review_match` task, no `candidates`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownUserTaskSaleEmailReason`.
+        @frozen public enum KnownUserTaskSaleEmailReason: String, Codable, Hashable, Sendable, CaseIterable {
+            case askBeforeDelist = "ask_before_delist"
+            case ambiguousMatch = "ambiguous_match"
+            case unknownFormat = "unknown_format"
+        }
+        /// What a forwarded sale email said, for a `confirm_sale` or `review_match` task: its parsed
+        /// details and a short excerpt with the buyer's details removed (Listora keeps nothing more of
+        /// the email).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail`.
+        public struct UserTaskSaleEmail: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/reason`.
+            public var reason: Components.Schemas.UserTaskSaleEmailReason
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/receivedAt`.
+            public var receivedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/excerpt`.
+            public var excerpt: Swift.String
+            /// The item's title as the email gave it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/title`.
+            public var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/salePrice`.
+            public var salePrice: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/soldAt`.
+            public var soldAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/orderNumber`.
+            public var orderNumber: Swift.String?
+            /// The items an ambiguous email could be; the user picks one with `matchedItemId`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/candidates`.
+            public var candidates: [Components.Schemas.UserTaskItem]
+            /// Creates a new `UserTaskSaleEmail`.
+            ///
+            /// - Parameters:
+            ///   - reason:
+            ///   - receivedAt:
+            ///   - excerpt:
+            ///   - title: The item's title as the email gave it.
+            ///   - salePrice:
+            ///   - soldAt:
+            ///   - orderNumber:
+            ///   - candidates: The items an ambiguous email could be; the user picks one with `matchedItemId`.
+            public init(
+                reason: Components.Schemas.UserTaskSaleEmailReason,
+                receivedAt: Components.Schemas.Timestamp,
+                excerpt: Swift.String,
+                title: Swift.String? = nil,
+                salePrice: Components.Schemas.Money? = nil,
+                soldAt: Components.Schemas.Timestamp? = nil,
+                orderNumber: Swift.String? = nil,
+                candidates: [Components.Schemas.UserTaskItem]
+            ) {
+                self.reason = reason
+                self.receivedAt = receivedAt
+                self.excerpt = excerpt
+                self.title = title
+                self.salePrice = salePrice
+                self.soldAt = soldAt
+                self.orderNumber = orderNumber
+                self.candidates = candidates
+            }
+            public enum CodingKeys: String, CodingKey {
+                case reason
+                case receivedAt
+                case excerpt
+                case title
+                case salePrice
+                case soldAt
+                case orderNumber
+                case candidates
+            }
+        }
         /// The user's confirmation and, for some kinds, their decision. Which properties apply
         /// depends on the task's `kind`; a property that does not apply is
         /// `422 validation_failed`.
@@ -8356,8 +8501,11 @@ extension Components {
         ///   it is not a listing on that marketplace, and `409 already_exists` when another listing
         ///   already has it.
         /// - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
-        ///   `rejectMatch: true` when nothing matches. Exactly one of the two is required.
-        /// - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+        ///   `rejectMatch: true` when nothing matches. Exactly one of the two is required. For a sale
+        ///   email, the chosen item's sale is recorded and delisted everywhere else; `422` when the
+        ///   email shows no price and the item has no listing price on that marketplace.
+        /// - `confirm_sale`: optional `saleCorrection` when the detected details are wrong. For a sale
+        ///   email, completing it records the sale and delists the item everywhere else.
         /// - `delist_manually`, `edit_manually`, `reconnect`, `resolve_double_sale`: nothing besides
         ///   `note`.
         /// - Every kind: optional `note`.
@@ -8466,6 +8614,212 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case data
                 case nextCursor
+            }
+        }
+        /// A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show
+        /// `statusDisplay` as given.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleEmailStatus`.
+        public struct SaleEmailStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleEmailStatus/value1`.
+            public var value1: Components.Schemas.KnownSaleEmailStatus?
+            /// - Remark: Generated from `#/components/schemas/SaleEmailStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SaleEmailStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSaleEmailStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - `unavailable`: this Listora receives no email yet (no `address`).
+        /// - `not_set_up`: no email has reached the address yet.
+        /// - `confirming`: the email provider sent its forwarding confirmation (`confirmation`); the
+        ///   user confirms it in their provider's settings.
+        /// - `working`: a marketplace email passed Listora's sender checks, so forwarding works.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownSaleEmailStatus`.
+        @frozen public enum KnownSaleEmailStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case unavailable = "unavailable"
+            case notSetUp = "not_set_up"
+            case confirming = "confirming"
+            case working = "working"
+        }
+        /// The email provider's forwarding confirmation, sent to the Listora address: the user types
+        /// the `code` into their provider's settings, or opens `url` (always on the provider's own
+        /// domain, from a message whose sender checks passed). Listora never opens the link itself.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleEmailConfirmation`.
+        public struct SaleEmailConfirmation: Codable, Hashable, Sendable {
+            /// For example "Gmail".
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmailConfirmation/provider`.
+            public var provider: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SaleEmailConfirmation/code`.
+            public var code: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SaleEmailConfirmation/url`.
+            public var url: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SaleEmailConfirmation/receivedAt`.
+            public var receivedAt: Components.Schemas.Timestamp
+            /// Creates a new `SaleEmailConfirmation`.
+            ///
+            /// - Parameters:
+            ///   - provider: For example "Gmail".
+            ///   - code:
+            ///   - url:
+            ///   - receivedAt:
+            public init(
+                provider: Swift.String,
+                code: Swift.String? = nil,
+                url: Swift.String? = nil,
+                receivedAt: Components.Schemas.Timestamp
+            ) {
+                self.provider = provider
+                self.code = code
+                self.url = url
+                self.receivedAt = receivedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case provider
+                case code
+                case url
+                case receivedAt
+            }
+        }
+        /// Email sale detection: the account's private forwarding address, how to forward the
+        /// marketplaces' sold emails to it, what has arrived, and the "ask before auto-delist"
+        /// setting. A sold email from Poshmark, Mercari, or Depop that passes Listora's sender checks
+        /// (SPF and the marketplace's DKIM signature) records the sale and delists the item everywhere
+        /// else within minutes, or with `askBeforeDelist` makes a confirm task first.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleEmails`.
+        public struct SaleEmails: Codable, Hashable, Sendable {
+            /// The account's own forwarding address; absent while `status` is `unavailable`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/address`.
+            public var address: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/status`.
+            public var status: Components.Schemas.SaleEmailStatus
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// When true, a sale email makes a `confirm_sale` task instead of recording the sale and
+            /// delisting at once. False by default.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/askBeforeDelist`.
+            public var askBeforeDelist: Swift.Bool
+            /// How to set forwarding up, in order, worded for the user.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/steps`.
+            public var steps: [Swift.String]
+            /// The email search that finds the marketplaces' sold emails, for the forwarding filter.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/filter`.
+            public var filter: Swift.String
+            /// Present while the provider's confirmation waits for the user (`confirming`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/confirmation`.
+            public var confirmation: Components.Schemas.SaleEmailConfirmation?
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/lastSaleEmailAt`.
+            public var lastSaleEmailAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/lastEmailAt`.
+            public var lastEmailAt: Components.Schemas.Timestamp?
+            /// Creates a new `SaleEmails`.
+            ///
+            /// - Parameters:
+            ///   - address: The account's own forwarding address; absent while `status` is `unavailable`.
+            ///   - status:
+            ///   - statusDisplay:
+            ///   - askBeforeDelist: When true, a sale email makes a `confirm_sale` task instead of recording the sale and
+            ///   - steps: How to set forwarding up, in order, worded for the user.
+            ///   - filter: The email search that finds the marketplaces' sold emails, for the forwarding filter.
+            ///   - confirmation: Present while the provider's confirmation waits for the user (`confirming`).
+            ///   - lastSaleEmailAt:
+            ///   - lastEmailAt:
+            public init(
+                address: Swift.String? = nil,
+                status: Components.Schemas.SaleEmailStatus,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                askBeforeDelist: Swift.Bool,
+                steps: [Swift.String],
+                filter: Swift.String,
+                confirmation: Components.Schemas.SaleEmailConfirmation? = nil,
+                lastSaleEmailAt: Components.Schemas.Timestamp? = nil,
+                lastEmailAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.address = address
+                self.status = status
+                self.statusDisplay = statusDisplay
+                self.askBeforeDelist = askBeforeDelist
+                self.steps = steps
+                self.filter = filter
+                self.confirmation = confirmation
+                self.lastSaleEmailAt = lastSaleEmailAt
+                self.lastEmailAt = lastEmailAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case address
+                case status
+                case statusDisplay
+                case askBeforeDelist
+                case steps
+                case filter
+                case confirmation
+                case lastSaleEmailAt
+                case lastEmailAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SaleEmailSettingsReplace`.
+        public struct SaleEmailSettingsReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleEmailSettingsReplace/askBeforeDelist`.
+            public var askBeforeDelist: Swift.Bool
+            /// Creates a new `SaleEmailSettingsReplace`.
+            ///
+            /// - Parameters:
+            ///   - askBeforeDelist:
+            public init(askBeforeDelist: Swift.Bool) {
+                self.askBeforeDelist = askBeforeDelist
+            }
+            public enum CodingKeys: String, CodingKey {
+                case askBeforeDelist
             }
         }
         /// A `KnownTodayCardKind`, or a card added after this client was built. Clients show an

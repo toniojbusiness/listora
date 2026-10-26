@@ -74,6 +74,10 @@ charge (ACM certificates and alias queries to API Gateway are free):
 | SES inbound sale email      | 300 emails at $0.10 per 1,000, plus 256 KB chunks at $0.09/1,000 |      $0.06 |
 | **Total with a domain**     | $34.52 plus these                                                | **$35.08** |
 
+The sale emails' SNS topic and SQS queue add nothing: SNS delivers to SQS for free, and the
+worker's once-a-minute poll is about 45,000 SQS requests a month, inside the free 1 million
+([email-sales.md](email-sales.md)).
+
 With browser automation as well, the total is $36.56. The domain's registration is billed by
 its registrar and is not included.
 
@@ -90,8 +94,8 @@ runner sets it back to 0 as it exits, after two minutes with nothing to do
 12 hours by default. The interval adapts to the seller's own sales history (sooner in the
 hours and days their sales usually happen and while items are hot, later when idle) while
 keeping about the same number of checks on average, and never more often than every 2 hours
-(`SALE_CHECK_MIN_HOURS`). Once a domain is added, forwarded sale emails also start a check at
-once, almost immediately after a sale.
+(`SALE_CHECK_MIN_HOURS`). Once a domain is added, a forwarded sale email records the sale itself within
+about a minute, and starts a check at once only when it cannot be matched to an item.
 
 On demand the runner costs $0.0583 an hour (1 vCPU at $0.04048 and 4 GB at $0.004446, x86),
 plus $0.005 an hour for its public address while it runs. Assumptions:

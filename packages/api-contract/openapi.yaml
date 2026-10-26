@@ -57,6 +57,8 @@ tags:
     description: The profit dashboard over the seller's sales and inventory.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
+  - name: sale-emails
+    description: The forwarding address that catches Poshmark, Mercari, and Depop sale emails.
   - name: usage
     description: How much of the plan's quotas the account has used this period.
   - name: today
@@ -187,6 +189,10 @@ paths:
     $ref: './paths/tasks.yaml#/~1v1~1tasks~1{taskId}~1complete'
   /v1/tasks/{taskId}/dismiss:
     $ref: './paths/tasks.yaml#/~1v1~1tasks~1{taskId}~1dismiss'
+  /v1/sale-emails:
+    $ref: './paths/sale-emails.yaml#/~1v1~1sale-emails'
+  /v1/sale-emails/settings:
+    $ref: './paths/sale-emails.yaml#/~1v1~1sale-emails~1settings'
   /v1/today:
     $ref: './paths/today.yaml#/~1v1~1today'
   /v1/today/settings:
@@ -726,12 +732,29 @@ components:
       $ref: './components/schemas/tasks.yaml#/UserTask'
     UserTaskItem:
       $ref: './components/schemas/tasks.yaml#/UserTaskItem'
+    UserTaskSaleEmailReason:
+      $ref: './components/schemas/tasks.yaml#/UserTaskSaleEmailReason'
+    KnownUserTaskSaleEmailReason:
+      $ref: './components/schemas/tasks.yaml#/KnownUserTaskSaleEmailReason'
+    UserTaskSaleEmail:
+      $ref: './components/schemas/tasks.yaml#/UserTaskSaleEmail'
     UserTaskCompletion:
       $ref: './components/schemas/tasks.yaml#/UserTaskCompletion'
     SaleCorrection:
       $ref: './components/schemas/tasks.yaml#/SaleCorrection'
     UserTaskPage:
       $ref: './components/schemas/tasks.yaml#/UserTaskPage'
+    # ---------------------------------------------------------------- sale emails
+    SaleEmailStatus:
+      $ref: './components/schemas/sale-emails.yaml#/SaleEmailStatus'
+    KnownSaleEmailStatus:
+      $ref: './components/schemas/sale-emails.yaml#/KnownSaleEmailStatus'
+    SaleEmailConfirmation:
+      $ref: './components/schemas/sale-emails.yaml#/SaleEmailConfirmation'
+    SaleEmails:
+      $ref: './components/schemas/sale-emails.yaml#/SaleEmails'
+    SaleEmailSettingsReplace:
+      $ref: './components/schemas/sale-emails.yaml#/SaleEmailSettingsReplace'
     # ---------------------------------------------------------------- today
     TodayCardKind:
       $ref: './components/schemas/today.yaml#/TodayCardKind'

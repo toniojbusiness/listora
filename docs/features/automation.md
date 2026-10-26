@@ -123,8 +123,9 @@ from the app
   the worker's adapters include the API adapters. The next check is due when the expected sales since now reach what an average
   default interval holds (`interval.ts`): every 12 hours by default, sooner over the hours and
   days the seller's sales on that marketplace usually happen and while items are hot, later when
-  idle, within `SALE_CHECK_MIN_HOURS` and `SALE_CHECK_MAX_HOURS`. A forwarded sale email asks for
-  a check at once (`requestSaleCheck`). A check that met a check waits for the relink. A
+  idle, within `SALE_CHECK_MIN_HOURS` and `SALE_CHECK_MAX_HOURS`. A forwarded sale email that
+  Listora could not act on (an unknown format, an ambiguous or no match) asks for a check at
+  once (`requestSaleCheck`, [email-sales.md](email-sales.md)). A check that met a check waits for the relink. A
   marketplace whose adapter reads no orders yet is checked at the longest interval, without
   starting the runner.
 - **Linking** (`linkAutomationSession`, called by the API's `linkMarketplaceSession`) stores the

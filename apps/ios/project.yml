@@ -77,6 +77,7 @@ targets:
         ListoraEnvironment: $(LISTORA_ENVIRONMENT)
         ListoraAPIBaseURL: $(API_BASE_URL)
         ListoraAppGroup: $(APP_GROUP_IDENTIFIER)
+        ListoraSessionKeychainGroup: $(SESSION_KEYCHAIN_GROUP)
         ListoraCognitoRegion: $(COGNITO_REGION)
         ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
         ITSAppUsesNonExemptEncryption: false
@@ -135,6 +136,7 @@ targets:
         ListoraEnvironment: $(LISTORA_ENVIRONMENT)
         ListoraAPIBaseURL: $(API_BASE_URL)
         ListoraAppGroup: $(APP_GROUP_IDENTIFIER)
+        ListoraSessionKeychainGroup: $(SESSION_KEYCHAIN_GROUP)
         ListoraCognitoRegion: $(COGNITO_REGION)
         ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
         NSExtension:

@@ -24,21 +24,22 @@ The app talks to the backend only through the generated `ListoraAPI` Swift packa
 
 Run these from the repository root.
 
-| Command                   | What it does                                                                       |
-| ------------------------- | ---------------------------------------------------------------------------------- |
-| `make ios-generate`       | Generate `apps/ios/Listora.xcodeproj` from `project.yml`                           |
-| `make ios-open`           | Generate the project and open it in Xcode                                          |
-| `make ios-build`          | Build the app, Share Extension, and packages for the simulator                     |
-| `make ios-test`           | Run package, unit, and UI tests on the simulator, in the local stack               |
-| `make ios-lint`           | SwiftLint (strict) and the SwiftFormat check                                       |
-| `make ios-format`         | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes                     |
-| `make ios-clean`          | Delete the generated project and `.build/ios`                                      |
-| `make ios-tag-fixtures`   | Re-render the tag-reading test photos (see Tag reading)                            |
-| `make ios-batch-fixtures` | Re-render the batch hauls and record their Vision signals (docs/features/batch.md) |
-| `make ios-app-icon`       | Re-render the placeholder app icon (see App icon)                                  |
-| `make ios-screenshots`    | Screenshot every screen in four variants (see Design)                              |
-| `make ios-archive`        | Unsigned release archive; needs no Apple account (Releases)                        |
-| `make ios-testflight`     | Signed release archive uploaded to TestFlight (Releases)                           |
+| Command                   | What it does                                                                           |
+| ------------------------- | -------------------------------------------------------------------------------------- |
+| `make ios-generate`       | Generate `apps/ios/Listora.xcodeproj` from `project.yml`                               |
+| `make ios-open`           | Generate the project and open it in Xcode                                              |
+| `make ios-build`          | Build the app, Share Extension, and packages for the simulator                         |
+| `make ios-test`           | Run package, unit, and UI tests on the simulator, in the local stack                   |
+| `make ios-lint`           | SwiftLint (strict) and the SwiftFormat check                                           |
+| `make ios-format`         | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes                         |
+| `make ios-clean`          | Delete the generated project and `.build/ios`                                          |
+| `make ios-tag-fixtures`   | Re-render the tag-reading test photos (see Tag reading)                                |
+| `make ios-batch-fixtures` | Re-render the batch hauls and record their Vision signals (docs/features/batch.md)     |
+| `make ios-app-icon`       | Re-render the placeholder app icon (see App icon)                                      |
+| `make ios-screenshots`    | Screenshot every screen in four variants (see Design)                                  |
+| `make ios-archive`        | Unsigned release archive; needs no Apple account (Releases)                            |
+| `make ios-testflight`     | Signed release archive uploaded to TestFlight (Releases)                               |
+| `make ios-install-device` | Install and launch on your own iPhone with a free Apple ID (Installing on your iPhone) |
 
 `make ios-test` writes DerivedData, SwiftPM caches, and the result bundle
 (`.build/ios/Test.xcresult`) to `.build/ios` in this checkout, never to `~/Library`. To use a
@@ -166,8 +167,10 @@ to **Listora** links it to an inventory item. The extension:
   ("Active (you confirmed)"), never "confirmed by <marketplace>". A failed link shows the
   server's message; a retryable one offers Try again with the same Idempotency-Key.
 - is signed in when the app is: the session (`AccessGrant`) is a keychain item in the App
-  Group's access group (`KeychainAccessGrantStorage.session(appGroup:)`), which both the app
-  and the extension use. A session an earlier build kept in the app's default group moves
+  Group's access group (`SESSION_KEYCHAIN_GROUP`, read as `AppConfiguration.sessionKeychainGroup`
+  by `KeychainAccessGrantStorage.session(accessGroup:)`), which both the app and the extension
+  use; personal device builds use a Keychain Sharing group instead
+  ([Installing on your iPhone](#installing-on-your-iphone)). A session an earlier build kept in the app's default group moves
   into the App Group on the first launch, and signing out removes it from both. The App Group (`APP_GROUP_IDENTIFIER` in `Config/Base.xcconfig`,
   `group.com.listora.app.dev` in Dev) is in both targets' entitlements. It is a placeholder
   until the Apple Developer account registers it (gate G-Apple); simulator builds need no team.
@@ -345,6 +348,61 @@ error that names the key.
   copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` (gitignored) and set
   `API_BASE_URL` there.
 - No configuration value is a secret. Never put credentials in an xcconfig file.
+
+## Installing on your iPhone
+
+`make ios-install-device` builds the app for the iPhone connected to this Mac, signs it with the
+Apple ID signed in to Xcode, installs it, and launches it (`scripts/ios-install-device.sh`). A
+free Apple ID works: Xcode gives it a Personal Team, which needs no Apple Developer Program
+account. It builds `Prod-Release` by default, so the app talks to the personal environment and
+signs in with its user pool; `IOS_DEVICE_CONFIGURATION=Dev-Debug` builds Dev instead (Dev also
+needs a LAN `API_BASE_URL` in `Config/Local.xcconfig`).
+
+The signing values live in `Config/Device.xcconfig` (gitignored). The command passes
+`Config/PersonalTeam.xcconfig`, which includes it, to `xcodebuild -xcconfig`, so its values
+override the configuration's without changing the committed Dev, Staging, or Prod settings that
+the paid account will use:
+
+- `DEVELOPMENT_TEAM`: the Personal Team's 10-character id.
+- `BASE_BUNDLE_IDENTIFIER`: a bundle id prefix of your own, such as `com.yourname.listora`. A
+  free team cannot register an id another team owns, and `com.listora.app` is kept for the paid
+  account. The Share Extension's id (the app's plus `.share`) follows it.
+
+A Personal Team cannot register App Groups (Xcode makes its provisioning profiles with an empty
+App Group list), so `PersonalTeam.xcconfig` also swaps the App Group entitlement for a Keychain
+Sharing group of the team, `<team id>.<prefix>.session` (`Config/PersonalTeam.entitlements`),
+and keeps the session there (`SESSION_KEYCHAIN_GROUP`). The app and the Share Extension still
+share the signed-in session. Nothing in Staging or Prod needs the App Group itself; only Dev's
+launch overrides (`DevOverrides`) do, so a personal Dev build ignores `LISTORA_DEV_API_BASE_URL`.
+
+One-time setup:
+
+1. In Xcode > Settings > Accounts, click +, choose Apple ID, and sign in.
+2. Copy `Config/Device.xcconfig.example` to `Config/Device.xcconfig` and set both values. With
+   `DEVELOPMENT_TEAM` empty, the command prints the team id of each signing certificate on this
+   Mac. Xcode does not show the id, and signing in makes no certificate, so make one first: in
+   Xcode > Settings > Accounts, select the Personal Team, click Manage Certificates, click +,
+   and choose Apple Development.
+3. Connect the iPhone with a cable, unlock it, and tap Trust.
+4. On the iPhone, turn on Settings > Privacy & Security > Developer Mode, restart it, and tap
+   Turn On.
+5. Run `make ios-install-device`. The first build registers the bundle ids and the iPhone with
+   the team (`-allowProvisioningUpdates`). If the iPhone then says "Untrusted
+   Developer", open Settings > General > VPN & Device Management, tap your Apple ID under
+   Developer App, tap Trust, and run the command again.
+
+With several iPhones connected, pass one: `make ios-install-device IOS_DEVICE='<name or UDID>'`
+(`xcrun devicectl list devices` lists them).
+
+Limits of a free Apple ID:
+
+- **The build expires after 7 days.** The app then stops opening. Connect the iPhone and run
+  `make ios-install-device` again; it reinstalls over the old build, keeping the app's data and
+  its signed-in session.
+- At most 3 apps installed from Xcode on a device at a time, and 10 new bundle ids a week.
+  Changing `BASE_BUNDLE_IDENTIFIER` uses 2 (the app and the Share Extension).
+- No App Groups (see above), and none of Push Notifications, In-App Purchase, or Sign in with
+  Apple; those need the paid account.
 
 ## Releases
 

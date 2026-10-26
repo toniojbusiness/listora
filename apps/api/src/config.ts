@@ -12,6 +12,11 @@ import {
   MarketplaceConfigError,
   type MarketplaceConfig,
 } from '@listora/connections';
+import {
+  EmailIngestConfigError,
+  loadEmailIngestConfig,
+  type EmailIngestConfig,
+} from '@listora/email-sales';
 import { assertNever, LOG_LEVELS, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -62,6 +67,11 @@ export interface ApiConfig {
    * marketplace's sign-in page and cookie domains, the same the worker and the runner use.
    */
   automation: AutomationSettings;
+  /**
+   * EMAIL_* (@listora/email-sales): the domain of the sale email forwarding addresses the API
+   * shows, and with the folder driver the folder `POST /dev/email` drops messages in.
+   */
+  emailIngest: EmailIngestConfig;
 }
 
 export class ConfigError extends Error {
@@ -178,12 +188,20 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     if (!(error instanceof AutomationConfigError)) throw error;
     issues.push(...error.issues);
   }
+  let emailIngest: EmailIngestConfig | undefined;
+  try {
+    emailIngest = loadEmailIngestConfig(env);
+  } catch (error) {
+    if (!(error instanceof EmailIngestConfigError)) throw error;
+    issues.push(...error.issues);
+  }
   if (
     !parsed.success ||
     storage === undefined ||
     ai === undefined ||
     marketplaces === undefined ||
-    automation === undefined
+    automation === undefined ||
+    emailIngest === undefined
   ) {
     throw new ConfigError(issues);
   }
@@ -200,5 +218,6 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     ai,
     marketplaces,
     automation,
+    emailIngest,
   };
 }

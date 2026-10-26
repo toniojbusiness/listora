@@ -45,7 +45,8 @@ final class ConnectionHealthUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(of: ebay, "Connection problem", timeout: 10), ebay.label)
         let forwarding = app.descendants(matching: .any)["marketplaces.saleForwarding.status"]
         XCTAssertTrue(forwarding.waitForExistence(timeout: 5))
-        XCTAssertEqual(forwarding.label, "Set up when you add a domain")
+        // The local stack reads sale emails (the folder driver), and nothing has arrived yet.
+        XCTAssertEqual(forwarding.label, "Not set up")
         let check = app.buttons["marketplaces.ebay.check"]
         XCTAssertTrue(check.waitForExistence(timeout: 5))
         XCTAssertEqual(check.label, "Retry check")

@@ -1,0 +1,84 @@
+SaleEmailStatus:
+  description: |
+    A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show
+    `statusDisplay` as given.
+  anyOf:
+    - $ref: '#/KnownSaleEmailStatus'
+    - type: string
+      maxLength: 64
+KnownSaleEmailStatus:
+  type: string
+  description: |
+    - `unavailable`: this Listora receives no email yet (no `address`).
+    - `not_set_up`: no email has reached the address yet.
+    - `confirming`: the email provider sent its forwarding confirmation (`confirmation`); the
+      user confirms it in their provider's settings.
+    - `working`: a marketplace email passed Listora's sender checks, so forwarding works.
+  enum: [unavailable, not_set_up, confirming, working]
+SaleEmailConfirmation:
+  type: object
+  description: |
+    The email provider's forwarding confirmation, sent to the Listora address: the user types
+    the `code` into their provider's settings, or opens `url` (always on the provider's own
+    domain, from a message whose sender checks passed). Listora never opens the link itself.
+  required: [provider, receivedAt]
+  properties:
+    provider:
+      type: string
+      maxLength: 64
+      description: For example "Gmail".
+    code:
+      type: string
+      maxLength: 64
+    url:
+      type: string
+      format: uri
+      maxLength: 2048
+    receivedAt:
+      $ref: './common.yaml#/Timestamp'
+SaleEmails:
+  type: object
+  description: |
+    Email sale detection: the account's private forwarding address, how to forward the
+    marketplaces' sold emails to it, what has arrived, and the "ask before auto-delist"
+    setting. A sold email from Poshmark, Mercari, or Depop that passes Listora's sender checks
+    (SPF and the marketplace's DKIM signature) records the sale and delists the item everywhere
+    else within minutes, or with `askBeforeDelist` makes a confirm task first.
+  required: [status, statusDisplay, askBeforeDelist, steps, filter]
+  properties:
+    address:
+      type: string
+      maxLength: 254
+      description: The account's own forwarding address; absent while `status` is `unavailable`.
+    status:
+      $ref: '#/SaleEmailStatus'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+    askBeforeDelist:
+      type: boolean
+      description: |
+        When true, a sale email makes a `confirm_sale` task instead of recording the sale and
+        delisting at once. False by default.
+    steps:
+      type: array
+      description: How to set forwarding up, in order, worded for the user.
+      items:
+        type: string
+        maxLength: 500
+    filter:
+      type: string
+      maxLength: 500
+      description: The email search that finds the marketplaces' sold emails, for the forwarding filter.
+    confirmation:
+      $ref: '#/SaleEmailConfirmation'
+      description: Present while the provider's confirmation waits for the user (`confirming`).
+    lastSaleEmailAt:
+      $ref: './common.yaml#/Timestamp'
+    lastEmailAt:
+      $ref: './common.yaml#/Timestamp'
+SaleEmailSettingsReplace:
+  type: object
+  required: [askBeforeDelist]
+  properties:
+    askBeforeDelist:
+      type: boolean

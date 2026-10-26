@@ -22,6 +22,10 @@ Marketplaces (Settings > Marketplaces) shows the same status in the same words f
 connection, with Retry check where Link accounts offers Check again: both screens render one
 description of the session (`describeAutomationSession` in `@listora/connections`).
 
+Below the marketplaces, the **Sale emails** section shows the forwarding address that catches
+their sold emails, how to set forwarding up, the email provider's confirmation code, and "Ask
+before delisting" ([email-sales.md](email-sales.md)).
+
 Listora never sees the password: it is typed into the marketplace's page, the app never reads
 the page or runs a script in it, and only the site's cookies are handed over. Listora cannot and
 does not read sessions from the marketplaces' own iPhone apps.

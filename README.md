@@ -138,6 +138,7 @@ packages/automation/    Browser automation: Playwright runner, safety rules, aut
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker metrics job (@listora/observability)
 packages/sales/         Sale intake, eBay notifications, the order poll, eBay account deletion (@listora/sales)
+packages/email-sales/   Email sale detection: forwarding addresses, folder and SES ingest, DKIM/SPF, parsers (@listora/email-sales)
 packages/today/         The Today screen: card rules, the summary's queries, the morning summary (@listora/today)
 packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)

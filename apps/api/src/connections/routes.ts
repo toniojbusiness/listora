@@ -13,6 +13,7 @@ import {
   type TokenSealer,
 } from '@listora/connections';
 import { addJob, MARKETPLACES, type DbExecutor, type Marketplace } from '@listora/db';
+import { findSaleEmailInbox, inboundDomainOf } from '@listora/email-sales';
 import {
   isMarketplace,
   MARKETPLACE_NAMES,
@@ -24,6 +25,8 @@ import type { FastifyInstance } from 'fastify';
 import { operationSpec } from '../contract/contract.ts';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { ApiError } from '../errors.ts';
+import type { SaleEmailsDependencies } from '../sale-emails/routes.ts';
+import { saleForwardingView } from '../sale-emails/views.ts';
 import {
   APP_CALLBACK_SCHEME,
   authorizationView,
@@ -47,6 +50,8 @@ export interface ConnectionsDependencies {
 
 export interface ConnectionRouteDependencies extends RouteDependencies, ConnectionsDependencies {
   now: () => Date;
+  /** Sale email forwarding, which the health summary reports on. */
+  saleEmails: SaleEmailsDependencies;
 }
 
 /**
@@ -95,9 +100,17 @@ export function registerConnectionRoutes(
     };
   });
 
+  const inboundDomain = inboundDomainOf(deps.saleEmails.ingest);
   contractRoute(app, deps, 'getConnectionHealth', async ({ tenant, db }) => {
     const { connections, sessionChecks } = await accountState(db, tenant.accountId);
-    return { status: 200, body: connectionHealthView(connections, context(sessionChecks)) };
+    const inbox = await findSaleEmailInbox(db, tenant.accountId);
+    return {
+      status: 200,
+      body: {
+        ...connectionHealthView(connections, context(sessionChecks)),
+        saleForwarding: saleForwardingView(inbox, inboundDomain),
+      },
+    };
   });
 
   // The worker checks with the settings the API connects with, so `canConnect` decides both.

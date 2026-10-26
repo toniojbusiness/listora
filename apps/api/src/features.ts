@@ -19,6 +19,7 @@ import type { ConnectionsDependencies } from './connections/routes.ts';
 import type { RouteDependencies } from './contract/routes.ts';
 import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
+import type { SaleEmailsDependencies } from './sale-emails/routes.ts';
 import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
 /** Everything a feature's routes may use, built once by `buildApp`. */
@@ -44,6 +45,8 @@ export interface ApiRouteContext extends RouteDependencies {
   marketplaceSessions: MarketplaceSessionsDependencies;
   /** eBay's notification endpoint settings; the endpoint is not served without them. */
   ebayWebhook?: EbayWebhookDependencies;
+  /** Email sale detection: the forwarding addresses' domain and the dev drop folder. */
+  saleEmails: SaleEmailsDependencies;
   /** The clock upload sessions expire by. */
   now: () => Date;
 }

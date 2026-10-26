@@ -164,6 +164,34 @@ describe('container environment', () => {
     expect(containerSecretNames('migrate')).toEqual(['PGPASSWORD']);
   });
 
+  it('reads sale emails from SES where the environment receives them, and none elsewhere', () => {
+    const saleEmail = {
+      inboundDomain: 'in.example.com',
+      queueUrl: 'https://sqs.us-east-1.amazonaws.com/111122223333/listora-staging-sale-email',
+      bucket: 'listora-staging-inbound-mail',
+      region: 'us-east-1',
+    };
+    const env = (container: ContainerName, resources: ServiceResources): NodeJS.ProcessEnv => ({
+      ...taskEnvironment(container),
+      ...containerEnvironment(container, DATABASE_URL, resources),
+    });
+    const ses = {
+      driver: 'ses',
+      inboundDomain: saleEmail.inboundDomain,
+      queueUrl: saleEmail.queueUrl,
+      bucket: saleEmail.bucket,
+      region: saleEmail.region,
+    };
+    expect(loadWorkerConfig(env('worker', { ...RESOURCES, saleEmail })).emailIngest).toEqual(ses);
+    expect(loadApiConfig(env('api', { ...RESOURCES, saleEmail })).emailIngest).toEqual(ses);
+    // Without a domain nothing is read, and never the folder driver's local inbox.
+    expect(loadWorkerConfig(taskEnvironment('worker')).emailIngest).toEqual({ driver: 'off' });
+    expect(loadApiConfig(taskEnvironment('api')).emailIngest).toEqual({ driver: 'off' });
+    expect(containerEnvironment('runner', DATABASE_URL, RESOURCES)).not.toHaveProperty(
+      'EMAIL_INGEST',
+    );
+  });
+
   it('gets the database password only from the injected secret', () => {
     for (const container of CONTAINER_NAMES) {
       const environment = containerEnvironment(container, DATABASE_URL, RESOURCES);

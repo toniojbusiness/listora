@@ -20,6 +20,11 @@ import {
   MarketplaceConfigError,
   type MarketplaceConfig,
 } from '@listora/connections';
+import {
+  EmailIngestConfigError,
+  loadEmailIngestConfig,
+  type EmailIngestConfig,
+} from '@listora/email-sales';
 import { loadPushConfig, PushConfigError, type PushConfig } from '@listora/push';
 import { isLogLevel, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
@@ -63,6 +68,8 @@ export interface WorkerConfig {
   automation: AutomationSettings;
   /** BROWSER_RUNNER_*: how the worker starts the browser runner when automated work waits. */
   runnerLaunch: RunnerLaunchConfig;
+  /** EMAIL_*, read by @listora/email-sales: where forwarded sale emails are read from. */
+  emailIngest: EmailIngestConfig;
 }
 
 export class ConfigError extends Error {
@@ -118,6 +125,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
   const push = collect(issues, PushConfigError, () => loadPushConfig(env));
   const automation = collect(issues, AutomationConfigError, () => loadAutomationSettings(env));
   const runnerLaunch = collect(issues, RunnerLaunchConfigError, () => loadRunnerLaunchConfig(env));
+  const emailIngest = collect(issues, EmailIngestConfigError, () => loadEmailIngestConfig(env));
 
   if (
     issues.length > 0 ||
@@ -129,7 +137,8 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     push === undefined ||
     marketplaces === undefined ||
     automation === undefined ||
-    runnerLaunch === undefined
+    runnerLaunch === undefined ||
+    emailIngest === undefined
   ) {
     throw new ConfigError(issues);
   }
@@ -149,6 +158,7 @@ export function loadWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerCo
     push,
     automation,
     runnerLaunch,
+    emailIngest,
   };
 }
 
