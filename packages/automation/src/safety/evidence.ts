@@ -86,7 +86,13 @@ const STRUCTURAL_WORDS = new Set(
     'product products profile profiles purchases rest robot sales search sell seller selling ' +
     'session sessions settings shipping shop sign sign-in sign-out signin signout sold something ' +
     'status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with ' +
-    'wrong www you your'
+    'wrong www you your ' +
+    // Pages and API paths of the sellers' own areas, so their shape shows in the evidence.
+    'address addresses balance bff buyer buyers complete completed count counts details draft ' +
+    'feeds followers following gateway inquiries insights internal mobile overview payout ' +
+    'payouts pending preferences presentation private public purchase receipt receipts referrals ' +
+    'reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary ' +
+    'transaction transactions verification verifications'
   ).split(' '),
 );
 

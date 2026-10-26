@@ -189,5 +189,13 @@ confirm them, ideally with the product owner watching. Check each of these in or
 6. The limits in `MERCARI_LIMITS`.
 
 When the live site differs, the step stops before it sends anything and the user does it, so
-this check can never cause a false success. Fixing a mismatch means changing the selectors in one
-page module.
+this check can never cause a false success. The run logs what the page has instead
+([automation.md](automation.md#how-it-works), "When a page changes"). Fixing a mismatch means
+changing the selectors in one page module.
+
+Confirmed on a real session (2026-10-26, from that evidence): item 1. `/mypage/` is a static
+Next.js page whose scripts draw it after the document is ready. It has the seller's own account
+section (`SellerInfo`, `EditProfileButton`, `Balance`), the sign-out form (`LogoutForm`), and
+links to `/mypage/listings/active/` (`My-listings`) and the sales tab (`Sales`). The health check
+waits for `EditProfileButton`. The listing tabs' paths are not confirmed yet: the sales tab's
+path is not `sold`.

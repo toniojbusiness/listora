@@ -5412,6 +5412,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function expectElement$2(page, selector, pageName, what) {
 		if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
 	}
+	/**
+	* Waits, within the step's time, for `selector` on a page that Depop's own scripts draw after
+	* its document is ready, and throws `PageChangedError` naming the part when it never comes. A
+	* check the page shows instead still stops the run as one: the page driver throws it again.
+	*/
+	async function awaitElement$1(page, selector, pageName, what) {
+		try {
+			await page.waitFor(selector, "attached");
+		} catch {
+			if (!await page.exists(selector)) throw changed$2(pageName, `has no ${what} (${selector})`);
+		}
+	}
 	/** The failure for a Depop page that is not as the script expects. */
 	function changed$2(pageName, problem) {
 		return new PageChangedError(`Depop's ${pageName} ${problem}; the page may have changed.`);
@@ -5716,10 +5728,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/depop/pages/hub-page.ts
-	const HUB_PAGE = { root: "[data-testid=\"sellingHub\"]" };
+	const HUB_PAGE = { signedInUser: "[data-testid=\"avatar\"]" };
 	async function openHub(page, site) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
-		await expectElement$2(page, HUB_PAGE.root, "selling hub", "selling hub");
+		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
 	}
 
 // src/depop/pages/selling-page.ts
@@ -6855,6 +6867,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function expectElement(page, selector, pageName, what) {
 		if (!await page.exists(selector)) throw changed(pageName, `has no ${what} (${selector})`);
 	}
+	/**
+	* Waits, within the step's time, for `selector` on a page that Mercari's own scripts draw after
+	* its document is ready (its signed-in pages are static Next.js pages filled in by the browser,
+	* read 2026-10-26), and throws `PageChangedError` naming the part when it never comes. A check
+	* the page shows instead still stops the run as one: the page driver throws it again.
+	*/
+	async function awaitElement(page, selector, pageName, what) {
+		try {
+			await page.waitFor(selector, "attached");
+		} catch {
+			if (!await page.exists(selector)) throw changed(pageName, `has no ${what} (${selector})`);
+		}
+	}
 	/** The failure for a Mercari page that is not as the script expects. */
 	function changed(pageName, problem) {
 		return new PageChangedError(`Mercari's ${pageName} ${problem}; the page may have changed.`);
@@ -6873,10 +6898,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/mercari/pages/account-page.ts
-	const ACCOUNT_PAGE = { root: "[data-testid=\"MyPage\"]" };
+	const ACCOUNT_PAGE = { ownAccount: "[data-testid=\"EditProfileButton\"]" };
 	async function openAccount(page, site) {
 		await page.goto(absolute(site, MERCARI_PATHS.account));
-		await expectElement(page, ACCOUNT_PAGE.root, "account page", "account section");
+		await awaitElement(page, ACCOUNT_PAGE.ownAccount, "account page", "edit profile button");
 	}
 
 // src/mercari/sizes.ts
@@ -8186,7 +8211,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   return { path: location.pathname, title: document.title, testIds, links, requests, scripts };
 })()`;
 	/** Words of paths, titles, and labels that say what a page is, never whose it is. */
-	const STRUCTURAL_WORDS = new Set("a about access account accounts active and api apps are auth back brand brands bundles buy category categories closet closets config create create-listing current dashboard denied depop drafts ebay edit edit-listing error experiments feature features feed flags for found graphql health home hub human identity in in_progress inactive inbox info item items just likes list listing listings log log-in log-out login logout marketplace me mercari messages moment my my-page mypage new news not notifications of offers on order orders page poshmark product products profile profiles purchases rest robot sales search sell seller selling session sessions settings shipping shop sign sign-in sign-out signin signout sold something status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with wrong www you your".split(" "));
+	const STRUCTURAL_WORDS = new Set("a about access account accounts active and api apps are auth back brand brands bundles buy category categories closet closets config create create-listing current dashboard denied depop drafts ebay edit edit-listing error experiments feature features feed flags for found graphql health home hub human identity in in_progress inactive inbox info item items just likes list listing listings log log-in log-out login logout marketplace me mercari messages moment my my-page mypage new news not notifications of offers on order orders page poshmark product products profile profiles purchases rest robot sales search sell seller selling session sessions settings shipping shop sign sign-in sign-out signin signout sold something status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with wrong www you your address addresses balance bff buyer buyers complete completed count counts details draft feeds followers following gateway inquiries insights internal mobile overview payout payouts pending preferences presentation private public purchase receipt receipts referrals reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary transaction transactions verification verifications".split(" "));
 	/** Keys whose children are keyed by a user, an id, or a name. */
 	const KEYED_BY_RECORD = /^(users|profiles|closets|accounts|byId|entities|people|members)$/i;
 	/** Subtrees of a page's data the skeleton follows down: who is signed in, and Next.js props. */

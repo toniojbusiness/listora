@@ -10,7 +10,7 @@
  *   GET  /login/                      the login page (a password field: no session needs it)
  *   POST /login/                      log in by hand: any email and password; sets the session cookie
  *   GET  /login/verify/               a login code step
- *   GET  /mypage/                     the seller's account ([data-testid="MyPage"])
+ *   GET  /mypage/                     the seller's account, drawn by its script ([data-testid="EditProfileButton"])
  *   GET  /sell/                       the sell form; POST /sell/ lists (multipart, photos)
  *   GET  /us/item/:id/                a listing's page (name, price, description, last update)
  *   GET  /sell/edit/:id/              the edit form; POST saves it
@@ -451,10 +451,7 @@ export class FakeMercariSite {
       case 'health':
         return {
           status: 200,
-          body: page(
-            'My page | Mercari',
-            `<main data-testid="MyPage"><h1>Your account</h1></main>`,
-          ),
+          body: page('My page | Mercari', accountPage()),
         };
       case 'form':
         if (route.id === null)
@@ -767,6 +764,20 @@ function listingFields(
 
 function page(title: string, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape(title)}</title></head><body>${body}</body></html>`;
+}
+
+/**
+ * The seller's account page as Mercari serves it (read 2026-10-26): a static page whose scripts
+ * draw the seller's own account section, with its edit-profile button, after the document is
+ * ready.
+ */
+function accountPage(): string {
+  const drawn =
+    '<section data-testid="SellerInfo"><h1 data-testid="DisplayName">Your account</h1>' +
+    '<a data-testid="EditProfileButton" href="/mypage/profile/">Edit profile</a></section>' +
+    '<div data-testid="Balance">$0</div>' +
+    '<form data-testid="LogoutForm" method="post" action="/logout"><button>Log out</button></form>';
+  return `<main id="mypage"></main><script>setTimeout(() => { document.getElementById('mypage').innerHTML = ${JSON.stringify(drawn)}; }, 300);</script>`;
 }
 
 function notFound(): string {

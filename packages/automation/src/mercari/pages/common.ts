@@ -28,6 +28,25 @@ export async function expectElement(
   if (!(await page.exists(selector))) throw changed(pageName, `has no ${what} (${selector})`);
 }
 
+/**
+ * Waits, within the step's time, for `selector` on a page that Mercari's own scripts draw after
+ * its document is ready (its signed-in pages are static Next.js pages filled in by the browser,
+ * read 2026-10-26), and throws `PageChangedError` naming the part when it never comes. A check
+ * the page shows instead still stops the run as one: the page driver throws it again.
+ */
+export async function awaitElement(
+  page: PageDriver,
+  selector: string,
+  pageName: string,
+  what: string,
+): Promise<void> {
+  try {
+    await page.waitFor(selector, 'attached');
+  } catch {
+    if (!(await page.exists(selector))) throw changed(pageName, `has no ${what} (${selector})`);
+  }
+}
+
 /** The failure for a Mercari page that is not as the script expects. */
 export function changed(pageName: string, problem: string): PageChangedError {
   return new PageChangedError(`Mercari's ${pageName} ${problem}; the page may have changed.`);
