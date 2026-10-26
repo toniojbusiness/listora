@@ -10,6 +10,8 @@ const script = fileURLToPath(new URL('../../../scripts/deploy-personal.sh', impo
 const ACCOUNT = '976033325938';
 const POLICY_ARN = `arn:aws:iam::${ACCOUNT}:policy/listora-personal-cdk-execution`;
 const OWNER = 'owner@example.com';
+/** The commit the fake `git` checks out. */
+const HEAD = '0123456789abcdef0123456789abcdef01234567';
 
 /** An answer of the fake `aws`: printed output and exit status. */
 interface Answer {
@@ -24,16 +26,24 @@ afterEach(() => {
 });
 
 /**
- * Runs the script with fake `aws`, `docker`, `git`, and `npx` first on PATH. The fake `aws`
- * answers `<service> <operation>` from `answers`, or `<service> <operation> <stack>` for a call
- * naming `--stack-name <stack>` (anything else fails loudly), and records every call, so a test
- * sees exactly what the script asked AWS. `npx` fails, except `cdk synth` with `realSynth`
- * (offline, as the script runs it), so no test can reach a cdk command that talks to AWS.
+ * Runs the script with fake `aws`, `docker`, `git`, `curl`, and `npx` first on PATH. The fake
+ * `aws` answers `<service> <operation>` from `answers`, or `<service> <operation> <stack>` for a
+ * call naming `--stack-name <stack>` (anything else fails loudly), and records every call, so a
+ * test sees exactly what the script asked AWS; `awsScript`, bash run first with the call's
+ * words in `args` and its stack in `stack`, answers what depends on more than that. `npx`
+ * fails, except `cdk synth` with `realSynth` (offline, as the script runs it), so no test can
+ * reach a cdk command that talks to AWS. `git diff` exits `gitDiff` (1: the paths changed).
  */
 function deploy(
   args: string[],
   answers: Record<string, Answer> = {},
-  { key = 'not-a-real-test-key', realSynth = false, owner = 'Owner@Example.com' } = {},
+  {
+    key = 'not-a-real-test-key',
+    realSynth = false,
+    owner = 'Owner@Example.com',
+    awsScript = '',
+    gitDiff = 0,
+  } = {},
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'deploy-personal-'));
   dirs.push(dir);
@@ -52,7 +62,7 @@ function deploy(
   stub(
     'aws',
     `echo "$*" >>"${calls}"
-args=(); stack=""
+all="$*"; args=(); stack=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --profile|--region) shift 2 ;;
@@ -60,16 +70,18 @@ while [[ $# -gt 0 ]]; do
     *) args+=("$1"); shift ;;
   esac
 done
+${awsScript}
 for file in "${dir}/answer_\${args[0]}_\${args[1]}_\${stack}" "${dir}/answer_\${args[0]}_\${args[1]}"; do
   if [[ -e "$file.out" ]]; then cat "$file.out"; cat "$file.err" >&2; exit "$(cat "$file.status")"; fi
 done
 echo "unexpected aws call: \${args[*]}" >&2; exit 99`,
   );
-  stub('docker', 'exit 0');
+  stub('docker', `[[ "$1" == info ]] || echo "docker $*" >>"${calls}"`);
   stub(
     'git',
-    'case "$1" in status) exit 0 ;; rev-parse) echo 0123456789abcdef0123456789abcdef01234567 ;; esac',
+    `case "$1" in status | cat-file) exit 0 ;; rev-parse) echo ${HEAD} ;; diff) exit ${String(gitDiff)} ;; esac`,
   );
+  stub('curl', `echo "curl $*" >>"${calls}"; echo '{"status":"ok","checks":{"database":"ok"}}'`);
   const npx = spawnSync('bash', ['-c', 'command -v npx'], { encoding: 'utf8' }).stdout.trim();
   stub(
     'npx',
@@ -92,6 +104,7 @@ echo "npx must not run in this test" >&2; exit 98`,
     status: result.status,
     output: result.stdout + result.stderr,
     calls: readFileSync(calls, 'utf8').split('\n').filter(Boolean),
+    dir,
   };
 }
 
@@ -373,5 +386,280 @@ describe('scripts/deploy-personal.sh --dry-run with the real cdk', () => {
     ].map((title) => output.indexOf(title));
     expect(order.every((index) => index > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
+  }, 120_000);
+});
+
+describe('scripts/deploy-personal.sh --code-only', () => {
+  /** The commit the deployed services run. */
+  const DEPLOYED = 'fedcba9876543210fedcba9876543210fedcba98';
+  const REGISTRY = `${ACCOUNT}.dkr.ecr.us-east-1.amazonaws.com`;
+  const TASKS = `arn:aws:ecs:us-east-1:${ACCOUNT}:task-definition`;
+  const ASSEMBLY = fileURLToPath(new URL('../../cdk.out/deploy-personal', import.meta.url));
+  const policy = spawnSync(
+    'node',
+    [fileURLToPath(new URL('execution-policy.ts', import.meta.url)), 'personal', ACCOUNT],
+    { encoding: 'utf8' },
+  ).stdout;
+  // The logical ids of the services' task definitions, as the synthesized template has them.
+  const compute = JSON.parse(
+    readFileSync(
+      new URL('../__snapshots__/personal/compute.template.json', import.meta.url),
+      'utf8',
+    ),
+  ) as { Resources: Record<string, { Type: string; Properties: Record<string, unknown> }> };
+  const serviceTasks = Object.values(compute.Resources)
+    .filter((resource) => resource.Type === 'AWS::ECS::Service')
+    .map((resource) => [
+      String(resource.Properties['ServiceName']),
+      (resource.Properties['TaskDefinition'] as { Ref: string }).Ref,
+    ]);
+
+  /** A deployed environment: every stack, Listora's bootstrap, and the key, all current. */
+  const deployed: Record<string, Answer> = {
+    'sts get-caller-identity': identity(ACCOUNT),
+    'ec2 describe-availability-zones': zones,
+    'cloudformation describe-stacks': {
+      stdout: JSON.stringify({ Stacks: [{ StackStatus: 'UPDATE_COMPLETE' }] }),
+    },
+    'cloudformation describe-stacks CDKToolkit-listora': {
+      stdout: JSON.stringify({
+        Stacks: [
+          {
+            StackStatus: 'UPDATE_COMPLETE',
+            Parameters: [
+              { ParameterKey: 'CloudFormationExecutionPolicies', ParameterValue: POLICY_ARN },
+            ],
+          },
+        ],
+      }),
+    },
+    'sesv2 get-email-identity': {
+      stderr: 'An error occurred (NotFoundException) when calling the GetEmailIdentity operation',
+      status: 254,
+    },
+    'iam get-policy': { stdout: JSON.stringify({ Policy: { DefaultVersionId: 'v2' } }) },
+    'iam get-policy-version': { stdout: policy },
+    'secretsmanager get-secret-value': { stdout: 'not-a-real-test-key\n' },
+    'ecr get-login-password': { stdout: 'password\n' },
+    'ecr describe-images': { stderr: 'ImageNotFoundException', status: 254 },
+  };
+
+  /**
+   * The answers that depend on the call: the deployed templates (the synthesized ones with the
+   * deployed commit's tag, and `changed` with a resource more), the compute stack's resources,
+   * and ECS, whose services run what `update-service` last gave them (`rolledBack`: ECS put
+   * them back on their old task definition).
+   */
+  function environment({ changed = '', rolledBack = false } = {}) {
+    const definitions = JSON.stringify(
+      serviceTasks.map(([service, id]) => [id, `${TASKS}/listora-personal-${String(service)}:7`]),
+    );
+    return String.raw`
+state="$(dirname "$0")/state"; mkdir -p "$state"
+service=$(sed -n 's/.*--service[s]* \([^ ]*\).*/\1/p' <<<"$all")
+definition=$(sed -n 's/.*--task-definition \([^ ]*\).*/\1/p' <<<"$all")
+family=$(sed -e 's/.*task-definition\///' -e 's/:[^:]*$//' <<<"$definition")
+running=$(cat "$state/$service" 2>/dev/null || echo "${TASKS}/listora-personal-$service:7")
+case "$all" in
+  *"cloudformation get-template"*)
+    jq --arg stack "$stack" 'if $stack == "${changed}" then .Resources.Extra = {"Type": "AWS::SNS::Topic"} else . end' \
+      "${ASSEMBLY}/$stack.template.json" | sed "s/:${HEAD}/:${DEPLOYED}/g"
+    exit 0 ;;
+  *"describe-stacks"*"--query"*ClusterName*) echo listora-personal; exit 0 ;;
+  *"describe-stacks"*"--query"*ApiUrl*) echo https://api.example.test; exit 0 ;;
+  *"describe-stacks"*"--query Stacks[0].Outputs "*)
+    echo '[{"OutputKey":"SubnetIds","OutputValue":"subnet-1"},{"OutputKey":"SecurityGroupId","OutputValue":"sg-1"},{"OutputKey":"AssignPublicIp","OutputValue":"ENABLED"}]'
+    exit 0 ;;
+  *"cloudformation list-stack-resources"*)
+    if [[ "$stack" == listora-personal-compute ]]; then echo '${definitions}'; else echo "${TASKS}/listora-personal-migrate:8"; fi
+    exit 0 ;;
+  *"ecs describe-services"*"--query"*) echo "$running"; exit 0 ;;
+  *"ecs describe-services"*)
+    if [[ "${String(rolledBack)}" == true ]]; then running="${TASKS}/listora-personal-$service:7"; fi
+    printf '{"services":[{"deployments":[{"status":"PRIMARY","taskDefinition":"%s","rolloutState":"COMPLETED","runningCount":1,"desiredCount":1}]}]}' "$running"
+    exit 0 ;;
+  *"ecs describe-task-definition"*)
+    tag=${DEPLOYED}; if [[ "$definition" == *:new ]]; then tag=${HEAD}; fi
+    repository=app; if [[ "$family" == *-runner ]]; then repository=runner; fi
+    image="${REGISTRY}/listora/$repository:$tag"
+    if [[ "$all" == *--query* ]]; then printf '%s\t%s\n' "$image" "$image"; exit 0; fi
+    jq -n --arg arn "$definition" --arg family "$family" --arg image "$image" '{
+      taskDefinition: {taskDefinitionArn: $arn, family: $family, revision: 7, status: "ACTIVE",
+        requiresAttributes: [{name: "ecs.capability.secrets.asm.environment-variables"}],
+        compatibilities: ["EC2", "FARGATE"], registeredAt: "2026-10-25T00:00:00Z",
+        registeredBy: "arn:aws:sts::1:assumed-role/cfn", cpu: "512", memory: "1024",
+        containerDefinitions: [{name: "api", image: $image}, {name: "sidecar", image: "public.ecr.aws/other/image:1.2"}]},
+      tags: [{key: "project", value: "listora"}]}'
+    exit 0 ;;
+  *"ecs register-task-definition"*)
+    file=$(sed -n 's/.*--cli-input-json file:\/\/\([^ ]*\).*/\1/p' <<<"$all")
+    family=$(jq -r .family "$file"); cp "$file" "$state/registered-$family.json"
+    echo "${TASKS}/$family:new"; exit 0 ;;
+  *"ecs update-service"*) echo "$definition" >"$state/$service"; echo '{}'; exit 0 ;;
+  *"ecs run-task"*) echo '{"tasks":[{"taskArn":"arn:aws:ecs:task/1"}]}'; exit 0 ;;
+  *"ecs describe-tasks"*) echo '{"tasks":[{"lastStatus":"STOPPED","containers":[{"exitCode":0}]}]}'; exit 0 ;;
+esac`;
+  }
+  const changes = (calls: string[]) =>
+    calls.filter((call) =>
+      /(^docker (build|push)| (create|put|update|delete|run|register)-)/.test(call),
+    );
+  const registered = (dir: string, family: string) =>
+    JSON.parse(readFileSync(join(dir, 'state', `registered-${family}.json`), 'utf8')) as {
+      family: string;
+      containerDefinitions: { name: string; image: string }[];
+      tags?: unknown;
+    } & Record<string, unknown>;
+
+  it('moves the services to new revisions with only the images changed, without CloudFormation', () => {
+    const run = deploy(['--code-only', '--profile', 'p'], deployed, {
+      realSynth: true,
+      awsScript: environment(),
+    });
+    expect(run.output).toContain(
+      'every stack matches the synthesized templates but for the image tag, and the Anthropic key is unchanged',
+    );
+    expect(run.output).toContain(`the services run ${DEPLOYED}`);
+    // No CloudFormation deploy at all, and no migration: none changed since the deployed commit.
+    expect(run.calls.some((call) => call.startsWith('npx cdk deploy'))).toBe(false);
+    expect(run.output).toContain(`no migration changed since ${DEPLOYED.slice(0, 12)}`);
+    expect(run.calls.some((call) => call.includes('ecs run-task'))).toBe(false);
+    // Both images, each reusing the deployed images' layers.
+    for (const [target, from] of [
+      ['app', ['app']],
+      ['runner', ['runner', 'app']],
+    ] as const) {
+      const build = run.calls.find((call) => call.includes(`--target ${target} `)) ?? '';
+      expect(build).toContain(`--tag ${REGISTRY}/listora/${target}:${HEAD} --cache-to type=inline`);
+      for (const repository of from) {
+        expect(build).toContain(
+          `--cache-from type=registry,ref=${REGISTRY}/listora/${repository}:${DEPLOYED}`,
+        );
+      }
+      expect(run.calls).toContain(`docker push ${REGISTRY}/listora/${target}:${HEAD}`);
+    }
+    // Each new revision is the stack's task definition with this commit's images, nothing else.
+    for (const [service] of serviceTasks) {
+      const family = `listora-personal-${String(service)}`;
+      const revision = registered(run.dir, family);
+      expect(revision.containerDefinitions).toEqual([
+        {
+          name: 'api',
+          image: `${REGISTRY}/listora/${service === 'runner' ? 'runner' : 'app'}:${HEAD}`,
+        },
+        { name: 'sidecar', image: 'public.ecr.aws/other/image:1.2' },
+      ]);
+      expect(revision).toMatchObject({ family, cpu: '512', memory: '1024' });
+      expect(revision.tags).toEqual([{ key: 'project', value: 'listora' }]);
+      for (const readOnly of ['taskDefinitionArn', 'revision', 'status', 'registeredAt'])
+        expect(revision).not.toHaveProperty(readOnly);
+      expect(run.calls).toContainEqual(
+        expect.stringMatching(
+          new RegExp(
+            `ecs update-service --cluster listora-personal --service ${String(service)} --task-definition ${TASKS}/${family}:new$`,
+          ),
+        ),
+      );
+      expect(run.output).toContain(`${String(service)}: runs only ${family}:new`);
+    }
+    // Then the same health wait and smoke test as the full deploy (the smoke test cannot reach
+    // the fake API).
+    expect(run.calls).toContain(
+      'curl --silent --fail --max-time 10 https://api.example.test/health/ready',
+    );
+    expect(run.output).toContain('the smoke test failed against https://api.example.test');
+    expect(run.status).toBe(1);
+  }, 120_000);
+
+  it('runs the migrations, with the new image, when the commit changes one', () => {
+    const run = deploy(['--code-only', '--profile', 'p'], deployed, {
+      realSynth: true,
+      awsScript: environment(),
+      gitDiff: 1,
+    });
+    expect(run.output).toContain(`packages/db/migrations changed since ${DEPLOYED.slice(0, 12)}`);
+    expect(registered(run.dir, 'listora-personal-migrate').containerDefinitions[0]?.image).toBe(
+      `${REGISTRY}/listora/app:${HEAD}`,
+    );
+    const migrate = run.calls.findIndex((call) =>
+      call.includes(
+        `ecs run-task --cluster listora-personal-migrate --task-definition ${TASKS}/listora-personal-migrate:new `,
+      ),
+    );
+    // Before any service moves.
+    expect(migrate).toBeGreaterThan(0);
+    expect(run.calls.findIndex((call) => call.includes('ecs update-service'))).toBeGreaterThan(
+      migrate,
+    );
+  }, 120_000);
+
+  it('refuses a commit that changes the infrastructure, naming the stack, and changes nothing', () => {
+    const run = deploy(['--code-only', '--profile', 'p'], deployed, {
+      realSynth: true,
+      awsScript: environment({ changed: 'listora-personal-data' }),
+    });
+    expect(run.status).toBe(1);
+    expect(run.output).toContain(
+      'the infrastructure differs from what is deployed in listora-personal-data',
+    );
+    expect(run.output).toContain(
+      'this commit needs the full deploy (nothing was changed): scripts/deploy-personal.sh --profile p',
+    );
+    expect(changes(run.calls)).toEqual([]);
+  }, 120_000);
+
+  it('refuses a new Anthropic key, which only the full deploy stores', () => {
+    const run = deploy(
+      ['--code-only', '--profile', 'p'],
+      { ...deployed, 'secretsmanager get-secret-value': { stdout: 'an-older-key\n' } },
+      { realSynth: true, awsScript: environment() },
+    );
+    expect(run.status).toBe(1);
+    expect(run.output).toContain('is new');
+    expect(run.output).toContain('this commit needs the full deploy');
+    expect(run.output).not.toContain('an-older-key');
+    expect(changes(run.calls)).toEqual([]);
+  }, 120_000);
+
+  it('refuses an execution policy that differs from the committed one', () => {
+    const run = deploy(
+      ['--code-only', '--profile', 'p'],
+      {
+        ...deployed,
+        'iam get-policy-version': { stdout: '{"Version":"2012-10-17","Statement":[]}' },
+      },
+      { realSynth: true, awsScript: environment() },
+    );
+    expect(run.status).toBe(1);
+    expect(run.output).toContain(
+      'listora-personal-cdk-execution differs from the committed document',
+    );
+    expect(changes(run.calls)).toEqual([]);
+  }, 120_000);
+
+  it('refuses before the first full deploy, when a stack does not exist yet', () => {
+    const run = deploy(['--code-only', '--profile', 'p'], {
+      ...deployed,
+      'cloudformation describe-stacks listora-personal-compute': {
+        stderr: 'An error occurred (ValidationError): Stack with id x does not exist',
+        status: 254,
+      },
+    });
+    expect(run.status).toBe(1);
+    expect(run.output).toContain(
+      'listora-personal-compute does not exist yet, so --code-only has nothing to update; deploy in full',
+    );
+    expect(changes(run.calls)).toEqual([]);
+  });
+
+  it('fails, without the health check, when ECS rolls a service back', () => {
+    const run = deploy(['--code-only', '--profile', 'p'], deployed, {
+      realSynth: true,
+      awsScript: environment({ rolledBack: true }),
+    });
+    expect(run.status).toBe(1);
+    expect(run.output).toMatch(/ECS rolled the \w+ service back to its previous task definition/);
+    expect(run.output).not.toContain('deploy-personal: deployed');
+    expect(run.calls.some((call) => call.startsWith('curl'))).toBe(false);
   }, 120_000);
 });

@@ -134,7 +134,8 @@ describe('deploy workflow', () => {
     const run = readFileSync(new URL('../../scripts/run-migrations.sh', import.meta.url), 'utf8');
     const names = migrateTaskNames('$environment');
     expect(run).toContain(`cluster="${names.cluster}"`);
-    expect(run).toContain(`--task-definition "${names.family}"`);
+    expect(run).toContain(`task_definition=\${3:-${names.family}}`);
+    expect(run).toContain(`--task-definition "$task_definition"`);
     expect(run).toContain(`--stack-name "${names.stack}"`);
     for (const output of Object.values(MIGRATE_OUTPUTS)) expect(run).toContain(`output ${output}`);
     // The stack says whether the task needs a public address (public-IP egress, no NAT).
