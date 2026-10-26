@@ -82,15 +82,17 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
 Measured on the real personal environment (us-east-1, from an M1 Mac building `linux/amd64`
 images with a warm builder cache), for a commit that changes no image input (docs only):
 
-| Deploy                                                        | Time  | Of which                                                     |
-| ------------------------------------------------------------- | ----- | ------------------------------------------------------------ |
-| Full, before (`deploy-personal.sh`, rolling task replacement) | 7m52s | compute stack update 4m43s, migrations 53s, other stacks 47s |
-| Full, after (task replaced in place)                          | 7m04s | compute stack update 3m45s, migrations 67s, other stacks 51s |
-| `--code-only`, rolling task replacement                       | 4m27s | ECS rollout 3m24s, images 28s, checks 32s                    |
-| `--code-only`, task replaced in place                         | 4m02s | ECS rollout 2m56s, images 28s, checks 36s                    |
+| Deploy                                                        | Time           | Of which                                                         |
+| ------------------------------------------------------------- | -------------- | ---------------------------------------------------------------- |
+| Full, before (`deploy-personal.sh`, rolling task replacement) | 7m52s          | compute stack update 4m43s, migrations 53s, other stacks 47s     |
+| Full, after (task replaced in place)                          | 7m04s          | compute stack update 3m45s, migrations 67s, other stacks 51s     |
+| `--code-only`, rolling task replacement                       | 4m27s          | ECS rollout 3m24s, images 28s, checks 32s                        |
+| `--code-only`, task replaced in place (two runs)              | 4m02s to 4m25s | ECS rollout 2m56s to 3m22s, images 22s to 28s, checks 34s to 36s |
 
 Most of what remains is ECS: starting a Fargate task takes about a minute, and ECS reports
 the rollout complete one to two minutes after the new task is healthy and the old one has
 stopped. The deploy waits for that, so a rollout the circuit breaker undoes is never reported
-as deployed. A rollback to the commit of the last full deploy, after a code-only one, took 7m17s
-(the full deploy, plus moving the services back to the stacks' task definitions).
+as deployed. A third code-only run took 5m35s while the Mac was heavily loaded (load average
+about 35), which slowed every local step; the stack checks have run in parallel since. A
+rollback to the commit of the last full deploy, after a code-only one, took 7m17s (the full
+deploy, plus moving the services back to the stacks' task definitions).
