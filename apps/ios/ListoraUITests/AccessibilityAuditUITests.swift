@@ -54,19 +54,33 @@ final class AccessibilityAuditUITests: XCTestCase {
         }
     }
 
-    /// The tab screens and Settings. The Add Item screens are a test of their own, so each stays
-    /// well inside the 5-minute allowance on CI, where an audit takes up to 45 seconds and the
-    /// first launch on the fresh simulator about a minute.
-    func testTabScreensPassTheAudit() throws {
+    // The screens are split across three tests, so each stays well inside the 5-minute
+    // allowance on CI, where an audit takes up to 45 seconds and the first launch on the fresh
+    // simulator about a minute.
+
+    /// The welcome and code screens, signed out.
+    func testSignInScreensPassTheAudit() throws {
         try launch()
-        XCTAssertTrue(app.descendants(matching: .any)["today.signedOut"].waitForExistence(timeout: 5))
+        let email = app.textFields["signIn.email"]
+        XCTAssertTrue(email.waitForExistence(timeout: 10))
+        try audit("Welcome")
+        let code = enterEmail(email)
+        try audit("Code")
+        signIn(code: code)
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+    }
+
+    /// The tab screens and Settings.
+    func testTabScreensPassTheAudit() throws {
+        try launchSignedIn()
+        XCTAssertTrue(app.staticTexts["today.count"].waitForExistence(timeout: 10))
         try audit("Today")
 
         app.tabBars.buttons["Inventory"].tap()
         try audit("Inventory")
 
         app.tabBars.buttons["Sales"].tap()
-        XCTAssertTrue(app.staticTexts["Sign in to see your sales"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Sales"].waitForExistence(timeout: 5))
         try audit("Sales")
 
         app.tabBars.buttons["Tasks"].tap()
@@ -80,7 +94,7 @@ final class AccessibilityAuditUITests: XCTestCase {
 
     /// Add Item, a draft of imported photos, and one photo.
     func testAddItemScreensPassTheAudit() throws {
-        try launch()
+        try launchSignedIn()
         app.tabBars.buttons["Add"].tap()
         XCTAssertTrue(app.buttons["addItem.importPhotos"].waitForExistence(timeout: 5))
         try audit("Add Item")
@@ -97,6 +111,7 @@ final class AccessibilityAuditUITests: XCTestCase {
         XCTAssertTrue(app.buttons["photo.tile.2"].waitForExistence(timeout: 5))
     }
 
+    /// Signed out against the stub, which opens on the welcome screen.
     private func launch() throws {
         let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
         let server = try StubAPIServer()
@@ -108,6 +123,28 @@ final class AccessibilityAuditUITests: XCTestCase {
             "LISTORA_DEV_API_BASE_URL": server.baseURL,
         ]
         app.launch()
+    }
+
+    /// Signed in through the stub's dev sign-in.
+    private func launchSignedIn() throws {
+        try launch()
+        let email = app.textFields["signIn.email"]
+        XCTAssertTrue(email.waitForExistence(timeout: 10))
+        signIn(code: enterEmail(email))
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+    }
+
+    private func enterEmail(_ email: XCUIElement) -> XCUIElement {
+        email.tap()
+        email.typeText("seller@listora.test")
+        app.buttons["signIn.continue"].tap()
+        let code = app.textFields["signIn.code"]
+        XCTAssertTrue(code.waitForExistence(timeout: 10))
+        return code
+    }
+
+    private func signIn(code: XCUIElement) {
+        code.typeText(StubAPIServer.devSignInCode)
+        app.buttons["signIn.signIn"].tap()
     }
 }

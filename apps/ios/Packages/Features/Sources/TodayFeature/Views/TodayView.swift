@@ -78,6 +78,7 @@ public struct TodayView<Settings: View>: View {
                 title: "Sign in to see your day",
                 message: "Today shows what needs you, like what to ship and what to delist, "
                     + "and how this week's sales are going.",
+                action: .init("Sign in", systemImage: "person.crop.circle", handler: environment.onSignIn),
             )
             .accessibilityIdentifier("today.signedOut")
         case let .failed(message):

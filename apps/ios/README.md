@@ -85,8 +85,11 @@ Packages/
     AddItemFeature    Add Item tab: guided capture, library import, drafts (GRDB), upload queue
     ReviewFeature     Analysis progress, confidence-first review, cost, price, and the saved item
     TasksFeature      Tasks tab
-    SettingsFeature   Settings (opened from the gear in the Today and Sales headers), with the
-                      sign-in (an emailed code, or the developer sign-in in Dev builds)
+    SettingsFeature   Settings (opened from the gear in the Today and Sales headers): who is
+                      signed in, signing out, marketplaces, and the build's details
+    SignInFeature     The session and the screens that start it, the app's root while nobody is
+                      signed in: welcome with the email, then the code (an emailed code, or the
+                      developer sign-in in Dev builds)
     MarketplacesFeature  Marketplaces screen (from Settings): each marketplace's connection
                       health, connecting eBay through ASWebAuthenticationSession, Retry
                       check, and the connection banner Inventory shows
@@ -267,7 +270,9 @@ against `FakeListoraServer` through a `URLProtocol` stub, including resume after
 retries, and failures that stop. The UI tests import the photos in `ListoraUITests/Fixtures`
 through debug-only launch variables: `LISTORA_FIXTURE_PHOTOS=<folder>` makes "Import photos"
 add that folder's JPEGs, `LISTORA_FAKE_CAMERA=<folder>` makes the camera take them, and
-`LISTORA_RESET_LOCAL_DATA=1` starts with no drafts, signed out.
+`LISTORA_RESET_LOCAL_DATA=1` starts with no drafts, signed out (on the welcome screen). A test of
+the tabs that needs no server calls `signInWithoutServer()` (`SignedInLaunch.swift`): a dev
+session against an address nobody answers at.
 
 ### Testing against the API
 
@@ -308,11 +313,22 @@ taps. How they work is in [docs/features/review.md](../../docs/features/review.m
 
 ### Signing in
 
-Uploads need a session. Settings signs in with an email and a one-time code
-([docs/features/auth.md](../../docs/features/auth.md)); `SignInModel` (SettingsFeature) runs
-the steps, and the build picks how the code arrives:
+The app shows its tabs only while someone is signed in. Signed out, its root is the welcome
+screen (`SignInFlowView`, SignInFeature): the Listora name, a one-line value statement, and the
+email; Continue requests a code, and the code screen takes it typed, pasted (`PasteButton`), or
+autofilled (`.oneTimeCode`), signs in by itself when a whole code arrives at once, and offers a new
+code after a 30-second cooldown. A wrong or expired code, no connection, and an email that cannot
+sign in each have their own message ([docs/features/auth.md](../../docs/features/auth.md) has
+the drivers). `SignInModel` runs the steps and follows the session (`AccessTokenStore.changes()`,
+and an expiry check on returning to the app), so signing out in Settings, a `401` from the API, a
+refresh the user pool refuses, or a dev session that expires brings the welcome screen back,
+saying the session ended when the person did not sign out. Deleting the account (Settings) ends
+the session at once but keeps its result, with the marketplaces to revoke by hand, on screen until
+Settings closes (`signOutKeepingScreen()`). A screen that still finds itself
+signed out shows a Sign in button that does the same. `SignInUITests` drives it against
+`StubAPIServer`'s dev sign-in. The build picks how the code arrives:
 
-- **Dev builds** have the developer sign-in: enter an email, tap "Send code", and enter the
+- **Dev builds** have the developer sign-in: enter an email, tap Continue, and enter the
   code the API prints to its log (`AUTH_DRIVER=dev`). These `/dev/auth` endpoints are outside
   the OpenAPI contract, so `DevSignInClient` calls the API without the generated client.
 - **Staging and Prod builds** sign in with the environment's Cognito user pool:
@@ -322,7 +338,7 @@ the steps, and the build picks how the code arrives:
   bearer token is the ID token, and `AccessTokenStore` renews it with the refresh token (one
   refresh at a time, 5 minutes before it expires) for 30 days; the Share Extension renews it
   the same way. Signing out revokes the refresh token. A build without `COGNITO_CLIENT_ID` says
-  in Settings that it cannot sign in.
+  on the welcome screen that it cannot sign in.
 
 The session is kept in the Keychain, in the App Group's access group (Share Extension).
 

@@ -219,6 +219,7 @@ schemes:
         - package: Features/ReviewFeatureTests
         - package: Features/TasksFeatureTests
         - package: Features/SettingsFeatureTests
+        - package: Features/SignInFeatureTests
         - package: Features/MarketplacesFeatureTests
         - package: Features/TagReadingFeatureTests
         - package: Features/VoiceInputFeatureTests

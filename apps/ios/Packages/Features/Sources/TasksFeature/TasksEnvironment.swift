@@ -10,14 +10,21 @@ public final class TasksEnvironment {
     let service: any TasksService
     let pasteboard: any Pasteboard
     let photoSaver: any PhotoSaving
+    /// Opens the sign-in, for a signed-out screen's Sign in button.
+    let onSignIn: @MainActor () -> Void
 
-    public convenience init(apiClient: APIClient, accessTokens: AccessTokenStore) {
+    public convenience init(
+        apiClient: APIClient,
+        accessTokens: AccessTokenStore,
+        onSignIn: @escaping @MainActor () -> Void = {},
+    ) {
         self.init(
             service: APITasksService(client: apiClient.client),
             reminders: UserNotificationReminders(),
             pasteboard: SystemPasteboard(),
             photoSaver: PhotoLibrarySaver(),
             isSignedIn: { accessTokens.grant != nil },
+            onSignIn: onSignIn,
         )
     }
 
@@ -27,10 +34,12 @@ public final class TasksEnvironment {
         pasteboard: any Pasteboard,
         photoSaver: any PhotoSaving,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
+        onSignIn: @escaping @MainActor () -> Void = {},
     ) {
         self.service = service
         self.pasteboard = pasteboard
         self.photoSaver = photoSaver
+        self.onSignIn = onSignIn
         inbox = TaskInboxModel(service: service, reminders: reminders, isSignedIn: isSignedIn)
     }
 

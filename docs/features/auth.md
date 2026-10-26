@@ -4,7 +4,7 @@ How people sign in to Listora and delete their account (plan task T-31, decision
 API side is in `apps/api/src/auth/` and `apps/api/src/account/`, the account deletion job
 the worker runs is in `packages/accounts`, the personal environment's user pool is
 `infra/src/stacks/auth-stack.ts`, and the app's sign-in is `CognitoSignInClient` (APIClient)
-and `SignInModel` (SettingsFeature) in `apps/ios`. The API conventions every route follows, the
+and `SignInModel` (SignInFeature) in `apps/ios`. The API conventions every route follows, the
 tenancy guard included, are in [architecture.md](../architecture.md#4-api-conventions).
 
 ## Drivers
@@ -120,7 +120,7 @@ them in the Keychain and refreshes them with the refresh token (`REFRESH_TOKEN_A
 - **Email one-time code** uses Cognito's passwordless sign-in (choice-based authentication).
   A returning person calls `InitiateAuth` with `AuthFlow=USER_AUTH` and
   `PREFERRED_CHALLENGE=EMAIL_OTP`, then `RespondToAuthChallenge` with `EMAIL_OTP_CODE`; the app
-  does this today (`CognitoSignInClient`, from Settings), against the owner pool. Cognito's
+  does this today (`CognitoSignInClient`, from the welcome screen), against the owner pool. Cognito's
   errors are shown in the app's own words, and a challenge other than `EMAIL_OTP` is refused.
   With public sign-up (later), a new person calls `SignUp` with only their email (no password)
   and `ConfirmSignUp` with the emailed code; the returned session signs them in through
