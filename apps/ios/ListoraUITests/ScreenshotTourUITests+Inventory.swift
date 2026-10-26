@@ -35,6 +35,12 @@ extension ScreenshotTourUITests {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         try shot("34-inventory-statuses", settle: 3)
+
+        // Nothing has sold and no task is open on the stack.
+        tab("Sales")
+        try shot("38-sales-empty", settle: 3)
+        tab("Tasks")
+        try shot("39-tasks-empty", settle: 3)
         app.terminate()
     }
 

@@ -156,6 +156,9 @@ final class ScreenshotTourUITests: XCTestCase {
         tab("Tasks")
         try shot("09-tasks")
 
+        tab("Sales")
+        try shot("35-sales-signed-out")
+
         tab("Today")
         app.buttons["settings.open"].tap()
         XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
@@ -189,6 +192,12 @@ final class ScreenshotTourUITests: XCTestCase {
         // Done is on the Settings screen, under Marketplaces.
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.buttons["settings.done"].tap()
+
+        // The stub has no item or sale endpoints, so both lists fail to load.
+        tab("Inventory")
+        try shot("36-inventory-unavailable", settle: 3)
+        tab("Sales")
+        try shot("37-sales-unavailable", settle: 3)
 
         tab("Add")
         XCTAssertTrue(app.buttons["draft.row"].waitForExistence(timeout: 5))
