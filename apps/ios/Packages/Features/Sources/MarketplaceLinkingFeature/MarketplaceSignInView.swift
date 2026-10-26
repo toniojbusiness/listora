@@ -60,6 +60,8 @@ struct MarketplaceSignInView: View {
                     }
                     .padding(Spacing.sm)
                     .background(Palette.surface)
+                    // A hairline edge, so the steps don't run into the marketplace's page.
+                    .overlay(alignment: .top) { Divider() }
                 }
                 .navigationTitle(link.name)
                 .navigationBarTitleDisplayMode(.inline)

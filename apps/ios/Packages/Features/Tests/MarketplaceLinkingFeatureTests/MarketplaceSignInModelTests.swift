@@ -7,7 +7,7 @@ import Testing
 /// so the session lands in Listora rather than in the phone's browser; nothing else opens there.
 @MainActor
 struct MarketplaceSignInModelTests {
-    private nonisolated static let start = Date(timeIntervalSince1970: 1_800_000_000)
+    nonisolated private static let start = Date(timeIntervalSince1970: 1_800_000_000)
     private let link = "https://www.depop.com/login/magic-link/?token=abc123"
 
     private func depop(emailsSignInLinks: Bool = true) -> MarketplaceLink {
