@@ -72,3 +72,9 @@ every committed configuration) names the support address. The UI tests run again
 - `account.business_name` (migration `20261026060419_profile`, nullable, 1 to 200 characters) is
   the business the account sells as. `account.name` stays the internal label (the owner's email
   at sign-up) that operator reports use.
+
+## Screenshots
+
+Before and after, in light and dark mode, are in [design/settings/](design/settings/)
+(`before-*` from `main` before this screen, `after-*` from `ScreenshotTourUITests/testSettingsTour`
+on the iPhone 17 simulator).
