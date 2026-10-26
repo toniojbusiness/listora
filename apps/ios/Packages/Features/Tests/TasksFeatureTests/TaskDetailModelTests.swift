@@ -128,4 +128,67 @@ struct TaskDetailModelTests {
         #expect(await service.completions.isEmpty)
         #expect(await service.dismissals.count == 1)
     }
+
+    @Test
+    func `confirming a sale email sends the plain confirmation, once per key`() async throws {
+        let model = await model(Fixtures.task(
+            kind: "confirm_sale",
+            operationID: nil,
+            fields: [],
+            photos: [],
+            saleEmail: Fixtures.saleEmail(reason: "ask_before_delist"),
+        ))
+        await model.complete()
+        #expect(model.outcome == .completed)
+        let sent = try #require(await service.completions.first)
+        #expect(sent.completion == TaskCompletion())
+    }
+
+    @Test
+    func `a sale email review sends the picked item, or that none sold`() async throws {
+        let candidates = [(id: "0199f0b4-0000-7000-8000-0000000000c2", sku: "AJ-000002")]
+        let review = Fixtures.task(
+            kind: "review_match",
+            operationID: nil,
+            fields: [],
+            photos: [],
+            saleEmail: Fixtures.saleEmail(reason: "ambiguous_match", candidates: candidates),
+        )
+        let picking = await model(review)
+        #expect(picking.candidates.map(\.sku) == ["AJ-000002"])
+        await picking.complete()
+        #expect(await service.completions.isEmpty)
+        await picking.pick(itemID: "0199f0b4-0000-7000-8000-0000000000c2")
+        #expect(picking.outcome == .completed)
+        #expect(try #require(await service.completions.last).completion
+            == TaskCompletion(matchedItemID: "0199f0b4-0000-7000-8000-0000000000c2"))
+
+        let rejecting = await model(review)
+        await rejecting.rejectMatch()
+        #expect(rejecting.outcome == .completed)
+        #expect(try #require(await service.completions.last).completion == TaskCompletion(rejectMatch: true))
+    }
+
+    @Test
+    func `a lost answer to a pick is resent with the same key`() async {
+        let review = Fixtures.task(
+            kind: "review_match",
+            operationID: nil,
+            fields: [],
+            photos: [],
+            saleEmail: Fixtures.saleEmail(
+                reason: "ambiguous_match",
+                candidates: [(id: "0199f0b4-0000-7000-8000-0000000000c2", sku: "AJ-000002")],
+            ),
+        )
+        let model = await model(review)
+        await service.script([.failure(.networkUnavailable)])
+        await model.pick(itemID: "0199f0b4-0000-7000-8000-0000000000c2")
+        #expect(model.outcome == nil)
+        #expect(model.problem == APIFailure.networkUnavailable.message)
+        await model.pick(itemID: "0199f0b4-0000-7000-8000-0000000000c2")
+        let keys = await service.completions.map(\.key)
+        #expect(keys.count == 2)
+        #expect(keys[0] == keys[1])
+    }
 }

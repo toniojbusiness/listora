@@ -11,6 +11,7 @@ files and do not conflict.
 | Setup and the commands every contributor runs                                   | The repository [README.md](../README.md); a feature's own setup goes in its feature doc               |
 | Every configuration key                                                         | `.env.example`, with a comment, in the section of the feature that reads it                           |
 | The phases and their order                                                      | [roadmap.md](roadmap.md); task status lives in the task tracker and merged PRs, not in docs           |
+| The privacy policy and terms of service (drafts for legal review)               | [legal/](legal/); keep them true to [features/privacy.md](features/privacy.md)                        |
 
 Rules:
 

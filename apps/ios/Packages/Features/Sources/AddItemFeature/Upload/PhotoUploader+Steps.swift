@@ -234,8 +234,8 @@ extension PhotoUploader {
         }
     }
 
-    func syncOrder(of draft: DraftRecord, photos: [DraftPhotoRecord]) async throws {
-        guard let itemID = draft.serverItemID else { return }
+    func syncOrder(of draft: DraftRecord?, photos: [DraftPhotoRecord]) async throws {
+        guard let draft, let itemID = draft.serverItemID else { return }
         let local = photos.sorted { $0.position < $1.position }.compactMap(\.serverPhotoID)
         let server: [String]
         do {
@@ -292,6 +292,8 @@ extension PhotoUploader {
             }
             let item = try await api.createItem(idempotencyKey: key)
             try? store.updateDeletion(deletion.id) { $0.serverItemID = item.id }
+        } else if let itemID = try await batchItemID(for: deletion) {
+            try? store.updateDeletion(deletion.id) { $0.serverItemID = itemID }
         } else {
             try? store.removeDeletion(deletion.id)
         }

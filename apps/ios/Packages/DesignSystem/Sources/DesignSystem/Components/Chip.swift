@@ -87,7 +87,7 @@ public struct ChoiceChip: View {
                 }
                 Text(title).lineLimit(1)
             }
-            .font(Typography.subheadline.weight(.semibold))
+            .font(Typography.emphasis)
             .foregroundStyle(isSelected ? Palette.onBrand : Palette.textPrimary)
             .padding(.horizontal, Spacing.sm)
             .frame(minHeight: 36)

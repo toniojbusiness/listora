@@ -40,7 +40,7 @@ struct ListingFlowView: View {
                 )
                 if model.isPreparing, model.choices.isEmpty {
                     ForEach(0 ..< 4, id: \.self) { _ in
-                        SkeletonRow().cardStyle(.outlined)
+                        SkeletonRow().cardStyle(.flat)
                     }
                 }
                 ForEach(model.choices) { choice in
@@ -126,6 +126,8 @@ struct ListingFlowView: View {
             Button(model.sendTitle, systemImage: model.current?.isAssisted == true ? "checklist" : "paperplane.fill") {
                 Task {
                     if await model.publish() {
+                        // Sent, not yet confirmed: a light tap, not a success.
+                        Haptics.play(.tap)
                         onDone()
                     }
                 }
@@ -158,10 +160,15 @@ struct ListingFlowView: View {
 private struct ChoiceRow: View {
     let choice: ListingFlowModel.Choice
     @Binding var isOn: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        // The tile above the text at accessibility sizes, leaving the text room beside the switch.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xs))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: Spacing.sm))
         Toggle(isOn: $isOn) {
-            HStack(alignment: .center, spacing: Spacing.sm) {
+            layout {
                 IconTile(monogram: String(choice.name.prefix(1)), tone: choice.isAvailable ? nil : .neutral)
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(choice.name)
@@ -176,7 +183,9 @@ private struct ChoiceRow: View {
         }
         .tint(Palette.brand.color)
         .disabled(!choice.isAvailable)
-        .cardStyle(.outlined)
+        .cardStyle(.flat)
+        // A toggle reads every text in its label, the tile's letter too; name what matters.
+        .accessibilityLabel("\(choice.name), \(choice.detail)")
         .accessibilityIdentifier("listing.choose.\(choice.id)")
     }
 }

@@ -23,8 +23,8 @@ CapabilityMode:
 KnownCapabilityMode:
   type: string
   description: |
-    `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
-    seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+    `api`: through the marketplace's API. `automation`: by Listora's browser runner or the
+    seller's iPhone, in the seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
     `none`: not offered.
   enum: [api, automation, assisted, bulk_file, none]
 MarkSoldMode:
@@ -160,7 +160,8 @@ KnownConnectionAction:
     `reconnect`: the same, for a connection that needs the seller's consent again (its grant
     was revoked, expires within 30 days, or fails); it renews the existing connection.
     `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
-    Listora may have cleared since.
+    Listora may have cleared since, or an automation connection whose sign-in is not
+    confirmed.
   enum: [connect, reconnect, check]
 Connection:
   type: object
@@ -199,6 +200,8 @@ Connection:
       description: When Listora last checked the connection, whatever it found.
     lastIssue:
       $ref: '#/ConnectionIssue'
+    execution:
+      $ref: './phone.yaml#/ConnectionExecution'
 ConnectionList:
   type: object
   required: [data]
@@ -257,8 +260,10 @@ KnownConnectionAttentionReason:
     `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
     `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
     cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
-    ends within 30 days.
-  enum: [reconnect, access_removed, connection_problem, expiring]
+    ends within 30 days. `not_confirmed`: Listora could not confirm that the marketplace
+    accepts the sign-in linked for automation (its check failed or did not finish); the
+    `check` action checks it again.
+  enum: [reconnect, access_removed, connection_problem, expiring, not_confirmed]
 ConnectionAttention:
   type: object
   description: One connection that needs the seller's attention.
@@ -282,9 +287,11 @@ SaleForwardingStatus:
 KnownSaleForwardingStatus:
   type: string
   description: |
-    `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
-    email domain, which this deployment does not have yet.
-  enum: [needs_domain]
+    - `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+      email domain, which this deployment does not have yet.
+    - `not_set_up`, `confirming`, `working`: as `KnownSaleEmailStatus` (`getSaleEmails`, which
+      has the address and the setup steps).
+  enum: [needs_domain, not_set_up, confirming, working]
 SaleForwarding:
   type: object
   description: Forwarding marketplace sale emails to Listora, which detects sales sooner.

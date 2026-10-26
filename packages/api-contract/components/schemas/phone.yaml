@@ -1,0 +1,197 @@
+# On-phone execution (docs/features/phone-execution.md): the devices the seller runs the app
+# on, where each connection's automated steps run, and the phone's runs of the work handed to it.
+ExecutionLocation:
+  description: A `KnownExecutionLocation`, or a location added after this client was built.
+  anyOf:
+    - $ref: '#/KnownExecutionLocation'
+    - type: string
+      maxLength: 64
+KnownExecutionLocation:
+  type: string
+  description: |
+    Where a connection's automated steps run: `cloud`, Listora's browser runner; `phone`, the
+    iPhone that linked the marketplace, in the seller's own session on their own network.
+  enum: [cloud, phone]
+ConnectionExecution:
+  type: object
+  description: |
+    Where the connection's automated steps run, and what waits for the phone. Present for a
+    marketplace that is automated in a linked session.
+  required: [location, label, cloudAllowed]
+  properties:
+    location:
+      $ref: '#/ExecutionLocation'
+    label:
+      type: string
+      maxLength: 200
+      description: |
+        What to show: `Runs on your iPhone` or `Runs in Listora's cloud`, or why the phone
+        can't run it yet (`Link it on your iPhone to run it there`).
+    deviceInstallationId:
+      $ref: './common.yaml#/Id'
+      description: The phone that runs it, when it runs on one (compare with your own).
+    deviceName:
+      type: string
+      maxLength: 100
+    waiting:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Changes and checks waiting for that phone to run them.
+    waitingSince:
+      $ref: './common.yaml#/Timestamp'
+      description: Since when the oldest of them waits.
+    cloudAllowed:
+      type: boolean
+      description: |
+        Whether the connection may run in Listora's cloud. False for a marketplace that
+        refuses Listora's cloud servers: the app does not offer the cloud, and
+        `setConnectionExecution` refuses a move there.
+    cloudBlockedReason:
+      type: string
+      maxLength: 200
+      description: |
+        Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
+        blocks cloud servers, so Listora runs it from your phone").
+ConnectionExecutionChange:
+  type: object
+  additionalProperties: false
+  required: [location]
+  properties:
+    location:
+      $ref: '#/KnownExecutionLocation'
+DevicePlatform:
+  type: string
+  enum: [ios]
+PushEnvironment:
+  type: string
+  description: The APNs environment the device token belongs to.
+  enum: [sandbox, production]
+DeviceRegistration:
+  type: object
+  additionalProperties: false
+  required: [name, platform]
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+      description: The device's name, as the seller sees it ("Tonio's iPhone").
+    platform:
+      $ref: '#/DevicePlatform'
+    appVersion:
+      type: string
+      minLength: 1
+      maxLength: 50
+    runtimeVersion:
+      type: integer
+      format: int32
+      minimum: 1
+      description: The version of phone calls the app's runtime speaks.
+    pushToken:
+      type: string
+      description: The APNs device token, hex; absent when the app has none.
+      minLength: 16
+      maxLength: 400
+      pattern: '^[0-9a-f]+$'
+    pushEnvironment:
+      $ref: '#/PushEnvironment'
+Device:
+  type: object
+  required: [installationId, name, platform, pushEnabled, lastSeenAt]
+  properties:
+    installationId:
+      $ref: './common.yaml#/Id'
+    name:
+      type: string
+      maxLength: 100
+    platform:
+      $ref: '#/DevicePlatform'
+    pushEnabled:
+      type: boolean
+      description: Whether Listora can send this device push notifications.
+    lastSeenAt:
+      $ref: './common.yaml#/Timestamp'
+PhoneWorkPurpose:
+  description: A `KnownPhoneWorkPurpose`, or one added after this client was built.
+  anyOf:
+    - $ref: '#/KnownPhoneWorkPurpose'
+    - type: string
+      maxLength: 64
+KnownPhoneWorkPurpose:
+  type: string
+  description: |
+    `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
+    or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
+    a look at the seller's sold orders.
+  enum: [operation, session_check, sale_check]
+PhoneRunClaim:
+  type: object
+  additionalProperties: false
+  required: [installationId, runtimeVersion]
+  properties:
+    installationId:
+      $ref: './common.yaml#/Id'
+    runtimeVersion:
+      type: integer
+      format: int32
+      minimum: 1
+PhoneCall:
+  type: object
+  description: |
+    One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,
+    and its result comes back as `answerPhoneCall`'s `answer`. Its shape is the runtime's
+    (`PhoneCallInput` in packages/automation/src/phone/runtime.ts), versioned by
+    `runtimeVersion`.
+  required: [index, input]
+  properties:
+    index:
+      type: integer
+      format: int32
+      minimum: 0
+    input:
+      type: object
+      additionalProperties: true
+PhoneRun:
+  type: object
+  description: |
+    The phone's run of one piece of work. While it has a `call`, the phone runs it and
+    answers; without one, the run is over and the phone claims the next.
+  required: [id, purpose, marketplace]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    purpose:
+      $ref: '#/PhoneWorkPurpose'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    operationId:
+      $ref: './common.yaml#/Id'
+    call:
+      $ref: '#/PhoneCall'
+PhoneRunResult:
+  type: object
+  description: The run to continue, absent when there is nothing (more) to run.
+  properties:
+    run:
+      $ref: '#/PhoneRun'
+    nextClaimInSeconds:
+      type: integer
+      format: int32
+      minimum: 1
+      maximum: 3600
+      description: |
+        Present on a claim that found nothing to run: how long the app waits, while it is open,
+        before it claims again. Sooner when work for this phone is due then (a check tried
+        again after a failed attempt), so work never waits for a push or for the app to reopen.
+PhoneCallAnswer:
+  type: object
+  additionalProperties: false
+  required: [installationId, answer]
+  properties:
+    installationId:
+      $ref: './common.yaml#/Id'
+    answer:
+      type: object
+      additionalProperties: true
+      description: What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged.

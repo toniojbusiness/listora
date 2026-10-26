@@ -3,9 +3,9 @@ export type { LocalStack, LocalStackOptions, StackMarketplaces, StackSeller } fr
 export { startStackControl } from './control.ts';
 export type { ControlSeller, FullStackControl, StackControl } from './control.ts';
 export {
+  EbaySessionLinker,
   ebayNotificationEnv,
   insertDepopConnection,
-  SessionLinker,
   startMarketplaceFakes,
 } from './marketplaces.ts';
 export type { MarketplaceFakes } from './marketplaces.ts';

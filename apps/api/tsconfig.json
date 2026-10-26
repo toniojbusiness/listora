@@ -12,8 +12,11 @@
     { "path": "../../packages/analysis" },
     { "path": "../../packages/api-contract" },
     { "path": "../../packages/auto-delist" },
+    { "path": "../../packages/automation" },
+    { "path": "../../packages/batches" },
     { "path": "../../packages/connections" },
     { "path": "../../packages/db" },
+    { "path": "../../packages/email-sales" },
     { "path": "../../packages/marketplaces" },
     { "path": "../../packages/operations" },
     { "path": "../../packages/photos" },
@@ -21,6 +24,7 @@
     { "path": "../../packages/sales" },
     { "path": "../../packages/shared" },
     { "path": "../../packages/storage" },
+    { "path": "../../packages/today" },
     { "path": "../../packages/testing" }
   ]
 }

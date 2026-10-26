@@ -95,7 +95,9 @@ final class SaleFlowUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["Inventory"].waitForExistence(timeout: 10))
+        let inventory = app.tabBars.buttons["Inventory"]
+        XCTAssertTrue(inventory.waitForExistence(timeout: 10))
+        inventory.tap()
     }
 
     /// Keeps a screenshot in the result bundle, passing or not, for reviewing the screens.

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describeAdapterConformance } from '../conformance/suite.ts';
 import {
   createDepopAssistedAdapter,
+  createEbayAssistedAdapter,
   createMercariAdapter,
   createPoshmarkAdapter,
 } from './marketplaces.ts';
@@ -30,4 +31,11 @@ describeAdapterConformance({
   adapter: createDepopAssistedAdapter(),
   connection: { id: 'connection-depop', mode: 'assisted', status: 'connected' },
   goldenDir: golden('depop'),
+});
+
+describeAdapterConformance({
+  name: 'eBay (assisted)',
+  adapter: createEbayAssistedAdapter(),
+  connection: null,
+  goldenDir: golden('ebay'),
 });

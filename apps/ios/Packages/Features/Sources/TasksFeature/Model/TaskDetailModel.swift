@@ -1,5 +1,6 @@
 import APIClient
 import Foundation
+import ListoraAPI
 import Observation
 
 /// One task: what to copy, the photos to save in order, the link that opens the marketplace, and
@@ -103,8 +104,33 @@ final class TaskDetailModel {
         guard !isSubmitting, presentation.doneTitle != nil, linkProblem == nil else { return }
         let typed = listingURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let link = presentation.takesListingLink && !typed.isEmpty ? typed : nil
+        await send(TaskCompletion(listingURL: link))
+    }
+
+    /// A sale email review: this item sold. The server records its sale and delists it everywhere else.
+    func pick(itemID: String) async {
+        guard !isSubmitting, presentation.kind == .reviewMatch, presentation.isSaleEmail else { return }
+        await send(TaskCompletion(matchedItemID: itemID))
+    }
+
+    /// A sale email review: none of the user's items sold, so nothing is recorded.
+    func rejectMatch() async {
+        guard !isSubmitting, presentation.rejectTitle != nil else { return }
+        await send(TaskCompletion(rejectMatch: true))
+    }
+
+    /// The candidates of a sale email review.
+    var candidates: [Components.Schemas.UserTaskItem] {
+        task.saleEmail?.candidates ?? []
+    }
+
+    // MARK: Private
+
+    /// Every answer that finishes the task shares one key: a lost answer is resent as it was,
+    /// and a second tap never records a second sale.
+    private func send(_ completion: TaskCompletion) async {
         await submit(\.completeKey, ending: .completed) { [service, task] key throws(APIFailure) in
-            try await service.complete(taskID: task.id, listingURL: link, idempotencyKey: key)
+            try await service.complete(taskID: task.id, completion: completion, idempotencyKey: key)
         }
     }
 
@@ -115,8 +141,6 @@ final class TaskDetailModel {
             try await service.dismiss(taskID: task.id, idempotencyKey: key)
         }
     }
-
-    // MARK: Private
 
     /// Sends one action with the key at `key`, and ends the screen with `outcome` once the server
     /// answers.

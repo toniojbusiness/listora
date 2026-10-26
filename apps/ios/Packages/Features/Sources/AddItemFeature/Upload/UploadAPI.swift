@@ -198,7 +198,7 @@ struct UploadAPI: Sendable {
 
     private struct Unreadable: Error {}
 
-    private func call<Output>(_ request: () async throws -> Output) async throws(APIFailure) -> Output {
+    func call<Output>(_ request: () async throws -> Output) async throws(APIFailure) -> Output {
         do {
             return try await request()
         } catch {
@@ -206,7 +206,7 @@ struct UploadAPI: Sendable {
         }
     }
 
-    private func body<Body>(_ read: () throws -> Body) throws(APIFailure) -> Body {
+    func body<Body>(_ read: () throws -> Body) throws(APIFailure) -> Body {
         do {
             return try read()
         } catch {

@@ -47,7 +47,7 @@ Depop API operations locally (listings on a connection whose mode is `api`), set
 `DEPOP_ENV=fake` and `DEPOP_USER_CONNECTION_ID` and start `npm run dev:fake-depop`.
 To watch browser automation (decision D1,
 [docs/features/automation.md](docs/features/automation.md)), set `FAKE_AUTOMATION_SITE_URL` and
-start `npm run dev:fake-site`: Poshmark, Mercari, and Depop connections that hold a linked
+start `npm run dev:fake-site`: Poshmark, Mercari, Depop, and eBay connections that hold a linked
 session are then automated against that local site, and the worker starts the browser runner
 as a child process whenever automated work waits. To watch the Poshmark adapter itself, also
 set `FAKE_POSHMARK_URL` and start `npm run dev:fake-poshmark`
@@ -91,8 +91,10 @@ has the steps.
 | `npm run dev:fake-site`        | Run the fake marketplace site at `FAKE_AUTOMATION_SITE_URL`, which browser automation drives in development                                      |
 | `npm run dev:fake-poshmark`    | Run the fake Poshmark at `FAKE_POSHMARK_URL`, which the Poshmark automation adapter drives in development                                        |
 | `npm run dev:runner`           | Run the browser runner by hand (the worker starts it on demand otherwise)                                                                        |
+| `npm run phone:bundle`         | Rebuild the iPhone app's phone runtime (`phone-runtime.js`) from the automation code; a test fails while it is stale                             |
 | `npm run db:migrate`           | Apply pending migrations and the job queue schema to `DATABASE_URL`; `-- status` lists them, `-- down <name>` reverts the latest one             |
-| `npm run admin -- --help`      | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail)                                   |
+| `npm run admin -- --help`      | Operator CLI: AI cost reports, the AI spend check, the AI kill switch and account blocks (with an audit trail), marketplace data purges          |
+| `npm run perf:api`             | Benchmark the API's screens on a synthetic 2,000-item seller (scratch database); see [performance.md](docs/features/performance.md)              |
 | `npm run eval`                 | Score the tag parsers, AI tag reading, and the full item analysis on the synthetic corpus (fake AI); `-- --provider anthropic` uses the real API |
 | `npm run corpus:render`        | Regenerate the synthetic tag corpus and its fake AI fixtures after changing the corpus generator                                                 |
 | `scripts/dev-db.sh start`      | Initialize if needed and start the cluster; create the `listora` and `listora_test` databases (the default command)                              |
@@ -126,6 +128,7 @@ apps/admin/             Operator CLI: AI cost reports, spend check, kill switch,
 apps/ios/               iPhone app: Swift 6 / SwiftUI, XcodeGen, local Swift packages
 packages/ai/            AI provider layer: providers, price table, metering, budget guards, quota counter (@listora/ai)
 packages/analysis/      Item analysis: prompt, output schema, provenance, marketplace copy, the job (@listora/analysis)
+packages/batches/       Batch listing: batches, their items' state, the job that starts each item's analysis (@listora/batches)
 packages/pricing/       Fee tables, cost floor, price tiers, research links, label guard (@listora/pricing)
 packages/api-contract/  OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
 packages/db/            SQL migrations, migration runner, Kysely types (@listora/db)
@@ -133,10 +136,12 @@ packages/storage/       Object storage drivers: local disk (.local/storage) and 
 packages/photos/        Image pipeline: derivatives, metadata stripping, hashes, processing job (@listora/photos)
 packages/marketplaces/  Marketplace adapter framework, assisted adapters, the eBay and Depop adapters, eBay's connect client, the fake marketplace, fake eBay, and fake Depop (@listora/marketplaces)
 packages/connections/   Marketplace connections: OAuth connect, token vault, browser session vault, credentials, health (@listora/connections)
-packages/automation/    Browser automation: Playwright runner, safety rules, automation adapter base, the Poshmark adapter, sale checks, fake site, fake Poshmark (@listora/automation)
+packages/automation/    Browser automation: Playwright runner, safety rules, automation adapter base, the Poshmark, Mercari, Depop, and eBay adapters, sale checks, fake site and fake marketplace sites (@listora/automation)
 packages/operations/    Operation engine on Graphile Worker (@listora/operations)
 packages/observability/ Trust metrics: catalog, CloudWatch EMF output, worker metrics job (@listora/observability)
 packages/sales/         Sale intake, eBay notifications, the order poll, eBay account deletion (@listora/sales)
+packages/email-sales/   Email sale detection: forwarding addresses, folder and SES ingest, DKIM/SPF, parsers (@listora/email-sales)
+packages/today/         The Today screen: card rules, the summary's queries, the morning summary (@listora/today)
 packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)
 packages/tag-parse/     Deterministic tag-text parsers (@listora/tag-parse)

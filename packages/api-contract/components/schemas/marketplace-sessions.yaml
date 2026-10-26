@@ -1,0 +1,151 @@
+MarketplaceSessionStatus:
+  description: |
+    A `KnownMarketplaceSessionStatus`, or a status added after this client was built.
+    Clients show `statusDisplay` for an unknown status and offer to link again.
+  anyOf:
+    - $ref: '#/KnownMarketplaceSessionStatus'
+    - type: string
+      maxLength: 64
+KnownMarketplaceSessionStatus:
+  type: string
+  description: |
+    `not_linked`: no session. `checking`: a session was just linked (or checked again) and
+    Listora is checking it where the marketplace runs (the browser runner, for at most 15
+    minutes, or the seller's iPhone, the next time Listora runs there). `linked`: the check passed,
+    and Listora automates the marketplace in that session. `needs_relink`: the marketplace
+    rejected the session, or showed a check automation must not pass; the user signs in
+    again. `check_failed`: Listora could not confirm the session works: its check failed or
+    did not finish in time (see `issue`). `requestConnectionCheck` checks the same session
+    again; linking again checks a new one. `api_connected`: the marketplace is connected
+    through its API, so there is nothing to sign in to. The marketplace's `Connection` shows
+    the same status in the same words.
+  enum: [not_linked, checking, linked, needs_relink, check_failed, api_connected]
+MarketplaceSessionLogin:
+  type: object
+  description: Where the app signs the user in, and which of that site's cookies it hands over.
+  required: [url, cookieDomains]
+  properties:
+    url:
+      type: string
+      format: uri
+      maxLength: 2048
+      description: The marketplace's own sign-in page.
+    cookieDomains:
+      type: array
+      description: |
+        The marketplace's own domains (`poshmark.com`). The app sends only cookies whose
+        domain is one of these or a subdomain of one; the server refuses any other.
+      minItems: 1
+      maxItems: 10
+      items:
+        type: string
+        maxLength: 253
+    emailsSignInLinks:
+      type: boolean
+      description: |
+        The marketplace may sign the user in with a link it emails them (Depop). Tapped in
+        the email, that link opens the phone's default browser, not the app, so the app asks
+        for the link to be copied (or shared to the app) and opens it in its sign-in page,
+        but only a link on `url`'s scheme or https and on one of `cookieDomains`. Absent
+        means `false`.
+MarketplaceSession:
+  type: object
+  description: |
+    A marketplace linked by signing in (`connect: session`). It is shown as linked only
+    after the session check (on the browser runner or the seller's iPhone) confirmed the
+    marketplace accepts the session.
+  required: [marketplace, status, statusDisplay, login]
+  properties:
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    status:
+      $ref: '#/MarketplaceSessionStatus'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+    login:
+      $ref: '#/MarketplaceSessionLogin'
+    displayName:
+      type: string
+      maxLength: 200
+      description: The seller's name on the marketplace, when the app or the check knows it.
+    linkedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When the current session was linked.
+    checkedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When the current session's check finished.
+    issue:
+      $ref: './connections.yaml#/ConnectionIssue'
+      description: Why the session needs relinking, or why its check failed.
+    execution:
+      $ref: './phone.yaml#/ConnectionExecution'
+      description: Where its automated steps run; present once it is linked.
+MarketplaceSessionList:
+  type: object
+  required: [data]
+  properties:
+    data:
+      type: array
+      items:
+        $ref: '#/MarketplaceSession'
+SessionCookie:
+  type: object
+  description: |
+    One cookie as the app's web view holds it (`HTTPCookie`), in the browser runner's
+    terms. A name plus value of at most 4096 bytes, as browsers allow.
+  additionalProperties: false
+  required: [name, value, domain, path, expires, httpOnly, secure, sameSite]
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 4096
+    value:
+      type: string
+      maxLength: 4096
+    domain:
+      type: string
+      description: A host (`www.poshmark.com`) or a domain cookie (`.poshmark.com`).
+      minLength: 1
+      maxLength: 253
+      pattern: '^\.?[A-Za-z0-9.-]+$'
+    path:
+      type: string
+      minLength: 1
+      maxLength: 1024
+      pattern: '^/'
+    expires:
+      type: integer
+      format: int64
+      description: Unix time in whole seconds; `-1` for a cookie that lasts as long as the browser session.
+      minimum: -1
+    httpOnly:
+      type: boolean
+    secure:
+      type: boolean
+    sameSite:
+      type: string
+      description: '`lax` when the site set none.'
+      enum: [strict, lax, none]
+MarketplaceSessionLink:
+  type: object
+  additionalProperties: false
+  required: [cookies]
+  properties:
+    cookies:
+      type: array
+      description: The marketplace's cookies after the user signed in, and no other site's.
+      minItems: 1
+      maxItems: 200
+      items:
+        $ref: '#/SessionCookie'
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: The seller's name on the marketplace, when the app knows it.
+    installationId:
+      $ref: './common.yaml#/Id'
+      description: |
+        The registered device that linked it (`registerDevice`), which then runs the
+        marketplace's automated steps when they run on the phone.

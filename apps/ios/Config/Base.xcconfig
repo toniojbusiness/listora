@@ -21,3 +21,22 @@ DEVELOPMENT_TEAM =
 // has its own group, like its own bundle id. Placeholder until the Apple Developer Program
 // account registers the groups (gate G-Apple); simulator builds need no team.
 APP_GROUP_IDENTIFIER = group.$(BASE_BUNDLE_IDENTIFIER)$(BUNDLE_ID_SUFFIX)
+
+// The keychain access group the signed-in session lives in: the App Group. Personal device builds
+// (Config/PersonalTeam.xcconfig) use a Keychain Sharing group instead, since a free team cannot
+// register App Groups.
+SESSION_KEYCHAIN_GROUP = $(APP_GROUP_IDENTIFIER)
+
+// The APNs environment the app's push entitlement names (aps-environment): Apple's sandbox for
+// development builds; Staging and Prod override it with production.
+APS_ENVIRONMENT = development
+
+// The Cognito user pool client the app signs in with outside Dev (docs/features/auth.md): the
+// pool's region and the app client id, neither a secret. An empty client id means the build has
+// no sign-in (Settings says so); Dev signs in with the local API's dev driver instead.
+COGNITO_REGION =
+COGNITO_CLIENT_ID =
+
+// The address Settings > Help and contact emails (docs/features/profile.md). Empty means the build
+// names none, and Help says that contact isn't set up yet.
+SUPPORT_EMAIL =

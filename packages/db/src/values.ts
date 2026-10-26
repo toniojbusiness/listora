@@ -225,9 +225,45 @@ export type DelistRunListingSource = (typeof DELIST_RUN_LISTING_SOURCES)[number]
 export const ACCOUNT_DELETION_GRANT_OUTCOMES = ['pending', 'revoked', 'manual'] as const;
 export type AccountDeletionGrantOutcome = (typeof ACCOUNT_DELETION_GRANT_OUTCOMES)[number];
 
+/**
+ * Why a connection's data was deleted: the seller unlinked it, its access stayed revoked past
+ * the retention period, or the marketplace ended Listora's access (an operator's purge).
+ */
+export const CONNECTION_DELETION_REASONS = [
+  'unlinked',
+  'revoked',
+  'marketplace_terminated',
+] as const;
+export type ConnectionDeletionReason = (typeof CONNECTION_DELETION_REASONS)[number];
+
+/** A deleted connection's grant: nothing to revoke, still to revoke, confirmed, or given up. */
+export const CONNECTION_DELETION_REVOCATIONS = ['none', 'pending', 'revoked', 'manual'] as const;
+export type ConnectionDeletionRevocation = (typeof CONNECTION_DELETION_REVOCATIONS)[number];
+
+/** What a `deletion_record` completed: an account, a connection, or an eBay user's data. */
+export const DELETION_RECORD_KINDS = ['account', 'connection', 'ebay_user'] as const;
+export type DeletionRecordKind = (typeof DELETION_RECORD_KINDS)[number];
+
 /** What a browser automation run was for (`automation_run.purpose`). */
 export const AUTOMATION_RUN_PURPOSES = ['operation', 'sale_check', 'health'] as const;
 export type AutomationRunPurpose = (typeof AUTOMATION_RUN_PURPOSES)[number];
+
+/** Where an automation connection's automated steps run (docs/features/phone-execution.md). */
+export const EXECUTION_LOCATIONS = ['cloud', 'phone'] as const;
+export type ExecutionLocation = (typeof EXECUTION_LOCATIONS)[number];
+
+/** Which host ran an automation run. */
+export const AUTOMATION_RUN_HOSTS = ['runner', 'phone'] as const;
+export type AutomationRunHost = (typeof AUTOMATION_RUN_HOSTS)[number];
+
+export const PHONE_WORK_PURPOSES = ['operation', 'session_check', 'sale_check'] as const;
+export type PhoneWorkPurpose = (typeof PHONE_WORK_PURPOSES)[number];
+
+export const DEVICE_PLATFORMS = ['ios'] as const;
+export type DevicePlatform = (typeof DEVICE_PLATFORMS)[number];
+
+export const PUSH_ENVIRONMENTS = ['sandbox', 'production'] as const;
+export type PushEnvironment = (typeof PUSH_ENVIRONMENTS)[number];
 
 export const AUTOMATION_RUN_OUTCOMES = [
   'succeeded',
@@ -258,3 +294,7 @@ export type SaleCheckReason = (typeof SALE_CHECK_REASONS)[number];
 
 export const SALE_CHECK_OUTCOMES = ['succeeded', 'failed', 'challenge'] as const;
 export type SaleCheckOutcome = (typeof SALE_CHECK_OUTCOMES)[number];
+
+/** Whether a newly linked session works (`session_check.status`). */
+export const SESSION_CHECK_STATUSES = ['pending', 'passed', 'failed'] as const;
+export type SessionCheckStatus = (typeof SESSION_CHECK_STATUSES)[number];

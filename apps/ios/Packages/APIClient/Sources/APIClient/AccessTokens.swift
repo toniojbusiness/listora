@@ -16,12 +16,24 @@ public struct AccessGrant: Codable, Equatable, Sendable {
     public let expiresAt: Date
     /// Who signed in, for display.
     public let email: String
+    /// Renews `accessToken` when it expires (a Cognito refresh token, valid for 30 days); nil for
+    /// a session that simply ends (the dev driver's). A session saved before it existed reads nil.
+    public let refreshToken: String?
 
-    public init(accessToken: String, expiresAt: Date, email: String) {
+    public init(accessToken: String, expiresAt: Date, email: String, refreshToken: String? = nil) {
         self.accessToken = accessToken
         self.expiresAt = expiresAt
         self.email = email
+        self.refreshToken = refreshToken
     }
+}
+
+/// Renews a session whose token is about to expire, with its refresh token.
+public protocol AccessGrantRefresher: Sendable {
+    /// The renewed session. A failure whose `isUnauthenticated` is true means the refresh token no
+    /// longer works (revoked, expired, or its user deleted): the person has to sign in again. Any
+    /// other failure (no connection) leaves the session as it is, to try again later.
+    func refresh(_ grant: AccessGrant) async throws(APIFailure) -> AccessGrant
 }
 
 /// Where the signed-in session is kept between launches.
@@ -33,33 +45,92 @@ public protocol AccessGrantStorage: Sendable {
 /// The app's signed-in session. It is kept in ``AccessGrantStorage`` (the Keychain in the app),
 /// cached in memory, and dropped when it expires or the server rejects it. Observers of
 /// ``changes()`` hear about every sign-in and sign-out, so work waiting for a session resumes.
+///
+/// With a ``AccessGrantRefresher``, a session with a refresh token outlives its token: the token
+/// is renewed shortly before it expires, by one refresh at a time however many requests wait for
+/// it, and the session ends only when the refresher says the refresh token no longer works.
 public final class AccessTokenStore: AccessTokenProvider {
     private struct State {
         var grant: AccessGrant?
         var observers: [UUID: AsyncStream<AccessGrant?>.Continuation] = [:]
+        /// The refresh in flight, which every caller of ``accessToken()`` meanwhile awaits.
+        var refreshing: Task<String?, Never>?
     }
 
+    /// A refreshable token is renewed this long before it expires, so no request carries a token
+    /// that expires on its way.
+    public static let refreshMargin: TimeInterval = 5 * 60
+
     private let storage: any AccessGrantStorage
+    private let refresher: (any AccessGrantRefresher)?
     private let now: @Sendable () -> Date
     private let state: Mutex<State>
 
-    public init(storage: any AccessGrantStorage, now: @escaping @Sendable () -> Date = Date.init) {
+    public init(
+        storage: any AccessGrantStorage,
+        refresher: (any AccessGrantRefresher)? = nil,
+        now: @escaping @Sendable () -> Date = Date.init,
+    ) {
         self.storage = storage
+        self.refresher = refresher
         self.now = now
         state = Mutex(State(grant: storage.load()))
     }
 
-    /// The session, or nil when signed out or expired.
+    /// The session, or nil when signed out, or expired with no way to renew it.
     public var grant: AccessGrant? {
         let now = now()
         return state.withLock { state in
-            guard let grant = state.grant, grant.expiresAt > now else { return nil }
+            guard let grant = state.grant, grant.expiresAt > now || canRefresh(grant) else { return nil }
             return grant
         }
     }
 
     public func accessToken() async -> String? {
-        grant?.accessToken
+        let soon = now().addingTimeInterval(Self.refreshMargin)
+        let (current, refresh): (AccessGrant?, Task<String?, Never>?) = state.withLock { state in
+            guard let grant = state.grant else { return (nil, nil) }
+            guard let refresher, grant.refreshToken != nil, grant.expiresAt <= soon else { return (grant, nil) }
+            if let running = state.refreshing {
+                return (grant, running)
+            }
+            // Set under the lock that the task's own cleanup takes, so it can never clear it first.
+            let task = Task { await self.renew(grant, with: refresher) }
+            state.refreshing = task
+            return (grant, task)
+        }
+        if let refresh {
+            return await refresh.value
+        }
+        guard let current, current.expiresAt > now() else { return nil }
+        return current.accessToken
+    }
+
+    private func canRefresh(_ grant: AccessGrant) -> Bool {
+        refresher != nil && grant.refreshToken != nil
+    }
+
+    /// Renews `grant` and returns the token to send, or nil when there is none.
+    private func renew(_ grant: AccessGrant, with refresher: any AccessGrantRefresher) async -> String? {
+        defer { state.withLock { $0.refreshing = nil } }
+        do {
+            let renewed = try await refresher.refresh(grant)
+            // A sign-out or another sign-in while the refresh ran wins over it.
+            var replaced = false
+            update { current in
+                guard current == grant else { return current }
+                replaced = true
+                return renewed
+            }
+            return replaced ? renewed.accessToken : nil
+        } catch {
+            if error.isUnauthenticated {
+                update { $0 == grant ? nil : $0 }
+                return nil
+            }
+            // Not reachable now: the old token still works until it expires; then nothing does.
+            return grant.expiresAt > now() ? grant.accessToken : nil
+        }
     }
 
     public func reject(_ token: String) async {
@@ -116,11 +187,12 @@ public struct KeychainAccessGrantStorage: AccessGrantStorage {
         self.accessGroup = accessGroup
     }
 
-    /// The signed-in session the app and its Share Extension share. An App Group identifier works
-    /// as a keychain access group for every target with the group's entitlement, without a
-    /// team-prefixed keychain-access-groups entry, so signing in to the app signs the extension in.
-    public static func session(appGroup: String) -> Self {
-        Self(service: "com.listora.app.session", accessGroup: appGroup)
+    /// The signed-in session the app and its Share Extension share, in an access group both are
+    /// entitled to (`AppConfiguration.sessionKeychainGroup`), so signing in to the app signs the
+    /// extension in. An App Group identifier works as one for every target with the group's
+    /// entitlement; so does a team-prefixed keychain-access-groups entry.
+    public static func session(accessGroup: String) -> Self {
+        Self(service: "com.listora.app.session", accessGroup: accessGroup)
     }
 
     /// Reads the session. With an access group, a session that an earlier build saved under the

@@ -14,6 +14,7 @@ import {
   MIGRATE_COMMAND,
   RUNNER_COMMAND,
   SERVICE_COMMANDS,
+  signInResources,
   type ContainerName,
   type PhotoStorage,
   type ServiceResources,
@@ -26,8 +27,10 @@ const PHOTO_STORAGE: PhotoStorage = {
   publicBaseUrl: 'https://d111111abcdef8.cloudfront.net',
 };
 const TOKEN_KEY_ARN = 'arn:aws:kms:us-east-1:111122223333:key/0b6f7b3e-0000-4000-8000-000000000001';
+const USER_POOL = { userPoolId: 'us-east-1_AbC123xyZ', clientIds: ['1example23456789abcdefghij'] };
 const RESOURCES: ServiceResources = {
   photoStorage: PHOTO_STORAGE,
+  signIn: { driver: 'cognito', ...USER_POOL },
   runner: { cluster: 'listora-staging', service: 'runner', region: 'us-east-1' },
   tokenKeyArn: TOKEN_KEY_ARN,
 };
@@ -40,6 +43,58 @@ function taskEnvironment(container: ContainerName): NodeJS.ProcessEnv {
     ...Object.fromEntries(containerSecretNames(container).map((name) => [name, 'placeholder'])),
   };
 }
+
+describe('the sign-in an environment gets', () => {
+  it('is the cognito driver with its user pool in an owner-pool environment', () => {
+    expect(signInResources({ via: 'owner-pool' }, USER_POOL)).toEqual({
+      driver: 'cognito',
+      ...USER_POOL,
+    });
+  });
+
+  it('is the dev driver only where the environment signs in with dev', () => {
+    expect(signInResources({ via: 'dev' }, undefined)).toEqual({ driver: 'dev' });
+  });
+
+  it('never falls back to the dev driver when the owner pool is missing, and never mixes the two', () => {
+    expect(() => signInResources({ via: 'owner-pool' }, undefined)).toThrow(
+      'an owner-pool environment needs its user pool',
+    );
+    expect(() =>
+      signInResources({ via: 'owner-pool' }, { userPoolId: USER_POOL.userPoolId, clientIds: [] }),
+    ).toThrow('the user pool needs an app client');
+    expect(() => signInResources({ via: 'dev' }, USER_POOL)).toThrow(
+      'a dev sign-in environment has no user pool',
+    );
+  });
+
+  it('gives the API the cognito driver, its pool, and its clients, and the worker the pool', () => {
+    expect(loadApiConfig(taskEnvironment('api')).auth).toEqual({
+      driver: 'cognito',
+      cognito: { region: 'us-east-1', ...USER_POOL },
+    });
+    expect(containerEnvironment('api', DATABASE_URL, RESOURCES)).not.toHaveProperty(
+      'AUTH_DEV_SECRET',
+    );
+    expect(containerEnvironment('worker', DATABASE_URL, RESOURCES)).toMatchObject({
+      COGNITO_USER_POOL_ID: USER_POOL.userPoolId,
+    });
+    expect(loadWorkerConfig(taskEnvironment('worker')).cognitoUserPool).toEqual({
+      region: 'us-east-1',
+      userPoolId: USER_POOL.userPoolId,
+    });
+  });
+
+  it('gives a dev environment the dev driver and no Cognito keys', () => {
+    const dev = { ...RESOURCES, signIn: { driver: 'dev' } } as const;
+    expect(containerEnvironment('api', DATABASE_URL, dev)).toMatchObject({ AUTH_DRIVER: 'dev' });
+    for (const container of ['api', 'worker'] as const) {
+      expect(Object.keys(containerEnvironment(container, DATABASE_URL, dev))).not.toContain(
+        'COGNITO_USER_POOL_ID',
+      );
+    }
+  });
+});
 
 describe('container environment', () => {
   // These run the processes' real config loaders, so a task that adds a required key to the
@@ -107,6 +162,34 @@ describe('container environment', () => {
       logLevel: 'info',
     });
     expect(containerSecretNames('migrate')).toEqual(['PGPASSWORD']);
+  });
+
+  it('reads sale emails from SES where the environment receives them, and none elsewhere', () => {
+    const saleEmail = {
+      inboundDomain: 'in.example.com',
+      queueUrl: 'https://sqs.us-east-1.amazonaws.com/111122223333/listora-staging-sale-email',
+      bucket: 'listora-staging-inbound-mail',
+      region: 'us-east-1',
+    };
+    const env = (container: ContainerName, resources: ServiceResources): NodeJS.ProcessEnv => ({
+      ...taskEnvironment(container),
+      ...containerEnvironment(container, DATABASE_URL, resources),
+    });
+    const ses = {
+      driver: 'ses',
+      inboundDomain: saleEmail.inboundDomain,
+      queueUrl: saleEmail.queueUrl,
+      bucket: saleEmail.bucket,
+      region: saleEmail.region,
+    };
+    expect(loadWorkerConfig(env('worker', { ...RESOURCES, saleEmail })).emailIngest).toEqual(ses);
+    expect(loadApiConfig(env('api', { ...RESOURCES, saleEmail })).emailIngest).toEqual(ses);
+    // Without a domain nothing is read, and never the folder driver's local inbox.
+    expect(loadWorkerConfig(taskEnvironment('worker')).emailIngest).toEqual({ driver: 'off' });
+    expect(loadApiConfig(taskEnvironment('api')).emailIngest).toEqual({ driver: 'off' });
+    expect(containerEnvironment('runner', DATABASE_URL, RESOURCES)).not.toHaveProperty(
+      'EMAIL_INGEST',
+    );
   });
 
   it('gets the database password only from the injected secret', () => {

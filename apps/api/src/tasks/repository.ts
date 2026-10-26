@@ -146,16 +146,21 @@ export async function lockTask(
     .executeTakeFirst();
 }
 
-/** Finishes a task that no operation waits on. */
+/** Finishes a task that no operation waits on; `saleId` is the sale a sale email's task recorded. */
 export async function settleTask(
   trx: DbTransaction,
   tenant: Tenant,
   taskId: string,
   status: 'done' | 'dismissed',
+  saleId?: string,
 ): Promise<void> {
   await trx
     .updateTable('user_task')
-    .set({ status, completed_at: sql<Date>`now()` })
+    .set({
+      status,
+      completed_at: sql<Date>`now()`,
+      ...(saleId === undefined ? {} : { sale_id: saleId }),
+    })
     .where('account_id', '=', tenant.accountId)
     .where('id', '=', taskId)
     .where('status', '=', 'open')
@@ -211,5 +216,16 @@ export async function coverPhotoRows(db: DbExecutor, tenant: Tenant, itemIds: re
     .where('account_id', '=', tenant.accountId)
     .where('item_id', 'in', [...itemIds])
     .where('position', '=', 0)
+    .execute();
+}
+
+/** The items a sale email's review task may be about, for its candidates. */
+export async function itemSummaryRows(db: DbExecutor, tenant: Tenant, itemIds: readonly string[]) {
+  if (itemIds.length === 0) return [];
+  return db
+    .selectFrom('inventory_item')
+    .select(['id', 'sku', 'title'])
+    .where('account_id', '=', tenant.accountId)
+    .where('id', 'in', [...itemIds])
     .execute();
 }

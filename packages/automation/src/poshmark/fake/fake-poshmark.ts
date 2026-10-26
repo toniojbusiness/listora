@@ -4,14 +4,16 @@
  * test ever sends traffic to the real Poshmark.
  *
  * It mirrors what Listora read on Poshmark's public pages (2026-10-24): listing and closet pages
- * that embed their data as `window.__INITIAL_STATE__` with Poshmark's own keys (listing records
- * with `inventory.status`, `price_amount.val`, and change times to the second), 24-hex listing
- * ids, closet filters and pages (`availability`, `sort_by`, `max_id`), and seller pages that send
- * a browser without a session to `/login?pmrd[url]=...`. The listing form, behind Poshmark's
+ * that embed their data as `window.__INITIAL_STATE__` in a script that removes itself once it
+ * ran, with Poshmark's own keys (listing records with `inventory.status`, `price_amount.val`, and
+ * change times to the second), 24-hex listing ids, closet filters and pages (`availability`,
+ * `sort_by`, `max_id`), and seller pages that send a browser without a session to
+ * `/login?pmrd[url]=...`. The listing form, behind Poshmark's
  * login, mirrors exactly what the adapter's form module expects (poshmark/pages/listing-form.ts),
  * with Poshmark's form rules. It injects every failure the adapter must stop at or recover from.
  *
  *   GET  /login                      the login page (a password field: no Listora session needs it)
+ *   POST /login                      log in by hand: any username and password; sets the session cookie
  *   GET  /create-listing             the listing form (a session is required)
  *   POST /create-listing             list
  *   GET  /listing/<title>-<id>       a listing's public page (also /listing/<id>)
@@ -301,6 +303,23 @@ export class FakePoshmark {
     };
 
     if (url.pathname === '/login') {
+      if (method === 'POST') {
+        // The seller logs in by hand, as on the app's Link accounts screen in development: any
+        // username with a password starts a session as that seller.
+        const form = await readForm(request);
+        const seller = form.text('login_form[username_email]');
+        if (seller !== '' && form.text('login_form[password]') !== '') {
+          const { value } = this.issueSession(seller);
+          send({
+            status: 303,
+            headers: {
+              location: `/closet/${encodeURIComponent(seller)}`,
+              'set-cookie': `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`,
+            },
+          });
+          return;
+        }
+      }
       send({ status: 200, body: page('Login - Poshmark', loginForm(), null) });
       return;
     }
@@ -947,6 +966,13 @@ ${badge === '' ? '' : `<span class="listing__status">${badge}</span>`}
 <div class="listing__description">${escape(listing.description)}</div></main>`;
 }
 
+/**
+ * Poshmark's own end of the script that embeds a page's data: it takes itself out of the page
+ * once it ran, so a ready page keeps the data only in its global (read 2026-10-26).
+ */
+const REMOVE_SELF =
+  '(function(){var s;(s=document.currentScript||document.scripts[document.scripts.length-1]).parentNode.removeChild(s);}());';
+
 /** A page with Poshmark's embedded data: who is logged in, and the page's own data. */
 function page(
   title: string,
@@ -961,7 +987,7 @@ function page(
     },
     ...data,
   };
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape(title)}</title></head><body>${body}<script>window.__INITIAL_STATE__=${json(state)}</script></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escape(title)}</title></head><body>${body}<script>window.__INITIAL_STATE__=${json(state)};${REMOVE_SELF}</script></body></html>`;
 }
 
 function notFound(seller: string | null): string {

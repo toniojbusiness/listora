@@ -50,7 +50,13 @@ export function registerListingRoutes(app: FastifyInstance, deps: ItemRouteDepen
       // Sharing the listing an open list task asked for is the user saying they posted it.
       const taskId = await openListTaskFor(trx, tenant, item.id, identity.marketplace);
       if (taskId !== undefined) {
-        const task = await completeUserTask(trx, tenant, taskId, { externalUrl: body.url });
+        const task = await completeUserTask(
+          trx,
+          tenant,
+          taskId,
+          { externalUrl: body.url },
+          deps.connections.adapters.lookup,
+        );
         const row =
           task.listing_id === null ? undefined : await findListing(trx, tenant, task.listing_id);
         const [state] = row === undefined ? [] : await listingStates(trx, tenant, [row]);

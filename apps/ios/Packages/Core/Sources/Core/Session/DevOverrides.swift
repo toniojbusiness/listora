@@ -31,6 +31,8 @@
                       environment: configuration.environment,
                       apiBaseURL: url,
                       appGroupIdentifier: configuration.appGroupIdentifier,
+                      sessionKeychainGroup: configuration.sessionKeychainGroup,
+                      cognito: configuration.cognito,
                   )
             else { return configuration }
             return overridden

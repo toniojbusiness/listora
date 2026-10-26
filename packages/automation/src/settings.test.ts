@@ -76,12 +76,43 @@ describe('loadAutomationSettings', () => {
     ]);
   });
 
+  it('keeps the marketplaces that refuse the cloud off it, unless configured back', () => {
+    const defaults = loadAutomationSettings({});
+    expect(defaults.profiles.poshmark).toMatchObject({ runsOn: 'phone', cloudAllowed: false });
+    expect(defaults.profiles.mercari).toMatchObject({ runsOn: 'phone', cloudAllowed: false });
+    expect(defaults.profiles.depop).toMatchObject({ runsOn: 'phone', cloudAllowed: false });
+    expect(defaults.profiles.ebay).toMatchObject({ runsOn: 'cloud', cloudAllowed: true });
+
+    const reopened = loadAutomationSettings({
+      AUTOMATION_DEPOP_CLOUD_ALLOWED: 'true',
+      AUTOMATION_DEPOP_RUNS_ON: 'cloud',
+    });
+    expect(reopened.profiles.depop).toMatchObject({ runsOn: 'cloud', cloudAllowed: true });
+  });
+
+  it('refuses a cloud default for a marketplace the cloud is not allowed for', () => {
+    expect(() =>
+      loadAutomationSettings({
+        AUTOMATION_MERCARI_RUNS_ON: 'cloud',
+        AUTOMATION_EBAY_CLOUD_ALLOWED: 'yes',
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        issues: [
+          'AUTOMATION_MERCARI_RUNS_ON can be cloud only when AUTOMATION_MERCARI_CLOUD_ALLOWED is true',
+          'AUTOMATION_EBAY_CLOUD_ALLOWED must be true or false',
+        ],
+      }),
+    );
+  });
+
   it('points every automated marketplace at the fake site, local only', () => {
     const settings = loadAutomationSettings({ FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400' });
     expect(settings.fakeSiteUrl).toBe('http://127.0.0.1:4400');
     expect(settings.profiles.mercari).toMatchObject({
       origins: ['http://127.0.0.1:4400'],
       cookieDomains: ['127.0.0.1'],
+      loginUrl: 'http://127.0.0.1:4400/login/',
     });
     expect(() =>
       loadAutomationSettings({ FAKE_AUTOMATION_SITE_URL: 'https://poshmark.com' }),
@@ -137,6 +168,33 @@ describe('loadAutomationSettings', () => {
     });
     expect(() => loadAutomationSettings({ FAKE_DEPOP_SITE_URL: 'https://www.depop.com' })).toThrow(
       'FAKE_DEPOP_SITE_URL',
+    );
+  });
+
+  it('points eBay at the fake eBay site, which wins over the fake site, local only', () => {
+    const settings = loadAutomationSettings({
+      FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400',
+      FAKE_EBAY_SITE_URL: 'http://127.0.0.1:4800',
+    });
+    expect(settings.fakeEbaySiteUrl).toBe('http://127.0.0.1:4800');
+    expect(settings.profiles.ebay).toMatchObject({
+      origins: ['http://127.0.0.1:4800'],
+      cookieDomains: ['127.0.0.1'],
+      // eBay's own sign-in path, on the stand-in.
+      loginUrl: 'http://127.0.0.1:4800/signin/',
+    });
+    expect(settings.profiles.depop.origins).toEqual(['http://127.0.0.1:4400']);
+    expect(
+      loadAutomationSettings({ FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400' }).profiles.ebay
+        .loginUrl,
+    ).toBe('http://127.0.0.1:4400/signin/');
+    expect(loadAutomationSettings({}).profiles.ebay).toMatchObject({
+      origins: ['https://www.ebay.com', 'https://ebay.com', 'https://signin.ebay.com'],
+      cookieDomains: ['ebay.com'],
+      loginUrl: 'https://signin.ebay.com/signin/',
+    });
+    expect(() => loadAutomationSettings({ FAKE_EBAY_SITE_URL: 'https://www.ebay.com' })).toThrow(
+      'FAKE_EBAY_SITE_URL',
     );
   });
 });

@@ -52,6 +52,27 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `DELETE /v1/account`.
     /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)`.
     func deleteAccount(_ input: Operations.DeleteAccount.Input) async throws -> Operations.DeleteAccount.Output
+    /// Get my profile
+    ///
+    /// What Settings shows about the signed-in person: their email from the sign-in provider
+    /// (read-only), the name they go by, and the business they sell as. A name absent from the
+    /// response was never entered (or was cleared).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/account/profile`.
+    /// - Remark: Generated from `#/paths//v1/account/profile/get(getProfile)`.
+    func getProfile(_ input: Operations.GetProfile.Input) async throws -> Operations.GetProfile.Output
+    /// Replace my profile
+    ///
+    /// Saves the person's name and the account's business name. The body replaces both: a name
+    /// left out is cleared. The server trims each name; one that is blank after trimming is
+    /// `422 validation_failed`. The email cannot be changed here. The business name belongs to
+    /// the account, so a member who is not its owner or an admin gets `403 forbidden`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/account/profile`.
+    /// - Remark: Generated from `#/paths//v1/account/profile/put(replaceProfile)`.
+    func replaceProfile(_ input: Operations.ReplaceProfile.Input) async throws -> Operations.ReplaceProfile.Output
     /// List items
     ///
     /// Newest first. Filters combine with AND.
@@ -200,6 +221,61 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/analyses/{analysisId}/apply`.
     /// - Remark: Generated from `#/paths//v1/analyses/{analysisId}/apply/post(applyAnalysis)`.
     func applyAnalysis(_ input: Operations.ApplyAnalysis.Input) async throws -> Operations.ApplyAnalysis.Output
+    /// Start a batch
+    ///
+    /// Starts an empty batch: the items of one haul, photographed in one session. Add one item
+    /// per physical item with `addItemBatchItem`, attach its photos as for any item, then
+    /// `submitItemBatchItem`: the server starts its analysis once the photos are processed.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/post(createItemBatch)`.
+    func createItemBatch(_ input: Operations.CreateItemBatch.Input) async throws -> Operations.CreateItemBatch.Output
+    /// Get a batch
+    ///
+    /// The batch's items in haul order, each with where it is (`state` and the server's
+    /// `statusDisplay`), and how many are in each state. Poll it while items upload and
+    /// analyze; every state comes from the items, photos, and analyses themselves.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/item-batches/{batchId}`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/get(getItemBatch)`.
+    func getItemBatch(_ input: Operations.GetItemBatch.Input) async throws -> Operations.GetItemBatch.Output
+    /// Add an item to a batch
+    ///
+    /// Creates a `draft` item (with its SKU) at `position` in the batch. A position the batch
+    /// already has answers `200` with that item instead of creating another, so an app that
+    /// submits its batch again, even after the Idempotency-Key has expired, never creates an
+    /// item twice.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches/{batchId}/items`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/items/post(addItemBatchItem)`.
+    func addItemBatchItem(_ input: Operations.AddItemBatchItem.Input) async throws -> Operations.AddItemBatchItem.Output
+    /// Analyze a batch item once its photos are ready
+    ///
+    /// Says the app has attached all `photoCount` photos of the item. The server starts the
+    /// item's analysis as soon as they are processed, under the same rules as
+    /// `startItemAnalysis`: an existing analysis of the photo set is kept, a failed one is
+    /// queued again, and the AI guards are checked first. A refusal (the daily AI budget, the
+    /// plan's quota, AI switched off) shows on the item as a `failed` state with its reason
+    /// instead of an error here. Submitting again is the item's Retry. `409
+    /// invalid_state_transition` when the item does not have `photoCount` photos yet.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches/{batchId}/items/{itemId}/submit`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/items/{itemId}/submit/post(submitItemBatchItem)`.
+    func submitItemBatchItem(_ input: Operations.SubmitItemBatchItem.Input) async throws -> Operations.SubmitItemBatchItem.Output
+    /// Record the seller's interaction with a batch
+    ///
+    /// Replaces the interaction the app measured for the batch (from its first photo to its
+    /// last saved item) and each item's share of it. An item left out has none. `422` when an
+    /// `itemId` is not an item of the batch.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/item-batches/{batchId}/interaction`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/interaction/put(replaceItemBatchInteraction)`.
+    func replaceItemBatchInteraction(_ input: Operations.ReplaceItemBatchInteraction.Input) async throws -> Operations.ReplaceItemBatchInteraction.Output
     /// Get the plan's quota use
     ///
     /// The account's use of each plan quota in the current period (the UTC calendar month
@@ -211,6 +287,26 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/usage`.
     /// - Remark: Generated from `#/paths//v1/usage/get(getUsage)`.
     func getUsage(_ input: Operations.GetUsage.Input) async throws -> Operations.GetUsage.Output
+    /// Interpret a spoken correction the app could not parse
+    ///
+    /// Maps the short text of a spoken correction on the review screen ("the pattern is
+    /// houndstooth, it's from the nineties") to proposed detail changes, with the cheap text
+    /// model. The app transcribes speech on the device and parses routine phrases itself, so
+    /// it sends only the phrases its own parser could not map, and only their text, never
+    /// audio. The answer is a proposal: nothing is changed on the item, and the app shows each
+    /// change for the seller to accept or undo before it saves anything (`replaceItem`).
+    /// Canonical details (category, department, size type, colors, pattern, materials,
+    /// condition) hold canonical values only, and `cost` and `listPrice` carry an `amount`;
+    /// every other change carries a `value`. A phrase the model could not map is left out, so
+    /// `changes` may be empty. The call is metered and counted in the account's daily AI
+    /// budget like every AI call, but uses no plan quota: `429 ai_budget_exceeded` when the
+    /// budget is used up, `503 service_unavailable` while AI is switched off or the model
+    /// could not answer (retryable), and `403 forbidden` when AI is turned off for the account.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/items/{itemId}/voice-corrections`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/voice-corrections/post(interpretVoiceCorrection)`.
+    func interpretVoiceCorrection(_ input: Operations.InterpretVoiceCorrection.Input) async throws -> Operations.InterpretVoiceCorrection.Output
     /// Get price suggestions for an item
     ///
     /// Every number carries its source. Without real sold data the response has no
@@ -404,8 +500,12 @@ public protocol APIProtocol: Sendable {
     func getConnection(_ input: Operations.GetConnection.Input) async throws -> Operations.GetConnection.Output
     /// Disconnect a marketplace account
     ///
-    /// Revokes and deletes the stored tokens. Existing listings stay on the marketplace but
-    /// Listora can no longer change or verify them until the account is connected again.
+    /// Unlinks the marketplace: deletes the stored tokens or session and the marketplace data
+    /// that came through the connection (the marketplace's user id and name, listing read-backs,
+    /// marketplace events, automation runs and their screenshots), and asks the marketplace to
+    /// revoke Listora's access. Items, listings, and sales stay. Existing listings stay on the
+    /// marketplace but Listora can no longer change or verify them until the account is
+    /// connected again. `404` when no account of the marketplace is linked.
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/connections/{marketplace}`.
@@ -448,17 +548,33 @@ public protocol APIProtocol: Sendable {
     func handleConnectionCallback(_ input: Operations.HandleConnectionCallback.Input) async throws -> Operations.HandleConnectionCallback.Output
     /// Check a marketplace connection now (Retry check)
     ///
-    /// Queues the same cheap read the daily health check makes, for this connection only. The
-    /// answer is the connection with a `Checking` status; read it again (or
-    /// `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
-    /// connection with a problem. `409 invalid_state_transition` for a connection a check
-    /// cannot change (not connected, or waiting for the seller to reconnect);
-    /// `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+    /// Queues the same cheap read the daily health check makes, for this connection only. For
+    /// an automation connection it asks for a check of the sign-in already linked again, where
+    /// the connection runs (the browser runner or the seller's iPhone), as after linking (`getMarketplaceSession`), without the seller signing in again;
+    /// a check still running is left to finish. The answer is the connection with a `Checking`
+    /// status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
+    /// the check found. Offered as the `check` action on a connection with a problem.
+    /// `409 invalid_state_transition` for a connection a check cannot change (not connected,
+    /// or waiting for the seller to reconnect or link again); `409
+    /// marketplace_action_unavailable` when this server cannot check the marketplace.
     ///
     ///
     /// - Remark: HTTP `POST /v1/connections/{marketplace}/checks`.
     /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/checks/post(requestConnectionCheck)`.
     func requestConnectionCheck(_ input: Operations.RequestConnectionCheck.Input) async throws -> Operations.RequestConnectionCheck.Output
+    /// Choose where a connection's automated steps run
+    ///
+    /// Moves the connection's automated steps to Listora's cloud browser runner or to the
+    /// iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
+    /// moves to the cloud with it; a run the phone is in the middle of finishes there.
+    /// `409 invalid_state_transition` for a marketplace that is not linked by signing in;
+    /// `409 marketplace_action_unavailable` for a move to the cloud of a marketplace that
+    /// refuses Listora's cloud servers (`execution.cloudAllowed` false).
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/connections/{marketplace}/execution`.
+    /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/execution/put(setConnectionExecution)`.
+    func setConnectionExecution(_ input: Operations.SetConnectionExecution.Input) async throws -> Operations.SetConnectionExecution.Output
     /// The account's connection health summary
     ///
     /// Every marketplace's connection (as `listConnections`), what needs the seller's
@@ -469,6 +585,49 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/connection-health`.
     /// - Remark: Generated from `#/paths//v1/connection-health/get(getConnectionHealth)`.
     func getConnectionHealth(_ input: Operations.GetConnectionHealth.Input) async throws -> Operations.GetConnectionHealth.Output
+    /// List the marketplaces linked by signing in
+    ///
+    /// One entry per marketplace whose connection can be a browser session (`connect:
+    /// session`): Poshmark, Mercari, Depop, and eBay (Depop and eBay until their APIs are
+    /// connected; an API connection is `api_connected`). Each says whether it is linked, where
+    /// the app opens the marketplace's sign-in page, and which cookies to hand over. Not
+    /// paginated.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-sessions`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/get(listMarketplaceSessions)`.
+    func listMarketplaceSessions(_ input: Operations.ListMarketplaceSessions.Input) async throws -> Operations.ListMarketplaceSessions.Output
+    /// Get one marketplace's sign-in link
+    ///
+    /// The app polls this after `linkMarketplaceSession` until `status` is no longer
+    /// `checking`. `404` for a marketplace that is not linked by signing in.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-sessions/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/{marketplace}/get(getMarketplaceSession)`.
+    func getMarketplaceSession(_ input: Operations.GetMarketplaceSession.Input) async throws -> Operations.GetMarketplaceSession.Output
+    /// Link a marketplace with the session the user signed into in the app
+    ///
+    /// The user signed into the marketplace's own sign-in page (`login.url`) inside the app,
+    /// in a web view with its own data store, including any two-step check. The app sends
+    /// that site's cookies (only those on `login.cookieDomains`), never the password, which
+    /// Listora never sees. The server stores them encrypted with the token key (KMS envelope
+    /// encryption) on the account's automation connection for the marketplace, and asks for one
+    /// read-only check that the marketplace accepts them, where the connection runs: the
+    /// browser runner, or the iPhone that linked it (`installationId`). The reply is
+    /// `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
+    /// takes the same way and replaces the earlier session. Cookie values are never logged
+    /// or returned.
+    ///
+    /// `404` for a marketplace that is not linked by signing in. `409
+    /// marketplace_action_unavailable` when the marketplace is connected through its API.
+    /// `422 validation_failed` (field `cookies`) when a cookie is on another site's domain,
+    /// every cookie has expired, or there are none.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/marketplace-sessions/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/{marketplace}/post(linkMarketplaceSession)`.
+    func linkMarketplaceSession(_ input: Operations.LinkMarketplaceSession.Input) async throws -> Operations.LinkMarketplaceSession.Output
     /// List sales
     ///
     /// The sales feed, newest first (by when Listora recorded them), each with its delist runs.
@@ -593,6 +752,85 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/tasks/{taskId}/dismiss`.
     /// - Remark: Generated from `#/paths//v1/tasks/{taskId}/dismiss/post(dismissTask)`.
     func dismissTask(_ input: Operations.DismissTask.Input) async throws -> Operations.DismissTask.Output
+    /// Get the sale email forwarding address and its status
+    ///
+    /// The account's forwarding address (created on first use), the setup steps, the provider's
+    /// forwarding confirmation while it waits, and the "ask before auto-delist" setting.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sale-emails`.
+    /// - Remark: Generated from `#/paths//v1/sale-emails/get(getSaleEmails)`.
+    func getSaleEmails(_ input: Operations.GetSaleEmails.Input) async throws -> Operations.GetSaleEmails.Output
+    /// Replace the sale email setting
+    ///
+    /// Turns "ask before auto-delist" on or off for sales found by email.
+    ///
+    /// - Remark: HTTP `PUT /v1/sale-emails/settings`.
+    /// - Remark: Generated from `#/paths//v1/sale-emails/settings/put(replaceSaleEmailSettings)`.
+    func replaceSaleEmailSettings(_ input: Operations.ReplaceSaleEmailSettings.Input) async throws -> Operations.ReplaceSaleEmailSettings.Output
+    /// Get what needs the seller today
+    ///
+    /// The Today screen: one card per thing that needs the seller (items to ship, delists that
+    /// are not done, connections to reconnect, drafts to review, and old listings that could use
+    /// a price drop or a relist), most urgent first, and the money summary. Computed from the
+    /// account's own data on every request, with no AI and no marketplace call, so the app asks
+    /// for it each time it opens. A card is gone once its work is done.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/today`.
+    /// - Remark: Generated from `#/paths//v1/today/get(getToday)`.
+    func getToday(_ input: Operations.GetToday.Input) async throws -> Operations.GetToday.Output
+    /// Get the morning summary setting
+    ///
+    /// The account's morning summary notification setting (defaults until saved).
+    ///
+    /// - Remark: HTTP `GET /v1/today/settings`.
+    /// - Remark: Generated from `#/paths//v1/today/settings/get(getTodaySettings)`.
+    func getTodaySettings(_ input: Operations.GetTodaySettings.Input) async throws -> Operations.GetTodaySettings.Output
+    /// Replace the morning summary setting
+    ///
+    /// Turns the morning summary on or off and sets its time, in the device's time zone. A time
+    /// zone the server does not know is `422 validation_failed`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/today/settings`.
+    /// - Remark: Generated from `#/paths//v1/today/settings/put(replaceTodaySettings)`.
+    func replaceTodaySettings(_ input: Operations.ReplaceTodaySettings.Input) async throws -> Operations.ReplaceTodaySettings.Output
+    /// Register this device
+    ///
+    /// The app registers its installation (an id it keeps in its Keychain) on every launch and
+    /// whenever its APNs token changes: its name, the phone runtime version it speaks, and
+    /// where push notifications reach it. The device that links a marketplace runs that
+    /// marketplace's automated steps when they run on the phone.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/devices/{installationId}`.
+    /// - Remark: Generated from `#/paths//v1/devices/{installationId}/put(registerDevice)`.
+    func registerDevice(_ input: Operations.RegisterDevice.Input) async throws -> Operations.RegisterDevice.Output
+    /// Claim the next work waiting for this phone
+    ///
+    /// Claims the next due work waiting for the device (delists after a sale first) and
+    /// returns its first script call; no `run` when nothing waits. The claim holds for a few
+    /// minutes from each call and answer; a phone that stops answering lets it lapse, and the
+    /// work is recovered on the server. `409 app_update_required` when the app's runtime
+    /// speaks another version of calls than the server's.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/phone-runs`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/post(claimPhoneRun)`.
+    func claimPhoneRun(_ input: Operations.ClaimPhoneRun.Input) async throws -> Operations.ClaimPhoneRun.Output
+    /// Answer a phone call of a run
+    ///
+    /// The phone's answer for the run's call `index`, as its runtime returned it. The server
+    /// records it, runs the work on with it, and returns the next call; no `run` once the work
+    /// is done (its result recorded). Sending the same answer again changes nothing. `404`
+    /// when the run is over or lapsed; `409 invalid_state_transition` for an answer to a call
+    /// the run is not waiting for.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/phone-runs/{runId}/calls/{index}`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/{runId}/calls/{index}/put(answerPhoneCall)`.
+    func answerPhoneCall(_ input: Operations.AnswerPhoneCall.Input) async throws -> Operations.AnswerPhoneCall.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -647,6 +885,37 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/account/delete(deleteAccount)`.
     public func deleteAccount(headers: Operations.DeleteAccount.Input.Headers = .init()) async throws -> Operations.DeleteAccount.Output {
         try await deleteAccount(Operations.DeleteAccount.Input(headers: headers))
+    }
+    /// Get my profile
+    ///
+    /// What Settings shows about the signed-in person: their email from the sign-in provider
+    /// (read-only), the name they go by, and the business they sell as. A name absent from the
+    /// response was never entered (or was cleared).
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/account/profile`.
+    /// - Remark: Generated from `#/paths//v1/account/profile/get(getProfile)`.
+    public func getProfile(headers: Operations.GetProfile.Input.Headers = .init()) async throws -> Operations.GetProfile.Output {
+        try await getProfile(Operations.GetProfile.Input(headers: headers))
+    }
+    /// Replace my profile
+    ///
+    /// Saves the person's name and the account's business name. The body replaces both: a name
+    /// left out is cleared. The server trims each name; one that is blank after trimming is
+    /// `422 validation_failed`. The email cannot be changed here. The business name belongs to
+    /// the account, so a member who is not its owner or an admin gets `403 forbidden`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/account/profile`.
+    /// - Remark: Generated from `#/paths//v1/account/profile/put(replaceProfile)`.
+    public func replaceProfile(
+        headers: Operations.ReplaceProfile.Input.Headers = .init(),
+        body: Operations.ReplaceProfile.Input.Body
+    ) async throws -> Operations.ReplaceProfile.Output {
+        try await replaceProfile(Operations.ReplaceProfile.Input(
+            headers: headers,
+            body: body
+        ))
     }
     /// List items
     ///
@@ -934,6 +1203,101 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// Start a batch
+    ///
+    /// Starts an empty batch: the items of one haul, photographed in one session. Add one item
+    /// per physical item with `addItemBatchItem`, attach its photos as for any item, then
+    /// `submitItemBatchItem`: the server starts its analysis once the photos are processed.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/post(createItemBatch)`.
+    public func createItemBatch(headers: Operations.CreateItemBatch.Input.Headers) async throws -> Operations.CreateItemBatch.Output {
+        try await createItemBatch(Operations.CreateItemBatch.Input(headers: headers))
+    }
+    /// Get a batch
+    ///
+    /// The batch's items in haul order, each with where it is (`state` and the server's
+    /// `statusDisplay`), and how many are in each state. Poll it while items upload and
+    /// analyze; every state comes from the items, photos, and analyses themselves.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/item-batches/{batchId}`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/get(getItemBatch)`.
+    public func getItemBatch(
+        path: Operations.GetItemBatch.Input.Path,
+        headers: Operations.GetItemBatch.Input.Headers = .init()
+    ) async throws -> Operations.GetItemBatch.Output {
+        try await getItemBatch(Operations.GetItemBatch.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Add an item to a batch
+    ///
+    /// Creates a `draft` item (with its SKU) at `position` in the batch. A position the batch
+    /// already has answers `200` with that item instead of creating another, so an app that
+    /// submits its batch again, even after the Idempotency-Key has expired, never creates an
+    /// item twice.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches/{batchId}/items`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/items/post(addItemBatchItem)`.
+    public func addItemBatchItem(
+        path: Operations.AddItemBatchItem.Input.Path,
+        headers: Operations.AddItemBatchItem.Input.Headers,
+        body: Operations.AddItemBatchItem.Input.Body
+    ) async throws -> Operations.AddItemBatchItem.Output {
+        try await addItemBatchItem(Operations.AddItemBatchItem.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Analyze a batch item once its photos are ready
+    ///
+    /// Says the app has attached all `photoCount` photos of the item. The server starts the
+    /// item's analysis as soon as they are processed, under the same rules as
+    /// `startItemAnalysis`: an existing analysis of the photo set is kept, a failed one is
+    /// queued again, and the AI guards are checked first. A refusal (the daily AI budget, the
+    /// plan's quota, AI switched off) shows on the item as a `failed` state with its reason
+    /// instead of an error here. Submitting again is the item's Retry. `409
+    /// invalid_state_transition` when the item does not have `photoCount` photos yet.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/item-batches/{batchId}/items/{itemId}/submit`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/items/{itemId}/submit/post(submitItemBatchItem)`.
+    public func submitItemBatchItem(
+        path: Operations.SubmitItemBatchItem.Input.Path,
+        headers: Operations.SubmitItemBatchItem.Input.Headers,
+        body: Operations.SubmitItemBatchItem.Input.Body
+    ) async throws -> Operations.SubmitItemBatchItem.Output {
+        try await submitItemBatchItem(Operations.SubmitItemBatchItem.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Record the seller's interaction with a batch
+    ///
+    /// Replaces the interaction the app measured for the batch (from its first photo to its
+    /// last saved item) and each item's share of it. An item left out has none. `422` when an
+    /// `itemId` is not an item of the batch.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/item-batches/{batchId}/interaction`.
+    /// - Remark: Generated from `#/paths//v1/item-batches/{batchId}/interaction/put(replaceItemBatchInteraction)`.
+    public func replaceItemBatchInteraction(
+        path: Operations.ReplaceItemBatchInteraction.Input.Path,
+        headers: Operations.ReplaceItemBatchInteraction.Input.Headers = .init(),
+        body: Operations.ReplaceItemBatchInteraction.Input.Body
+    ) async throws -> Operations.ReplaceItemBatchInteraction.Output {
+        try await replaceItemBatchInteraction(Operations.ReplaceItemBatchInteraction.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
     /// Get the plan's quota use
     ///
     /// The account's use of each plan quota in the current period (the UTC calendar month
@@ -946,6 +1310,36 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/usage/get(getUsage)`.
     public func getUsage(headers: Operations.GetUsage.Input.Headers = .init()) async throws -> Operations.GetUsage.Output {
         try await getUsage(Operations.GetUsage.Input(headers: headers))
+    }
+    /// Interpret a spoken correction the app could not parse
+    ///
+    /// Maps the short text of a spoken correction on the review screen ("the pattern is
+    /// houndstooth, it's from the nineties") to proposed detail changes, with the cheap text
+    /// model. The app transcribes speech on the device and parses routine phrases itself, so
+    /// it sends only the phrases its own parser could not map, and only their text, never
+    /// audio. The answer is a proposal: nothing is changed on the item, and the app shows each
+    /// change for the seller to accept or undo before it saves anything (`replaceItem`).
+    /// Canonical details (category, department, size type, colors, pattern, materials,
+    /// condition) hold canonical values only, and `cost` and `listPrice` carry an `amount`;
+    /// every other change carries a `value`. A phrase the model could not map is left out, so
+    /// `changes` may be empty. The call is metered and counted in the account's daily AI
+    /// budget like every AI call, but uses no plan quota: `429 ai_budget_exceeded` when the
+    /// budget is used up, `503 service_unavailable` while AI is switched off or the model
+    /// could not answer (retryable), and `403 forbidden` when AI is turned off for the account.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/items/{itemId}/voice-corrections`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/voice-corrections/post(interpretVoiceCorrection)`.
+    public func interpretVoiceCorrection(
+        path: Operations.InterpretVoiceCorrection.Input.Path,
+        headers: Operations.InterpretVoiceCorrection.Input.Headers,
+        body: Operations.InterpretVoiceCorrection.Input.Body
+    ) async throws -> Operations.InterpretVoiceCorrection.Output {
+        try await interpretVoiceCorrection(Operations.InterpretVoiceCorrection.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
     }
     /// Get price suggestions for an item
     ///
@@ -1318,8 +1712,12 @@ extension APIProtocol {
     }
     /// Disconnect a marketplace account
     ///
-    /// Revokes and deletes the stored tokens. Existing listings stay on the marketplace but
-    /// Listora can no longer change or verify them until the account is connected again.
+    /// Unlinks the marketplace: deletes the stored tokens or session and the marketplace data
+    /// that came through the connection (the marketplace's user id and name, listing read-backs,
+    /// marketplace events, automation runs and their screenshots), and asks the marketplace to
+    /// revoke Listora's access. Items, listings, and sales stay. Existing listings stay on the
+    /// marketplace but Listora can no longer change or verify them until the account is
+    /// connected again. `404` when no account of the marketplace is linked.
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/connections/{marketplace}`.
@@ -1396,12 +1794,15 @@ extension APIProtocol {
     }
     /// Check a marketplace connection now (Retry check)
     ///
-    /// Queues the same cheap read the daily health check makes, for this connection only. The
-    /// answer is the connection with a `Checking` status; read it again (or
-    /// `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
-    /// connection with a problem. `409 invalid_state_transition` for a connection a check
-    /// cannot change (not connected, or waiting for the seller to reconnect);
-    /// `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+    /// Queues the same cheap read the daily health check makes, for this connection only. For
+    /// an automation connection it asks for a check of the sign-in already linked again, where
+    /// the connection runs (the browser runner or the seller's iPhone), as after linking (`getMarketplaceSession`), without the seller signing in again;
+    /// a check still running is left to finish. The answer is the connection with a `Checking`
+    /// status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
+    /// the check found. Offered as the `check` action on a connection with a problem.
+    /// `409 invalid_state_transition` for a connection a check cannot change (not connected,
+    /// or waiting for the seller to reconnect or link again); `409
+    /// marketplace_action_unavailable` when this server cannot check the marketplace.
     ///
     ///
     /// - Remark: HTTP `POST /v1/connections/{marketplace}/checks`.
@@ -1415,6 +1816,29 @@ extension APIProtocol {
             headers: headers
         ))
     }
+    /// Choose where a connection's automated steps run
+    ///
+    /// Moves the connection's automated steps to Listora's cloud browser runner or to the
+    /// iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
+    /// moves to the cloud with it; a run the phone is in the middle of finishes there.
+    /// `409 invalid_state_transition` for a marketplace that is not linked by signing in;
+    /// `409 marketplace_action_unavailable` for a move to the cloud of a marketplace that
+    /// refuses Listora's cloud servers (`execution.cloudAllowed` false).
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/connections/{marketplace}/execution`.
+    /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/execution/put(setConnectionExecution)`.
+    public func setConnectionExecution(
+        path: Operations.SetConnectionExecution.Input.Path,
+        headers: Operations.SetConnectionExecution.Input.Headers = .init(),
+        body: Operations.SetConnectionExecution.Input.Body
+    ) async throws -> Operations.SetConnectionExecution.Output {
+        try await setConnectionExecution(Operations.SetConnectionExecution.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
     /// The account's connection health summary
     ///
     /// Every marketplace's connection (as `listConnections`), what needs the seller's
@@ -1426,6 +1850,69 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/connection-health/get(getConnectionHealth)`.
     public func getConnectionHealth(headers: Operations.GetConnectionHealth.Input.Headers = .init()) async throws -> Operations.GetConnectionHealth.Output {
         try await getConnectionHealth(Operations.GetConnectionHealth.Input(headers: headers))
+    }
+    /// List the marketplaces linked by signing in
+    ///
+    /// One entry per marketplace whose connection can be a browser session (`connect:
+    /// session`): Poshmark, Mercari, Depop, and eBay (Depop and eBay until their APIs are
+    /// connected; an API connection is `api_connected`). Each says whether it is linked, where
+    /// the app opens the marketplace's sign-in page, and which cookies to hand over. Not
+    /// paginated.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-sessions`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/get(listMarketplaceSessions)`.
+    public func listMarketplaceSessions(headers: Operations.ListMarketplaceSessions.Input.Headers = .init()) async throws -> Operations.ListMarketplaceSessions.Output {
+        try await listMarketplaceSessions(Operations.ListMarketplaceSessions.Input(headers: headers))
+    }
+    /// Get one marketplace's sign-in link
+    ///
+    /// The app polls this after `linkMarketplaceSession` until `status` is no longer
+    /// `checking`. `404` for a marketplace that is not linked by signing in.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/marketplace-sessions/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/{marketplace}/get(getMarketplaceSession)`.
+    public func getMarketplaceSession(
+        path: Operations.GetMarketplaceSession.Input.Path,
+        headers: Operations.GetMarketplaceSession.Input.Headers = .init()
+    ) async throws -> Operations.GetMarketplaceSession.Output {
+        try await getMarketplaceSession(Operations.GetMarketplaceSession.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Link a marketplace with the session the user signed into in the app
+    ///
+    /// The user signed into the marketplace's own sign-in page (`login.url`) inside the app,
+    /// in a web view with its own data store, including any two-step check. The app sends
+    /// that site's cookies (only those on `login.cookieDomains`), never the password, which
+    /// Listora never sees. The server stores them encrypted with the token key (KMS envelope
+    /// encryption) on the account's automation connection for the marketplace, and asks for one
+    /// read-only check that the marketplace accepts them, where the connection runs: the
+    /// browser runner, or the iPhone that linked it (`installationId`). The reply is
+    /// `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
+    /// takes the same way and replaces the earlier session. Cookie values are never logged
+    /// or returned.
+    ///
+    /// `404` for a marketplace that is not linked by signing in. `409
+    /// marketplace_action_unavailable` when the marketplace is connected through its API.
+    /// `422 validation_failed` (field `cookies`) when a cookie is on another site's domain,
+    /// every cookie has expired, or there are none.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/marketplace-sessions/{marketplace}`.
+    /// - Remark: Generated from `#/paths//v1/marketplace-sessions/{marketplace}/post(linkMarketplaceSession)`.
+    public func linkMarketplaceSession(
+        path: Operations.LinkMarketplaceSession.Input.Path,
+        headers: Operations.LinkMarketplaceSession.Input.Headers,
+        body: Operations.LinkMarketplaceSession.Input.Body
+    ) async throws -> Operations.LinkMarketplaceSession.Output {
+        try await linkMarketplaceSession(Operations.LinkMarketplaceSession.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
     }
     /// List sales
     ///
@@ -1659,6 +2146,135 @@ extension APIProtocol {
         try await dismissTask(Operations.DismissTask.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Get the sale email forwarding address and its status
+    ///
+    /// The account's forwarding address (created on first use), the setup steps, the provider's
+    /// forwarding confirmation while it waits, and the "ask before auto-delist" setting.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/sale-emails`.
+    /// - Remark: Generated from `#/paths//v1/sale-emails/get(getSaleEmails)`.
+    public func getSaleEmails(headers: Operations.GetSaleEmails.Input.Headers = .init()) async throws -> Operations.GetSaleEmails.Output {
+        try await getSaleEmails(Operations.GetSaleEmails.Input(headers: headers))
+    }
+    /// Replace the sale email setting
+    ///
+    /// Turns "ask before auto-delist" on or off for sales found by email.
+    ///
+    /// - Remark: HTTP `PUT /v1/sale-emails/settings`.
+    /// - Remark: Generated from `#/paths//v1/sale-emails/settings/put(replaceSaleEmailSettings)`.
+    public func replaceSaleEmailSettings(
+        headers: Operations.ReplaceSaleEmailSettings.Input.Headers = .init(),
+        body: Operations.ReplaceSaleEmailSettings.Input.Body
+    ) async throws -> Operations.ReplaceSaleEmailSettings.Output {
+        try await replaceSaleEmailSettings(Operations.ReplaceSaleEmailSettings.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Get what needs the seller today
+    ///
+    /// The Today screen: one card per thing that needs the seller (items to ship, delists that
+    /// are not done, connections to reconnect, drafts to review, and old listings that could use
+    /// a price drop or a relist), most urgent first, and the money summary. Computed from the
+    /// account's own data on every request, with no AI and no marketplace call, so the app asks
+    /// for it each time it opens. A card is gone once its work is done.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/today`.
+    /// - Remark: Generated from `#/paths//v1/today/get(getToday)`.
+    public func getToday(headers: Operations.GetToday.Input.Headers = .init()) async throws -> Operations.GetToday.Output {
+        try await getToday(Operations.GetToday.Input(headers: headers))
+    }
+    /// Get the morning summary setting
+    ///
+    /// The account's morning summary notification setting (defaults until saved).
+    ///
+    /// - Remark: HTTP `GET /v1/today/settings`.
+    /// - Remark: Generated from `#/paths//v1/today/settings/get(getTodaySettings)`.
+    public func getTodaySettings(headers: Operations.GetTodaySettings.Input.Headers = .init()) async throws -> Operations.GetTodaySettings.Output {
+        try await getTodaySettings(Operations.GetTodaySettings.Input(headers: headers))
+    }
+    /// Replace the morning summary setting
+    ///
+    /// Turns the morning summary on or off and sets its time, in the device's time zone. A time
+    /// zone the server does not know is `422 validation_failed`.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/today/settings`.
+    /// - Remark: Generated from `#/paths//v1/today/settings/put(replaceTodaySettings)`.
+    public func replaceTodaySettings(
+        headers: Operations.ReplaceTodaySettings.Input.Headers = .init(),
+        body: Operations.ReplaceTodaySettings.Input.Body
+    ) async throws -> Operations.ReplaceTodaySettings.Output {
+        try await replaceTodaySettings(Operations.ReplaceTodaySettings.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Register this device
+    ///
+    /// The app registers its installation (an id it keeps in its Keychain) on every launch and
+    /// whenever its APNs token changes: its name, the phone runtime version it speaks, and
+    /// where push notifications reach it. The device that links a marketplace runs that
+    /// marketplace's automated steps when they run on the phone.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/devices/{installationId}`.
+    /// - Remark: Generated from `#/paths//v1/devices/{installationId}/put(registerDevice)`.
+    public func registerDevice(
+        path: Operations.RegisterDevice.Input.Path,
+        headers: Operations.RegisterDevice.Input.Headers = .init(),
+        body: Operations.RegisterDevice.Input.Body
+    ) async throws -> Operations.RegisterDevice.Output {
+        try await registerDevice(Operations.RegisterDevice.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Claim the next work waiting for this phone
+    ///
+    /// Claims the next due work waiting for the device (delists after a sale first) and
+    /// returns its first script call; no `run` when nothing waits. The claim holds for a few
+    /// minutes from each call and answer; a phone that stops answering lets it lapse, and the
+    /// work is recovered on the server. `409 app_update_required` when the app's runtime
+    /// speaks another version of calls than the server's.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/phone-runs`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/post(claimPhoneRun)`.
+    public func claimPhoneRun(
+        headers: Operations.ClaimPhoneRun.Input.Headers,
+        body: Operations.ClaimPhoneRun.Input.Body
+    ) async throws -> Operations.ClaimPhoneRun.Output {
+        try await claimPhoneRun(Operations.ClaimPhoneRun.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Answer a phone call of a run
+    ///
+    /// The phone's answer for the run's call `index`, as its runtime returned it. The server
+    /// records it, runs the work on with it, and returns the next call; no `run` once the work
+    /// is done (its result recorded). Sending the same answer again changes nothing. `404`
+    /// when the run is over or lapsed; `409 invalid_state_transition` for an answer to a call
+    /// the run is not waiting for.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/phone-runs/{runId}/calls/{index}`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/{runId}/calls/{index}/put(answerPhoneCall)`.
+    public func answerPhoneCall(
+        path: Operations.AnswerPhoneCall.Input.Path,
+        headers: Operations.AnswerPhoneCall.Input.Headers = .init(),
+        body: Operations.AnswerPhoneCall.Input.Body
+    ) async throws -> Operations.AnswerPhoneCall.Output {
+        try await answerPhoneCall(Operations.AnswerPhoneCall.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
 }

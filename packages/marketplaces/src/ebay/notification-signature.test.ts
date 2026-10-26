@@ -126,6 +126,58 @@ describe('EbayNotificationVerifier', () => {
     expect(keyFetches() - before).toBe(3);
   });
 
+  it('keeps forged key ids from pushing out the real key or spending the call limit', async () => {
+    const subject = new EbayNotificationVerifier({
+      endpoints: { api: fake.url },
+      token: new ApplicationToken(
+        new EbayOAuthClient({
+          tokenUrl: `${fake.url}/identity/v1/oauth2/token`,
+          clientId: FAKE_EBAY_CLIENT_ID,
+          clientSecret: FAKE_EBAY_CLIENT_SECRET,
+        }),
+      ),
+      maxCachedKeys: 2,
+      maxNewKeyFetchesPerMinute: 3,
+      now: () => clock,
+    });
+    clock = Date.now();
+    const notification = fake.notification('ORDER_CONFIRMATION', ORDER);
+    expect(await subject.verify(notification.body, notification.signature, signal())).toEqual({
+      type: 'valid',
+    });
+    const header = JSON.parse(
+      Buffer.from(notification.signature, 'base64').toString('utf8'),
+    ) as Record<string, string>;
+    const forged = (kid: string): string =>
+      Buffer.from(JSON.stringify({ ...header, kid })).toString('base64');
+
+    const before = keyFetches();
+    const verdicts = [];
+    for (const kid of ['forged-1', 'forged-2', 'forged-3', 'forged-4']) {
+      verdicts.push(await subject.verify(notification.body, forged(kid), signal()));
+    }
+    expect(verdicts).toEqual([
+      { type: 'invalid', reason: 'unknown_key' },
+      { type: 'invalid', reason: 'unknown_key' },
+      { type: 'unavailable', code: 'key_fetches_limited' },
+      { type: 'unavailable', code: 'key_fetches_limited' },
+    ]);
+    // The real key was fetched first (one new id), so two forged ids used up the budget.
+    expect(keyFetches() - before).toBe(2);
+    // The real key is still cached, and an expired real key is fetched again despite the limit.
+    expect(await subject.verify(notification.body, notification.signature, signal())).toEqual({
+      type: 'valid',
+    });
+    expect(keyFetches() - before).toBe(2);
+    clock += 61 * 60_000;
+    for (const kid of ['forged-5', 'forged-6', 'forged-7']) {
+      await subject.verify(notification.body, forged(kid), signal());
+    }
+    expect(await subject.verify(notification.body, notification.signature, signal())).toEqual({
+      type: 'valid',
+    });
+  });
+
   it('answers unavailable when the key cannot be read now, and fetches it again later', async () => {
     const subject = verifier();
     const notification = fake.notification('ORDER_CONFIRMATION', ORDER);

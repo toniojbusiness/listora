@@ -105,6 +105,45 @@ describe('local e2e stack (real Postgres)', () => {
     expect(label).toBe('Connected');
     expect((await setEbay('broken')).status).toBe(422);
     expect((await setEbay('connected')).status).toBe(204);
+    // A sold item to ship is a Today card until the seller marks the sale shipped.
+    const sold = await fetch(`${stack.controlUrl}/today/sold-item`, { method: 'POST' });
+    expect(sold.status).toBe(201);
+    const soldItem = (await sold.json()) as { id: string; saleId: string; saleItemId: string };
+    const today = async () =>
+      (
+        (await (await fetch(`${stack.apiUrl}/v1/today`, { headers: auth })).json()) as {
+          cards: { id: string; shipment?: { location?: { code: string } } }[];
+        }
+      ).cards;
+    expect(await today()).toContainEqual(
+      expect.objectContaining({
+        id: `ship:${soldItem.saleItemId}`,
+        shipment: expect.objectContaining({
+          location: { code: 'B-12', label: 'Garage shelf 3' },
+        }) as unknown,
+      }),
+    );
+    const shipped = await fetch(`${stack.apiUrl}/v1/sales/${soldItem.saleId}/ship`, {
+      method: 'POST',
+      headers: {
+        ...auth,
+        'content-type': 'application/json',
+        'idempotency-key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({}),
+    });
+    expect(shipped.status).toBe(200);
+    expect((await today()).map((card) => card.id)).not.toContain(`ship:${soldItem.saleItemId}`);
+
+    // The dev sign-in code the API printed for the user, as their email would show it.
+    const code = await fetch(
+      `${stack.controlUrl}/dev/sign-in-code?email=${encodeURIComponent(E2E_EMAIL)}`,
+    );
+    expect(code.status).toBe(200);
+    expect(await code.json()).toEqual({ code: expect.any(String) as unknown });
+    expect((await fetch(`${stack.controlUrl}/dev/sign-in-code?email=nobody%40x.test`)).status).toBe(
+      404,
+    );
 
     await stack.stop();
     await expect(fetch(`${stack.apiUrl}/health/live`)).rejects.toThrow();
@@ -122,6 +161,7 @@ describe('local e2e stack (real Postgres)', () => {
         accessToken: 'token',
         email: 'a@b.c',
         controlUrl: 'http://127.0.0.1:6',
+        fakeDepopUrl: 'http://127.0.0.1:7',
         marketplaces: 'ebay',
       }),
     ).toEqual({
@@ -129,11 +169,13 @@ describe('local e2e stack (real Postgres)', () => {
       LISTORA_E2E_ACCESS_TOKEN: 'token',
       LISTORA_E2E_EMAIL: 'a@b.c',
       LISTORA_E2E_CONTROL_URL: 'http://127.0.0.1:6',
+      LISTORA_E2E_FAKE_DEPOP_URL: 'http://127.0.0.1:7',
       LISTORA_E2E_MARKETPLACES: 'ebay',
       TEST_RUNNER_LISTORA_E2E_API_BASE_URL: 'http://127.0.0.1:5',
       TEST_RUNNER_LISTORA_E2E_ACCESS_TOKEN: 'token',
       TEST_RUNNER_LISTORA_E2E_EMAIL: 'a@b.c',
       TEST_RUNNER_LISTORA_E2E_CONTROL_URL: 'http://127.0.0.1:6',
+      TEST_RUNNER_LISTORA_E2E_FAKE_DEPOP_URL: 'http://127.0.0.1:7',
       TEST_RUNNER_LISTORA_E2E_MARKETPLACES: 'ebay',
     });
     expect(
@@ -142,6 +184,7 @@ describe('local e2e stack (real Postgres)', () => {
         accessToken: 'token',
         email: 'a@b.c',
         controlUrl: 'http://127.0.0.1:6',
+        fakeDepopUrl: 'http://127.0.0.1:7',
         marketplaces: 'all',
         secondSeller: { accessToken: 'second-token', email: 'd@e.f' },
       }),
@@ -162,7 +205,7 @@ describe('local e2e stack (real Postgres)', () => {
           { marketplace: 'poshmark', action: 'create', fault: { type: 'captcha' } },
         ],
         ['/ebay/sales', { sku: 'X-000001' }],
-        ['/sessions/poshmark', {}],
+        ['/sessions/ebay', {}],
       ] as const) {
         const answer = await fetch(`${other.controlUrl}${path}`, {
           method: 'POST',
@@ -205,31 +248,43 @@ describe('full local e2e stack: every marketplace (real Postgres, headless Chrom
         await fetch(`${stack.apiUrl}/v1/connections`, {
           headers: { authorization: `Bearer ${token}` },
         })
-      ).json()) as { data: { marketplace: string; mode: string; status: string }[] }
-    ).data.map(({ marketplace, mode, status }) => ({ marketplace, mode, status }));
+      ).json()) as {
+        data: {
+          marketplace: string;
+          mode: string;
+          status: string;
+          execution?: { location: string };
+        }[];
+      }
+    ).data.map(({ marketplace, mode, status, execution }) => ({
+      marketplace,
+      mode,
+      status,
+      runsOn: execution?.location,
+    }));
 
-  it("connects the seller's eBay and Depop APIs and links Poshmark and Mercari, and the second seller's Depop", async () => {
-    expect(await connections(stack.accessToken)).toEqual([
-      { marketplace: 'ebay', mode: 'api', status: 'connected' },
-      { marketplace: 'depop', mode: 'api', status: 'connected' },
-      { marketplace: 'poshmark', mode: 'automation', status: 'connected' },
-      { marketplace: 'mercari', mode: 'automation', status: 'connected' },
-    ]);
+  it("connects the seller's eBay and Depop APIs, and the second seller's eBay for cloud automation", async () => {
+    expect(await connections(stack.accessToken)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ marketplace: 'ebay', mode: 'api', status: 'connected' }),
+        expect.objectContaining({ marketplace: 'depop', mode: 'api', status: 'connected' }),
+      ]),
+    );
     const second = stack.secondSeller;
     expect(second?.email).toBe(E2E_SECOND_EMAIL);
-    expect(await connections(second?.accessToken ?? '')).toEqual([
-      { marketplace: 'ebay', mode: 'api', status: 'not_connected' },
-      { marketplace: 'depop', mode: 'automation', status: 'connected' },
-      { marketplace: 'poshmark', mode: 'assisted', status: 'not_connected' },
-      { marketplace: 'mercari', mode: 'assisted', status: 'not_connected' },
-    ]);
+    expect(await connections(second?.accessToken ?? '')).toContainEqual({
+      marketplace: 'ebay',
+      mode: 'automation',
+      status: 'connected',
+      runsOn: 'cloud',
+    });
   });
 
-  it('lists through every adapter, each confirmed by its read-back', async () => {
+  it('lists through the API adapters, each confirmed by its read-back', async () => {
     const listed = await fetch(`${stack.controlUrl}/items/listed`, {
       method: 'POST',
       body: JSON.stringify({
-        marketplaces: ['ebay', 'depop', 'poshmark', 'mercari'],
+        marketplaces: ['ebay', 'depop'],
         // A category Depop's API maps.
         details: { category: 'clothing/tops/t_shirts' },
       }),
@@ -250,10 +305,26 @@ describe('full local e2e stack: every marketplace (real Postgres, headless Chrom
     ).toEqual([
       ['depop', 'api', 'Active (confirmed by Depop)'],
       ['ebay', 'api', 'Active (confirmed by eBay)'],
-      ['mercari', 'automation', 'Active (confirmed by Mercari)'],
-      ['poshmark', 'automation', 'Active (confirmed by Poshmark)'],
     ]);
-  }, 240_000);
+  }, 120_000);
+
+  it("automates the second seller's eBay in the cloud, confirmed by its read-back", async () => {
+    const listed = await fetch(`${stack.controlUrl}/items/listed`, {
+      method: 'POST',
+      body: JSON.stringify({ seller: 'second', marketplaces: ['ebay'] }),
+    });
+    expect(listed.status, await listed.clone().text()).toBe(201);
+    const { listingId } = (await listed.json()) as { listingId: string };
+    const listing = (await (
+      await fetch(`${stack.apiUrl}/v1/listings/${listingId}`, {
+        headers: { authorization: `Bearer ${stack.secondSeller?.accessToken ?? ''}` },
+      })
+    ).json()) as { mode: string; statusDisplay: { label: string } };
+    expect(listing).toMatchObject({
+      mode: 'automation',
+      statusDisplay: { label: 'Active (confirmed by eBay)' },
+    });
+  }, 180_000);
 
   it('injects faults on every fake, refusing ones it does not know', async () => {
     const post = (path: string, body: unknown) =>
@@ -268,7 +339,8 @@ describe('full local e2e stack: every marketplace (real Postgres, headless Chrom
       ).status,
     ).toBe(204);
     expect(
-      (await post('/depop/faults', { action: 'delete', fault: { type: 'server_error' } })).status,
+      (await post('/depop-api/faults', { action: 'delete', fault: { type: 'server_error' } }))
+        .status,
     ).toBe(204);
     expect(
       (
@@ -282,7 +354,7 @@ describe('full local e2e stack: every marketplace (real Postgres, headless Chrom
     expect(
       (
         await post('/automation/faults', {
-          marketplace: 'ebay',
+          marketplace: 'depop',
           action: 'create',
           fault: { type: 'captcha' },
         })
@@ -290,7 +362,7 @@ describe('full local e2e stack: every marketplace (real Postgres, headless Chrom
     ).toBe(422);
     expect((await post('/ebay/sales', { sku: 'NOPE-000001' })).status).toBe(422);
     expect((await fetch(`${stack.controlUrl}/faults`, { method: 'DELETE' })).status).toBe(204);
-    // A fresh session for the second seller's Depop, as relinking does.
-    expect((await post('/sessions/depop', {})).status).toBe(201);
+    // A fresh session for the second seller's eBay, as relinking does.
+    expect((await post('/sessions/ebay', {})).status).toBe(201);
   });
 });

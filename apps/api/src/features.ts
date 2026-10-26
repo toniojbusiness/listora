@@ -9,14 +9,18 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { AiClient } from '@listora/ai';
+import type { PhoneWorkDependencies } from '@listora/automation';
 import type { AnalysisJobQueue } from '@listora/analysis';
+import type { BatchJobQueue } from '@listora/batches';
 import type { PhotoJobQueue } from '@listora/photos';
 import type { ObjectStorage } from '@listora/storage';
 import type { FastifyInstance } from 'fastify';
 
 import type { ConnectionsDependencies } from './connections/routes.ts';
 import type { RouteDependencies } from './contract/routes.ts';
+import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import type { PhotoUploads } from './photos/uploads.ts';
+import type { SaleEmailsDependencies } from './sale-emails/routes.ts';
 import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
 /** Everything a feature's routes may use, built once by `buildApp`. */
@@ -27,14 +31,25 @@ export interface ApiRouteContext extends RouteDependencies {
   uploads: PhotoUploads;
   /** Where `addItemPhoto` adds each new photo's processing job. */
   photoJobs: PhotoJobQueue;
-  /** The AI client whose guards analysis requests are checked against (it is never called). */
+  /**
+   * The AI client: analysis requests are checked against its guards (the worker makes those
+   * calls), and voice corrections call it.
+   */
   ai: AiClient;
   /** Where starting or escalating an analysis adds its job. */
   analysisJobs: AnalysisJobQueue;
+  /** Where submitting a batch item adds the job that starts its analysis. */
+  batchJobs: BatchJobQueue;
   /** Marketplace adapters, OAuth clients, and the token sealer of connections. */
   connections: ConnectionsDependencies;
+  /** The session vault and each marketplace's profile, for linking by signing in. */
+  marketplaceSessions: MarketplaceSessionsDependencies;
   /** eBay's notification endpoint settings; the endpoint is not served without them. */
   ebayWebhook?: EbayWebhookDependencies;
+  /** Email sale detection: the forwarding addresses' domain and the dev drop folder. */
+  saleEmails: SaleEmailsDependencies;
+  /** The marketplace work phones run (docs/features/phone-execution.md); none without it. */
+  phone: PhoneWorkDependencies | undefined;
   /** The clock upload sessions expire by. */
   now: () => Date;
 }

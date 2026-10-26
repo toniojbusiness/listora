@@ -3,10 +3,20 @@ import { z } from 'zod';
 import { USER_POOL_ID_PATTERN, userPoolRegion } from '@listora/accounts';
 import { AiConfigError, loadAiConfig, type AiConfig } from '@listora/ai';
 import {
+  AutomationConfigError,
+  loadAutomationSettings,
+  type AutomationSettings,
+} from '@listora/automation';
+import {
   loadMarketplaceConfig,
   MarketplaceConfigError,
   type MarketplaceConfig,
 } from '@listora/connections';
+import {
+  EmailIngestConfigError,
+  loadEmailIngestConfig,
+  type EmailIngestConfig,
+} from '@listora/email-sales';
 import { assertNever, LOG_LEVELS, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
@@ -48,9 +58,25 @@ export interface ApiConfig {
   ai: AiConfig;
   /**
    * FAKE_MARKETPLACE_URL, EBAY_*, and TOKEN_* keys, read by @listora/connections: which
-   * marketplaces can be connected, and the token vault the API seals new grants with.
+   * marketplaces can be connected, and the token vault the API seals new grants and linked
+   * marketplace sessions with (only the worker and the browser runner decrypt them).
    */
   marketplaces: MarketplaceConfig;
+  /**
+   * AUTOMATION_* and FAKE_AUTOMATION_SITE_URL (@listora/automation): each automated
+   * marketplace's sign-in page and cookie domains, the same the worker and the runner use.
+   */
+  automation: AutomationSettings;
+  /**
+   * EMAIL_* (@listora/email-sales): the domain of the sale email forwarding addresses the API
+   * shows, and with the folder driver the folder `POST /dev/email` drops messages in.
+   */
+  emailIngest: EmailIngestConfig;
+  /**
+   * OPERATION_RETRY_DELAY_SCALE: the operation engine's retry and confirmation delays, as the
+   * worker's, for the steps phones run (the API records their results).
+   */
+  operationRetryDelayScale: number;
 }
 
 export class ConfigError extends Error {
@@ -109,6 +135,13 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(LOG_LEVELS, { error: `LOG_LEVEL must be one of ${LOG_LEVELS.join(', ')}` })
     .default('info'),
+  OPERATION_RETRY_DELAY_SCALE: z
+    .string()
+    .default('')
+    .transform((value) => (value === '' ? 1 : Number(value)))
+    .refine((value) => value >= 0.001 && value <= 1, {
+      error: 'OPERATION_RETRY_DELAY_SCALE must be a number from 0.001 to 1',
+    }),
 });
 type Env = z.infer<typeof envSchema>;
 
@@ -160,7 +193,28 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     if (!(error instanceof MarketplaceConfigError)) throw error;
     issues.push(...error.issues);
   }
-  if (!parsed.success || storage === undefined || ai === undefined || marketplaces === undefined) {
+  let automation: AutomationSettings | undefined;
+  try {
+    automation = loadAutomationSettings(env);
+  } catch (error) {
+    if (!(error instanceof AutomationConfigError)) throw error;
+    issues.push(...error.issues);
+  }
+  let emailIngest: EmailIngestConfig | undefined;
+  try {
+    emailIngest = loadEmailIngestConfig(env);
+  } catch (error) {
+    if (!(error instanceof EmailIngestConfigError)) throw error;
+    issues.push(...error.issues);
+  }
+  if (
+    !parsed.success ||
+    storage === undefined ||
+    ai === undefined ||
+    marketplaces === undefined ||
+    automation === undefined ||
+    emailIngest === undefined
+  ) {
     throw new ConfigError(issues);
   }
   const values = parsed.data;
@@ -175,5 +229,8 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     storage,
     ai,
     marketplaces,
+    automation,
+    emailIngest,
+    operationRetryDelayScale: values.OPERATION_RETRY_DELAY_SCALE,
   };
 }

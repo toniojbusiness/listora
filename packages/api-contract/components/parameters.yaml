@@ -49,6 +49,12 @@ SessionId:
   required: true
   schema:
     $ref: './schemas/common.yaml#/Id'
+BatchId:
+  name: batchId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
 AnalysisId:
   name: analysisId
   in: path
@@ -91,3 +97,24 @@ MarketplacePath:
   required: true
   schema:
     $ref: './schemas/common.yaml#/KnownMarketplace'
+InstallationId:
+  name: installationId
+  in: path
+  required: true
+  description: The app installation's id, which it keeps in its Keychain.
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+RunId:
+  name: runId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+CallIndex:
+  name: index
+  in: path
+  required: true
+  description: The call's place in its run, from 0 (path parameters are text).
+  schema:
+    type: string
+    pattern: '^(0|[1-9][0-9]{0,3})$'

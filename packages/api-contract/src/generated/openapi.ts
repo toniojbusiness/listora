@@ -87,6 +87,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/account/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my profile
+         * @description What Settings shows about the signed-in person: their email from the sign-in provider
+         *     (read-only), the name they go by, and the business they sell as. A name absent from the
+         *     response was never entered (or was cleared).
+         */
+        get: operations["getProfile"];
+        /**
+         * Replace my profile
+         * @description Saves the person's name and the account's business name. The body replaces both: a name
+         *     left out is cleared. The server trims each name; one that is blank after trimming is
+         *     `422 validation_failed`. The email cannot be changed here. The business name belongs to
+         *     the account, so a member who is not its owner or an admin gets `403 forbidden`.
+         */
+        put: operations["replaceProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/items": {
         parameters: {
             query?: never;
@@ -388,6 +417,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/item-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a batch
+         * @description Starts an empty batch: the items of one haul, photographed in one session. Add one item
+         *     per physical item with `addItemBatchItem`, attach its photos as for any item, then
+         *     `submitItemBatchItem`: the server starts its analysis once the photos are processed.
+         */
+        post: operations["createItemBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/item-batches/{batchId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get a batch
+         * @description The batch's items in haul order, each with where it is (`state` and the server's
+         *     `statusDisplay`), and how many are in each state. Poll it while items upload and
+         *     analyze; every state comes from the items, photos, and analyses themselves.
+         */
+        get: operations["getItemBatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/item-batches/{batchId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an item to a batch
+         * @description Creates a `draft` item (with its SKU) at `position` in the batch. A position the batch
+         *     already has answers `200` with that item instead of creating another, so an app that
+         *     submits its batch again, even after the Idempotency-Key has expired, never creates an
+         *     item twice.
+         */
+        post: operations["addItemBatchItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/item-batches/{batchId}/items/{itemId}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze a batch item once its photos are ready
+         * @description Says the app has attached all `photoCount` photos of the item. The server starts the
+         *     item's analysis as soon as they are processed, under the same rules as
+         *     `startItemAnalysis`: an existing analysis of the photo set is kept, a failed one is
+         *     queued again, and the AI guards are checked first. A refusal (the daily AI budget, the
+         *     plan's quota, AI switched off) shows on the item as a `failed` state with its reason
+         *     instead of an error here. Submitting again is the item's Retry. `409
+         *     invalid_state_transition` when the item does not have `photoCount` photos yet.
+         */
+        post: operations["submitItemBatchItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/item-batches/{batchId}/interaction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Record the seller's interaction with a batch
+         * @description Replaces the interaction the app measured for the batch (from its first photo to its
+         *     last saved item) and each item's share of it. An item left out has none. `422` when an
+         *     `itemId` is not an item of the batch.
+         */
+        put: operations["replaceItemBatchInteraction"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/usage": {
         parameters: {
             query?: never;
@@ -405,6 +558,40 @@ export interface paths {
         get: operations["getUsage"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/items/{itemId}/voice-corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Interpret a spoken correction the app could not parse
+         * @description Maps the short text of a spoken correction on the review screen ("the pattern is
+         *     houndstooth, it's from the nineties") to proposed detail changes, with the cheap text
+         *     model. The app transcribes speech on the device and parses routine phrases itself, so
+         *     it sends only the phrases its own parser could not map, and only their text, never
+         *     audio. The answer is a proposal: nothing is changed on the item, and the app shows each
+         *     change for the seller to accept or undo before it saves anything (`replaceItem`).
+         *     Canonical details (category, department, size type, colors, pattern, materials,
+         *     condition) hold canonical values only, and `cost` and `listPrice` carry an `amount`;
+         *     every other change carries a `value`. A phrase the model could not map is left out, so
+         *     `changes` may be empty. The call is metered and counted in the account's daily AI
+         *     budget like every AI call, but uses no plan quota: `429 ai_budget_exceeded` when the
+         *     budget is used up, `503 service_unavailable` while AI is switched off or the model
+         *     could not answer (retryable), and `403 forbidden` when AI is turned off for the account.
+         */
+        post: operations["interpretVoiceCorrection"];
         delete?: never;
         options?: never;
         head?: never;
@@ -872,8 +1059,12 @@ export interface paths {
         post?: never;
         /**
          * Disconnect a marketplace account
-         * @description Revokes and deletes the stored tokens. Existing listings stay on the marketplace but
-         *     Listora can no longer change or verify them until the account is connected again.
+         * @description Unlinks the marketplace: deletes the stored tokens or session and the marketplace data
+         *     that came through the connection (the marketplace's user id and name, listing read-backs,
+         *     marketplace events, automation runs and their screenshots), and asks the marketplace to
+         *     revoke Listora's access. Items, listings, and sales stay. Existing listings stay on the
+         *     marketplace but Listora can no longer change or verify them until the account is
+         *     connected again. `404` when no account of the marketplace is linked.
          */
         delete: operations["disconnectConnection"];
         options?: never;
@@ -972,14 +1163,44 @@ export interface paths {
         put?: never;
         /**
          * Check a marketplace connection now (Retry check)
-         * @description Queues the same cheap read the daily health check makes, for this connection only. The
-         *     answer is the connection with a `Checking` status; read it again (or
-         *     `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
-         *     connection with a problem. `409 invalid_state_transition` for a connection a check
-         *     cannot change (not connected, or waiting for the seller to reconnect);
-         *     `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+         * @description Queues the same cheap read the daily health check makes, for this connection only. For
+         *     an automation connection it asks for a check of the sign-in already linked again, where
+         *     the connection runs (the browser runner or the seller's iPhone), as after linking (`getMarketplaceSession`), without the seller signing in again;
+         *     a check still running is left to finish. The answer is the connection with a `Checking`
+         *     status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
+         *     the check found. Offered as the `check` action on a connection with a problem.
+         *     `409 invalid_state_transition` for a connection a check cannot change (not connected,
+         *     or waiting for the seller to reconnect or link again); `409
+         *     marketplace_action_unavailable` when this server cannot check the marketplace.
          */
         post: operations["requestConnectionCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{marketplace}/execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose where a connection's automated steps run
+         * @description Moves the connection's automated steps to Listora's cloud browser runner or to the
+         *     iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
+         *     moves to the cloud with it; a run the phone is in the middle of finishes there.
+         *     `409 invalid_state_transition` for a marketplace that is not linked by signing in;
+         *     `409 marketplace_action_unavailable` for a move to the cloud of a marketplace that
+         *     refuses Listora's cloud servers (`execution.cloudAllowed` false).
+         */
+        put: operations["setConnectionExecution"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1002,6 +1223,71 @@ export interface paths {
         get: operations["getConnectionHealth"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the marketplaces linked by signing in
+         * @description One entry per marketplace whose connection can be a browser session (`connect:
+         *     session`): Poshmark, Mercari, Depop, and eBay (Depop and eBay until their APIs are
+         *     connected; an API connection is `api_connected`). Each says whether it is linked, where
+         *     the app opens the marketplace's sign-in page, and which cookies to hand over. Not
+         *     paginated.
+         */
+        get: operations["listMarketplaceSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/marketplace-sessions/{marketplace}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get one marketplace's sign-in link
+         * @description The app polls this after `linkMarketplaceSession` until `status` is no longer
+         *     `checking`. `404` for a marketplace that is not linked by signing in.
+         */
+        get: operations["getMarketplaceSession"];
+        put?: never;
+        /**
+         * Link a marketplace with the session the user signed into in the app
+         * @description The user signed into the marketplace's own sign-in page (`login.url`) inside the app,
+         *     in a web view with its own data store, including any two-step check. The app sends
+         *     that site's cookies (only those on `login.cookieDomains`), never the password, which
+         *     Listora never sees. The server stores them encrypted with the token key (KMS envelope
+         *     encryption) on the account's automation connection for the marketplace, and asks for one
+         *     read-only check that the marketplace accepts them, where the connection runs: the
+         *     browser runner, or the iPhone that linked it (`installationId`). The reply is
+         *     `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
+         *     takes the same way and replaces the earlier session. Cookie values are never logged
+         *     or returned.
+         *
+         *     `404` for a marketplace that is not linked by signing in. `409
+         *     marketplace_action_unavailable` when the marketplace is connected through its API.
+         *     `422 validation_failed` (field `cookies`) when a cookie is on another site's domain,
+         *     every cookie has expired, or there are none.
+         */
+        post: operations["linkMarketplaceSession"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1292,6 +1578,174 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sale-emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the sale email forwarding address and its status
+         * @description The account's forwarding address (created on first use), the setup steps, the provider's
+         *     forwarding confirmation while it waits, and the "ask before auto-delist" setting.
+         */
+        get: operations["getSaleEmails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sale-emails/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the sale email setting
+         * @description Turns "ask before auto-delist" on or off for sales found by email.
+         */
+        put: operations["replaceSaleEmailSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get what needs the seller today
+         * @description The Today screen: one card per thing that needs the seller (items to ship, delists that
+         *     are not done, connections to reconnect, drafts to review, and old listings that could use
+         *     a price drop or a relist), most urgent first, and the money summary. Computed from the
+         *     account's own data on every request, with no AI and no marketplace call, so the app asks
+         *     for it each time it opens. A card is gone once its work is done.
+         */
+        get: operations["getToday"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/today/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the morning summary setting
+         * @description The account's morning summary notification setting (defaults until saved).
+         */
+        get: operations["getTodaySettings"];
+        /**
+         * Replace the morning summary setting
+         * @description Turns the morning summary on or off and sets its time, in the device's time zone. A time
+         *     zone the server does not know is `422 validation_failed`.
+         */
+        put: operations["replaceTodaySettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/devices/{installationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The app installation's id, which it keeps in its Keychain. */
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Register this device
+         * @description The app registers its installation (an id it keeps in its Keychain) on every launch and
+         *     whenever its APNs token changes: its name, the phone runtime version it speaks, and
+         *     where push notifications reach it. The device that links a marketplace runs that
+         *     marketplace's automated steps when they run on the phone.
+         */
+        put: operations["registerDevice"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/phone-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim the next work waiting for this phone
+         * @description Claims the next due work waiting for the device (delists after a sale first) and
+         *     returns its first script call; no `run` when nothing waits. The claim holds for a few
+         *     minutes from each call and answer; a phone that stops answering lets it lapse, and the
+         *     work is recovered on the server. `409 app_update_required` when the app's runtime
+         *     speaks another version of calls than the server's.
+         */
+        post: operations["claimPhoneRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/phone-runs/{runId}/calls/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+                /** @description The call's place in its run, from 0 (path parameters are text). */
+                index: components["parameters"]["CallIndex"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Answer a phone call of a run
+         * @description The phone's answer for the run's call `index`, as its runtime returned it. The server
+         *     records it, runs the work on with it, and returns the next call; no `run` once the work
+         *     is done (its result recorded). Sending the same answer again changes nothing. `404`
+         *     when the run is over or lapsed; `409 invalid_state_transition` for an answer to a call
+         *     the run is not waiting for.
+         */
+        put: operations["answerPhoneCall"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1336,9 +1790,9 @@ export interface components {
         IntegrationMode: components["schemas"]["KnownIntegrationMode"];
         /**
          * @description `api`: Listora acts through the marketplace's official API and verifies by read-back.
-         *     `automation`: Listora's browser runner acts in the seller's own marketplace session
-         *     (where the marketplace permits it and has no API) and verifies by read-back through that
-         *     session. `assisted`: Listora prepares the work and the user does the final step in the
+         *     `automation`: Listora's browser runner, or the iPhone app (`execution`), acts in the
+         *     seller's own marketplace session (where the marketplace permits it and has no API) and
+         *     verifies by read-back through that session. `assisted`: Listora prepares the work and the user does the final step in the
          *     marketplace app, then confirms.
          * @enum {string}
          */
@@ -1421,14 +1875,14 @@ export interface components {
          *     402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
          *     `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
          *     `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-         *     `marketplace_action_unavailable` 409; `payload_too_large` 413; `validation_failed`,
+         *     `marketplace_action_unavailable`, `app_update_required` 409; `payload_too_large` 413; `validation_failed`,
          *     `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
          *     `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
          *     and `marketplace_authorization_failed` appear only inside a failed
          *     `ConnectionAuthorization`.
          * @enum {string}
          */
-        KnownErrorCode: "invalid_request" | "unauthenticated" | "quota_exceeded" | "forbidden" | "not_found" | "version_conflict" | "invalid_state_transition" | "already_exists" | "idempotency_key_in_progress" | "upload_incomplete" | "upload_expired" | "marketplace_not_connected" | "marketplace_reauth_required" | "marketplace_action_unavailable" | "payload_too_large" | "validation_failed" | "idempotency_key_reused" | "rate_limited" | "ai_budget_exceeded" | "internal_error" | "service_unavailable" | "marketplace_authorization_denied" | "marketplace_authorization_failed";
+        KnownErrorCode: "invalid_request" | "unauthenticated" | "quota_exceeded" | "forbidden" | "not_found" | "version_conflict" | "invalid_state_transition" | "already_exists" | "idempotency_key_in_progress" | "upload_incomplete" | "upload_expired" | "marketplace_not_connected" | "marketplace_reauth_required" | "marketplace_action_unavailable" | "app_update_required" | "payload_too_large" | "validation_failed" | "idempotency_key_reused" | "rate_limited" | "ai_budget_exceeded" | "internal_error" | "service_unavailable" | "marketplace_authorization_denied" | "marketplace_authorization_failed";
         AccountDeletion: {
             deletedAt: components["schemas"]["Timestamp"];
             /** @description One entry per API marketplace connection the account had; assisted connections hold no access. */
@@ -1445,6 +1899,20 @@ export interface components {
              *     for up to 7 days when it still holds the connection's tokens).
              */
             revoked: boolean;
+        };
+        /** @description The signed-in person as Settings shows them. */
+        Profile: {
+            /** @description The email the person signs in with; absent when the sign-in provider gave none. */
+            email?: string;
+            /** @description The name the person goes by. */
+            displayName?: string;
+            /** @description The business the account sells as. */
+            businessName?: string;
+        };
+        /** @description Both names; one left out is cleared. */
+        ProfileReplace: {
+            displayName?: string;
+            businessName?: string;
         };
         /** @enum {string} */
         HealthCheckStatus: "ok" | "unavailable";
@@ -1899,6 +2367,114 @@ export interface components {
             expectedVersion: number;
         };
         /**
+         * @description A `KnownItemBatchItemState`, or a state added after this client was built. Clients show
+         *     an unknown state's `statusDisplay` as given and never treat it as saved.
+         */
+        ItemBatchItemState: components["schemas"]["KnownItemBatchItemState"];
+        /**
+         * @description Where a batch item is: `uploading` (the app has not submitted it yet), `preparing_photos`
+         *     (the server is processing its photos), `analyzing`, `ready_for_review` (analyzed, waiting
+         *     for the seller), `saved` (the seller saved it; its status is no longer `draft`), or
+         *     `failed` (see `problem`).
+         * @enum {string}
+         */
+        KnownItemBatchItemState: "uploading" | "preparing_photos" | "analyzing" | "ready_for_review" | "saved" | "failed";
+        /** @description Why a batch item stopped. `retryable` says whether submitting it again may help as it is. */
+        ItemBatchItemProblem: {
+            /**
+             * @description Stable snake_case, for example `photo_failed`, `photos_not_ready`, `no_photos`,
+             *     `ai_budget_exceeded`, `quota_exceeded`, or an analysis failure's code.
+             */
+            code: string;
+            /** @description Safe to show to the user. */
+            message: string;
+            retryable: boolean;
+        };
+        /**
+         * @description The seller's interaction as the app measured it: time a screen of the flow was in front of
+         *     them with nothing to wait for (`activeMs`), the time spent waiting on Listora meanwhile
+         *     (`waitingMs`), and taps.
+         */
+        InteractionTotals: {
+            /** Format: int64 */
+            activeMs: number;
+            /** Format: int64 */
+            waitingMs: number;
+            /** Format: int32 */
+            taps: number;
+        };
+        /** @description How many of the item's photos the server has, and how many are processed. */
+        ItemBatchPhotoProgress: {
+            /** Format: int32 */
+            total: number;
+            /** Format: int32 */
+            ready: number;
+        };
+        ItemBatchItem: {
+            /**
+             * Format: int32
+             * @description The item's place in the haul, 0 first.
+             */
+            position: number;
+            item: components["schemas"]["ItemSummary"];
+            state: components["schemas"]["ItemBatchItemState"];
+            statusDisplay: components["schemas"]["StatusDisplay"];
+            photos: components["schemas"]["ItemBatchPhotoProgress"];
+            /** @description Present exactly when `state` is `failed`. */
+            problem?: components["schemas"]["ItemBatchItemProblem"];
+            /** @description This item's share of the batch's interaction, once the app reported it. */
+            interaction?: components["schemas"]["InteractionTotals"];
+        };
+        /** @description How many of the batch's items are in each state. */
+        ItemBatchProgress: {
+            /** Format: int32 */
+            total: number;
+            /** Format: int32 */
+            uploading: number;
+            /** Format: int32 */
+            preparingPhotos: number;
+            /** Format: int32 */
+            analyzing: number;
+            /** Format: int32 */
+            readyForReview: number;
+            /** Format: int32 */
+            saved: number;
+            /** Format: int32 */
+            failed: number;
+        };
+        /** @description The items of one haul, photographed in one session, in haul order. */
+        ItemBatch: {
+            id: components["schemas"]["Id"];
+            items: components["schemas"]["ItemBatchItem"][];
+            progress: components["schemas"]["ItemBatchProgress"];
+            /** @description The batch's interaction from its first photo, once the app reported it. */
+            interaction?: components["schemas"]["InteractionTotals"];
+            createdAt: components["schemas"]["Timestamp"];
+            updatedAt: components["schemas"]["Timestamp"];
+        };
+        ItemBatchItemCreate: {
+            /**
+             * Format: int32
+             * @description The item's place in the haul, 0 first.
+             */
+            position: number;
+        };
+        ItemBatchItemSubmit: {
+            /**
+             * Format: int32
+             * @description How many photos the app attached; the item must have exactly these many.
+             */
+            photoCount: number;
+        };
+        ItemBatchItemInteraction: {
+            itemId: components["schemas"]["Id"];
+            interaction: components["schemas"]["InteractionTotals"];
+        };
+        ItemBatchInteractionReplace: {
+            batch: components["schemas"]["InteractionTotals"];
+            items: components["schemas"]["ItemBatchItemInteraction"][];
+        };
+        /**
          * @description A model's guess, not market data. `label` is always
          *     "AI estimate - not based on sold listings"; clients show it next to the numbers.
          */
@@ -2043,6 +2619,40 @@ export interface components {
             /** @description One per `KnownUsageMetric`, in that order. */
             quotas: components["schemas"]["QuotaUsage"][];
         };
+        VoiceCorrectionRequest: {
+            /**
+             * @description The phrases of the seller's spoken correction that the app's own parser could not
+             *     map, as text (on-device speech recognition). Never audio.
+             */
+            transcript: string;
+        };
+        VoiceCorrection: {
+            /** @description The proposed changes in the order they were said; empty when nothing mapped. */
+            changes: components["schemas"]["VoiceCorrectionChange"][];
+        };
+        /**
+         * @description One proposed change. `cost` (what the seller paid) and `listPrice` carry `amount`; every
+         *     other field carries `value`: a canonical value for category (`<category>/<subcategory>`),
+         *     department, sizeSystem, colors, pattern, materials, and condition, otherwise text. A list
+         *     detail gets one change per entry: the colors (or materials) of one answer together
+         *     replace the item's, and each keyword or flaw is added to the item's.
+         */
+        VoiceCorrectionChange: {
+            field: components["schemas"]["VoiceCorrectionField"];
+            value?: string;
+            amount?: components["schemas"]["Money"];
+        };
+        /**
+         * @description A `KnownVoiceCorrectionField`, or a field added after this client was built. Clients
+         *     ignore a change to a field they do not know.
+         */
+        VoiceCorrectionField: components["schemas"]["KnownVoiceCorrectionField"];
+        /**
+         * @description The item detail a change is for, named like `ItemDetails`; `cost` is what the seller paid
+         *     and `purchaseSource` where they bought it.
+         * @enum {string}
+         */
+        KnownVoiceCorrectionField: "title" | "brand" | "productName" | "category" | "department" | "sizeLabel" | "sizeSystem" | "colors" | "pattern" | "materials" | "keywords" | "styleNumber" | "condition" | "conditionNotes" | "flaws" | "cost" | "purchaseSource" | "listPrice";
         /**
          * @description A `KnownListingStatus`, or a status added after this client was built. Clients show
          *     the listing's `statusDisplay` for an unknown status and never treat it as success.
@@ -2283,8 +2893,8 @@ export interface components {
          */
         CapabilityMode: components["schemas"]["KnownCapabilityMode"];
         /**
-         * @description `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
-         *     seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+         * @description `api`: through the marketplace's API. `automation`: by Listora's browser runner or the
+         *     seller's iPhone, in the seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
          *     `none`: not offered.
          * @enum {string}
          */
@@ -2365,7 +2975,8 @@ export interface components {
          *     `reconnect`: the same, for a connection that needs the seller's consent again (its grant
          *     was revoked, expires within 30 days, or fails); it renews the existing connection.
          *     `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
-         *     Listora may have cleared since.
+         *     Listora may have cleared since, or an automation connection whose sign-in is not
+         *     confirmed.
          * @enum {string}
          */
         KnownConnectionAction: "connect" | "reconnect" | "check";
@@ -2387,6 +2998,7 @@ export interface components {
             /** @description When Listora last checked the connection, whatever it found. */
             lastCheckedAt?: components["schemas"]["Timestamp"];
             lastIssue?: components["schemas"]["ConnectionIssue"];
+            execution?: components["schemas"]["ConnectionExecution"];
         };
         ConnectionList: {
             data: components["schemas"]["Connection"][];
@@ -2423,10 +3035,12 @@ export interface components {
          * @description `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
          *     `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
          *     cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
-         *     ends within 30 days.
+         *     ends within 30 days. `not_confirmed`: Listora could not confirm that the marketplace
+         *     accepts the sign-in linked for automation (its check failed or did not finish); the
+         *     `check` action checks it again.
          * @enum {string}
          */
-        KnownConnectionAttentionReason: "reconnect" | "access_removed" | "connection_problem" | "expiring";
+        KnownConnectionAttentionReason: "reconnect" | "access_removed" | "connection_problem" | "expiring" | "not_confirmed";
         /** @description One connection that needs the seller's attention. */
         ConnectionAttention: {
             marketplace: components["schemas"]["Marketplace"];
@@ -2440,11 +3054,13 @@ export interface components {
          */
         SaleForwardingStatus: components["schemas"]["KnownSaleForwardingStatus"];
         /**
-         * @description `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
-         *     email domain, which this deployment does not have yet.
+         * @description - `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+         *       email domain, which this deployment does not have yet.
+         *     - `not_set_up`, `confirming`, `working`: as `KnownSaleEmailStatus` (`getSaleEmails`, which
+         *       has the address and the setup steps).
          * @enum {string}
          */
-        KnownSaleForwardingStatus: "needs_domain";
+        KnownSaleForwardingStatus: "needs_domain" | "not_set_up" | "confirming" | "working";
         /** @description Forwarding marketplace sale emails to Listora, which detects sales sooner. */
         SaleForwarding: {
             status: components["schemas"]["SaleForwardingStatus"];
@@ -2462,6 +3078,233 @@ export interface components {
             saleForwarding: components["schemas"]["SaleForwarding"];
             /** @description The latest check of any connection; absent before the first. */
             lastCheckedAt?: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description A `KnownMarketplaceSessionStatus`, or a status added after this client was built.
+         *     Clients show `statusDisplay` for an unknown status and offer to link again.
+         */
+        MarketplaceSessionStatus: components["schemas"]["KnownMarketplaceSessionStatus"];
+        /**
+         * @description `not_linked`: no session. `checking`: a session was just linked (or checked again) and
+         *     Listora is checking it where the marketplace runs (the browser runner, for at most 15
+         *     minutes, or the seller's iPhone, the next time Listora runs there). `linked`: the check passed,
+         *     and Listora automates the marketplace in that session. `needs_relink`: the marketplace
+         *     rejected the session, or showed a check automation must not pass; the user signs in
+         *     again. `check_failed`: Listora could not confirm the session works: its check failed or
+         *     did not finish in time (see `issue`). `requestConnectionCheck` checks the same session
+         *     again; linking again checks a new one. `api_connected`: the marketplace is connected
+         *     through its API, so there is nothing to sign in to. The marketplace's `Connection` shows
+         *     the same status in the same words.
+         * @enum {string}
+         */
+        KnownMarketplaceSessionStatus: "not_linked" | "checking" | "linked" | "needs_relink" | "check_failed" | "api_connected";
+        /** @description Where the app signs the user in, and which of that site's cookies it hands over. */
+        MarketplaceSessionLogin: {
+            /**
+             * Format: uri
+             * @description The marketplace's own sign-in page.
+             */
+            url: string;
+            /**
+             * @description The marketplace's own domains (`poshmark.com`). The app sends only cookies whose
+             *     domain is one of these or a subdomain of one; the server refuses any other.
+             */
+            cookieDomains: string[];
+            /**
+             * @description The marketplace may sign the user in with a link it emails them (Depop). Tapped in
+             *     the email, that link opens the phone's default browser, not the app, so the app asks
+             *     for the link to be copied (or shared to the app) and opens it in its sign-in page,
+             *     but only a link on `url`'s scheme or https and on one of `cookieDomains`. Absent
+             *     means `false`.
+             */
+            emailsSignInLinks?: boolean;
+        };
+        /**
+         * @description A marketplace linked by signing in (`connect: session`). It is shown as linked only
+         *     after the session check (on the browser runner or the seller's iPhone) confirmed the
+         *     marketplace accepts the session.
+         */
+        MarketplaceSession: {
+            marketplace: components["schemas"]["Marketplace"];
+            status: components["schemas"]["MarketplaceSessionStatus"];
+            statusDisplay: components["schemas"]["StatusDisplay"];
+            login: components["schemas"]["MarketplaceSessionLogin"];
+            /** @description The seller's name on the marketplace, when the app or the check knows it. */
+            displayName?: string;
+            /** @description When the current session was linked. */
+            linkedAt?: components["schemas"]["Timestamp"];
+            /** @description When the current session's check finished. */
+            checkedAt?: components["schemas"]["Timestamp"];
+            /** @description Why the session needs relinking, or why its check failed. */
+            issue?: components["schemas"]["ConnectionIssue"];
+            /** @description Where its automated steps run; present once it is linked. */
+            execution?: components["schemas"]["ConnectionExecution"];
+        };
+        MarketplaceSessionList: {
+            data: components["schemas"]["MarketplaceSession"][];
+        };
+        /**
+         * @description One cookie as the app's web view holds it (`HTTPCookie`), in the browser runner's
+         *     terms. A name plus value of at most 4096 bytes, as browsers allow.
+         */
+        SessionCookie: {
+            name: string;
+            value: string;
+            /** @description A host (`www.poshmark.com`) or a domain cookie (`.poshmark.com`). */
+            domain: string;
+            path: string;
+            /**
+             * Format: int64
+             * @description Unix time in whole seconds; `-1` for a cookie that lasts as long as the browser session.
+             */
+            expires: number;
+            httpOnly: boolean;
+            secure: boolean;
+            /**
+             * @description `lax` when the site set none.
+             * @enum {string}
+             */
+            sameSite: "strict" | "lax" | "none";
+        };
+        MarketplaceSessionLink: {
+            /** @description The marketplace's cookies after the user signed in, and no other site's. */
+            cookies: components["schemas"]["SessionCookie"][];
+            /** @description The seller's name on the marketplace, when the app knows it. */
+            displayName?: string;
+            /**
+             * @description The registered device that linked it (`registerDevice`), which then runs the
+             *     marketplace's automated steps when they run on the phone.
+             */
+            installationId?: components["schemas"]["Id"];
+        };
+        /** @description A `KnownExecutionLocation`, or a location added after this client was built. */
+        ExecutionLocation: components["schemas"]["KnownExecutionLocation"];
+        /**
+         * @description Where a connection's automated steps run: `cloud`, Listora's browser runner; `phone`, the
+         *     iPhone that linked the marketplace, in the seller's own session on their own network.
+         * @enum {string}
+         */
+        KnownExecutionLocation: "cloud" | "phone";
+        /**
+         * @description Where the connection's automated steps run, and what waits for the phone. Present for a
+         *     marketplace that is automated in a linked session.
+         */
+        ConnectionExecution: {
+            location: components["schemas"]["ExecutionLocation"];
+            /**
+             * @description What to show: `Runs on your iPhone` or `Runs in Listora's cloud`, or why the phone
+             *     can't run it yet (`Link it on your iPhone to run it there`).
+             */
+            label: string;
+            /** @description The phone that runs it, when it runs on one (compare with your own). */
+            deviceInstallationId?: components["schemas"]["Id"];
+            deviceName?: string;
+            /**
+             * Format: int32
+             * @description Changes and checks waiting for that phone to run them.
+             */
+            waiting?: number;
+            /** @description Since when the oldest of them waits. */
+            waitingSince?: components["schemas"]["Timestamp"];
+            /**
+             * @description Whether the connection may run in Listora's cloud. False for a marketplace that
+             *     refuses Listora's cloud servers: the app does not offer the cloud, and
+             *     `setConnectionExecution` refuses a move there.
+             */
+            cloudAllowed: boolean;
+            /**
+             * @description Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
+             *     blocks cloud servers, so Listora runs it from your phone").
+             */
+            cloudBlockedReason?: string;
+        };
+        ConnectionExecutionChange: {
+            location: components["schemas"]["KnownExecutionLocation"];
+        };
+        /** @enum {string} */
+        DevicePlatform: "ios";
+        /**
+         * @description The APNs environment the device token belongs to.
+         * @enum {string}
+         */
+        PushEnvironment: "sandbox" | "production";
+        DeviceRegistration: {
+            /** @description The device's name, as the seller sees it ("Tonio's iPhone"). */
+            name: string;
+            platform: components["schemas"]["DevicePlatform"];
+            appVersion?: string;
+            /**
+             * Format: int32
+             * @description The version of phone calls the app's runtime speaks.
+             */
+            runtimeVersion?: number;
+            /** @description The APNs device token, hex; absent when the app has none. */
+            pushToken?: string;
+            pushEnvironment?: components["schemas"]["PushEnvironment"];
+        };
+        Device: {
+            installationId: components["schemas"]["Id"];
+            name: string;
+            platform: components["schemas"]["DevicePlatform"];
+            /** @description Whether Listora can send this device push notifications. */
+            pushEnabled: boolean;
+            lastSeenAt: components["schemas"]["Timestamp"];
+        };
+        /** @description A `KnownPhoneWorkPurpose`, or one added after this client was built. */
+        PhoneWorkPurpose: components["schemas"]["KnownPhoneWorkPurpose"];
+        /**
+         * @description `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
+         *     or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
+         *     a look at the seller's sold orders.
+         * @enum {string}
+         */
+        KnownPhoneWorkPurpose: "operation" | "session_check" | "sale_check";
+        PhoneRunClaim: {
+            installationId: components["schemas"]["Id"];
+            /** Format: int32 */
+            runtimeVersion: number;
+        };
+        /**
+         * @description One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,
+         *     and its result comes back as `answerPhoneCall`'s `answer`. Its shape is the runtime's
+         *     (`PhoneCallInput` in packages/automation/src/phone/runtime.ts), versioned by
+         *     `runtimeVersion`.
+         */
+        PhoneCall: {
+            /** Format: int32 */
+            index: number;
+            input: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * @description The phone's run of one piece of work. While it has a `call`, the phone runs it and
+         *     answers; without one, the run is over and the phone claims the next.
+         */
+        PhoneRun: {
+            id: components["schemas"]["Id"];
+            purpose: components["schemas"]["PhoneWorkPurpose"];
+            marketplace: components["schemas"]["Marketplace"];
+            operationId?: components["schemas"]["Id"];
+            call?: components["schemas"]["PhoneCall"];
+        };
+        /** @description The run to continue, absent when there is nothing (more) to run. */
+        PhoneRunResult: {
+            run?: components["schemas"]["PhoneRun"];
+            /**
+             * Format: int32
+             * @description Present on a claim that found nothing to run: how long the app waits, while it is open,
+             *     before it claims again. Sooner when work for this phone is due then (a check tried
+             *     again after a failed attempt), so work never waits for a push or for the app to reopen.
+             */
+            nextClaimInSeconds?: number;
+        };
+        PhoneCallAnswer: {
+            installationId: components["schemas"]["Id"];
+            /** @description What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged. */
+            answer: {
+                [key: string]: unknown;
+            };
         };
         /**
          * @description A `KnownSaleStatus`, or a status added after this client was built. Clients show an
@@ -2989,8 +3832,12 @@ export interface components {
             item?: components["schemas"]["UserTaskItem"];
             listingId?: components["schemas"]["Id"];
             operationId?: components["schemas"]["Id"];
-            /** @description For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale. */
+            /**
+             * @description For a completed `confirm_sale` or `review_match` of a sale email, the sale it recorded;
+             *     for `resolve_double_sale`, the later sale.
+             */
             saleId?: components["schemas"]["Id"];
+            saleEmail?: components["schemas"]["UserTaskSaleEmail"];
             /**
              * Format: uri
              * @description Opens the right screen in the marketplace app or site.
@@ -3008,6 +3855,36 @@ export interface components {
             title?: string;
             coverPhoto?: components["schemas"]["Photo"];
         };
+        /** @description A `KnownUserTaskSaleEmailReason`, or one added after this client was built. */
+        UserTaskSaleEmailReason: components["schemas"]["KnownUserTaskSaleEmailReason"];
+        /**
+         * @description Why a sale email waits for the user:
+         *
+         *     - `ask_before_delist`: it matched `item`, and the user asked to confirm sale emails first
+         *       (a `confirm_sale` task). Completing it records the sale and delists the item everywhere
+         *       else; dismissing it records nothing.
+         *     - `ambiguous_match`: it could be any of `candidates` (a `review_match` task).
+         *     - `unknown_format`: Listora cannot read it (a `review_match` task, no `candidates`).
+         * @enum {string}
+         */
+        KnownUserTaskSaleEmailReason: "ask_before_delist" | "ambiguous_match" | "unknown_format";
+        /**
+         * @description What a forwarded sale email said, for a `confirm_sale` or `review_match` task: its parsed
+         *     details and a short excerpt with the buyer's details removed (Listora keeps nothing more of
+         *     the email).
+         */
+        UserTaskSaleEmail: {
+            reason: components["schemas"]["UserTaskSaleEmailReason"];
+            receivedAt: components["schemas"]["Timestamp"];
+            excerpt: string;
+            /** @description The item's title as the email gave it. */
+            title?: string;
+            salePrice?: components["schemas"]["Money"];
+            soldAt?: components["schemas"]["Timestamp"];
+            orderNumber?: string;
+            /** @description The items an ambiguous email could be; the user picks one with `matchedItemId`. */
+            candidates: components["schemas"]["UserTaskItem"][];
+        };
         /**
          * @description The user's confirmation and, for some kinds, their decision. Which properties apply
          *     depends on the task's `kind`; a property that does not apply is
@@ -3018,8 +3895,11 @@ export interface components {
          *       it is not a listing on that marketplace, and `409 already_exists` when another listing
          *       already has it.
          *     - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
-         *       `rejectMatch: true` when nothing matches. Exactly one of the two is required.
-         *     - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+         *       `rejectMatch: true` when nothing matches. Exactly one of the two is required. For a sale
+         *       email, the chosen item's sale is recorded and delisted everywhere else; `422` when the
+         *       email shows no price and the item has no listing price on that marketplace.
+         *     - `confirm_sale`: optional `saleCorrection` when the detected details are wrong. For a sale
+         *       email, completing it records the sale and delists the item everywhere else.
          *     - `delist_manually`, `edit_manually`, `reconnect`, `resolve_double_sale`: nothing besides
          *       `note`.
          *     - Every kind: optional `note`.
@@ -3044,6 +3924,252 @@ export interface components {
             data: components["schemas"]["UserTask"][];
             /** @description Present when there are more results. */
             nextCursor?: string;
+        };
+        /**
+         * @description A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show
+         *     `statusDisplay` as given.
+         */
+        SaleEmailStatus: components["schemas"]["KnownSaleEmailStatus"];
+        /**
+         * @description - `unavailable`: this Listora receives no email yet (no `address`).
+         *     - `not_set_up`: no email has reached the address yet.
+         *     - `confirming`: the email provider sent its forwarding confirmation (`confirmation`); the
+         *       user confirms it in their provider's settings.
+         *     - `working`: a marketplace email passed Listora's sender checks, so forwarding works.
+         * @enum {string}
+         */
+        KnownSaleEmailStatus: "unavailable" | "not_set_up" | "confirming" | "working";
+        /**
+         * @description The email provider's forwarding confirmation, sent to the Listora address: the user types
+         *     the `code` into their provider's settings, or opens `url` (always on the provider's own
+         *     domain, from a message whose sender checks passed). Listora never opens the link itself.
+         */
+        SaleEmailConfirmation: {
+            /** @description For example "Gmail". */
+            provider: string;
+            code?: string;
+            /** Format: uri */
+            url?: string;
+            receivedAt: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description Email sale detection: the account's private forwarding address, how to forward the
+         *     marketplaces' sold emails to it, what has arrived, and the "ask before auto-delist"
+         *     setting. A sold email from Poshmark, Mercari, or Depop that passes Listora's sender checks
+         *     (SPF and the marketplace's DKIM signature) records the sale and delists the item everywhere
+         *     else within minutes, or with `askBeforeDelist` makes a confirm task first.
+         */
+        SaleEmails: {
+            /** @description The account's own forwarding address; absent while `status` is `unavailable`. */
+            address?: string;
+            status: components["schemas"]["SaleEmailStatus"];
+            statusDisplay: components["schemas"]["StatusDisplay"];
+            /**
+             * @description When true, a sale email makes a `confirm_sale` task instead of recording the sale and
+             *     delisting at once. False by default.
+             */
+            askBeforeDelist: boolean;
+            /** @description How to set forwarding up, in order, worded for the user. */
+            steps: string[];
+            /** @description The email search that finds the marketplaces' sold emails, for the forwarding filter. */
+            filter: string;
+            /** @description Present while the provider's confirmation waits for the user (`confirming`). */
+            confirmation?: components["schemas"]["SaleEmailConfirmation"];
+            lastSaleEmailAt?: components["schemas"]["Timestamp"];
+            lastEmailAt?: components["schemas"]["Timestamp"];
+        };
+        SaleEmailSettingsReplace: {
+            askBeforeDelist: boolean;
+        };
+        /**
+         * @description A `KnownTodayCardKind`, or a card added after this client was built. Clients show an
+         *     unknown card's `title`, `detail`, and action generically.
+         */
+        TodayCardKind: components["schemas"]["KnownTodayCardKind"];
+        /**
+         * @description `delist`: an item sold and is not delisted (or confirmed) everywhere else yet.
+         *     `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
+         *     seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
+         *     `stale_listing`: a listing live a long time with no changes, with a price drop (never below
+         *     the item's floor) or a relist suggested.
+         * @enum {string}
+         */
+        KnownTodayCardKind: "delist" | "ship" | "reconnect" | "review_drafts" | "stale_listing";
+        /**
+         * @description A `KnownTodayUrgency`, or a level added after this client was built, which clients show
+         *     like `normal`.
+         */
+        TodayUrgency: components["schemas"]["KnownTodayUrgency"];
+        /**
+         * @description `urgent`: needs the seller now (a delist that is stuck or waiting for them, a ship-by date
+         *     within a day or past). `high`: soon. `normal`: when the seller has a moment.
+         * @enum {string}
+         */
+        KnownTodayUrgency: "urgent" | "high" | "normal";
+        /**
+         * @description A `KnownTodayDestination`, or a screen added after this client was built. Clients that do
+         *     not know it open the item when the action names one, and otherwise offer no action.
+         */
+        TodayDestination: components["schemas"]["KnownTodayDestination"];
+        /**
+         * @description `item`: the item screen (`itemId`). `sale`: the sale's screen (`saleId`; `itemId` names the
+         *     item too). `marketplaces`: the marketplace connections screen (`connectionId` names the
+         *     connection). `drafts`: the drafts waiting for review.
+         * @enum {string}
+         */
+        KnownTodayDestination: "item" | "sale" | "marketplaces" | "drafts";
+        /** @description The card's one primary action and the screen it opens. */
+        TodayAction: {
+            /** @description The button's title, for example `Open sale` or `Lower to $40`. */
+            label: string;
+            destination: components["schemas"]["TodayDestination"];
+            itemId?: components["schemas"]["Id"];
+            saleId?: components["schemas"]["Id"];
+            connectionId?: components["schemas"]["Id"];
+        };
+        /** @description The item a card is about. */
+        TodayItem: {
+            id: components["schemas"]["Id"];
+            sku: components["schemas"]["Sku"];
+            title?: string;
+            /**
+             * Format: uri
+             * @description The item's cover photo, small; absent until a photo is processed.
+             */
+            thumbnailUrl?: string;
+        };
+        /** @description A `ship` card's sale and where the item is kept. */
+        TodayShipment: {
+            saleId: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            soldAt: components["schemas"]["Timestamp"];
+            /** @description The marketplace's ship-by date, when it gives one. */
+            shipBy?: components["schemas"]["Timestamp"];
+            location?: components["schemas"]["TodayLocation"];
+        };
+        /** @description Where the item is kept, for example bin `B-12`. */
+        TodayLocation: {
+            code: string;
+            label?: string;
+        };
+        /** @description A `delist` card's delist run, with its honest summary. */
+        TodayDelist: {
+            saleId: components["schemas"]["Id"];
+            delistRunId: components["schemas"]["Id"];
+            soldOn: components["schemas"]["Marketplace"];
+            statusDisplay: components["schemas"]["StatusDisplay"];
+            /** @description The marketplaces where it is not delisted or confirmed yet. */
+            remaining: components["schemas"]["Marketplace"][];
+        };
+        /** @description A `reconnect` card's connection. */
+        TodayConnection: {
+            connectionId: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            displayName?: string;
+            status: components["schemas"]["ConnectionStatus"];
+        };
+        /**
+         * @description A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
+         *     clients show through the card's `detail` and action.
+         */
+        TodayStaleSuggestion: components["schemas"]["KnownTodayStaleSuggestion"];
+        /**
+         * @description `price_drop`: lower the price to `suggestedPrice`, which is never below the item's floor.
+         *     `relist`: no price drop is possible (the price is at its floor, or no floor is known).
+         * @enum {string}
+         */
+        KnownTodayStaleSuggestion: "price_drop" | "relist";
+        /** @description A `stale_listing` card's listing facts and suggestion. */
+        TodayStaleListing: {
+            /** @description When its oldest live listing went live. */
+            listedAt: components["schemas"]["Timestamp"];
+            /** Format: int32 */
+            daysListed: number;
+            price: components["schemas"]["Money"];
+            floor?: components["schemas"]["Money"];
+            suggestion: components["schemas"]["TodayStaleSuggestion"];
+            /** @description Present with `price_drop`. */
+            suggestedPrice?: components["schemas"]["Money"];
+            /** @description Where it is live. */
+            marketplaces: components["schemas"]["Marketplace"][];
+        };
+        /** @description A `review_drafts` card's drafts. */
+        TodayDrafts: {
+            /** Format: int32 */
+            count: number;
+            oldestCreatedAt: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description One thing that needs the seller. A card exists only while its work is not done, so it is
+         *     gone from the next summary once the work is finished. The kind's own property (`shipment`,
+         *     `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+         */
+        TodayCard: {
+            /** @description Stable while the card's work is the same, for example `ship:<saleItemId>`. */
+            id: string;
+            kind: components["schemas"]["TodayCardKind"];
+            urgency: components["schemas"]["TodayUrgency"];
+            title: string;
+            detail?: string;
+            action: components["schemas"]["TodayAction"];
+            item?: components["schemas"]["TodayItem"];
+            shipment?: components["schemas"]["TodayShipment"];
+            delist?: components["schemas"]["TodayDelist"];
+            connection?: components["schemas"]["TodayConnection"];
+            staleListing?: components["schemas"]["TodayStaleListing"];
+            drafts?: components["schemas"]["TodayDrafts"];
+        };
+        /**
+         * @description Sales in a 7-day period. Canceled and returned sales count for nothing. `profit` is the sum
+         *     over the sales whose profit is known (price plus shipping charged, minus fees and the items'
+         *     costs); a sale without recorded fees or with an item without a cost is counted in
+         *     `profitPendingSales` instead. `profit` is absent when no sale's profit is known.
+         */
+        TodayMoneyPeriod: {
+            start: components["schemas"]["Timestamp"];
+            end: components["schemas"]["Timestamp"];
+            /**
+             * Format: int32
+             * @description Orders.
+             */
+            sales: number;
+            /** Format: int32 */
+            itemsSold: number;
+            /** @description What the items sold for, before shipping, fees, and costs. */
+            salesTotal: components["schemas"]["Money"];
+            profit?: components["schemas"]["Money"];
+            /** Format: int32 */
+            profitPendingSales: number;
+        };
+        /** @description The last 7 days (`thisWeek`, ending now) next to the 7 days before (`lastWeek`). */
+        TodayMoney: {
+            thisWeek: components["schemas"]["TodayMoneyPeriod"];
+            lastWeek: components["schemas"]["TodayMoneyPeriod"];
+        };
+        Today: {
+            generatedAt: components["schemas"]["Timestamp"];
+            /** @description Most urgent first. Empty when the seller is all caught up. */
+            cards: components["schemas"]["TodayCard"][];
+            money: components["schemas"]["TodayMoney"];
+        };
+        /**
+         * @description The morning summary notification: once a day at `time` in `timeZone`, a push that sums up
+         *     the Today screen (nothing is sent on a day with nothing to do). Until the app saves a time
+         *     zone, `timeZone` is absent and no summary is sent.
+         */
+        TodaySummarySettings: {
+            enabled: boolean;
+            /** @description Wall-clock `HH:MM`, 24-hour. */
+            time: string;
+            /** @description An IANA time zone name, for example `America/New_York`. */
+            timeZone?: string;
+        };
+        TodaySummarySettingsReplace: {
+            enabled: boolean;
+            /** @description Wall-clock `HH:MM`, 24-hour. */
+            time: string;
+            /** @description An IANA time zone name, for example `America/New_York` (the device's own). */
+            timeZone: string;
         };
     };
     responses: {
@@ -3159,6 +4285,7 @@ export interface components {
         ItemId: components["schemas"]["Id"];
         PhotoId: components["schemas"]["Id"];
         SessionId: components["schemas"]["Id"];
+        BatchId: components["schemas"]["Id"];
         AnalysisId: components["schemas"]["Id"];
         ListingId: components["schemas"]["Id"];
         OperationId: components["schemas"]["Id"];
@@ -3166,6 +4293,11 @@ export interface components {
         SaleId: components["schemas"]["Id"];
         TaskId: components["schemas"]["Id"];
         MarketplacePath: components["schemas"]["KnownMarketplace"];
+        /** @description The app installation's id, which it keeps in its Keychain. */
+        InstallationId: components["schemas"]["Id"];
+        RunId: components["schemas"]["Id"];
+        /** @description The call's place in its run, from 0 (path parameters are text). */
+        CallIndex: string;
     };
     requestBodies: never;
     headers: never;
@@ -3194,6 +4326,8 @@ export type ErrorCode = components['schemas']['ErrorCode'];
 export type KnownErrorCode = components['schemas']['KnownErrorCode'];
 export type AccountDeletion = components['schemas']['AccountDeletion'];
 export type MarketplaceAccessRevocation = components['schemas']['MarketplaceAccessRevocation'];
+export type Profile = components['schemas']['Profile'];
+export type ProfileReplace = components['schemas']['ProfileReplace'];
 export type HealthCheckStatus = components['schemas']['HealthCheckStatus'];
 export type HealthLive = components['schemas']['HealthLive'];
 export type HealthReady = components['schemas']['HealthReady'];
@@ -3245,6 +4379,18 @@ export type AnalysisResult = components['schemas']['AnalysisResult'];
 export type AnalysisFailure = components['schemas']['AnalysisFailure'];
 export type Analysis = components['schemas']['Analysis'];
 export type AnalysisApply = components['schemas']['AnalysisApply'];
+export type ItemBatchItemState = components['schemas']['ItemBatchItemState'];
+export type KnownItemBatchItemState = components['schemas']['KnownItemBatchItemState'];
+export type ItemBatchItemProblem = components['schemas']['ItemBatchItemProblem'];
+export type InteractionTotals = components['schemas']['InteractionTotals'];
+export type ItemBatchPhotoProgress = components['schemas']['ItemBatchPhotoProgress'];
+export type ItemBatchItem = components['schemas']['ItemBatchItem'];
+export type ItemBatchProgress = components['schemas']['ItemBatchProgress'];
+export type ItemBatch = components['schemas']['ItemBatch'];
+export type ItemBatchItemCreate = components['schemas']['ItemBatchItemCreate'];
+export type ItemBatchItemSubmit = components['schemas']['ItemBatchItemSubmit'];
+export type ItemBatchItemInteraction = components['schemas']['ItemBatchItemInteraction'];
+export type ItemBatchInteractionReplace = components['schemas']['ItemBatchInteractionReplace'];
 export type AiPriceEstimate = components['schemas']['AiPriceEstimate'];
 export type SoldDataSource = components['schemas']['SoldDataSource'];
 export type KnownSoldDataSource = components['schemas']['KnownSoldDataSource'];
@@ -3263,6 +4409,11 @@ export type UsageMetric = components['schemas']['UsageMetric'];
 export type KnownUsageMetric = components['schemas']['KnownUsageMetric'];
 export type QuotaUsage = components['schemas']['QuotaUsage'];
 export type Usage = components['schemas']['Usage'];
+export type VoiceCorrectionRequest = components['schemas']['VoiceCorrectionRequest'];
+export type VoiceCorrection = components['schemas']['VoiceCorrection'];
+export type VoiceCorrectionChange = components['schemas']['VoiceCorrectionChange'];
+export type VoiceCorrectionField = components['schemas']['VoiceCorrectionField'];
+export type KnownVoiceCorrectionField = components['schemas']['KnownVoiceCorrectionField'];
 export type ListingStatus = components['schemas']['ListingStatus'];
 export type KnownListingStatus = components['schemas']['KnownListingStatus'];
 export type ListingAction = components['schemas']['ListingAction'];
@@ -3325,6 +4476,28 @@ export type SaleForwardingStatus = components['schemas']['SaleForwardingStatus']
 export type KnownSaleForwardingStatus = components['schemas']['KnownSaleForwardingStatus'];
 export type SaleForwarding = components['schemas']['SaleForwarding'];
 export type ConnectionHealthSummary = components['schemas']['ConnectionHealthSummary'];
+export type MarketplaceSessionStatus = components['schemas']['MarketplaceSessionStatus'];
+export type KnownMarketplaceSessionStatus = components['schemas']['KnownMarketplaceSessionStatus'];
+export type MarketplaceSessionLogin = components['schemas']['MarketplaceSessionLogin'];
+export type MarketplaceSession = components['schemas']['MarketplaceSession'];
+export type MarketplaceSessionList = components['schemas']['MarketplaceSessionList'];
+export type SessionCookie = components['schemas']['SessionCookie'];
+export type MarketplaceSessionLink = components['schemas']['MarketplaceSessionLink'];
+export type ExecutionLocation = components['schemas']['ExecutionLocation'];
+export type KnownExecutionLocation = components['schemas']['KnownExecutionLocation'];
+export type ConnectionExecution = components['schemas']['ConnectionExecution'];
+export type ConnectionExecutionChange = components['schemas']['ConnectionExecutionChange'];
+export type DevicePlatform = components['schemas']['DevicePlatform'];
+export type PushEnvironment = components['schemas']['PushEnvironment'];
+export type DeviceRegistration = components['schemas']['DeviceRegistration'];
+export type Device = components['schemas']['Device'];
+export type PhoneWorkPurpose = components['schemas']['PhoneWorkPurpose'];
+export type KnownPhoneWorkPurpose = components['schemas']['KnownPhoneWorkPurpose'];
+export type PhoneRunClaim = components['schemas']['PhoneRunClaim'];
+export type PhoneCall = components['schemas']['PhoneCall'];
+export type PhoneRun = components['schemas']['PhoneRun'];
+export type PhoneRunResult = components['schemas']['PhoneRunResult'];
+export type PhoneCallAnswer = components['schemas']['PhoneCallAnswer'];
 export type SaleStatus = components['schemas']['SaleStatus'];
 export type KnownSaleStatus = components['schemas']['KnownSaleStatus'];
 export type SaleDetectionSource = components['schemas']['SaleDetectionSource'];
@@ -3373,9 +4546,39 @@ export type CopyField = components['schemas']['CopyField'];
 export type CopyAssist = components['schemas']['CopyAssist'];
 export type UserTask = components['schemas']['UserTask'];
 export type UserTaskItem = components['schemas']['UserTaskItem'];
+export type UserTaskSaleEmailReason = components['schemas']['UserTaskSaleEmailReason'];
+export type KnownUserTaskSaleEmailReason = components['schemas']['KnownUserTaskSaleEmailReason'];
+export type UserTaskSaleEmail = components['schemas']['UserTaskSaleEmail'];
 export type UserTaskCompletion = components['schemas']['UserTaskCompletion'];
 export type SaleCorrection = components['schemas']['SaleCorrection'];
 export type UserTaskPage = components['schemas']['UserTaskPage'];
+export type SaleEmailStatus = components['schemas']['SaleEmailStatus'];
+export type KnownSaleEmailStatus = components['schemas']['KnownSaleEmailStatus'];
+export type SaleEmailConfirmation = components['schemas']['SaleEmailConfirmation'];
+export type SaleEmails = components['schemas']['SaleEmails'];
+export type SaleEmailSettingsReplace = components['schemas']['SaleEmailSettingsReplace'];
+export type TodayCardKind = components['schemas']['TodayCardKind'];
+export type KnownTodayCardKind = components['schemas']['KnownTodayCardKind'];
+export type TodayUrgency = components['schemas']['TodayUrgency'];
+export type KnownTodayUrgency = components['schemas']['KnownTodayUrgency'];
+export type TodayDestination = components['schemas']['TodayDestination'];
+export type KnownTodayDestination = components['schemas']['KnownTodayDestination'];
+export type TodayAction = components['schemas']['TodayAction'];
+export type TodayItem = components['schemas']['TodayItem'];
+export type TodayShipment = components['schemas']['TodayShipment'];
+export type TodayLocation = components['schemas']['TodayLocation'];
+export type TodayDelist = components['schemas']['TodayDelist'];
+export type TodayConnection = components['schemas']['TodayConnection'];
+export type TodayStaleSuggestion = components['schemas']['TodayStaleSuggestion'];
+export type KnownTodayStaleSuggestion = components['schemas']['KnownTodayStaleSuggestion'];
+export type TodayStaleListing = components['schemas']['TodayStaleListing'];
+export type TodayDrafts = components['schemas']['TodayDrafts'];
+export type TodayCard = components['schemas']['TodayCard'];
+export type TodayMoneyPeriod = components['schemas']['TodayMoneyPeriod'];
+export type TodayMoney = components['schemas']['TodayMoney'];
+export type Today = components['schemas']['Today'];
+export type TodaySummarySettings = components['schemas']['TodaySummarySettings'];
+export type TodaySummarySettingsReplace = components['schemas']['TodaySummarySettingsReplace'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -3392,6 +4595,7 @@ export type ParameterLimit = components['parameters']['Limit'];
 export type ParameterItemId = components['parameters']['ItemId'];
 export type ParameterPhotoId = components['parameters']['PhotoId'];
 export type ParameterSessionId = components['parameters']['SessionId'];
+export type ParameterBatchId = components['parameters']['BatchId'];
 export type ParameterAnalysisId = components['parameters']['AnalysisId'];
 export type ParameterListingId = components['parameters']['ListingId'];
 export type ParameterOperationId = components['parameters']['OperationId'];
@@ -3399,6 +4603,9 @@ export type ParameterAuthorizationId = components['parameters']['AuthorizationId
 export type ParameterSaleId = components['parameters']['SaleId'];
 export type ParameterTaskId = components['parameters']['TaskId'];
 export type ParameterMarketplacePath = components['parameters']['MarketplacePath'];
+export type ParameterInstallationId = components['parameters']['InstallationId'];
+export type ParameterRunId = components['parameters']['RunId'];
+export type ParameterCallIndex = components['parameters']['CallIndex'];
 export type $defs = Record<string, never>;
 export interface operations {
     getLiveness: {
@@ -3480,6 +4687,62 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileReplace"];
+            };
+        };
+        responses: {
+            /** @description The saved profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description The person may not change the account's business name (`forbidden`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -3988,6 +5251,182 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    createItemBatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatch"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getItemBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The batch. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatch"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    addItemBatchItem: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBatchItemCreate"];
+            };
+        };
+        responses: {
+            /** @description The item already at that position. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatchItem"];
+                };
+            };
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatchItem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    submitItemBatchItem: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                batchId: components["parameters"]["BatchId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBatchItemSubmit"];
+            };
+        };
+        responses: {
+            /** @description The item, as it is now. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatchItem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceItemBatchInteraction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: components["parameters"]["BatchId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemBatchInteractionReplace"];
+            };
+        };
+        responses: {
+            /** @description The batch. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemBatch"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     getUsage: {
         parameters: {
             query?: never;
@@ -4006,6 +5445,48 @@ export interface operations {
                     "application/json": components["schemas"]["Usage"];
                 };
             };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    interpretVoiceCorrection: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceCorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description The proposed changes, possibly none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceCorrection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -4810,6 +6291,36 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    setConnectionExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionExecutionChange"];
+            };
+        };
+        responses: {
+            /** @description The connection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     getConnectionHealth: {
         parameters: {
             query?: never;
@@ -4828,6 +6339,92 @@ export interface operations {
                     "application/json": components["schemas"]["ConnectionHealthSummary"];
                 };
             };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listMarketplaceSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every marketplace linked by signing in, and its state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceSessionList"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getMarketplaceSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The marketplace's state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceSession"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    linkMarketplaceSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarketplaceSessionLink"];
+            };
+        };
+        responses: {
+            /** @description Stored; the session is being checked. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketplaceSession"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -5278,6 +6875,219 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    getSaleEmails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's sale email forwarding. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleEmails"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceSaleEmailSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaleEmailSettingsReplace"];
+            };
+        };
+        responses: {
+            /** @description The account's sale email forwarding, with the saved setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleEmails"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getToday: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The summary as of `generatedAt`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Today"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getTodaySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodaySummarySettings"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    replaceTodaySettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TodaySummarySettingsReplace"];
+            };
+        };
+        responses: {
+            /** @description The saved setting. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodaySummarySettings"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    registerDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The app installation's id, which it keeps in its Keychain. */
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceRegistration"];
+            };
+        };
+        responses: {
+            /** @description The device. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Device"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    claimPhoneRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneRunClaim"];
+            };
+        };
+        responses: {
+            /** @description The claimed run, or none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneRunResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    answerPhoneCall: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+                /** @description The call's place in its run, from 0 (path parameters are text). */
+                index: components["parameters"]["CallIndex"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneCallAnswer"];
+            };
+        };
+        responses: {
+            /** @description The run's next call, or none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneRunResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -5293,7 +7103,7 @@ export const knownIntegrationModeValues: ReadonlyArray<FlattenedDeepRequired<com
 export const knownStatusToneValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownStatusTone"]> = ["success", "in_progress", "checking", "failed", "action_needed", "neutral"];
 export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["marketplace_api", "user_confirmation"];
 export const knownProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownProvenance"]> = ["ai", "ocr", "barcode", "user"];
-export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownErrorCode"]> = ["invalid_request", "unauthenticated", "quota_exceeded", "forbidden", "not_found", "version_conflict", "invalid_state_transition", "already_exists", "idempotency_key_in_progress", "upload_incomplete", "upload_expired", "marketplace_not_connected", "marketplace_reauth_required", "marketplace_action_unavailable", "payload_too_large", "validation_failed", "idempotency_key_reused", "rate_limited", "ai_budget_exceeded", "internal_error", "service_unavailable", "marketplace_authorization_denied", "marketplace_authorization_failed"];
+export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownErrorCode"]> = ["invalid_request", "unauthenticated", "quota_exceeded", "forbidden", "not_found", "version_conflict", "invalid_state_transition", "already_exists", "idempotency_key_in_progress", "upload_incomplete", "upload_expired", "marketplace_not_connected", "marketplace_reauth_required", "marketplace_action_unavailable", "app_update_required", "payload_too_large", "validation_failed", "idempotency_key_reused", "rate_limited", "ai_budget_exceeded", "internal_error", "service_unavailable", "marketplace_authorization_denied", "marketplace_authorization_failed"];
 export const healthCheckStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["HealthCheckStatus"]> = ["ok", "unavailable"];
 export const knownItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownItemStatus"]> = ["draft", "ready", "listed", "sold_pending_delist", "sold", "shipped", "archived"];
 export const userSettableItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserSettableItemStatus"]> = ["draft", "ready", "archived"];
@@ -5307,11 +7117,13 @@ export const uploadTargetMethodValues: ReadonlyArray<FlattenedDeepRequired<compo
 export const analysisTierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnalysisTier"]> = ["fast", "premium"];
 export const analysisStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnalysisStatus"]> = ["queued", "running", "completed", "failed"];
 export const knownAnalysisProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownAnalysisProvenance"]> = ["ai", "ocr", "barcode"];
+export const knownItemBatchItemStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownItemBatchItemState"]> = ["uploading", "preparing_photos", "analyzing", "ready_for_review", "saved", "failed"];
 export const knownSoldDataSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSoldDataSource"]> = ["depop_inspiration", "ebay_mi", "own_history"];
 export const priceTierNameValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PriceTierName"]> = ["quick_sale", "recommended", "higher_profit"];
 export const knownPriceBasisValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPriceBasis"]> = ["sold_data", "ai_estimate", "cost_floor"];
 export const knownFeeEstimateSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownFeeEstimateSource"]> = ["fee_table", "actual_fees"];
 export const knownUsageMetricValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUsageMetric"]> = ["ai_items", "premium_identifications"];
+export const knownVoiceCorrectionFieldValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownVoiceCorrectionField"]> = ["title", "brand", "productName", "category", "department", "sizeLabel", "sizeSystem", "colors", "pattern", "materials", "keywords", "styleNumber", "condition", "conditionNotes", "flaws", "cost", "purchaseSource", "listPrice"];
 export const knownListingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingStatus"]> = ["draft", "queued", "publishing", "active", "ending", "ended", "sold", "error", "unknown", "needs_user_action"];
 export const knownListingActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingAction"]> = ["publish", "revise", "change_price", "end", "relist", "verify"];
 export const listingEndReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ListingEndReason"]> = ["sold_elsewhere", "not_available", "other"];
@@ -5327,8 +7139,14 @@ export const knownImportListingsModeValues: ReadonlyArray<FlattenedDeepRequired<
 export const knownImageTransportModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImageTransportMode"]> = ["url_fetch", "upload", "user_saves_photos"];
 export const knownConnectionActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAction"]> = ["connect", "reconnect", "check"];
 export const connectionAuthorizationStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ConnectionAuthorizationStatus"]> = ["pending", "completed", "failed", "expired"];
-export const knownConnectionAttentionReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAttentionReason"]> = ["reconnect", "access_removed", "connection_problem", "expiring"];
-export const knownSaleForwardingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleForwardingStatus"]> = ["needs_domain"];
+export const knownConnectionAttentionReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownConnectionAttentionReason"]> = ["reconnect", "access_removed", "connection_problem", "expiring", "not_confirmed"];
+export const knownSaleForwardingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleForwardingStatus"]> = ["needs_domain", "not_set_up", "confirming", "working"];
+export const knownMarketplaceSessionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceSessionStatus"]> = ["not_linked", "checking", "linked", "needs_relink", "check_failed", "api_connected"];
+export const sessionCookieSameSiteValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SessionCookie"]["sameSite"]> = ["strict", "lax", "none"];
+export const knownExecutionLocationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownExecutionLocation"]> = ["cloud", "phone"];
+export const devicePlatformValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DevicePlatform"]> = ["ios"];
+export const pushEnvironmentValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PushEnvironment"]> = ["sandbox", "production"];
+export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];
@@ -5341,3 +7159,9 @@ export const knownProfitGranularityValues: ReadonlyArray<FlattenedDeepRequired<c
 export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskKind"]> = ["list_manually", "delist_manually", "edit_manually", "confirm_sale", "reconnect", "review_match", "resolve_double_sale"];
 export const userTaskStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskStatus"]> = ["open", "completed", "dismissed"];
 export const userTaskUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskUrgency"]> = ["normal", "urgent"];
+export const knownUserTaskSaleEmailReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskSaleEmailReason"]> = ["ask_before_delist", "ambiguous_match", "unknown_format"];
+export const knownSaleEmailStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleEmailStatus"]> = ["unavailable", "not_set_up", "confirming", "working"];
+export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayCardKind"]> = ["delist", "ship", "reconnect", "review_drafts", "stale_listing"];
+export const knownTodayUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayUrgency"]> = ["urgent", "high", "normal"];
+export const knownTodayDestinationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayDestination"]> = ["item", "sale", "marketplaces", "drafts"];
+export const knownTodayStaleSuggestionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayStaleSuggestion"]> = ["price_drop", "relist"];

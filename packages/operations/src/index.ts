@@ -19,8 +19,31 @@ export {
   SupersededOperationError,
 } from './errors.ts';
 export type { SuccessProof } from './evidence.ts';
-export { runOperationStep } from './executor.ts';
-export type { StepDependencies } from './executor.ts';
+export {
+  callOperationStep,
+  claimedStepRef,
+  claimOperationStep,
+  loadClaimedStep,
+  NAMED_LISTING_KEY,
+  recordOperationStep,
+  runOperationStep,
+} from './executor.ts';
+export type {
+  CalledStep,
+  Claim,
+  ClaimedStep,
+  ClaimedStepRef,
+  StepDependencies,
+  StepHost,
+} from './executor.ts';
+export {
+  DEFAULT_PHONE_QUEUE,
+  PHONE_UNAVAILABLE_ERROR,
+  phoneWaits,
+  releasePhoneOperations,
+  removePhoneWork,
+} from './phone-queue.ts';
+export type { PhoneQueueSettings, PhoneWait } from './phone-queue.ts';
 export {
   AUTOMATION_OPERATION_TASK,
   listingQueueName,
@@ -34,6 +57,7 @@ export {
   DEFAULT_RETRY_POLICY,
   delayAfterAttempt,
   maxAttempts,
+  queuePollIntervalMs,
   RETRY_DELAYS_MS,
   scaledRetryPolicy,
 } from './policy.ts';
@@ -54,8 +78,19 @@ export {
   UNFINISHED_STATUSES,
 } from './state-machine.ts';
 export type { OperationChange, OperationError, OperationRow } from './transitions.ts';
-export { describeListingStatus, describeOperation } from './status-display.ts';
-export type { ListingStatusInput, StatusDisplay, StatusTone } from './status-display.ts';
+export {
+  describeListingStatus,
+  describeOperation,
+  isRetryableFailure,
+  REFUSED_CONTENT_ERROR,
+  waitedFor,
+} from './status-display.ts';
+export type {
+  ListingStatusInput,
+  PhoneWaitInput,
+  StatusDisplay,
+  StatusTone,
+} from './status-display.ts';
 export { startOperationWorker } from './worker.ts';
 export type {
   OperationWorker,

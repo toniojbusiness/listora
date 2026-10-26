@@ -19,7 +19,7 @@ final class ConnectionHealthUITests: XCTestCase {
         try await stack.setEbayConnection("reauth_required")
         launch(signedInTo: stack)
 
-        // Inventory shows the banner in the server's words, and Settings has a badge.
+        // Inventory shows the banner in the server's words.
         let banner = app.descendants(matching: .any)["connectionAttention.banner"]
         XCTAssertTrue(banner.waitForExistence(timeout: 15), "no connection banner")
         XCTAssertTrue(banner.label.contains("Reconnect eBay"), banner.label)
@@ -45,7 +45,8 @@ final class ConnectionHealthUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(of: ebay, "Connection problem", timeout: 10), ebay.label)
         let forwarding = app.descendants(matching: .any)["marketplaces.saleForwarding.status"]
         XCTAssertTrue(forwarding.waitForExistence(timeout: 5))
-        XCTAssertEqual(forwarding.label, "Set up when you add a domain")
+        // The local stack reads sale emails (the folder driver), and nothing has arrived yet.
+        XCTAssertEqual(forwarding.label, "Not set up")
         let check = app.buttons["marketplaces.ebay.check"]
         XCTAssertTrue(check.waitForExistence(timeout: 5))
         XCTAssertEqual(check.label, "Retry check")
@@ -57,7 +58,9 @@ final class ConnectionHealthUITests: XCTestCase {
         keepScreenshot("Marketplaces, eBay connected")
 
         // Back on Inventory the banner is gone.
-        app.tabBars.buttons["Inventory"].tap()
+        app.navigationBars["Marketplaces"].buttons.element(boundBy: 0).tap()
+        app.buttons["settings.done"].tap()
+        XCTAssertTrue(app.tabBars.buttons["Inventory"].isSelected)
         XCTAssertTrue(waitForAbsence(of: banner), "the banner stayed after eBay was fixed")
     }
 
@@ -69,7 +72,9 @@ final class ConnectionHealthUITests: XCTestCase {
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
         ]
         app.launch()
-        XCTAssertTrue(app.tabBars.buttons["Inventory"].waitForExistence(timeout: 10))
+        let inventory = app.tabBars.buttons["Inventory"]
+        XCTAssertTrue(inventory.waitForExistence(timeout: 10))
+        inventory.tap()
     }
 
     /// Keeps a screenshot in the result bundle, passing or not, for reviewing the screens.

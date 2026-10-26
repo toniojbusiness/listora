@@ -22,6 +22,11 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    worker hands its job over, unchanged and without using an attempt, to the browser runner's
    task (`AUTOMATION_OPERATION_TASK`, the same job key and listing queue), which runs it by the
    same rules ([automation.md](automation.md)); its next steps come back to the worker first.
+   Under a connection that runs on the phone, the step waits in `phone_work` for the seller's
+   iPhone instead (`phone-queue.ts`): the operation keeps its status and its job, which only
+   rechecks the wait, recovers a phone run that stopped mid-step like any interrupted step, and
+   fails the operation with `phone_unavailable` (and a Retry) after 24 hours. The phone's
+   answers are decided by the same phases, in the API ([phone-execution.md](phone-execution.md)).
    Automated and API operations are decided the same way. The adapter outcome determines the
    next state:
    - `confirmed`: the API (or the browser session) took the change **and** `readListing` shows
@@ -43,7 +48,13 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
    seven. The delays are the worker's `OPERATION_RETRY_DELAY_SCALE` times the schedule above (1
    in production; the local stack for UI tests uses 0.1). A step whose result is unknown is always followed by a read-back, even after the
    last attempt. Retry (`retryOperation`) gives a failed operation a fresh set of attempts; it
-   is refused once a newer operation exists on the listing, since it would undo that one.
+   is refused once a newer operation exists on the listing, since it would undo that one. A
+   create, revise, or relist whose content the adapter's own validation refuses fails before
+   anything is sent (`validation_failed`, `REFUSED_CONTENT_ERROR`, "Poshmark needs a size for
+   Men's Shirts. Fix it, then try again."). Retrying the same content can only fail again, so
+   that failure is not retryable (`error.retryable: false`, the label has no "- Retry"): the
+   seller fixes the item or the listing and sends it again, which a draft that never reached the
+   marketplace allows ([inventory.md](inventory.md#the-api-behind-it)).
 4. **Idempotent re-execution.** An operation that was sent before is read back before every
    later send, and succeeds without sending again when the change already took effect (a 5xx
    can hide an applied write). Adapters also pass the operation's idempotency key to the
@@ -116,7 +127,8 @@ escalates the alert. A second sale opens a double-sale incident.
 
 **Status vocabulary** shown to users: `Active (confirmed by eBay)`, `Delisting... retry 2 of 6`,
 `Delist failed - Retry`, `Checking...`, `Action needed - delist on Poshmark`,
-`Done (you confirmed)`. Assisted listings never show "confirmed by <marketplace>".
+`Done (you confirmed)`, and for a step the phone runs, `Delisting... waiting on your iPhone (12
+minutes)` and `Delisting on your iPhone...`. Assisted listings never show "confirmed by <marketplace>".
 `describeListingStatus` (`status-display.ts`) renders these labels from the listing's newest
 operation: "confirmed by <marketplace>" only for a read-back's evidence, "you confirmed" only
 for the user's confirmation, and a listing without a successful operation is never shown as

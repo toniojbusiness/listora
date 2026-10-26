@@ -3,7 +3,7 @@
  * freshly migrated scratch database, dev sign-in, and a `call` that drives one contract
  * operation and fails the test when the response does not match the contract.
  */
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -36,6 +36,21 @@ import {
   type AnalysisJobPayload,
   type AnalysisJobQueue,
 } from '@listora/analysis';
+import { DEFAULT_RETRY_POLICY } from '@listora/operations';
+import {
+  loadAutomationSettings,
+  phoneWorkAdapters,
+  type AutomationSettings,
+  type PhoneWorkDependencies,
+} from '@listora/automation';
+import { LocalTokenVault, SessionVault } from '@listora/connections';
+import {
+  startBatchItemAnalysis,
+  type BatchJobDependencies,
+  type BatchJobOutcome,
+  type BatchJobPayload,
+  type BatchJobQueue,
+} from '@listora/batches';
 import {
   createDatabase,
   migrateJobQueue,
@@ -51,7 +66,7 @@ import {
   type PhotoProcessingDependencies,
   type PhotoProcessingOutcome,
 } from '@listora/photos';
-import { createLogger, sha256Hex } from '@listora/shared';
+import { createLogger, sha256Hex, type Logger } from '@listora/shared';
 import { LocalDiskStorage } from '@listora/storage';
 import { createScratchDatabase, type ScratchDatabase } from '@listora/testing';
 import type { ApiError, ErrorResponse } from '@listora/api-contract';
@@ -63,6 +78,8 @@ import type { AuthDriver } from './auth/driver.ts';
 import type { ConnectionsDependencies } from './connections/routes.ts';
 import { operationSpec, responseContractErrors } from './contract/contract.ts';
 import type { ContractReply, OperationId } from './contract/routes.ts';
+import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
+import type { SaleEmailsDependencies } from './sale-emails/routes.ts';
 import { resolveTenant, type Tenant } from './tenancy.ts';
 import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
@@ -147,6 +164,39 @@ export class RecordingAnalysisJobs implements AnalysisJobQueue {
   }
 }
 
+/** A BatchJobQueue that records jobs; `runAll` runs them the way the worker will. */
+export class RecordingBatchJobs implements BatchJobQueue {
+  readonly jobs: (BatchJobPayload & { runAt?: Date })[] = [];
+  readonly #deps: () => BatchJobDependencies;
+
+  constructor(deps: () => BatchJobDependencies) {
+    this.#deps = deps;
+  }
+
+  enqueue(_executor: DbExecutor, job: BatchJobPayload, runAt?: Date): Promise<void> {
+    this.jobs.push({ ...job, ...(runAt === undefined ? {} : { runAt }) });
+    return Promise.resolve();
+  }
+
+  /**
+   * Runs every recorded job once, in order, and forgets them. A job that queues itself again
+   * (its photos are still processing) waits for the next `runAll`.
+   */
+  async runAll(): Promise<BatchJobOutcome[]> {
+    const outcomes: BatchJobOutcome[] = [];
+    for (const job of this.jobs.splice(0)) {
+      outcomes.push(
+        await startBatchItemAnalysis(this.#deps(), {
+          accountId: job.accountId,
+          batchId: job.batchId,
+          itemId: job.itemId,
+        }),
+      );
+    }
+    return outcomes;
+  }
+}
+
 export type TestUploadState = 'uploaded' | 'pending' | 'expired' | 'attached';
 
 /**
@@ -225,6 +275,42 @@ export function offlineDependencies(): Pick<
   };
 }
 
+/** The session vault under a random key, and the marketplaces' real profiles. */
+function testMarketplaceSessions(
+  logger: Logger,
+  settings: AutomationSettings,
+): MarketplaceSessionsDependencies & { vault: SessionVault } {
+  return {
+    vault: new SessionVault({ vault: new LocalTokenVault(randomBytes(32)), logger }),
+    profiles: settings.profiles,
+  };
+}
+
+/** Phone runs over the marketplaces' real profiles and adapters, as the API serves them. */
+function testPhoneWork(
+  db: Db,
+  logger: Logger,
+  settings: AutomationSettings,
+  vault: SessionVault,
+): PhoneWorkDependencies {
+  return {
+    db,
+    adapters: phoneWorkAdapters(
+      settings,
+      { fakeMarketplaceUrl: undefined, ebay: undefined, depop: undefined },
+      logger,
+    ),
+    profiles: settings.profiles,
+    vault,
+    policy: DEFAULT_RETRY_POLICY,
+    saleChecks: settings.saleChecks,
+    logger,
+    stepTimeoutMs: settings.stepTimeoutMs,
+    callTimeoutMs: settings.callTimeoutMs,
+    blockedRecheckMs: 60_000,
+  };
+}
+
 function unused(): never {
   throw new Error('offline test dependencies are not used');
 }
@@ -281,6 +367,12 @@ export interface TestApiOptions {
   connections?: ConnectionsDependencies;
   /** eBay's notification endpoint (default: not served). */
   ebayWebhook?: EbayWebhookDependencies;
+  /** The session vault and profiles linking uses (default: `vault`, under a random key). */
+  marketplaceSessions?: MarketplaceSessionsDependencies;
+  /** Email sale detection's settings (default: no mail is read). */
+  saleEmails?: SaleEmailsDependencies;
+  /** `AUTOMATION_*` keys for the marketplaces' profiles (`AUTOMATION_POSHMARK_RUNS_ON`). */
+  automationEnv?: Readonly<Record<string, string>>;
 }
 
 export interface TestApi {
@@ -299,9 +391,13 @@ export interface TestApi {
   photoJobs: RecordingPhotoJobs;
   /** Jobs analysis requests added; `analysisJobs.runAll()` runs them with the fake provider. */
   analysisJobs: RecordingAnalysisJobs;
+  /** Jobs batch item submits added; `batchJobs.runAll()` runs them as the worker does. */
+  batchJobs: RecordingBatchJobs;
   aiControls: TestAiControls;
   /** The AI client the API and the jobs share. */
   ai: AiClient;
+  /** The session vault `linkMarketplaceSession` stores sessions in (a random local key). */
+  vault: SessionVault;
   /** The clock for dev sign-in and upload sessions, in milliseconds; move it to expire them. */
   clock: { now: number };
   /** Every line the API logged (requests included), parsed, oldest first. */
@@ -368,25 +464,45 @@ export async function createTestApi(
     logger,
     autoEscalate: aiControls.autoEscalate,
   }));
+  const batchJobs: RecordingBatchJobs = new RecordingBatchJobs(() => ({
+    db,
+    ai,
+    analysisJobs,
+    batchJobs,
+    logger,
+    now: () => new Date(clock.now),
+  }));
   const cognito = new FakeCognitoUserAdmin();
   const marketplaceAccess = new FakeMarketplaceAccess();
-  const deletionDeps: AccountDeletionDependencies = { db, cognito, marketplaceAccess, logger };
+  const deletionDeps: AccountDeletionDependencies = {
+    db,
+    cognito,
+    marketplaceAccess,
+    storage,
+    logger,
+  };
   const accountDeletions: TestAccountDeletions = {
     cognito,
     marketplaceAccess,
     jobs: () => accountDeletionJobs(db),
     runAll: () => runAccountDeletionJobs(deletionDeps),
   };
+  const automation = loadAutomationSettings({ ...options.automationEnv });
+  const marketplaceSessions = testMarketplaceSessions(logger, automation);
   const app = buildApp({
     logger,
     db,
     auth: options.auth ?? devAuth,
     ...(options.connections === undefined ? {} : { connections: options.connections }),
     ...(options.ebayWebhook === undefined ? {} : { ebayWebhook: options.ebayWebhook }),
+    ...(options.saleEmails === undefined ? {} : { saleEmails: options.saleEmails }),
     storage,
     photoJobs,
     ai,
     analysisJobs,
+    marketplaceSessions: options.marketplaceSessions ?? marketplaceSessions,
+    phone: testPhoneWork(db, logger, automation, marketplaceSessions.vault),
+    batchJobs,
     now: () => new Date(clock.now),
     pingDatabase: () => Promise.resolve(),
   });
@@ -481,8 +597,10 @@ export async function createTestApi(
     storageDir,
     photoJobs,
     analysisJobs,
+    batchJobs,
     aiControls,
     ai,
+    vault: marketplaceSessions.vault,
     clock,
     logLines,
     signIn,

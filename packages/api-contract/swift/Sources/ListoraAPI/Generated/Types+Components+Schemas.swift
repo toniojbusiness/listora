@@ -163,9 +163,9 @@ extension Components {
             }
         }
         /// `api`: Listora acts through the marketplace's official API and verifies by read-back.
-        /// `automation`: Listora's browser runner acts in the seller's own marketplace session
-        /// (where the marketplace permits it and has no API) and verifies by read-back through that
-        /// session. `assisted`: Listora prepares the work and the user does the final step in the
+        /// `automation`: Listora's browser runner, or the iPhone app (`execution`), acts in the
+        /// seller's own marketplace session (where the marketplace permits it and has no API) and
+        /// verifies by read-back through that session. `assisted`: Listora prepares the work and the user does the final step in the
         /// marketplace app, then confirms.
         ///
         ///
@@ -522,7 +522,7 @@ extension Components {
         /// 402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
         /// `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
         /// `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-        /// `marketplace_action_unavailable` 409; `payload_too_large` 413; `validation_failed`,
+        /// `marketplace_action_unavailable`, `app_update_required` 409; `payload_too_large` 413; `validation_failed`,
         /// `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
         /// `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
         /// and `marketplace_authorization_failed` appear only inside a failed
@@ -545,6 +545,7 @@ extension Components {
             case marketplaceNotConnected = "marketplace_not_connected"
             case marketplaceReauthRequired = "marketplace_reauth_required"
             case marketplaceActionUnavailable = "marketplace_action_unavailable"
+            case appUpdateRequired = "app_update_required"
             case payloadTooLarge = "payload_too_large"
             case validationFailed = "validation_failed"
             case idempotencyKeyReused = "idempotency_key_reused"
@@ -615,6 +616,68 @@ extension Components {
                 case marketplace
                 case displayName
                 case revoked
+            }
+        }
+        /// The signed-in person as Settings shows them.
+        ///
+        /// - Remark: Generated from `#/components/schemas/Profile`.
+        public struct Profile: Codable, Hashable, Sendable {
+            /// The email the person signs in with; absent when the sign-in provider gave none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Profile/email`.
+            public var email: Swift.String?
+            /// The name the person goes by.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Profile/displayName`.
+            public var displayName: Swift.String?
+            /// The business the account sells as.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Profile/businessName`.
+            public var businessName: Swift.String?
+            /// Creates a new `Profile`.
+            ///
+            /// - Parameters:
+            ///   - email: The email the person signs in with; absent when the sign-in provider gave none.
+            ///   - displayName: The name the person goes by.
+            ///   - businessName: The business the account sells as.
+            public init(
+                email: Swift.String? = nil,
+                displayName: Swift.String? = nil,
+                businessName: Swift.String? = nil
+            ) {
+                self.email = email
+                self.displayName = displayName
+                self.businessName = businessName
+            }
+            public enum CodingKeys: String, CodingKey {
+                case email
+                case displayName
+                case businessName
+            }
+        }
+        /// Both names; one left out is cleared.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ProfileReplace`.
+        public struct ProfileReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ProfileReplace/displayName`.
+            public var displayName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ProfileReplace/businessName`.
+            public var businessName: Swift.String?
+            /// Creates a new `ProfileReplace`.
+            ///
+            /// - Parameters:
+            ///   - displayName:
+            ///   - businessName:
+            public init(
+                displayName: Swift.String? = nil,
+                businessName: Swift.String? = nil
+            ) {
+                self.displayName = displayName
+                self.businessName = businessName
+            }
+            public enum CodingKeys: String, CodingKey {
+                case displayName
+                case businessName
             }
         }
         /// - Remark: Generated from `#/components/schemas/HealthCheckStatus`.
@@ -2455,6 +2518,414 @@ extension Components {
                 case expectedVersion
             }
         }
+        /// A `KnownItemBatchItemState`, or a state added after this client was built. Clients show
+        /// an unknown state's `statusDisplay` as given and never treat it as saved.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItemState`.
+        public struct ItemBatchItemState: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemState/value1`.
+            public var value1: Components.Schemas.KnownItemBatchItemState?
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemState/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ItemBatchItemState`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownItemBatchItemState? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Where a batch item is: `uploading` (the app has not submitted it yet), `preparing_photos`
+        /// (the server is processing its photos), `analyzing`, `ready_for_review` (analyzed, waiting
+        /// for the seller), `saved` (the seller saved it; its status is no longer `draft`), or
+        /// `failed` (see `problem`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownItemBatchItemState`.
+        @frozen public enum KnownItemBatchItemState: String, Codable, Hashable, Sendable, CaseIterable {
+            case uploading = "uploading"
+            case preparingPhotos = "preparing_photos"
+            case analyzing = "analyzing"
+            case readyForReview = "ready_for_review"
+            case saved = "saved"
+            case failed = "failed"
+        }
+        /// Why a batch item stopped. `retryable` says whether submitting it again may help as it is.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItemProblem`.
+        public struct ItemBatchItemProblem: Codable, Hashable, Sendable {
+            /// Stable snake_case, for example `photo_failed`, `photos_not_ready`, `no_photos`,
+            /// `ai_budget_exceeded`, `quota_exceeded`, or an analysis failure's code.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemProblem/code`.
+            public var code: Swift.String
+            /// Safe to show to the user.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemProblem/message`.
+            public var message: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemProblem/retryable`.
+            public var retryable: Swift.Bool
+            /// Creates a new `ItemBatchItemProblem`.
+            ///
+            /// - Parameters:
+            ///   - code: Stable snake_case, for example `photo_failed`, `photos_not_ready`, `no_photos`,
+            ///   - message: Safe to show to the user.
+            ///   - retryable:
+            public init(
+                code: Swift.String,
+                message: Swift.String,
+                retryable: Swift.Bool
+            ) {
+                self.code = code
+                self.message = message
+                self.retryable = retryable
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case message
+                case retryable
+            }
+        }
+        /// The seller's interaction as the app measured it: time a screen of the flow was in front of
+        /// them with nothing to wait for (`activeMs`), the time spent waiting on Listora meanwhile
+        /// (`waitingMs`), and taps.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/InteractionTotals`.
+        public struct InteractionTotals: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InteractionTotals/activeMs`.
+            public var activeMs: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/InteractionTotals/waitingMs`.
+            public var waitingMs: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/InteractionTotals/taps`.
+            public var taps: Swift.Int32
+            /// Creates a new `InteractionTotals`.
+            ///
+            /// - Parameters:
+            ///   - activeMs:
+            ///   - waitingMs:
+            ///   - taps:
+            public init(
+                activeMs: Swift.Int64,
+                waitingMs: Swift.Int64,
+                taps: Swift.Int32
+            ) {
+                self.activeMs = activeMs
+                self.waitingMs = waitingMs
+                self.taps = taps
+            }
+            public enum CodingKeys: String, CodingKey {
+                case activeMs
+                case waitingMs
+                case taps
+            }
+        }
+        /// How many of the item's photos the server has, and how many are processed.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemBatchPhotoProgress`.
+        public struct ItemBatchPhotoProgress: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatchPhotoProgress/total`.
+            public var total: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchPhotoProgress/ready`.
+            public var ready: Swift.Int32
+            /// Creates a new `ItemBatchPhotoProgress`.
+            ///
+            /// - Parameters:
+            ///   - total:
+            ///   - ready:
+            public init(
+                total: Swift.Int32,
+                ready: Swift.Int32
+            ) {
+                self.total = total
+                self.ready = ready
+            }
+            public enum CodingKeys: String, CodingKey {
+                case total
+                case ready
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItem`.
+        public struct ItemBatchItem: Codable, Hashable, Sendable {
+            /// The item's place in the haul, 0 first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/position`.
+            public var position: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/item`.
+            public var item: Components.Schemas.ItemSummary
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/state`.
+            public var state: Components.Schemas.ItemBatchItemState
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/photos`.
+            public var photos: Components.Schemas.ItemBatchPhotoProgress
+            /// Present exactly when `state` is `failed`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/problem`.
+            public var problem: Components.Schemas.ItemBatchItemProblem?
+            /// This item's share of the batch's interaction, once the app reported it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItem/interaction`.
+            public var interaction: Components.Schemas.InteractionTotals?
+            /// Creates a new `ItemBatchItem`.
+            ///
+            /// - Parameters:
+            ///   - position: The item's place in the haul, 0 first.
+            ///   - item:
+            ///   - state:
+            ///   - statusDisplay:
+            ///   - photos:
+            ///   - problem: Present exactly when `state` is `failed`.
+            ///   - interaction: This item's share of the batch's interaction, once the app reported it.
+            public init(
+                position: Swift.Int32,
+                item: Components.Schemas.ItemSummary,
+                state: Components.Schemas.ItemBatchItemState,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                photos: Components.Schemas.ItemBatchPhotoProgress,
+                problem: Components.Schemas.ItemBatchItemProblem? = nil,
+                interaction: Components.Schemas.InteractionTotals? = nil
+            ) {
+                self.position = position
+                self.item = item
+                self.state = state
+                self.statusDisplay = statusDisplay
+                self.photos = photos
+                self.problem = problem
+                self.interaction = interaction
+            }
+            public enum CodingKeys: String, CodingKey {
+                case position
+                case item
+                case state
+                case statusDisplay
+                case photos
+                case problem
+                case interaction
+            }
+        }
+        /// How many of the batch's items are in each state.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemBatchProgress`.
+        public struct ItemBatchProgress: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/total`.
+            public var total: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/uploading`.
+            public var uploading: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/preparingPhotos`.
+            public var preparingPhotos: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/analyzing`.
+            public var analyzing: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/readyForReview`.
+            public var readyForReview: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/saved`.
+            public var saved: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/ItemBatchProgress/failed`.
+            public var failed: Swift.Int32
+            /// Creates a new `ItemBatchProgress`.
+            ///
+            /// - Parameters:
+            ///   - total:
+            ///   - uploading:
+            ///   - preparingPhotos:
+            ///   - analyzing:
+            ///   - readyForReview:
+            ///   - saved:
+            ///   - failed:
+            public init(
+                total: Swift.Int32,
+                uploading: Swift.Int32,
+                preparingPhotos: Swift.Int32,
+                analyzing: Swift.Int32,
+                readyForReview: Swift.Int32,
+                saved: Swift.Int32,
+                failed: Swift.Int32
+            ) {
+                self.total = total
+                self.uploading = uploading
+                self.preparingPhotos = preparingPhotos
+                self.analyzing = analyzing
+                self.readyForReview = readyForReview
+                self.saved = saved
+                self.failed = failed
+            }
+            public enum CodingKeys: String, CodingKey {
+                case total
+                case uploading
+                case preparingPhotos
+                case analyzing
+                case readyForReview
+                case saved
+                case failed
+            }
+        }
+        /// The items of one haul, photographed in one session, in haul order.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemBatch`.
+        public struct ItemBatch: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/items`.
+            public var items: [Components.Schemas.ItemBatchItem]
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/progress`.
+            public var progress: Components.Schemas.ItemBatchProgress
+            /// The batch's interaction from its first photo, once the app reported it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/interaction`.
+            public var interaction: Components.Schemas.InteractionTotals?
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/createdAt`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/ItemBatch/updatedAt`.
+            public var updatedAt: Components.Schemas.Timestamp
+            /// Creates a new `ItemBatch`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - items:
+            ///   - progress:
+            ///   - interaction: The batch's interaction from its first photo, once the app reported it.
+            ///   - createdAt:
+            ///   - updatedAt:
+            public init(
+                id: Components.Schemas.Id,
+                items: [Components.Schemas.ItemBatchItem],
+                progress: Components.Schemas.ItemBatchProgress,
+                interaction: Components.Schemas.InteractionTotals? = nil,
+                createdAt: Components.Schemas.Timestamp,
+                updatedAt: Components.Schemas.Timestamp
+            ) {
+                self.id = id
+                self.items = items
+                self.progress = progress
+                self.interaction = interaction
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case items
+                case progress
+                case interaction
+                case createdAt
+                case updatedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItemCreate`.
+        public struct ItemBatchItemCreate: Codable, Hashable, Sendable {
+            /// The item's place in the haul, 0 first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemCreate/position`.
+            public var position: Swift.Int32
+            /// Creates a new `ItemBatchItemCreate`.
+            ///
+            /// - Parameters:
+            ///   - position: The item's place in the haul, 0 first.
+            public init(position: Swift.Int32) {
+                self.position = position
+            }
+            public enum CodingKeys: String, CodingKey {
+                case position
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItemSubmit`.
+        public struct ItemBatchItemSubmit: Codable, Hashable, Sendable {
+            /// How many photos the app attached; the item must have exactly these many.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemSubmit/photoCount`.
+            public var photoCount: Swift.Int32
+            /// Creates a new `ItemBatchItemSubmit`.
+            ///
+            /// - Parameters:
+            ///   - photoCount: How many photos the app attached; the item must have exactly these many.
+            public init(photoCount: Swift.Int32) {
+                self.photoCount = photoCount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case photoCount
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemBatchItemInteraction`.
+        public struct ItemBatchItemInteraction: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemInteraction/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ItemBatchItemInteraction/interaction`.
+            public var interaction: Components.Schemas.InteractionTotals
+            /// Creates a new `ItemBatchItemInteraction`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - interaction:
+            public init(
+                itemId: Components.Schemas.Id,
+                interaction: Components.Schemas.InteractionTotals
+            ) {
+                self.itemId = itemId
+                self.interaction = interaction
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case interaction
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemBatchInteractionReplace`.
+        public struct ItemBatchInteractionReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ItemBatchInteractionReplace/batch`.
+            public var batch: Components.Schemas.InteractionTotals
+            /// - Remark: Generated from `#/components/schemas/ItemBatchInteractionReplace/items`.
+            public var items: [Components.Schemas.ItemBatchItemInteraction]
+            /// Creates a new `ItemBatchInteractionReplace`.
+            ///
+            /// - Parameters:
+            ///   - batch:
+            ///   - items:
+            public init(
+                batch: Components.Schemas.InteractionTotals,
+                items: [Components.Schemas.ItemBatchItemInteraction]
+            ) {
+                self.batch = batch
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case batch
+                case items
+            }
+        }
         /// A model's guess, not market data. `label` is always
         /// "AI estimate - not based on sold listings"; clients show it next to the numbers.
         ///
@@ -3091,6 +3562,154 @@ extension Components {
                 case periodEnd
                 case quotas
             }
+        }
+        /// - Remark: Generated from `#/components/schemas/VoiceCorrectionRequest`.
+        public struct VoiceCorrectionRequest: Codable, Hashable, Sendable {
+            /// The phrases of the seller's spoken correction that the app's own parser could not
+            /// map, as text (on-device speech recognition). Never audio.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionRequest/transcript`.
+            public var transcript: Swift.String
+            /// Creates a new `VoiceCorrectionRequest`.
+            ///
+            /// - Parameters:
+            ///   - transcript: The phrases of the seller's spoken correction that the app's own parser could not
+            public init(transcript: Swift.String) {
+                self.transcript = transcript
+            }
+            public enum CodingKeys: String, CodingKey {
+                case transcript
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/VoiceCorrection`.
+        public struct VoiceCorrection: Codable, Hashable, Sendable {
+            /// The proposed changes in the order they were said; empty when nothing mapped.
+            ///
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrection/changes`.
+            public var changes: [Components.Schemas.VoiceCorrectionChange]
+            /// Creates a new `VoiceCorrection`.
+            ///
+            /// - Parameters:
+            ///   - changes: The proposed changes in the order they were said; empty when nothing mapped.
+            public init(changes: [Components.Schemas.VoiceCorrectionChange]) {
+                self.changes = changes
+            }
+            public enum CodingKeys: String, CodingKey {
+                case changes
+            }
+        }
+        /// One proposed change. `cost` (what the seller paid) and `listPrice` carry `amount`; every
+        /// other field carries `value`: a canonical value for category (`<category>/<subcategory>`),
+        /// department, sizeSystem, colors, pattern, materials, and condition, otherwise text. A list
+        /// detail gets one change per entry: the colors (or materials) of one answer together
+        /// replace the item's, and each keyword or flaw is added to the item's.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/VoiceCorrectionChange`.
+        public struct VoiceCorrectionChange: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionChange/field`.
+            public var field: Components.Schemas.VoiceCorrectionField
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionChange/value`.
+            public var value: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionChange/amount`.
+            public var amount: Components.Schemas.Money?
+            /// Creates a new `VoiceCorrectionChange`.
+            ///
+            /// - Parameters:
+            ///   - field:
+            ///   - value:
+            ///   - amount:
+            public init(
+                field: Components.Schemas.VoiceCorrectionField,
+                value: Swift.String? = nil,
+                amount: Components.Schemas.Money? = nil
+            ) {
+                self.field = field
+                self.value = value
+                self.amount = amount
+            }
+            public enum CodingKeys: String, CodingKey {
+                case field
+                case value
+                case amount
+            }
+        }
+        /// A `KnownVoiceCorrectionField`, or a field added after this client was built. Clients
+        /// ignore a change to a field they do not know.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/VoiceCorrectionField`.
+        public struct VoiceCorrectionField: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionField/value1`.
+            public var value1: Components.Schemas.KnownVoiceCorrectionField?
+            /// - Remark: Generated from `#/components/schemas/VoiceCorrectionField/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `VoiceCorrectionField`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownVoiceCorrectionField? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// The item detail a change is for, named like `ItemDetails`; `cost` is what the seller paid
+        /// and `purchaseSource` where they bought it.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownVoiceCorrectionField`.
+        @frozen public enum KnownVoiceCorrectionField: String, Codable, Hashable, Sendable, CaseIterable {
+            case title = "title"
+            case brand = "brand"
+            case productName = "productName"
+            case category = "category"
+            case department = "department"
+            case sizeLabel = "sizeLabel"
+            case sizeSystem = "sizeSystem"
+            case colors = "colors"
+            case pattern = "pattern"
+            case materials = "materials"
+            case keywords = "keywords"
+            case styleNumber = "styleNumber"
+            case condition = "condition"
+            case conditionNotes = "conditionNotes"
+            case flaws = "flaws"
+            case cost = "cost"
+            case purchaseSource = "purchaseSource"
+            case listPrice = "listPrice"
         }
         /// A `KnownListingStatus`, or a status added after this client was built. Clients show
         /// the listing's `statusDisplay` for an unknown status and never treat it as success.
@@ -4359,8 +4978,8 @@ extension Components {
                 ])
             }
         }
-        /// `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
-        /// seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+        /// `api`: through the marketplace's API. `automation`: by Listora's browser runner or the
+        /// seller's iPhone, in the seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
         /// `none`: not offered.
         ///
         ///
@@ -4835,7 +5454,8 @@ extension Components {
         /// `reconnect`: the same, for a connection that needs the seller's consent again (its grant
         /// was revoked, expires within 30 days, or fails); it renews the existing connection.
         /// `check`: `requestConnectionCheck` (Retry check), for a connection with a problem
-        /// Listora may have cleared since.
+        /// Listora may have cleared since, or an automation connection whose sign-in is not
+        /// confirmed.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownConnectionAction`.
@@ -4880,6 +5500,8 @@ extension Components {
             public var lastCheckedAt: Components.Schemas.Timestamp?
             /// - Remark: Generated from `#/components/schemas/Connection/lastIssue`.
             public var lastIssue: Components.Schemas.ConnectionIssue?
+            /// - Remark: Generated from `#/components/schemas/Connection/execution`.
+            public var execution: Components.Schemas.ConnectionExecution?
             /// Creates a new `Connection`.
             ///
             /// - Parameters:
@@ -4895,6 +5517,7 @@ extension Components {
             ///   - lastOkAt: When the marketplace last accepted Listora's access (the last successful check).
             ///   - lastCheckedAt: When Listora last checked the connection, whatever it found.
             ///   - lastIssue:
+            ///   - execution:
             public init(
                 marketplace: Components.Schemas.Marketplace,
                 mode: Components.Schemas.IntegrationMode,
@@ -4907,7 +5530,8 @@ extension Components {
                 grantExpiresAt: Components.Schemas.Timestamp? = nil,
                 lastOkAt: Components.Schemas.Timestamp? = nil,
                 lastCheckedAt: Components.Schemas.Timestamp? = nil,
-                lastIssue: Components.Schemas.ConnectionIssue? = nil
+                lastIssue: Components.Schemas.ConnectionIssue? = nil,
+                execution: Components.Schemas.ConnectionExecution? = nil
             ) {
                 self.marketplace = marketplace
                 self.mode = mode
@@ -4921,6 +5545,7 @@ extension Components {
                 self.lastOkAt = lastOkAt
                 self.lastCheckedAt = lastCheckedAt
                 self.lastIssue = lastIssue
+                self.execution = execution
             }
             public enum CodingKeys: String, CodingKey {
                 case marketplace
@@ -4935,6 +5560,7 @@ extension Components {
                 case lastOkAt
                 case lastCheckedAt
                 case lastIssue
+                case execution
             }
         }
         /// - Remark: Generated from `#/components/schemas/ConnectionList`.
@@ -5095,7 +5721,9 @@ extension Components {
         /// `reconnect`: the marketplace no longer accepts Listora's access (`reauth_required`).
         /// `access_removed`: the access was revoked (`revoked`). `connection_problem`: Listora
         /// cannot reach the marketplace now and keeps checking (`degraded`). `expiring`: the grant
-        /// ends within 30 days.
+        /// ends within 30 days. `not_confirmed`: Listora could not confirm that the marketplace
+        /// accepts the sign-in linked for automation (its check failed or did not finish); the
+        /// `check` action checks it again.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownConnectionAttentionReason`.
@@ -5104,6 +5732,7 @@ extension Components {
             case accessRemoved = "access_removed"
             case connectionProblem = "connection_problem"
             case expiring = "expiring"
+            case notConfirmed = "not_confirmed"
         }
         /// One connection that needs the seller's attention.
         ///
@@ -5189,13 +5818,18 @@ extension Components {
                 ])
             }
         }
-        /// `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
-        /// email domain, which this deployment does not have yet.
+        /// - `needs_domain`: forwarding marketplace sale emails to Listora needs Listora's inbound
+        ///   email domain, which this deployment does not have yet.
+        /// - `not_set_up`, `confirming`, `working`: as `KnownSaleEmailStatus` (`getSaleEmails`, which
+        ///   has the address and the setup steps).
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownSaleForwardingStatus`.
         @frozen public enum KnownSaleForwardingStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case needsDomain = "needs_domain"
+            case notSetUp = "not_set_up"
+            case confirming = "confirming"
+            case working = "working"
         }
         /// Forwarding marketplace sale emails to Listora, which detects sales sooner.
         ///
@@ -5277,6 +5911,983 @@ extension Components {
                 case connections
                 case saleForwarding
                 case lastCheckedAt
+            }
+        }
+        /// A `KnownMarketplaceSessionStatus`, or a status added after this client was built.
+        /// Clients show `statusDisplay` for an unknown status and offer to link again.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSessionStatus`.
+        public struct MarketplaceSessionStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionStatus/value1`.
+            public var value1: Components.Schemas.KnownMarketplaceSessionStatus?
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `MarketplaceSessionStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownMarketplaceSessionStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `not_linked`: no session. `checking`: a session was just linked (or checked again) and
+        /// Listora is checking it where the marketplace runs (the browser runner, for at most 15
+        /// minutes, or the seller's iPhone, the next time Listora runs there). `linked`: the check passed,
+        /// and Listora automates the marketplace in that session. `needs_relink`: the marketplace
+        /// rejected the session, or showed a check automation must not pass; the user signs in
+        /// again. `check_failed`: Listora could not confirm the session works: its check failed or
+        /// did not finish in time (see `issue`). `requestConnectionCheck` checks the same session
+        /// again; linking again checks a new one. `api_connected`: the marketplace is connected
+        /// through its API, so there is nothing to sign in to. The marketplace's `Connection` shows
+        /// the same status in the same words.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownMarketplaceSessionStatus`.
+        @frozen public enum KnownMarketplaceSessionStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case notLinked = "not_linked"
+            case checking = "checking"
+            case linked = "linked"
+            case needsRelink = "needs_relink"
+            case checkFailed = "check_failed"
+            case apiConnected = "api_connected"
+        }
+        /// Where the app signs the user in, and which of that site's cookies it hands over.
+        ///
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin`.
+        public struct MarketplaceSessionLogin: Codable, Hashable, Sendable {
+            /// The marketplace's own sign-in page.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin/url`.
+            public var url: Swift.String
+            /// The marketplace's own domains (`poshmark.com`). The app sends only cookies whose
+            /// domain is one of these or a subdomain of one; the server refuses any other.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin/cookieDomains`.
+            public var cookieDomains: [Swift.String]
+            /// The marketplace may sign the user in with a link it emails them (Depop). Tapped in
+            /// the email, that link opens the phone's default browser, not the app, so the app asks
+            /// for the link to be copied (or shared to the app) and opens it in its sign-in page,
+            /// but only a link on `url`'s scheme or https and on one of `cookieDomains`. Absent
+            /// means `false`.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLogin/emailsSignInLinks`.
+            public var emailsSignInLinks: Swift.Bool?
+            /// Creates a new `MarketplaceSessionLogin`.
+            ///
+            /// - Parameters:
+            ///   - url: The marketplace's own sign-in page.
+            ///   - cookieDomains: The marketplace's own domains (`poshmark.com`). The app sends only cookies whose
+            ///   - emailsSignInLinks: The marketplace may sign the user in with a link it emails them (Depop). Tapped in
+            public init(
+                url: Swift.String,
+                cookieDomains: [Swift.String],
+                emailsSignInLinks: Swift.Bool? = nil
+            ) {
+                self.url = url
+                self.cookieDomains = cookieDomains
+                self.emailsSignInLinks = emailsSignInLinks
+            }
+            public enum CodingKeys: String, CodingKey {
+                case url
+                case cookieDomains
+                case emailsSignInLinks
+            }
+        }
+        /// A marketplace linked by signing in (`connect: session`). It is shown as linked only
+        /// after the session check (on the browser runner or the seller's iPhone) confirmed the
+        /// marketplace accepts the session.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSession`.
+        public struct MarketplaceSession: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/status`.
+            public var status: Components.Schemas.MarketplaceSessionStatus
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/login`.
+            public var login: Components.Schemas.MarketplaceSessionLogin
+            /// The seller's name on the marketplace, when the app or the check knows it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/displayName`.
+            public var displayName: Swift.String?
+            /// When the current session was linked.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/linkedAt`.
+            public var linkedAt: Components.Schemas.Timestamp?
+            /// When the current session's check finished.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/checkedAt`.
+            public var checkedAt: Components.Schemas.Timestamp?
+            /// Why the session needs relinking, or why its check failed.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/issue`.
+            public var issue: Components.Schemas.ConnectionIssue?
+            /// Where its automated steps run; present once it is linked.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/execution`.
+            public var execution: Components.Schemas.ConnectionExecution?
+            /// Creates a new `MarketplaceSession`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - status:
+            ///   - statusDisplay:
+            ///   - login:
+            ///   - displayName: The seller's name on the marketplace, when the app or the check knows it.
+            ///   - linkedAt: When the current session was linked.
+            ///   - checkedAt: When the current session's check finished.
+            ///   - issue: Why the session needs relinking, or why its check failed.
+            ///   - execution: Where its automated steps run; present once it is linked.
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                status: Components.Schemas.MarketplaceSessionStatus,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                login: Components.Schemas.MarketplaceSessionLogin,
+                displayName: Swift.String? = nil,
+                linkedAt: Components.Schemas.Timestamp? = nil,
+                checkedAt: Components.Schemas.Timestamp? = nil,
+                issue: Components.Schemas.ConnectionIssue? = nil,
+                execution: Components.Schemas.ConnectionExecution? = nil
+            ) {
+                self.marketplace = marketplace
+                self.status = status
+                self.statusDisplay = statusDisplay
+                self.login = login
+                self.displayName = displayName
+                self.linkedAt = linkedAt
+                self.checkedAt = checkedAt
+                self.issue = issue
+                self.execution = execution
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case status
+                case statusDisplay
+                case login
+                case displayName
+                case linkedAt
+                case checkedAt
+                case issue
+                case execution
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSessionList`.
+        public struct MarketplaceSessionList: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionList/data`.
+            public var data: [Components.Schemas.MarketplaceSession]
+            /// Creates a new `MarketplaceSessionList`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            public init(data: [Components.Schemas.MarketplaceSession]) {
+                self.data = data
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+            }
+        }
+        /// One cookie as the app's web view holds it (`HTTPCookie`), in the browser runner's
+        /// terms. A name plus value of at most 4096 bytes, as browsers allow.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SessionCookie`.
+        public struct SessionCookie: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/value`.
+            public var value: Swift.String
+            /// A host (`www.poshmark.com`) or a domain cookie (`.poshmark.com`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/domain`.
+            public var domain: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/path`.
+            public var path: Swift.String
+            /// Unix time in whole seconds; `-1` for a cookie that lasts as long as the browser session.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/expires`.
+            public var expires: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/httpOnly`.
+            public var httpOnly: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/secure`.
+            public var secure: Swift.Bool
+            /// `lax` when the site set none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/sameSite`.
+            @frozen public enum SameSitePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case strict = "strict"
+                case lax = "lax"
+                case none = "none"
+            }
+            /// `lax` when the site set none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SessionCookie/sameSite`.
+            public var sameSite: Components.Schemas.SessionCookie.SameSitePayload
+            /// Creates a new `SessionCookie`.
+            ///
+            /// - Parameters:
+            ///   - name:
+            ///   - value:
+            ///   - domain: A host (`www.poshmark.com`) or a domain cookie (`.poshmark.com`).
+            ///   - path:
+            ///   - expires: Unix time in whole seconds; `-1` for a cookie that lasts as long as the browser session.
+            ///   - httpOnly:
+            ///   - secure:
+            ///   - sameSite: `lax` when the site set none.
+            public init(
+                name: Swift.String,
+                value: Swift.String,
+                domain: Swift.String,
+                path: Swift.String,
+                expires: Swift.Int64,
+                httpOnly: Swift.Bool,
+                secure: Swift.Bool,
+                sameSite: Components.Schemas.SessionCookie.SameSitePayload
+            ) {
+                self.name = name
+                self.value = value
+                self.domain = domain
+                self.path = path
+                self.expires = expires
+                self.httpOnly = httpOnly
+                self.secure = secure
+                self.sameSite = sameSite
+            }
+            public enum CodingKeys: String, CodingKey {
+                case name
+                case value
+                case domain
+                case path
+                case expires
+                case httpOnly
+                case secure
+                case sameSite
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.value = try container.decode(
+                    Swift.String.self,
+                    forKey: .value
+                )
+                self.domain = try container.decode(
+                    Swift.String.self,
+                    forKey: .domain
+                )
+                self.path = try container.decode(
+                    Swift.String.self,
+                    forKey: .path
+                )
+                self.expires = try container.decode(
+                    Swift.Int64.self,
+                    forKey: .expires
+                )
+                self.httpOnly = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .httpOnly
+                )
+                self.secure = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .secure
+                )
+                self.sameSite = try container.decode(
+                    Components.Schemas.SessionCookie.SameSitePayload.self,
+                    forKey: .sameSite
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "name",
+                    "value",
+                    "domain",
+                    "path",
+                    "expires",
+                    "httpOnly",
+                    "secure",
+                    "sameSite"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLink`.
+        public struct MarketplaceSessionLink: Codable, Hashable, Sendable {
+            /// The marketplace's cookies after the user signed in, and no other site's.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLink/cookies`.
+            public var cookies: [Components.Schemas.SessionCookie]
+            /// The seller's name on the marketplace, when the app knows it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLink/displayName`.
+            public var displayName: Swift.String?
+            /// The registered device that linked it (`registerDevice`), which then runs the
+            /// marketplace's automated steps when they run on the phone.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLink/installationId`.
+            public var installationId: Components.Schemas.Id?
+            /// Creates a new `MarketplaceSessionLink`.
+            ///
+            /// - Parameters:
+            ///   - cookies: The marketplace's cookies after the user signed in, and no other site's.
+            ///   - displayName: The seller's name on the marketplace, when the app knows it.
+            ///   - installationId: The registered device that linked it (`registerDevice`), which then runs the
+            public init(
+                cookies: [Components.Schemas.SessionCookie],
+                displayName: Swift.String? = nil,
+                installationId: Components.Schemas.Id? = nil
+            ) {
+                self.cookies = cookies
+                self.displayName = displayName
+                self.installationId = installationId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case cookies
+                case displayName
+                case installationId
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.cookies = try container.decode(
+                    [Components.Schemas.SessionCookie].self,
+                    forKey: .cookies
+                )
+                self.displayName = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .displayName
+                )
+                self.installationId = try container.decodeIfPresent(
+                    Components.Schemas.Id.self,
+                    forKey: .installationId
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "cookies",
+                    "displayName",
+                    "installationId"
+                ])
+            }
+        }
+        /// A `KnownExecutionLocation`, or a location added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ExecutionLocation`.
+        public struct ExecutionLocation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExecutionLocation/value1`.
+            public var value1: Components.Schemas.KnownExecutionLocation?
+            /// - Remark: Generated from `#/components/schemas/ExecutionLocation/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ExecutionLocation`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownExecutionLocation? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Where a connection's automated steps run: `cloud`, Listora's browser runner; `phone`, the
+        /// iPhone that linked the marketplace, in the seller's own session on their own network.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownExecutionLocation`.
+        @frozen public enum KnownExecutionLocation: String, Codable, Hashable, Sendable, CaseIterable {
+            case cloud = "cloud"
+            case phone = "phone"
+        }
+        /// Where the connection's automated steps run, and what waits for the phone. Present for a
+        /// marketplace that is automated in a linked session.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ConnectionExecution`.
+        public struct ConnectionExecution: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/location`.
+            public var location: Components.Schemas.ExecutionLocation
+            /// What to show: `Runs on your iPhone` or `Runs in Listora's cloud`, or why the phone
+            /// can't run it yet (`Link it on your iPhone to run it there`).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/label`.
+            public var label: Swift.String
+            /// The phone that runs it, when it runs on one (compare with your own).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/deviceInstallationId`.
+            public var deviceInstallationId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/deviceName`.
+            public var deviceName: Swift.String?
+            /// Changes and checks waiting for that phone to run them.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/waiting`.
+            public var waiting: Swift.Int32?
+            /// Since when the oldest of them waits.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/waitingSince`.
+            public var waitingSince: Components.Schemas.Timestamp?
+            /// Whether the connection may run in Listora's cloud. False for a marketplace that
+            /// refuses Listora's cloud servers: the app does not offer the cloud, and
+            /// `setConnectionExecution` refuses a move there.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/cloudAllowed`.
+            public var cloudAllowed: Swift.Bool
+            /// Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
+            /// blocks cloud servers, so Listora runs it from your phone").
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/cloudBlockedReason`.
+            public var cloudBlockedReason: Swift.String?
+            /// Creates a new `ConnectionExecution`.
+            ///
+            /// - Parameters:
+            ///   - location:
+            ///   - label: What to show: `Runs on your iPhone` or `Runs in Listora's cloud`, or why the phone
+            ///   - deviceInstallationId: The phone that runs it, when it runs on one (compare with your own).
+            ///   - deviceName:
+            ///   - waiting: Changes and checks waiting for that phone to run them.
+            ///   - waitingSince: Since when the oldest of them waits.
+            ///   - cloudAllowed: Whether the connection may run in Listora's cloud. False for a marketplace that
+            ///   - cloudBlockedReason: Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
+            public init(
+                location: Components.Schemas.ExecutionLocation,
+                label: Swift.String,
+                deviceInstallationId: Components.Schemas.Id? = nil,
+                deviceName: Swift.String? = nil,
+                waiting: Swift.Int32? = nil,
+                waitingSince: Components.Schemas.Timestamp? = nil,
+                cloudAllowed: Swift.Bool,
+                cloudBlockedReason: Swift.String? = nil
+            ) {
+                self.location = location
+                self.label = label
+                self.deviceInstallationId = deviceInstallationId
+                self.deviceName = deviceName
+                self.waiting = waiting
+                self.waitingSince = waitingSince
+                self.cloudAllowed = cloudAllowed
+                self.cloudBlockedReason = cloudBlockedReason
+            }
+            public enum CodingKeys: String, CodingKey {
+                case location
+                case label
+                case deviceInstallationId
+                case deviceName
+                case waiting
+                case waitingSince
+                case cloudAllowed
+                case cloudBlockedReason
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ConnectionExecutionChange`.
+        public struct ConnectionExecutionChange: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecutionChange/location`.
+            public var location: Components.Schemas.KnownExecutionLocation
+            /// Creates a new `ConnectionExecutionChange`.
+            ///
+            /// - Parameters:
+            ///   - location:
+            public init(location: Components.Schemas.KnownExecutionLocation) {
+                self.location = location
+            }
+            public enum CodingKeys: String, CodingKey {
+                case location
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.location = try container.decode(
+                    Components.Schemas.KnownExecutionLocation.self,
+                    forKey: .location
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "location"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/DevicePlatform`.
+        @frozen public enum DevicePlatform: String, Codable, Hashable, Sendable, CaseIterable {
+            case ios = "ios"
+        }
+        /// The APNs environment the device token belongs to.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PushEnvironment`.
+        @frozen public enum PushEnvironment: String, Codable, Hashable, Sendable, CaseIterable {
+            case sandbox = "sandbox"
+            case production = "production"
+        }
+        /// - Remark: Generated from `#/components/schemas/DeviceRegistration`.
+        public struct DeviceRegistration: Codable, Hashable, Sendable {
+            /// The device's name, as the seller sees it ("Tonio's iPhone").
+            ///
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/platform`.
+            public var platform: Components.Schemas.DevicePlatform
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/appVersion`.
+            public var appVersion: Swift.String?
+            /// The version of phone calls the app's runtime speaks.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/runtimeVersion`.
+            public var runtimeVersion: Swift.Int32?
+            /// The APNs device token, hex; absent when the app has none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/pushToken`.
+            public var pushToken: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/pushEnvironment`.
+            public var pushEnvironment: Components.Schemas.PushEnvironment?
+            /// Creates a new `DeviceRegistration`.
+            ///
+            /// - Parameters:
+            ///   - name: The device's name, as the seller sees it ("Tonio's iPhone").
+            ///   - platform:
+            ///   - appVersion:
+            ///   - runtimeVersion: The version of phone calls the app's runtime speaks.
+            ///   - pushToken: The APNs device token, hex; absent when the app has none.
+            ///   - pushEnvironment:
+            public init(
+                name: Swift.String,
+                platform: Components.Schemas.DevicePlatform,
+                appVersion: Swift.String? = nil,
+                runtimeVersion: Swift.Int32? = nil,
+                pushToken: Swift.String? = nil,
+                pushEnvironment: Components.Schemas.PushEnvironment? = nil
+            ) {
+                self.name = name
+                self.platform = platform
+                self.appVersion = appVersion
+                self.runtimeVersion = runtimeVersion
+                self.pushToken = pushToken
+                self.pushEnvironment = pushEnvironment
+            }
+            public enum CodingKeys: String, CodingKey {
+                case name
+                case platform
+                case appVersion
+                case runtimeVersion
+                case pushToken
+                case pushEnvironment
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.platform = try container.decode(
+                    Components.Schemas.DevicePlatform.self,
+                    forKey: .platform
+                )
+                self.appVersion = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .appVersion
+                )
+                self.runtimeVersion = try container.decodeIfPresent(
+                    Swift.Int32.self,
+                    forKey: .runtimeVersion
+                )
+                self.pushToken = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .pushToken
+                )
+                self.pushEnvironment = try container.decodeIfPresent(
+                    Components.Schemas.PushEnvironment.self,
+                    forKey: .pushEnvironment
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "name",
+                    "platform",
+                    "appVersion",
+                    "runtimeVersion",
+                    "pushToken",
+                    "pushEnvironment"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/Device`.
+        public struct Device: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Device/installationId`.
+            public var installationId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/Device/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Device/platform`.
+            public var platform: Components.Schemas.DevicePlatform
+            /// Whether Listora can send this device push notifications.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Device/pushEnabled`.
+            public var pushEnabled: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/Device/lastSeenAt`.
+            public var lastSeenAt: Components.Schemas.Timestamp
+            /// Creates a new `Device`.
+            ///
+            /// - Parameters:
+            ///   - installationId:
+            ///   - name:
+            ///   - platform:
+            ///   - pushEnabled: Whether Listora can send this device push notifications.
+            ///   - lastSeenAt:
+            public init(
+                installationId: Components.Schemas.Id,
+                name: Swift.String,
+                platform: Components.Schemas.DevicePlatform,
+                pushEnabled: Swift.Bool,
+                lastSeenAt: Components.Schemas.Timestamp
+            ) {
+                self.installationId = installationId
+                self.name = name
+                self.platform = platform
+                self.pushEnabled = pushEnabled
+                self.lastSeenAt = lastSeenAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case installationId
+                case name
+                case platform
+                case pushEnabled
+                case lastSeenAt
+            }
+        }
+        /// A `KnownPhoneWorkPurpose`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PhoneWorkPurpose`.
+        public struct PhoneWorkPurpose: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneWorkPurpose/value1`.
+            public var value1: Components.Schemas.KnownPhoneWorkPurpose?
+            /// - Remark: Generated from `#/components/schemas/PhoneWorkPurpose/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `PhoneWorkPurpose`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownPhoneWorkPurpose? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
+        /// or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
+        /// a look at the seller's sold orders.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownPhoneWorkPurpose`.
+        @frozen public enum KnownPhoneWorkPurpose: String, Codable, Hashable, Sendable, CaseIterable {
+            case operation = "operation"
+            case sessionCheck = "session_check"
+            case saleCheck = "sale_check"
+        }
+        /// - Remark: Generated from `#/components/schemas/PhoneRunClaim`.
+        public struct PhoneRunClaim: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneRunClaim/installationId`.
+            public var installationId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/PhoneRunClaim/runtimeVersion`.
+            public var runtimeVersion: Swift.Int32
+            /// Creates a new `PhoneRunClaim`.
+            ///
+            /// - Parameters:
+            ///   - installationId:
+            ///   - runtimeVersion:
+            public init(
+                installationId: Components.Schemas.Id,
+                runtimeVersion: Swift.Int32
+            ) {
+                self.installationId = installationId
+                self.runtimeVersion = runtimeVersion
+            }
+            public enum CodingKeys: String, CodingKey {
+                case installationId
+                case runtimeVersion
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.installationId = try container.decode(
+                    Components.Schemas.Id.self,
+                    forKey: .installationId
+                )
+                self.runtimeVersion = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .runtimeVersion
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "installationId",
+                    "runtimeVersion"
+                ])
+            }
+        }
+        /// One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,
+        /// and its result comes back as `answerPhoneCall`'s `answer`. Its shape is the runtime's
+        /// (`PhoneCallInput` in packages/automation/src/phone/runtime.ts), versioned by
+        /// `runtimeVersion`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PhoneCall`.
+        public struct PhoneCall: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneCall/index`.
+            public var index: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/PhoneCall/input`.
+            public struct InputPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+                /// Creates a new `InputPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhoneCall/input`.
+            public var input: Components.Schemas.PhoneCall.InputPayload
+            /// Creates a new `PhoneCall`.
+            ///
+            /// - Parameters:
+            ///   - index:
+            ///   - input:
+            public init(
+                index: Swift.Int32,
+                input: Components.Schemas.PhoneCall.InputPayload
+            ) {
+                self.index = index
+                self.input = input
+            }
+            public enum CodingKeys: String, CodingKey {
+                case index
+                case input
+            }
+        }
+        /// The phone's run of one piece of work. While it has a `call`, the phone runs it and
+        /// answers; without one, the run is over and the phone claims the next.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PhoneRun`.
+        public struct PhoneRun: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneRun/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/PhoneRun/purpose`.
+            public var purpose: Components.Schemas.PhoneWorkPurpose
+            /// - Remark: Generated from `#/components/schemas/PhoneRun/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/PhoneRun/operationId`.
+            public var operationId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/PhoneRun/call`.
+            public var call: Components.Schemas.PhoneCall?
+            /// Creates a new `PhoneRun`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - purpose:
+            ///   - marketplace:
+            ///   - operationId:
+            ///   - call:
+            public init(
+                id: Components.Schemas.Id,
+                purpose: Components.Schemas.PhoneWorkPurpose,
+                marketplace: Components.Schemas.Marketplace,
+                operationId: Components.Schemas.Id? = nil,
+                call: Components.Schemas.PhoneCall? = nil
+            ) {
+                self.id = id
+                self.purpose = purpose
+                self.marketplace = marketplace
+                self.operationId = operationId
+                self.call = call
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case purpose
+                case marketplace
+                case operationId
+                case call
+            }
+        }
+        /// The run to continue, absent when there is nothing (more) to run.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PhoneRunResult`.
+        public struct PhoneRunResult: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneRunResult/run`.
+            public var run: Components.Schemas.PhoneRun?
+            /// Present on a claim that found nothing to run: how long the app waits, while it is open,
+            /// before it claims again. Sooner when work for this phone is due then (a check tried
+            /// again after a failed attempt), so work never waits for a push or for the app to reopen.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneRunResult/nextClaimInSeconds`.
+            public var nextClaimInSeconds: Swift.Int32?
+            /// Creates a new `PhoneRunResult`.
+            ///
+            /// - Parameters:
+            ///   - run:
+            ///   - nextClaimInSeconds: Present on a claim that found nothing to run: how long the app waits, while it is open,
+            public init(
+                run: Components.Schemas.PhoneRun? = nil,
+                nextClaimInSeconds: Swift.Int32? = nil
+            ) {
+                self.run = run
+                self.nextClaimInSeconds = nextClaimInSeconds
+            }
+            public enum CodingKeys: String, CodingKey {
+                case run
+                case nextClaimInSeconds
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhoneCallAnswer`.
+        public struct PhoneCallAnswer: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneCallAnswer/installationId`.
+            public var installationId: Components.Schemas.Id
+            /// What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneCallAnswer/answer`.
+            public struct AnswerPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+                /// Creates a new `AnswerPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneCallAnswer/answer`.
+            public var answer: Components.Schemas.PhoneCallAnswer.AnswerPayload
+            /// Creates a new `PhoneCallAnswer`.
+            ///
+            /// - Parameters:
+            ///   - installationId:
+            ///   - answer: What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged.
+            public init(
+                installationId: Components.Schemas.Id,
+                answer: Components.Schemas.PhoneCallAnswer.AnswerPayload
+            ) {
+                self.installationId = installationId
+                self.answer = answer
+            }
+            public enum CodingKeys: String, CodingKey {
+                case installationId
+                case answer
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.installationId = try container.decode(
+                    Components.Schemas.Id.self,
+                    forKey: .installationId
+                )
+                self.answer = try container.decode(
+                    Components.Schemas.PhoneCallAnswer.AnswerPayload.self,
+                    forKey: .answer
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "installationId",
+                    "answer"
+                ])
             }
         }
         /// A `KnownSaleStatus`, or a status added after this client was built. Clients show an
@@ -7305,10 +8916,14 @@ extension Components {
             public var listingId: Components.Schemas.Id?
             /// - Remark: Generated from `#/components/schemas/UserTask/operationId`.
             public var operationId: Components.Schemas.Id?
-            /// For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
+            /// For a completed `confirm_sale` or `review_match` of a sale email, the sale it recorded;
+            /// for `resolve_double_sale`, the later sale.
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/UserTask/saleId`.
             public var saleId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/UserTask/saleEmail`.
+            public var saleEmail: Components.Schemas.UserTaskSaleEmail?
             /// Opens the right screen in the marketplace app or site.
             ///
             /// - Remark: Generated from `#/components/schemas/UserTask/deepLink`.
@@ -7335,7 +8950,8 @@ extension Components {
             ///   - item:
             ///   - listingId:
             ///   - operationId:
-            ///   - saleId: For `confirm_sale`, the sale to confirm; for `resolve_double_sale`, the later sale.
+            ///   - saleId: For a completed `confirm_sale` or `review_match` of a sale email, the sale it recorded;
+            ///   - saleEmail:
             ///   - deepLink: Opens the right screen in the marketplace app or site.
             ///   - copyAssist:
             ///   - dueAt:
@@ -7354,6 +8970,7 @@ extension Components {
                 listingId: Components.Schemas.Id? = nil,
                 operationId: Components.Schemas.Id? = nil,
                 saleId: Components.Schemas.Id? = nil,
+                saleEmail: Components.Schemas.UserTaskSaleEmail? = nil,
                 deepLink: Swift.String? = nil,
                 copyAssist: Components.Schemas.CopyAssist? = nil,
                 dueAt: Components.Schemas.Timestamp? = nil,
@@ -7372,6 +8989,7 @@ extension Components {
                 self.listingId = listingId
                 self.operationId = operationId
                 self.saleId = saleId
+                self.saleEmail = saleEmail
                 self.deepLink = deepLink
                 self.copyAssist = copyAssist
                 self.dueAt = dueAt
@@ -7391,6 +9009,7 @@ extension Components {
                 case listingId
                 case operationId
                 case saleId
+                case saleEmail
                 case deepLink
                 case copyAssist
                 case dueAt
@@ -7435,6 +9054,138 @@ extension Components {
                 case coverPhoto
             }
         }
+        /// A `KnownUserTaskSaleEmailReason`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmailReason`.
+        public struct UserTaskSaleEmailReason: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmailReason/value1`.
+            public var value1: Components.Schemas.KnownUserTaskSaleEmailReason?
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmailReason/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `UserTaskSaleEmailReason`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownUserTaskSaleEmailReason? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Why a sale email waits for the user:
+        ///
+        /// - `ask_before_delist`: it matched `item`, and the user asked to confirm sale emails first
+        ///   (a `confirm_sale` task). Completing it records the sale and delists the item everywhere
+        ///   else; dismissing it records nothing.
+        /// - `ambiguous_match`: it could be any of `candidates` (a `review_match` task).
+        /// - `unknown_format`: Listora cannot read it (a `review_match` task, no `candidates`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownUserTaskSaleEmailReason`.
+        @frozen public enum KnownUserTaskSaleEmailReason: String, Codable, Hashable, Sendable, CaseIterable {
+            case askBeforeDelist = "ask_before_delist"
+            case ambiguousMatch = "ambiguous_match"
+            case unknownFormat = "unknown_format"
+        }
+        /// What a forwarded sale email said, for a `confirm_sale` or `review_match` task: its parsed
+        /// details and a short excerpt with the buyer's details removed (Listora keeps nothing more of
+        /// the email).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail`.
+        public struct UserTaskSaleEmail: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/reason`.
+            public var reason: Components.Schemas.UserTaskSaleEmailReason
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/receivedAt`.
+            public var receivedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/excerpt`.
+            public var excerpt: Swift.String
+            /// The item's title as the email gave it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/title`.
+            public var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/salePrice`.
+            public var salePrice: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/soldAt`.
+            public var soldAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/orderNumber`.
+            public var orderNumber: Swift.String?
+            /// The items an ambiguous email could be; the user picks one with `matchedItemId`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/UserTaskSaleEmail/candidates`.
+            public var candidates: [Components.Schemas.UserTaskItem]
+            /// Creates a new `UserTaskSaleEmail`.
+            ///
+            /// - Parameters:
+            ///   - reason:
+            ///   - receivedAt:
+            ///   - excerpt:
+            ///   - title: The item's title as the email gave it.
+            ///   - salePrice:
+            ///   - soldAt:
+            ///   - orderNumber:
+            ///   - candidates: The items an ambiguous email could be; the user picks one with `matchedItemId`.
+            public init(
+                reason: Components.Schemas.UserTaskSaleEmailReason,
+                receivedAt: Components.Schemas.Timestamp,
+                excerpt: Swift.String,
+                title: Swift.String? = nil,
+                salePrice: Components.Schemas.Money? = nil,
+                soldAt: Components.Schemas.Timestamp? = nil,
+                orderNumber: Swift.String? = nil,
+                candidates: [Components.Schemas.UserTaskItem]
+            ) {
+                self.reason = reason
+                self.receivedAt = receivedAt
+                self.excerpt = excerpt
+                self.title = title
+                self.salePrice = salePrice
+                self.soldAt = soldAt
+                self.orderNumber = orderNumber
+                self.candidates = candidates
+            }
+            public enum CodingKeys: String, CodingKey {
+                case reason
+                case receivedAt
+                case excerpt
+                case title
+                case salePrice
+                case soldAt
+                case orderNumber
+                case candidates
+            }
+        }
         /// The user's confirmation and, for some kinds, their decision. Which properties apply
         /// depends on the task's `kind`; a property that does not apply is
         /// `422 validation_failed`.
@@ -7444,8 +9195,11 @@ extension Components {
         ///   it is not a listing on that marketplace, and `409 already_exists` when another listing
         ///   already has it.
         /// - `review_match`: the user's choice, `matchedItemId` and/or `matchedListingId`, or
-        ///   `rejectMatch: true` when nothing matches. Exactly one of the two is required.
-        /// - `confirm_sale`: optional `saleCorrection` when the detected details are wrong.
+        ///   `rejectMatch: true` when nothing matches. Exactly one of the two is required. For a sale
+        ///   email, the chosen item's sale is recorded and delisted everywhere else; `422` when the
+        ///   email shows no price and the item has no listing price on that marketplace.
+        /// - `confirm_sale`: optional `saleCorrection` when the detected details are wrong. For a sale
+        ///   email, completing it records the sale and delists the item everywhere else.
         /// - `delist_manually`, `edit_manually`, `reconnect`, `resolve_double_sale`: nothing besides
         ///   `note`.
         /// - Every kind: optional `note`.
@@ -7554,6 +9308,1064 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case data
                 case nextCursor
+            }
+        }
+        /// A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show
+        /// `statusDisplay` as given.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleEmailStatus`.
+        public struct SaleEmailStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleEmailStatus/value1`.
+            public var value1: Components.Schemas.KnownSaleEmailStatus?
+            /// - Remark: Generated from `#/components/schemas/SaleEmailStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SaleEmailStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSaleEmailStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - `unavailable`: this Listora receives no email yet (no `address`).
+        /// - `not_set_up`: no email has reached the address yet.
+        /// - `confirming`: the email provider sent its forwarding confirmation (`confirmation`); the
+        ///   user confirms it in their provider's settings.
+        /// - `working`: a marketplace email passed Listora's sender checks, so forwarding works.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownSaleEmailStatus`.
+        @frozen public enum KnownSaleEmailStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case unavailable = "unavailable"
+            case notSetUp = "not_set_up"
+            case confirming = "confirming"
+            case working = "working"
+        }
+        /// The email provider's forwarding confirmation, sent to the Listora address: the user types
+        /// the `code` into their provider's settings, or opens `url` (always on the provider's own
+        /// domain, from a message whose sender checks passed). Listora never opens the link itself.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleEmailConfirmation`.
+        public struct SaleEmailConfirmation: Codable, Hashable, Sendable {
+            /// For example "Gmail".
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmailConfirmation/provider`.
+            public var provider: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SaleEmailConfirmation/code`.
+            public var code: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SaleEmailConfirmation/url`.
+            public var url: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SaleEmailConfirmation/receivedAt`.
+            public var receivedAt: Components.Schemas.Timestamp
+            /// Creates a new `SaleEmailConfirmation`.
+            ///
+            /// - Parameters:
+            ///   - provider: For example "Gmail".
+            ///   - code:
+            ///   - url:
+            ///   - receivedAt:
+            public init(
+                provider: Swift.String,
+                code: Swift.String? = nil,
+                url: Swift.String? = nil,
+                receivedAt: Components.Schemas.Timestamp
+            ) {
+                self.provider = provider
+                self.code = code
+                self.url = url
+                self.receivedAt = receivedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case provider
+                case code
+                case url
+                case receivedAt
+            }
+        }
+        /// Email sale detection: the account's private forwarding address, how to forward the
+        /// marketplaces' sold emails to it, what has arrived, and the "ask before auto-delist"
+        /// setting. A sold email from Poshmark, Mercari, or Depop that passes Listora's sender checks
+        /// (SPF and the marketplace's DKIM signature) records the sale and delists the item everywhere
+        /// else within minutes, or with `askBeforeDelist` makes a confirm task first.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleEmails`.
+        public struct SaleEmails: Codable, Hashable, Sendable {
+            /// The account's own forwarding address; absent while `status` is `unavailable`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/address`.
+            public var address: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/status`.
+            public var status: Components.Schemas.SaleEmailStatus
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// When true, a sale email makes a `confirm_sale` task instead of recording the sale and
+            /// delisting at once. False by default.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/askBeforeDelist`.
+            public var askBeforeDelist: Swift.Bool
+            /// How to set forwarding up, in order, worded for the user.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/steps`.
+            public var steps: [Swift.String]
+            /// The email search that finds the marketplaces' sold emails, for the forwarding filter.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/filter`.
+            public var filter: Swift.String
+            /// Present while the provider's confirmation waits for the user (`confirming`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/confirmation`.
+            public var confirmation: Components.Schemas.SaleEmailConfirmation?
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/lastSaleEmailAt`.
+            public var lastSaleEmailAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/SaleEmails/lastEmailAt`.
+            public var lastEmailAt: Components.Schemas.Timestamp?
+            /// Creates a new `SaleEmails`.
+            ///
+            /// - Parameters:
+            ///   - address: The account's own forwarding address; absent while `status` is `unavailable`.
+            ///   - status:
+            ///   - statusDisplay:
+            ///   - askBeforeDelist: When true, a sale email makes a `confirm_sale` task instead of recording the sale and
+            ///   - steps: How to set forwarding up, in order, worded for the user.
+            ///   - filter: The email search that finds the marketplaces' sold emails, for the forwarding filter.
+            ///   - confirmation: Present while the provider's confirmation waits for the user (`confirming`).
+            ///   - lastSaleEmailAt:
+            ///   - lastEmailAt:
+            public init(
+                address: Swift.String? = nil,
+                status: Components.Schemas.SaleEmailStatus,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                askBeforeDelist: Swift.Bool,
+                steps: [Swift.String],
+                filter: Swift.String,
+                confirmation: Components.Schemas.SaleEmailConfirmation? = nil,
+                lastSaleEmailAt: Components.Schemas.Timestamp? = nil,
+                lastEmailAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.address = address
+                self.status = status
+                self.statusDisplay = statusDisplay
+                self.askBeforeDelist = askBeforeDelist
+                self.steps = steps
+                self.filter = filter
+                self.confirmation = confirmation
+                self.lastSaleEmailAt = lastSaleEmailAt
+                self.lastEmailAt = lastEmailAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case address
+                case status
+                case statusDisplay
+                case askBeforeDelist
+                case steps
+                case filter
+                case confirmation
+                case lastSaleEmailAt
+                case lastEmailAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SaleEmailSettingsReplace`.
+        public struct SaleEmailSettingsReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleEmailSettingsReplace/askBeforeDelist`.
+            public var askBeforeDelist: Swift.Bool
+            /// Creates a new `SaleEmailSettingsReplace`.
+            ///
+            /// - Parameters:
+            ///   - askBeforeDelist:
+            public init(askBeforeDelist: Swift.Bool) {
+                self.askBeforeDelist = askBeforeDelist
+            }
+            public enum CodingKeys: String, CodingKey {
+                case askBeforeDelist
+            }
+        }
+        /// A `KnownTodayCardKind`, or a card added after this client was built. Clients show an
+        /// unknown card's `title`, `detail`, and action generically.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayCardKind`.
+        public struct TodayCardKind: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayCardKind/value1`.
+            public var value1: Components.Schemas.KnownTodayCardKind?
+            /// - Remark: Generated from `#/components/schemas/TodayCardKind/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `TodayCardKind`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownTodayCardKind? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `delist`: an item sold and is not delisted (or confirmed) everywhere else yet.
+        /// `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
+        /// seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
+        /// `stale_listing`: a listing live a long time with no changes, with a price drop (never below
+        /// the item's floor) or a relist suggested.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownTodayCardKind`.
+        @frozen public enum KnownTodayCardKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case delist = "delist"
+            case ship = "ship"
+            case reconnect = "reconnect"
+            case reviewDrafts = "review_drafts"
+            case staleListing = "stale_listing"
+        }
+        /// A `KnownTodayUrgency`, or a level added after this client was built, which clients show
+        /// like `normal`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayUrgency`.
+        public struct TodayUrgency: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayUrgency/value1`.
+            public var value1: Components.Schemas.KnownTodayUrgency?
+            /// - Remark: Generated from `#/components/schemas/TodayUrgency/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `TodayUrgency`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownTodayUrgency? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `urgent`: needs the seller now (a delist that is stuck or waiting for them, a ship-by date
+        /// within a day or past). `high`: soon. `normal`: when the seller has a moment.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownTodayUrgency`.
+        @frozen public enum KnownTodayUrgency: String, Codable, Hashable, Sendable, CaseIterable {
+            case urgent = "urgent"
+            case high = "high"
+            case normal = "normal"
+        }
+        /// A `KnownTodayDestination`, or a screen added after this client was built. Clients that do
+        /// not know it open the item when the action names one, and otherwise offer no action.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayDestination`.
+        public struct TodayDestination: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayDestination/value1`.
+            public var value1: Components.Schemas.KnownTodayDestination?
+            /// - Remark: Generated from `#/components/schemas/TodayDestination/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `TodayDestination`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownTodayDestination? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `item`: the item screen (`itemId`). `sale`: the sale's screen (`saleId`; `itemId` names the
+        /// item too). `marketplaces`: the marketplace connections screen (`connectionId` names the
+        /// connection). `drafts`: the drafts waiting for review.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownTodayDestination`.
+        @frozen public enum KnownTodayDestination: String, Codable, Hashable, Sendable, CaseIterable {
+            case item = "item"
+            case sale = "sale"
+            case marketplaces = "marketplaces"
+            case drafts = "drafts"
+        }
+        /// The card's one primary action and the screen it opens.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayAction`.
+        public struct TodayAction: Codable, Hashable, Sendable {
+            /// The button's title, for example `Open sale` or `Lower to $40`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayAction/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TodayAction/destination`.
+            public var destination: Components.Schemas.TodayDestination
+            /// - Remark: Generated from `#/components/schemas/TodayAction/itemId`.
+            public var itemId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/TodayAction/saleId`.
+            public var saleId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/TodayAction/connectionId`.
+            public var connectionId: Components.Schemas.Id?
+            /// Creates a new `TodayAction`.
+            ///
+            /// - Parameters:
+            ///   - label: The button's title, for example `Open sale` or `Lower to $40`.
+            ///   - destination:
+            ///   - itemId:
+            ///   - saleId:
+            ///   - connectionId:
+            public init(
+                label: Swift.String,
+                destination: Components.Schemas.TodayDestination,
+                itemId: Components.Schemas.Id? = nil,
+                saleId: Components.Schemas.Id? = nil,
+                connectionId: Components.Schemas.Id? = nil
+            ) {
+                self.label = label
+                self.destination = destination
+                self.itemId = itemId
+                self.saleId = saleId
+                self.connectionId = connectionId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case label
+                case destination
+                case itemId
+                case saleId
+                case connectionId
+            }
+        }
+        /// The item a card is about.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayItem`.
+        public struct TodayItem: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayItem/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodayItem/sku`.
+            public var sku: Components.Schemas.Sku
+            /// - Remark: Generated from `#/components/schemas/TodayItem/title`.
+            public var title: Swift.String?
+            /// The item's cover photo, small; absent until a photo is processed.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayItem/thumbnailUrl`.
+            public var thumbnailUrl: Swift.String?
+            /// Creates a new `TodayItem`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - sku:
+            ///   - title:
+            ///   - thumbnailUrl: The item's cover photo, small; absent until a photo is processed.
+            public init(
+                id: Components.Schemas.Id,
+                sku: Components.Schemas.Sku,
+                title: Swift.String? = nil,
+                thumbnailUrl: Swift.String? = nil
+            ) {
+                self.id = id
+                self.sku = sku
+                self.title = title
+                self.thumbnailUrl = thumbnailUrl
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case sku
+                case title
+                case thumbnailUrl
+            }
+        }
+        /// A `ship` card's sale and where the item is kept.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayShipment`.
+        public struct TodayShipment: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayShipment/saleId`.
+            public var saleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodayShipment/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/TodayShipment/soldAt`.
+            public var soldAt: Components.Schemas.Timestamp
+            /// The marketplace's ship-by date, when it gives one.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayShipment/shipBy`.
+            public var shipBy: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/TodayShipment/location`.
+            public var location: Components.Schemas.TodayLocation?
+            /// Creates a new `TodayShipment`.
+            ///
+            /// - Parameters:
+            ///   - saleId:
+            ///   - marketplace:
+            ///   - soldAt:
+            ///   - shipBy: The marketplace's ship-by date, when it gives one.
+            ///   - location:
+            public init(
+                saleId: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                soldAt: Components.Schemas.Timestamp,
+                shipBy: Components.Schemas.Timestamp? = nil,
+                location: Components.Schemas.TodayLocation? = nil
+            ) {
+                self.saleId = saleId
+                self.marketplace = marketplace
+                self.soldAt = soldAt
+                self.shipBy = shipBy
+                self.location = location
+            }
+            public enum CodingKeys: String, CodingKey {
+                case saleId
+                case marketplace
+                case soldAt
+                case shipBy
+                case location
+            }
+        }
+        /// Where the item is kept, for example bin `B-12`.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayLocation`.
+        public struct TodayLocation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayLocation/code`.
+            public var code: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TodayLocation/label`.
+            public var label: Swift.String?
+            /// Creates a new `TodayLocation`.
+            ///
+            /// - Parameters:
+            ///   - code:
+            ///   - label:
+            public init(
+                code: Swift.String,
+                label: Swift.String? = nil
+            ) {
+                self.code = code
+                self.label = label
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case label
+            }
+        }
+        /// A `delist` card's delist run, with its honest summary.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayDelist`.
+        public struct TodayDelist: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayDelist/saleId`.
+            public var saleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodayDelist/delistRunId`.
+            public var delistRunId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodayDelist/soldOn`.
+            public var soldOn: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/TodayDelist/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// The marketplaces where it is not delisted or confirmed yet.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayDelist/remaining`.
+            public var remaining: [Components.Schemas.Marketplace]
+            /// Creates a new `TodayDelist`.
+            ///
+            /// - Parameters:
+            ///   - saleId:
+            ///   - delistRunId:
+            ///   - soldOn:
+            ///   - statusDisplay:
+            ///   - remaining: The marketplaces where it is not delisted or confirmed yet.
+            public init(
+                saleId: Components.Schemas.Id,
+                delistRunId: Components.Schemas.Id,
+                soldOn: Components.Schemas.Marketplace,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                remaining: [Components.Schemas.Marketplace]
+            ) {
+                self.saleId = saleId
+                self.delistRunId = delistRunId
+                self.soldOn = soldOn
+                self.statusDisplay = statusDisplay
+                self.remaining = remaining
+            }
+            public enum CodingKeys: String, CodingKey {
+                case saleId
+                case delistRunId
+                case soldOn
+                case statusDisplay
+                case remaining
+            }
+        }
+        /// A `reconnect` card's connection.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayConnection`.
+        public struct TodayConnection: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayConnection/connectionId`.
+            public var connectionId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodayConnection/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/TodayConnection/displayName`.
+            public var displayName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TodayConnection/status`.
+            public var status: Components.Schemas.ConnectionStatus
+            /// Creates a new `TodayConnection`.
+            ///
+            /// - Parameters:
+            ///   - connectionId:
+            ///   - marketplace:
+            ///   - displayName:
+            ///   - status:
+            public init(
+                connectionId: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                displayName: Swift.String? = nil,
+                status: Components.Schemas.ConnectionStatus
+            ) {
+                self.connectionId = connectionId
+                self.marketplace = marketplace
+                self.displayName = displayName
+                self.status = status
+            }
+            public enum CodingKeys: String, CodingKey {
+                case connectionId
+                case marketplace
+                case displayName
+                case status
+            }
+        }
+        /// A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
+        /// clients show through the card's `detail` and action.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayStaleSuggestion`.
+        public struct TodayStaleSuggestion: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayStaleSuggestion/value1`.
+            public var value1: Components.Schemas.KnownTodayStaleSuggestion?
+            /// - Remark: Generated from `#/components/schemas/TodayStaleSuggestion/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `TodayStaleSuggestion`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownTodayStaleSuggestion? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `price_drop`: lower the price to `suggestedPrice`, which is never below the item's floor.
+        /// `relist`: no price drop is possible (the price is at its floor, or no floor is known).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownTodayStaleSuggestion`.
+        @frozen public enum KnownTodayStaleSuggestion: String, Codable, Hashable, Sendable, CaseIterable {
+            case priceDrop = "price_drop"
+            case relist = "relist"
+        }
+        /// A `stale_listing` card's listing facts and suggestion.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayStaleListing`.
+        public struct TodayStaleListing: Codable, Hashable, Sendable {
+            /// When its oldest live listing went live.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/listedAt`.
+            public var listedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/daysListed`.
+            public var daysListed: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/price`.
+            public var price: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/floor`.
+            public var floor: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/suggestion`.
+            public var suggestion: Components.Schemas.TodayStaleSuggestion
+            /// Present with `price_drop`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/suggestedPrice`.
+            public var suggestedPrice: Components.Schemas.Money?
+            /// Where it is live.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayStaleListing/marketplaces`.
+            public var marketplaces: [Components.Schemas.Marketplace]
+            /// Creates a new `TodayStaleListing`.
+            ///
+            /// - Parameters:
+            ///   - listedAt: When its oldest live listing went live.
+            ///   - daysListed:
+            ///   - price:
+            ///   - floor:
+            ///   - suggestion:
+            ///   - suggestedPrice: Present with `price_drop`.
+            ///   - marketplaces: Where it is live.
+            public init(
+                listedAt: Components.Schemas.Timestamp,
+                daysListed: Swift.Int32,
+                price: Components.Schemas.Money,
+                floor: Components.Schemas.Money? = nil,
+                suggestion: Components.Schemas.TodayStaleSuggestion,
+                suggestedPrice: Components.Schemas.Money? = nil,
+                marketplaces: [Components.Schemas.Marketplace]
+            ) {
+                self.listedAt = listedAt
+                self.daysListed = daysListed
+                self.price = price
+                self.floor = floor
+                self.suggestion = suggestion
+                self.suggestedPrice = suggestedPrice
+                self.marketplaces = marketplaces
+            }
+            public enum CodingKeys: String, CodingKey {
+                case listedAt
+                case daysListed
+                case price
+                case floor
+                case suggestion
+                case suggestedPrice
+                case marketplaces
+            }
+        }
+        /// A `review_drafts` card's drafts.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayDrafts`.
+        public struct TodayDrafts: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayDrafts/count`.
+            public var count: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/TodayDrafts/oldestCreatedAt`.
+            public var oldestCreatedAt: Components.Schemas.Timestamp
+            /// Creates a new `TodayDrafts`.
+            ///
+            /// - Parameters:
+            ///   - count:
+            ///   - oldestCreatedAt:
+            public init(
+                count: Swift.Int32,
+                oldestCreatedAt: Components.Schemas.Timestamp
+            ) {
+                self.count = count
+                self.oldestCreatedAt = oldestCreatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case count
+                case oldestCreatedAt
+            }
+        }
+        /// One thing that needs the seller. A card exists only while its work is not done, so it is
+        /// gone from the next summary once the work is finished. The kind's own property (`shipment`,
+        /// `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayCard`.
+        public struct TodayCard: Codable, Hashable, Sendable {
+            /// Stable while the card's work is the same, for example `ship:<saleItemId>`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayCard/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TodayCard/kind`.
+            public var kind: Components.Schemas.TodayCardKind
+            /// - Remark: Generated from `#/components/schemas/TodayCard/urgency`.
+            public var urgency: Components.Schemas.TodayUrgency
+            /// - Remark: Generated from `#/components/schemas/TodayCard/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TodayCard/detail`.
+            public var detail: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/action`.
+            public var action: Components.Schemas.TodayAction
+            /// - Remark: Generated from `#/components/schemas/TodayCard/item`.
+            public var item: Components.Schemas.TodayItem?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/shipment`.
+            public var shipment: Components.Schemas.TodayShipment?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/delist`.
+            public var delist: Components.Schemas.TodayDelist?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/connection`.
+            public var connection: Components.Schemas.TodayConnection?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/staleListing`.
+            public var staleListing: Components.Schemas.TodayStaleListing?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/drafts`.
+            public var drafts: Components.Schemas.TodayDrafts?
+            /// Creates a new `TodayCard`.
+            ///
+            /// - Parameters:
+            ///   - id: Stable while the card's work is the same, for example `ship:<saleItemId>`.
+            ///   - kind:
+            ///   - urgency:
+            ///   - title:
+            ///   - detail:
+            ///   - action:
+            ///   - item:
+            ///   - shipment:
+            ///   - delist:
+            ///   - connection:
+            ///   - staleListing:
+            ///   - drafts:
+            public init(
+                id: Swift.String,
+                kind: Components.Schemas.TodayCardKind,
+                urgency: Components.Schemas.TodayUrgency,
+                title: Swift.String,
+                detail: Swift.String? = nil,
+                action: Components.Schemas.TodayAction,
+                item: Components.Schemas.TodayItem? = nil,
+                shipment: Components.Schemas.TodayShipment? = nil,
+                delist: Components.Schemas.TodayDelist? = nil,
+                connection: Components.Schemas.TodayConnection? = nil,
+                staleListing: Components.Schemas.TodayStaleListing? = nil,
+                drafts: Components.Schemas.TodayDrafts? = nil
+            ) {
+                self.id = id
+                self.kind = kind
+                self.urgency = urgency
+                self.title = title
+                self.detail = detail
+                self.action = action
+                self.item = item
+                self.shipment = shipment
+                self.delist = delist
+                self.connection = connection
+                self.staleListing = staleListing
+                self.drafts = drafts
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case kind
+                case urgency
+                case title
+                case detail
+                case action
+                case item
+                case shipment
+                case delist
+                case connection
+                case staleListing
+                case drafts
+            }
+        }
+        /// Sales in a 7-day period. Canceled and returned sales count for nothing. `profit` is the sum
+        /// over the sales whose profit is known (price plus shipping charged, minus fees and the items'
+        /// costs); a sale without recorded fees or with an item without a cost is counted in
+        /// `profitPendingSales` instead. `profit` is absent when no sale's profit is known.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod`.
+        public struct TodayMoneyPeriod: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/start`.
+            public var start: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/end`.
+            public var end: Components.Schemas.Timestamp
+            /// Orders.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/sales`.
+            public var sales: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/itemsSold`.
+            public var itemsSold: Swift.Int32
+            /// What the items sold for, before shipping, fees, and costs.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/salesTotal`.
+            public var salesTotal: Components.Schemas.Money
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/profit`.
+            public var profit: Components.Schemas.Money?
+            /// - Remark: Generated from `#/components/schemas/TodayMoneyPeriod/profitPendingSales`.
+            public var profitPendingSales: Swift.Int32
+            /// Creates a new `TodayMoneyPeriod`.
+            ///
+            /// - Parameters:
+            ///   - start:
+            ///   - end:
+            ///   - sales: Orders.
+            ///   - itemsSold:
+            ///   - salesTotal: What the items sold for, before shipping, fees, and costs.
+            ///   - profit:
+            ///   - profitPendingSales:
+            public init(
+                start: Components.Schemas.Timestamp,
+                end: Components.Schemas.Timestamp,
+                sales: Swift.Int32,
+                itemsSold: Swift.Int32,
+                salesTotal: Components.Schemas.Money,
+                profit: Components.Schemas.Money? = nil,
+                profitPendingSales: Swift.Int32
+            ) {
+                self.start = start
+                self.end = end
+                self.sales = sales
+                self.itemsSold = itemsSold
+                self.salesTotal = salesTotal
+                self.profit = profit
+                self.profitPendingSales = profitPendingSales
+            }
+            public enum CodingKeys: String, CodingKey {
+                case start
+                case end
+                case sales
+                case itemsSold
+                case salesTotal
+                case profit
+                case profitPendingSales
+            }
+        }
+        /// The last 7 days (`thisWeek`, ending now) next to the 7 days before (`lastWeek`).
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodayMoney`.
+        public struct TodayMoney: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodayMoney/thisWeek`.
+            public var thisWeek: Components.Schemas.TodayMoneyPeriod
+            /// - Remark: Generated from `#/components/schemas/TodayMoney/lastWeek`.
+            public var lastWeek: Components.Schemas.TodayMoneyPeriod
+            /// Creates a new `TodayMoney`.
+            ///
+            /// - Parameters:
+            ///   - thisWeek:
+            ///   - lastWeek:
+            public init(
+                thisWeek: Components.Schemas.TodayMoneyPeriod,
+                lastWeek: Components.Schemas.TodayMoneyPeriod
+            ) {
+                self.thisWeek = thisWeek
+                self.lastWeek = lastWeek
+            }
+            public enum CodingKeys: String, CodingKey {
+                case thisWeek
+                case lastWeek
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/Today`.
+        public struct Today: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Today/generatedAt`.
+            public var generatedAt: Components.Schemas.Timestamp
+            /// Most urgent first. Empty when the seller is all caught up.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Today/cards`.
+            public var cards: [Components.Schemas.TodayCard]
+            /// - Remark: Generated from `#/components/schemas/Today/money`.
+            public var money: Components.Schemas.TodayMoney
+            /// Creates a new `Today`.
+            ///
+            /// - Parameters:
+            ///   - generatedAt:
+            ///   - cards: Most urgent first. Empty when the seller is all caught up.
+            ///   - money:
+            public init(
+                generatedAt: Components.Schemas.Timestamp,
+                cards: [Components.Schemas.TodayCard],
+                money: Components.Schemas.TodayMoney
+            ) {
+                self.generatedAt = generatedAt
+                self.cards = cards
+                self.money = money
+            }
+            public enum CodingKeys: String, CodingKey {
+                case generatedAt
+                case cards
+                case money
+            }
+        }
+        /// The morning summary notification: once a day at `time` in `timeZone`, a push that sums up
+        /// the Today screen (nothing is sent on a day with nothing to do). Until the app saves a time
+        /// zone, `timeZone` is absent and no summary is sent.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodaySummarySettings`.
+        public struct TodaySummarySettings: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettings/enabled`.
+            public var enabled: Swift.Bool
+            /// Wall-clock `HH:MM`, 24-hour.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettings/time`.
+            public var time: Swift.String
+            /// An IANA time zone name, for example `America/New_York`.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettings/timeZone`.
+            public var timeZone: Swift.String?
+            /// Creates a new `TodaySummarySettings`.
+            ///
+            /// - Parameters:
+            ///   - enabled:
+            ///   - time: Wall-clock `HH:MM`, 24-hour.
+            ///   - timeZone: An IANA time zone name, for example `America/New_York`.
+            public init(
+                enabled: Swift.Bool,
+                time: Swift.String,
+                timeZone: Swift.String? = nil
+            ) {
+                self.enabled = enabled
+                self.time = time
+                self.timeZone = timeZone
+            }
+            public enum CodingKeys: String, CodingKey {
+                case enabled
+                case time
+                case timeZone
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TodaySummarySettingsReplace`.
+        public struct TodaySummarySettingsReplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettingsReplace/enabled`.
+            public var enabled: Swift.Bool
+            /// Wall-clock `HH:MM`, 24-hour.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettingsReplace/time`.
+            public var time: Swift.String
+            /// An IANA time zone name, for example `America/New_York` (the device's own).
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySummarySettingsReplace/timeZone`.
+            public var timeZone: Swift.String
+            /// Creates a new `TodaySummarySettingsReplace`.
+            ///
+            /// - Parameters:
+            ///   - enabled:
+            ///   - time: Wall-clock `HH:MM`, 24-hour.
+            ///   - timeZone: An IANA time zone name, for example `America/New_York` (the device's own).
+            public init(
+                enabled: Swift.Bool,
+                time: Swift.String,
+                timeZone: Swift.String
+            ) {
+                self.enabled = enabled
+                self.time = time
+                self.timeZone = timeZone
+            }
+            public enum CodingKeys: String, CodingKey {
+                case enabled
+                case time
+                case timeZone
             }
         }
     }

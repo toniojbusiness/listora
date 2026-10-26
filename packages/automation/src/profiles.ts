@@ -6,10 +6,11 @@
  * data, which screenshots black out. The per-marketplace automation adapters add their own
  * challenge signs and private selectors as they learn the sites' pages.
  */
-import type { Marketplace } from '@listora/db';
+import type { ExecutionLocation, Marketplace } from '@listora/db';
 import type { AutomatedMarketplace } from '@listora/marketplaces';
 
 import { DEPOP_CHALLENGE_SIGNS, DEPOP_PRIVATE_SELECTORS } from './depop/site.ts';
+import { EBAY_CHALLENGE_SIGNS, EBAY_PRIVATE_SELECTORS } from './ebay/site.ts';
 import { MERCARI_CHALLENGE_SIGNS, MERCARI_PRIVATE_SELECTORS } from './mercari/site.ts';
 
 /** A closed range of milliseconds; each wait picks uniformly inside it. */
@@ -39,6 +40,8 @@ export interface ChallengeSigns {
   readonly loginPaths: readonly RegExp[];
   /** Main-frame paths of its verification steps (a code sent by email or text). */
   readonly verificationPaths: readonly RegExp[];
+  /** Main-frame paths of its own bot-check or CAPTCHA pages (eBay's `/splashui/challenge`). */
+  readonly botCheckPaths: readonly RegExp[];
   /** Elements only its CAPTCHA or bot-check pages show. */
   readonly challengeSelectors: readonly string[];
 }
@@ -49,11 +52,36 @@ export interface AutomationProfile {
   readonly origins: readonly string[];
   /** `poshmark.com`: the only cookies a session loads or keeps. */
   readonly cookieDomains: readonly string[];
+  /**
+   * The marketplace's own sign-in page, which the app opens to link the seller's account; the
+   * seller signs in there (with any two-step check) and the app hands Listora the cookies.
+   */
+  readonly loginUrl: string;
+  /**
+   * The marketplace may sign the seller in with a link it emails them (Depop does). Tapped in
+   * the email, the link signs in the phone's default browser, not Listora, so the app asks the
+   * seller to copy it (or share it to Listora) instead and opens it in its own sign-in page.
+   */
+  readonly emailsSignInLinks: boolean;
   readonly pacing: PacingSettings;
   readonly limits: RunLimits;
   readonly challenges: ChallengeSigns;
   /** Elements screenshots black out besides every form field (names, addresses, messages). */
   readonly privateSelectors: readonly string[];
+  /**
+   * Where a newly linked connection's automated steps run (docs/features/phone-execution.md):
+   * on the seller's iPhone for the marketplaces that refuse Listora's cloud browser, in the
+   * cloud otherwise. `AUTOMATION_<MARKETPLACE>_RUNS_ON` changes it; each connection keeps its
+   * own location afterwards.
+   */
+  readonly runsOn: ExecutionLocation;
+  /**
+   * Whether its automated steps may run in Listora's cloud at all: false for the marketplaces
+   * that refuse the cloud runner, so the app does not offer the cloud and the API refuses a
+   * move there. `AUTOMATION_<MARKETPLACE>_CLOUD_ALLOWED` changes it, so a marketplace can go
+   * back to the cloud without an app update.
+   */
+  readonly cloudAllowed: boolean;
 }
 
 /** The pace of a careful person: a second or two between actions, a run every few seconds. */
@@ -80,44 +108,80 @@ export const LIMITS_CEILING: RunLimits = { runsPerHour: 120, runsPerDay: 1_000 }
 const COMMON_SIGNS: ChallengeSigns = {
   loginPaths: [/^\/(login|log-in|signin|sign-in|sign_in)(\/|$)/i],
   verificationPaths: [/^\/(verify|verification|two-factor|2fa|otp|challenge)(\/|$)/i],
+  botCheckPaths: [],
   challengeSelectors: [],
 };
 
-const PROFILES: Readonly<Record<Exclude<Marketplace, 'ebay'>, AutomationProfile>> = {
+const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
   poshmark: {
     marketplace: 'poshmark',
     origins: ['https://poshmark.com', 'https://www.poshmark.com'],
     cookieDomains: ['poshmark.com'],
+    loginUrl: 'https://poshmark.com/login',
+    emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: COMMON_SIGNS,
     privateSelectors: [],
+    // Poshmark serves the cloud runner its pages without their data.
+    runsOn: 'phone',
+    cloudAllowed: false,
   },
   mercari: {
     marketplace: 'mercari',
     origins: ['https://www.mercari.com', 'https://mercari.com'],
     cookieDomains: ['mercari.com'],
+    loginUrl: 'https://www.mercari.com/login/',
+    emailsSignInLinks: false,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: MERCARI_CHALLENGE_SIGNS,
     privateSelectors: MERCARI_PRIVATE_SELECTORS,
+    // Mercari shows the cloud runner a bot check.
+    runsOn: 'phone',
+    cloudAllowed: false,
   },
   depop: {
     marketplace: 'depop',
     origins: ['https://www.depop.com', 'https://depop.com'],
     cookieDomains: ['depop.com'],
+    loginUrl: 'https://www.depop.com/login/',
+    emailsSignInLinks: true,
     pacing: DEFAULT_PACING,
     limits: DEFAULT_LIMITS,
     challenges: DEPOP_CHALLENGE_SIGNS,
     privateSelectors: DEPOP_PRIVATE_SELECTORS,
+    // Depop blocks the cloud runner's address.
+    runsOn: 'phone',
+    cloudAllowed: false,
+  },
+  ebay: {
+    marketplace: 'ebay',
+    // eBay's sign-in pages are on signin.ebay.com: a session eBay rejected is sent there, and
+    // is stopped as a login page rather than as a page outside eBay.
+    origins: ['https://www.ebay.com', 'https://ebay.com', 'https://signin.ebay.com'],
+    cookieDomains: ['ebay.com'],
+    loginUrl: 'https://signin.ebay.com/signin/',
+    emailsSignInLinks: false,
+    pacing: DEFAULT_PACING,
+    limits: DEFAULT_LIMITS,
+    challenges: EBAY_CHALLENGE_SIGNS,
+    privateSelectors: EBAY_PRIVATE_SELECTORS,
+    runsOn: 'cloud',
+    cloudAllowed: true,
   },
 };
 
-/** The marketplaces browser automation may serve: every one without a usable API. */
+/**
+ * The marketplaces browser automation may serve, in the order Link accounts lists them: every
+ * one without a usable API, and eBay until Listora's eBay developer keys exist (an `api`
+ * connection is never automated).
+ */
 export const AUTOMATED_MARKETPLACES = [
   'poshmark',
   'mercari',
   'depop',
+  'ebay',
 ] as const satisfies readonly AutomatedMarketplace[];
 
 export function isAutomatedMarketplace(
@@ -135,9 +199,16 @@ export function automationProfile(marketplace: AutomatedMarketplace): Automation
 
 /**
  * A profile for a local stand-in of the marketplace's site (the fake site in development and
- * tests): the same rules, but its origin and cookie domain are the stand-in's.
+ * tests): the same rules, but its origin, cookie domain, and sign-in page are the stand-in's.
  */
 export function standInProfile(base: AutomationProfile, siteUrl: string): AutomationProfile {
   const site = new URL(siteUrl);
-  return { ...base, origins: [site.origin], cookieDomains: [site.hostname] };
+  return {
+    ...base,
+    origins: [site.origin],
+    cookieDomains: [site.hostname],
+    // The marketplace's own sign-in path, on the stand-in (`/login` on Poshmark, `/login/` on
+    // Mercari and Depop, `/signin/` on eBay).
+    loginUrl: new URL(new URL(base.loginUrl).pathname, site.origin).href,
+  };
 }

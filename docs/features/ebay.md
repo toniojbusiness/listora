@@ -3,6 +3,12 @@
 The eBay adapter, the fake eBay it is built and tested against, and the check against eBay's
 sandbox. The adapter framework it implements is in [marketplaces.md](marketplaces.md).
 
+The adapter needs Listora's eBay developer keys (`EBAY_ENV` and the keys below). Until they
+exist, a seller links an eBay browser session and eBay is automated in it
+([ebay-automation.md](ebay-automation.md)); without either, eBay runs assisted. An `api`
+connection always takes precedence over automation, and both modes address the same listings by
+item number and SKU, so connecting the API needs no data migration.
+
 ## The adapter
 
 **The eBay adapter** (`ebay/`, `createEbayAdapter` from `EBAY_ENV` and the other `EBAY_*` keys)

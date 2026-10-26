@@ -13,6 +13,13 @@ public typealias ItemReviewDestination = @MainActor (
     _ onFinished: @escaping @MainActor (ItemReviewOutcome) -> Void,
 ) -> AnyView
 
+/// Builds the rapid review of a batch's analyzed items, which reports each saved item and the end
+/// of the review as they happen. The review feature implements it, like ``ItemReviewDestination``.
+public typealias BatchReviewDestination = @MainActor (
+    BatchReviewRequest,
+    _ onEvent: @escaping @MainActor (BatchReviewEvent) -> Void,
+) -> AnyView
+
 /// Everything the Add Item tab needs, built once at launch by `AppDependencies`: the on-device
 /// draft store, the upload queue, and the background upload session.
 @MainActor
@@ -45,6 +52,19 @@ public final class AddItemEnvironment {
     let meter: InteractionMeter
     /// Opens the review of a draft's item; nil offers no review (previews).
     let reviewDestination: ItemReviewDestination?
+    /// Opens the rapid review of a batch's items; nil offers none (previews).
+    let batchReviewDestination: BatchReviewDestination?
+    /// Reads the grouping signals of batch photos on the device.
+    let signalReader: any PhotoSignalReader
+    /// Where the batch screen reads its batch's progress.
+    let batchProgress: any BatchProgressSource
+    /// Whether this iPhone holds any draft: the Add Item tab lists only these, so the Today card
+    /// for drafts on the server opens it only then.
+    public var hasDrafts: Bool {
+        guard case let .ready(store, _) = state else { return false }
+        return (try? store.drafts().isEmpty) == false
+    }
+
     private let tokenChanges: AsyncStream<AccessGrant?>?
     private var tokenObservation: Task<Void, Never>?
 
@@ -54,8 +74,10 @@ public final class AddItemEnvironment {
         apiClient: APIClient,
         accessTokens: AccessTokenStore,
         tagReader: any TagReader,
+        signalReader: any PhotoSignalReader,
         meter: InteractionMeter,
         reviewDestination: ItemReviewDestination?,
+        batchReviewDestination: BatchReviewDestination?,
         fixturePhotosDirectory: URL? = nil,
         fakeCameraDirectory: URL? = nil,
     ) {
@@ -65,12 +87,14 @@ public final class AddItemEnvironment {
             accessTokens: accessTokens,
             tokenChanges: accessTokens.changes(),
             tagReader: tagReader,
+            signalReader: signalReader,
             transport: Self.backgroundTransport,
             isCameraAvailable: AVCaptureDevice.default(for: .video) != nil,
             fixturePhotosDirectory: fixturePhotosDirectory,
             fakeCameraDirectory: fakeCameraDirectory,
             meter: meter,
             reviewDestination: reviewDestination,
+            batchReviewDestination: batchReviewDestination,
         )
     }
 
@@ -80,18 +104,24 @@ public final class AddItemEnvironment {
         accessTokens: any AccessTokenProvider,
         tokenChanges: AsyncStream<AccessGrant?>?,
         tagReader: any TagReader,
+        signalReader: any PhotoSignalReader,
         transport: any UploadTransport,
         isCameraAvailable: Bool,
         fixturePhotosDirectory: URL?,
         fakeCameraDirectory: URL? = nil,
         meter: InteractionMeter,
         reviewDestination: ItemReviewDestination?,
+        batchReviewDestination: BatchReviewDestination? = nil,
+        batchProgress: (any BatchProgressSource)? = nil,
         policy: RetryPolicy = .standard,
     ) {
         let activity = UploadActivity()
         self.activity = activity
         self.meter = meter
         self.reviewDestination = reviewDestination
+        self.batchReviewDestination = batchReviewDestination
+        self.signalReader = signalReader
+        self.batchProgress = batchProgress ?? api
         self.isCameraAvailable = isCameraAvailable || fakeCameraDirectory != nil
         self.fixturePhotosDirectory = fixturePhotosDirectory
         self.fakeCameraDirectory = fakeCameraDirectory
@@ -124,6 +154,12 @@ public final class AddItemEnvironment {
             }
         #endif
         return DeviceCamera()
+    }
+
+    /// Forgets the Add Item tab's settings on this iPhone (`LISTORA_RESET_LOCAL_DATA`); the drafts
+    /// are in ``defaultDataDirectory()``, which the reset removes.
+    public static func resetLocalData(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: AddItemMode.storageKey)
     }
 
     /// Where the app keeps drafts: Application Support, which is backed up and never purged.

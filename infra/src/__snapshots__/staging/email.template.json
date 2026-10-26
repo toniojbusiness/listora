@@ -100,7 +100,7 @@
         "LifecycleConfiguration": {
           "Rules": [
             {
-              "ExpirationInDays": 90,
+              "ExpirationInDays": 14,
               "Id": "expire-raw-mail",
               "Prefix": "inbound/",
               "Status": "Enabled"
@@ -233,6 +233,192 @@
         }
       }
     },
+    "SaleEmailDeadLettersC4275ACB": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "MessageRetentionPeriod": 1209600,
+        "QueueName": "listora-staging-sale-email-dead-letters",
+        "SqsManagedSseEnabled": true
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "SaleEmailDeadLettersPolicyA2B52003": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sqs:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Resource": {
+                "Fn::GetAtt": [
+                  "SaleEmailDeadLettersC4275ACB",
+                  "Arn"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Queues": [
+          {
+            "Ref": "SaleEmailDeadLettersC4275ACB"
+          }
+        ]
+      }
+    },
+    "SaleEmailQueueB61ACB28": {
+      "Type": "AWS::SQS::Queue",
+      "Properties": {
+        "MessageRetentionPeriod": 345600,
+        "QueueName": "listora-staging-sale-email",
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "SaleEmailDeadLettersC4275ACB",
+              "Arn"
+            ]
+          },
+          "maxReceiveCount": 5
+        },
+        "SqsManagedSseEnabled": true,
+        "VisibilityTimeout": 300
+      },
+      "UpdateReplacePolicy": "Delete",
+      "DeletionPolicy": "Delete"
+    },
+    "SaleEmailQueuePolicyB330EDC4": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sqs:*",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              },
+              "Effect": "Deny",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Resource": {
+                "Fn::GetAtt": [
+                  "SaleEmailQueueB61ACB28",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Action": "sqs:SendMessage",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Ref": "SaleEmailTopicAC5CFFEB"
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "sns.amazonaws.com"
+              },
+              "Resource": {
+                "Fn::GetAtt": [
+                  "SaleEmailQueueB61ACB28",
+                  "Arn"
+                ]
+              }
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Queues": [
+          {
+            "Ref": "SaleEmailQueueB61ACB28"
+          }
+        ]
+      }
+    },
+    "SaleEmailQueuelistorastagingemailSaleEmailTopic3A6A46E30B13166B": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Endpoint": {
+          "Fn::GetAtt": [
+            "SaleEmailQueueB61ACB28",
+            "Arn"
+          ]
+        },
+        "Protocol": "sqs",
+        "RawMessageDelivery": true,
+        "TopicArn": {
+          "Ref": "SaleEmailTopicAC5CFFEB"
+        }
+      },
+      "DependsOn": [
+        "SaleEmailQueuePolicyB330EDC4"
+      ]
+    },
+    "SaleEmailTopicAC5CFFEB": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "listora-staging-sale-email"
+      }
+    },
+    "SaleEmailTopicPolicyB25775C3": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              },
+              "Effect": "Deny",
+              "Principal": "*",
+              "Resource": {
+                "Ref": "SaleEmailTopicAC5CFFEB"
+              },
+              "Sid": "AllowPublishThroughSSLOnly"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "111111111111"
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ses.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "SaleEmailTopicAC5CFFEB"
+              },
+              "Sid": "SesPublishes"
+            }
+          ],
+          "Version": "2012-10-17"
+        },
+        "Topics": [
+          {
+            "Ref": "SaleEmailTopicAC5CFFEB"
+          }
+        ]
+      }
+    },
     "ReceiptRules259D9F96": {
       "Type": "AWS::SES::ReceiptRuleSet",
       "Properties": {
@@ -249,7 +435,10 @@
                 "BucketName": {
                   "Ref": "InboundMailDA244C94"
                 },
-                "ObjectKeyPrefix": "inbound/"
+                "ObjectKeyPrefix": "inbound/",
+                "TopicArn": {
+                  "Ref": "SaleEmailTopicAC5CFFEB"
+                }
               }
             }
           ],
@@ -278,10 +467,28 @@
         "Ref": "ReceiptRules259D9F96"
       }
     },
+    "PublishOutputRefSaleEmailQueueB61ACB28FF1A6111": {
+      "Value": {
+        "Ref": "SaleEmailQueueB61ACB28"
+      }
+    },
+    "PublishOutputRefInboundMailDA244C947E76FD7D": {
+      "Value": {
+        "Ref": "InboundMailDA244C94"
+      }
+    },
     "PublishOutputFnGetAttInboundMailDA244C94Arn018032F9": {
       "Value": {
         "Fn::GetAtt": [
           "InboundMailDA244C94",
+          "Arn"
+        ]
+      }
+    },
+    "PublishOutputFnGetAttSaleEmailQueueB61ACB28ArnA6B166F6": {
+      "Value": {
+        "Fn::GetAtt": [
+          "SaleEmailQueueB61ACB28",
           "Arn"
         ]
       }
@@ -290,7 +497,7 @@
   "Parameters": {
     "BootstrapVersion": {
       "Type": "AWS::SSM::Parameter::Value<String>",
-      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Default": "/cdk-bootstrap/listora/version",
       "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
     }
   },

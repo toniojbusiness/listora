@@ -3,6 +3,8 @@
 
 #include "Base.xcconfig"
 
+APS_ENVIRONMENT = production
+
 LISTORA_ENVIRONMENT = staging
 APP_DISPLAY_NAME = Listora Staging
 BUNDLE_ID_SUFFIX = .staging

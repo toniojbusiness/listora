@@ -30,22 +30,31 @@ struct LabeledRow: View {
         self.note = note
     }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+        // The value under its label at accessibility sizes, both at full width.
+        let stacked = dynamicTypeSize.isAccessibilitySize
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spacing.sm))
+        layout {
             Text(label)
                 .font(Typography.subheadline)
                 .foregroundStyle(Palette.textSecondary)
-            Spacer(minLength: Spacing.sm)
-            VStack(alignment: .trailing, spacing: 2) {
+            if !stacked {
+                Spacer(minLength: Spacing.sm)
+            }
+            VStack(alignment: stacked ? .leading : .trailing, spacing: 2) {
                 Text(value)
-                    .font(Typography.subheadline.weight(.semibold).monospacedDigit())
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.textPrimary)
-                    .multilineTextAlignment(.trailing)
+                    .multilineTextAlignment(stacked ? .leading : .trailing)
                 if let note {
                     Text(note)
                         .font(Typography.footnote)
                         .foregroundStyle(Palette.textSecondary)
-                        .multilineTextAlignment(.trailing)
+                        .multilineTextAlignment(stacked ? .leading : .trailing)
                 }
             }
         }
@@ -63,14 +72,10 @@ struct PhotoView: View {
         // The color takes exactly the proposed size; the photo fills it and is clipped to it.
         Palette.surfaceSecondary.color
             .overlay {
-                AsyncImage(url: url.flatMap(URL.init(string:))) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        Image(systemName: "photo")
-                            .font(Typography.title3)
-                            .foregroundStyle(Palette.textSecondary)
-                    }
+                RemoteImage(url: url.flatMap(URL.init(string:))) {
+                    Image(systemName: "photo")
+                        .font(Typography.title3)
+                        .foregroundStyle(Palette.textSecondary)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))

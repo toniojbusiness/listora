@@ -1,8 +1,9 @@
 import XCTest
 
 /// Runs Xcode's accessibility audit (hit regions, element labels, traits, actions) on the
-/// main screens. Issues in system-drawn chrome (the tab bar, navigation bar, and keyboard) and in
-/// the fixture photos themselves are Apple's or the photo's, not the app's, so they are ignored.
+/// main screens. Issues in system-drawn chrome (the tab bar, navigation bar, keyboard, and system
+/// banners) and in the fixture photos themselves are Apple's or the photo's, not the app's, so
+/// they are ignored.
 @MainActor
 final class AccessibilityAuditUITests: XCTestCase {
     private let app = XCUIApplication()
@@ -16,9 +17,20 @@ final class AccessibilityAuditUITests: XCTestCase {
         server?.stop()
     }
 
+    /// A system notification over the app. A fresh simulator shows "Ready for Apple Intelligence"
+    /// about a minute after its first boot, and the audit flags the banner's text as the app's.
+    private var systemBanner: XCUIElement {
+        XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            .descendants(matching: .any)["NotificationShortLookView"]
+    }
+
     private func audit(_ screen: String) throws {
         // Let transitions finish: the audit samples the screen.
         RunLoop.current.run(until: Date(timeIntervalSinceNow: 1.5))
+        if systemBanner.exists {
+            systemBanner.swipeUp()
+            XCTAssertTrue(systemBanner.waitForNonExistence(timeout: 5), "a system banner covers the app")
+        }
         // System chrome (tab bar, navigation bars, and their buttons) is drawn by UIKit.
         let chrome = (app.navigationBars.allElementsBoundByIndex + app.tabBars.allElementsBoundByIndex).map(\.frame)
         // Contrast and text size are left to deterministic checks: `PaletteTests` checks every token
@@ -27,8 +39,10 @@ final class AccessibilityAuditUITests: XCTestCase {
         // sample the rendered screen and flag secondary text that measures 7:1, rows that scroll
         // under the tab bar, and list row titles that are shown whole.
         let types = XCUIAccessibilityAuditType.all.subtracting([.contrast, .dynamicType, .textClipped])
+        let banner = systemBanner
         try app.performAccessibilityAudit(for: types) { issue in
-            guard let element = issue.element else { return false }
+            // A banner that arrived during the audit: its text is SpringBoard's, not the app's.
+            guard let element = issue.element else { return banner.exists }
             let center = CGPoint(x: element.frame.midX, y: element.frame.midY)
             // A photo's pixels can have any contrast or size.
             if element.elementType == .image || chrome.contains(where: { $0.contains(center) }) {
@@ -40,25 +54,52 @@ final class AccessibilityAuditUITests: XCTestCase {
         }
     }
 
-    func testMainScreensPassTheAudit() throws {
-        let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
-        let server = try StubAPIServer()
-        try server.start()
-        self.server = server
-        app.launchEnvironment = [
-            "LISTORA_FIXTURE_PHOTOS": fixtures.path(percentEncoded: false),
-            "LISTORA_RESET_LOCAL_DATA": "1",
-            "LISTORA_DEV_API_BASE_URL": server.baseURL,
-        ]
-        app.launch()
+    // The screens are split across three tests, so each stays well inside the 5-minute
+    // allowance on CI, where an audit takes up to 45 seconds and the first launch on the fresh
+    // simulator about a minute.
+
+    /// The welcome, code, and getting started screens.
+    func testSignInScreensPassTheAudit() throws {
+        try launch()
+        let email = app.textFields["signIn.email"]
+        XCTAssertTrue(email.waitForExistence(timeout: 10))
+        try audit("Welcome")
+        let code = enterEmail(email)
+        try audit("Code")
+        signIn(code: code)
+        let skipGuide = app.buttons["gettingStarted.skip"]
+        XCTAssertTrue(skipGuide.waitForExistence(timeout: 10))
+        try audit("Getting started")
+        skipGuide.tap()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+    }
+
+    /// The tab screens and Settings.
+    func testTabScreensPassTheAudit() throws {
+        try launchSignedIn()
+        XCTAssertTrue(app.staticTexts["today.count"].waitForExistence(timeout: 10))
+        try audit("Today")
+
+        app.tabBars.buttons["Inventory"].tap()
         try audit("Inventory")
 
         app.tabBars.buttons["Sales"].tap()
-        XCTAssertTrue(app.staticTexts["Sign in to see your sales"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Sales"].waitForExistence(timeout: 5))
         try audit("Sales")
 
-        app.tabBars.buttons["Add Item"].tap()
+        app.tabBars.buttons["Tasks"].tap()
+        try audit("Tasks")
+
+        app.tabBars.buttons["Today"].tap()
+        app.buttons["settings.open"].tap()
+        XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
+        try audit("Settings")
+    }
+
+    /// Add Item, a draft of imported photos, and one photo.
+    func testAddItemScreensPassTheAudit() throws {
+        try launchSignedIn()
+        app.tabBars.buttons["Add"].tap()
         XCTAssertTrue(app.buttons["addItem.importPhotos"].waitForExistence(timeout: 5))
         try audit("Add Item")
 
@@ -70,12 +111,47 @@ final class AccessibilityAuditUITests: XCTestCase {
         XCTAssertTrue(app.buttons["photo.done"].waitForExistence(timeout: 5))
         try audit("Photo")
         app.buttons["photo.done"].tap()
+        // Back on the draft once the photo sheet has closed.
+        XCTAssertTrue(app.buttons["photo.tile.2"].waitForExistence(timeout: 5))
+    }
 
-        app.tabBars.buttons["Tasks"].tap()
-        try audit("Tasks")
+    /// Signed out against the stub, which opens on the welcome screen.
+    private func launch() throws {
+        let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
+        let server = try StubAPIServer()
+        try server.start()
+        self.server = server
+        app.launchEnvironment = [
+            "LISTORA_FIXTURE_PHOTOS": fixtures.path(percentEncoded: false),
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_API_BASE_URL": server.baseURL,
+        ]
+        app.launch()
+    }
 
-        app.tabBars.buttons["Settings"].tap()
-        XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
-        try audit("Settings")
+    /// Signed in through the stub's dev sign-in, past the getting started guide.
+    private func launchSignedIn() throws {
+        try launch()
+        let email = app.textFields["signIn.email"]
+        XCTAssertTrue(email.waitForExistence(timeout: 10))
+        signIn(code: enterEmail(email))
+        let skipGuide = app.buttons["gettingStarted.skip"]
+        XCTAssertTrue(skipGuide.waitForExistence(timeout: 10))
+        skipGuide.tap()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+    }
+
+    private func enterEmail(_ email: XCUIElement) -> XCUIElement {
+        email.tap()
+        email.typeText("seller@listora.test")
+        app.buttons["signIn.continue"].tap()
+        let code = app.textFields["signIn.code"]
+        XCTAssertTrue(code.waitForExistence(timeout: 10))
+        return code
+    }
+
+    private func signIn(code: XCUIElement) {
+        code.typeText(StubAPIServer.devSignInCode)
+        app.buttons["signIn.signIn"].tap()
     }
 }

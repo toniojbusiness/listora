@@ -41,6 +41,27 @@ enum PhotoPreparation {
         return try encode(image)
     }
 
+    /// When a library photo was taken, from its EXIF data (read before preparing strips it), in
+    /// its own time zone when it records one. Nil when it has no capture date.
+    static func captureDate(of imageData: Data) -> Date? {
+        guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any],
+              let original = exif[kCGImagePropertyExifDateTimeOriginal] as? String
+        else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        if let offset = exif[kCGImagePropertyExifOffsetTimeOriginal] as? String {
+            formatter.dateFormat = "yyyy:MM:dd HH:mm:ssxxx"
+            if let date = formatter.date(from: original + offset) {
+                return date
+            }
+        }
+        formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+        formatter.timeZone = .current
+        return formatter.date(from: original)
+    }
+
     /// Crops a prepared photo to `rect`, given in normalized coordinates of the upright image
     /// (origin top left, 1 is the full width or height).
     static func crop(_ imageData: Data, to rect: CGRect) throws(PhotoPreparationError) -> PreparedPhoto {
@@ -85,7 +106,21 @@ enum PhotoPreparation {
         return image
     }
 
-    private static func encode(_ image: CGImage) throws(PhotoPreparationError) -> PreparedPhoto {
+    /// A photo this app prepared earlier, as it is: its size, checksum, and sharpness, without
+    /// encoding it again (undoing a background cleanup puts the original back byte for byte).
+    static func describe(_ imageData: Data) throws(PhotoPreparationError) -> PreparedPhoto {
+        let image = try decodeUpright(imageData, maxLongEdge: nil)
+        return PreparedPhoto(
+            data: imageData,
+            width: image.width,
+            height: image.height,
+            sha256: SHA256.hash(data: imageData).map { String(format: "%02x", $0) }.joined(),
+            sharpness: BlurDetector.sharpness(of: image),
+        )
+    }
+
+    /// Encodes `image` as the upload's JPEG, with no metadata.
+    static func encode(_ image: CGImage) throws(PhotoPreparationError) -> PreparedPhoto {
         let output = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil)
         else {

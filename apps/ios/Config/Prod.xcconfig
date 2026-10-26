@@ -1,10 +1,16 @@
-// Prod: the App Store build, served by the personal environment for now. The ".invalid" host is
-// a deliberate placeholder that never resolves; at the personal environment's first deploy it
-// becomes the compute stack's ApiUrl output (apps/ios/README.md, Environments).
+// Prod: the App Store build, served by the personal environment for now (its first deploy,
+// scripts/deploy-personal.sh, printed these values; apps/ios/README.md, Environments). The API
+// is the compute stack's ApiUrl output, and sign-in is the personal user pool: COGNITO_CLIENT_ID
+// is its app client (the auth stack's AppClientId output). Update both if the deploy prints new
+// ones (a domain changes the URL; replacing the auth stack changes the client id).
 
 #include "Base.xcconfig"
+
+APS_ENVIRONMENT = production
 
 LISTORA_ENVIRONMENT = prod
 APP_DISPLAY_NAME = Listora
 BUNDLE_ID_SUFFIX =
-API_BASE_URL = https:/$()/api.listora.invalid
+API_BASE_URL = https:/$()/7c7l91oldf.execute-api.us-east-1.amazonaws.com
+COGNITO_REGION = us-east-1
+COGNITO_CLIENT_ID = 7sstt4lhe4qu7of40nkahc8ddh

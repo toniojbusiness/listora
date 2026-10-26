@@ -2,12 +2,13 @@ import APIClient
 import AppFeature
 import Core
 import Foundation
+import SignInFeature
 import Testing
 
 struct AppTabTests {
     @Test
-    func `the tab bar shows Inventory, Add Item, Tasks, Settings in that order`() {
-        #expect(AppTab.allCases.map(\.title) == ["Inventory", "Sales", "Add Item", "Tasks", "Settings"])
+    func `the tab bar shows Today, Inventory, Add, Tasks, Sales: five, with Add in the center`() {
+        #expect(AppTab.allCases.map(\.title) == ["Today", "Inventory", "Add", "Tasks", "Sales"])
     }
 
     @Test
@@ -31,11 +32,15 @@ struct AppDependenciesTests {
         url: String = "https://api.staging.example.com",
         storage: InMemoryAccessGrantStorage = InMemoryAccessGrantStorage(),
         launchOptions: DebugLaunchOptions = .none,
+        cognitoClientID: String = "",
     ) throws -> AppDependencies {
         let bundle = try InfoBundle([
             AppConfiguration.InfoKey.environment: environment,
             AppConfiguration.InfoKey.apiBaseURL: url,
             AppConfiguration.InfoKey.appGroup: "group.com.listora.app.staging",
+            AppConfiguration.InfoKey.sessionKeychainGroup: "group.com.listora.app.staging",
+            AppConfiguration.InfoKey.cognitoRegion: "us-east-1",
+            AppConfiguration.InfoKey.cognitoClientID: cognitoClientID,
             "CFBundleShortVersionString": "1.0",
             "CFBundleVersion": "3",
         ])
@@ -71,9 +76,22 @@ struct AppDependenciesTests {
     }
 
     @Test
-    func `only Dev builds offer the developer sign-in`() throws {
-        #expect(try dependencies().devSignIn == nil)
-        #expect(try dependencies(environment: "dev", url: "http://127.0.0.1:3000").devSignIn != nil)
+    func `dev builds sign in with the developer sign-in, others with their user pool or not at all`() throws {
+        #expect(try dependencies(environment: "dev", url: "http://127.0.0.1:3000").signIn.kind == .developer)
+        #expect(try dependencies(cognitoClientID: "4example5client6id7abcdefgh").signIn.kind == .emailCode)
+        let unconfigured = try dependencies()
+        #expect(unconfigured.signIn.kind == nil)
+        #expect(unconfigured.signIn.stage == .unavailable)
+    }
+
+    @Test
+    func `a Cognito build renews an expired session instead of signing it out`() throws {
+        let expired = AccessGrant(accessToken: "t", expiresAt: .distantPast, email: "a@b.c", refreshToken: "r")
+        let refreshable = try dependencies(
+            storage: InMemoryAccessGrantStorage(expired), cognitoClientID: "4example5client6id7abcdefgh",
+        )
+        #expect(refreshable.accessTokens.grant == expired)
+        #expect(try dependencies(storage: InMemoryAccessGrantStorage(expired)).accessTokens.grant == nil)
     }
 
     @Test

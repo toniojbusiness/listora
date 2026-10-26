@@ -1,4 +1,5 @@
 import AuthenticationServices
+import Core
 import DesignSystem
 import SwiftUI
 
@@ -80,15 +81,18 @@ public struct MarketplacesView: View {
                         row: row,
                         busyAction: busyAction(for: row),
                         isEnabled: model.connecting == nil && model.requestingCheck == nil,
-                    ) { action in
-                        switch action {
-                        case .connect, .reconnect:
-                            let authenticate = webAuthenticationSession.authenticator()
-                            Task { await model.connect(row, authenticate: authenticate) }
-                        case .check:
-                            Task { await model.check(row) }
-                        }
-                    }
+                        moving: model.moving == row.id,
+                        onMove: { toPhone in Task { await model.move(row, toPhone: toPhone) } },
+                        perform: { action in
+                            switch action {
+                            case .connect, .reconnect:
+                                let authenticate = webAuthenticationSession.authenticator()
+                                Task { await model.connect(row, authenticate: authenticate) }
+                            case .check:
+                                Task { await model.check(row) }
+                            }
+                        },
+                    )
                 }
                 if let forwarding = model.saleForwarding {
                     SectionHeader("Sale emails")
@@ -103,6 +107,9 @@ public struct MarketplacesView: View {
             .motion(value: model.rows)
         }
         .refreshable { await model.load() }
+        .onReceive(NotificationCenter.default.publisher(for: .phoneWorkFinished)) { _ in
+            Task { await model.load() }
+        }
     }
 
     private func busyAction(for row: MarketplaceRow) -> MarketplaceRow.Action? {
@@ -133,7 +140,7 @@ private struct HowItWorksCard: View {
                 systemImage: "hand.tap",
             )
         }
-        .cardStyle(.outlined)
+        .cardStyle(.flat)
     }
 
     private func point(_ title: String, _ detail: String, systemImage: String) -> some View {
@@ -141,7 +148,7 @@ private struct HowItWorksCard: View {
             IconTile(systemImage: systemImage)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(Typography.subheadline.weight(.semibold))
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.textPrimary)
                 Text(detail)
                     .font(Typography.subheadline)
@@ -160,6 +167,9 @@ struct MarketplaceRowView: View {
     /// The action running for this row right now.
     let busyAction: MarketplaceRow.Action?
     let isEnabled: Bool
+    var moving = false
+    /// Moves its automated steps to this phone (true) or to Listora's cloud.
+    var onMove: (Bool) -> Void = { _ in }
     let perform: (MarketplaceRow.Action) -> Void
 
     var body: some View {
@@ -203,6 +213,33 @@ struct MarketplaceRowView: View {
                 .font(Typography.footnote)
                 .foregroundStyle(Palette.textSecondary)
                 .accessibilityIdentifier("marketplaces.\(row.id).lastOk")
+            }
+            if let execution = row.execution {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                    Label(execution.text, systemImage: execution.onPhone ? "iphone" : "cloud")
+                        .font(Typography.footnote)
+                        .foregroundStyle(Palette.textSecondary)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(execution.text)
+                        .accessibilityIdentifier("marketplaces.\(row.id).runsOn")
+                    Spacer(minLength: 0)
+                    if let move = execution.move {
+                        Button(move == .toCloud ? "Run in the cloud" : "Run on this iPhone") {
+                            onMove(move == .toPhone)
+                        }
+                        .buttonStyle(.listoraTertiary)
+                        .loading(moving)
+                        .disabled(!isEnabled || moving)
+                        .accessibilityIdentifier("marketplaces.\(row.id).move")
+                    }
+                }
+                if let reason = execution.cloudBlockedReason {
+                    Text(reason)
+                        .font(Typography.footnote)
+                        .foregroundStyle(Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("marketplaces.\(row.id).cloudBlocked")
+                }
             }
             if !row.actions.isEmpty {
                 VStack(spacing: Spacing.xs) {
@@ -264,7 +301,7 @@ struct SaleForwardingCard: View {
                         .font(Typography.title3)
                         .foregroundStyle(Palette.textPrimary)
                         .accessibilityAddTraits(.isHeader)
-                    StatusBadge(row.statusLabel, tone: .neutral)
+                    StatusBadge(row.statusLabel, tone: row.tone)
                         .accessibilityIdentifier("marketplaces.saleForwarding.status")
                 }
                 Spacer(minLength: 0)

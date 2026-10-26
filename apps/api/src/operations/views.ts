@@ -9,8 +9,10 @@ import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import {
   DEFAULT_RETRY_POLICY,
   describeOperation,
+  isRetryableFailure,
   maxAttempts,
   SETTLED_STATUSES,
+  type PhoneWait,
 } from '@listora/operations';
 import { assertNever } from '@listora/shared';
 
@@ -25,7 +27,10 @@ export interface OperationListing {
   marketplace: Marketplace;
 }
 
-/** An operation's error as the contract shows it; only a failed operation can be retried. */
+/**
+ * An operation's error as the contract shows it. Only a failed operation can be retried, and not
+ * one whose content Listora refused before sending it: the same content would fail again.
+ */
 function operationError(
   status: OperationStatus,
   code: string | null,
@@ -35,7 +40,7 @@ function operationError(
   return {
     code,
     message: message ?? 'Something went wrong.',
-    retryable: status === 'failed',
+    retryable: status === 'failed' && isRetryableFailure(code),
   };
 }
 
@@ -49,7 +54,12 @@ function operationVerification(op: OperationRow): Verification | undefined {
 }
 
 /** The contract's `Operation`, with the label of what it did or is doing. */
-export function operationView(op: OperationRow, listing: OperationListing): Operation {
+export function operationView(
+  op: OperationRow,
+  listing: OperationListing,
+  /** Its step waits for the seller's iPhone, or the phone runs it now (phone-execution.md). */
+  phoneWait?: PhoneWait | null,
+): Operation {
   const error = operationError(op.status, op.error_code, op.error_message);
   const verification = operationVerification(op);
   const settled = (SETTLED_STATUSES as readonly string[]).includes(op.status);
@@ -67,7 +77,9 @@ export function operationView(op: OperationRow, listing: OperationListing): Oper
         status: op.status,
         attempts: op.attempts,
         errorMessage: op.error_message,
+        errorCode: op.error_code,
         successEvidence: op.success_evidence,
+        phoneWait: phoneWait ?? null,
       },
       maxAttempts: MAX_ATTEMPTS,
     }),

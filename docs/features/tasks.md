@@ -1,7 +1,7 @@
 # Assisted mode: the task inbox
 
-Where Listora can't act on a marketplace itself (Poshmark, Mercari, and Depop until its API is
-connected, plan task T-21), it prepares the work and the user does the last step in the
+Where Listora can't act on a marketplace itself (Poshmark, Mercari, Depop, and eBay without a
+connected API or a working linked session, plan task T-21), it prepares the work and the user does the last step in the
 marketplace's app. Each such step is a **user task**. The iPhone's Tasks tab is the inbox of
 them; the server finishes a task only on the user's word, so an assisted listing reads "Done (you
 confirmed)" and never "confirmed by <marketplace>" ([operations.md](operations.md)).
@@ -38,9 +38,11 @@ assisted adapters' `pendingUser` outcome ([marketplaces.md](marketplaces.md#adap
 4. Every completion and dismissal is in the item's history (`task.completed`, `task.dismissed`,
    with the linked URL and the user's note).
 
-Confirm-sale and match-review tasks have no producer yet (T-20's sale confirmations, T-23's
-imports); until then `completeTask` refuses them, and a task kind added later is shown with its
-title, instructions, and link and a request to update the app.
+Confirm-sale and match-review tasks come from forwarded sale emails
+([email-sales.md](email-sales.md#the-tasks)): the app shows what the email said, and confirming
+or picking the item records the sale. Such tasks of any other origin (imports) have no producer
+yet, and `completeTask` refuses them; a task kind added later is shown with its title,
+instructions, and link and a request to update the app.
 
 ## The app
 

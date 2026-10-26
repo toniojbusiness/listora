@@ -15,6 +15,7 @@ actor FakeReviewService: ReviewService {
         case replace(version: Int64)
         case pricing
         case usage
+        case voice(String, key: String)
     }
 
     private(set) var calls: [Call] = []
@@ -29,6 +30,7 @@ actor FakeReviewService: ReviewService {
     var replaceAnswers: [Result<Schemas.Item, APIFailure>]?
     var pricingAnswers: [Result<Schemas.PricingSuggestion, APIFailure>] = [.success(Fixtures.pricing())]
     var usageAnswers: [Result<Schemas.Usage, APIFailure>] = [.success(Fixtures.usage(premiumUsed: 2, limit: 10))]
+    var voiceAnswers: [Result<Schemas.VoiceCorrection, APIFailure>] = [.success(.init(changes: []))]
     private var latestItem: Schemas.Item?
 
     func setItems(_ answers: [Result<Schemas.Item, APIFailure>]) {
@@ -61,6 +63,10 @@ actor FakeReviewService: ReviewService {
 
     func setUsage(_ answers: [Result<Schemas.Usage, APIFailure>]) {
         usageAnswers = answers
+    }
+
+    func setVoiceAnswers(_ answers: [Result<Schemas.VoiceCorrection, APIFailure>]) {
+        voiceAnswers = answers
     }
 
     func item(id _: String) async throws(APIFailure) -> Schemas.Item {
@@ -123,6 +129,13 @@ actor FakeReviewService: ReviewService {
     func usage() async throws(APIFailure) -> Schemas.Usage {
         calls.append(.usage)
         return try next(&usageAnswers)
+    }
+
+    func interpretVoiceCorrection(itemID _: String, transcript: String, idempotencyKey: String)
+        async throws(APIFailure) -> Schemas.VoiceCorrection
+    {
+        calls.append(.voice(transcript, key: idempotencyKey))
+        return try next(&voiceAnswers)
     }
 
     private func next<Value>(_ answers: inout [Result<Value, APIFailure>]) throws(APIFailure) -> Value {

@@ -6,7 +6,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 
-import type { Marketplace } from '@listora/db';
+import type { Db, Marketplace } from '@listora/db';
 import type { FakeEbay } from '@listora/marketplaces';
 import sharp from 'sharp';
 
@@ -175,16 +175,17 @@ export interface SeededListedItem extends SeededItem {
 
 /**
  * A ready item (`createReadyItem`) published on each marketplace through the API and the
- * worker, as the listing flow publishes it; waits until every marketplace confirmed it active
- * (by read-back). Automated marketplaces take their turn in the browser runner, so this can take
- * a while.
+ * worker, as the listing flow publishes it; unless `wait` is false, waits until every
+ * marketplace confirmed it active (by read-back). A marketplace that runs on the phone confirms
+ * only once the app has run its publish.
  */
 export async function createListedItem(
   api: StackApi,
   details: Record<string, unknown> = {},
   marketplaces: readonly Marketplace[] = ['ebay'],
-  timeoutMs = 240_000,
+  options: { wait?: boolean; timeoutMs?: number } = {},
 ): Promise<SeededListedItem> {
+  const timeoutMs = options.timeoutMs ?? 240_000;
   const item = await createReadyItem(api, details);
   const merged = { ...READY_ITEM_DETAILS, ...details };
   const listed = await Promise.all(
@@ -202,7 +203,7 @@ export async function createListedItem(
     }),
   );
   const deadline = Date.now() + timeoutMs;
-  for (const [marketplace, listingId] of listed) {
+  for (const [marketplace, listingId] of options.wait === false ? [] : listed) {
     for (;;) {
       const current = await call<{ latestOperation?: { status: string; error?: unknown } }>(
         api,
@@ -228,6 +229,29 @@ export async function createListedItem(
   return { ...item, listingId: first[1], listings };
 }
 
+/**
+ * A ready item with a Depop listing that is being published: the publish is only queued, for
+ * the phone that runs Depop to take (docs/features/phone-execution.md), so nothing waits for it.
+ */
+export async function createQueuedDepopListing(
+  api: StackApi,
+  details: Record<string, unknown> = {},
+  timeoutMs = 30_000,
+): Promise<SeededListedItem> {
+  const item = await createReadyItem(api, details, timeoutMs);
+  const merged = { ...READY_ITEM_DETAILS, ...details };
+  const listing = await call<{ id: string }>(api, 'POST', `/v1/items/${item.id}/listings`, {
+    marketplace: 'depop',
+    variant: {
+      title: merged.title,
+      description: merged.description,
+      price: merged.listPrice,
+    },
+  });
+  await call(api, 'POST', `/v1/listings/${listing.id}/publish`);
+  return { ...item, listingId: listing.id, listings: { depop: listing.id } };
+}
+
 /** An 800 x 600 JPEG of one color. */
 async function jpeg(red: number): Promise<Uint8Array> {
   return new Uint8Array(
@@ -237,4 +261,61 @@ async function jpeg(red: number): Promise<Uint8Array> {
       .jpeg({ quality: 80 })
       .toBuffer(),
   );
+}
+
+/**
+ * Records a sale of `item` on eBay an hour ago, shipping by tomorrow, with the item kept in bin
+ * `B-12`: what a Today "ship" card shows. Written to the database directly, standing in for an
+ * eBay order notification (a seller's own "Mark as sold" has no ship-by date or bin); the item
+ * is `sold`, as it is once a sale's delist run (here: nothing else to delist) completes.
+ */
+export async function recordSoldItem(
+  db: Db,
+  item: SeededItem,
+): Promise<SeededItem & { saleId: string; saleItemId: string }> {
+  return db.transaction().execute(async (trx) => {
+    const row = await trx
+      .selectFrom('inventory_item')
+      .select(['account_id', 'list_price_cents'])
+      .where('id', '=', item.id)
+      .executeTakeFirstOrThrow();
+    const location = await trx
+      .insertInto('storage_location')
+      .values({ account_id: row.account_id, code: 'B-12', label: 'Garage shelf 3' })
+      .onConflict((conflict) =>
+        conflict.columns(['account_id', 'code']).doUpdateSet({ label: 'Garage shelf 3' }),
+      )
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await trx
+      .updateTable('inventory_item')
+      .set({ status: 'sold', storage_location_id: location.id })
+      .where('id', '=', item.id)
+      .execute();
+    const now = Date.now();
+    const sale = await trx
+      .insertInto('sale')
+      .values({
+        account_id: row.account_id,
+        marketplace: 'ebay',
+        external_order_id: `e2e-${randomUUID()}`,
+        sold_at: new Date(now - 60 * 60_000),
+        ship_by: new Date(now + 24 * 60 * 60_000),
+        detection_source: 'webhook',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    const line = await trx
+      .insertInto('sale_item')
+      .values({
+        account_id: row.account_id,
+        sale_id: sale.id,
+        marketplace: 'ebay',
+        item_id: item.id,
+        sale_price_cents: row.list_price_cents ?? 4500,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return { ...item, saleId: sale.id, saleItemId: line.id };
+  });
 }

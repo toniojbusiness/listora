@@ -9,9 +9,11 @@ import SwiftUI
 /// and dead stock. Every number is the server's (`getProfit`).
 struct ProfitView: View {
     @State private var model: ProfitModel
+    private let onSignIn: @MainActor () -> Void
 
-    init(model: ProfitModel) {
+    init(model: ProfitModel, onSignIn: @escaping @MainActor () -> Void = {}) {
         _model = State(initialValue: model)
+        self.onSignIn = onSignIn
     }
 
     var body: some View {
@@ -39,6 +41,7 @@ struct ProfitView: View {
                 systemImage: "person.crop.circle.badge.questionmark",
                 title: "Sign in to see your profit",
                 message: "Your revenue, fees, and profit show up here once you sign in.",
+                action: .init("Sign in", systemImage: "person.crop.circle", handler: onSignIn),
             )
         case let .failed(message) where model.report == nil:
             EmptyStateView(
@@ -160,7 +163,7 @@ private struct ProfitPeriodPicker: View {
         .font(Typography.subheadline)
         .foregroundStyle(Palette.textPrimary)
         .tint(Palette.brand.color)
-        .cardStyle(.outlined)
+        .cardStyle(.flat)
     }
 }
 
@@ -320,7 +323,7 @@ private struct ProfitStat: View {
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle(.outlined)
+        .cardStyle(.flat)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("profit.\(identifier)")
     }

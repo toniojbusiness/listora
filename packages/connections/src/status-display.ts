@@ -8,6 +8,7 @@ import type { ConnectionMode, ConnectionStatus, Marketplace } from '@listora/db'
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { assertNever } from '@listora/shared';
 
+import { describeAutomationSession, type SessionCheckState } from './session-status.ts';
 import { checkPending, type ConnectionRow } from './store.ts';
 
 /** The expiry warning starts this long before the grant ends. */
@@ -18,7 +19,7 @@ export type ConnectionAction = 'connect' | 'reconnect' | 'check';
 export type ConnectionTone = 'success' | 'checking' | 'action_needed' | 'neutral';
 /** Why a connection needs the seller's attention (the health summary's `attention`). */
 export type ConnectionAttentionReason =
-  'reconnect' | 'access_removed' | 'connection_problem' | 'expiring';
+  'reconnect' | 'access_removed' | 'connection_problem' | 'expiring' | 'not_confirmed';
 
 export interface ConnectionView {
   marketplace: Marketplace;
@@ -47,6 +48,13 @@ export interface DescribeConnectionInput {
    * worker that checks connections reads the same settings, so it also decides `check`.
    */
   canConnect: boolean;
+  /**
+   * The check of the session linked on an `automation` connection; none (or absent) means it was
+   * never checked. Ignored for other modes.
+   */
+  sessionCheck?: SessionCheckState | null;
+  /** Where an automation connection runs, when on the phone (`phoneSessionState`). */
+  phone?: { linked: boolean; checkWaiting: boolean };
   now: Date;
 }
 
@@ -88,6 +96,8 @@ export function describeConnection(input: DescribeConnectionInput): ConnectionVi
       actions: connect('connect'),
     };
   }
+
+  if (row.mode === 'automation') return describeAutomationConnection(input, row);
 
   const expired = row.refresh_expires_at !== null && row.refresh_expires_at <= now;
   const status: ConnectionStatus =
@@ -197,6 +207,73 @@ export function describeConnection(input: DescribeConnectionInput): ConnectionVi
     default:
       return assertNever(status, 'connection status');
   }
+}
+
+/**
+ * An automation connection: the linked browser session as `describeAutomationSession` shows it,
+ * so Marketplaces says exactly what Link accounts says about it.
+ */
+function describeAutomationConnection(
+  input: DescribeConnectionInput,
+  row: ConnectionRow,
+): ConnectionView {
+  const check = input.sessionCheck ?? null;
+  const session = describeAutomationSession({
+    marketplace: input.marketplace,
+    connection: {
+      status: row.status,
+      displayName: row.display_name,
+      lastError: row.last_error,
+      lastErrorCode: row.last_error_code,
+      lastErrorAt: row.last_error_at,
+      updatedAt: row.updated_at,
+    },
+    check,
+    now: input.now,
+    ...(input.phone === undefined ? {} : { phone: input.phone }),
+  });
+  // Only a session the marketplace accepted has a last good check: its passed check, or a later
+  // run whose refreshed cookies the marketplace sent.
+  const lastOkAt =
+    session.state === 'linked' ? latest(check?.finishedAt ?? null, row.last_ok_at) : null;
+  const lastCheckedAt = check?.finishedAt ?? row.last_checked_at;
+  const attention = automationAttention(session.state, row.status);
+  return {
+    marketplace: input.marketplace,
+    mode: 'automation',
+    status: row.status,
+    statusDisplay: session.statusDisplay,
+    actions: session.canCheck ? ['check'] : [],
+    ...(row.display_name === null ? {} : { displayName: row.display_name }),
+    ...(row.granted_at === null ? {} : { connectedAt: row.granted_at }),
+    ...(lastOkAt === null ? {} : { lastOkAt }),
+    ...(lastCheckedAt === null ? {} : { lastCheckedAt }),
+    ...(session.issue === undefined ? {} : { lastIssue: session.issue }),
+    ...(attention === undefined ? {} : { attention }),
+  };
+}
+
+function automationAttention(
+  state: ReturnType<typeof describeAutomationSession>['state'],
+  status: ConnectionStatus,
+): ConnectionAttentionReason | undefined {
+  switch (state) {
+    case 'needs_relink':
+      return status === 'revoked' ? 'access_removed' : 'reconnect';
+    case 'not_confirmed':
+      return 'not_confirmed';
+    case 'checking':
+    case 'linked':
+      return undefined;
+    default:
+      return assertNever(state, 'session state');
+  }
+}
+
+function latest(a: Date | null, b: Date | null): Date | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return a > b ? a : b;
 }
 
 /** `March 3, 2027`, in UTC. */

@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct ListoraApp: App {
+    @UIApplicationDelegateAdaptor(ListoraAppDelegate.self) private var appDelegate
     private let dependencies: AppDependencies
 
     init() {

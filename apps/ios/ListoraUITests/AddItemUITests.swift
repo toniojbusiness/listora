@@ -3,8 +3,8 @@ import XCTest
 /// Drives the Add Item flow on the simulator: import fixture photos into a draft, set roles and
 /// the cover, and find the draft unchanged after the app is relaunched. The simulator has no
 /// camera, so photos come from `Fixtures/` through the app's debug fixture import (the same path as
-/// the photo picker after selection). These tests never sign in, so the draft stays on the phone,
-/// saying so; `ReviewFlowUITests` takes a draft through the local stack's API.
+/// the photo picker after selection). These tests have no server, so the draft stays on the phone
+/// waiting to upload; `ReviewFlowUITests` takes a draft through the local stack's API.
 @MainActor
 final class AddItemUITests: XCTestCase {
     private let app = XCUIApplication()
@@ -22,11 +22,12 @@ final class AddItemUITests: XCTestCase {
 
     private func launch(reset: Bool) throws {
         app.launchEnvironment = try ["LISTORA_FIXTURE_PHOTOS": fixturesPath]
+        app.signInWithoutServer()
         if reset {
             app.launchEnvironment["LISTORA_RESET_LOCAL_DATA"] = "1"
         }
         app.launch()
-        let tab = app.tabBars.buttons["Add Item"]
+        let tab = app.tabBars.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()
     }
@@ -61,7 +62,7 @@ final class AddItemUITests: XCTestCase {
         XCTAssertTrue(tile(2).label.hasPrefix("Photo 3, Detail"), tile(2).label)
         XCTAssertFalse(tile(0).label.contains("Looks blurry"), tile(0).label)
         let summary = app.descendants(matching: .any)["draft.uploadSummary"]
-        XCTAssertEqual(summary.label, "Saved on this phone. Sign in to upload.")
+        XCTAssertTrue(summary.label.hasPrefix("Uploading photos (0 of 3 done)"), summary.label)
 
         // The third photo is the tag.
         tile(2).tap()
@@ -97,9 +98,8 @@ final class AddItemUITests: XCTestCase {
         XCTAssertTrue(tile(0).label.hasPrefix("Photo 1, Back, Cover"), tile(0).label)
         XCTAssertTrue(tile(1).label.hasPrefix("Photo 2, Front"), tile(1).label)
         XCTAssertTrue(tile(2).label.hasPrefix("Photo 3, Tag"), tile(2).label)
-        // The tag photo's on-device reading may still be running (it is slow on a CI simulator);
-        // its tile says "Reading tag" until the reading ends.
-        XCTAssertTrue(waitForLabel(of: tile(2), suffix: "Sign in to upload", timeout: 60), tile(2).label)
+        // With no server the draft never uploads; the tag is read on the way to its upload.
+        XCTAssertFalse(tile(2).label.contains("Uploaded"), tile(2).label)
     }
 
     func testRemovesAPhotoAndDeletesADraft() throws {
@@ -128,10 +128,6 @@ final class AddItemUITests: XCTestCase {
 
     private func waitForLabel(of element: XCUIElement, prefix: String, timeout: TimeInterval = 5) -> Bool {
         waitForLabel(of: element, matching: NSPredicate(format: "label BEGINSWITH %@", prefix), timeout: timeout)
-    }
-
-    private func waitForLabel(of element: XCUIElement, suffix: String, timeout: TimeInterval) -> Bool {
-        waitForLabel(of: element, matching: NSPredicate(format: "label ENDSWITH %@", suffix), timeout: timeout)
     }
 
     private func waitForLabel(of element: XCUIElement, matching predicate: NSPredicate, timeout: TimeInterval) -> Bool {

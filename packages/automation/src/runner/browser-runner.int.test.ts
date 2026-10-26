@@ -8,7 +8,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { FakeAutomationSite } from '../fake-site/fake-site.ts';
 import type { AutomationProfile } from '../profiles.ts';
+import { createLogger } from '@listora/shared';
+
 import { fakeSiteProfile, testRunner } from '../test-support.ts';
+import { PlaywrightBrowserRunner } from './browser-runner.ts';
 import type { PlaywrightSession } from './session.ts';
 import type { AutomationSession } from './types.ts';
 
@@ -94,7 +97,7 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
           await page.type('#price', '45.00');
           await page.fill('#sku', 'SKU-FORM-1');
           await page.upload('#photos', [
-            { name: 'front.jpg', mimeType: 'image/jpeg', buffer: Buffer.from([0xff, 0xd8]) },
+            { name: 'front.jpg', mimeType: 'image/jpeg', bytes: Buffer.from([0xff, 0xd8]) },
           ]);
         });
         return step('publish', { mutates: true }, async (page) => {
@@ -230,7 +233,10 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
       failure: { kind: 'challenge', challenge: kind, step: 'open the account' },
     });
     expect(afterwards).toBe(false);
-    expect(result.ok ? null : result.failure.screenshotKey).toEqual(expect.any(String));
+    // A page off the marketplace is never kept, whatever it shows.
+    expect(result.ok ? null : result.failure.screenshotKey).toEqual(
+      kind === 'unexpected_page' ? null : expect.any(String),
+    );
 
     // The session refuses every later run without touching the page.
     const requests = site.requests.length;
@@ -242,6 +248,91 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
       ),
     ).toMatchObject({ ok: false, failure: { kind: 'challenge', challenge: kind } });
     expect(site.requests).toHaveLength(requests);
+  });
+
+  it('sends nothing to another origin on a private address, and keeps the main frame on the site', async () => {
+    const browser = await session();
+    const before = site.requests.length;
+    site.inject({ action: 'health', fault: { type: 'offsite_content' } });
+    const result = await browser.run(
+      'offsite content',
+      async (step) => {
+        await step('open the account', { mutates: false }, (page) => page.goto(`${site.url}/`));
+        const seller = await step('read the seller', { mutates: false }, (page) =>
+          page.attribute('[data-account]', 'data-account'),
+        );
+        await step('follow the link', { mutates: false }, (page) => page.click('#offsite-link'));
+        return seller;
+      },
+      signal(),
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      steps: ['open the account', 'read the seller', 'follow the link'],
+      failure: { step: 'follow the link', screenshotKey: null },
+    });
+    const elsewhere = new URL(site.url.replace('127.0.0.1', 'localhost')).host;
+    const sent = site.requests.slice(before);
+    expect(sent.map((request) => request.path)).toContain('/');
+    expect(sent.filter((request) => request.host === elsewhere)).toEqual([]);
+  });
+
+  it('logs, by origin, what the network rules refused and what the site answered with errors', async () => {
+    // So a page that broke in the runner shows whether Listora's rules or the marketplace did it.
+    const lines: Record<string, unknown>[] = [];
+    const logged = new PlaywrightBrowserRunner({
+      logger: createLogger({
+        service: 'automation-test',
+        level: 'warn',
+        destination: {
+          write: (line: string) => lines.push(JSON.parse(line) as Record<string, unknown>),
+        },
+      }),
+      screenshots,
+      stepTimeoutMs: 3_000,
+    });
+    const elsewhere = new URL(site.url.replace('127.0.0.1', 'localhost')).origin;
+    try {
+      const browser = await logged.openSession(
+        { profile, cookies: [site.issueSession()], accountId: 'acct', runId: 'run-network' },
+        signal(),
+      );
+      site.inject({ action: 'health', fault: { type: 'offsite_content' } });
+      const result = await browser.run(
+        'offsite content',
+        async (step) => {
+          await step('open the account', { mutates: false }, (page) => page.goto(`${site.url}/`));
+          await step('follow the link', { mutates: false }, (page) => page.click('#offsite-link'));
+        },
+        signal(),
+      );
+      await browser.close();
+      expect(result.ok).toBe(false);
+      const stopped = lines.find((line) => line['msg'] === 'automation script stopped');
+      expect(stopped?.['network']).toMatchObject({
+        refused: { [elsewhere]: expect.any(Number) as number },
+      });
+      // The image, the frame, the fetch, and the link: every one refused, and only the origin kept.
+      const refused = (stopped?.['network'] as { refused: Record<string, number> }).refused;
+      expect(refused[elsewhere]).toBeGreaterThanOrEqual(3);
+      expect(JSON.stringify(stopped)).not.toContain('elsewhere');
+
+      const second = await logged.openSession(
+        { profile, cookies: [site.issueSession()], accountId: 'acct', runId: 'run-errors' },
+        signal(),
+      );
+      site.inject({ action: 'health', fault: { type: 'server_error' } });
+      await second.run(
+        'broken',
+        (step) => step('open the account', { mutates: false }, (page) => page.goto(`${site.url}/`)),
+        signal(),
+      );
+      await second.close();
+      const broken = lines.filter((line) => line['msg'] === 'automation script stopped').at(-1);
+      expect(broken?.['network']).toEqual({ errors: { [`${new URL(site.url).origin} 500`]: 1 } });
+    } finally {
+      await logged.close();
+    }
   });
 
   it('stops at a check even when the script catches the error and tries to go on', async () => {

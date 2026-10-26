@@ -3,27 +3,89 @@ import APIClient
 import Core
 import DesignSystem
 import InventoryFeature
+import MarketplaceLinkingFeature
 import MarketplacesFeature
+import PhoneExecutionFeature
 import SalesFeature
 import SettingsFeature
+import SignInFeature
 import SwiftUI
 import TasksFeature
+import TodayFeature
 
-/// The app's root: one tab per top-level area. While a marketplace connection needs attention,
-/// Inventory shows the connection banner, which opens Marketplaces in Settings, and the
-/// Settings tab has a badge.
+/// The app's root: the welcome and sign-in screens while nobody is signed in, and once someone is,
+/// one tab per top-level area, and Settings over them, opened from the seller's avatar in the Today
+/// and Sales headers. The session ending anywhere (sign-out, a `401`, a refresh the pool refuses,
+/// expiry) brings the sign-in back. While a marketplace connection needs attention, Inventory shows
+/// the connection banner, which opens Marketplaces in Settings, and the avatar has a dot.
 public struct RootView: View {
     private let dependencies: AppDependencies
     @State private var selection: AppTab
     @State private var settingsPath: [SettingsDestination] = []
+    @State private var showsSettings = false
+    /// What to open once the first-run guide has closed (a sheet cannot open while it closes).
+    @State private var afterGettingStarted: [SettingsDestination]?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(dependencies: AppDependencies, initialTab: AppTab = .inventory) {
+    public init(dependencies: AppDependencies, initialTab: AppTab = .today) {
         self.dependencies = dependencies
         _selection = State(initialValue: initialTab)
     }
 
     public var body: some View {
+        ZStack {
+            if dependencies.signIn.isSignedIn {
+                tabs
+                    .transition(.opacity)
+            } else {
+                SignInFlowView(model: dependencies.signIn)
+                    .transition(.opacity)
+            }
+        }
+        .animation(Motion.animation(Motion.standard, reduceMotion: reduceMotion), value: dependencies.signIn.isSignedIn)
+        .solidBarEdges()
+        .background { WindowTapCounter { [meter = dependencies.interactionMeter] in meter.recordTap() } }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            dependencies.interactionMeter.setAppActive(phase == .active)
+            if phase == .active {
+                dependencies.signIn.refresh()
+            }
+        }
+        // The first-run guide follows the session from launch, so it shows after a sign-in only.
+        .onChange(of: dependencies.signIn.isSignedIn, initial: true) { _, signedIn in
+            dependencies.gettingStarted.signedInChanged(signedIn)
+        }
+        .fullScreenCover(
+            isPresented: Bindable(dependencies.gettingStarted).isPresented,
+            onDismiss: {
+                if let path = afterGettingStarted {
+                    afterGettingStarted = nil
+                    openSettings(at: path)
+                }
+            },
+            content: { gettingStarted },
+        )
+        .onChange(of: dependencies.signIn.isSignedIn) { _, signedIn in
+            // The next person (or the same one, again) starts on Today with nothing open.
+            if !signedIn {
+                showsSettings = false
+                settingsPath = []
+                selection = .today
+                dependencies.settings.profile.signedOut()
+            }
+        }
+        // The avatar in the headers shows the seller's own initials or photo.
+        .task(id: dependencies.signIn.stage.signedInEmail) {
+            if dependencies.signIn.stage.signedInEmail != nil {
+                await dependencies.settings.profile.load()
+            }
+        }
+        .task { await dependencies.signIn.follow() }
+        .task { dependencies.startBackgroundWork() }
+    }
+
+    private var tabs: some View {
         TabView(selection: $selection) {
             ForEach(AppTab.allCases) { tab in
                 Tab(tab.title, systemImage: tab.systemImage, value: tab) {
@@ -33,17 +95,25 @@ public struct RootView: View {
             }
         }
         .tint(Palette.brand.color)
-        .background { WindowTapCounter { [meter = dependencies.interactionMeter] in meter.recordTap() } }
+        // Deleting the account keeps its result on screen; closing Settings then shows the sign-in.
+        .sheet(isPresented: $showsSettings, onDismiss: { dependencies.signIn.finishSignOut() }, content: { settings })
         .onChange(of: scenePhase, initial: true) { _, phase in
-            dependencies.interactionMeter.setAppActive(phase == .active)
             if phase == .active {
                 Task { await dependencies.marketplaces.refreshAttention() }
+            } else if phase == .background {
+                PhoneBackgroundWork.schedule()
             }
+        }
+        // While the app is open, the phone runs the marketplace work waiting for it (a sale's
+        // delists among it) at once, and again whenever Listora says, so work queued or due
+        // meanwhile (a check tried again) starts within seconds.
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active else { return }
+            await dependencies.phone.runner.follow()
         }
         .onReceive(NotificationCenter.default.publisher(for: TaskNotificationRouter.openTasks)) { _ in
             selection = .tasks
         }
-        .task { dependencies.startBackgroundWork() }
         // The badge follows the server while the app is open, and when it comes back.
         .task(id: scenePhase == .active) {
             guard scenePhase == .active else { return }
@@ -54,42 +124,115 @@ public struct RootView: View {
     /// Settings counts the connections that need the seller, Tasks the open tasks.
     private func badgeCount(for tab: AppTab) -> Int {
         switch tab {
-        case .settings: dependencies.marketplaces.attention?.count ?? 0
         case .tasks: dependencies.tasks.inbox.openCount
-        case .inventory, .sales, .addItem: 0
+        case .today, .inventory, .addItem, .sales: 0
         }
     }
 
     @ViewBuilder
     private func screen(for tab: AppTab) -> some View {
         switch tab {
+        case .today:
+            TodayView(
+                environment: dependencies.today,
+                onOpenDrafts: {
+                    // The Add Item tab lists this iPhone's drafts; the server's others are in Inventory.
+                    if dependencies.addItem.hasDrafts {
+                        selection = .addItem
+                    } else {
+                        dependencies.inventory.showDrafts()
+                        selection = .inventory
+                    }
+                },
+                onAddItem: { selection = .addItem },
+                settings: { settingsButton },
+            )
         case .inventory:
             InventoryView(
                 environment: dependencies.inventory,
                 onAddItem: { selection = .addItem },
                 header: {
                     ConnectionAttentionBanner(model: dependencies.marketplaces) {
-                        settingsPath = [.marketplaces]
-                        selection = .settings
+                        openSettings(at: [.marketplaces])
                     }
                 },
             )
         case .sales:
-            SalesView(environment: dependencies.sales)
+            SalesView(
+                environment: dependencies.sales,
+                onOpenInventory: { selection = .inventory },
+                settings: { settingsButton },
+            )
         case .addItem:
             AddItemView(environment: dependencies.addItem)
         case .tasks:
             TasksView(environment: dependencies.tasks)
-        case .settings:
-            SettingsView(
-                content: SettingsContent(configuration: dependencies.configuration, version: dependencies.version),
-                devSignIn: dependencies.devSignIn,
-                path: $settingsPath,
-                marketplacesAttention: dependencies.marketplaces.attention == nil ? nil : "Needs attention",
-            ) {
-                MarketplacesView(model: dependencies.marketplaces)
-            }
         }
+    }
+}
+
+extension RootView {
+    private var settingsButton: some View {
+        ProfileButton(
+            initials: dependencies.settings.profile.initials,
+            photo: dependencies.settings.profile.photo,
+            needsAttention: dependencies.marketplaces.attention != nil,
+        ) {
+            openSettings()
+        }
+    }
+
+    private func openSettings(at path: [SettingsDestination] = []) {
+        settingsPath = path
+        showsSettings = true
+    }
+
+    /// The first-run guide; each of its ways out ends it for good.
+    private var gettingStarted: some View {
+        let guide = dependencies.gettingStarted
+        return GettingStartedView(
+            onLinkAccounts: {
+                afterGettingStarted = [.linkAccounts]
+                guide.finish()
+            },
+            onAddItem: {
+                guide.finish()
+                selection = .addItem
+            },
+            onSkip: { guide.finish() },
+        )
+    }
+
+    private var settings: some View {
+        SettingsView(
+            content: SettingsContent(
+                configuration: dependencies.configuration,
+                version: dependencies.version,
+                installationID: dependencies.linkAccounts.installationID,
+            ),
+            profile: dependencies.settings.profile,
+            account: dependencies.signIn.stage.signedInEmail.map { email in
+                SettingsAccount(email: email) { dependencies.signIn.signOut() }
+            },
+            accountDeletion: dependencies.settings.accountDeletion,
+            screens: SettingsScreens(
+                linkAccounts: { AnyView(LinkAccountsView(model: dependencies.linkAccounts)) },
+                marketplaces: { AnyView(MarketplacesView(model: dependencies.marketplaces)) },
+                notifications: {
+                    AnyView(NotificationSettingsView(
+                        today: dependencies.today,
+                        saleEmails: dependencies.settings.saleEmails,
+                    ))
+                },
+                saleEmails: { AnyView(SaleEmailsView(model: dependencies.settings.saleEmails)) },
+            ),
+            marketplacesSummary: dependencies.marketplaces.healthLine.map {
+                SettingsSummary($0.text, needsAttention: $0.needsAttention)
+            },
+            saleEmailsSummary: dependencies.marketplaces.saleForwarding.map { SettingsSummary($0.statusLabel) },
+            path: $settingsPath,
+            onDone: { showsSettings = false },
+        )
     }
 }
 

@@ -1,6 +1,7 @@
 import { assertNever } from '@listora/shared';
 import { CfnOutput, Duration } from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import type * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -15,6 +16,7 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import type * as s3 from 'aws-cdk-lib/aws-s3';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
+import type * as sqs from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 
 import type { DnsTarget, ServiceName, ServiceSize } from '../config.ts';
@@ -23,6 +25,7 @@ import {
   containerEnvironment,
   RUNNER_COMMAND,
   SERVICE_COMMANDS,
+  signInResources,
   type ServiceResources,
 } from '../containers.ts';
 import { ListoraStack, removalPolicyFor, taskPlacement, type ListoraStackProps } from './common.ts';
@@ -43,7 +46,14 @@ export interface ComputeStackProps extends ListoraStackProps {
   /** The photo CloudFront distribution's domain name; it serves the bucket's `public/` keys. */
   readonly photoCdnDomain: string;
   readonly inboundMailBucket: s3.IBucket;
+  /** The queue of received sale emails and their domain; absent without a domain. */
+  readonly saleEmail?: { readonly inboundDomain: string; readonly queue: sqs.IQueue };
   readonly tokenKey: kms.IKey;
+  /** The auth stack's user pool and the iPhone app's client, where the environment has one. */
+  readonly userPool?: {
+    readonly pool: cognito.IUserPool;
+    readonly appClient: cognito.IUserPoolClient;
+  };
 }
 
 /** Label under the environment's domain that serves the API. */
@@ -140,12 +150,29 @@ export class ComputeStack extends ListoraStack {
         region: target.region,
         publicBaseUrl: `https://${props.photoCdnDomain}`,
       },
+      signIn: signInResources(
+        settings.signIn,
+        props.userPool && {
+          userPoolId: props.userPool.pool.userPoolId,
+          clientIds: [props.userPool.appClient.userPoolClientId],
+        },
+      ),
       runner: {
         cluster: `listora-${environment}`,
         service: RUNNER_SERVICE_NAME,
         region: target.region,
       },
       tokenKeyArn: props.tokenKey.keyArn,
+      ...(props.saleEmail === undefined
+        ? {}
+        : {
+            saleEmail: {
+              inboundDomain: props.saleEmail.inboundDomain,
+              queueUrl: props.saleEmail.queue.queueUrl,
+              bucket: props.inboundMailBucket.bucketName,
+              region: target.region,
+            },
+          }),
     };
     this.containerOptions = (service) => ({
       image,
@@ -164,15 +191,20 @@ export class ComputeStack extends ListoraStack {
     });
 
     // Designed access, least privilege: photos for both (uploads, derivatives), raw sale
-    // emails for the worker only, and envelope encryption of marketplace credentials: the API
+    // emails and their queue for the worker only, and envelope encryption of marketplace credentials: the API
     // only seals (GenerateDataKey), the worker opens OAuth tokens and only those, and the
     // browser runner opens sellers' browser sessions and only those (the KMS encryption
-    // context's `purpose` tells them apart). The worker also starts the browser runner. A
-    // combined task's role holds the union, since its two containers share it.
+    // context's `purpose` tells them apart). The worker also starts the browser runner, and
+    // deletes the Cognito users of deleted accounts. A combined task's role holds the union,
+    // since its two containers share it.
     const grant = (role: iam.IRole, containers: readonly ServiceName[]): void => {
       props.photoBucket.grantReadWrite(role);
       if (containers.includes('worker')) {
+        props.userPool?.pool.grant(role, 'cognito-idp:AdminGetUser', 'cognito-idp:AdminDeleteUser');
+        // Raw sale emails: read each one, and delete it once processed.
         props.inboundMailBucket.grantRead(role, `${INBOUND_MAIL_PREFIX}*`);
+        props.inboundMailBucket.grantDelete(role, `${INBOUND_MAIL_PREFIX}*`);
+        props.saleEmail?.queue.grantConsumeMessages(role);
         role.addToPrincipalPolicy(startRunner(this.runnerServiceArn(environment)));
         role.addToPrincipalPolicy(
           new iam.PolicyStatement({
@@ -348,10 +380,12 @@ export class ComputeStack extends ListoraStack {
 
   /**
    * The browser runner: a task of the configured size (`browserRunner`) from the runner image,
-   * with a writable `/tmp` for Chromium on an otherwise read-only file system, in the worker's
-   * network place and security group (database access, internet egress, no ingress), and a
-   * role that may decrypt sellers' sessions (and only those), store the screenshots of failed
-   * runs, and scale its own service to zero.
+   * with a writable `/tmp` for Chromium on an otherwise read-only file system (the image
+   * declares it a volume its unprivileged user owns, or Fargate would create it root-owned and
+   * read-only for that user; the Dockerfile's runner stage), in the worker's network place and
+   * security group (database access, internet egress, no ingress), and a role that may decrypt
+   * sellers' sessions (and only those), store the screenshots of failed runs, and scale its own
+   * service to zero.
    */
   private runner(
     {
@@ -522,7 +556,8 @@ export class ComputeStack extends ListoraStack {
       assignPublicIp: placement.assignPublicIp,
       // A deploy whose tasks never become healthy rolls back to the previous revision.
       circuitBreaker: { enable: true, rollback: true },
-      minHealthyPercent: 100,
+      // `replace` stops the old tasks while the new ones start (ServiceDeployments).
+      minHealthyPercent: settings.deployments === 'replace' ? 0 : 100,
       maxHealthyPercent: 200,
       propagateTags: ecs.PropagatedTagSource.SERVICE,
       ...(runsApi && settings.ingress.via === 'load-balancer'

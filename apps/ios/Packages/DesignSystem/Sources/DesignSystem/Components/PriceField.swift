@@ -75,7 +75,7 @@ public struct PriceField: View {
         let shape = RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(label)
-                .font(Typography.subheadline.weight(.semibold))
+                .font(Typography.emphasis)
                 .foregroundStyle(Palette.textPrimary)
                 .accessibilityHidden(true)
             HStack(alignment: .firstTextBaseline, spacing: Spacing.xxs) {
@@ -125,7 +125,7 @@ public struct PriceField: View {
         return amount.formatted(.currency(code: currencyCode))
     }
 
-    static func text(forMinorUnits minorUnits: Int) -> String {
+    nonisolated static func text(forMinorUnits minorUnits: Int) -> String {
         let whole = minorUnits / 100
         let cents = minorUnits % 100
         return cents == 0 ? "\(whole)" : String(format: "%d.%02d", whole, cents)

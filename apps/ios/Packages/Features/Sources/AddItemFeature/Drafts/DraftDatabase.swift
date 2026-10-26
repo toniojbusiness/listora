@@ -30,6 +30,11 @@ final class DraftDatabase: Sendable {
         photosDirectory.appending(path: photo.fileName)
     }
 
+    /// The photo before its background cleanup, when it has one.
+    func originalFileURL(for photo: DraftPhotoRecord) -> URL? {
+        photo.originalFileName.map { photosDirectory.appending(path: $0) }
+    }
+
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1: drafts, photos, server deletions") { db in
@@ -82,6 +87,12 @@ final class DraftDatabase: Sendable {
                 table.column("attachRequest", .jsonText)
                 table.column("sha256", .text)
                 table.column("retry", .jsonText).notNull()
+            }
+        }
+        registerBatchMigration(in: &migrator)
+        migrator.registerMigration("v3: background cleanup originals") { db in
+            try db.alter(table: DraftPhotoRecord.databaseTableName) { table in
+                table.add(column: "originalFileName", .text)
             }
         }
         return migrator

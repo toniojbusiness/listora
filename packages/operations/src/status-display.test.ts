@@ -11,6 +11,7 @@ import {
 import {
   describeListingStatus,
   describeOperation,
+  waitedFor,
   type ListingStatusInput,
 } from './status-display.ts';
 
@@ -228,5 +229,50 @@ describe('describeOperation', () => {
         }
       }
     }
+  });
+
+  it('says a step waits on the seller iPhone, and for how long, never that it is done', () => {
+    const now = new Date('2026-10-26T12:00:00.000Z');
+    const since = new Date(now.getTime() - 12 * 60_000);
+    const waiting = (status: 'queued' | 'retrying' | 'verifying', running = false) =>
+      describeListingStatus({
+        marketplace: 'depop',
+        listingStatus: 'active',
+        operation: operation({ kind: 'end', status, phoneWait: { since, running } }),
+        now,
+      });
+    expect(waiting('queued')).toEqual({
+      tone: 'in_progress',
+      label: 'Delisting... waiting on your iPhone (12 min)',
+      detail: 'Open Listora on your iPhone to finish this on Depop. It has waited 12 min.',
+    });
+    expect(waiting('verifying').label).toBe('Checking... waiting on your iPhone (12 min)');
+    expect(waiting('retrying', true)).toEqual({
+      tone: 'in_progress',
+      label: 'Delisting on your iPhone...',
+    });
+    // A settled operation is shown as it is, whatever waited before.
+    expect(
+      describeListingStatus({
+        marketplace: 'depop',
+        listingStatus: 'ended',
+        operation: operation({
+          kind: 'end',
+          status: 'succeeded',
+          successEvidence: 'read_back',
+          phoneWait: { since, running: false },
+        }),
+        now,
+      }).label,
+    ).toBe('Delisted (confirmed by Depop)');
+  });
+
+  it('writes how long something waited in plain words', () => {
+    expect(waitedFor(20_000)).toBe('less than a minute');
+    expect(waitedFor(59 * 60_000)).toBe('59 min');
+    expect(waitedFor(2 * 3_600_000)).toBe('2 h');
+    expect(waitedFor(3 * 3_600_000 + 5 * 60_000)).toBe('3 h 5 min');
+    expect(waitedFor(26 * 3_600_000)).toBe('1 day');
+    expect(waitedFor(80 * 3_600_000)).toBe('3 days');
   });
 });

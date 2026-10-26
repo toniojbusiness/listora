@@ -1,15 +1,18 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, sep } from 'node:path';
 
 import { sha256Hex } from '@listora/shared';
 
 import {
   assertPublicKey,
   assertStorageKey,
+  assertStoragePrefix,
   base64ToHex,
   CHECKSUM_SHA256_HEADER,
   hexToBase64,
+  isStorageKey,
+  listLimit,
   type ObjectStorage,
   type PutOptions,
   type StoredObjectInfo,
@@ -153,6 +156,30 @@ export class LocalDiskStorage implements ObjectStorage {
 
   async delete(key: string): Promise<void> {
     await rm(this.#path(key), { force: true });
+  }
+
+  async list(prefix: string, limit?: number): Promise<string[]> {
+    assertStoragePrefix(prefix);
+    const max = listLimit(limit);
+    let entries;
+    try {
+      entries = await readdir(this.#path(prefix.slice(0, -1)), {
+        recursive: true,
+        withFileTypes: true,
+      });
+    } catch (error) {
+      if (isMissingFile(error)) return [];
+      throw error;
+    }
+    const keys = entries
+      .filter((entry) => entry.isFile())
+      .map((entry) =>
+        relative(this.#rootDir, join(entry.parentPath, entry.name)).split(sep).join('/'),
+      )
+      // A file `put` is still writing (a `.tmp` name) is not an object yet.
+      .filter((key) => !key.endsWith('.tmp') && isStorageKey(key))
+      .sort();
+    return keys.slice(0, max);
   }
 
   publicUrl(key: string): string {

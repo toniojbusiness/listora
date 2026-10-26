@@ -81,6 +81,63 @@ struct InventoryModelsTests {
     }
 
     @Test
+    func `warns when a new price is below the marketplace's floor, and only then`() async {
+        let service = FakeInventoryService()
+        let usd = { (cents: Int64) in Schemas.Money(amountCents: cents, currency: .usd) }
+        let breakdown = Schemas.FloorBreakdown(
+            cost: usd(1250), estimatedFees: usd(244), shipping: usd(0), minimumProfit: usd(0),
+        )
+        let floor = { (marketplace: Schemas.KnownMarketplace, cents: Int64) in
+            Schemas.MarketplaceFloor(
+                marketplace: .init(value1: marketplace), floorPrice: usd(cents), breakdown: breakdown,
+                feeTableVersion: "t",
+            )
+        }
+        service.floorList = [floor(.ebay, 1494), floor(.poshmark, 1563)]
+        let model = ItemDetailModel(itemID: Fixtures.itemID, service: service, timing: .fast)
+        let ebayFloor = await model.floor(on: "ebay")
+        #expect(ebayFloor?.amountCents == 1494)
+        #expect(await model.floor(on: "depop") == nil)
+
+        #expect(
+            PriceChangeView.floorWarning(cents: 1000, floor: ebayFloor, marketplace: "eBay")
+                == "Below your $14.94 floor on eBay, so you would make less than your minimum after fees.",
+        )
+        #expect(PriceChangeView.floorWarning(cents: 1494, floor: ebayFloor, marketplace: "eBay") == nil)
+        #expect(PriceChangeView.floorWarning(cents: 1000, floor: nil, marketplace: "eBay") == nil, "no cost, no floor")
+        service.failure = .networkUnavailable
+        #expect(await model.floor(on: "ebay") == nil, "a failed read only drops the warning")
+    }
+
+    @Test
+    func `saves the size the marketplaces asked for, again on the newest version after a conflict`() async {
+        let service = FakeInventoryService()
+        var item = Fixtures.item()
+        item.details.sizeLabel = nil
+        service.item = item
+        let model = ItemDetailModel(itemID: Fixtures.itemID, service: service, timing: .fast)
+        await model.load()
+
+        #expect(await model.saveSize("  M ") == nil)
+        #expect(service.replaced.last?.details.sizeLabel == "M")
+        #expect(service.replaced.last?.expectedVersion == item.version)
+        #expect(model.item?.details.sizeLabel == "M")
+        #expect(model.item?.details.title == item.details.title, "the other details are kept")
+
+        // Changed elsewhere meanwhile: read again, and the size goes on the newest version.
+        service.failingCall = "replaceItem"
+        service.failure = APIFailure(statusCode: 409, code: "version_conflict", message: "Changed.", retryable: false)
+        #expect(await model.saveSize("L") == nil)
+        #expect(service.replaced.map(\.details.sizeLabel) == ["M", "L", "L"])
+        #expect(model.item?.details.sizeLabel == "L")
+
+        // Any other refusal is shown, and nothing changes.
+        service.failure = APIFailure(statusCode: 422, code: "validation_failed", message: "Too long.", retryable: false)
+        #expect(await model.saveSize(String(repeating: "X", count: 40)) == "Too long.")
+        #expect(model.item?.details.sizeLabel == "L")
+    }
+
+    @Test
     func `starts the eBay listing from the seller's edit, else the analysis, else the item`() async throws {
         let directory = URL.temporaryDirectory.appending(path: UUID().uuidString)
         let store = ListingCopyStore(directory: directory)
@@ -145,6 +202,7 @@ struct InventoryModelsTests {
         #expect(service.calls.isEmpty)
 
         model.title = "Levi's Trucker Denim Jacket Men's M"
+        #expect(model.problem == nil, "fixing the title clears the old refusal")
         service.failingCall = "perform"
         service.failure = APIFailure(
             statusCode: 422,

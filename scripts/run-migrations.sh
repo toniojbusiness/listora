@@ -4,13 +4,16 @@
 # the task's container exited 0, so a deploy that runs this stops on a failed migration before
 # any new service task starts. Its logs are in /listora/<env>/migrate.
 #
-# Usage: scripts/run-migrations.sh <env> [started-by]
+# Usage: scripts/run-migrations.sh <env> [started-by] [task-definition]
+# The task definition defaults to the family's newest revision; scripts/deploy-personal.sh names
+# the revision it deploys.
 # Uses the ambient AWS credentials and region. Run by .github/workflows/deploy.yml and
 # scripts/deploy-personal.sh; see infra/README.md (Schema migrations).
 set -euo pipefail
 
 readonly environment=${1:?usage: run-migrations.sh <env> [started-by]}
 readonly started_by=${2:-deploy-${GITHUB_RUN_ID:-local}}
+readonly task_definition=${3:-listora-$environment-migrate}
 
 error() {
   # GitHub Actions turns ::error:: lines into annotations; elsewhere they are plain errors.
@@ -25,7 +28,7 @@ subnets=$(output SubnetIds)
 group=$(output SecurityGroupId)
 # The stack says whether the task needs a public address (public-IP egress, no NAT).
 public_ip=$(output AssignPublicIp)
-started=$(aws ecs run-task --cluster "$cluster" --task-definition "listora-$environment-migrate" \
+started=$(aws ecs run-task --cluster "$cluster" --task-definition "$task_definition" \
   --launch-type FARGATE --count 1 --started-by "$started_by" \
   --network-configuration "awsvpcConfiguration={subnets=[$subnets],securityGroups=[$group],assignPublicIp=$public_ip}" \
   --output json)

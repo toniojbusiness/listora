@@ -13,21 +13,41 @@ final class AddItemModel {
     let activity: UploadActivity
     /// Measures each new item's interaction time from its first photo.
     let meter: InteractionMeter
+    /// The drafts of single items; a batch's drafts show with their batch.
     private(set) var drafts: [Draft] = []
+    /// The batches on this iPhone, newest first.
+    var batches: [Batch] = []
     /// A problem to show in an alert.
     var errorMessage: String?
-    /// Photos being prepared for a new or existing draft.
-    private(set) var isPreparingPhotos = false
-    private let log = Logger(subsystem: "com.listora.app", category: "drafts")
+    /// Photos being prepared for a new or existing draft or batch.
+    var isPreparingPhotos = false
+    /// One item or a whole haul: the seller's last choice, kept in `defaults`. Not an
+    /// `@AppStorage` of the view: that redraws the Add Item navigation stack on every
+    /// `UserDefaults` write (a purchase source, an interaction record), which made the review
+    /// under the cost and price screens appear again.
+    var mode: AddItemMode {
+        didSet { defaults.set(mode.rawValue, forKey: AddItemMode.storageKey) }
+    }
+
+    let log = Logger(subsystem: "com.listora.app", category: "drafts")
     /// The measurement of a new item whose draft does not exist yet (the camera is open, or the
     /// photos are being prepared).
     private var pendingSession: String?
+    private let defaults: UserDefaults
 
-    init(store: DraftStore, uploader: PhotoUploader, activity: UploadActivity, meter: InteractionMeter) {
+    init(
+        store: DraftStore,
+        uploader: PhotoUploader,
+        activity: UploadActivity,
+        meter: InteractionMeter,
+        defaults: UserDefaults = .standard,
+    ) {
         self.store = store
         self.uploader = uploader
         self.activity = activity
         self.meter = meter
+        self.defaults = defaults
+        mode = defaults.string(forKey: AddItemMode.storageKey).flatMap(AddItemMode.init(rawValue:)) ?? .single
     }
 
     /// The seller started a new item (opened the camera, or picked photos): its measurement starts
@@ -61,7 +81,7 @@ final class AddItemModel {
     func observeDrafts() async {
         do {
             for try await drafts in store.observeDrafts() {
-                self.drafts = drafts
+                self.drafts = drafts.filter { $0.record.batchID == nil }
             }
         } catch {
             log.error("Observing drafts failed: \(String(describing: error), privacy: .public)")
@@ -164,10 +184,15 @@ final class AddItemModel {
         meter.discard(draftID)
     }
 
-    /// The draft's item was saved in review: only this iPhone's copy of the draft goes.
+    /// The draft's item was saved in review: only this iPhone's copy of the draft goes (and its
+    /// batch, once nothing else of the batch is left here).
     func completeDraft(_ draftID: String) {
+        let batchID = try? store.draft(id: draftID)?.record.batchID
         perform { store in
             try cancelTransfers(of: store.completeDraft(draftID).map(\.id))
+            if let batchID, try store.removeBatchIfFinished(batchID) {
+                meter.discard(BatchRecord.meterSession(batchID))
+            }
         }
     }
 
@@ -193,6 +218,42 @@ final class AddItemModel {
         }
     }
 
+    /// Lifts the item off the photo's background onto the plain backdrop (``BackgroundCleanup``),
+    /// keeping the original on this iPhone for ``undoBackgroundCleanup(_:)``. Returns the cleaned
+    /// photo's id, or a message to show when it could not be done.
+    func cleanBackground(_ photo: DraftPhotoRecord) async -> Result<String, PhotoEditFailure> {
+        await replace(photo) { store in
+            let cleaned = try BackgroundCleanup.clean(store.imageData(of: photo))
+            return try store.cleanBackground(of: photo.id, with: cleaned)
+        }
+    }
+
+    /// Puts the photo back as it was before its background cleanup.
+    func undoBackgroundCleanup(_ photo: DraftPhotoRecord) async -> Result<String, PhotoEditFailure> {
+        await replace(photo) { store in try store.restoreOriginal(of: photo.id) }
+    }
+
+    /// Runs a photo replacement off the main actor, then stops the old photo's transfer and wakes
+    /// the upload queue for the new one.
+    private func replace(
+        _: DraftPhotoRecord,
+        _ change: @escaping @Sendable (DraftStore) throws -> (old: DraftPhotoRecord, new: DraftPhotoRecord),
+    ) async -> Result<String, PhotoEditFailure> {
+        let store = store
+        let result = await Task.detached(priority: .userInitiated) {
+            Result { try change(store) }
+        }.value
+        switch result {
+        case let .success(replaced):
+            cancelTransfers(of: [replaced.old.id])
+            await uploader.wake()
+            return .success(replaced.new.id)
+        case let .failure(error):
+            log.error("Photo edit failed: \(String(describing: error), privacy: .public)")
+            return .failure(PhotoEditFailure(error))
+        }
+    }
+
     private func perform(_ change: (DraftStore) throws -> Void) {
         do {
             try change(store)
@@ -209,7 +270,7 @@ final class AddItemModel {
         Task { await uploader.cancelTransfers(of: photoIDs) }
     }
 
-    private func show(_ error: any Error) {
+    func show(_ error: any Error) {
         log.error("Draft change failed: \(String(describing: error), privacy: .public)")
         errorMessage = switch error {
         case DraftStoreError.tooManyPhotos:
@@ -220,6 +281,24 @@ final class AddItemModel {
             "One of the photos could not be read. Try a different photo."
         default:
             "Listora couldn't save the photos on this iPhone. Free up some storage and try again."
+        }
+    }
+}
+
+/// Why a background cleanup, or undoing one, did not happen, in words for the seller.
+struct PhotoEditFailure: Error, Equatable {
+    let message: String
+
+    init(_ error: any Error) {
+        message = switch error {
+        case BackgroundCleanupError.noSubject:
+            "Listora couldn't find the item in this photo. Try a photo with the item clearly in front."
+        case BackgroundCleanupError.failed, PhotoPreparationError.unreadableImage, PhotoPreparationError.encodingFailed:
+            "Listora couldn't clean up this photo. The photo is unchanged."
+        case DraftStoreError.notFound:
+            "This photo changed meanwhile. Try again."
+        default:
+            "Listora couldn't save the photo on this iPhone. Free up some storage and try again."
         }
     }
 }

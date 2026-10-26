@@ -20,6 +20,7 @@ final class ReviewFlowUITests: XCTestCase {
         createDraftAndOpenReview()
         reviewConfidenceFirst()
         identifyHarder()
+        enterSize()
         enterCost()
         let sku = choosePriceAndSave()
 
@@ -31,6 +32,7 @@ final class ReviewFlowUITests: XCTestCase {
         XCTAssertEqual(item.details.purchaseSource, "Goodwill")
         XCTAssertEqual(item.details.colors, ["navy"])
         XCTAssertEqual(item.fieldProvenance["colors"], "user")
+        XCTAssertEqual(item.details.sizeLabel, "M")
         XCTAssertNotNil(item.details.floorPrice)
 
         // Done: back to Add Item, where the saved item's draft is gone.
@@ -46,9 +48,115 @@ final class ReviewFlowUITests: XCTestCase {
         keepScreenshot("Inventory")
     }
 
+    /// The seller holds the talk button and says one correction; the simulator has no microphone,
+    /// so the app "hears" `LISTORA_VOICE_TRANSCRIPT`. The phone's own parser maps the routine
+    /// phrases, the one it can't goes to the API's text model (the fake AI answers it from
+    /// `FakeAI/default.json`), and every change waits as a chip until the seller accepts it.
+    func testASpokenCorrectionIsProposedAsChipsAndAcceptedAsTheSellersOwnEdits() async throws {
+        let stack = try E2EStack.fromEnvironment()
+        try launch(signedInTo: stack, environment: [
+            "LISTORA_VOICE_TRANSCRIPT": "Size medium, small stain on the left cuff, paid four dollars at Goodwill, "
+                + "it has a tiny embroidered logo",
+        ])
+        createDraftAndOpenReview()
+        let sku = try XCTUnwrap(
+            app.navigationBars.staticTexts.matching(NSPredicate(format: "label MATCHES %@", "[A-Z0-9]{1,8}-[0-9]{6,}"))
+                .firstMatch.label,
+        )
+        speakACorrection()
+        acceptAndUndo()
+        correctFast()
+
+        // The cost screen starts from what was said, and the server has the seller's edits.
+        app.buttons["review.continue"].tap()
+        let amount = app.staticTexts["cost.amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 10))
+        XCTAssertEqual(amount.value as? String, "$4")
+        XCTAssertEqual(app.textFields["cost.source"].value as? String, "Goodwill")
+        app.buttons["cost.continue"].tap()
+        XCTAssertTrue(app.staticTexts["price.estimateLabel"].waitForExistence(timeout: 15))
+
+        let item = try await stack.item(sku: sku)
+        XCTAssertEqual(item.details.sizeLabel, "M")
+        XCTAssertEqual(item.fieldProvenance["sizeLabel"], "user")
+        XCTAssertEqual(item.details.flaws, ["Small stain on the left cuff"])
+        XCTAssertEqual(item.details.keywords, ["button up", "casual", "embroidered logo"])
+        XCTAssertEqual(item.details.pattern, "striped")
+        XCTAssertEqual(item.details.cost?.amountCents, 400)
+        XCTAssertEqual(item.details.purchaseSource, "Goodwill")
+    }
+
+    // MARK: Voice steps
+
+    /// Holds the talk button: the first hold explains what voice needs, the next one is heard.
+    /// The routine phrases are chips at once; the logo phrase comes back from the text model.
+    private func speakACorrection() {
+        let talk = app.descendants(matching: .any)["voice.talk"]
+        talk.press(forDuration: 0.5)
+        let allow = app.buttons["voice.noticeAction"]
+        XCTAssertTrue(allow.waitForExistence(timeout: 5))
+        XCTAssertEqual(allow.label, "Turn on voice")
+        allow.tap()
+        talk.press(forDuration: 1)
+
+        let aiChip = app.descendants(matching: .any)["voice.proposal.5"]
+        XCTAssertTrue(aiChip.waitForExistence(timeout: 20), "the text model's change never arrived")
+        let chips = (0 ... 5).map { app.descendants(matching: .any)["voice.proposal.\($0)"].label }
+        XCTAssertEqual(chips, [
+            "Size: M",
+            "Size type: Letter (XS to XXXL)",
+            "Flaws: + Small stain on the left cuff",
+            "Paid: $4.00",
+            "Bought at: Goodwill",
+            "Keywords: + embroidered logo, understood by Listora AI",
+        ])
+        // Nothing changed yet.
+        let size = app.buttons["review.field.sizeLabel"]
+        XCTAssertTrue(waitForLabel(of: size, prefix: "Size, No value"), size.label)
+        keepScreenshot("Voice proposals")
+    }
+
+    /// Accepting makes each change the seller's; undo takes one back and offers it again.
+    private func acceptAndUndo() {
+        app.buttons["voice.acceptAll"].tap()
+        let size = app.buttons["review.field.sizeLabel"]
+        XCTAssertTrue(waitForLabel(of: size, prefix: "Size, M, From You"), size.label)
+        let flaws = scrolledTo(app.buttons["review.field.flaws"])
+        XCTAssertTrue(waitForLabel(of: flaws, prefix: "Flaws, Small stain on the left cuff, From You"), flaws.label)
+        let keywords = scrolledTo(app.buttons["review.field.keywords"], upward: true)
+        XCTAssertTrue(waitForLabel(of: keywords, prefix: "Keywords, button up, casual, embroidered logo, From You"))
+        keepScreenshot("Voice accepted")
+
+        app.buttons["voice.undo.0"].tap()
+        XCTAssertTrue(app.buttons["voice.accept.0"].waitForExistence(timeout: 5), "an undone change is offered again")
+        XCTAssertTrue(waitForLabel(of: scrolledTo(size, upward: true), prefix: "Size, No value"), size.label)
+        app.buttons["voice.accept.0"].tap()
+        XCTAssertTrue(waitForLabel(of: size, prefix: "Size, M, From You"), size.label)
+        app.buttons["voice.done"].tap()
+        XCTAssertFalse(app.descendants(matching: .any)["voice.tray"].exists)
+    }
+
+    /// "Next" opens the least certain detail and a swipe moves on; touch and hold offers common
+    /// values.
+    private func correctFast() {
+        app.buttons["review.nextToCheck"].tap()
+        let brand = app.textFields["review.editor.brand"]
+        XCTAssertTrue(brand.waitForExistence(timeout: 5))
+        brand.swipeLeft()
+        XCTAssertTrue(app.textFields["review.editor.colors"].waitForExistence(timeout: 5))
+        app.buttons["review.editor.done"].tap()
+
+        let pattern = scrolledTo(app.buttons["review.field.pattern"])
+        pattern.press(forDuration: 1)
+        let striped = app.buttons["Striped"]
+        XCTAssertTrue(striped.waitForExistence(timeout: 5))
+        striped.tap()
+        XCTAssertTrue(waitForLabel(of: pattern, prefix: "Pattern, Striped, From You"), pattern.label)
+    }
+
     // MARK: Steps
 
-    private func launch(signedInTo stack: E2EStack) throws {
+    private func launch(signedInTo stack: E2EStack, environment: [String: String] = [:]) throws {
         let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
         app.launchEnvironment = [
             "LISTORA_FIXTURE_PHOTOS": fixtures.path(percentEncoded: false),
@@ -56,9 +164,9 @@ final class ReviewFlowUITests: XCTestCase {
             "LISTORA_DEV_API_BASE_URL": stack.apiURL.absoluteString,
             "LISTORA_DEV_ACCESS_TOKEN": stack.token,
             "LISTORA_DEV_ACCESS_EMAIL": stack.email,
-        ]
+        ].merging(environment) { _, new in new }
         app.launch()
-        let tab = app.tabBars.buttons["Add Item"]
+        let tab = app.tabBars.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
         tab.tap()
     }
@@ -80,7 +188,8 @@ final class ReviewFlowUITests: XCTestCase {
         review.tap()
         let attention = app.staticTexts["review.section.attention"]
         XCTAssertTrue(attention.waitForExistence(timeout: 120), "the review never appeared")
-        XCTAssertEqual(attention.label, "Check these (2)")
+        // The size the tag doesn't show, then the uncertain brand and color.
+        XCTAssertEqual(attention.label, "Check these (3)")
         keepScreenshot("Review")
     }
 
@@ -105,7 +214,8 @@ final class ReviewFlowUITests: XCTestCase {
             category.label,
         )
 
-        colors.tap()
+        // The size the tag lacks leads the list now, which can push the color under the bottom bar.
+        clearOfBottomBar(colors).tap()
         let editor = app.textFields["review.editor.colors"]
         XCTAssertTrue(editor.waitForExistence(timeout: 5))
         editor.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 8) + "navy")
@@ -128,7 +238,7 @@ final class ReviewFlowUITests: XCTestCase {
         identifyHarder.tap()
         XCTAssertTrue(app.descendants(matching: .any)["review.premiumDone"].waitForExistence(timeout: 60))
         XCTAssertTrue(app.buttons["review.field.colors"].label.hasPrefix("Colors, Navy, From You"))
-        XCTAssertEqual(app.staticTexts["review.section.attention"].label, "Check these (1)")
+        XCTAssertEqual(app.staticTexts["review.section.attention"].label, "Check these (2)")
     }
 
     /// The cost on the in-app keypad, then where it was bought.
@@ -176,6 +286,27 @@ final class ReviewFlowUITests: XCTestCase {
         return text
     }
 
+    /// `element` once the review has scrolled it into view, upward or down: its rows load as they
+    /// come on screen. It drags near the top of the review, which the voice tray over its bottom
+    /// never covers.
+    private func scrolledTo(_ element: XCUIElement, upward: Bool = false) -> XCUIElement {
+        let scrollView = app.scrollViews["review.scroll"]
+        let top = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
+        let lower = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.38))
+        // Above the bottom bar, not only hittable: the review scrolls under the bar, and a row
+        // there reports hittable while a press on it lands on the bar.
+        let barTop = app.buttons["voice.talk"].frame.minY
+        for _ in 0 ..< 12 where !(element.exists && element.isHittable && element.frame.maxY < barTop) {
+            if upward {
+                top.press(forDuration: 0.05, thenDragTo: lower)
+            } else {
+                lower.press(forDuration: 0.05, thenDragTo: top)
+            }
+        }
+        XCTAssertTrue(element.exists, "never scrolled to \(element)")
+        return element
+    }
+
     /// Keeps a screenshot in the result bundle, passing or not, for reviewing the screens.
     private func keepScreenshot(_ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
@@ -189,4 +320,36 @@ final class ReviewFlowUITests: XCTestCase {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
+}
+
+extension ReviewFlowUITests {
+    /// A shirt can't be listed without its size, which the tag doesn't show, so Continue waits
+    /// for it.
+    private func enterSize() {
+        XCTAssertEqual(app.staticTexts["review.missing"].label, "Add size to continue.")
+        XCTAssertFalse(app.buttons["review.continue"].isEnabled)
+        let size = scrolledTo(app.buttons["review.field.sizeLabel"], upward: true)
+        size.tap()
+        let editor = app.textFields["review.editor.sizeLabel"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("M")
+        app.buttons["review.editor.done"].tap()
+        let edited = app.buttons["review.field.sizeLabel"]
+        XCTAssertTrue(waitForLabel(of: edited, prefix: "Size, M, From You"), edited.label)
+        XCTAssertFalse(app.staticTexts["review.missing"].exists)
+    }
+
+    /// Scrolls the review up a little at a time until `element` sits above the bottom bar.
+    private func clearOfBottomBar(_ element: XCUIElement) -> XCUIElement {
+        let scrollView = app.scrollViews["review.scroll"]
+        let start = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+        let barTop = app.descendants(matching: .any)["voice.talk"].frame.minY
+        for _ in 0 ..< 6 where element.frame.maxY > barTop - Self.barMargin {
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        return element
+    }
+
+    private static let barMargin: CGFloat = 8
 }

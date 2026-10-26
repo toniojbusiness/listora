@@ -16,7 +16,11 @@ The details and commands are in [apps/ios/README.md](../../apps/ios/README.md).
   `ItemReviewOutcome`).
 - The app and the Share Extension share the signed-in session through an App Group
   (`APP_GROUP_IDENTIFIER` in `Base.xcconfig`): the session is a keychain item in the group's
-  access group (`KeychainAccessGrantStorage.session(appGroup:)`).
+  access group (`SESSION_KEYCHAIN_GROUP`, `KeychainAccessGrantStorage.session(accessGroup:)`).
+  Personal device builds, signed by a free team that has no App Groups, use a Keychain Sharing
+  group instead (apps/ios/README.md, Installing on your iPhone). The same access group carries
+  a marketplace's emailed sign-in link from the extension to the app's open sign-in page
+  (`KeychainSignInLinkHandoff`, [marketplace-linking.md](marketplace-linking.md#emailed-sign-in-links-depop)).
 - Configuration comes only from the build configuration's xcconfig file (`Dev-Debug`,
   `Staging-Release`, `Prod-Release`) through Info.plist. `AppConfiguration` validates it at
   launch and stops the app with an error that names the bad key. Only Dev may use plain HTTP.
@@ -27,10 +31,21 @@ The details and commands are in [apps/ios/README.md](../../apps/ios/README.md).
   Interactive steps (review, cost, price) save to the server before the next screen opens, so a
   relaunch resumes from the server's state; every wait on the server has a deadline and ends in
   a failure with a Retry, never an endless spinner ([review.md](review.md)).
+- A screen's `.task` loads its data once: SwiftUI can show a screen again, restarting its task,
+  while later screens are pushed over it, so a flow's model guards its first load
+  (`ReviewFlowModel.appeared()`). A setting that a navigation host reads lives in its model, not
+  in `@AppStorage`, which redraws the view on every `UserDefaults` write.
 - Views use `DesignSystem` tokens and components, never raw colors, sizes, or their own button
   and card styling, so light and dark mode stay consistent. A test checks WCAG AA contrast for
   every text and background pair. The design system and its rules are in
   [design.md](design.md).
+- Work outside a screen: the photo upload queue's background `URLSession`, and the marketplace
+  work this phone runs ([phone-execution.md](phone-execution.md)) on a push, on background app
+  refresh, and in an overnight `BGProcessingTask` (`UIBackgroundModes` and
+  `BGTaskSchedulerPermittedIdentifiers` in `project.yml`). `ListoraAppDelegate` exists only for
+  what UIKit alone reports: the APNs token and a push that wakes the app. The installation id and
+  the marketplace sessions the phone keeps are Keychain items readable after the first unlock,
+  never synced (`Core/Phone`).
 - Tests use Swift Testing; UI tests use XCTest. `make ios-lint` (SwiftLint and SwiftFormat)
   must be clean.
 - Releases are plain `xcodebuild`, no fastlane: `scripts/ios-release.sh` archives

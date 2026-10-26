@@ -446,6 +446,31 @@
         "TreatMissingData": "notBreaching"
       }
     },
+    "deletionoverdueD769F762": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "An account or marketplace connection deletion is still unfinished 8 days after it was asked for: personal data that should be gone may still be held.",
+        "AlarmName": "listora-personal-deletion-overdue",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "MetricName": "OverdueDeletions",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "Maximum",
+        "Threshold": 1,
+        "TreatMissingData": "notBreaching"
+      }
+    },
     "delistlatencyebayE5A35E96": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -835,7 +860,7 @@
   "Parameters": {
     "BootstrapVersion": {
       "Type": "AWS::SSM::Parameter::Value<String>",
-      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Default": "/cdk-bootstrap/listora/version",
       "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
     }
   },

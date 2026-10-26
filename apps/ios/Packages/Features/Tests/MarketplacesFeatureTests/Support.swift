@@ -3,6 +3,37 @@ import Foundation
 import ListoraAPI
 import MarketplacesFeature
 
+/// The phone the tests' Depop runs on, unless `device` says another.
+let depopPhone = "0199a1f0-0000-7000-8000-0000000000d1"
+let depopCloudBlocked = "Depop blocks cloud servers, so Listora runs it from your phone"
+
+/// A Depop connection linked by signing in, on a phone or in the cloud.
+func depopConnection(
+    onPhone: Bool,
+    waiting: Int = 0,
+    cloudAllowed: Bool = true,
+    device: String = depopPhone,
+) throws -> Components.Schemas.Connection {
+    let cloud: [String: Any] = cloudAllowed
+        ? ["cloudAllowed": true]
+        : ["cloudAllowed": false, "cloudBlockedReason": depopCloudBlocked]
+    let place: [String: Any] = onPhone
+        ? [
+            "location": "phone", "label": "Runs on your iPhone", "deviceInstallationId": device,
+            "deviceName": "Sam's iPhone", "waiting": waiting,
+        ]
+        : ["location": "cloud", "label": "Runs in Listora's cloud"]
+    return try connection(
+        marketplace: "depop",
+        mode: "assisted",
+        status: "connected",
+        tone: "success",
+        label: "Linked",
+        connect: "none",
+        execution: place.merging(cloud) { $1 },
+    )
+}
+
 /// A connection as the server sends it, with the parts a test cares about.
 func connection(
     marketplace: String = "ebay",
@@ -15,6 +46,7 @@ func connection(
     actions: [String] = [],
     displayName: String? = nil,
     lastOkAt: String? = nil,
+    execution: [String: Any]? = nil,
 ) throws -> Components.Schemas.Connection {
     var object: [String: Any] = [
         "marketplace": marketplace,
@@ -33,6 +65,9 @@ func connection(
     }
     if let lastOkAt {
         object["lastOkAt"] = lastOkAt
+    }
+    if let execution {
+        object["execution"] = execution
     }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
@@ -137,6 +172,8 @@ final class FakeConnectionsService: ConnectionsService, @unchecked Sendable {
     private var _start: Result<Components.Schemas.ConnectionAuthorization, APIFailure>
     private var _check: Result<Components.Schemas.Connection, APIFailure>
     private var _results: [String: Components.Schemas.ConnectionAuthorization]
+    private var _move: Result<Components.Schemas.Connection, APIFailure>
+    private(set) var moves: [String] = []
     private(set) var startedKeys: [String] = []
     private(set) var checkKeys: [String] = []
     private(set) var readIDs: [String] = []
@@ -148,7 +185,9 @@ final class FakeConnectionsService: ConnectionsService, @unchecked Sendable {
         start: Result<Components.Schemas.ConnectionAuthorization, APIFailure> = .failure(.networkUnavailable),
         check: Result<Components.Schemas.Connection, APIFailure> = .failure(.networkUnavailable),
         results: [String: Components.Schemas.ConnectionAuthorization] = [:],
+        move: Result<Components.Schemas.Connection, APIFailure> = .failure(.networkUnavailable),
     ) {
+        _move = move
         _lists = lists
         _banners = banners
         _start = start
@@ -177,6 +216,17 @@ final class FakeConnectionsService: ConnectionsService, @unchecked Sendable {
         let result = lock.withLock {
             checkKeys.append(idempotencyKey)
             return _check
+        }
+        return try result.get()
+    }
+
+    func setExecution(
+        marketplace: Components.Schemas.KnownMarketplace,
+        location: Components.Schemas.KnownExecutionLocation,
+    ) async throws(APIFailure) -> Components.Schemas.Connection {
+        let result = lock.withLock {
+            moves.append("\(marketplace.rawValue):\(location.rawValue)")
+            return _move
         }
         return try result.get()
     }

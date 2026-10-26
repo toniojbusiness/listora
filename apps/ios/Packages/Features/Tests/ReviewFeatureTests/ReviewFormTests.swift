@@ -7,6 +7,13 @@ struct ReviewFormTests {
     let form = ReviewForm(item: Fixtures.appliedItem(), result: Fixtures.result())
 
     @Test
+    func `names a detail in a sentence in lowercase, keeping acronyms`() {
+        #expect(ReviewFieldKey.sizeSystem.inlineTitle == "size type")
+        #expect(ReviewFieldKey.upc.inlineTitle == "UPC")
+        #expect(ReviewFieldKey.rnNumber.inlineTitle == "RN number")
+    }
+
+    @Test
     func `puts the low-confidence details first, the least certain at the top`() {
         // Brand 0.45 and colors 0.55 are below 0.6; condition at 0.7 is not.
         #expect(form.attention == [.brand, .colors])
@@ -31,6 +38,33 @@ struct ReviewFormTests {
         #expect(form.attention == [.category, .condition, .brand, .colors])
         #expect(form.field(.category).isMissing)
         #expect(form.missing == [.category, .condition])
+    }
+
+    @Test
+    func `asks for the size of clothing and shoes, which every marketplace needs, and no other item's`() {
+        var item = Fixtures.appliedItem()
+        item.details.sizeLabel = nil
+        var result = Fixtures.result()
+        result.details.sizeLabel = nil
+        var form = ReviewForm(item: item, result: result)
+        #expect(form.attention == [.sizeLabel, .brand, .colors])
+        #expect(form.missing == [.sizeLabel])
+        #expect(ReviewFieldKey.sizeLabel.inlineTitle == "size")
+
+        form.set(.category, to: .text("shoes/sneakers"))
+        #expect(form.missing == [.sizeLabel])
+        form.set(.category, to: .text("bags/totes"))
+        #expect(form.missing.isEmpty, "a bag has no size to ask for")
+        form.set(.category, to: .text("clothing/bottoms/jeans"))
+        form.set(.sizeLabel, to: .text("One size"))
+        #expect(form.missing.isEmpty)
+    }
+
+    @Test
+    func `writes a detail's name lowercase inside a sentence, keeping abbreviations`() {
+        #expect(ReviewFieldKey.productName.inlineTitle == "product name")
+        #expect(ReviewFieldKey.upc.inlineTitle == "UPC")
+        #expect(ReviewFieldKey.rnNumber.inlineTitle == "RN number")
     }
 
     @Test

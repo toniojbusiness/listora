@@ -39,9 +39,7 @@ struct OperationTaskView: View {
     private var content: some View {
         switch phase {
         case .loading:
-            ProgressView("Loading task")
-                .foregroundStyle(Palette.textSecondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            SkeletonList(count: 3, label: "Loading task")
         case let .found(model):
             TaskDetailView(model: model) { _ in
                 Task { await environment.inbox.load() }
@@ -53,6 +51,7 @@ struct OperationTaskView: View {
                 tone: .success,
                 title: "Nothing to do here",
                 message: "This step isn't waiting for you any more. The item shows where it stands.",
+                action: .init("Close") { dismiss() },
             )
         case let .failed(message):
             EmptyStateView(
@@ -60,7 +59,7 @@ struct OperationTaskView: View {
                 tone: .failed,
                 title: "The task didn't load",
                 message: message,
-                action: .init("Try again") { Task { await load() } },
+                action: .init("Try again", systemImage: "arrow.clockwise") { Task { await load() } },
             )
         }
     }

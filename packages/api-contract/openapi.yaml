@@ -34,13 +34,15 @@ tags:
   - name: health
     description: Liveness and readiness probes for load balancers and containers.
   - name: account
-    description: The signed-in person's Listora account.
+    description: The signed-in person's Listora account and profile.
   - name: items
     description: Master inventory items. Each physical item has one item and one SKU.
   - name: photos
     description: Upload sessions and item photos.
   - name: analysis
     description: AI analysis of an item's photos (run once per photo set).
+  - name: batches
+    description: Batches of items photographed in one session, and where each item is.
   - name: pricing
     description: Price suggestions with honest source labels.
   - name: listings
@@ -55,8 +57,16 @@ tags:
     description: The profit dashboard over the seller's sales and inventory.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
+  - name: sale-emails
+    description: The forwarding address that catches Poshmark, Mercari, and Depop sale emails.
   - name: usage
     description: How much of the plan's quotas the account has used this period.
+  - name: today
+    description: The Today screen (what needs the seller, and the money summary) and its morning summary.
+  - name: voice
+    description: Spoken corrections on the review screen that the app could not parse itself.
+  - name: phone
+    description: The seller's devices, and the marketplace work their iPhone runs (docs/features/phone-execution.md).
 
 paths:
   /health/live:
@@ -65,6 +75,8 @@ paths:
     $ref: './paths/health.yaml#/~1health~1ready'
   /v1/account:
     $ref: './paths/account.yaml#/~1v1~1account'
+  /v1/account/profile:
+    $ref: './paths/account.yaml#/~1v1~1account~1profile'
   /v1/items:
     $ref: './paths/items.yaml#/~1v1~1items'
   /v1/items/{itemId}:
@@ -89,8 +101,20 @@ paths:
     $ref: './paths/analysis.yaml#/~1v1~1analyses~1{analysisId}~1escalate'
   /v1/analyses/{analysisId}/apply:
     $ref: './paths/analysis.yaml#/~1v1~1analyses~1{analysisId}~1apply'
+  /v1/item-batches:
+    $ref: './paths/batches.yaml#/~1v1~1item-batches'
+  /v1/item-batches/{batchId}:
+    $ref: './paths/batches.yaml#/~1v1~1item-batches~1{batchId}'
+  /v1/item-batches/{batchId}/items:
+    $ref: './paths/batches.yaml#/~1v1~1item-batches~1{batchId}~1items'
+  /v1/item-batches/{batchId}/items/{itemId}/submit:
+    $ref: './paths/batches.yaml#/~1v1~1item-batches~1{batchId}~1items~1{itemId}~1submit'
+  /v1/item-batches/{batchId}/interaction:
+    $ref: './paths/batches.yaml#/~1v1~1item-batches~1{batchId}~1interaction'
   /v1/usage:
     $ref: './paths/usage.yaml#/~1v1~1usage'
+  /v1/items/{itemId}/voice-corrections:
+    $ref: './paths/voice.yaml#/~1v1~1items~1{itemId}~1voice-corrections'
   /v1/items/{itemId}/pricing:
     $ref: './paths/pricing.yaml#/~1v1~1items~1{itemId}~1pricing'
   /v1/items/{itemId}/listings:
@@ -139,8 +163,14 @@ paths:
     $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1callback'
   /v1/connections/{marketplace}/checks:
     $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1checks'
+  /v1/connections/{marketplace}/execution:
+    $ref: './paths/connections.yaml#/~1v1~1connections~1{marketplace}~1execution'
   /v1/connection-health:
     $ref: './paths/connections.yaml#/~1v1~1connection-health'
+  /v1/marketplace-sessions:
+    $ref: './paths/connections.yaml#/~1v1~1marketplace-sessions'
+  /v1/marketplace-sessions/{marketplace}:
+    $ref: './paths/connections.yaml#/~1v1~1marketplace-sessions~1{marketplace}'
   /v1/sales:
     $ref: './paths/sales.yaml#/~1v1~1sales'
   /v1/sales/{saleId}:
@@ -165,6 +195,20 @@ paths:
     $ref: './paths/tasks.yaml#/~1v1~1tasks~1{taskId}~1complete'
   /v1/tasks/{taskId}/dismiss:
     $ref: './paths/tasks.yaml#/~1v1~1tasks~1{taskId}~1dismiss'
+  /v1/sale-emails:
+    $ref: './paths/sale-emails.yaml#/~1v1~1sale-emails'
+  /v1/sale-emails/settings:
+    $ref: './paths/sale-emails.yaml#/~1v1~1sale-emails~1settings'
+  /v1/today:
+    $ref: './paths/today.yaml#/~1v1~1today'
+  /v1/today/settings:
+    $ref: './paths/today.yaml#/~1v1~1today~1settings'
+  /v1/devices/{installationId}:
+    $ref: './paths/phone.yaml#/~1v1~1devices~1{installationId}'
+  /v1/phone-runs:
+    $ref: './paths/phone.yaml#/~1v1~1phone-runs'
+  /v1/phone-runs/{runId}/calls/{index}:
+    $ref: './paths/phone.yaml#/~1v1~1phone-runs~1{runId}~1calls~1{index}'
 
 components:
   securitySchemes:
@@ -190,6 +234,8 @@ components:
       $ref: './components/parameters.yaml#/PhotoId'
     SessionId:
       $ref: './components/parameters.yaml#/SessionId'
+    BatchId:
+      $ref: './components/parameters.yaml#/BatchId'
     AnalysisId:
       $ref: './components/parameters.yaml#/AnalysisId'
     ListingId:
@@ -204,6 +250,12 @@ components:
       $ref: './components/parameters.yaml#/TaskId'
     MarketplacePath:
       $ref: './components/parameters.yaml#/MarketplacePath'
+    InstallationId:
+      $ref: './components/parameters.yaml#/InstallationId'
+    RunId:
+      $ref: './components/parameters.yaml#/RunId'
+    CallIndex:
+      $ref: './components/parameters.yaml#/CallIndex'
 
   responses:
     DefaultError:
@@ -277,6 +329,10 @@ components:
       $ref: './components/schemas/account.yaml#/AccountDeletion'
     MarketplaceAccessRevocation:
       $ref: './components/schemas/account.yaml#/MarketplaceAccessRevocation'
+    Profile:
+      $ref: './components/schemas/account.yaml#/Profile'
+    ProfileReplace:
+      $ref: './components/schemas/account.yaml#/ProfileReplace'
     # ---------------------------------------------------------------- health
     HealthCheckStatus:
       $ref: './components/schemas/health.yaml#/HealthCheckStatus'
@@ -383,6 +439,31 @@ components:
       $ref: './components/schemas/analysis.yaml#/Analysis'
     AnalysisApply:
       $ref: './components/schemas/analysis.yaml#/AnalysisApply'
+    # ---------------------------------------------------------------- batches
+    ItemBatchItemState:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItemState'
+    KnownItemBatchItemState:
+      $ref: './components/schemas/batches.yaml#/KnownItemBatchItemState'
+    ItemBatchItemProblem:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItemProblem'
+    InteractionTotals:
+      $ref: './components/schemas/batches.yaml#/InteractionTotals'
+    ItemBatchPhotoProgress:
+      $ref: './components/schemas/batches.yaml#/ItemBatchPhotoProgress'
+    ItemBatchItem:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItem'
+    ItemBatchProgress:
+      $ref: './components/schemas/batches.yaml#/ItemBatchProgress'
+    ItemBatch:
+      $ref: './components/schemas/batches.yaml#/ItemBatch'
+    ItemBatchItemCreate:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItemCreate'
+    ItemBatchItemSubmit:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItemSubmit'
+    ItemBatchItemInteraction:
+      $ref: './components/schemas/batches.yaml#/ItemBatchItemInteraction'
+    ItemBatchInteractionReplace:
+      $ref: './components/schemas/batches.yaml#/ItemBatchInteractionReplace'
     # ---------------------------------------------------------------- pricing
     AiPriceEstimate:
       $ref: './components/schemas/pricing.yaml#/AiPriceEstimate'
@@ -421,6 +502,17 @@ components:
       $ref: './components/schemas/usage.yaml#/QuotaUsage'
     Usage:
       $ref: './components/schemas/usage.yaml#/Usage'
+    # ---------------------------------------------------------------- voice
+    VoiceCorrectionRequest:
+      $ref: './components/schemas/voice.yaml#/VoiceCorrectionRequest'
+    VoiceCorrection:
+      $ref: './components/schemas/voice.yaml#/VoiceCorrection'
+    VoiceCorrectionChange:
+      $ref: './components/schemas/voice.yaml#/VoiceCorrectionChange'
+    VoiceCorrectionField:
+      $ref: './components/schemas/voice.yaml#/VoiceCorrectionField'
+    KnownVoiceCorrectionField:
+      $ref: './components/schemas/voice.yaml#/KnownVoiceCorrectionField'
     # ---------------------------------------------------------------- listings
     ListingStatus:
       $ref: './components/schemas/listings.yaml#/ListingStatus'
@@ -548,6 +640,52 @@ components:
       $ref: './components/schemas/connections.yaml#/SaleForwarding'
     ConnectionHealthSummary:
       $ref: './components/schemas/connections.yaml#/ConnectionHealthSummary'
+    # ---------------------------------------------------------------- marketplace sessions
+    MarketplaceSessionStatus:
+      $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSessionStatus'
+    KnownMarketplaceSessionStatus:
+      $ref: './components/schemas/marketplace-sessions.yaml#/KnownMarketplaceSessionStatus'
+    MarketplaceSessionLogin:
+      $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSessionLogin'
+    MarketplaceSession:
+      $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSession'
+    MarketplaceSessionList:
+      $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSessionList'
+    SessionCookie:
+      $ref: './components/schemas/marketplace-sessions.yaml#/SessionCookie'
+    MarketplaceSessionLink:
+      $ref: './components/schemas/marketplace-sessions.yaml#/MarketplaceSessionLink'
+    # ---------------------------------------------------------------- phone
+    ExecutionLocation:
+      $ref: './components/schemas/phone.yaml#/ExecutionLocation'
+    KnownExecutionLocation:
+      $ref: './components/schemas/phone.yaml#/KnownExecutionLocation'
+    ConnectionExecution:
+      $ref: './components/schemas/phone.yaml#/ConnectionExecution'
+    ConnectionExecutionChange:
+      $ref: './components/schemas/phone.yaml#/ConnectionExecutionChange'
+    DevicePlatform:
+      $ref: './components/schemas/phone.yaml#/DevicePlatform'
+    PushEnvironment:
+      $ref: './components/schemas/phone.yaml#/PushEnvironment'
+    DeviceRegistration:
+      $ref: './components/schemas/phone.yaml#/DeviceRegistration'
+    Device:
+      $ref: './components/schemas/phone.yaml#/Device'
+    PhoneWorkPurpose:
+      $ref: './components/schemas/phone.yaml#/PhoneWorkPurpose'
+    KnownPhoneWorkPurpose:
+      $ref: './components/schemas/phone.yaml#/KnownPhoneWorkPurpose'
+    PhoneRunClaim:
+      $ref: './components/schemas/phone.yaml#/PhoneRunClaim'
+    PhoneCall:
+      $ref: './components/schemas/phone.yaml#/PhoneCall'
+    PhoneRun:
+      $ref: './components/schemas/phone.yaml#/PhoneRun'
+    PhoneRunResult:
+      $ref: './components/schemas/phone.yaml#/PhoneRunResult'
+    PhoneCallAnswer:
+      $ref: './components/schemas/phone.yaml#/PhoneCallAnswer'
     # ---------------------------------------------------------------- sales
     SaleStatus:
       $ref: './components/schemas/sales.yaml#/SaleStatus'
@@ -647,9 +785,71 @@ components:
       $ref: './components/schemas/tasks.yaml#/UserTask'
     UserTaskItem:
       $ref: './components/schemas/tasks.yaml#/UserTaskItem'
+    UserTaskSaleEmailReason:
+      $ref: './components/schemas/tasks.yaml#/UserTaskSaleEmailReason'
+    KnownUserTaskSaleEmailReason:
+      $ref: './components/schemas/tasks.yaml#/KnownUserTaskSaleEmailReason'
+    UserTaskSaleEmail:
+      $ref: './components/schemas/tasks.yaml#/UserTaskSaleEmail'
     UserTaskCompletion:
       $ref: './components/schemas/tasks.yaml#/UserTaskCompletion'
     SaleCorrection:
       $ref: './components/schemas/tasks.yaml#/SaleCorrection'
     UserTaskPage:
       $ref: './components/schemas/tasks.yaml#/UserTaskPage'
+    # ---------------------------------------------------------------- sale emails
+    SaleEmailStatus:
+      $ref: './components/schemas/sale-emails.yaml#/SaleEmailStatus'
+    KnownSaleEmailStatus:
+      $ref: './components/schemas/sale-emails.yaml#/KnownSaleEmailStatus'
+    SaleEmailConfirmation:
+      $ref: './components/schemas/sale-emails.yaml#/SaleEmailConfirmation'
+    SaleEmails:
+      $ref: './components/schemas/sale-emails.yaml#/SaleEmails'
+    SaleEmailSettingsReplace:
+      $ref: './components/schemas/sale-emails.yaml#/SaleEmailSettingsReplace'
+    # ---------------------------------------------------------------- today
+    TodayCardKind:
+      $ref: './components/schemas/today.yaml#/TodayCardKind'
+    KnownTodayCardKind:
+      $ref: './components/schemas/today.yaml#/KnownTodayCardKind'
+    TodayUrgency:
+      $ref: './components/schemas/today.yaml#/TodayUrgency'
+    KnownTodayUrgency:
+      $ref: './components/schemas/today.yaml#/KnownTodayUrgency'
+    TodayDestination:
+      $ref: './components/schemas/today.yaml#/TodayDestination'
+    KnownTodayDestination:
+      $ref: './components/schemas/today.yaml#/KnownTodayDestination'
+    TodayAction:
+      $ref: './components/schemas/today.yaml#/TodayAction'
+    TodayItem:
+      $ref: './components/schemas/today.yaml#/TodayItem'
+    TodayShipment:
+      $ref: './components/schemas/today.yaml#/TodayShipment'
+    TodayLocation:
+      $ref: './components/schemas/today.yaml#/TodayLocation'
+    TodayDelist:
+      $ref: './components/schemas/today.yaml#/TodayDelist'
+    TodayConnection:
+      $ref: './components/schemas/today.yaml#/TodayConnection'
+    TodayStaleSuggestion:
+      $ref: './components/schemas/today.yaml#/TodayStaleSuggestion'
+    KnownTodayStaleSuggestion:
+      $ref: './components/schemas/today.yaml#/KnownTodayStaleSuggestion'
+    TodayStaleListing:
+      $ref: './components/schemas/today.yaml#/TodayStaleListing'
+    TodayDrafts:
+      $ref: './components/schemas/today.yaml#/TodayDrafts'
+    TodayCard:
+      $ref: './components/schemas/today.yaml#/TodayCard'
+    TodayMoneyPeriod:
+      $ref: './components/schemas/today.yaml#/TodayMoneyPeriod'
+    TodayMoney:
+      $ref: './components/schemas/today.yaml#/TodayMoney'
+    Today:
+      $ref: './components/schemas/today.yaml#/Today'
+    TodaySummarySettings:
+      $ref: './components/schemas/today.yaml#/TodaySummarySettings'
+    TodaySummarySettingsReplace:
+      $ref: './components/schemas/today.yaml#/TodaySummarySettingsReplace'

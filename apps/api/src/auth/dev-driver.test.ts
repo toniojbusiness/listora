@@ -107,6 +107,48 @@ describe('DevAuthDriver', () => {
     expect(() => instance.requestCode('a@example.com')).not.toThrow();
   });
 
+  it('does not reset the wrong-guess limit when a new code is requested', async () => {
+    const { instance, codes, clock } = driver({ maxWrongGuessesPerEmail: 4, maxAttempts: 2 });
+    const wrongFor = (code: string | undefined) => (code === '000000' ? '111111' : '000000');
+    for (let round = 0; round < 2; round += 1) {
+      instance.requestCode(EMAIL);
+      const code = codes.at(-1);
+      await rejection(instance.createSession(EMAIL, wrongFor(code)));
+      await rejection(instance.createSession(EMAIL, wrongFor(code)));
+    }
+    const limited = (() => {
+      try {
+        instance.requestCode(EMAIL);
+      } catch (error) {
+        return error;
+      }
+      return undefined;
+    })();
+    expect(limited).toBeInstanceOf(ApiError);
+    expect((limited as ApiError).code).toBe('rate_limited');
+    expect((limited as ApiError).retryAfterSeconds).toBe(3600);
+    // Even the right code is refused while the email is limited.
+    expect((await rejection(instance.createSession(EMAIL, codes.at(-1) ?? ''))).code).toBe(
+      'rate_limited',
+    );
+
+    // Other emails are unaffected, and the email can sign in again once the window passes.
+    expect(() => instance.requestCode('other@example.com')).not.toThrow();
+    clock.now += 3_600_000;
+    instance.requestCode(EMAIL);
+    await expect(instance.createSession(EMAIL, codes.at(-1) ?? '')).resolves.toBeDefined();
+  });
+
+  it('limits wrong guesses across all emails', async () => {
+    const { instance, codes } = driver({ maxWrongGuesses: 3 });
+    for (const email of ['a@example.com', 'b@example.com', 'c@example.com']) {
+      instance.requestCode(email);
+      const code = codes.at(-1);
+      await rejection(instance.createSession(email, code === '000000' ? '111111' : '000000'));
+    }
+    expect(() => instance.requestCode('d@example.com')).toThrow('Too many wrong sign-in codes');
+  });
+
   it('rejects tokens it did not sign', async () => {
     const { instance } = driver();
     const other = driver({ secret: 'o'.repeat(32) });

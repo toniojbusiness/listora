@@ -11,11 +11,14 @@ public final class ReviewEnvironment {
     let listingCopy: ListingCopyStore
     let recentSources: RecentPurchaseSources
     let timing: ReviewTiming
+    /// Speech to text for spoken corrections on the review.
+    let transcriber: any VoiceTranscriber
 
     public convenience init(
         apiClient: APIClient,
         meter: InteractionMeter,
         listingCopy: ListingCopyStore,
+        transcriber: any VoiceTranscriber,
         defaults: UserDefaults = .standard,
     ) {
         self.init(
@@ -23,6 +26,7 @@ public final class ReviewEnvironment {
             meter: meter,
             listingCopy: listingCopy,
             recentSources: RecentPurchaseSources(defaults: defaults),
+            transcriber: transcriber,
         )
     }
 
@@ -31,12 +35,14 @@ public final class ReviewEnvironment {
         meter: InteractionMeter,
         listingCopy: ListingCopyStore,
         recentSources: RecentPurchaseSources,
+        transcriber: any VoiceTranscriber,
         timing: ReviewTiming = .standard,
     ) {
         self.service = service
         self.meter = meter
         self.listingCopy = listingCopy
         self.recentSources = recentSources
+        self.transcriber = transcriber
         self.timing = timing
     }
 
@@ -52,6 +58,15 @@ public final class ReviewEnvironment {
         -> some View
     {
         ReviewFlowView(environment: self, request: request, onFinished: onFinished)
+    }
+
+    /// The rapid review of a batch's items (docs/features/batch.md): `onEvent` hears of each saved
+    /// item as it is saved, and of the seller finishing.
+    public func batchFlow(
+        for request: BatchReviewRequest,
+        onEvent: @escaping @MainActor (BatchReviewEvent) -> Void,
+    ) -> some View {
+        BatchReviewView(environment: self, request: request, onEvent: onEvent)
     }
 
     func makeModel(for request: ItemReviewRequest) -> ReviewFlowModel {

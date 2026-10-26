@@ -5,12 +5,22 @@ import SwiftUI
 /// The Sales tab: recent sales, newest first, with what each one sold for and its profit, and the
 /// way to the profit dashboard. The list is read from the server each time it appears and on
 /// pull to refresh.
-public struct SalesView: View {
+public struct SalesView<Settings: View>: View {
     private let environment: SalesEnvironment
+    private let settings: Settings
+    private let onOpenInventory: (@MainActor () -> Void)?
     @State private var model: SalesListModel
 
-    public init(environment: SalesEnvironment) {
+    /// `settings` is the header's button that opens Settings; `onOpenInventory` opens Inventory,
+    /// the empty list's action.
+    public init(
+        environment: SalesEnvironment,
+        onOpenInventory: (@MainActor () -> Void)? = nil,
+        @ViewBuilder settings: () -> Settings,
+    ) {
         self.environment = environment
+        self.onOpenInventory = onOpenInventory
+        self.settings = settings()
         _model = State(initialValue: environment.makeListModel())
     }
 
@@ -23,7 +33,7 @@ public struct SalesView: View {
                     SaleDetailView(environment: environment, saleID: route.saleID)
                 }
                 .navigationDestination(for: ProfitRoute.self) { _ in
-                    ProfitView(model: environment.makeProfitModel())
+                    ProfitView(model: environment.makeProfitModel(), onSignIn: environment.onSignIn)
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -32,32 +42,29 @@ public struct SalesView: View {
                         }
                         .accessibilityIdentifier("sales.profit")
                     }
+                    ToolbarItem(placement: .topBarTrailing) { settings }
                 }
                 .task { await model.load() }
                 .refreshable { await model.load() }
         }
+        .celebration(trigger: model.newSaleID)
+    }
+
+    private var content: some View {
+        phaseContent.motion(value: model.phase)
     }
 
     @ViewBuilder
-    private var content: some View {
+    private var phaseContent: some View {
         switch model.phase {
         case .loading where model.sales.isEmpty:
-            ScrollView {
-                VStack(spacing: Spacing.sm) {
-                    ForEach(0 ..< 4, id: \.self) { _ in
-                        SkeletonRow().cardStyle(.outlined)
-                    }
-                }
-                .padding(Spacing.md)
-            }
-            .scrollDisabled(true)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Loading sales")
+            SkeletonList(count: 4, label: "Loading sales")
         case .signedOut:
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.questionmark",
                 title: "Sign in to see your sales",
                 message: "Every sale, its fees, and its profit show up here once you sign in.",
+                action: .init("Sign in", systemImage: "person.crop.circle", handler: environment.onSignIn),
             )
         case let .failed(message) where model.sales.isEmpty:
             EmptyStateView(
@@ -74,6 +81,7 @@ public struct SalesView: View {
                     title: "No sales yet",
                     message: "When an item sells, Listora delists it everywhere else and shows the sale and "
                         + "its profit here. Sold somewhere Listora doesn't see? Open the item and tap Mark as sold.",
+                    action: onOpenInventory.map { .init("Go to Inventory", systemImage: "shippingbox", handler: $0) },
                 )
                 .accessibilityIdentifier("sales.empty")
             } else {
@@ -98,8 +106,10 @@ public struct SalesView: View {
                     .accessibilityIdentifier("sales.row.\(sale.items.first?.sku ?? sale.id)")
                 }
                 if model.hasMore {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
+                    SkeletonRow()
+                        .cardStyle(.flat)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Loading more sales")
                         .task { await model.loadMore() }
                 }
             }
@@ -131,7 +141,7 @@ private struct ProfitEntryRow: View {
             }
             Spacer(minLength: Spacing.sm)
             Image(systemName: "chevron.right")
-                .font(Typography.subheadline.weight(.semibold))
+                .font(Typography.emphasis)
                 .foregroundStyle(Palette.textSecondary)
                 .accessibilityHidden(true)
         }
@@ -153,9 +163,17 @@ private struct SaleRow: View {
                     .font(Typography.headline)
                     .foregroundStyle(Palette.textPrimary)
                     .lineLimit(2)
-                Text("\(sale.marketplace.name) · \(SaleFormatting.day(sale.soldAt))")
-                    .font(Typography.subheadline)
-                    .foregroundStyle(Palette.textSecondary)
+                // Where and when on one line when it fits, else on two, never breaking the date.
+                ViewThatFits(in: .horizontal) {
+                    Text("\(sale.marketplace.name) · \(SaleFormatting.day(sale.soldAt))")
+                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(sale.marketplace.name)
+                        Text(SaleFormatting.day(sale.soldAt))
+                    }
+                }
+                .font(Typography.subheadline)
+                .foregroundStyle(Palette.textSecondary)
                 if sale.status.value1 != .detected {
                     StatusBadge(sale.status.label, tone: sale.status.tone, showsIcon: false)
                 }
@@ -163,13 +181,13 @@ private struct SaleRow: View {
             Spacer(minLength: Spacing.sm)
             VStack(alignment: .trailing, spacing: Spacing.xxs) {
                 Text(SaleFormatting.money(sale.salePrice))
-                    .font(Typography.headline.monospacedDigit())
+                    .font(Typography.number)
                     .foregroundStyle(Palette.textPrimary)
                 profit
             }
         }
         .contentShape(Rectangle())
-        .cardStyle(.outlined)
+        .cardStyle(.flat)
         .accessibilityElement(children: .combine)
     }
 
@@ -181,7 +199,7 @@ private struct SaleRow: View {
                 .foregroundStyle(Palette.textSecondary)
         } else if let profit = sale.profit {
             Text("\(sale.feesEstimated == true ? "Est. profit" : "Profit") \(SaleFormatting.money(profit))")
-                .font(Typography.footnote.weight(.semibold).monospacedDigit())
+                .font(Typography.smallEmphasis)
                 .foregroundStyle(profit.amountCents < 0 ? Palette.danger : Palette.success)
         } else {
             Text("Add cost for profit")

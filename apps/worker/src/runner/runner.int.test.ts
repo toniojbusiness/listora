@@ -106,7 +106,13 @@ describe('browser runner process (real Postgres, headless Chromium)', () => {
     const { connectionId } = await linkAutomationSession(
       database.db,
       { vault, profile },
-      { accountId, marketplace: 'mercari', cookies: [site.issueSession(accountId)] },
+      // The browser runner's work: a connection whose steps run in the cloud.
+      {
+        accountId,
+        marketplace: 'mercari',
+        cookies: [site.issueSession(accountId)],
+        runsOn: 'cloud',
+      },
     );
     // The first sale check after linking is not part of these tests.
     await sql`delete from graphile_worker._private_jobs`.execute(database.db);

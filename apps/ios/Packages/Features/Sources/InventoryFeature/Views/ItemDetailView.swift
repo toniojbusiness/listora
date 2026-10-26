@@ -11,10 +11,11 @@ struct ItemDetailView: View {
     @State private var model: ItemDetailModel
     @State private var listingFlow: ListingFlowModel?
     @State private var priceChange: PriceChange?
-    @State private var ending: MarketplaceRowState?
     @State private var markingSold: MarkSoldRequest?
     @State private var openSale: SaleLink?
     @State private var openTask: OpenTask?
+    @State private var editingSize = false
+    @State private var reviewing = false
 
     /// The assisted step whose task is open.
     private struct OpenTask: Identifiable {
@@ -40,6 +41,8 @@ struct ItemDetailView: View {
                 await model.followChanges()
             }
             .refreshable { await model.load() }
+            // A change the server refused (the notice) is felt as well as shown.
+            .sensoryFeedback(trigger: model.notice) { _, notice in notice == nil ? nil : .error }
             .sheet(
                 item: $listingFlow,
                 onDismiss: { Task { await model.refresh() } },
@@ -49,11 +52,21 @@ struct ItemDetailView: View {
                 item: $markingSold,
                 onDismiss: { Task { await model.refresh() } },
                 content: { request in
-                    environment.saleScreens?.markSold(request) { saleID in openSale = SaleLink(id: saleID) }
+                    environment.saleScreens?
+                        .markSold(request) { saleID in openSale = SaleLink(id: saleID, isNew: true) }
                 },
             )
+            .navigationDestination(isPresented: $reviewing) {
+                if let item = model.item, let review = environment.reviewScreen {
+                    review(ItemReviewRequest(sessionID: item.id, itemID: item.id, sku: item.sku)) { _ in
+                        reviewing = false
+                        Task { await model.load() }
+                    }
+                }
+            }
             .navigationDestination(item: $openSale) { link in
                 environment.saleScreens?.sale(link.id)
+                    .celebration(trigger: link.isNew ? link.id : nil)
                     .onDisappear { Task { await model.refresh() } }
             }
             .sheet(item: $openTask, onDismiss: { Task { await model.refresh() } }, content: { task in
@@ -61,8 +74,16 @@ struct ItemDetailView: View {
                     destination(model.itemID, task.operationID) { openTask = nil }
                 }
             })
+            .sheet(isPresented: $editingSize) {
+                SizeEditorView(current: model.item?.details.sizeLabel) { size in
+                    await model.saveSize(size)
+                }
+            }
             .sheet(item: $priceChange) { change in
-                PriceChangeView(change: change) { price in
+                PriceChangeView(change: change) {
+                    await model.floor(on: change.marketplace)
+                } save: { price in
+                    Haptics.play(.tap)
                     priceChange = nil
                     Task {
                         await model.perform(
@@ -70,28 +91,6 @@ struct ItemDetailView: View {
                             marketplace: change.marketplace,
                         )
                     }
-                }
-            }
-            .confirmationDialog(
-                "End the \(ending?.name ?? "") listing?",
-                isPresented: Binding(get: { ending != nil }, set: {
-                    if !$0 {
-                        ending = nil
-                    }
-                }),
-                titleVisibility: .visible,
-                presenting: ending,
-            ) { row in
-                ForEach(EndReason.allCases) { reason in
-                    Button(reason.title, role: .destructive) { end(row, reason: reason) }
-                        .accessibilityIdentifier("end.\(reason.rawValue)")
-                }
-                Button("Keep it listed", role: .cancel) {}
-            } message: { row in
-                if row.listing?.mode.value1 == .api || row.listing?.mode.value1 == .automation {
-                    Text("Listora ends it on \(row.name) and shows it as delisted once \(row.name) confirms.")
-                } else {
-                    Text("You end it in the \(row.name) app: Listora adds a task with a link to the listing.")
                 }
             }
     }
@@ -149,17 +148,29 @@ struct ItemDetailView: View {
                     .transition(.rise)
                 }
                 saleBanners(of: item)
+                if item.status.value1 == .draft, environment.reviewScreen != nil {
+                    // A draft from another device or an earlier install has no draft on this
+                    // iPhone's Add Item tab: it is reviewed from here.
+                    Banner(
+                        "Review it before listing",
+                        message: "Check its details and price, and it's ready to list everywhere.",
+                        tone: .actionNeeded,
+                        action: .init("Review item", identifier: "item.review") { reviewing = true },
+                        identifier: "item.draft",
+                    )
+                }
                 MarketplacesSection(
                     rows: model.rows,
                     histories: model.histories,
                     events: model.events,
                     busyMarketplace: model.busyMarketplace,
                     perform: perform,
+                    end: { reason, row in end(row, reason: reason) },
                     loadEvents: { id in await model.loadEvents(operationID: id) },
                 )
                 MoneySection(item: item)
                 markSoldButton(for: item)
-                DetailsSection(item: item)
+                DetailsSection(item: item) { editingSize = true }
             }
             .padding(Spacing.md)
             .frame(maxWidth: Layout.readableWidth)
@@ -226,7 +237,8 @@ struct ItemDetailView: View {
                 current: listing.variant?.price,
             )
         case .end:
-            ending = row
+            // The End button confirms on its card first, then calls `end(_:reason:)`.
+            break
         case .relist, .check:
             guard let listing = row.listing else { return }
             let request: ListingRequest = action == .relist
@@ -241,7 +253,6 @@ struct ItemDetailView: View {
     }
 
     private func end(_ row: MarketplaceRowState, reason: EndReason) {
-        ending = nil
         guard let listing = row.listing else { return }
         Task { await model.perform(.end(listingID: listing.id, reason: reason.contract), marketplace: row.id) }
     }
@@ -250,10 +261,15 @@ struct ItemDetailView: View {
 /// Title, SKU, status, and list price.
 private struct ItemHeader: View {
     let item: Item
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        // The price under the title at accessibility sizes, so neither breaks mid-word.
+        let heading = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xxs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spacing.sm))
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+            heading {
                 Text(item.details.title ?? "Untitled item")
                     .font(Typography.title)
                     .foregroundStyle(Palette.textPrimary)
@@ -264,13 +280,15 @@ private struct ItemHeader: View {
                 if let price = item.details.listPrice {
                     Text(Formatting.money(price))
                         .font(Typography.price)
-                        .foregroundStyle(Palette.brand)
+                        .foregroundStyle(Palette.textPrimary)
+                        .fixedSize()
                         .accessibilityLabel("List price \(Formatting.money(price))")
                 }
             }
-            HStack(spacing: Spacing.xs) {
+            // The chip wraps under the SKU rather than breaking it.
+            FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
                 Text(item.sku)
-                    .font(Typography.subheadline.monospacedDigit())
+                    .font(Typography.metadata)
                     .foregroundStyle(Palette.textSecondary)
                     .textSelection(.enabled)
                     .accessibilityIdentifier("item.sku")
@@ -308,43 +326,6 @@ private struct MoneySection: View {
             }
             if let source = item.details.purchaseSource {
                 LabeledRow("Bought at", value: source)
-            }
-        }
-    }
-}
-
-/// The item's details and where it is kept.
-private struct DetailsSection: View {
-    let item: Item
-
-    var body: some View {
-        DetailSection(title: "Details") {
-            LabeledRow(
-                "Storage location",
-                value: item.storageLocation.map { "\($0.label) (\($0.code))" } ?? "Not set",
-            )
-            .accessibilityIdentifier("item.storage")
-            if let brand = item.details.brand {
-                LabeledRow("Brand", value: brand)
-            }
-            if let size = item.details.sizeLabel {
-                LabeledRow("Size", value: size)
-            }
-            if let condition = item.details.condition {
-                LabeledRow("Condition", value: condition.label)
-            }
-            if let colors = item.details.colors, !colors.isEmpty {
-                LabeledRow("Colors", value: colors.map(\.capitalized).joined(separator: ", "))
-            }
-            if let materials = item.details.materials, !materials.isEmpty {
-                LabeledRow("Materials", value: materials.joined(separator: ", "))
-            }
-            if let description = item.details.description, !description.isEmpty {
-                Text(description)
-                    .font(Typography.subheadline)
-                    .foregroundStyle(Palette.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, Spacing.xxs)
             }
         }
     }

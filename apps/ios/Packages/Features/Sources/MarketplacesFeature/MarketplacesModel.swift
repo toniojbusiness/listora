@@ -1,4 +1,6 @@
 import APIClient
+import Core
+import DesignSystem
 import Foundation
 import ListoraAPI
 import Observation
@@ -39,14 +41,24 @@ public final class MarketplacesModel {
     private let maxPolls: Int
     private let sleep: @Sendable (Duration) async throws -> Void
     private let isSignedIn: @MainActor () -> Bool
+    /// Runs the work waiting for this phone (a check of a marketplace that runs here).
+    public weak var phoneWork: (any PhoneWorkTrigger)?
+    /// The row whose automated steps are moving between the cloud and this phone.
+    public private(set) var moving: String?
+    /// This app's installation: a marketplace that runs here says "Runs on this iPhone".
+    private let installationID: String
 
-    /// `pollInterval` and `maxPolls`: how often and how long a requested check is read again.
+    /// `pollInterval` and `maxPolls`: how often and how long a requested check is read again. An
+    /// API connection's check takes seconds; the browser runner's check of a linked sign-in can
+    /// take minutes, and the server decides it within 15, so the default reads a little longer
+    /// than that and never leaves a row on Checking... while the server has an answer.
     /// `isSignedIn`: whether there is a session; the banner never asks the API without one.
     public init(
         service: any ConnectionsService,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
-        pollInterval: Duration = .seconds(2),
-        maxPolls: Int = 15,
+        installationID: String = Installation.id(),
+        pollInterval: Duration = .seconds(3),
+        maxPolls: Int = 320,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
     ) {
         self.service = service
@@ -54,6 +66,7 @@ public final class MarketplacesModel {
         self.maxPolls = maxPolls
         self.sleep = sleep
         self.isSignedIn = isSignedIn
+        self.installationID = installationID
     }
 
     /// Reloads for the app's banner (on launch, on return to the app, when Inventory appears):
@@ -64,6 +77,30 @@ public final class MarketplacesModel {
             return
         }
         await load()
+    }
+
+    /// One line about every marketplace, for Settings: the server's banner while a connection
+    /// needs attention, otherwise how many connections the server reports with a problem or
+    /// working. Nil before the first read.
+    public var healthLine: HealthLine? {
+        if let attention {
+            return HealthLine(text: attention.title, needsAttention: attention.needsAction)
+        }
+        guard !rows.isEmpty else { return nil }
+        let problems = rows.count { $0.tone == .failed || $0.tone == .actionNeeded }
+        if problems > 0 {
+            return HealthLine(
+                text: problems == 1 ? "1 needs attention" : "\(problems) need attention",
+                needsAttention: true,
+            )
+        }
+        let working = rows.count { $0.tone == .success }
+        let text = switch working {
+        case 0: "None linked yet"
+        case 1: "1 working"
+        default: "\(working) working"
+        }
+        return HealthLine(text: text, needsAttention: false)
     }
 
     /// Loads (or reloads) every marketplace's connection and the attention banner.
@@ -83,7 +120,7 @@ public final class MarketplacesModel {
     }
 
     /// Retry check: asks the server to check the row's connection, shows its "Checking" status,
-    /// and reads the summary again until that status changes (or a minute or so has passed).
+    /// and reads the summary again until that status changes (or `maxPolls` reads have passed).
     public func check(_ row: MarketplaceRow) async {
         guard requestingCheck == nil, connecting == nil, let marketplace = row.marketplace,
               row.actions.contains(.check)
@@ -92,10 +129,10 @@ public final class MarketplacesModel {
         notice = nil
         let checking: MarketplaceRow
         do {
-            checking = try await MarketplaceRow(connection: service.requestCheck(
-                marketplace: marketplace,
-                idempotencyKey: UUID().uuidString,
-            ))
+            checking = try await MarketplaceRow(
+                connection: service.requestCheck(marketplace: marketplace, idempotencyKey: UUID().uuidString),
+                installationID: installationID,
+            )
         } catch {
             requestingCheck = nil
             notice = ConnectionNotice(tone: .failure, message: error.message)
@@ -104,6 +141,9 @@ public final class MarketplacesModel {
         }
         requestingCheck = nil
         replace(checking)
+        if checking.execution?.onPhone == true {
+            phoneWork?.runPhoneWork(.userAction)
+        }
         for _ in 0 ..< maxPolls {
             do {
                 try await sleep(pollInterval)
@@ -121,8 +161,32 @@ public final class MarketplacesModel {
         }
     }
 
+    /// Moves the row's automated steps to Listora's cloud, or back to this phone
+    /// (docs/features/phone-execution.md); work waiting for the phone moves with them.
+    public func move(_ row: MarketplaceRow, toPhone: Bool) async {
+        guard moving == nil, let marketplace = row.marketplace else { return }
+        moving = row.id
+        defer { moving = nil }
+        do {
+            let moved = try await service.setExecution(
+                marketplace: marketplace,
+                location: toPhone ? .phone : .cloud,
+            )
+            replace(MarketplaceRow(connection: moved, installationID: installationID))
+            notice = ConnectionNotice(
+                tone: .success,
+                message: toPhone ? "\(row.name) runs on this iPhone now." : "\(row.name) runs in Listora's cloud now.",
+            )
+            if toPhone {
+                phoneWork?.runPhoneWork(.userAction)
+            }
+        } catch {
+            notice = ConnectionNotice(tone: .failure, message: error.message)
+        }
+    }
+
     private func apply(_ summary: Components.Schemas.ConnectionHealthSummary) {
-        rows = summary.connections.map(MarketplaceRow.init(connection:))
+        rows = summary.connections.map { MarketplaceRow(connection: $0, installationID: installationID) }
         attention = summary.banner.flatMap { banner in
             summary.needsAttention ? AttentionBanner(banner: banner, count: summary.attention.count) : nil
         }
@@ -252,13 +316,30 @@ public struct AttentionBanner: Equatable, Sendable {
     }
 }
 
+/// The marketplaces' health in one line (``MarketplacesModel/healthLine``).
+public struct HealthLine: Equatable, Sendable {
+    public let text: String
+    /// True when the seller has to act on a connection.
+    public let needsAttention: Bool
+}
+
 /// Sale email forwarding, as the server describes it.
 public struct SaleForwardingRow: Equatable, Sendable {
     public let statusLabel: String
     public let statusDetail: String?
+    /// The server's tone: `success` only once a marketplace email passed Listora's checks.
+    public let tone: StatusTone
 
     init(_ forwarding: Components.Schemas.SaleForwarding) {
         statusLabel = forwarding.statusDisplay.label
         statusDetail = forwarding.statusDisplay.detail
+        tone = switch forwarding.statusDisplay.tone.value1 {
+        case .success: .success
+        case .inProgress: .inProgress
+        case .checking: .checking
+        case .failed: .failed
+        case .actionNeeded: .actionNeeded
+        case .neutral, nil: .neutral
+        }
     }
 }

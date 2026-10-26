@@ -15,16 +15,20 @@
     "@listora/analysis": "*",
     "@listora/auto-delist": "*",
     "@listora/automation": "*",
+    "@listora/batches": "*",
     "@listora/connections": "*",
     "@listora/db": "*",
+    "@listora/email-sales": "*",
     "@listora/marketplaces": "*",
     "@listora/observability": "*",
     "@listora/operations": "*",
     "@listora/photos": "*",
     "@listora/push": "*",
+    "@listora/retention": "*",
     "@listora/sales": "*",
     "@listora/shared": "*",
-    "@listora/storage": "*"
+    "@listora/storage": "*",
+    "@listora/today": "*"
   },
   "devDependencies": {
     "@listora/testing": "*",

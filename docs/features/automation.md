@@ -1,7 +1,7 @@
 # Browser automation (decision D1)
 
-How Listora acts on marketplaces without an API (Poshmark, Mercari, and Depop until its partner
-API is granted). `@listora/automation` holds the browser runner and everything around it; the
+How Listora acts on marketplaces without an API it can use (Poshmark, Mercari, Depop until its
+partner API is granted, and eBay until Listora's eBay developer keys exist). `@listora/automation` holds the browser runner and everything around it; the
 session vault is in `@listora/connections` ([connections.md](connections.md)), next to the
 token vault it seals with. The assisted adapters that serve these marketplaces until a seller
 links a session, and whenever automation must stop, are in
@@ -9,23 +9,32 @@ links a session, and whenever automation must stop, are in
 
 **Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
 only". The marketplaces granted the product owner permission to automate where no API exists,
-Listora is for the product owner's personal use, and everything runs in the cloud. So
-Poshmark, Mercari, and Depop (until its partner API is granted) use cloud browser automation:
-the headless-Chromium browser runner (`browserRunner` in `infra/src/config.ts`) acts on
-sessions the user logs into from the iPhone app.
+Listora is for the product owner's personal use. eBay granted the same permission for the
+product owner's own account. So Poshmark, Mercari, Depop (until its partner API is granted), and
+eBay (until its API is connected) use browser automation on sessions the user logs into from the
+iPhone app.
+
+**Where it runs, 2026-10-25.** Depop blocks the cloud runner's address, Mercari shows it a bot
+check, and Poshmark serves it pages without their data, so the automated steps of Poshmark,
+Mercari, and Depop run in the iPhone app by default, in the seller's own session on their own
+device ([phone-execution.md](phone-execution.md)). The app runs the same scripts as the
+headless-Chromium browser runner (`browserRunner` in `infra/src/config.ts`), which still runs
+eBay automation and any connection moved back to the cloud.
 
 - Session cookies are stored encrypted with the token key, by the same envelope encryption as
   OAuth tokens. Passwords never are.
-- Actions are human-paced, within per-seller rate limits.
+- Actions are human-paced, within per-seller rate limits, wherever they run.
 - The runner never solves or bypasses a CAPTCHA or bot check: it stops and falls back to an
-  assisted task.
+  assisted task. On the phone the check is shown to the seller to complete themselves.
 - Every action is still confirmed by read-back ([operations.md](operations.md)), never reported
   as a false success.
 
-The runner, the `automation` mode, the session vault, sale-check scheduling, and the Poshmark,
-Mercari, and Depop automation adapters ([poshmark.md](poshmark.md), [mercari.md](mercari.md),
-[depop-automation.md](depop-automation.md)) are built. The app's linking screen is its own task. [costs.md](costs.md#browser-automation) sizes
-and prices the runner.
+The runner, the `automation` mode, the session vault, sale-check scheduling, the Poshmark,
+Mercari, Depop, and eBay automation adapters ([poshmark.md](poshmark.md), [mercari.md](mercari.md),
+[depop-automation.md](depop-automation.md), [ebay-automation.md](ebay-automation.md)), and linking
+from the app
+([marketplace-linking.md](marketplace-linking.md)) are built.
+[costs.md](costs.md#browser-automation) sizes and prices the runner.
 
 ## How it works
 
@@ -37,8 +46,19 @@ and prices the runner.
   `read` runs a script that may not mutate (form input refuses). A failed run leaves one
   screenshot of the viewport with every form field and the profile's private elements blacked
   out, in private storage under `automation/<account>/`, deleted after 14 days or with the
-  account. The browser is honest about what it is: Playwright's own headless Chromium and user
-  agent, no stealth, no fingerprint changes.
+  account; a page off the marketplace's origins is never kept. The browser is honest about what
+  it is: Playwright's own headless Chromium and user agent, no stealth, no fingerprint changes.
+- **Network rules** (`safety/network.ts`). The runner checks every request and WebSocket before
+  Chromium sends it. The main frame may only load the profile's own origins. No request may go
+  to a private address: loopback, the private ranges, link-local (where the cloud's metadata
+  and task credential endpoints are), or internal host names. Images, scripts, and styles from
+  other public hosts (the marketplaces' CDNs) still load. Chromium follows HTTP redirects
+  without asking, so a redirect hop is not checked. If a redirect sends the main frame
+  elsewhere, the page inspection below stops the run. A run that stops logs its session's
+  network, by origin only (`NetworkLog`, `runner/network-log.ts`): the requests these rules
+  refused, the responses with an error status, and the requests that failed. So a page that
+  broke because of Listora's rules can be told apart from one the marketplace answered with
+  errors.
 - **Safety rules** (`safety/`, `profiles.ts`). Pacing: a random delay before every action and
   keystroke, and between a seller's sessions, per marketplace (`AUTOMATION_<MARKETPLACE>_*`),
   never below the floors in `profiles.ts`. Rate limits: runs per hour and per day per seller,
@@ -75,18 +95,28 @@ and prices the runner.
   on the fake Depop site with `FAKE_DEPOP_SITE_URL`, for sellers whose Depop connection is a
   browser session; one that uses Depop's API gets the API adapter. With only
   `FAKE_AUTOMATION_SITE_URL` set, development drives the fake site instead.
+- **eBay** (`ebay/`, [ebay-automation.md](ebay-automation.md)) is automated on ebay.com, or on the
+  fake eBay site with `FAKE_EBAY_SITE_URL`, for sellers whose eBay connection is a browser
+  session; one that uses eBay's API gets the API adapter, and both address the same listings by
+  item number and SKU. With only `FAKE_AUTOMATION_SITE_URL` set, development drives the fake site
+  instead.
 - **Routing.** The automation adapters join the marketplace adapters
   (`createMarketplaceAdapters`, its `automation` setting): a marketplace's
   `ConnectionAwareAdapter` serves its automation adapter under an `automation` connection whose
-  session works (`connected` or `degraded`), and its assisted adapter otherwise
-  ([marketplaces.md](marketplaces.md#adapter-model)). The worker and the runner build the same
+  session works (`connected` or `degraded`), its API adapter (eBay, Depop) under an `api`
+  connection, and its assisted adapter otherwise ([marketplaces.md](marketplaces.md#adapter-model)).
+  The API's routes build no automation adapters, so they report an automation connection's steps
+  as assisted; only the API's phone runs build them (`phoneWorkAdapters`,
+  [phone-execution.md](phone-execution.md)). The worker and the runner build the same
   automation adapters (the worker's have no browser), so both route each operation to the same
   mode.
-- **Where it runs.** Automated steps need a browser, which only the runner has. The worker hands
-  such a step to the runner's task on the same listing queue ([operations.md](operations.md))
+- **Where it runs.** Automated steps need a browser: the runner's, or the iPhone app's for a
+  connection that runs on the phone, whose steps wait in `phone_work` for the app instead
+  ([phone-execution.md](phone-execution.md)). The worker hands a runner step to the runner's task
+  on the same listing queue ([operations.md](operations.md))
   and starts the runner (`launcher.ts`): locally as a child process, in AWS by setting the
   runner's ECS service to one task. A runner holds a Postgres session named
-  `listora-browser-runner:<id>`, takes only automated steps and sale checks, one at a time, and
+  `listora-browser-runner:<id>`, takes only automated steps, sale checks, and session checks (`RUNNER_TASKS`), one at a time, and
   exits after `RUNNER_IDLE_EXIT_SECONDS` with nothing to do, scaling its service back to zero.
   The worker's `automation_dispatch` task runs every minute: it queues due sale checks, starts
   the runner when its work waits and none is alive, and prunes old run records and
@@ -102,23 +132,30 @@ and prices the runner.
   the worker's adapters include the API adapters. The next check is due when the expected sales since now reach what an average
   default interval holds (`interval.ts`): every 12 hours by default, sooner over the hours and
   days the seller's sales on that marketplace usually happen and while items are hot, later when
-  idle, within `SALE_CHECK_MIN_HOURS` and `SALE_CHECK_MAX_HOURS`. A forwarded sale email asks for
-  a check at once (`requestSaleCheck`). A check that met a check waits for the relink. A
+  idle, within `SALE_CHECK_MIN_HOURS` and `SALE_CHECK_MAX_HOURS`. A forwarded sale email that
+  Listora could not act on (an unknown format, an ambiguous or no match) asks for a check at
+  once (`requestSaleCheck`, [email-sales.md](email-sales.md)). A check that met a check waits for the relink. A
   marketplace whose adapter reads no orders yet is checked at the longest interval, without
   starting the runner.
-- **Linking** (`linkAutomationSession`) stores the cookies the app captured (on the
-  marketplace's domains only), revives the connection, moves the marketplace's unconnected
-  listings to it, and makes a first sale check due at once; relinking takes the same way.
+- **Linking** (`linkAutomationSession`, called by the API's `linkMarketplaceSession`) stores the
+  cookies the app captured (on the marketplace's domains only), revives the connection, moves the
+  marketplace's unconnected listings to it, asks for a read-only **session check**
+  (`session-checks/`) where the connection runs (the runner, or the phone that linked it), and makes a first sale check due at once; relinking takes the same way.
+  The app shows a marketplace as linked only after its session check passed, on Link accounts and
+  Marketplaces alike. The flow, from the app's sign-in web view to the check, is in
+  [marketplace-linking.md](marketplace-linking.md).
 - **Hosting.** The runner is the compute stack's `runner` service, from the Dockerfile's
   `runner` stage (the application's files on top of headless Chromium, its own ECR repository),
-  with no task while idle and never two at once ([infra.md](infra.md)).
+  with no task while idle and never two at once ([infra.md](infra.md)). A session the runner's
+  browser cannot open (Chromium did not start) ends as `browser_unavailable`: a failure on
+  Listora's side, never reported as the marketplace's answer.
 
 ## Local development
 
 `scripts/dev-browser.sh` installs the headless Chromium build Playwright pins into
 `.local/playwright`. Set `FAKE_AUTOMATION_SITE_URL` and start `npm run dev:fake-site`: Poshmark,
-Mercari, and Depop connections that hold a linked session are then automated against that local
-site. The worker starts the runner as a child process whenever automated work waits
+Mercari, Depop, and eBay connections that hold a linked session are then automated against that
+local site. The worker starts the runner as a child process whenever automated work waits
 (`BROWSER_RUNNER_LAUNCH=process`, the local default), or run it by hand with
 `npm run dev:runner` (`none`). The runner needs the token vault's key (`TOKEN_ENCRYPTION_KEY`
 locally), because every session it opens is sealed.
@@ -135,8 +172,10 @@ never skips them.
 | `FAKE_POSHMARK_URL`                          | The Poshmark adapter drives the fake Poshmark instead of poshmark.com   |
 | `FAKE_MERCARI_SITE_URL`                      | The Mercari adapter drives the fake Mercari site instead of mercari.com |
 | `FAKE_DEPOP_SITE_URL`                        | The Depop adapter drives the fake Depop site instead of depop.com       |
+| `FAKE_EBAY_SITE_URL`                         | The eBay adapter drives the fake eBay site instead of ebay.com          |
 | `AUTOMATION_STEP_TIMEOUT_MS`, `_CALL_`       | One script step's timeout, and one automated call's                     |
 | `AUTOMATION_<MARKETPLACE>_*`                 | Pacing, the pause between sessions, and the per-seller rate limits      |
+| `AUTOMATION_<MARKETPLACE>_RUNS_ON`           | Where new connections' steps run: `phone` or `cloud`                    |
 | `SALE_CHECK_DEFAULT_HOURS`, `_MIN_`, `_MAX_` | The sale-check interval without history, and the adapted one's bounds   |
 | `BROWSER_RUNNER_LAUNCH`, `BROWSER_RUNNER_*`  | How the worker starts the runner (`process`, `ecs`, or `none`)          |
 | `RUNNER_IDLE_EXIT_SECONDS`                   | How long the runner stays up with nothing to do                         |
@@ -150,11 +189,13 @@ never skips them.
   `degraded`: one waiting for a relink holds none, so nothing retries around a check (a
   database constraint). `credential_version` is bumped by every session write (link, rotation,
   relink), so a runner holding an older session never overwrites a newer one.
-- **`automation_run`**: one browser session the runner opened, for an operation step, a sale
-  check, or a health check: the script, its outcome, the check it met (`challenge_kind`), the
+- **`automation_run`**: one browser session the runner or the phone opened (`host`), for an
+  operation step, a sale check, or a health check: the script, its outcome, the check it met (`challenge_kind`), the
   failed step, an error code, and the key of its redacted screenshot (deleted with the
-  account). It is the per-seller rate limits' count, and the record of what automation did and
+  account, or with the connection when the seller unlinks it, [privacy.md](privacy.md)). It is the per-seller rate limits' count, and the record of what automation did and
   where it stopped.
 - **`sale_check_schedule`**: when each automation connection is next checked for sales and why
   (`scheduled`, `email`, `retry`, or `linked`), the last check's time and outcome, and the
   newest order time it has seen.
+- **`session_check`**: whether the newest session linked on each automation connection works:
+  pending, passed, or failed with a reason ([marketplace-linking.md](marketplace-linking.md)).

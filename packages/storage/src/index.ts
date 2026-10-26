@@ -9,6 +9,8 @@ export {
 export type { StorageConfig } from './config.ts';
 export { LOCAL_STORAGE_ROUTE_PREFIX, LocalDiskStorage } from './local.ts';
 export type { LocalDiskStorageOptions, LocalUploadRequest, LocalUploadResult } from './local.ts';
+export { purgeObjects } from './purge.ts';
+export type { ObjectsToPurge, PurgeResult } from './purge.ts';
 export { createS3Client, S3Storage } from './s3.ts';
 export type { S3ClientSettings, S3StorageOptions } from './s3.ts';
 export {
@@ -16,6 +18,7 @@ export {
   CHECKSUM_SHA256_HEADER,
   isPublicKey,
   isStorageKey,
+  MAX_LIST_KEYS,
   MAX_STORAGE_KEY_LENGTH,
   PUBLIC_KEY_PREFIX,
   STORAGE_DRIVERS,

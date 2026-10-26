@@ -65,7 +65,17 @@ official OAuth 2.0 authorization code grant; Listora never sees a marketplace pa
   deletes the tokens; a notice older than the current grant changes nothing. eBay's notice
   arrives at `/webhooks/ebay`, which verifies it and records it at once
   ([ebay-notifications.md](ebay-notifications.md)). Account deletion revokes grants through the
-  marketplace's revocation endpoint (`OAuthGrantRevoker`).
+  marketplace's revocation endpoint (`OAuthGrantRevoker`). A connection still revoked 30 days
+  later, never reconnected, has the rest of its data deleted as if it were unlinked
+  ([privacy.md](privacy.md)).
+- **Unlinking.** `disconnectConnection` (`DELETE /v1/connections/{marketplace}`) deletes the
+  connection and the marketplace data that came through it at once (`startConnectionDeletion`
+  in `deletion.ts`: the tokens or session, the marketplace's user id and name, its automation
+  runs, session checks, and sale-check schedule, its listings' read-backs, and marketplace events
+  about the seller) and answers with the marketplace `not_connected`; `404` when none is linked.
+  Items, listings, and sales stay. The `connection_deletion` job then revokes an OAuth grant
+  through the marketplace's revocation endpoint (for up to 7 days), deletes the runs'
+  screenshots, checks, and records the deletion ([privacy.md](privacy.md)).
 
 ## Health dashboard
 
@@ -80,8 +90,9 @@ thing.
   when its grant ends within 30 days ("Reconnect within N days"), or while Listora cannot reach
   the marketplace (`degraded`: "Connection problem"). What only the seller can fix comes first,
   and the banner is `action_needed` unless every entry is a problem Listora keeps checking. Sale
-  email forwarding is "Set up when you add a domain" until Listora has an inbound email domain
-  (email ingest, T-23).
+  email forwarding (`saleForwarding`) is "Set up when you add a domain" until Listora has an
+  inbound email domain, and then the account's own forwarding status
+  ([email-sales.md](email-sales.md)).
 - **Statuses in plain words.** API connections show Connected, Reconnect needed, Access removed,
   or Connection problem; an assisted marketplace with no linked account shows Not linked, and its
   card says it works in assisted mode. The card also shows the mode (API, Automation, Assisted)
@@ -100,14 +111,28 @@ thing.
   ([push.md](push.md)). A connection that is already broken never sends it again; reconnecting
   and breaking anew does. A grant that ran out is recorded by the daily check without asking the
   marketplace, so it notifies too.
-- **Automation sessions** (decision D1, [automation.md](automation.md)) join the same model when
-  the session vault lands: a session the marketplace rejects is a connection that needs relinking,
-  shown and notified like `reauth_required`. Until then Poshmark, Mercari, and Depop show Not
-  linked.
+- **Automation sessions** (decision D1, [automation.md](automation.md)). An `automation`
+  connection is shown as its linked session's check says (`describeAutomationSession`,
+  session-status.ts), the same description Link accounts renders
+  ([marketplace-linking.md](marketplace-linking.md)), so the two screens never disagree: Checking...,
+  Linked (only after the session check passed, on the runner or the phone; `lastOkAt` is that
+  check, or a later run whose refreshed cookies the marketplace sent), Not confirmed (the check failed or did not finish
+  within 15 minutes; attention `not_confirmed`, action `check`), or Sign in again (the marketplace
+  rejected the session, shown and notified like `reauth_required`). A connection that runs on the
+  phone carries its `execution` (where it runs and what waits there) and says Checking on your
+  iPhone... while its check waits for the phone, or Link on your iPhone while no phone holds its
+  session; it asks to sign in again only when the phone's own check found the session signed out
+  ([phone-execution.md](phone-execution.md#where-a-marketplace-runs)). Retry check on an automation
+  connection checks the stored session again (`requestSessionRecheck`) instead of queueing the
+  API health check. Without a linked session, Poshmark, Mercari, Depop, and eBay (without its API
+  keys) show Not linked.
 - **In the app** (`MarketplacesFeature`): one card per marketplace with its mode, status, detail,
-  last successful check, and actions (Connect, Reconnect, Retry check; the main one filled); a
+  last successful check, where it runs (with Run on this iPhone, or Run in the cloud where the
+  server allows the cloud, else why not: [phone-execution.md](phone-execution.md)), and actions
+  (Connect, Reconnect, Retry check; the main one filled); a
   Sale emails card; and `ConnectionAttentionBanner`, which Inventory shows above the list while
-  anything needs attention and which opens Marketplaces in Settings. The Settings tab gets a badge.
+  anything needs attention and which opens Marketplaces in Settings. The Settings gear in the
+  Today and Sales headers gets a dot.
 
 ## Data
 
@@ -115,7 +140,8 @@ thing.
   tokens, or the browser session of an `automation` connection, with its `credential_version`;
   [automation.md](automation.md#data)), expiries, scopes, status, when the grant was issued
   (or the session linked), `last_ok_at`, `last_checked_at`, `check_requested_at` (a pending
-  Retry check), and the latest problem's code, message, and time; `orders_polled_through`, the
+  Retry check), and the latest problem's code, message, and time; `runs_on` and
+  `phone_device_id`, where its automated steps run ([phone-execution.md](phone-execution.md#data)); `orders_polled_through`, the
   eBay order poll's mark ([ebay-notifications.md](ebay-notifications.md)); a revoked connection
   holds no tokens; at most one per account and marketplace, which
   connecting keeps under the account's row lock) and `connection_authorization` (one connect

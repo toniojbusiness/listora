@@ -1,14 +1,34 @@
 import {
+  cloudAccess,
+  requestSessionRecheck,
+  setExecutionLocation,
+  type AutomatedMarketplace,
+  type AutomationProfile,
+} from '@listora/automation';
+import {
   accountConnections,
+  accountExecutionState,
+  accountSessionChecks,
   completeAuthorization,
   CONNECTION_CHECK_TASK,
   findAuthorization,
   requestHealthCheck,
   startAuthorization,
+  startConnectionDeletion,
   type CompleteAuthorizationDependencies,
+  type ConnectionRow,
+  type ExecutionState,
+  type SessionCheckState,
   type TokenSealer,
 } from '@listora/connections';
-import { addJob, MARKETPLACES, type Marketplace } from '@listora/db';
+import {
+  addJob,
+  inTransaction,
+  MARKETPLACES,
+  type DbExecutor,
+  type Marketplace,
+} from '@listora/db';
+import { findSaleEmailInbox, inboundDomainOf } from '@listora/email-sales';
 import {
   isMarketplace,
   MARKETPLACE_NAMES,
@@ -20,6 +40,8 @@ import type { FastifyInstance } from 'fastify';
 import { operationSpec } from '../contract/contract.ts';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { ApiError } from '../errors.ts';
+import type { SaleEmailsDependencies } from '../sale-emails/routes.ts';
+import { saleForwardingView } from '../sale-emails/views.ts';
 import {
   APP_CALLBACK_SCHEME,
   authorizationView,
@@ -43,14 +65,20 @@ export interface ConnectionsDependencies {
 
 export interface ConnectionRouteDependencies extends RouteDependencies, ConnectionsDependencies {
   now: () => Date;
+  /** Each automated marketplace's profile: whether it may run in Listora's cloud. */
+  marketplaceSessions: { profiles: Readonly<Record<AutomatedMarketplace, AutomationProfile>> };
+  /** Sale email forwarding, which the health summary reports on. */
+  saleEmails: SaleEmailsDependencies;
 }
 
 /**
  * Marketplace connections: `listConnections`, `getConnection`, the health summary
- * `getConnectionHealth`, `requestConnectionCheck` (Retry check), `startConnectionAuthorization`,
+ * `getConnectionHealth`, `requestConnectionCheck` (Retry check), `disconnectConnection` (unlink),
+ * `startConnectionAuthorization`,
  * `getConnectionAuthorization`, and the marketplace's OAuth redirect,
  * `handleConnectionCallback` (docs/features/connections.md; the flow is in
- * `@listora/connections`).
+ * `@listora/connections`). An automation connection is shown as its linked session's check says
+ * (`describeAutomationSession`), the same way Link accounts shows it.
  */
 export function registerConnectionRoutes(
   app: FastifyInstance,
@@ -58,11 +86,24 @@ export function registerConnectionRoutes(
 ): void {
   const canConnect = (marketplace: Marketplace): boolean =>
     deps.oauth[marketplace] !== undefined && deps.sealer !== undefined;
-  const context = () => ({ adapters: deps.adapters, canConnect, now: deps.now() });
+  const cloudAccessOf = (marketplace: Marketplace) =>
+    cloudAccess(deps.marketplaceSessions.profiles, marketplace);
+  const context = (
+    state: { sessionChecks: ReadonlyMap<string, SessionCheckState>; execution: ExecutionState },
+    now = deps.now(),
+  ) => ({
+    adapters: deps.adapters,
+    canConnect,
+    sessionChecks: state.sessionChecks,
+    execution: state.execution,
+    cloudAccess: cloudAccessOf,
+    now,
+  });
 
   contractRoute(app, deps, 'listConnections', async ({ tenant, db }) => {
-    const connections = await accountConnections(db, tenant.accountId);
-    const viewContext = context();
+    const state = await accountState(db, tenant.accountId);
+    const { connections } = state;
+    const viewContext = context(state);
     return {
       status: 200,
       body: {
@@ -74,29 +115,108 @@ export function registerConnectionRoutes(
   });
 
   contractRoute(app, deps, 'getConnection', async ({ tenant, db, params }) => {
-    const connections = await accountConnections(db, tenant.accountId);
+    const state = await accountState(db, tenant.accountId);
     return {
       status: 200,
-      body: connectionView(params.marketplace, connections.get(params.marketplace), context()),
+      body: connectionView(
+        params.marketplace,
+        state.connections.get(params.marketplace),
+        context(state),
+      ),
+    };
+  });
+
+  const inboundDomain = inboundDomainOf(deps.saleEmails.ingest);
+
+  /**
+   * Unlinking: deletes the connection and the marketplace data that came through it at once
+   * (`startConnectionDeletion`), and leaves the job that asks the marketplace to revoke the
+   * grant, deletes the connection's screenshots, and records the checked deletion
+   * (docs/features/privacy.md). Listings stay on the marketplace.
+   */
+  contractRoute(app, deps, 'disconnectConnection', async ({ tenant, db, params, request }) => {
+    const connection = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
+    const started =
+      connection === undefined
+        ? undefined
+        : await inTransaction(db, (trx) =>
+            startConnectionDeletion(trx, {
+              accountId: tenant.accountId,
+              connectionId: connection.id,
+              reason: 'unlinked',
+            }),
+          );
+    if (started === undefined) {
+      throw new ApiError(
+        'not_found',
+        `No ${MARKETPLACE_NAMES[params.marketplace]} account is linked to Listora.`,
+      );
+    }
+    request.log.info(
+      {
+        connectionDeletionId: started.deletionId,
+        marketplace: params.marketplace,
+        listings: started.deleted.listings,
+        inboundEvents: started.deleted.inboundEvents,
+        automationRuns: started.deleted.automationRuns,
+        revokeGrant: started.deleted.grantCiphertext !== null,
+      },
+      'marketplace connection unlinked; its data was deleted',
+    );
+    const state = await accountState(db, tenant.accountId);
+    return {
+      status: 200,
+      body: connectionView(params.marketplace, undefined, context(state)),
     };
   });
 
   contractRoute(app, deps, 'getConnectionHealth', async ({ tenant, db }) => {
-    const connections = await accountConnections(db, tenant.accountId);
-    return { status: 200, body: connectionHealthView(connections, context()) };
+    const state = await accountState(db, tenant.accountId);
+    const inbox = await findSaleEmailInbox(db, tenant.accountId);
+    return {
+      status: 200,
+      body: {
+        ...connectionHealthView(state.connections, context(state)),
+        saleForwarding: saleForwardingView(inbox, inboundDomain),
+      },
+    };
   });
 
   // The worker checks with the settings the API connects with, so `canConnect` decides both.
+  // An automation connection's check is the browser runner's session check instead.
   contractRoute(app, deps, 'requestConnectionCheck', async ({ tenant, db, params }) => {
     const name = MARKETPLACE_NAMES[params.marketplace];
+    const now = deps.now();
+    const linked = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
+    if (linked?.mode === 'automation') {
+      const requested = await requestSessionRecheck(
+        db,
+        { accountId: tenant.accountId, connectionId: linked.id },
+        now,
+      );
+      if (!requested) {
+        throw new ApiError(
+          'invalid_state_transition',
+          `Listora has no ${name} sign-in to check. Link ${name} again.`,
+        );
+      }
+      const state = await accountState(db, tenant.accountId);
+      return {
+        status: 202,
+        body: connectionView(
+          params.marketplace,
+          state.connections.get(params.marketplace),
+          context(state, now),
+        ),
+      };
+    }
     if (!canConnect(params.marketplace)) {
       throw new ApiError(
         'marketplace_action_unavailable',
         `Listora can't check ${name} connections yet.`,
       );
     }
-    const connection = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
-    const now = deps.now();
+    const connection = linked;
     if (connection === undefined || !(await requestHealthCheck(db, connection.id, now))) {
       throw new ApiError(
         'invalid_state_transition',
@@ -110,10 +230,44 @@ export function registerConnectionRoutes(
       payload: { connectionId: connection.id },
       jobKey: `connection_check:${connection.id}`,
     });
-    const checked = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
+    const state = await accountState(db, tenant.accountId);
     return {
       status: 202,
-      body: connectionView(params.marketplace, checked, { ...context(), now }),
+      body: connectionView(
+        params.marketplace,
+        state.connections.get(params.marketplace),
+        context(state, now),
+      ),
+    };
+  });
+
+  // Where the connection's automated steps run: the cloud runner, or the phone that linked it.
+  contractRoute(app, deps, 'setConnectionExecution', async ({ tenant, db, params, body }) => {
+    const name = MARKETPLACE_NAMES[params.marketplace];
+    const linked = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
+    if (linked?.mode !== 'automation') {
+      throw new ApiError(
+        'invalid_state_transition',
+        `${name} isn't linked by signing in, so there is nothing to run on your iPhone.`,
+      );
+    }
+    const cloud = cloudAccessOf(params.marketplace);
+    if (body.location === 'cloud' && !cloud.allowed) {
+      throw new ApiError('marketplace_action_unavailable', `${cloud.reason}.`);
+    }
+    await setExecutionLocation(
+      db,
+      { accountId: tenant.accountId, connectionId: linked.id },
+      body.location,
+    );
+    const state = await accountState(db, tenant.accountId);
+    return {
+      status: 200,
+      body: connectionView(
+        params.marketplace,
+        state.connections.get(params.marketplace),
+        context(state),
+      ),
     };
   });
 
@@ -172,10 +326,10 @@ export function registerConnectionRoutes(
       const now = deps.now();
       let connection;
       if (row.status === 'completed' && row.connection_id !== null) {
-        const connections = await accountConnections(db, tenant.accountId);
-        const found = connections.get(params.marketplace);
+        const state = await accountState(db, tenant.accountId);
+        const found = state.connections.get(params.marketplace);
         if (found?.id === row.connection_id) {
-          connection = connectionView(params.marketplace, found, context());
+          connection = connectionView(params.marketplace, found, context(state, now));
         }
       }
       return {
@@ -190,6 +344,23 @@ export function registerConnectionRoutes(
   );
 
   registerCallback(app, deps);
+}
+
+/** The account's connections and their session checks, read together for the views. */
+async function accountState(
+  db: DbExecutor,
+  accountId: string,
+): Promise<{
+  connections: Map<Marketplace, ConnectionRow>;
+  sessionChecks: Map<string, SessionCheckState>;
+  execution: ExecutionState;
+}> {
+  const connections = await accountConnections(db, accountId);
+  return {
+    connections,
+    sessionChecks: await accountSessionChecks(db, accountId),
+    execution: await accountExecutionState(db, accountId),
+  };
 }
 
 /**

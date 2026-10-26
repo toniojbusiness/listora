@@ -24,21 +24,23 @@ The app talks to the backend only through the generated `ListoraAPI` Swift packa
 
 Run these from the repository root.
 
-| Command                 | What it does                                                         |
-| ----------------------- | -------------------------------------------------------------------- |
-| `make ios-generate`     | Generate `apps/ios/Listora.xcodeproj` from `project.yml`             |
-| `make ios-open`         | Generate the project and open it in Xcode                            |
-| `make ios-build`        | Build the app, Share Extension, and packages for the simulator       |
-| `make ios-test`         | Run package, unit, and UI tests on the simulator, in the local stack |
-| `make e2e-full`         | The full-stack suite (`FullStackUITests`; docs/features/e2e.md)      |
-| `make ios-lint`         | SwiftLint (strict) and the SwiftFormat check                         |
-| `make ios-format`       | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes       |
-| `make ios-clean`        | Delete the generated project and `.build/ios`                        |
-| `make ios-tag-fixtures` | Re-render the tag-reading test photos (see Tag reading)              |
-| `make ios-app-icon`     | Re-render the placeholder app icon (see App icon)                    |
-| `make ios-screenshots`  | Screenshot every screen in four variants (see Design)                |
-| `make ios-archive`      | Unsigned release archive; needs no Apple account (Releases)          |
-| `make ios-testflight`   | Signed release archive uploaded to TestFlight (Releases)             |
+| Command                   | What it does                                                                           |
+| ------------------------- | -------------------------------------------------------------------------------------- |
+| `make ios-generate`       | Generate `apps/ios/Listora.xcodeproj` from `project.yml`                               |
+| `make ios-open`           | Generate the project and open it in Xcode                                              |
+| `make ios-build`          | Build the app, Share Extension, and packages for the simulator                         |
+| `make ios-test`           | Run package, unit, and UI tests on the simulator, in the local stack                   |
+| `make e2e-full`           | The full-stack suite (`FullStackUITests`; docs/features/e2e.md)                        |
+| `make ios-lint`           | SwiftLint (strict) and the SwiftFormat check                                           |
+| `make ios-format`         | Rewrite Swift files with SwiftFormat and apply SwiftLint fixes                         |
+| `make ios-clean`          | Delete the generated project and `.build/ios`                                          |
+| `make ios-tag-fixtures`   | Re-render the tag-reading test photos (see Tag reading)                                |
+| `make ios-batch-fixtures` | Re-render the batch hauls and record their Vision signals (docs/features/batch.md)     |
+| `make ios-app-icon`       | Re-render the placeholder app icon (see App icon)                                      |
+| `make ios-screenshots`    | Screenshot every screen in four variants (see Design)                                  |
+| `make ios-archive`        | Unsigned release archive; needs no Apple account (Releases)                            |
+| `make ios-testflight`     | Signed release archive uploaded to TestFlight (Releases)                               |
+| `make ios-install-device` | Install and launch on your own iPhone with a free Apple ID (Installing on your iPhone) |
 
 `make ios-test` writes DerivedData, SwiftPM caches, and the result bundle
 (`.build/ios/Test.xcresult`) to `.build/ios` in this checkout, never to `~/Library`. To use a
@@ -69,24 +71,44 @@ Code lives in local Swift packages under `Packages/`. The app target only compos
 ```text
 Packages/
   Core/          Models and utilities with no UI: AppConfiguration, AppEnvironment, AppVersion,
-                 the TagReader protocol with its TagReading model, the listing URL parser
-                 (ListingURL, SharedContent), the vocabulary's display names (VocabularyName)
+                 the TagReader protocol with its TagReading model, the VoiceTranscriber
+                 protocol, the listing URL parser (ListingURL, SharedContent), the vocabulary's
+                 display names (VocabularyName)
   DesignSystem/  Palette (light and dark colors), Typography, Spacing, Radius, Elevation, Motion,
                  Haptics, and the shared components (docs/features/design.md)
   APIClient/     The generated ListoraAPI client over URLSession, the signed-in session (Keychain),
-                 APIFailure (the contract's error model), and the dev sign-in client
+                 APIFailure (the contract's error model), and the sign-in clients (dev, Cognito)
   Features/      One library per feature:
     AppFeature        Root tab shell and AppDependencies (composes the features)
+    TodayFeature      Today tab (the home): what needs the seller, the money summary, and the
+                      morning summary setting
     InventoryFeature  Inventory tab
     AddItemFeature    Add Item tab: guided capture, library import, drafts (GRDB), upload queue
     ReviewFeature     Analysis progress, confidence-first review, cost, price, and the saved item
     TasksFeature      Tasks tab
-    SettingsFeature   Settings tab, with the developer sign-in in Dev builds
+    SettingsFeature   Profile and settings (opened from the avatar in the Today and Sales
+                      headers): the profile (names, photo), help, the legal documents, signing
+                      out, deleting the account, and the hidden Diagnostics
+                      (docs/features/profile.md)
+    SignInFeature     The session and the screens that start it, the app's root while nobody is
+                      signed in: welcome with the email, then the code (an emailed code, or the
+                      developer sign-in in Dev builds)
     MarketplacesFeature  Marketplaces screen (from Settings): each marketplace's connection
                       health, connecting eBay through ASWebAuthenticationSession, Retry
                       check, and the connection banner Inventory shows
     TagReadingFeature On-device tag reading with Vision (VisionTagReader); no UI
+    VoiceInputFeature On-device speech to text for spoken corrections (AppleSpeechTranscriber,
+                      and ScriptedVoiceTranscriber for UI tests); no UI
+    PhotoSignalsFeature On-device grouping signals of batch photos with Vision
+                      (VisionPhotoSignalReader, implementing Core's PhotoSignalReader); no UI
     ShareLinkFeature  The Share Extension's screen (ShareLinkView, ShareLinkModel)
+    MarketplaceLinkingFeature  Settings > Link accounts: sign in on a marketplace's own page
+                      in a web view and hand Listora its session; Settings > Sale emails
+                      (docs/features/marketplace-linking.md)
+    PhoneExecutionFeature  The marketplace work Listora hands this phone: the runner, the
+                      phone runtime in off-screen web views (Resources/phone-runtime.js, built
+                      by `npm run phone:bundle`), handing a check to the seller, and the
+                      background tasks (docs/features/phone-execution.md)
 ```
 
 Dependency rules:
@@ -155,8 +177,10 @@ to **Listora** links it to an inventory item. The extension:
   ("Active (you confirmed)"), never "confirmed by <marketplace>". A failed link shows the
   server's message; a retryable one offers Try again with the same Idempotency-Key.
 - is signed in when the app is: the session (`AccessGrant`) is a keychain item in the App
-  Group's access group (`KeychainAccessGrantStorage.session(appGroup:)`), which both the app
-  and the extension use. A session an earlier build kept in the app's default group moves
+  Group's access group (`SESSION_KEYCHAIN_GROUP`, read as `AppConfiguration.sessionKeychainGroup`
+  by `KeychainAccessGrantStorage.session(accessGroup:)`), which both the app and the extension
+  use; personal device builds use a Keychain Sharing group instead
+  ([Installing on your iPhone](#installing-on-your-iphone)). A session an earlier build kept in the app's default group moves
   into the App Group on the first launch, and signing out removes it from both. The App Group (`APP_GROUP_IDENTIFIER` in `Config/Base.xcconfig`,
   `group.com.listora.app.dev` in Dev) is in both targets' entitlements. It is a placeholder
   until the Apple Developer account registers it (gate G-Apple); simulator builds need no team.
@@ -183,7 +207,7 @@ Xcode derives every smaller size from them:
 
 The Share Extension has no icon of its own; the share sheet shows the containing app's icon.
 
-The current icon is a placeholder: a price tag on the brand teal, drawn by
+The current icon is a placeholder: a price tag on teal (the first brand color), drawn by
 `Tools/generate-app-icon.swift`. To change it, edit that tool and run `make ios-app-icon`. To
 ship a real design, export the three PNGs above from the design file, replace the files (keep
 the names, or update `Contents.json`), delete the tool and the `ios-app-icon` target, and run
@@ -194,7 +218,8 @@ the names, or update `Contents.json`), delete the tool and the `ios-app-icon` ta
 The visual language (palette, type scale, spacing, motion, haptics, components) and the UI audit
 are in [docs/features/design.md](../../docs/features/design.md). `make ios-screenshots
 IOS_SIMULATOR='<name>'` runs `ScreenshotTourUITests`, which visits every screen against
-`StubAPIServer` and the fake camera, once each in light and dark mode at the default and the
+`StubAPIServer` and the fake camera (the review flow against the local stack, which the target
+starts, like `ios-test`), once each in light and dark mode at the default and the
 largest accessibility text size, and writes PNGs to `.build/ios/screenshots/<variant>/` (set
 `IOS_SCREENSHOT_DIR` to write elsewhere). It switches the simulator's appearance and text size
 and puts them back afterwards. `make ios-test` skips the tour, which runs only when the test
@@ -218,6 +243,16 @@ audit on the main screens as part of `make ios-test`.
   asks "Retake or keep?" for a blurry shot; the editor marks it.
 - **Editing.** The draft editor reorders (drag, or "Make cover"), removes, crops, and sets each
   photo's role. Cropping replaces the photo with a new one.
+- **Background cleanup.** "Clean background" on a photo (not a tag photo) lifts the item onto a
+  plain, light backdrop (#F7F7F5) on the phone, with no AI service (`BackgroundCleanup`): Vision's
+  foreground instance mask (the Photos app's subject lifting) finds the item, which keeps its
+  place and size in the frame. Like a crop, the cleaned image replaces the photo and uploads as a
+  new one, but the original stays on this iPhone (`draftPhoto.originalFileName`), so Undo puts it
+  back byte for byte, and uploads it again. A crop, or removing the photo, removes the original.
+  The simulator cannot run Vision's segmentation models ("Could not create inference context"),
+  so there `EdgeColorSubjectMasker`, a stand-in with no model, lifts what does not match the
+  colors along the photo's edge; devices always use Vision, which the simulator tests therefore
+  do not exercise (`BackgroundCleanupTests` has a device-only test for it).
 - **Drafts** live in a GRDB (SQLite) database with the photo files in Application Support
   (`DraftDatabase`; schema changes only through new migrations). A draft and its upload progress
   survive the app being closed.
@@ -238,6 +273,11 @@ audit on the main screens as part of `make ios-test`.
   for the upload, then opens it. When the item is saved, the draft leaves this iPhone (its server
   item stays: `DraftStore.completeDraft`).
 
+- **Batch mode.** The One item / Batch switch above the actions shoots or imports a whole haul,
+  splits it into items on the device, and makes each confirmed item a draft of its batch, which
+  the queue creates in the server batch and submits once uploaded. How it works is in
+  [docs/features/batch.md](../../docs/features/batch.md).
+
 - **Tag reading results.** A tag photo's screen shows what on-device reading found, as read:
   the text lines and barcodes, or that nothing was found or reading failed. The device never
   interprets them; the server does.
@@ -247,7 +287,9 @@ against `FakeListoraServer` through a `URLProtocol` stub, including resume after
 retries, and failures that stop. The UI tests import the photos in `ListoraUITests/Fixtures`
 through debug-only launch variables: `LISTORA_FIXTURE_PHOTOS=<folder>` makes "Import photos"
 add that folder's JPEGs, `LISTORA_FAKE_CAMERA=<folder>` makes the camera take them, and
-`LISTORA_RESET_LOCAL_DATA=1` starts with no drafts, signed out.
+`LISTORA_RESET_LOCAL_DATA=1` starts with no drafts, signed out (on the welcome screen). A test of
+the tabs that needs no server calls `signInWithoutServer()` (`SignedInLaunch.swift`): a dev
+session against an address nobody answers at.
 
 ### Testing against the API
 
@@ -262,6 +304,19 @@ variables, and the tests pass them to the app with the Dev-only launch variables
 `ReviewFlowUITests` takes a fixture item from a draft through review and price to a saved item
 with a SKU, then reads it back from the API. The stack's logs are in `.build/ios/e2e-logs`.
 
+Rules for UI tests that hold up on CI's slower, freshly erased simulator:
+
+- An `async` test checks its steps with `try require(...)` (`ListoraUITests/Require.swift`), not
+  `XCTAssert`: `continueAfterFailure = false` does not stop an `async` test, so one failed step
+  otherwise runs every later wait out to its timeout, up to the 5-minute allowance.
+- A system permission alert is tapped until it has closed. A tap while it is still animating in
+  is dropped on CI. A test that meets one resets that permission first (for example
+  `app.resetAuthorizationStatus(for: .photos)`), so a local run takes the same path as CI's
+  erased simulator.
+- Nothing animates forever with `repeatForever`. XCUITest waits up to a minute for the app to
+  be idle before each tap. A looping effect is drawn from a `TimelineView` (the skeleton
+  shimmer).
+
 To run those UI tests from Xcode, start the stack with
 `npm run e2e:stack -- --fake-ai-fixtures apps/ios/ListoraUITests/FakeAI`, which prints the
 `LISTORA_E2E_*` values, and set them in the test action's environment. Without them the tests
@@ -273,13 +328,36 @@ skip.
 saved inventory item, and `InteractionMeter` (in `Core`) measures each item's active time and
 taps. How they work is in [docs/features/review.md](../../docs/features/review.md).
 
-### Signing in (Dev)
+### Signing in
 
-Uploads need a session. Until the app signs in with Cognito (the API side is in
-[docs/features/auth.md](../../docs/features/auth.md)), Dev builds have a developer sign-in in Settings: enter an
-email, tap "Send code", and enter the code the API prints to its log (`AUTH_DRIVER=dev`). The
-session is kept in the Keychain. These `/dev/auth` endpoints are outside the OpenAPI contract,
-so `DevSignInClient` is the one place the app calls the API without the generated client.
+The app shows its tabs only while someone is signed in. Signed out, its root is the welcome
+screen (`SignInFlowView`, SignInFeature): the Listora name, a one-line value statement, and the
+email; Continue requests a code, and the code screen takes it typed, pasted (`PasteButton`), or
+autofilled (`.oneTimeCode`), signs in by itself when a whole code arrives at once, and offers a new
+code after a 30-second cooldown. A wrong or expired code, no connection, and an email that cannot
+sign in each have their own message ([docs/features/auth.md](../../docs/features/auth.md) has
+the drivers). `SignInModel` runs the steps and follows the session (`AccessTokenStore.changes()`,
+and an expiry check on returning to the app), so signing out in Settings, a `401` from the API, a
+refresh the user pool refuses, or a dev session that expires brings the welcome screen back,
+saying the session ended when the person did not sign out. Deleting the account (Settings) ends
+the session at once but keeps its result, with the marketplaces to revoke by hand, on screen until
+Settings closes (`signOutKeepingScreen()`). A screen that still finds itself
+signed out shows a Sign in button that does the same. `SignInUITests` drives it against
+`StubAPIServer`'s dev sign-in. The build picks how the code arrives:
+
+- **Dev builds** have the developer sign-in: enter an email, tap Continue, and enter the
+  code the API prints to its log (`AUTH_DRIVER=dev`). These `/dev/auth` endpoints are outside
+  the OpenAPI contract, so `DevSignInClient` calls the API without the generated client.
+- **Staging and Prod builds** sign in with the environment's Cognito user pool:
+  `CognitoSignInClient` (APIClient) calls Cognito's `InitiateAuth` (`USER_AUTH`, preferring
+  `EMAIL_OTP`), the pool emails the code, and `RespondToAuthChallenge` exchanges it for the
+  pool's tokens. The app client is public, so these calls need no AWS credentials. The session's
+  bearer token is the ID token, and `AccessTokenStore` renews it with the refresh token (one
+  refresh at a time, 5 minutes before it expires) for 30 days; the Share Extension renews it
+  the same way. Signing out revokes the refresh token. A build without `COGNITO_CLIENT_ID` says
+  on the welcome screen that it cannot sign in.
+
+The session is kept in the Keychain, in the App Group's access group (Share Extension).
 
 ## Environments
 
@@ -287,11 +365,11 @@ Each build configuration reads one xcconfig file in `Config/`, and `AppConfigura
 values from Info.plist at launch. A missing or invalid value stops the app at launch with an
 error that names the key.
 
-| Configuration     | xcconfig                  | `API_BASE_URL`                                                                           | Bundle id suffix |
-| ----------------- | ------------------------- | ---------------------------------------------------------------------------------------- | ---------------- |
-| `Dev-Debug`       | `Config/Dev.xcconfig`     | `http://127.0.0.1:3000` (local API)                                                      | `.dev`           |
-| `Staging-Release` | `Config/Staging.xcconfig` | placeholder `.invalid` host                                                              | `.staging`       |
-| `Prod-Release`    | `Config/Prod.xcconfig`    | the personal environment's `ApiUrl` (placeholder `.invalid` host until its first deploy) | none             |
+| Configuration     | xcconfig                  | `API_BASE_URL`                                              | Sign-in                            | Bundle id suffix |
+| ----------------- | ------------------------- | ----------------------------------------------------------- | ---------------------------------- | ---------------- |
+| `Dev-Debug`       | `Config/Dev.xcconfig`     | `http://127.0.0.1:3000` (local API)                         | the local API's dev driver         | `.dev`           |
+| `Staging-Release` | `Config/Staging.xcconfig` | placeholder `.invalid` host                                 | none until staging has a user pool | `.staging`       |
+| `Prod-Release`    | `Config/Prod.xcconfig`    | the personal environment's `ApiUrl` (its `execute-api` URL) | its user pool's iPhone app client  | none             |
 
 - Run and test use `Dev-Debug`; archive uses `Prod-Release`. The build type is part of each
   name because Xcode gives Swift packages debug settings only for configurations whose name
@@ -301,18 +379,76 @@ error that names the key.
 - Only the Dev Info.plists (the app's and the Share Extension's) carry the ATS local-networking
   exception (`NSAllowsLocalNetworking`). XcodeGen derives them from the shared plists, and
   `make ios-check-ats` (part of `make ios-test`) fails if Staging or Prod would ship it.
-- The Staging and Prod hosts end in `.invalid` and never resolve until they are set. Prod
-  points at the personal environment, which is production for now (there is no separate
-  Personal configuration): at that environment's first deploy, set its `API_BASE_URL` to the
-  compute stack's `ApiUrl` output: the HTTP API's `execute-api` URL until the environment has
-  a domain, then `https://api.<domain>`, so update it and ship a build when the domain is
-  added, before the `execute-api` URL is turned off
+- The Staging host ends in `.invalid` and never resolves until it is set. Prod points at the
+  personal environment, which is production for now (there is no separate Personal
+  configuration): its `API_BASE_URL` is the compute stack's `ApiUrl` output, the HTTP API's
+  `execute-api` URL until the environment has a domain, then `https://api.<domain>`, so update
+  it and ship a build when the domain is added, before the `execute-api` URL is turned off
   ([infra/README.md](../../infra/README.md#without-a-domain)). Staging's domain arrives
   with the staging AWS account (gate G-AWS, T-30).
+- Sign-in outside Dev needs `COGNITO_REGION` and `COGNITO_CLIENT_ID`, the user pool's region
+  and its iPhone app client (`Base.xcconfig` leaves both empty). `scripts/deploy-personal.sh`
+  prints Prod's with the API URL; set them in `Config/Prod.xcconfig` before the next TestFlight
+  build. An empty client id is a build that cannot sign in, not an error.
 - To point Dev at a different port or host (for example a LAN address for a physical device),
   copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` (gitignored) and set
   `API_BASE_URL` there.
 - No configuration value is a secret. Never put credentials in an xcconfig file.
+
+## Installing on your iPhone
+
+`make ios-install-device` builds the app for the iPhone connected to this Mac, signs it with the
+Apple ID signed in to Xcode, installs it, and launches it (`scripts/ios-install-device.sh`). A
+free Apple ID works: Xcode gives it a Personal Team, which needs no Apple Developer Program
+account. It builds `Prod-Release` by default, so the app talks to the personal environment and
+signs in with its user pool; `IOS_DEVICE_CONFIGURATION=Dev-Debug` builds Dev instead (Dev also
+needs a LAN `API_BASE_URL` in `Config/Local.xcconfig`).
+
+The signing values live in `Config/Device.xcconfig` (gitignored). The command passes
+`Config/PersonalTeam.xcconfig`, which includes it, to `xcodebuild -xcconfig`, so its values
+override the configuration's without changing the committed Dev, Staging, or Prod settings that
+the paid account will use:
+
+- `DEVELOPMENT_TEAM`: the Personal Team's 10-character id.
+- `BASE_BUNDLE_IDENTIFIER`: a bundle id prefix of your own, such as `com.yourname.listora`. A
+  free team cannot register an id another team owns, and `com.listora.app` is kept for the paid
+  account. The Share Extension's id (the app's plus `.share`) follows it.
+
+A Personal Team cannot register App Groups (Xcode makes its provisioning profiles with an empty
+App Group list), so `PersonalTeam.xcconfig` also swaps the App Group entitlement for a Keychain
+Sharing group of the team, `<team id>.<prefix>.session` (`Config/PersonalTeam.entitlements`),
+and keeps the session there (`SESSION_KEYCHAIN_GROUP`). The app and the Share Extension still
+share the signed-in session. Nothing in Staging or Prod needs the App Group itself; only Dev's
+launch overrides (`DevOverrides`) do, so a personal Dev build ignores `LISTORA_DEV_API_BASE_URL`.
+
+One-time setup:
+
+1. In Xcode > Settings > Accounts, click +, choose Apple ID, and sign in.
+2. Copy `Config/Device.xcconfig.example` to `Config/Device.xcconfig` and set both values. With
+   `DEVELOPMENT_TEAM` empty, the command prints the team id of each signing certificate on this
+   Mac. Xcode does not show the id, and signing in makes no certificate, so make one first: in
+   Xcode > Settings > Accounts, select the Personal Team, click Manage Certificates, click +,
+   and choose Apple Development.
+3. Connect the iPhone with a cable, unlock it, and tap Trust.
+4. On the iPhone, turn on Settings > Privacy & Security > Developer Mode, restart it, and tap
+   Turn On.
+5. Run `make ios-install-device`. The first build registers the bundle ids and the iPhone with
+   the team (`-allowProvisioningUpdates`). If the iPhone then says "Untrusted
+   Developer", open Settings > General > VPN & Device Management, tap your Apple ID under
+   Developer App, tap Trust, and run the command again.
+
+With several iPhones connected, pass one: `make ios-install-device IOS_DEVICE='<name or UDID>'`
+(`xcrun devicectl list devices` lists them).
+
+Limits of a free Apple ID:
+
+- **The build expires after 7 days.** The app then stops opening. Connect the iPhone and run
+  `make ios-install-device` again; it reinstalls over the old build, keeping the app's data and
+  its signed-in session.
+- At most 3 apps installed from Xcode on a device at a time, and 10 new bundle ids a week.
+  Changing `BASE_BUNDLE_IDENTIFIER` uses 2 (the app and the Share Extension).
+- No App Groups (see above), and none of Push Notifications, In-App Purchase, or Sign in with
+  Apple; those need the paid account.
 
 ## Releases
 

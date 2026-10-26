@@ -4,6 +4,8 @@
  * never faster than `PACING_FLOOR` or above `LIMITS_CEILING`: a setting beyond them is refused,
  * so no configuration makes automation hurried. Errors name the bad key, never its value.
  */
+import type { ExecutionLocation } from '@listora/db';
+
 import {
   AUTOMATED_MARKETPLACES,
   automationProfile,
@@ -31,9 +33,8 @@ export interface AutomationSettings {
   readonly profiles: Readonly<Record<AutomatedMarketplace, AutomationProfile>>;
   readonly saleChecks: SaleCheckSettings;
   /**
-   * Development and tests only: the fake marketplace site that stands in for Poshmark,
-   * Mercari, and Depop without a fake of their own, whose automation connections then run
-   * against it.
+   * Development and tests only: the fake marketplace site that stands in for each automated
+   * marketplace without a fake of its own, whose automation connections then run against it.
    */
   readonly fakeSiteUrl: string | undefined;
   /**
@@ -53,6 +54,12 @@ export interface AutomationSettings {
    * `fakeSiteUrl` for Depop).
    */
   readonly fakeDepopSiteUrl: string | undefined;
+  /**
+   * Development and tests only: the fake eBay site (`npm run dev:fake-ebay-site`), which the
+   * eBay automation adapter then drives instead of ebay.com (it takes precedence over
+   * `fakeSiteUrl` for eBay).
+   */
+  readonly fakeEbaySiteUrl: string | undefined;
 }
 
 export class AutomationConfigError extends Error {
@@ -89,6 +96,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
   const fakePoshmarkUrl = localUrl(issues, env, 'FAKE_POSHMARK_URL');
   const fakeMercariSiteUrl = localUrl(issues, env, 'FAKE_MERCARI_SITE_URL');
   const fakeDepopSiteUrl = localUrl(issues, env, 'FAKE_DEPOP_SITE_URL');
+  const fakeEbaySiteUrl = localUrl(issues, env, 'FAKE_EBAY_SITE_URL');
 
   const profiles = Object.fromEntries(
     AUTOMATED_MARKETPLACES.map((marketplace) => {
@@ -126,16 +134,24 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
         1,
         LIMITS_CEILING.runsPerDay,
       );
+      const runsOn = location(issues, env, `${prefix}_RUNS_ON`, base.runsOn);
+      const cloudAllowed = flag(issues, env, `${prefix}_CLOUD_ALLOWED`, base.cloudAllowed);
+      if (runsOn === 'cloud' && !cloudAllowed) {
+        issues.push(`${prefix}_RUNS_ON can be cloud only when ${prefix}_CLOUD_ALLOWED is true`);
+      }
       const profile: AutomationProfile = {
         ...base,
         pacing: { ...base.pacing, actionDelayMs, sessionGapMs },
         limits: { runsPerHour, runsPerDay },
+        runsOn,
+        cloudAllowed,
       };
       // In development, a marketplace's stand-in replaces its real site, never the reverse.
       const ownFake = {
         poshmark: fakePoshmarkUrl,
         mercari: fakeMercariSiteUrl,
         depop: fakeDepopSiteUrl,
+        ebay: fakeEbaySiteUrl,
       }[marketplace];
       const standIn = ownFake ?? fakeSiteUrl;
       return [marketplace, standIn === undefined ? profile : standInProfile(profile, standIn)];
@@ -168,6 +184,7 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
     fakePoshmarkUrl,
     fakeMercariSiteUrl,
     fakeDepopSiteUrl,
+    fakeEbaySiteUrl,
   };
 }
 
@@ -238,4 +255,27 @@ function delayRange(
     return fallback;
   }
   return [min, max];
+}
+
+/** `cloud` or `phone` (unset: the marketplace's own default). */
+function location(
+  issues: string[],
+  env: NodeJS.ProcessEnv,
+  key: string,
+  fallback: ExecutionLocation,
+): ExecutionLocation {
+  const raw = env[key]?.trim() ?? '';
+  if (raw === '') return fallback;
+  if (raw === 'cloud' || raw === 'phone') return raw;
+  issues.push(`${key} must be cloud or phone`);
+  return fallback;
+}
+
+/** `true` or `false` (unset: `fallback`). */
+function flag(issues: string[], env: NodeJS.ProcessEnv, key: string, fallback: boolean): boolean {
+  const raw = env[key]?.trim() ?? '';
+  if (raw === '') return fallback;
+  if (raw === 'true' || raw === 'false') return raw === 'true';
+  issues.push(`${key} must be true or false`);
+  return fallback;
 }

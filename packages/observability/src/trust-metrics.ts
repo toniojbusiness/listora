@@ -6,7 +6,12 @@
  */
 import { sql } from 'kysely';
 
-import type { Db, OperationKind, OperationStatus } from '@listora/db';
+import {
+  DELETION_COMPLETION_DEADLINE_MS,
+  type Db,
+  type OperationKind,
+  type OperationStatus,
+} from '@listora/db';
 
 import type { MetricGroup } from './emf.ts';
 
@@ -221,6 +226,21 @@ export async function collectCurrentState(db: Db, now: Date): Promise<MetricGrou
     timestamp: now,
     dimensions: {},
     values: { ConnectionsNeedingRelink: [needingRelink] },
+  });
+
+  const overdueBefore = new Date(now.getTime() - DELETION_COMPLETION_DEADLINE_MS);
+  const overdue = await db
+    .selectFrom('account_deletion')
+    .select('id')
+    .where('requested_at', '<', overdueBefore)
+    .unionAll(
+      db.selectFrom('connection_deletion').select('id').where('requested_at', '<', overdueBefore),
+    )
+    .execute();
+  groups.push({
+    timestamp: now,
+    dimensions: {},
+    values: { OverdueDeletions: [overdue.length] },
   });
   return groups;
 }

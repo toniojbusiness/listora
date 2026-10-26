@@ -1,6 +1,7 @@
 import type { App } from 'aws-cdk-lib';
 
 import { ENVIRONMENT_SETTINGS, type DeployTarget } from './config.ts';
+import { AuthStack } from './stacks/auth-stack.ts';
 import type { ListoraStackProps } from './stacks/common.ts';
 import { ComputeStack } from './stacks/compute-stack.ts';
 import { DataStack } from './stacks/data-stack.ts';
@@ -22,6 +23,8 @@ export interface ListoraStacks {
   readonly migrate: MigrateStack;
   readonly storage: StorageStack;
   readonly email: EmailStack;
+  /** The owner pool, where the environment signs in with one (`signIn`); absent elsewhere. */
+  readonly auth: AuthStack | undefined;
   readonly compute: ComputeStack;
   readonly observability: ObservabilityStack;
 }
@@ -83,6 +86,12 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
     props('storage', 'photo bucket and CloudFront'),
   );
   const email = new EmailStack(app, id('email'), props('email', 'SES inbound sale email'));
+  let auth: AuthStack | undefined;
+  if (settings.signIn.via === 'owner-pool') {
+    auth = new AuthStack(app, id('auth'), props('auth', 'Cognito user pool for sign-in'));
+    // The pool emails through the email stack's SES identities, which it names, not references.
+    auth.addStackDependency(email, 'the SES identities the user pool sends from must exist');
+  }
   const front = settings.ingress.via === 'load-balancer' ? 'an ALB' : 'an API Gateway HTTP API';
   const compute = new ComputeStack(app, id('compute'), {
     ...props('compute', `ECS Fargate api and worker behind ${front}, and the browser runner`),
@@ -96,7 +105,9 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
     photoBucket: storage.photoBucket,
     photoCdnDomain: storage.photoDistribution.distributionDomainName,
     inboundMailBucket: email.inboundMailBucket,
+    ...(email.saleEmail === undefined ? {} : { saleEmail: email.saleEmail }),
     tokenKey: secrets.tokenKey,
+    ...(auth === undefined ? {} : { userPool: { pool: auth.userPool, appClient: auth.appClient } }),
   });
   // App secrets are referenced by name, which CDK cannot see as a dependency.
   compute.addStackDependency(secrets, 'app secrets must exist before tasks read them');
@@ -116,6 +127,7 @@ export function defineListora(app: App, target: DeployTarget): ListoraStacks {
     migrate,
     storage,
     email,
+    auth,
     compute,
     observability,
   };

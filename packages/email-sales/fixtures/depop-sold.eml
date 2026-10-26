@@ -1,0 +1,18 @@
+From: Depop <noreply@depop.com>
+To: seller.jane@example.com
+Subject: You've sold an item on Depop
+Date: Sat, 24 Oct 2026 20:15:30 +0000
+Message-ID: <a1b2c3d4-e5f6-4789-9abc-def012345678@depop.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+DKIM-Signature: v=1; a=rsa-sha256; d=depop.com; s=d1; h=from:to:subject:date; bh=c3ludGhldGlj; b=c3ludGhldGljIHNpZ25hdHVyZQ==
+
+<html><body>
+<h1>You've sold an item!</h1>
+<div>Item: Y2K Baby Tee Butterfly Print</div>
+<div>Price: $25.00</div>
+<div>Order number: 88112233</div>
+<p><a href="https://www.depop.com/products/janescloset-y2k-baby-tee-butterfly/">See the item</a></p>
+<p>Buyer: <a href="https://www.depop.com/tee_lover/">@tee_lover</a></p>
+<p>Post it within 5 days.</p>
+</body></html>

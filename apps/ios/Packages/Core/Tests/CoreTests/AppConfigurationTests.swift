@@ -7,11 +7,13 @@ struct AppConfigurationTests {
         environment: String? = "dev",
         url: String? = "http://127.0.0.1:3000",
         appGroup: String? = "group.com.listora.app.dev",
+        sessionKeychainGroup: String? = "group.com.listora.app.dev",
     ) -> [String: Any] {
         var info: [String: Any] = [:]
         info[AppConfiguration.InfoKey.environment] = environment
         info[AppConfiguration.InfoKey.apiBaseURL] = url
         info[AppConfiguration.InfoKey.appGroup] = appGroup
+        info[AppConfiguration.InfoKey.sessionKeychainGroup] = sessionKeychainGroup
         return info
     }
 
@@ -21,6 +23,29 @@ struct AppConfigurationTests {
         #expect(config.environment == .dev)
         #expect(config.apiBaseURL == URL(string: "http://127.0.0.1:3000"))
         #expect(config.appGroupIdentifier == "group.com.listora.app.dev")
+        #expect(config.sessionKeychainGroup == "group.com.listora.app.dev")
+    }
+
+    @Test
+    func `reads the session's keychain group, which a personal device build sets apart from the App Group`() throws {
+        let config = try AppConfiguration(infoDictionary: info(
+            environment: "prod",
+            url: "https://api.example.com",
+            appGroup: "group.com.example.listora",
+            sessionKeychainGroup: "ABCDE12345.com.example.listora.session",
+        ))
+        #expect(config.appGroupIdentifier == "group.com.example.listora")
+        #expect(config.sessionKeychainGroup == "ABCDE12345.com.example.listora.session")
+    }
+
+    @Test
+    func `requires the session's keychain group`() {
+        #expect(throws: ConfigurationError.missing(key: "ListoraSessionKeychainGroup")) {
+            try AppConfiguration(infoDictionary: info(sessionKeychainGroup: nil))
+        }
+        #expect(throws: ConfigurationError.missing(key: "ListoraSessionKeychainGroup")) {
+            try AppConfiguration(infoDictionary: info(sessionKeychainGroup: "$(SESSION_KEYCHAIN_GROUP)"))
+        }
     }
 
     @Test
@@ -50,6 +75,72 @@ struct AppConfigurationTests {
         ))
         #expect(config.environment.rawValue == environment)
         #expect(config.apiBaseURL.absoluteString == "https://api.example.com/v1")
+    }
+
+    @Test
+    func `reads the Cognito app client the build signs in with`() throws {
+        var dictionary = info(environment: "prod", url: "https://api.example.com")
+        dictionary[AppConfiguration.InfoKey.cognitoRegion] = "us-east-1"
+        dictionary[AppConfiguration.InfoKey.cognitoClientID] = "4example5client6id7abcdefgh"
+        let config = try AppConfiguration(infoDictionary: dictionary)
+        #expect(try config.cognito == CognitoConfiguration(
+            region: "us-east-1",
+            clientID: "4example5client6id7abcdefgh",
+        ))
+    }
+
+    @Test(arguments: [nil as String?, "", "$(COGNITO_CLIENT_ID)"])
+    func `has no sign-in without a Cognito app client, whatever the region`(clientID: String?) throws {
+        var dictionary = info(environment: "prod", url: "https://api.example.com")
+        dictionary[AppConfiguration.InfoKey.cognitoRegion] = "us-east-1"
+        dictionary[AppConfiguration.InfoKey.cognitoClientID] = clientID
+        #expect(try AppConfiguration(infoDictionary: dictionary).cognito == nil)
+        #expect(try AppConfiguration(infoDictionary: info()).cognito == nil)
+    }
+
+    @Test
+    func `needs the region of a Cognito app client, and rejects malformed values`() {
+        var dictionary = info(environment: "prod", url: "https://api.example.com")
+        dictionary[AppConfiguration.InfoKey.cognitoClientID] = "4example5client6id7abcdefgh"
+        #expect(throws: ConfigurationError.missing(key: AppConfiguration.InfoKey.cognitoRegion)) {
+            try AppConfiguration(infoDictionary: dictionary)
+        }
+        dictionary[AppConfiguration.InfoKey.cognitoRegion] = "Virginia"
+        #expect(throws: ConfigurationError.invalid(
+            key: AppConfiguration.InfoKey.cognitoRegion,
+            reason: "must be an AWS region such as us-east-1",
+        )) {
+            try AppConfiguration(infoDictionary: dictionary)
+        }
+        dictionary[AppConfiguration.InfoKey.cognitoRegion] = "us-east-1"
+        dictionary[AppConfiguration.InfoKey.cognitoClientID] = "not a client/id"
+        #expect(throws: ConfigurationError.invalid(
+            key: AppConfiguration.InfoKey.cognitoClientID,
+            reason: "must be a Cognito app client id",
+        )) {
+            try AppConfiguration(infoDictionary: dictionary)
+        }
+    }
+
+    @Test(arguments: [nil, "", "$(SUPPORT_EMAIL)"])
+    func `names no support address unless the build sets one`(value: String?) throws {
+        var dictionary = info()
+        dictionary[AppConfiguration.InfoKey.supportEmail] = value
+        #expect(try AppConfiguration(infoDictionary: dictionary).supportEmail == nil)
+    }
+
+    @Test
+    func `reads the support address, and rejects one that is not an email`() throws {
+        var dictionary = info()
+        dictionary[AppConfiguration.InfoKey.supportEmail] = "help@listora.example"
+        #expect(try AppConfiguration(infoDictionary: dictionary).supportEmail == "help@listora.example")
+        dictionary[AppConfiguration.InfoKey.supportEmail] = "help desk"
+        #expect(throws: ConfigurationError.invalid(
+            key: AppConfiguration.InfoKey.supportEmail,
+            reason: "must be an email address",
+        )) {
+            try AppConfiguration(infoDictionary: dictionary)
+        }
     }
 
     @Test

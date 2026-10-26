@@ -2,22 +2,25 @@ import Core
 import DesignSystem
 import SwiftUI
 
-/// The price: the "Don't sell below" floor per marketplace, the three tiers with the server's
-/// source labels, the AI estimate labeled as such, and research links that open in Safari.
+/// The price: the three tiers with the server's source labels, each with whether it clears the
+/// "Don't sell below" floors, the floor per marketplace against the chosen price, the AI estimate
+/// labeled as such, and research links that open in Safari.
 struct PriceView: View {
     @Bindable var model: ReviewFlowModel
     let onFinished: @MainActor (ItemReviewOutcome) -> Void
     @State private var isEnteringPrice = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         content
             .background(Palette.background)
             .navigationTitle("Price")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
             .measuresInteraction(model)
             .actionErrorAlert(model)
             .sheet(isPresented: $isEnteringPrice) {
-                CustomPriceView(initial: model.chosenCents) { cents in
+                CustomPriceView(initial: model.chosenCents, presentation: loadedPresentation) { cents in
                     model.priceChoice = .custom(cents)
                 }
                 .presentationDetents([.large])
@@ -30,14 +33,18 @@ struct PriceView: View {
             }
     }
 
+    private var loadedPresentation: PricingPresentation? {
+        if case let .loaded(presentation) = model.pricing {
+            return presentation
+        }
+        return nil
+    }
+
     @ViewBuilder
     private var content: some View {
         switch model.pricing {
         case .idle, .loading:
-            ProgressView("Working out prices")
-                .foregroundStyle(Palette.textSecondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityIdentifier("price.loading")
+            PriceSkeleton()
         case let .failed(message):
             ProblemView(
                 problem: .init(
@@ -59,8 +66,10 @@ struct PriceView: View {
                     research(presentation)
                 }
                 .padding(Spacing.md)
+                .frame(maxWidth: Layout.readableWidth)
+                .frame(maxWidth: .infinity)
             }
-            .safeAreaInset(edge: .bottom) { saveBar(presentation) }
+            .bottomActionBar { saveBar(presentation) }
         }
     }
 
@@ -68,16 +77,15 @@ struct PriceView: View {
 
     private func tiers(_ presentation: PricingPresentation) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            heading("Choose a price")
-            if presentation.tiers.isEmpty {
-                Text("There is no estimate for this item. Set your own price.")
-                    .font(Typography.callout)
-                    .foregroundStyle(Palette.textSecondary)
-            }
+            SectionHeader(
+                "Choose a price",
+                subtitle: presentation.tiers.isEmpty ? "There is no estimate for this item. Set your own price." : nil,
+            )
             ForEach(presentation.tiers) { tier in
-                choiceButton(
+                PriceOption(
                     title: tier.label,
                     price: tier.price,
+                    warning: presentation.shortWarning(for: tier.cents),
                     isSelected: model.priceChoice == .tier(tier.tier),
                     identifier: "price.tier.\(tier.tier.rawValue)",
                 ) {
@@ -85,77 +93,48 @@ struct PriceView: View {
                 }
             }
             if case let .custom(cents) = model.priceChoice {
-                choiceButton(
+                PriceOption(
                     title: "Your price",
                     price: Formatting.money(cents: cents),
+                    warning: presentation.shortWarning(for: cents),
                     isSelected: true,
                     identifier: "price.custom",
                 ) {
                     isEnteringPrice = true
                 }
             }
-            Button("Set my own price") { isEnteringPrice = true }
-                .font(Typography.headline)
-                .foregroundStyle(Palette.brand)
-                .frame(minHeight: Layout.minimumTapTarget)
+            Button("Set my own price", systemImage: "pencil") { isEnteringPrice = true }
+                .buttonStyle(.listoraSecondary)
                 .accessibilityIdentifier("price.setOwn")
         }
-    }
-
-    private func choiceButton(
-        title: String,
-        price: String,
-        isSelected: Bool,
-        identifier: String,
-        action: @escaping () -> Void,
-    ) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
-        return Button(action: action) {
-            HStack(spacing: Spacing.sm) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(Typography.headline)
-                    .foregroundStyle(isSelected ? Palette.brand : Palette.textSecondary)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(Typography.body)
-                    .foregroundStyle(Palette.textPrimary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(price)
-                    .font(Typography.price)
-                    .foregroundStyle(Palette.textPrimary)
-            }
-            .padding(Spacing.md)
-            .frame(minHeight: Layout.buttonHeight)
-            .background(Palette.surface, in: shape)
-            .overlay(shape.strokeBorder(isSelected ? Palette.brand : Palette.separator, lineWidth: isSelected ? 2 : 1))
-            .contentShape(shape)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityIdentifier(identifier)
     }
 
     // MARK: Floors
 
     private func floors(_ presentation: PricingPresentation) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            heading("Don't sell below")
             if presentation.floors.isEmpty {
+                SectionHeader("Don't sell below")
                 Text("Add what you paid to see the lowest price that covers it on each marketplace.")
                     .font(Typography.callout)
                     .foregroundStyle(Palette.textSecondary)
+                    .cardStyle(.flat)
                     .accessibilityIdentifier("price.noFloors")
             } else {
+                SectionHeader(
+                    "Don't sell below",
+                    subtitle: "The lowest price that still covers your cost, fees, shipping, and minimum profit. "
+                        + "Tap one to see how it adds up.",
+                )
                 VStack(spacing: 0) {
                     ForEach(Array(presentation.floors.enumerated()), id: \.element.id) { index, floor in
                         if index > 0 {
-                            Divider().overlay(Palette.separator.color)
+                            Divider().overlay(Palette.separator.color).padding(.leading, Spacing.md)
                         }
-                        FloorRow(floor: floor)
+                        FloorRow(floor: floor, chosenCents: model.chosenCents)
                     }
                 }
-                .cardBackground()
+                .cardStyle(.flat, padding: 0)
             }
         }
     }
@@ -164,207 +143,108 @@ struct PriceView: View {
 
     private func marketData(_ presentation: PricingPresentation) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            heading("Where the prices come from")
-            VStack(alignment: .leading, spacing: Spacing.sm) {
+            SectionHeader("Where the prices come from")
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 if let estimate = presentation.estimate {
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text(estimate.label)
-                            .font(Typography.headline)
-                            .foregroundStyle(Palette.textPrimary)
-                            .accessibilityIdentifier("price.estimateLabel")
-                        Text("\(estimate.range) · \(estimate.confidence)")
-                            .font(Typography.callout)
-                            .foregroundStyle(Palette.textSecondary)
-                            .accessibilityIdentifier("price.estimateDetail")
+                    HStack(alignment: .top, spacing: Spacing.sm) {
+                        IconTile(systemImage: "sparkles")
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text(estimate.label)
+                                .font(Typography.headline)
+                                .foregroundStyle(Palette.textPrimary)
+                                .accessibilityIdentifier("price.estimateLabel")
+                            Text("\(estimate.range) · \(estimate.confidence)")
+                                .font(Typography.subheadline)
+                                .foregroundStyle(Palette.textSecondary)
+                                .accessibilityIdentifier("price.estimateDetail")
+                        }
                     }
                 }
                 if let message = presentation.noSoldDataMessage {
-                    Text(message)
-                        .font(Typography.callout)
-                        .foregroundStyle(Palette.textSecondary)
-                        .accessibilityIdentifier("price.noSoldData")
+                    HStack(alignment: .top, spacing: Spacing.sm) {
+                        IconTile(systemImage: "chart.bar.xaxis", tone: .neutral)
+                        Text(message)
+                            .font(Typography.subheadline)
+                            .foregroundStyle(Palette.textSecondary)
+                            .frame(minHeight: 36)
+                            .accessibilityIdentifier("price.noSoldData")
+                    }
                 }
                 ForEach(presentation.soldData) { sold in
-                    VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text(sold.label)
-                            .font(Typography.headline)
-                            .foregroundStyle(Palette.textPrimary)
-                        Text(sold.summary)
-                            .font(Typography.callout)
-                            .foregroundStyle(Palette.textSecondary)
+                    HStack(alignment: .top, spacing: Spacing.sm) {
+                        IconTile(systemImage: "chart.bar.xaxis")
+                        VStack(alignment: .leading, spacing: Spacing.xxs) {
+                            Text(sold.label)
+                                .font(Typography.headline)
+                                .foregroundStyle(Palette.textPrimary)
+                            Text(sold.summary)
+                                .font(Typography.subheadline)
+                                .foregroundStyle(Palette.textSecondary)
+                        }
                     }
                     .accessibilityElement(children: .combine)
                 }
             }
-            .cardStyle()
+            .cardStyle(.flat)
         }
     }
 
     @ViewBuilder
     private func research(_ presentation: PricingPresentation) -> some View {
         if !presentation.researchLinks.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                heading("Research")
-                Text("Opens in Safari. Listora doesn't read these pages.")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.textSecondary)
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionHeader("Research", subtitle: "Opens in Safari. Listora doesn't read these pages.")
                 VStack(spacing: 0) {
                     ForEach(Array(presentation.researchLinks.enumerated()), id: \.element.id) { index, link in
                         if index > 0 {
-                            Divider().overlay(Palette.separator.color)
+                            Divider().overlay(Palette.separator.color).padding(.leading, Spacing.md)
                         }
                         Link(destination: link.url) {
-                            HStack {
-                                Text(link.label)
-                                    .font(Typography.body)
-                                    .foregroundStyle(Palette.brand)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Image(systemName: "safari")
+                            ListRow(link.label, systemImage: "safari") {
+                                Image(systemName: "arrow.up.right")
+                                    .font(Typography.smallEmphasis)
                                     .foregroundStyle(Palette.textSecondary)
                                     .accessibilityHidden(true)
                             }
-                            .padding(Spacing.md)
-                            .frame(minHeight: Layout.minimumTapTarget)
-                            .contentShape(Rectangle())
+                            .padding(.horizontal, Spacing.md)
+                            .padding(.vertical, Spacing.xs)
                         }
                         .accessibilityIdentifier("price.research.\(index)")
                     }
                 }
-                .cardBackground()
+                .cardStyle(.flat, padding: 0)
             }
         }
     }
 
     // MARK: Save
 
+    @ViewBuilder
     private func saveBar(_ presentation: PricingPresentation) -> some View {
-        VStack(spacing: Spacing.xs) {
-            if let cents = model.chosenCents, let warning = presentation.warning(for: cents) {
-                Label(warning, systemImage: "exclamationmark.triangle.fill")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.warning)
-                    .accessibilityIdentifier("price.belowFloor")
-            }
-            Button {
-                Task { await model.save() }
-            } label: {
-                if model.isWorking {
-                    ProgressView().tint(Palette.onBrand.color)
-                } else if let cents = model.chosenCents {
-                    Text("Save item at \(Formatting.money(cents: cents))")
-                } else {
-                    Text("Save item")
-                }
-            }
-            .buttonStyle(.listoraPrimary)
-            .disabled(model.chosenCents == nil || model.isWorking)
-            .accessibilityIdentifier("price.save")
+        // At accessibility sizes the short form, so the bar leaves room for the screen.
+        if let cents = model.chosenCents,
+           let warning = dynamicTypeSize.isAccessibilitySize
+           ? presentation.shortWarning(for: cents) : presentation.warning(for: cents)
+        {
+            Label(warning, systemImage: "exclamationmark.triangle.fill")
+                .font(Typography.smallEmphasis)
+                .foregroundStyle(Palette.warning)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("price.belowFloor")
         }
-        .bottomBar()
-    }
-
-    private func heading(_ text: String) -> some View {
-        Text(text)
-            .font(Typography.headline)
-            .foregroundStyle(Palette.textPrimary)
-            .accessibilityAddTraits(.isHeader)
-    }
-}
-
-/// One marketplace's floor; tap to see how it adds up.
-private struct FloorRow: View {
-    let floor: PricingPresentation.Floor
-    @State private var isExpanded = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Button {
-                isExpanded.toggle()
-            } label: {
-                HStack {
-                    Text(floor.name)
-                        .font(Typography.body)
-                        .foregroundStyle(Palette.textPrimary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(floor.price)
-                        .font(Typography.price)
-                        .foregroundStyle(Palette.textPrimary)
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(Typography.caption.weight(.semibold))
-                        .foregroundStyle(Palette.textSecondary)
-                        .accessibilityHidden(true)
-                }
-                .frame(minHeight: Layout.minimumTapTarget)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(floor.name), don't sell below \(floor.price)")
-            .accessibilityHint(isExpanded ? "Hides how it adds up" : "Shows how it adds up")
-            .accessibilityIdentifier("price.floor.\(floor.marketplace)")
-            if isExpanded {
-                ForEach(floor.breakdown, id: \.label) { line in
-                    HStack {
-                        Text(line.label)
-                        Spacer()
-                        Text(line.amount).monospacedDigit()
-                    }
-                    .font(Typography.callout)
-                    .foregroundStyle(Palette.textSecondary)
-                }
-                Text(floor.feeNote)
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.textSecondary)
+        Button {
+            Task { await model.save() }
+        } label: {
+            if let cents = model.chosenCents {
+                Text("Save item at \(Formatting.money(cents: cents))")
+            } else {
+                Text("Save item")
             }
         }
-        .padding(.horizontal, Spacing.md)
-        .padding(.vertical, Spacing.xs)
-    }
-}
-
-/// The seller's own price on the keypad.
-private struct CustomPriceView: View {
-    let onDone: (Int64) -> Void
-    @State private var entry: AmountEntry
-    @Environment(\.dismiss) private var dismiss
-
-    init(initial: Int64?, onDone: @escaping (Int64) -> Void) {
-        self.onDone = onDone
-        _entry = State(initialValue: initial.map(AmountEntry.init(cents:)) ?? AmountEntry())
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: Spacing.lg) {
-                Text(entry.display)
-                    .font(Typography.largeTitle.monospacedDigit())
-                    .foregroundStyle(entry.isEmpty ? Palette.textSecondary : Palette.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .accessibilityLabel("Price")
-                    .accessibilityValue(entry.display)
-                    .accessibilityIdentifier("price.customAmount")
-                KeypadView { entry.press($0) }
-                Spacer(minLength: 0)
-            }
-            .padding(Spacing.md)
-            .background(Palette.background)
-            .navigationTitle("Your price")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Use") {
-                        if let cents = entry.cents {
-                            onDone(cents)
-                        }
-                        dismiss()
-                    }
-                    .disabled((entry.cents ?? 0) <= 0)
-                    .accessibilityIdentifier("price.customUse")
-                }
-            }
-        }
+        .buttonStyle(.listoraPrimary)
+        .loading(model.isWorking)
+        .disabled(model.chosenCents == nil)
+        .accessibilityIdentifier("price.save")
     }
 }

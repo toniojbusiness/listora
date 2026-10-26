@@ -11,7 +11,13 @@ import type {
 } from '@listora/api-contract';
 import type { DbExecutor, Marketplace, OperationKind } from '@listora/db';
 import { operationMode, type AdapterRegistry } from '@listora/marketplaces';
-import { describeListingStatus, UNFINISHED_STATUSES } from '@listora/operations';
+import {
+  describeListingStatus,
+  phoneWaits,
+  REFUSED_CONTENT_ERROR,
+  UNFINISHED_STATUSES,
+  type PhoneWait,
+} from '@listora/operations';
 import { assertNever } from '@listora/shared';
 
 import { operationView } from '../operations/views.ts';
@@ -43,6 +49,8 @@ export interface ListingViewContext {
 export interface ListingState {
   row: ListingRow;
   operation: OperationRow | undefined;
+  /** The operation's step waits for the seller's iPhone, or the phone runs it now. */
+  phoneWait?: PhoneWait | undefined;
 }
 
 /**
@@ -91,7 +99,11 @@ export function listingVerification(row: ListingRow): Verification | undefined {
  * the user linked, shows its recorded state: `success` only for a state that a read-back or the
  * user confirmed; an unverified `active` or `ended` is still being checked.
  */
-export function listingStatusDisplay(row: ListingRow, operation?: OperationRow): StatusDisplay {
+export function listingStatusDisplay(
+  row: ListingRow,
+  operation?: OperationRow,
+  phoneWait?: PhoneWait,
+): StatusDisplay {
   if (operation !== undefined) {
     return describeListingStatus({
       marketplace: row.marketplace,
@@ -101,7 +113,9 @@ export function listingStatusDisplay(row: ListingRow, operation?: OperationRow):
         status: operation.status,
         attempts: operation.attempts,
         errorMessage: operation.error_message,
+        errorCode: operation.error_code,
         successEvidence: operation.success_evidence,
+        phoneWait: phoneWait ?? null,
       },
     });
   }
@@ -168,6 +182,16 @@ export function actionsForState(state: ListingState): KnownListingAction[] {
   );
 }
 
+/**
+ * A failed operation that Listora refused before sending anything: its content broke the
+ * marketplace's rules, so nothing of it reached the marketplace.
+ */
+export function wasRefusedBeforeSending(
+  operation: Pick<OperationRow, 'status' | 'error_code'>,
+): boolean {
+  return operation.status === 'failed' && operation.error_code === REFUSED_CONTENT_ERROR;
+}
+
 /** Items that can get a new listing, or be published or relisted: not sold and not archived. */
 export const LISTABLE_ITEM_STATUSES: ReadonlySet<string> = new Set(['draft', 'ready', 'listed']);
 
@@ -181,7 +205,9 @@ function listingActions(state: ListingState): KnownListingAction[] {
   }
   switch (row.status) {
     case 'draft':
-      return operation === undefined ? ['publish'] : [];
+      // A draft whose publish Listora refused before sending it never reached the marketplace:
+      // the seller fixes it and publishes again, since retrying the same content cannot work.
+      return operation === undefined || wasRefusedBeforeSending(operation) ? ['publish'] : [];
     case 'active':
       return ['change_price', 'revise', 'end', 'verify'];
     case 'ended':
@@ -248,7 +274,7 @@ export function variantView(row: ListingRow): ListingVariant | undefined {
  * listing has no title or price, because Listora never read it.
  */
 export function listingView(state: ListingState, context: ListingViewContext): Listing {
-  const { row, operation } = state;
+  const { row, operation, phoneWait } = state;
   const verification = listingVerification(row);
   const variant = variantView(row);
   return {
@@ -257,13 +283,15 @@ export function listingView(state: ListingState, context: ListingViewContext): L
     marketplace: row.marketplace,
     mode: listingMode(row),
     status: row.status,
-    statusDisplay: listingStatusDisplay(row, operation),
+    statusDisplay: listingStatusDisplay(row, operation, phoneWait),
     ...(verification ? { verification } : {}),
     ...(row.external_listing_id === null ? {} : { externalListingId: row.external_listing_id }),
     ...(row.external_sku === null ? {} : { externalSku: row.external_sku }),
     ...(row.external_url === null ? {} : { externalUrl: row.external_url }),
     ...(variant === undefined ? {} : { variant }),
-    ...(operation === undefined ? {} : { latestOperation: operationView(operation, row) }),
+    ...(operation === undefined
+      ? {}
+      : { latestOperation: operationView(operation, row, phoneWait) }),
     availableActions: availableActions(state, context),
     ...(row.listed_at === null ? {} : { listedAt: row.listed_at.toISOString() }),
     ...(row.ended_at === null ? {} : { endedAt: row.ended_at.toISOString() }),
@@ -276,13 +304,13 @@ export function listingView(state: ListingState, context: ListingViewContext): L
 }
 
 export function listingSummaryView(state: ListingState): ListingStatusSummary {
-  const { row, operation } = state;
+  const { row, operation, phoneWait } = state;
   return {
     listingId: row.id,
     marketplace: row.marketplace,
     mode: listingMode(row),
     status: row.status,
-    statusDisplay: listingStatusDisplay(row, operation),
+    statusDisplay: listingStatusDisplay(row, operation, phoneWait),
   };
 }
 
@@ -305,11 +333,18 @@ export async function listingStates(
       await listingRowsByIds(snapshot, tenant, ids),
       await latestOperations(snapshot, tenant, ids),
     ];
+    const waits = await phoneWaits(
+      snapshot,
+      tenant.accountId,
+      [...operations.values()].map((operation) => operation.id),
+    );
     const byId = new Map(fresh.map((row) => [row.id, row]));
     // A listing deleted meanwhile (with its account) keeps the row the caller read.
     return rows.map((row) => {
       const current = byId.get(row.id) ?? row;
-      return { row: current, operation: operations.get(row.id) };
+      const operation = operations.get(row.id);
+      const phoneWait = operation === undefined ? undefined : waits.get(operation.id);
+      return { row: current, operation, ...(phoneWait === undefined ? {} : { phoneWait }) };
     });
   };
   if (db.isTransaction) return read(db);

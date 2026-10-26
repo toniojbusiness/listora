@@ -40,7 +40,7 @@ struct TaskDetailView: View {
             .accessibilityIdentifier("task.dismiss.confirm")
             Button("Keep it", role: .cancel) {}
         } message: {
-            Text("Listora won't count it as done. The item shows this step as not done, with a Retry.")
+            Text(model.presentation.dismissMessage)
         }
         .onChange(of: model.outcome) { _, outcome in
             if let outcome {
@@ -96,6 +96,12 @@ struct TaskDetailView: View {
                     .foregroundStyle(Palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        case .saleEmail:
+            if let email = model.task.saleEmail {
+                SaleEmailStep(number: number, email: email, marketplaceName: name)
+            }
+        case .pickItem:
+            PickItemStep(number: number, model: model)
         }
     }
 
@@ -109,6 +115,14 @@ struct TaskDetailView: View {
             .loading(model.isSubmitting)
             .disabled(model.linkProblem != nil)
             .accessibilityIdentifier("task.done")
+        }
+        if let rejectTitle = model.presentation.rejectTitle {
+            Button(rejectTitle, systemImage: "xmark") {
+                Task { await model.rejectMatch() }
+            }
+            .buttonStyle(.listoraSecondary)
+            .loading(model.isSubmitting)
+            .accessibilityIdentifier("task.rejectMatch")
         }
         Button("Dismiss task") { confirmsDismiss = true }
             .buttonStyle(.listora(.destructiveText, size: .large))
@@ -158,7 +172,7 @@ private struct TaskHeader: View {
 }
 
 /// A numbered step on a card.
-private struct StepCard<Content: View>: View {
+struct StepCard<Content: View>: View {
     let number: Int
     let title: String
     @ViewBuilder let content: Content
@@ -194,12 +208,8 @@ private struct PhotosStep: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.xs) {
                     ForEach(Array(model.photos.enumerated()), id: \.element.id) { index, photo in
-                        AsyncImage(url: (photo.urls?.thumbnail).flatMap(URL.init(string:))) { phase in
-                            if let image = phase.image {
-                                image.resizable().scaledToFill()
-                            } else {
-                                Palette.surfaceSecondary.color
-                            }
+                        RemoteImage(url: (photo.urls?.thumbnail).flatMap(URL.init(string:))) {
+                            Palette.surfaceSecondary.color
                         }
                         .frame(width: 64, height: 64)
                         .clipShape(RoundedRectangle(cornerRadius: Radius.small, style: .continuous))

@@ -20,24 +20,29 @@ struct CostView: View {
                         .font(Typography.callout)
                         .foregroundStyle(Palette.textSecondary)
                 }
-                Text(model.cost.amount.display)
-                    .font(Typography.largeTitle.monospacedDigit())
-                    .foregroundStyle(model.cost.amount.isEmpty ? Palette.textSecondary : Palette.textPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Spacing.sm)
-                    .accessibilityLabel("Cost")
-                    .accessibilityValue(model.cost.amount.isEmpty ? "None" : model.cost.amount.display)
-                    .accessibilityIdentifier("cost.amount")
+                AmountDisplay(entry: model.cost.amount, label: "Cost", identifier: "cost.amount")
                 KeypadView { model.cost.amount.press($0) }
                 details
             }
             .padding(Spacing.md)
+            .frame(maxWidth: Layout.readableWidth)
+            .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
         .background(Palette.background)
         .navigationTitle("Cost")
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) { actions }
+        .toolbar(.hidden, for: .tabBar)
+        .bottomActionBar {
+            Button("Continue to price") {
+                isSourceFocused = false
+                Task { await model.continueToPrice() }
+            }
+            .buttonStyle(.listoraPrimary)
+            .loading(model.isWorking)
+            .disabled(model.cost.amount.cents == nil)
+            .accessibilityIdentifier("cost.continue")
+        }
         .toolbar {
             // Not knowing the cost is the exception, so it stays out of the thumb's way.
             ToolbarItem(placement: .topBarTrailing) {
@@ -58,72 +63,47 @@ struct CostView: View {
     }
 
     private var details: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: Spacing.md) {
             DatePicker(
                 "Bought on",
                 selection: $model.cost.purchaseDate,
                 in: ...Date(),
                 displayedComponents: .date,
             )
-            .font(Typography.body)
+            .font(Typography.emphasis)
             .foregroundStyle(Palette.textPrimary)
             .tint(Palette.brand.color)
+            .frame(minHeight: Layout.minimumTapTarget)
             .accessibilityIdentifier("cost.date")
             Divider().overlay(Palette.separator.color)
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Where")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.textSecondary)
-                TextField("Thrift store, estate sale, ...", text: $model.cost.source)
-                    .font(Typography.body)
-                    .foregroundStyle(Palette.textPrimary)
-                    .submitLabel(.done)
-                    .focused($isSourceFocused)
-                    .frame(minHeight: Layout.minimumTapTarget)
-                    .accessibilityIdentifier("cost.source")
-                let recent = model.recentSources.sources
-                if !recent.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: Spacing.xs) {
-                            ForEach(recent, id: \.self) { source in
-                                Button(source) {
-                                    model.cost.source = source
-                                    isSourceFocused = false
-                                }
-                                .font(Typography.callout)
-                                .foregroundStyle(model.cost.source == source ? Palette.onBrand : Palette.brand)
-                                .padding(.horizontal, Spacing.sm)
-                                .frame(minHeight: Layout.minimumTapTarget)
-                                .background(
-                                    model.cost.source == source ? Palette.brand : Palette.surfaceSecondary,
-                                    in: Capsule(),
-                                )
-                                .accessibilityIdentifier("cost.recentSource")
+            ListoraTextField("Where you bought it") {
+                TextField(
+                    "Where you bought it",
+                    text: $model.cost.source,
+                    prompt: Text("Thrift store, estate sale, ...").foregroundStyle(Palette.textSecondary),
+                )
+                .submitLabel(.done)
+                .focused($isSourceFocused)
+                .accessibilityIdentifier("cost.source")
+            }
+            let recent = model.recentSources.sources
+            if !recent.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("Recent")
+                        .font(Typography.footnote)
+                        .foregroundStyle(Palette.textSecondary)
+                    FlowLayout {
+                        ForEach(recent, id: \.self) { source in
+                            ChoiceChip(source, isSelected: model.cost.source == source) {
+                                model.cost.source = source
+                                isSourceFocused = false
                             }
+                            .accessibilityIdentifier("cost.recentSource")
                         }
                     }
                 }
             }
         }
         .cardStyle()
-    }
-
-    private var actions: some View {
-        VStack(spacing: Spacing.xs) {
-            Button {
-                isSourceFocused = false
-                Task { await model.continueToPrice() }
-            } label: {
-                if model.isWorking {
-                    ProgressView().tint(Palette.onBrand.color)
-                } else {
-                    Text("Continue")
-                }
-            }
-            .buttonStyle(.listoraPrimary)
-            .disabled(model.cost.amount.cents == nil || model.isWorking)
-            .accessibilityIdentifier("cost.continue")
-        }
-        .bottomBar()
     }
 }

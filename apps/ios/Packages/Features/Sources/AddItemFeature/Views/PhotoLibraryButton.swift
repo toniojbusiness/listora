@@ -123,7 +123,7 @@ struct UnloadedPhotosNotice: View {
         if let picked, let problem = picked.problem {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Label(problem, systemImage: "exclamationmark.icloud")
-                    .font(Typography.subheadline.weight(.semibold))
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.textPrimary)
                     .accessibilityIdentifier("photos.unloaded")
                 AdaptiveStack { buttons(picked) }

@@ -19,12 +19,16 @@ import type { CurrencyCode } from '@listora/shared';
 import type { JsonArray, JsonObject, JsonValue } from './json.ts';
 import type {
   AccountDeletionGrantOutcome,
+  ConnectionDeletionReason,
+  ConnectionDeletionRevocation,
+  DeletionRecordKind,
   AiControlAction,
   AiProvider,
   AiUsageOutcome,
   AnalysisStatus,
   AnalysisTier,
   AuditActorKind,
+  AutomationRunHost,
   AutomationRunOutcome,
   AutomationRunPurpose,
   AuthProvider,
@@ -33,6 +37,8 @@ import type {
   ConnectionMode,
   ConnectionStatus,
   DelistRunListingSource,
+  DevicePlatform,
+  ExecutionLocation,
   DelistRunStatus,
   FeeKind,
   FeeSource,
@@ -46,16 +52,19 @@ import type {
   OperationOrigin,
   OperationStatus,
   ImageContentType,
+  PhoneWorkPurpose,
   PhotoRole,
   PhotoStatus,
   Plan,
   PreArchiveItemStatus,
   PricingSource,
+  PushEnvironment,
   SaleCheckOutcome,
   SaleCheckReason,
   SaleDetectionSource,
   RelistDecision,
   SaleStatus,
+  SessionCheckStatus,
   SubscriptionSource,
   SubscriptionStatus,
   SuccessEvidence,
@@ -97,6 +106,8 @@ export interface AccountTable {
   id: Id;
   name: string;
   sku_prefix: string;
+  /** The business the seller sells as, from Settings; null until they enter one. */
+  business_name: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -360,6 +371,10 @@ export interface MarketplaceConnectionTable {
   last_checked_at: NullableTimestamp;
   /** When the seller last asked for a check; pending while later than `last_checked_at`. */
   check_requested_at: NullableTimestamp;
+  /** Where its automated steps run: the cloud runner, or the phone (phone-execution.md). */
+  runs_on: Generated<ExecutionLocation>;
+  /** The device that runs them on the phone: the one that linked the session. */
+  phone_device_id: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -697,6 +712,20 @@ export interface AccountDeletionTable {
   requested_at: CreatedAt;
   identity_deleted_at: NullableTimestamp;
   attempts: Generated<number>;
+  /** The deleted account; null when a member left an account that stays (or before T-33). */
+  account_id: Nullable<string>;
+  /** The deleted user; null for tombstones written before T-33. */
+  user_id: Nullable<string>;
+  /** Key prefixes that hold only the deleted account's objects. */
+  storage_prefixes: TextArray;
+  /** When every stored object of the deletion was deleted and checked gone. */
+  objects_deleted_at: NullableTimestamp;
+}
+
+/** A stored object an account deletion still has to delete. */
+export interface AccountDeletionObjectTable {
+  deletion_id: string;
+  storage_key: string;
 }
 
 /** A deleted account's marketplace grant; the encrypted tokens stay only while it is pending. */
@@ -706,6 +735,39 @@ export interface AccountDeletionGrantTable {
   marketplace: Marketplace;
   token_ciphertext: Nullable<Buffer>;
   outcome: Generated<AccountDeletionGrantOutcome>;
+}
+
+/**
+ * The tombstone of a marketplace connection whose data was deleted and whose
+ * `connection_deletion` job has not finished (revoking the grant, deleting stored objects).
+ */
+export interface ConnectionDeletionTable {
+  id: Id;
+  connection_id: string;
+  marketplace: Marketplace;
+  reason: ConnectionDeletionReason;
+  /** The grant's encrypted tokens, only while its revocation is pending. */
+  token_ciphertext: Nullable<Buffer>;
+  revocation: ConnectionDeletionRevocation;
+  requested_at: CreatedAt;
+  attempts: Generated<number>;
+}
+
+/** A stored object a connection deletion still has to delete. */
+export interface ConnectionDeletionObjectTable {
+  deletion_id: string;
+  storage_key: string;
+}
+
+/** The completion record of a finished deletion; it holds no personal data. */
+export interface DeletionRecordTable {
+  id: string;
+  kind: DeletionRecordKind;
+  reason: string;
+  marketplace: Nullable<Marketplace>;
+  requested_at: Timestamp;
+  completed_at: CreatedAt;
+  summary: DefaultedJsonb<JsonObject>;
 }
 
 // Browser automation --------------------------------------------------------------------------
@@ -728,6 +790,8 @@ export interface AutomationRunTable {
   error_code: Nullable<string>;
   /** A private storage key of the redacted screenshot taken when the run failed. */
   screenshot_key: Nullable<string>;
+  /** Where it ran: the browser runner, or the phone. */
+  host: Generated<AutomationRunHost>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -743,6 +807,145 @@ export interface SaleCheckScheduleTable {
   last_finished_at: NullableTimestamp;
   last_outcome: Nullable<SaleCheckOutcome>;
   checked_through: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/**
+ * The check that an automation connection's newest linked session works, which the app waits
+ * for before it shows the marketplace as linked (one row per connection).
+ */
+export interface SessionCheckTable {
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  /** The link this check is for; a relink sets a new one. */
+  check_id: Generated<string>;
+  status: Generated<SessionCheckStatus>;
+  attempts: Generated<number>;
+  failure_code: Nullable<string>;
+  /** User-readable and names the marketplace. */
+  failure_message: Nullable<string>;
+  requested_at: Generated<Date>;
+  finished_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+// Phone execution (docs/features/phone-execution.md) ----------------------------------------
+
+/** A device the seller runs the app on: where pushes go, and which phone runs a connection. */
+export interface AppDeviceTable {
+  id: Id;
+  account_id: string;
+  /** Made by the app and kept in its Keychain; the API names devices by it. */
+  installation_id: string;
+  user_id: string;
+  name: string;
+  platform: DevicePlatform;
+  app_version: Nullable<string>;
+  /** The version of phone calls its runtime speaks. */
+  runtime_version: Nullable<number>;
+  /** APNs device token (hex), with its APNs environment, or neither. */
+  push_token: Nullable<string>;
+  push_environment: Nullable<PushEnvironment>;
+  last_seen_at: Generated<Date>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** Work handed to the phone: an automated operation step or a session check, and its run. */
+export interface PhoneWorkTable {
+  id: Id;
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  purpose: PhoneWorkPurpose;
+  operation_id: Nullable<string>;
+  check_id: Nullable<string>;
+  priority: Generated<number>;
+  waiting_since: Generated<Date>;
+  due_at: Generated<Date>;
+  notified_at: NullableTimestamp;
+  claimed_at: NullableTimestamp;
+  lease_expires_at: NullableTimestamp;
+  /** What the claim decided (null while it waits). */
+  step: NullableJsonb<JsonObject>;
+  /** The script calls the phone answered so far, in order. */
+  transcript: DefaultedJsonb<JsonArray>;
+  /** The call the phone runs now. */
+  pending_call: NullableJsonb<JsonObject>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+// Today ---------------------------------------------------------------------------------------
+
+/** The morning summary notification's setting, one per account (docs/features/today.md). */
+export interface TodaySummarySettingTable {
+  account_id: string;
+  enabled: Generated<boolean>;
+  /** Wall-clock time in `time_zone`, as `HH:MM:SS` (whole minutes). */
+  local_time: ColumnType<string, string | undefined, string>;
+  /** An IANA time zone name; the summary is never sent without one. */
+  time_zone: Nullable<string>;
+  /** The local date of the latest summary sent. */
+  last_sent_on: Nullable<DateString>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+// Sale emails ---------------------------------------------------------------------------------
+
+/** An account's forwarding address and email sale settings (docs/features/email-sales.md). */
+export interface SaleEmailInboxTable {
+  account_id: string;
+  /** The private part of `sales+<token>@<inbound domain>`. */
+  address_token: string;
+  ask_before_delist: Generated<boolean>;
+  last_email_at: NullableTimestamp;
+  /** The latest marketplace email that passed DKIM and SPF. */
+  last_verified_email_at: NullableTimestamp;
+  last_sale_email_at: NullableTimestamp;
+  confirmation_provider: Nullable<string>;
+  confirmation_code: Nullable<string>;
+  confirmation_url: Nullable<string>;
+  confirmation_received_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+// Batch listing -------------------------------------------------------------------------------
+
+/** A haul photographed in one session (docs/features/batch.md). */
+export interface ItemBatchTable {
+  id: Id;
+  account_id: string;
+  created_by_user_id: Nullable<string>;
+  /** The seller's measured interaction: all three set, or none until the app reports them. */
+  active_ms: Nullable<number>;
+  waiting_ms: Nullable<number>;
+  taps: Nullable<number>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** One item of a batch, at its place in the haul. */
+export interface ItemBatchItemTable {
+  account_id: string;
+  batch_id: string;
+  item_id: string;
+  position: number;
+  /** When the app had attached every photo (`photo_count` of them). */
+  submitted_at: NullableTimestamp;
+  photo_count: Nullable<number>;
+  /** Why the worker did not start the analysis; all three set, or none. */
+  start_error_code: Nullable<string>;
+  start_error_message: Nullable<string>;
+  start_error_retryable: Nullable<boolean>;
+  active_ms: Nullable<number>;
+  waiting_ms: Nullable<number>;
+  taps: Nullable<number>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -786,6 +989,17 @@ export interface Database {
   deleted_identity: DeletedIdentityTable;
   account_deletion: AccountDeletionTable;
   account_deletion_grant: AccountDeletionGrantTable;
+  account_deletion_object: AccountDeletionObjectTable;
+  connection_deletion: ConnectionDeletionTable;
+  connection_deletion_object: ConnectionDeletionObjectTable;
+  deletion_record: DeletionRecordTable;
   automation_run: AutomationRunTable;
   sale_check_schedule: SaleCheckScheduleTable;
+  session_check: SessionCheckTable;
+  app_device: AppDeviceTable;
+  phone_work: PhoneWorkTable;
+  today_summary_setting: TodaySummarySettingTable;
+  sale_email_inbox: SaleEmailInboxTable;
+  item_batch: ItemBatchTable;
+  item_batch_item: ItemBatchItemTable;
 }

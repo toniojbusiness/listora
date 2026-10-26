@@ -7,11 +7,6 @@ struct E2EStack {
     let email: String
     /// The stack's control endpoint (packages/e2e/src/control.ts).
     let controlURL: URL?
-    /// `ebay`, or `all` for the full stack (`make e2e-full`): Depop through its API, Poshmark and
-    /// Mercari automated in linked sessions, and a second seller whose Depop is automated.
-    let marketplaces: String
-    /// The full stack's second seller (its token and email).
-    let secondSeller: (token: String, email: String)?
 
     static func fromEnvironment() throws -> E2EStack {
         let environment = ProcessInfo.processInfo.environment
@@ -25,20 +20,7 @@ struct E2EStack {
             token: token,
             email: environment["LISTORA_E2E_EMAIL"] ?? "e2e@listora.test",
             controlURL: environment["LISTORA_E2E_CONTROL_URL"].flatMap(URL.init(string:)),
-            marketplaces: environment["LISTORA_E2E_MARKETPLACES"] ?? "ebay",
-            secondSeller: environment["LISTORA_E2E_SECOND_ACCESS_TOKEN"].map { token in
-                (token, environment["LISTORA_E2E_SECOND_EMAIL"] ?? "e2e-second@listora.test")
-            },
         )
-    }
-
-    /// The full stack, or a skip: the full-stack suite runs only under `make e2e-full`.
-    static func fullFromEnvironment() throws -> E2EStack {
-        let stack = try fromEnvironment()
-        guard stack.marketplaces == "all", stack.secondSeller != nil else {
-            throw XCTSkip("Needs the full local stack. Run `make e2e-full`, which starts it.")
-        }
-        return stack
     }
 
     /// The item as the API has it (`getItemBySku`).
@@ -92,6 +74,13 @@ struct E2EStack {
         return try JSONDecoder().decode(ProfitReportBody.self, from: data).summary
     }
 
+    /// A ready item, kept in bin B-12, that sold on eBay and ships by tomorrow
+    /// (`POST /today/sold-item`): a Today ship card.
+    func seedSoldItem() async throws -> SoldItem {
+        let data = try await control("today/sold-item", method: "POST", body: [:])
+        return try JSONDecoder().decode(SoldItem.self, from: data)
+    }
+
     /// Makes the fake eBay fail the next matching request (`POST /ebay/faults`).
     func injectEbayFault(action: String, type: String, message: String? = nil) async throws {
         var fault: [String: Any] = ["type": type]
@@ -110,55 +99,66 @@ struct E2EStack {
         _ = try await control("ebay/faults", method: "DELETE", body: nil)
     }
 
-    // MARK: The full stack (`make e2e-full`)
-
-    /// A ready item for a seller (`primary` or `second`), with details replaced key by key.
-    func seedReadyItem(seller: String, details: [String: String]) async throws -> SeededItem {
-        let data = try await control("items", method: "POST", body: ["seller": seller, "details": details])
-        return try JSONDecoder().decode(SeededItem.self, from: data)
+    /// A ready item whose Depop listing is being published (`POST /items/depop`): the publish
+    /// waits for the phone, which runs Depop.
+    func seedQueuedDepopListing() async throws -> SeededListing {
+        let data = try await control("items/depop", method: "POST", body: [:])
+        return try JSONDecoder().decode(SeededListing.self, from: data)
     }
 
-    /// An item live on each marketplace, every listing confirmed by its read-back.
-    func seedListedItem(on marketplaces: [String], details: [String: String]) async throws -> SeededItem {
-        let data = try await control(
-            "items/listed",
-            method: "POST",
-            body: ["marketplaces": marketplaces, "details": details],
-        )
-        return try JSONDecoder().decode(SeededItem.self, from: data)
+    /// Makes the fake Depop show a check on the next matching page (`POST /depop/faults`):
+    /// `captcha`, `bot_check`, `login_challenge`, or `session_expired`.
+    func injectDepopCheck(action: String, type: String) async throws {
+        _ = try await control("depop/faults", method: "POST", body: ["action": action, "fault": ["type": type]])
     }
 
-    /// A buyer buys the item's eBay listing; the fake eBay sends the API its notification.
-    func sellOnEbay(sku: String) async throws {
-        _ = try await control("ebay/sales", method: "POST", body: ["sku": sku])
+    /// Removes every check a test asked the fake Depop for (`DELETE /depop/faults`).
+    func clearDepopChecks() async throws {
+        _ = try await control("depop/faults", method: "DELETE", body: nil)
     }
 
-    /// The fake Poshmark, Mercari, or Depop site fails the next matching page
-    /// (`POST /automation/faults`): a `captcha`, a `reject` with a message, a `server_error`.
-    func injectAutomationFault(
-        marketplace: String,
-        action: String,
-        type: String,
-        message: String? = nil,
-        times: Int = 1,
-    ) async throws {
-        var fault: [String: Any] = ["type": type]
-        fault["message"] = message
-        _ = try await control(
-            "automation/faults",
-            method: "POST",
-            body: ["marketplace": marketplace, "action": action, "fault": fault, "times": times],
-        )
+    /// The newest sign-in link the fake Depop "emailed" (`GET /depop/sign-in-link`).
+    func depopSignInLink() async throws -> String {
+        let data = try await control("depop/sign-in-link", method: "GET", body: nil)
+        return try JSONDecoder().decode([String: String].self, from: data)["link"] ?? ""
     }
 
-    /// Removes every fault of every fake (`DELETE /faults`).
-    func clearAllFaults() async throws {
-        _ = try await control("faults", method: "DELETE", body: nil)
+    /// The fake Depop's products (`GET /depop/products`).
+    func depopProducts() async throws -> [DepopProduct] {
+        let data = try await control("depop/products", method: "GET", body: nil)
+        return try JSONDecoder().decode([DepopProduct].self, from: data)
     }
 
-    /// Links a fresh browser session (`POST /sessions/<marketplace>`), as relinking does.
-    func linkSession(_ marketplace: String) async throws {
-        _ = try await control("sessions/\(marketplace)", method: "POST", body: [:])
+    /// Unlinks the marketplace through the API (`disconnectConnection`), so a test starts with
+    /// nothing linked there and no work waiting for a phone; nothing to unlink is fine.
+    func unlink(_ marketplace: String) async throws {
+        var request = URLRequest(url: apiURL.appending(path: "v1/connections/\(marketplace)"))
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        XCTAssertTrue([200, 404].contains(status), String(bytes: data, encoding: .utf8) ?? "")
+    }
+
+    /// The listing as the API reports it (`getListing`).
+    func listing(id: String) async throws -> SavedListing {
+        var request = URLRequest(url: apiURL.appending(path: "v1/listings/\(id)"))
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200, String(bytes: data, encoding: .utf8) ?? "")
+        return try JSONDecoder().decode(SavedListing.self, from: data)
+    }
+
+    /// Ends the listing through the API (`endListing`), as the item screen's End listing does.
+    func endListing(id: String) async throws {
+        var request = URLRequest(url: apiURL.appending(path: "v1/listings/\(id)/end"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(UUID().uuidString, forHTTPHeaderField: "Idempotency-Key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["reason": "not_available"])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 202, String(bytes: data, encoding: .utf8) ?? "")
     }
 
     private func control(_ path: String, method: String, body: [String: Any]?) async throws -> Data {
@@ -180,6 +180,38 @@ struct SeededItem: Decodable {
     let sku: String
 }
 
+struct SeededListing: Decodable {
+    let id: String
+    let sku: String
+    let listingId: String
+}
+
+/// A product on the fake Depop site.
+struct DepopProduct: Decodable {
+    let slug: String
+    /// `ONSALE`, `SOLD`, or `DELETED`.
+    let status: String
+    let priceCents: Int
+    let description: String
+}
+
+/// The parts of the contract's `Listing` the tests check.
+struct SavedListing: Decodable {
+    struct StatusDisplay: Decodable {
+        let label: String
+    }
+
+    let status: String
+    let statusDisplay: StatusDisplay
+}
+
+struct SoldItem: Decodable {
+    let id: String
+    let sku: String
+    let saleId: String
+    let saleItemId: String
+}
+
 /// The parts of the contract's `Item` the test checks.
 struct SavedItem: Decodable {
     let status: String
@@ -193,6 +225,10 @@ struct SavedDetails: Decodable {
     let cost: SavedMoney?
     let purchaseSource: String?
     let colors: [String]?
+    let sizeLabel: String?
+    let pattern: String?
+    let flaws: [String]?
+    let keywords: [String]?
 }
 
 struct SavedMoney: Decodable {

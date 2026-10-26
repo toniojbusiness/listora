@@ -84,9 +84,13 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
             actions = Self.actions(of: listing)
         } else {
             statusLabel = "Not listed"
-            statusDetail = nil
             tone = .neutral
-            actions = Self.canList(marketplace: marketplace, connection: connection) ? [.list] : []
+            let canList = Self.canList(marketplace: marketplace, connection: connection)
+            actions = canList ? [.list] : []
+            // Without a usable connection (only eBay needs one) the card says how to list here.
+            statusDetail = canList ? nil : connection == nil
+                ? "Connect your \(name) account in Settings > Marketplaces to list it here."
+                : "Reconnect \(name) in Settings > Marketplaces to list it here."
         }
     }
 
@@ -106,8 +110,8 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
 
     /// Whether the item can be listed on the marketplace from here: Listora does it under a
     /// usable API or browser automation connection; otherwise every marketplace but eBay (which
-    /// Listora reaches only through its API) is listed assisted, through a task the user
-    /// finishes in its app.
+    /// Listora lists only through its API or a linked eBay session) is listed assisted, through a
+    /// task the user finishes in its app.
     static func canList(marketplace: KnownMarketplace, connection: Connection?) -> Bool {
         if isListoraDone(connection: connection) {
             return true

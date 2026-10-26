@@ -16,6 +16,9 @@ struct DraftEditorView: View {
 
     @State private var draft: Draft?
     @State private var selection: PhotoSelection?
+    /// The photo the detail sheet last showed, kept on screen for the moment a cleanup's new photo
+    /// takes to reach the observed draft.
+    @State private var shownPhoto: DraftPhotoRecord?
     @State private var isCapturing = false
     @State private var isConfirmingDelete = false
     @State private var unloadedPhotos: PickedPhotos<PhotosPickerItem>?
@@ -110,17 +113,15 @@ struct DraftEditorView: View {
         } message: {
             Text("Its photos are removed from this iPhone and from Listora.")
         }
-        .sheet(item: $selection) { selection in
-            Group {
-                if let photo = draft?.photos.first(where: { $0.id == selection.id }) {
-                    PhotoDetailView(photo: photo, model: model)
-                } else {
-                    // The photo was removed or replaced (cropped) while open.
-                    Color.clear.onAppear { self.selection = nil }
-                }
-            }
-            .navigationTransition(.zoom(sourceID: selection.id, in: photoTransition))
-        }
+        .sheet(
+            item: $selection,
+            onDismiss: { shownPhoto = nil },
+            content: { selection in
+                // Zooms back into the tile of the photo now open: after a cleanup, the new one's.
+                photoDetail(for: selection)
+                    .navigationTransition(.zoom(sourceID: selection.photoID, in: photoTransition))
+            },
+        )
         .fullScreenCover(isPresented: $isCapturing) {
             CameraCaptureView(
                 camera: environment.makeCamera(),
@@ -142,39 +143,6 @@ struct DraftEditorView: View {
                 dismiss()
             }
         }
-    }
-
-    private func photoGrid(_ draft: Draft) -> some View {
-        LazyVGrid(columns: columns, spacing: Spacing.xs) {
-            ForEach(Array(draft.photos.enumerated()), id: \.element.id) { index, photo in
-                Button {
-                    selection = PhotoSelection(id: photo.id)
-                } label: {
-                    PhotoTile(
-                        photo: photo,
-                        index: index,
-                        url: model.store.fileURL(for: photo),
-                        status: PhotoUploadStatus(
-                            photo: photo,
-                            isTransferring: model.activity.transferring.contains(photo.id),
-                            isSignedIn: model.activity.isSignedIn,
-                        ),
-                    )
-                }
-                .buttonStyle(.plain)
-                .matchedTransitionSource(id: photo.id, in: photoTransition)
-                .accessibilityIdentifier("photo.tile.\(index)")
-                .draggable(photo.id)
-                .dropDestination(for: String.self) { items, _ in
-                    guard let moved = items.first, moved != photo.id else { return false }
-                    Motion.perform(Motion.gentle) {
-                        model.movePhoto(moved, to: index)
-                    }
-                    return true
-                }
-            }
-        }
-        .motion(Motion.gentle, value: draft.photos.map(\.id))
     }
 
     @ViewBuilder
@@ -276,8 +244,73 @@ struct DraftEditorView: View {
     }
 }
 
+extension DraftEditorView {
+    private func photoGrid(_ draft: Draft) -> some View {
+        LazyVGrid(columns: columns, spacing: Spacing.xs) {
+            ForEach(Array(draft.photos.enumerated()), id: \.element.id) { index, photo in
+                Button {
+                    selection = PhotoSelection(id: photo.id, photoID: photo.id)
+                } label: {
+                    PhotoTile(
+                        photo: photo,
+                        index: index,
+                        url: model.store.fileURL(for: photo),
+                        status: PhotoUploadStatus(
+                            photo: photo,
+                            isTransferring: model.activity.transferring.contains(photo.id),
+                            isSignedIn: model.activity.isSignedIn,
+                        ),
+                    )
+                }
+                .buttonStyle(.plain)
+                .matchedTransitionSource(id: photo.id, in: photoTransition)
+                .accessibilityIdentifier("photo.tile.\(index)")
+                .draggable(photo.id)
+                .dropDestination(for: String.self) { items, _ in
+                    guard let moved = items.first, moved != photo.id else { return false }
+                    Motion.perform(Motion.gentle) {
+                        model.movePhoto(moved, to: index)
+                    }
+                    return true
+                }
+            }
+        }
+        .motion(Motion.gentle, value: draft.photos.map(\.id))
+    }
+}
+
+extension DraftEditorView {
+    /// The open photo's detail. A photo that is gone (removed, or cropped into a new one) closes
+    /// the sheet; one that a background cleanup is replacing stays on screen meanwhile.
+    @ViewBuilder
+    private func photoDetail(for selection: PhotoSelection) -> some View {
+        let current = draft?.photos.first(where: { $0.id == selection.photoID })
+            ?? (try? model.store.photo(id: selection.photoID))
+        if let photo = current ?? shownPhoto {
+            PhotoDetailView(photo: photo, model: model) { newID in
+                self.selection?.photoID = newID
+            }
+            .task(id: current) {
+                guard current == nil else {
+                    shownPhoto = current
+                    return
+                }
+                // A replacement lands within a moment; a photo still missing after it is gone.
+                try? await Task.sleep(for: .milliseconds(800))
+                guard !Task.isCancelled else { return }
+                self.selection = nil
+            }
+        } else {
+            Color.clear.onAppear { self.selection = nil }
+        }
+    }
+}
+
+/// The photo open in the detail sheet. `id` stays the photo first opened, so the sheet stays up
+/// when a background cleanup replaces the photo; `photoID` follows the replacement.
 struct PhotoSelection: Identifiable {
     let id: String
+    var photoID: String
 }
 
 extension DraftUploadSummary.Tone {

@@ -42,7 +42,7 @@ require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Ins
 
 .PHONY: ios-generate ios-build ios-test ios-e2e-ready ios-check-ats ios-screenshots ios-lint ios-format ios-open ios-clean \
 	ios-simulator e2e-full \
-	ios-tag-fixtures ios-app-icon ios-archive ios-testflight
+	ios-tag-fixtures ios-batch-fixtures ios-app-icon ios-archive ios-testflight ios-install-device
 
 ## Generate Listora.xcodeproj from apps/ios/project.yml.
 ios-generate:
@@ -122,13 +122,18 @@ ios-e2e-ready:
 
 ## Screenshot every screen in light and dark mode, at the default and the largest text size, into
 ## IOS_SCREENSHOT_DIR/<variant>/ (ScreenshotTourUITests). It switches the simulator's appearance
-## and text size, then puts them back to light and the default size.
+## and text size, then puts them back to light and the default size. The review screens go
+## through the local stack, like `ios-test`. IOS_SCREENSHOT_TESTS narrows the tour, for example to
+## ListoraUITests/ScreenshotTourUITests/testReviewTour.
 IOS_SCREENSHOT_DIR ?= $(IOS_BUILD_DIR)/screenshots
+IOS_SCREENSHOT_TESTS ?= ListoraUITests/ScreenshotTourUITests
 IOS_SCREENSHOT_VARIANTS := light:large dark:large light:accessibility-extra-extra-extra-large \
 	dark:accessibility-extra-extra-extra-large
 
-ios-screenshots: ios-generate ios-simulator
+ios-screenshots: ios-generate ios-simulator ios-e2e-ready
 	$(XCODEBUILD) build-for-testing
+	@# Appearance and text size can only be set on a booted simulator.
+	xcrun simctl bootstatus "$(IOS_SIMULATOR)" -b >/dev/null
 	@trap 'xcrun simctl ui "$(IOS_SIMULATOR)" appearance light; xcrun simctl ui "$(IOS_SIMULATOR)" content_size large' EXIT; \
 	for variant in $(IOS_SCREENSHOT_VARIANTS); do \
 		appearance=$${variant%%:*}; size=$${variant#*:}; \
@@ -136,7 +141,7 @@ ios-screenshots: ios-generate ios-simulator
 		xcrun simctl ui "$(IOS_SIMULATOR)" content_size $$size && \
 		TEST_RUNNER_LISTORA_SCREENSHOT_DIR='$(IOS_SCREENSHOT_DIR)' \
 		TEST_RUNNER_LISTORA_SCREENSHOT_VARIANT="$$appearance-$$size" \
-			$(XCODEBUILD) test-without-building -only-testing:ListoraUITests/ScreenshotTourUITests \
+			$(E2E_STACK) -- $(XCODEBUILD) test-without-building -only-testing:$(IOS_SCREENSHOT_TESTS) \
 			-test-timeouts-enabled YES -default-test-execution-time-allowance 900 -collect-test-diagnostics never \
 			|| exit 1; \
 	done
@@ -162,6 +167,15 @@ ios-tag-fixtures:
 	xcrun swiftc -O -o $(IOS_BUILD_DIR)/tools/generate-tag-fixtures $(IOS_DIR)/Tools/generate-tag-fixtures.swift
 	$(IOS_BUILD_DIR)/tools/generate-tag-fixtures
 
+## Re-render the synthetic haul photos that PhotoSignalsFeatureTests groups and the batch UI
+## test shoots, then record their Vision signals for the grouping tests in CoreTests.
+ios-batch-fixtures:
+	mkdir -p $(IOS_BUILD_DIR)/tools
+	xcrun swiftc -O -o $(IOS_BUILD_DIR)/tools/generate-batch-fixtures $(IOS_DIR)/Tools/generate-batch-fixtures.swift
+	$(IOS_BUILD_DIR)/tools/generate-batch-fixtures
+	xcrun swiftc -O -parse-as-library -o $(IOS_BUILD_DIR)/tools/record-batch-signals $(IOS_DIR)/Tools/record-batch-signals.swift
+	$(IOS_BUILD_DIR)/tools/record-batch-signals
+
 ## Re-render the placeholder app icon PNGs in Listora/Assets.xcassets/AppIcon.appiconset.
 ios-app-icon:
 	mkdir -p $(IOS_BUILD_DIR)/tools
@@ -179,6 +193,17 @@ ios-testflight:
 	$(IOS_RELEASE) check-credentials
 	$(MAKE) ios-generate ios-check-ats
 	$(IOS_RELEASE) testflight '$(IOS_RELEASE_CONFIGURATION)' '$(IOS_BUILD_NUMBER)'
+
+## Build, install, and launch the app on the iPhone connected to this Mac, signed with the Apple
+## ID in Xcode (a free Personal Team works). Signing: Config/Device.xcconfig (gitignored).
+## IOS_DEVICE_CONFIGURATION defaults to Prod-Release; IOS_DEVICE picks one of several iPhones.
+IOS_DEVICE_CONFIGURATION ?= Prod-Release
+IOS_DEVICE ?=
+
+ios-install-device: ios-generate
+	$(call require,node,node)
+	IOS_BUILD_DIR='$(IOS_BUILD_DIR)' IOS_DEVICE_CONFIGURATION='$(IOS_DEVICE_CONFIGURATION)' \
+		IOS_DEVICE='$(IOS_DEVICE)' scripts/ios-install-device.sh
 
 ## Generate the project and open it in Xcode.
 ios-open: ios-generate

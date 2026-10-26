@@ -58,6 +58,12 @@ targets:
     platform: iOS
     sources:
       - Listora
+      # Settings > Privacy policy and Terms of service read the repository's own drafts
+      # (LegalDocument in SettingsFeature), so the app and docs/legal never disagree.
+      - path: ../../docs/legal/privacy-policy.md
+        buildPhase: resources
+      - path: ../../docs/legal/terms-of-service.md
+        buildPhase: resources
     dependencies:
       - package: Core
       - package: Features
@@ -68,6 +74,11 @@ targets:
       properties:
         com.apple.security.application-groups:
           - $(APP_GROUP_IDENTIFIER)
+        # Push notifications (sale alerts that delist from this phone, docs/features/phone-execution.md):
+        # `development` in Dev, `production` in Staging and Prod (APS_ENVIRONMENT). Personal device
+        # builds sign with Config/PersonalTeam.entitlements, without them: a free team has no push.
+        aps-environment: $(APS_ENVIRONMENT)
+        com.apple.developer.usernotifications.time-sensitive: true
     info:
       path: Generated/Listora-Info.plist
       properties:
@@ -77,11 +88,26 @@ targets:
         ListoraEnvironment: $(LISTORA_ENVIRONMENT)
         ListoraAPIBaseURL: $(API_BASE_URL)
         ListoraAppGroup: $(APP_GROUP_IDENTIFIER)
+        ListoraSessionKeychainGroup: $(SESSION_KEYCHAIN_GROUP)
+        ListoraCognitoRegion: $(COGNITO_REGION)
+        ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
+        ListoraSupportEmail: $(SUPPORT_EMAIL)
         ITSAppUsesNonExemptEncryption: false
         NSCameraUsageDescription: Listora uses the camera to photograph the items you sell.
         # Assisted tasks save an item's photos to the camera roll, in posting order, for the
         # marketplace's app to pick up (add-only access).
         NSPhotoLibraryAddUsageDescription: Listora saves your item's photos so you can post them in a marketplace's app.
+        NSMicrophoneUsageDescription: Listora listens only while you hold the talk button on the review screen, so you can correct an item's details by voice.
+        NSSpeechRecognitionUsageDescription: Listora turns what you say into text to fill in an item's details. Your voice recording is never sent to Listora.
+        # The marketplace work that runs on this phone (docs/features/phone-execution.md): on a
+        # push, on background app refresh, and overnight while the phone charges.
+        UIBackgroundModes:
+          - fetch
+          - processing
+          - remote-notification
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.listora.phone-work.refresh
+          - com.listora.phone-work.processing
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UIApplicationSceneManifest:
@@ -131,6 +157,9 @@ targets:
         ListoraEnvironment: $(LISTORA_ENVIRONMENT)
         ListoraAPIBaseURL: $(API_BASE_URL)
         ListoraAppGroup: $(APP_GROUP_IDENTIFIER)
+        ListoraSessionKeychainGroup: $(SESSION_KEYCHAIN_GROUP)
+        ListoraCognitoRegion: $(COGNITO_REGION)
+        ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -169,10 +198,15 @@ targets:
       - path: ListoraUITests
         excludes:
           - Fixtures
+          - BatchFixtures
           # The fake AI answers of the local stack `make ios-test` starts; read by the stack.
           - FakeAI
       # Photos the UI tests import through the app's debug fixture import, kept as one folder.
       - path: ListoraUITests/Fixtures
+        type: folder
+        buildPhase: resources
+      # A 3-item haul the batch UI test shoots with the fake camera (make ios-batch-fixtures).
+      - path: ListoraUITests/BatchFixtures
         type: folder
         buildPhase: resources
     dependencies:
@@ -199,15 +233,21 @@ schemes:
         - package: DesignSystem/DesignSystemTests
         - package: APIClient/APIClientTests
         - package: Features/AppFeatureTests
+        - package: Features/TodayFeatureTests
         - package: Features/InventoryFeatureTests
         - package: Features/SalesFeatureTests
         - package: Features/AddItemFeatureTests
         - package: Features/ReviewFeatureTests
         - package: Features/TasksFeatureTests
         - package: Features/SettingsFeatureTests
+        - package: Features/SignInFeatureTests
         - package: Features/MarketplacesFeatureTests
         - package: Features/TagReadingFeatureTests
+        - package: Features/VoiceInputFeatureTests
+        - package: Features/PhotoSignalsFeatureTests
         - package: Features/ShareLinkFeatureTests
+        - package: Features/MarketplaceLinkingFeatureTests
+        - package: Features/PhoneExecutionFeatureTests
     profile:
       config: Prod-Release
     analyze:

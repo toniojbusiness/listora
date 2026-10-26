@@ -85,7 +85,7 @@ struct MarkSoldView: View {
                                     .font(Typography.headline)
                                     .foregroundStyle(Palette.textPrimary)
                                 Text(line.sku)
-                                    .font(Typography.footnote.monospacedDigit())
+                                    .font(Typography.metadata)
                                     .foregroundStyle(Palette.textSecondary)
                             }
                             Spacer()
@@ -169,10 +169,10 @@ struct MarkSoldView: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.title ?? "Untitled item")
-                            .font(Typography.subheadline.weight(.semibold))
+                            .font(Typography.emphasis)
                             .foregroundStyle(Palette.textPrimary)
                         Text(item.sku)
-                            .font(Typography.footnote.monospacedDigit())
+                            .font(Typography.metadata)
                             .foregroundStyle(Palette.textSecondary)
                     }
                 }

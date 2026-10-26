@@ -14,6 +14,7 @@ export type { AutomationSessions, SessionRequest, SessionRun } from './adapter/s
 export { createAutomationAdapters } from './adapters.ts';
 export { createDepopAutomationAdapter } from './depop/adapter.ts';
 export type { DepopAutomationAdapterOptions } from './depop/adapter.ts';
+export type { DepopAutomationPayload } from './depop/payload.ts';
 export { FakeDepopSite } from './depop/fake/fake-depop-site.ts';
 export type {
   FakeDepopSiteAction,
@@ -21,7 +22,17 @@ export type {
   FakeDepopSiteFaultRule,
   FakeDepopSiteOptions,
 } from './depop/fake/fake-depop-site.ts';
-export type { DepopAutomationPayload } from './depop/payload.ts';
+export { createEbayAutomationAdapter } from './ebay/adapter.ts';
+export type { EbayAutomationAdapterOptions } from './ebay/adapter.ts';
+export { FakeEbaySite } from './ebay/fake/fake-ebay-site.ts';
+export type {
+  FakeEbaySiteAction,
+  FakeEbaySiteFault,
+  FakeEbaySiteFaultRule,
+  FakeEbaySiteListing,
+  FakeEbaySiteOptions,
+} from './ebay/fake/fake-ebay-site.ts';
+export type { EbayAutomationPayload } from './ebay/payload.ts';
 export type { AutomationAdapterDependencies } from './adapters.ts';
 export {
   AUTOMATION_DISPATCH_SCHEDULE,
@@ -57,6 +68,7 @@ export {
   scaleRunnerServiceToZero,
 } from './launcher.ts';
 export type { LauncherDependencies, RunnerLauncher, RunnerLaunchConfig } from './launcher.ts';
+export { cloudAccess, setExecutionLocation } from './execution.ts';
 export { linkAutomationSession } from './link.ts';
 export { FakeMercariSite } from './mercari/fake/fake-mercari.ts';
 export type {
@@ -84,6 +96,22 @@ export type {
   PacingSettings,
   RunLimits,
 } from './profiles.ts';
+export { phoneWorkAdapters } from './phone/adapters.ts';
+export { PHONE_RUNTIME_VERSION } from './phone/runtime.ts';
+export type { PhoneCallInput, PhoneCallOutput } from './phone/runtime.ts';
+export { PHONE_WATCH_SCHEDULE, PHONE_WATCH_TASK, watchPhoneWork } from './phone/watch.ts';
+export type { PhoneWatchOptions } from './phone/watch.ts';
+export {
+  answerPhoneCall,
+  claimPhoneRun,
+  nextPhoneClaimSeconds,
+  PHONE_IDLE_CLAIM_SECONDS,
+  PHONE_UNUSED_CLAIM_SECONDS,
+  PhoneCallConflictError,
+  PhoneRunGoneError,
+  PhoneRuntimeMismatchError,
+} from './phone/work.ts';
+export type { PhoneRunState, PhoneWorkDependencies } from './phone/work.ts';
 export { createPoshmarkAutomationAdapter } from './poshmark/adapter.ts';
 export type { PoshmarkAdapterOptions } from './poshmark/adapter.ts';
 export { FakePoshmark } from './poshmark/fake/fake-poshmark.ts';
@@ -130,6 +158,7 @@ export type { SaleCheckDependencies } from './sale-checks/job.ts';
 export {
   dueSaleChecks,
   enqueueSaleCheck,
+  queueSaleCheckForPhone,
   isSaleCheckJobPayload,
   requestSaleCheck,
   SALE_CHECK_TASK,
@@ -137,5 +166,16 @@ export {
   scheduleSaleCheck,
 } from './sale-checks/schedule.ts';
 export type { SaleCheckJobPayload, ScheduledCheck } from './sale-checks/schedule.ts';
+export { runSessionCheck, SESSION_CHECK_ATTEMPTS } from './session-checks/job.ts';
+export type { SessionCheckDependencies } from './session-checks/job.ts';
+export {
+  isSessionCheckJobPayload,
+  queueSessionCheckForPhone,
+  requestSessionCheck,
+  requestSessionRecheck,
+  SESSION_CHECK_TASK,
+  sessionCheckJobKey,
+} from './session-checks/schedule.ts';
+export type { SessionCheckJobPayload, SessionCheckTarget } from './session-checks/schedule.ts';
 export { AutomationConfigError, loadAutomationSettings } from './settings.ts';
 export type { AutomationSettings, SaleCheckSettings } from './settings.ts';

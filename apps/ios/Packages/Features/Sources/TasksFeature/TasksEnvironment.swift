@@ -10,14 +10,21 @@ public final class TasksEnvironment {
     let service: any TasksService
     let pasteboard: any Pasteboard
     let photoSaver: any PhotoSaving
+    /// Opens the sign-in, for a signed-out screen's Sign in button.
+    let onSignIn: @MainActor () -> Void
 
-    public convenience init(apiClient: APIClient, accessTokens: AccessTokenStore) {
+    public convenience init(
+        apiClient: APIClient,
+        accessTokens: AccessTokenStore,
+        onSignIn: @escaping @MainActor () -> Void = {},
+    ) {
         self.init(
             service: APITasksService(client: apiClient.client),
             reminders: UserNotificationReminders(),
             pasteboard: SystemPasteboard(),
             photoSaver: PhotoLibrarySaver(),
             isSignedIn: { accessTokens.grant != nil },
+            onSignIn: onSignIn,
         )
     }
 
@@ -27,20 +34,23 @@ public final class TasksEnvironment {
         pasteboard: any Pasteboard,
         photoSaver: any PhotoSaving,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
+        onSignIn: @escaping @MainActor () -> Void = {},
     ) {
         self.service = service
         self.pasteboard = pasteboard
         self.photoSaver = photoSaver
+        self.onSignIn = onSignIn
         inbox = TaskInboxModel(service: service, reminders: reminders, isSignedIn: isSignedIn)
     }
 
     private var notificationRouter: TaskNotificationRouter?
 
-    /// Shows task reminders while the app is open and opens the Tasks tab when one is tapped.
-    /// Only an app has a notification center, so test hosts and previews skip it.
-    public func startNotifications() {
+    /// Shows task reminders while the app is open and opens the Tasks tab when one is tapped;
+    /// `onOther` runs for any other notification as it shows or is tapped (a sale's push). Only
+    /// an app has a notification center, so test hosts and previews skip it.
+    public func startNotifications(onOther: @escaping @Sendable () async -> Void = {}) {
         guard notificationRouter == nil, UserNotificationReminders.isAvailable else { return }
-        notificationRouter = TaskNotificationRouter.install()
+        notificationRouter = TaskNotificationRouter.install(onOther: onOther)
     }
 
     func makeDetailModel(task: UserTask) -> TaskDetailModel {

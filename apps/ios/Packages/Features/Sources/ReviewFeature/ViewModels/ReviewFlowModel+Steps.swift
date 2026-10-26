@@ -214,7 +214,7 @@ extension ReviewFlowModel {
     // MARK: Requests
 
     /// Runs a step's requests as waiting time, showing progress and any failure.
-    private func perform(_ step: () async throws(APIFailure) -> Void) async {
+    func perform(_ step: () async throws(APIFailure) -> Void) async {
         guard !isWorking else { return }
         isWorking = true
         meter.setWaiting(true, for: request.sessionID)

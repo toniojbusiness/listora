@@ -14,7 +14,7 @@ import type { AutomationProfile } from '../profiles.ts';
 export interface UploadFile {
   name: string;
   mimeType: string;
-  buffer: Buffer;
+  bytes: Uint8Array;
 }
 
 /**
@@ -49,6 +49,12 @@ export interface PageDriver {
   texts(selector: string): Promise<string[]>;
   attribute(selector: string, name: string): Promise<string | null>;
   attributes(selector: string, name: string): Promise<(string | null)[]>;
+  /**
+   * The data the page keeps for its own scripts in the global `name` (`window.<name>`), as
+   * JSON, or `null` when it has none. A page whose data comes in an inline script that removes
+   * itself once it ran (Poshmark's `window.__INITIAL_STATE__`) has it only there.
+   */
+  pageData(name: string): Promise<unknown>;
 }
 
 export interface StepOptions {
@@ -94,8 +100,20 @@ export type ScriptErrorCode =
   | 'element_missing'
   /** The run was aborted (the engine's deadline, or the runner stopping). */
   | 'aborted'
+  /**
+   * The runner's browser could not start or open the session, so the marketplace was never
+   * asked: a failure on Listora's side, never the marketplace's answer.
+   */
+  | 'browser_unavailable'
   /** The script itself failed (a bug, or a page it does not understand). */
-  | 'script_error';
+  | 'script_error'
+  /**
+   * On the phone (docs/features/phone-execution.md): the page showed a check that the seller
+   * completes themselves in the app, and the run stopped there; nothing after it ran. The step
+   * runs again once they have, or the read-back decides when the run had already changed
+   * something.
+   */
+  | 'stopped_for_check';
 
 export type ScriptResult<T> =
   | { ok: true; value: T; mutated: boolean; steps: string[] }

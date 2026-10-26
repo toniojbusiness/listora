@@ -7,12 +7,14 @@ import { CREDENTIAL_PURPOSES as VAULT_PURPOSES } from '@listora/connections';
 import { MARKETPLACES } from '@listora/db';
 import { METRIC_NAMESPACE, TRUST_METRICS } from '@listora/observability/catalog';
 
+import { CDK_BOOTSTRAP_QUALIFIER } from './bootstrap.ts';
 import { APP_SECRETS, ENVIRONMENT_SETTINGS, SERVICE_NAMES } from './config.ts';
 import {
   containerEnvironment,
   containerSecretNames,
   MIGRATE_COMMAND,
   RUNNER_COMMAND,
+  signInResources,
   type ServiceResources,
 } from './containers.ts';
 import type { ListoraStacks } from './app.ts';
@@ -21,11 +23,26 @@ import {
   HTTP_API_THROTTLE,
   RUNNER_SERVICE_NAME,
 } from './stacks/compute-stack.ts';
-import { PLACEHOLDER_SHAPES } from './placeholders.ts';
 import { MIGRATE_OUTPUTS, migrateTaskNames } from './stacks/migrate-stack.ts';
+import { PLACEHOLDER_CONTEXT, PLACEHOLDER_SHAPES } from './placeholders.ts';
 import { stackList, synthesize } from './test-support.ts';
 
 type Resource = { Type: string; Properties?: Record<string, unknown> } & Record<string, unknown>;
+
+/** The Dockerfile's `runner` stage: the paths it declares volumes and the ones its user owns. */
+function runnerImageStage(): { volumes: string[]; owned: string[] } {
+  const dockerfile = readFileSync(new URL('../../Dockerfile', import.meta.url), 'utf8');
+  const stage = dockerfile.split(/^FROM /m).find((part) => /^\S+ AS runner\b/.test(part));
+  if (stage === undefined) throw new Error('the Dockerfile has no runner stage');
+  const user = /^USER (\S+)$/m.exec(stage)?.[1];
+  const volumes = [...stage.matchAll(/^VOLUME \[(.*)\]$/gm)].flatMap(
+    (match) => JSON.parse(`[${match[1] ?? ''}]`) as string[],
+  );
+  const owned = [...stage.matchAll(/^RUN chown (\S+):\S+ (.+)$/gm)]
+    .filter((match) => match[1] === user)
+    .flatMap((match) => (match[2] ?? '').split(' '));
+  return { volumes, owned };
+}
 
 /** Each environment, plus personal with a domain (it deploys without one until then). */
 const synthesized = new Map(
@@ -39,7 +56,9 @@ function synthesizedShape(shape: string): ReturnType<typeof synthesize> {
 }
 
 function template(shape: string, stack: keyof ListoraStacks) {
-  return Template.fromStack(synthesizedShape(shape).stacks[stack]);
+  const defined = synthesizedShape(shape).stacks[stack];
+  if (defined === undefined) throw new Error(`${shape} has no ${stack} stack`);
+  return Template.fromStack(defined);
 }
 
 function resources(t: Template, type: string): Resource[] {
@@ -61,6 +80,7 @@ function asList(value: unknown): unknown[] {
 /** Any resources, for the names of the variables a container gets. */
 const ANY_RESOURCES: ServiceResources = {
   photoStorage: { bucket: '', region: '', publicBaseUrl: '' },
+  signIn: { driver: 'dev' },
   runner: { cluster: '', service: '', region: '' },
   tokenKeyArn: '',
 };
@@ -244,6 +264,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
             Rules: [
               Match.objectLike({ AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 } }),
               Match.objectLike({ NoncurrentVersionExpiration: { NoncurrentDays: 30 } }),
+              // Uploads never attached (the worker deletes each one it processes).
+              Match.objectLike({ Prefix: 'uploads/', ExpirationInDays: 7 }),
               // The browser runner's screenshots, which the worker deletes after 14 days.
               Match.objectLike({ Prefix: 'automation/', ExpirationInDays: 30 }),
             ],
@@ -297,17 +319,21 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         ).Statement.filter((statement) => statement['Effect'] === 'Allow'),
       );
       expect(allowed.flatMap((statement) => asList(statement['Action']))).toEqual(['s3:GetObject']);
+      // CloudFront may read public/ objects only, whatever its origins and behaviors say.
+      expect(allowed.map((statement) => JSON.stringify(statement['Resource']))).toEqual([
+        expect.stringMatching(/"\/public\/\*"/),
+      ]);
     });
   });
 
   describe('email', () => {
     const t = template(shape, 'email');
 
-    it('keeps raw sale email in a private bucket for 90 days', () => {
+    it('keeps raw sale email in a private bucket, at most 14 days if it is never processed', () => {
       t.hasResourceProperties('AWS::S3::Bucket', {
         PublicAccessBlockConfiguration: Match.objectLike({ BlockPublicPolicy: true }),
         LifecycleConfiguration: {
-          Rules: [Match.objectLike({ ExpirationInDays: 90, Prefix: 'inbound/' })],
+          Rules: [Match.objectLike({ ExpirationInDays: 14, Prefix: 'inbound/' })],
         },
       });
     });
@@ -328,7 +354,14 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
             Recipients: [`in.${dns.domain}`],
             ScanEnabled: true,
             TlsPolicy: 'Require',
-            Actions: [{ S3Action: Match.objectLike({ ObjectKeyPrefix: 'inbound/' }) }],
+            Actions: [
+              {
+                S3Action: Match.objectLike({
+                  ObjectKeyPrefix: 'inbound/',
+                  TopicArn: { Ref: Match.stringLikeRegexp('^SaleEmailTopic') },
+                }),
+              },
+            ],
           }),
         });
         t.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: dns.domain });
@@ -345,13 +378,48 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           },
         });
       });
+
+      it('notifies the worker of each stored message: SES publishes to a topic, raw into an encrypted queue', () => {
+        t.hasResourceProperties('AWS::SNS::TopicPolicy', {
+          PolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Action: 'sns:Publish',
+                Principal: { Service: 'ses.amazonaws.com' },
+                Condition: { StringEquals: { 'aws:SourceAccount': target.account } },
+              }),
+            ]),
+          },
+        });
+        t.hasResourceProperties('AWS::SNS::Subscription', {
+          Protocol: 'sqs',
+          RawMessageDelivery: true,
+          TopicArn: { Ref: Match.stringLikeRegexp('^SaleEmailTopic') },
+        });
+        t.hasResourceProperties('AWS::SQS::Queue', {
+          QueueName: `listora-${environment}-sale-email`,
+          SqsManagedSseEnabled: true,
+          VisibilityTimeout: 300,
+          RedrivePolicy: Match.objectLike({ maxReceiveCount: 5 }),
+        });
+        t.hasResourceProperties('AWS::SQS::Queue', {
+          QueueName: `listora-${environment}-sale-email-dead-letters`,
+          MessageRetentionPeriod: 14 * 24 * 3600,
+        });
+      });
     } else {
-      it('receives no email without a domain: no SES identity, MX record, or receipt rule', () => {
+      it('receives no email without a domain: no domain identity, MX record, or receipt rule', () => {
+        expect(
+          resources(t, 'AWS::SES::EmailIdentity').map(
+            (identity) => identity.Properties?.['EmailIdentity'],
+          ),
+        ).toEqual(target.ownerEmail === undefined ? [] : [target.ownerEmail]);
         for (const type of [
-          'AWS::SES::EmailIdentity',
           'AWS::SES::ReceiptRuleSet',
           'AWS::SES::ReceiptRule',
           'AWS::Route53::RecordSet',
+          'AWS::SNS::Topic',
+          'AWS::SQS::Queue',
         ]) {
           t.resourceCountIs(type, 0);
         }
@@ -359,7 +427,106 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(Object.keys(t.findOutputs('*'))).not.toContain('InboundMailDomain');
       });
     }
+
+    if (target.ownerEmail !== undefined) {
+      const owner = target.ownerEmail;
+      it("holds the owner's address as an SES identity, for the user pool to email the sign-in codes", () => {
+        t.hasResourceProperties('AWS::SES::EmailIdentity', { EmailIdentity: owner });
+      });
+    }
   });
+
+  if (settings.signIn.via === 'owner-pool') {
+    describe('auth', () => {
+      const t = template(shape, 'auth');
+      const owner = target.ownerEmail ?? '';
+
+      it('signs in with emailed one-time codes, with no sign-up, no password reset, and no MFA', () => {
+        t.resourceCountIs('AWS::Cognito::UserPool', 1);
+        t.hasResource('AWS::Cognito::UserPool', {
+          DeletionPolicy: settings.protectData ? 'Retain' : 'Delete',
+          Properties: Match.objectLike({
+            UserPoolName: `listora-${environment}`,
+            UserPoolTier: 'ESSENTIALS',
+            AdminCreateUserConfig: { AllowAdminCreateUserOnly: true },
+            UsernameAttributes: ['email'],
+            UsernameConfiguration: { CaseSensitive: false },
+            AutoVerifiedAttributes: ['email'],
+            Policies: Match.objectLike({
+              SignInPolicy: { AllowedFirstAuthFactors: ['PASSWORD', 'EMAIL_OTP'] },
+            }),
+            MfaConfiguration: 'OFF',
+            AccountRecoverySetting: { RecoveryMechanisms: [{ Name: 'admin_only', Priority: 1 }] },
+            DeletionProtection: settings.protectData ? 'ACTIVE' : 'INACTIVE',
+          }),
+        });
+      });
+
+      it('emails the codes through SES, from no-reply@<domain> or else from the owner', () => {
+        const from = dns === undefined ? owner : `no-reply@${dns.domain}`;
+        const identity = dns === undefined ? owner : dns.domain;
+        t.hasResourceProperties('AWS::Cognito::UserPool', {
+          EmailConfiguration: {
+            EmailSendingAccount: 'DEVELOPER',
+            From: `Listora <${from}>`,
+            SourceArn: Match.anyValue(),
+          },
+        });
+        const config = (resources(t, 'AWS::Cognito::UserPool')[0]?.Properties?.[
+          'EmailConfiguration'
+        ] ?? {}) as Record<string, unknown>;
+        expect(JSON.stringify(config['SourceArn'])).toContain(`:identity/${identity}`);
+      });
+
+      it('has one user, the owner, verified, with no password and no invitation', () => {
+        t.resourceCountIs('AWS::Cognito::UserPoolUser', 1);
+        t.hasResourceProperties('AWS::Cognito::UserPoolUser', {
+          Username: owner,
+          UserAttributes: [
+            { Name: 'email', Value: owner },
+            { Name: 'email_verified', Value: 'true' },
+          ],
+          MessageAction: 'SUPPRESS',
+        });
+      });
+
+      it('gives the iPhone app a public client that signs in with USER_AUTH only, without a hosted UI', () => {
+        t.resourceCountIs('AWS::Cognito::UserPoolClient', 1);
+        const client = resources(t, 'AWS::Cognito::UserPoolClient')[0]?.Properties ?? {};
+        expect(client).toMatchObject({
+          ClientName: 'iphone-app',
+          GenerateSecret: false,
+          ExplicitAuthFlows: ['ALLOW_USER_AUTH', 'ALLOW_REFRESH_TOKEN_AUTH'],
+          AllowedOAuthFlowsUserPoolClient: false,
+          PreventUserExistenceErrors: 'ENABLED',
+          EnableTokenRevocation: true,
+          AuthSessionValidity: 10,
+        });
+        expect(client).not.toHaveProperty('CallbackURLs');
+        // Cognito's own users only: no Sign in with Apple or other provider yet.
+        expect(client['SupportedIdentityProviders']).toEqual(['COGNITO']);
+        // The API refuses tokens older than a day (docs/features/auth.md).
+        expect(client).toMatchObject({
+          IdTokenValidity: 60,
+          AccessTokenValidity: 60,
+          RefreshTokenValidity: 43_200,
+          TokenValidityUnits: {
+            IdToken: 'minutes',
+            AccessToken: 'minutes',
+            RefreshToken: 'minutes',
+          },
+        });
+        // The deploy prints them for the iPhone app's Prod configuration.
+        expect(Object.keys(t.findOutputs('*'))).toEqual(
+          expect.arrayContaining(['AppClientId', 'UserPoolId']),
+        );
+      });
+    });
+  } else {
+    it('has no user pool, so the API runs the dev driver until the environment gets one', () => {
+      expect(stacks.auth).toBeUndefined();
+    });
+  }
 
   describe('secrets', () => {
     const t = template(shape, 'secrets');
@@ -484,6 +651,15 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       expect(runner['MountPoints']).toEqual([
         { ContainerPath: '/tmp', ReadOnly: false, SourceVolume: 'tmp' },
       ]);
+      // Fargate creates each bind mount owned by root (0755) unless the image declares its path
+      // a VOLUME; the runner runs unprivileged, so it could not write /tmp and Chromium would
+      // not start (as on 2026-10-25: EACCES on mkdtemp). The runner image declares every
+      // mount and owns it.
+      const stage = runnerImageStage();
+      for (const mount of runner['MountPoints'] as { ContainerPath: string }[]) {
+        expect(stage.volumes).toContain(mount.ContainerPath);
+        expect(stage.owned).toContain(mount.ContainerPath);
+      }
       // The runner image repository's, not the application's.
       expect(JSON.stringify(runner['Image'])).toMatch(/OutputFnGetAttRunner/);
       expect(JSON.stringify(runner['Image'])).not.toMatch(/OutputFnGetAttApp/);
@@ -538,13 +714,48 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         );
         expect(secrets.map((secret) => secret.Name)).toEqual(containerSecretNames(service));
         expect(env.map((entry) => entry.Name)).toEqual(
-          Object.keys(containerEnvironment(service, 'postgres://', ANY_RESOURCES)),
+          Object.keys(
+            containerEnvironment(service, 'postgres://', {
+              ...ANY_RESOURCES,
+              ...(dns === undefined
+                ? {}
+                : { saleEmail: { inboundDomain: '', queueUrl: '', bucket: '', region: '' } }),
+              signIn: signInResources(
+                settings.signIn,
+                settings.signIn.via === 'owner-pool'
+                  ? { userPoolId: '', clientIds: [''] }
+                  : undefined,
+              ),
+            }),
+          ),
         );
         // Nothing secret-looking travels as plain environment (a KMS key's id is not a secret).
         for (const { Name } of env) expect(Name).not.toMatch(/PASSWORD|SECRET|KEY(?!_ID$)/);
         expect(JSON.stringify(env.find((entry) => entry.Name === 'TOKEN_KMS_KEY_ID'))).toContain(
           'TokenKey',
         );
+      }
+    });
+
+    it('gives api and worker the sale email queue and bucket where mail is received, else none', () => {
+      for (const service of SERVICE_NAMES) {
+        const env = Object.fromEntries(
+          (container(service)['Environment'] as { Name: string; Value: unknown }[]).map((entry) => [
+            entry.Name,
+            entry.Value,
+          ]),
+        );
+        if (dns === undefined) {
+          expect(env['EMAIL_INGEST']).toBe('off');
+        } else {
+          expect(env).toMatchObject({
+            EMAIL_INGEST: 'ses',
+            EMAIL_INBOUND_DOMAIN: `in.${dns.domain}`,
+            EMAIL_SES_REGION: target.region,
+          });
+          expect(JSON.stringify(env['EMAIL_SES_QUEUE_URL'])).toContain('SaleEmailQueue');
+          expect(JSON.stringify(env['EMAIL_SES_BUCKET'])).toContain('InboundMail');
+        }
       }
     });
 
@@ -568,8 +779,43 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       }
     });
 
+    it('signs in with the user pool where there is one, and never with the dev driver there', () => {
+      const env = (name: string) =>
+        Object.fromEntries(
+          (container(name)['Environment'] as { Name: string; Value: unknown }[]).map((entry) => [
+            entry.Name,
+            JSON.stringify(entry.Value),
+          ]),
+        );
+      const api = env('api');
+      const worker = env('worker');
+      const cognitoGrant = statements(t).filter((statement) =>
+        asList(statement['Action']).some((action) => String(action).startsWith('cognito-idp:')),
+      );
+      if (settings.signIn.via === 'owner-pool') {
+        expect(api['AUTH_DRIVER']).toBe('"cognito"');
+        expect(api['COGNITO_USER_POOL_ID']).toContain('UserPool');
+        expect(api['COGNITO_CLIENT_IDS']).toContain('IPhoneApp');
+        expect(worker['COGNITO_USER_POOL_ID']).toBe(api['COGNITO_USER_POOL_ID']);
+        // Only the worker deletes users, and only these two calls on this pool.
+        expect(cognitoGrant).toHaveLength(1);
+        expect(cognitoGrant[0]).toMatchObject({
+          Effect: 'Allow',
+          Action: ['cognito-idp:AdminDeleteUser', 'cognito-idp:AdminGetUser'],
+        });
+        expect(JSON.stringify(cognitoGrant[0]?.['Resource'])).toContain('UserPool');
+      } else {
+        expect(api['AUTH_DRIVER']).toBe('"dev"');
+        expect(api).not.toHaveProperty('COGNITO_USER_POOL_ID');
+        expect(worker).not.toHaveProperty('COGNITO_USER_POOL_ID');
+        expect(cognitoGrant).toEqual([]);
+      }
+    });
+
     it('runs tasks where the task egress places them, with rollback on failed deploys', () => {
       const publicIp = settings.network.taskEgress.via === 'public-ip';
+      // `replace` stops the old tasks while the new ones start; `rolling` keeps them serving.
+      const minimumHealthy = settings.deployments === 'replace' ? 0 : 100;
       for (const service of appServices()) {
         // Autoscaling owns the task count; a template count would reset it on every deploy.
         expect(service.Properties?.['DesiredCount']).toBeUndefined();
@@ -580,7 +826,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           },
           DeploymentConfiguration: {
             DeploymentCircuitBreaker: { Enable: true, Rollback: true },
-            MinimumHealthyPercent: 100,
+            MinimumHealthyPercent: minimumHealthy,
             MaximumPercent: 200,
           },
         });
@@ -638,7 +884,14 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(policy).toContain('Photos');
         // Raw sale email, and starting the browser runner, only for a task that runs the worker.
         expect(policy.includes('InboundMail')).toBe(containers.includes('worker'));
-        if (containers.includes('worker')) expect(policy).toContain('/inbound/*');
+        if (containers.includes('worker')) {
+          expect(policy).toContain('/inbound/*');
+          expect(policy).toContain('s3:DeleteObject*');
+        }
+        // Reading the sale email queue: the worker, and only where mail is received.
+        expect(policy.includes('sqs:ReceiveMessage')).toBe(
+          containers.includes('worker') && dns !== undefined,
+        );
         expect(policy.includes('ecs:UpdateService')).toBe(containers.includes('worker'));
         // Every task seals; only the worker opens marketplace tokens, and never a browser session
         // (only the runner opens those).
@@ -920,6 +1173,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           'delist-failed',
           'ai-daily-cost',
           'connection-needs-relink',
+          'deletion-overdue',
           ...MARKETPLACES.map((marketplace) => `delist-latency-${marketplace}`),
           ...MARKETPLACES.map((marketplace) => `verified-success-${marketplace}`),
           'database-cpu',
@@ -938,9 +1192,9 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
 
     if (environment === 'personal') {
       it('has the alarm count docs/features/costs.md prices', () => {
-        // Ten beyond the always-free ten standard alarms, at $0.10 each a month.
+        // Eleven beyond the always-free ten standard alarms, at $0.10 each a month.
         const count = resources(t, 'AWS::CloudWatch::Alarm').length;
-        expect(count).toBe(20);
+        expect(count).toBe(21);
         const costs = readFileSync(
           new URL('../../docs/features/costs.md', import.meta.url),
           'utf8',
@@ -1034,6 +1288,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         'delist-failed': ['DelistFailed', 'Sum', 1],
         'ai-daily-cost': ['AiDailyCostUsd', 'Maximum', settings.aiDailyCostAlarmUsd],
         'connection-needs-relink': ['ConnectionsNeedingRelink', 'Maximum', 1],
+        'deletion-overdue': ['OverdueDeletions', 'Maximum', 1],
       } as const;
       for (const [name, [metricName, statistic, threshold]] of Object.entries(expected)) {
         const alarm = alarmNamed(name);
@@ -1264,7 +1519,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       const role = resources(t, 'AWS::IAM::Role')[0];
       expect(role?.Properties?.['ManagedPolicyArns']).toBeUndefined();
       expect(JSON.stringify(statements(t))).toContain(
-        `role/cdk-hnb659fds-*-${target.account}-${target.region}`,
+        `role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-*-${target.account}-${target.region}`,
       );
     });
 
@@ -1288,5 +1543,21 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       expect(passRole).toContain('"iam:PassedToService":"ecs-tasks.amazonaws.com"');
       expect(bySid('ReadStackOutputs')).toContain(`:stack/listora-${environment}-*/*`);
     });
+  });
+});
+
+describe('the owner email identity', () => {
+  const identities = (overrides: Record<string, unknown>) =>
+    resources(
+      Template.fromStack(synthesize('personal', overrides).stacks.email),
+      'AWS::SES::EmailIdentity',
+    ).map((identity) => identity.Properties?.['EmailIdentity']);
+
+  it('is created by the email stack by default', () => {
+    expect(identities({})).toEqual([PLACEHOLDER_CONTEXT.personal['ownerEmail']]);
+  });
+
+  it('is left alone when it already exists outside the stack', () => {
+    expect(identities({ ownerEmailIdentity: 'existing' })).toEqual([]);
   });
 });

@@ -94,6 +94,20 @@
             },
             {
               "Action": [
+                "cognito-idp:AdminDeleteUser",
+                "cognito-idp:AdminGetUser"
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetStackOutput": {
+                  "StackName": "listora-personal-auth",
+                  "Region": "us-east-1",
+                  "OutputName": "PublishOutputFnGetAttUserPool6BA7E5F2Arn6E09B627"
+                }
+              }
+            },
+            {
+              "Action": [
                 "s3:GetBucket*",
                 "s3:GetObject*",
                 "s3:List*"
@@ -123,6 +137,25 @@
                   ]
                 }
               ]
+            },
+            {
+              "Action": "s3:DeleteObject*",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-personal-email",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputFnGetAttInboundMailDA244C94Arn018032F9"
+                      }
+                    },
+                    "/inbound/*"
+                  ]
+                ]
+              }
             },
             {
               "Action": "ecs:UpdateService",
@@ -189,7 +222,27 @@
               },
               {
                 "Name": "AUTH_DRIVER",
-                "Value": "dev"
+                "Value": "cognito"
+              },
+              {
+                "Name": "COGNITO_USER_POOL_ID",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-auth",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefUserPool6BA7E5F24B752AC8"
+                  }
+                }
+              },
+              {
+                "Name": "COGNITO_CLIENT_IDS",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-auth",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefUserPoolIPhoneApp88BB6ABF22F930E1"
+                  }
+                }
               },
               {
                 "Name": "DATABASE_URL",
@@ -271,6 +324,10 @@
                     "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
                   }
                 }
+              },
+              {
+                "Name": "EMAIL_INGEST",
+                "Value": "off"
               }
             ],
             "Essential": true,
@@ -469,6 +526,20 @@
                     "StackName": "listora-personal-secrets",
                     "Region": "us-east-1",
                     "OutputName": "PublishOutputFnGetAttTokenKeyD1D1A236ArnDAE12A0D"
+                  }
+                }
+              },
+              {
+                "Name": "EMAIL_INGEST",
+                "Value": "off"
+              },
+              {
+                "Name": "COGNITO_USER_POOL_ID",
+                "Value": {
+                  "Fn::GetStackOutput": {
+                    "StackName": "listora-personal-auth",
+                    "Region": "us-east-1",
+                    "OutputName": "PublishOutputRefUserPool6BA7E5F24B752AC8"
                   }
                 }
               },
@@ -712,7 +783,7 @@
             "Rollback": true
           },
           "MaximumPercent": 200,
-          "MinimumHealthyPercent": 100
+          "MinimumHealthyPercent": 0
         },
         "EnableECSManagedTags": false,
         "LaunchType": "FARGATE",
@@ -1471,7 +1542,7 @@
   "Parameters": {
     "BootstrapVersion": {
       "Type": "AWS::SSM::Parameter::Value<String>",
-      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Default": "/cdk-bootstrap/listora/version",
       "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
     }
   },

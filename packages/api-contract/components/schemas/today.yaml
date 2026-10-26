@@ -1,0 +1,311 @@
+TodayCardKind:
+  description: |
+    A `KnownTodayCardKind`, or a card added after this client was built. Clients show an
+    unknown card's `title`, `detail`, and action generically.
+  anyOf:
+    - $ref: '#/KnownTodayCardKind'
+    - type: string
+      maxLength: 64
+KnownTodayCardKind:
+  type: string
+  description: |
+    `delist`: an item sold and is not delisted (or confirmed) everywhere else yet.
+    `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
+    seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
+    `stale_listing`: a listing live a long time with no changes, with a price drop (never below
+    the item's floor) or a relist suggested.
+  enum: [delist, ship, reconnect, review_drafts, stale_listing]
+TodayUrgency:
+  description: |
+    A `KnownTodayUrgency`, or a level added after this client was built, which clients show
+    like `normal`.
+  anyOf:
+    - $ref: '#/KnownTodayUrgency'
+    - type: string
+      maxLength: 64
+KnownTodayUrgency:
+  type: string
+  description: |
+    `urgent`: needs the seller now (a delist that is stuck or waiting for them, a ship-by date
+    within a day or past). `high`: soon. `normal`: when the seller has a moment.
+  enum: [urgent, high, normal]
+TodayDestination:
+  description: |
+    A `KnownTodayDestination`, or a screen added after this client was built. Clients that do
+    not know it open the item when the action names one, and otherwise offer no action.
+  anyOf:
+    - $ref: '#/KnownTodayDestination'
+    - type: string
+      maxLength: 64
+KnownTodayDestination:
+  type: string
+  description: |
+    `item`: the item screen (`itemId`). `sale`: the sale's screen (`saleId`; `itemId` names the
+    item too). `marketplaces`: the marketplace connections screen (`connectionId` names the
+    connection). `drafts`: the drafts waiting for review.
+  enum: [item, sale, marketplaces, drafts]
+TodayAction:
+  type: object
+  description: The card's one primary action and the screen it opens.
+  required: [label, destination]
+  properties:
+    label:
+      type: string
+      maxLength: 60
+      description: The button's title, for example `Open sale` or `Lower to $40`.
+    destination:
+      $ref: '#/TodayDestination'
+    itemId:
+      $ref: './common.yaml#/Id'
+    saleId:
+      $ref: './common.yaml#/Id'
+    connectionId:
+      $ref: './common.yaml#/Id'
+TodayItem:
+  type: object
+  description: The item a card is about.
+  required: [id, sku]
+  properties:
+    id:
+      $ref: './common.yaml#/Id'
+    sku:
+      $ref: './common.yaml#/Sku'
+    title:
+      type: string
+      maxLength: 200
+    thumbnailUrl:
+      type: string
+      format: uri
+      description: The item's cover photo, small; absent until a photo is processed.
+TodayShipment:
+  type: object
+  description: A `ship` card's sale and where the item is kept.
+  required: [saleId, marketplace, soldAt]
+  properties:
+    saleId:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    soldAt:
+      $ref: './common.yaml#/Timestamp'
+    shipBy:
+      $ref: './common.yaml#/Timestamp'
+      description: The marketplace's ship-by date, when it gives one.
+    location:
+      $ref: '#/TodayLocation'
+TodayLocation:
+  type: object
+  description: Where the item is kept, for example bin `B-12`.
+  required: [code]
+  properties:
+    code:
+      type: string
+      maxLength: 32
+    label:
+      type: string
+      maxLength: 120
+TodayDelist:
+  type: object
+  description: A `delist` card's delist run, with its honest summary.
+  required: [saleId, delistRunId, soldOn, statusDisplay, remaining]
+  properties:
+    saleId:
+      $ref: './common.yaml#/Id'
+    delistRunId:
+      $ref: './common.yaml#/Id'
+    soldOn:
+      $ref: './common.yaml#/Marketplace'
+    statusDisplay:
+      $ref: './common.yaml#/StatusDisplay'
+    remaining:
+      type: array
+      description: The marketplaces where it is not delisted or confirmed yet.
+      items:
+        $ref: './common.yaml#/Marketplace'
+TodayConnection:
+  type: object
+  description: A `reconnect` card's connection.
+  required: [connectionId, marketplace, status]
+  properties:
+    connectionId:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    displayName:
+      type: string
+      maxLength: 200
+    status:
+      $ref: './connections.yaml#/ConnectionStatus'
+TodayStaleSuggestion:
+  description: |
+    A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
+    clients show through the card's `detail` and action.
+  anyOf:
+    - $ref: '#/KnownTodayStaleSuggestion'
+    - type: string
+      maxLength: 64
+KnownTodayStaleSuggestion:
+  type: string
+  description: |
+    `price_drop`: lower the price to `suggestedPrice`, which is never below the item's floor.
+    `relist`: no price drop is possible (the price is at its floor, or no floor is known).
+  enum: [price_drop, relist]
+TodayStaleListing:
+  type: object
+  description: A `stale_listing` card's listing facts and suggestion.
+  required: [listedAt, daysListed, price, suggestion, marketplaces]
+  properties:
+    listedAt:
+      $ref: './common.yaml#/Timestamp'
+      description: When its oldest live listing went live.
+    daysListed:
+      type: integer
+      format: int32
+      minimum: 0
+    price:
+      $ref: './common.yaml#/Money'
+    floor:
+      $ref: './common.yaml#/Money'
+    suggestion:
+      $ref: '#/TodayStaleSuggestion'
+    suggestedPrice:
+      $ref: './common.yaml#/Money'
+      description: Present with `price_drop`.
+    marketplaces:
+      type: array
+      description: Where it is live.
+      items:
+        $ref: './common.yaml#/Marketplace'
+TodayDrafts:
+  type: object
+  description: A `review_drafts` card's drafts.
+  required: [count, oldestCreatedAt]
+  properties:
+    count:
+      type: integer
+      format: int32
+      minimum: 1
+    oldestCreatedAt:
+      $ref: './common.yaml#/Timestamp'
+TodayCard:
+  type: object
+  description: |
+    One thing that needs the seller. A card exists only while its work is not done, so it is
+    gone from the next summary once the work is finished. The kind's own property (`shipment`,
+    `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+  required: [id, kind, urgency, title, action]
+  properties:
+    id:
+      type: string
+      maxLength: 120
+      description: Stable while the card's work is the same, for example `ship:<saleItemId>`.
+    kind:
+      $ref: '#/TodayCardKind'
+    urgency:
+      $ref: '#/TodayUrgency'
+    title:
+      type: string
+      maxLength: 200
+    detail:
+      type: string
+      maxLength: 500
+    action:
+      $ref: '#/TodayAction'
+    item:
+      $ref: '#/TodayItem'
+    shipment:
+      $ref: '#/TodayShipment'
+    delist:
+      $ref: '#/TodayDelist'
+    connection:
+      $ref: '#/TodayConnection'
+    staleListing:
+      $ref: '#/TodayStaleListing'
+    drafts:
+      $ref: '#/TodayDrafts'
+TodayMoneyPeriod:
+  type: object
+  description: |
+    Sales in a 7-day period. Canceled and returned sales count for nothing. `profit` is the sum
+    over the sales whose profit is known (price plus shipping charged, minus fees and the items'
+    costs); a sale without recorded fees or with an item without a cost is counted in
+    `profitPendingSales` instead. `profit` is absent when no sale's profit is known.
+  required: [start, end, sales, itemsSold, salesTotal, profitPendingSales]
+  properties:
+    start:
+      $ref: './common.yaml#/Timestamp'
+    end:
+      $ref: './common.yaml#/Timestamp'
+    sales:
+      type: integer
+      format: int32
+      minimum: 0
+      description: Orders.
+    itemsSold:
+      type: integer
+      format: int32
+      minimum: 0
+    salesTotal:
+      $ref: './common.yaml#/Money'
+      description: What the items sold for, before shipping, fees, and costs.
+    profit:
+      $ref: './common.yaml#/Money'
+    profitPendingSales:
+      type: integer
+      format: int32
+      minimum: 0
+TodayMoney:
+  type: object
+  description: The last 7 days (`thisWeek`, ending now) next to the 7 days before (`lastWeek`).
+  required: [thisWeek, lastWeek]
+  properties:
+    thisWeek:
+      $ref: '#/TodayMoneyPeriod'
+    lastWeek:
+      $ref: '#/TodayMoneyPeriod'
+Today:
+  type: object
+  required: [generatedAt, cards, money]
+  properties:
+    generatedAt:
+      $ref: './common.yaml#/Timestamp'
+    cards:
+      type: array
+      description: Most urgent first. Empty when the seller is all caught up.
+      items:
+        $ref: '#/TodayCard'
+    money:
+      $ref: '#/TodayMoney'
+TodaySummarySettings:
+  type: object
+  description: |
+    The morning summary notification: once a day at `time` in `timeZone`, a push that sums up
+    the Today screen (nothing is sent on a day with nothing to do). Until the app saves a time
+    zone, `timeZone` is absent and no summary is sent.
+  required: [enabled, time]
+  properties:
+    enabled:
+      type: boolean
+    time:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+      description: Wall-clock `HH:MM`, 24-hour.
+    timeZone:
+      type: string
+      maxLength: 64
+      description: An IANA time zone name, for example `America/New_York`.
+TodaySummarySettingsReplace:
+  type: object
+  required: [enabled, time, timeZone]
+  properties:
+    enabled:
+      type: boolean
+    time:
+      type: string
+      pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+      description: Wall-clock `HH:MM`, 24-hour.
+    timeZone:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: An IANA time zone name, for example `America/New_York` (the device's own).

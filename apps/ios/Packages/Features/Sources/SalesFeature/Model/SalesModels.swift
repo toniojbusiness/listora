@@ -53,6 +53,9 @@ final class SalesListModel {
     private(set) var sales: [Sale] = []
     private(set) var phase: Phase = .loading
     private(set) var hasMore = false
+    /// The newest sale, when it arrived since the list last loaded while the app was open: the
+    /// Sales tab celebrates it. The first load sets nothing.
+    private(set) var newSaleID: String?
     private var cursor: String?
     private let service: any SalesService
     private let isSignedIn: @MainActor () -> Bool
@@ -73,6 +76,9 @@ final class SalesListModel {
         }
         do {
             let page = try await service.sales(cursor: nil)
+            if phase == .loaded, let newest = page.sales.first, !sales.contains(where: { $0.id == newest.id }) {
+                newSaleID = newest.id
+            }
             sales = page.sales
             cursor = page.nextCursor
             hasMore = page.nextCursor != nil

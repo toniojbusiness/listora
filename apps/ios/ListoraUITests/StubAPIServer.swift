@@ -1,8 +1,9 @@
 import Foundation
 import Network
 
-/// A tiny HTTP server inside the UI test runner, standing in for the Listora API so the Share
-/// Extension can be driven end to end without a backend. The simulator shares the Mac's
+/// A tiny HTTP server inside the UI test runner, standing in for the Listora API (and a fake
+/// marketplace's sign-in page) so the Share Extension and Link accounts can be driven end to end
+/// without a backend or a real marketplace. The simulator shares the Mac's
 /// loopback interface, so the extension reaches it at `baseURL`. Answers use the contract's
 /// shapes; every request is recorded for the test to check.
 final class StubAPIServer: @unchecked Sendable {
@@ -23,6 +24,34 @@ final class StubAPIServer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "StubAPIServer")
     private var recorded: [Request] = []
     private var startFailure: NWError?
+    /// Poshmark's link: nil until the app links it, then how many times its check was read.
+    private var poshmarkChecks: Int?
+    /// Depop's sign-in, whose check did not confirm it: nil until the app asks to check it again,
+    /// then how many times that check was read.
+    private var depopRechecks: Int?
+    private var todayState = TodayState.busy
+    /// "Ask before delisting", as the last `PUT /v1/sale-emails/settings` saved it.
+    var askBeforeDelist = false
+    /// The names `GET /v1/account/profile` answers, as the last `PUT` saved them.
+    var profileNames: [String: String] = [:]
+
+    /// What `GET /v1/today` answers.
+    enum TodayState: Sendable {
+        /// A card of every kind, and this week's sales.
+        case busy
+        /// Nothing to do and no sales.
+        case caughtUp
+    }
+
+    /// Changes what `GET /v1/today` answers from the next request on.
+    func setToday(_ state: TodayState) {
+        queue.sync { todayState = state }
+    }
+
+    /// Poshmark reads as linked (its check passed) from the next request on.
+    func linkPoshmark() {
+        queue.sync { poshmarkChecks = 2 }
+    }
 
     private(set) var port: UInt16 = 0
 
@@ -130,19 +159,36 @@ final class StubAPIServer: @unchecked Sendable {
             return Self.http(status: "200 OK", body: #"{"data":\#(Self.connections)}"#)
         case ("GET", "/v1/connection-health"):
             return Self.http(status: "200 OK", body: Self.connectionHealth)
+        case ("GET", "/v1/today"):
+            return Self.http(status: "200 OK", body: todayState == .busy ? Self.busyToday() : Self.caughtUpToday())
+        case ("GET", "/v1/today/settings"):
+            return Self.http(status: "200 OK", body: #"{"enabled":true,"time":"08:00","timeZone":"UTC"}"#)
+        case ("PUT", "/v1/today/settings"):
+            // Saved as sent.
+            return Self.http(status: "200 OK", body: request.body)
         default:
-            return Self.http(
-                status: "404 Not Found",
-                body: #"{"error":{"code":"not_found","message":"No stub for this request.","retryable":false,"#
-                    + #""requestId":"stub"}}"#,
-            )
+            return respondToLinkAccounts(method: request.method, path: path)
+                ?? respondToSaleEmails(method: request.method, path: path, body: request.body)
+                ?? respondToProfile(method: request.method, path: path, body: request.body)
+                ?? respondToDevSignIn(request, path: path)
+                ?? Self.http(
+                    status: "404 Not Found",
+                    body: #"{"error":{"code":"not_found","message":"No stub for this request.","retryable":false,"#
+                        + #""requestId":"stub"}}"#,
+                )
         }
     }
 
-    private static func http(status: String, contentType: String = "application/json", body: String) -> Data {
+    static func http(
+        status: String,
+        contentType: String = "application/json",
+        extraHeaders: [String] = [],
+        body: String,
+    ) -> Data {
         let bytes = Data(body.utf8)
+        let extra = extraHeaders.map { "\($0)\r\n" }.joined()
         let head = "HTTP/1.1 \(status)\r\nContent-Type: \(contentType)\r\nContent-Length: \(bytes.count)\r\n"
-            + "Connection: close\r\n\r\n"
+            + extra + "Connection: close\r\n\r\n"
         return Data(head.utf8) + bytes
     }
 
@@ -185,40 +231,138 @@ final class StubAPIServer: @unchecked Sendable {
     "externalUrl":"https://poshmark.com/listing/Lululemon-Align-Pant-25-64f1a2b3c4d5e6f7a8b9c0d1",
     "availableActions":[],"createdAt":"2026-10-24T12:00:00Z","updatedAt":"2026-10-24T12:00:00Z"}
     """
+}
 
-    /// The Marketplaces screen before eBay is connected: the health summary, nothing needing
-    /// attention (`packages/connections/src/health-summary.ts`).
-    private static let connectionHealth = #"{"needsAttention":false,"attention":[],"#
-        + #""connections":\#(connections),"saleForwarding":{"status":"needs_domain","statusDisplay":"#
-        + #"{"tone":"neutral","label":"Set up when you add a domain","detail":"Forwarding your "#
-        + #"marketplaces' sale emails to Listora lets it spot sales sooner. It needs Listora's email "#
-        + #"domain, which isn't set up yet."}}}"#
+/// Link accounts: a fake marketplace's sign-in page and the marketplace-sessions endpoints.
+extension StubAPIServer {
+    /// The actions on a connection: unlinking Poshmark and checking Depop's sign-in again.
+    private func respondToConnectionActions(method: String, path: String) -> Data? {
+        switch (method, path) {
+        case ("DELETE", "/v1/connections/poshmark"):
+            // Unlinked: the session is gone, and Poshmark is back to assisted.
+            poshmarkChecks = nil
+            return Self.http(status: "200 OK", body: Self.assistedConnection("poshmark", "Poshmark"))
+        case ("POST", "/v1/connections/depop/checks"):
+            // Retry check of the sign-in the server holds: the connection, checking.
+            depopRechecks = 0
+            return Self.http(status: "202 Accepted", body: Self.depopConnectionChecking)
+        default:
+            return nil
+        }
+    }
 
-    /// Every marketplace's connection before eBay is connected, as a JSON array, in the words the
-    /// server uses (`packages/connections/src/status-display.ts`).
-    private static let connections: String = {
-        func capabilities(_ mode: String, connect: String) -> String {
-            let verify = mode == "api" ? "api" : "user_confirm"
-            return #"{"connect":"\#(connect)","create":"\#(mode)","updatePrice":"\#(mode)","#
-                + #""updateDetails":"\#(mode)","delist":"\#(mode)","relist":"\#(mode)","markSold":"\#(mode)","#
-                + #""verifyRead":"\#(verify)","importListings":"none","saleDetection":["manual"],"#
-                + #""imageTransport":"url_fetch"}"#
+    private func respondToLinkAccounts(method: String, path: String) -> Data? {
+        switch (method, path) {
+        case ("GET", Self.loginPath):
+            return Self.http(status: "200 OK", contentType: "text/html; charset=utf-8", body: Self.loginPage)
+        case ("POST", Self.loginPath):
+            // The fake marketplace signs the user in: a session cookie on its own host, then its
+            // account page. The app must hand Listora the cookie, never the password.
+            return Self.http(
+                status: "303 See Other",
+                extraHeaders: [
+                    "Location: \(Self.accountPath)",
+                    "Set-Cookie: \(Self.sessionCookieName)=\(Self.sessionCookieValue); Path=/; HttpOnly",
+                ],
+                body: "",
+            )
+        case ("GET", Self.accountPath):
+            return Self.http(status: "200 OK", contentType: "text/html; charset=utf-8", body: Self.accountPage)
+        case ("GET", "/v1/marketplace-sessions"):
+            let sessions = [poshmarkSession(), Self.mercariSession, depopSession(), Self.ebaySession]
+            return Self.http(status: "200 OK", body: #"{"data":["# + sessions.joined(separator: ",") + "]}")
+        case ("POST", "/v1/marketplace-sessions/poshmark"):
+            poshmarkChecks = 0
+            return Self.http(status: "201 Created", body: poshmarkSession())
+        case ("GET", "/v1/marketplace-sessions/poshmark"):
+            poshmarkChecks = poshmarkChecks.map { $0 + 1 }
+            return Self.http(status: "200 OK", body: poshmarkSession())
+        case ("GET", "/v1/marketplace-sessions/depop"):
+            depopRechecks = depopRechecks.map { $0 + 1 }
+            return Self.http(status: "200 OK", body: depopSession())
+        default:
+            return respondToConnectionActions(method: method, path: path)
         }
-        func assisted(_ id: String, _ name: String) -> String {
-            #"{"marketplace":"\#(id)","mode":"assisted","status":"not_connected","#
-                + #""statusDisplay":{"tone":"neutral","label":"Not linked","detail":"Listora works with "#
-                + #"\#(name) in assisted mode: it prepares each listing and change, and you finish it in the "#
-                + #"\#(name) app, then confirm it."},"#
-                + #""capabilities":\#(capabilities("assisted", connect: "none")),"availableActions":[]}"#
+    }
+
+    // The fake marketplace's sign-in page, standing in for Poshmark's own.
+
+    static let loginPath = "/fake-marketplace/login"
+    static let accountPath = "/fake-marketplace/account"
+    static let sessionCookieName = "fake_sid"
+    static let sessionCookieValue = "stub-session-7f3a9c"
+
+    private static let loginPage = """
+    <!doctype html>
+    <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Log in</title>
+    <style>
+      body { font: 18px -apple-system; padding: 24px; }
+      label { display: block; margin-bottom: 16px; }
+      input { display: block; width: 100%; box-sizing: border-box; font-size: 18px; padding: 10px; margin-top: 6px; }
+    </style></head>
+    <body>
+    <form method="post" action="\(loginPath)">
+      <label>Username <input name="username" autocapitalize="none" autocorrect="off"></label>
+      <label>Password <input type="password" name="password"></label>
+      <button type="submit" style="font-size: 20px; padding: 12px 24px">Log in</button>
+    </form>
+    </body></html>
+    """
+
+    private static let accountPage = """
+    <!doctype html>
+    <html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Your closet</title></head>
+    <body style="font: 18px -apple-system; padding: 24px"><h1>Signed in as closet_queen</h1></body></html>
+    """
+
+    /// Not linked until the app links it; then checking, and linked from the second read on.
+    private func poshmarkSession() -> String {
+        let (status, tone, label) = switch poshmarkChecks {
+        case nil: ("not_linked", "neutral", "Not linked")
+        case let .some(reads) where reads < 2: ("checking", "checking", "Checking...")
+        case .some: ("linked", "success", "Linked")
         }
-        let ebay = #"{"marketplace":"ebay","mode":"api","status":"not_connected","#
-            + #""statusDisplay":{"tone":"neutral","label":"Not connected","detail":"Connect your eBay "#
-            + #"account so Listora can list, update, and end your items there, and confirm every change "#
-            + #"with eBay."},"capabilities":\#(capabilities("api", connect: "oauth")),"#
-            + #""availableActions":["connect"]}"#
-        let all = [ebay, assisted("depop", "Depop"), assisted("poshmark", "Poshmark"), assisted("mercari", "Mercari")]
-        return "[\(all.joined(separator: ","))]"
-    }()
+        return """
+        {"marketplace":"poshmark","status":"\(status)","statusDisplay":{"tone":"\(tone)","label":"\(label)"},
+        "login":{"url":"\(baseURL)\(Self.loginPath)","cookieDomains":["127.0.0.1"]}}
+        """
+    }
+
+    private static let mercariSession = """
+    {"marketplace":"mercari","status":"needs_relink","statusDisplay":{"tone":"action_needed",
+    "label":"Sign in again","detail":"Mercari logged Listora out. Log in again."},
+    "login":{"url":"https://www.mercari.com/login/","cookieDomains":["mercari.com"]},
+    "issue":{"code":"session_rejected","message":"Mercari logged Listora out. Log in again.",
+    "occurredAt":"2026-10-24T12:00:00Z"}}
+    """
+
+    /// Not confirmed (its check failed, as when the cloud browser could not start) until the app
+    /// asks to check it again; then checking, and linked from the second read on.
+    private func depopSession() -> String {
+        let login = #""login":{"url":"https://www.depop.com/login/","cookieDomains":["depop.com"]}"#
+        switch depopRechecks {
+        case nil:
+            let reason = "Listora's browser didn't start, so it couldn't check your Depop sign-in. "
+                + "The problem is on Listora's side, not Depop's."
+            return #"{"marketplace":"depop","status":"check_failed","statusDisplay":{"tone":"action_needed","#
+                + #""label":"Not confirmed","detail":"\#(reason) Check again, or link Depop again if it "#
+                + #"keeps failing."},\#(login),"issue":{"code":"browser_unavailable","message":"\#(reason)","#
+                + #""occurredAt":"2026-10-25T23:39:46Z"}}"#
+        case let .some(reads) where reads < 2:
+            return #"{"marketplace":"depop","status":"checking","statusDisplay":{"tone":"checking","#
+                + #""label":"Checking..."},\#(login)}"#
+        case .some:
+            return #"{"marketplace":"depop","status":"linked","statusDisplay":{"tone":"success","#
+                + #""label":"Linked"},\#(login)}"#
+        }
+    }
+
+    private static let ebaySession = """
+    {"marketplace":"ebay","status":"not_linked","statusDisplay":{"tone":"neutral","label":"Not linked"},
+    "login":{"url":"https://signin.ebay.com/signin/","cookieDomains":["ebay.com"]}}
+    """
 }
 
 enum StubServerError: Error {

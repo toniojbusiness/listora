@@ -67,8 +67,14 @@ struct MarketplaceRowStateTests {
             connection: Fixtures.connection(.ebay, mode: "api", status: "reauth_required"),
         )
         #expect(reauth.actions.isEmpty)
+        #expect(reauth.statusDetail == "Reconnect eBay in Settings > Marketplaces to list it here.")
         let unconnected = MarketplaceRowState(marketplace: .ebay, listing: nil, connection: nil)
         #expect(unconnected.actions.isEmpty)
+        #expect(
+            unconnected.statusDetail == "Connect your eBay account in Settings > Marketplaces to list it here.",
+            "a card without an action says how to list there",
+        )
+        #expect(connected.statusDetail == nil)
         let poshmark = MarketplaceRowState(
             marketplace: .poshmark,
             listing: nil,

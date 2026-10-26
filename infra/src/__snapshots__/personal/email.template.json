@@ -1,6 +1,12 @@
 {
   "Description": "Listora personal: SES inbound sale email",
   "Resources": {
+    "OwnerAddressE38AED87": {
+      "Type": "AWS::SES::EmailIdentity",
+      "Properties": {
+        "EmailIdentity": "owner@example.com"
+      }
+    },
     "InboundMailDA244C94": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
@@ -16,7 +22,7 @@
         "LifecycleConfiguration": {
           "Rules": [
             {
-              "ExpirationInDays": 90,
+              "ExpirationInDays": 14,
               "Id": "expire-raw-mail",
               "Prefix": "inbound/",
               "Status": "Enabled"
@@ -135,7 +141,7 @@
   "Parameters": {
     "BootstrapVersion": {
       "Type": "AWS::SSM::Parameter::Value<String>",
-      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Default": "/cdk-bootstrap/listora/version",
       "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
     }
   },

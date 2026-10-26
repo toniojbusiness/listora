@@ -55,7 +55,7 @@ export const stubPhotos: PhotoSource = {
     Promise.resolve({
       name: url.split('/').at(-1) ?? 'photo.jpg',
       mimeType: 'image/jpeg',
-      buffer: TINY_JPEG,
+      bytes: TINY_JPEG,
     }),
 };
 

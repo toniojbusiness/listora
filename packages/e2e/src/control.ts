@@ -14,29 +14,46 @@
  *   the daily check would have recorded it: `degraded` (eBay could not be asked) or
  *   `reauth_required` (eBay refused the grant), or back to `connected`, which a test that
  *   changed it must end with (the other tests list on eBay).
- * - `POST /items/listed` `{ details?, marketplaces?, seller? }`: such an item published on each
- *   marketplace (default eBay) and confirmed there (`createListedItem`), answering
- *   `{ id, sku, listingId, listings }`.
+ * - `POST /items/listed` `{ details?, marketplaces?, wait?, seller? }`: such an item published on
+ *   each marketplace (default eBay) and, unless `wait` is false, confirmed there
+ *   (`createListedItem`), answering `{ id, sku, listingId, listings }`. A marketplace that runs
+ *   on the phone confirms only once the app has run it, so a test with the app open passes
+ *   `wait: false` and waits on the app's screens.
+ * - `POST /today/sold-item`: a ready item (as above) kept in bin `B-12` that sold on eBay an hour
+ *   ago and ships by tomorrow, answering `{ id, sku, saleId, saleItemId }`: a Today "ship" card.
+ * - `POST /items/depop`: a ready item (as above) whose Depop listing is being published, answering
+ *   `{ id, sku, listingId }`. Depop runs on the phone, so the publish waits for the app to run it.
+ * - `POST /depop/faults` `{ action, fault, times? }`: the fake Depop site (which the phone
+ *   runtime drives in the simulator, docs/features/phone-execution.md) shows a check on matching
+ *   pages (`FakeDepopSite.inject`): a CAPTCHA, a bot check, a login code, or a signed-out page.
+ * - `DELETE /depop/faults`: removes every fault.
+ * - `GET /depop/products`: the fake Depop's products, `[{ slug, status, priceCents, description }]`.
+ * - `POST /depop/sessions` `{ seller? }`: a signed-in session cookie on the fake Depop, as signing
+ *   in there would set, answering `{ name, value, domain, path }`.
+ * - `GET /depop/sign-in-link`: the newest sign-in link the fake Depop "emailed" (its Email me a
+ *   sign-in link), answering `{ link }`, or 404 when it emailed none.
+ * - `GET /dev/sign-in-code?email=<email>`: the newest one-time code the API's dev sign-in printed
+ *   for that email, answering `{ code }`: what the person signing in reads from their email.
  *
  * With `all` marketplaces (stack.ts) also:
  *
- * - `POST /depop/faults` `{ action, fault, times? }`: the fake Depop fails matching requests.
- * - `POST /automation/faults` `{ marketplace, action, fault, times? }`: the fake Poshmark,
- *   Mercari, or Depop site shows a failure page on matching requests: a CAPTCHA, a bot check, or
- *   a login challenge (which automation must stop at), a server error, or a validation refusal.
+ * - `POST /depop-api/faults` `{ action, fault, times? }`: the fake Depop Selling API fails
+ *   matching requests.
+ * - `POST /automation/faults` `{ marketplace, action, fault, times? }`: the fake Poshmark, the
+ *   fake Mercari site, or the fake eBay site shows a failure page on matching requests: a
+ *   CAPTCHA or a login challenge (which automation must stop at), a signed-out page, a server
+ *   error, or a validation refusal.
  * - `DELETE /faults`: removes every fault of every fake.
  * - `POST /ebay/sales` `{ sku }`: a buyer buys the item's eBay listing on the fake eBay, which
  *   then sends eBay's `ORDER_CONFIRMATION` notification to the API; answers `{ orderId }`.
- * - `POST /sessions/<marketplace>` `{ seller? }`: links a fresh browser session for Poshmark or
- *   Mercari (the first seller) or Depop (the second), as relinking in the app does, so a test
- *   that met a check leaves automation working.
+ * - `POST /sessions/ebay`: links a fresh eBay session for the second seller, as relinking does.
  *
  * `seller` is `primary` (the default, the signed-in user) or `second` (the full stack's second
  * seller).
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
-import type { AutomatedMarketplace } from '@listora/automation';
+import type { FakeDepopSite, FakeDepopSiteAction } from '@listora/automation';
 import type { Db, Marketplace } from '@listora/db';
 import type {
   FakeDepopAction,
@@ -46,8 +63,16 @@ import type {
   FakeEbayFault,
 } from '@listora/marketplaces';
 
-import type { MarketplaceFakes, SessionLinker } from './marketplaces.ts';
-import { createListedItem, createReadyItem, type StackApi } from './seed.ts';
+import type { StartedProcess } from '@listora/testing';
+
+import type { EbaySessionLinker, MarketplaceFakes } from './marketplaces.ts';
+import {
+  createListedItem,
+  createQueuedDepopListing,
+  createReadyItem,
+  recordSoldItem,
+  type StackApi,
+} from './seed.ts';
 
 const ACTIONS: readonly FakeEbayAction[] = ['add', 'revise', 'end', 'relist', 'get_item', 'media'];
 const FAULTS = ['reject', 'server_error', 'system_error', 'rate_limited'] as const;
@@ -56,11 +81,14 @@ const MARKETPLACES: readonly Marketplace[] = ['ebay', 'depop', 'poshmark', 'merc
 const DEPOP_ACTIONS: readonly FakeDepopAction[] = ['put', 'patch', 'delete', 'mark_sold', 'get'];
 const DEPOP_FAULTS = ['reject', 'server_error', 'rate_limited'] as const;
 
+/** The fake sites `POST /automation/faults` fails, by marketplace. */
+type FaultedSite = 'poshmark' | 'mercari' | 'ebay';
+
 /** The pages each fake site can fail, by the fake's own action names. */
-const AUTOMATION_ACTIONS: Readonly<Record<AutomatedMarketplace, readonly string[]>> = {
+const AUTOMATION_ACTIONS: Readonly<Record<FaultedSite, readonly string[]>> = {
   poshmark: ['new_form', 'create', 'edit_form', 'update', 'listing', 'closet'],
   mercari: ['form', 'create', 'update', 'end', 'relist', 'read', 'listings', 'health'],
-  depop: ['form', 'create', 'update', 'delete', 'read', 'listings', 'sold', 'health'],
+  ebay: ['form', 'create', 'update', 'relist', 'end', 'read', 'listings', 'sold', 'health'],
 };
 /** The faults every fake site has; each fails before anything is applied. */
 const AUTOMATION_FAULTS = [
@@ -85,15 +113,18 @@ export interface ControlSeller extends StackApi {
 /** What the full stack (`all` marketplaces) adds. */
 export interface FullStackControl {
   fakes: MarketplaceFakes;
-  linker: SessionLinker;
+  ebayLinker: EbaySessionLinker;
   sellers: { primary: ControlSeller; second: ControlSeller };
 }
 
 interface ControlDependencies {
   api: StackApi;
   fakeEbay: FakeEbay;
+  fakeDepop: FakeDepopSite;
   /** The stack's database, for the connection states the daily check would record. */
   db: Db;
+  /** The API process, whose log has the dev sign-in codes. */
+  apiProcess: StartedProcess;
   full?: FullStackControl;
 }
 
@@ -134,6 +165,16 @@ export async function startStackControl(deps: ControlDependencies): Promise<Stac
 }
 
 async function handle(request: IncomingMessage, deps: ControlDependencies): Promise<Reply> {
+  const url = new URL(request.url ?? '/', 'http://control');
+  if (request.method === 'GET' && url.pathname === '/dev/sign-in-code') {
+    const email = url.searchParams.get('email');
+    const line = deps.apiProcess.logs.findLast(
+      (log) => log['email'] === email && typeof log['devSignInCode'] === 'string',
+    );
+    return line === undefined
+      ? { status: 404, body: { error: `no dev sign-in code for ${String(email)}` } }
+      : { status: 200, body: { code: line['devSignInCode'] } };
+  }
   const route = `${request.method ?? ''} ${request.url ?? ''}`;
   switch (route) {
     case 'POST /ebay/faults': {
@@ -157,7 +198,56 @@ async function handle(request: IncomingMessage, deps: ControlDependencies): Prom
       if (typeof api === 'string') return refused(api);
       const marketplaces = marketplacesIn(body, deps);
       if (typeof marketplaces === 'string') return refused(marketplaces);
-      return { status: 201, body: await createListedItem(api, detailsIn(body), marketplaces) };
+      return {
+        status: 201,
+        body: await createListedItem(api, detailsIn(body), marketplaces, {
+          wait: field(body, 'wait') !== false,
+        }),
+      };
+    }
+    case 'POST /items/depop':
+      return {
+        status: 201,
+        body: await createQueuedDepopListing(deps.api, detailsIn(await readJson(request))),
+      };
+    case 'POST /depop/faults': {
+      const rule = depopSiteFaultRule(await readJson(request));
+      if (typeof rule === 'string') return refused(rule);
+      deps.fakeDepop.inject(rule);
+      return { status: 204 };
+    }
+    case 'DELETE /depop/faults':
+      deps.fakeDepop.clearFaults();
+      return { status: 204 };
+    case 'GET /depop/products':
+      return {
+        status: 200,
+        body: deps.fakeDepop.products().map((product) => ({
+          slug: product.slug,
+          status: product.status,
+          priceCents: product.priceCents,
+          description: product.description,
+        })),
+      };
+    case 'GET /depop/sign-in-link': {
+      const link = deps.fakeDepop.signInLinks().at(-1);
+      return link === undefined
+        ? { status: 404, body: { error: 'the fake Depop emailed no sign-in link' } }
+        : { status: 200, body: { link } };
+    }
+    case 'POST /depop/sessions': {
+      const seller = field(await readJson(request), 'seller');
+      const cookie = deps.fakeDepop.issueSession(
+        typeof seller === 'string' ? seller : 'e2e-seller',
+      );
+      return {
+        status: 201,
+        body: { name: cookie.name, value: cookie.value, domain: cookie.domain, path: cookie.path },
+      };
+    }
+    case 'POST /today/sold-item': {
+      const item = await createReadyItem(deps.api, { title: 'Wrangler Western Shirt' });
+      return { status: 201, body: await recordSoldItem(deps.db, item) };
     }
     case 'POST /connections/ebay': {
       const body = await readJson(request);
@@ -189,7 +279,7 @@ async function handleFull(
 ): Promise<Reply | undefined> {
   const { fakes } = full;
   switch (route) {
-    case 'POST /depop/faults': {
+    case 'POST /depop-api/faults': {
       const rule = depopFaultRule(await readJson(request));
       if (typeof rule === 'string') return refused(rule);
       fakes.depop.inject(rule);
@@ -206,7 +296,8 @@ async function handleFull(
       fakes.depop.clearFaults();
       fakes.poshmark.clearFaults();
       fakes.mercari.clearFaults();
-      fakes.depopSite.clearFaults();
+      fakes.ebaySite.clearFaults();
+      deps.fakeDepop.clearFaults();
       return { status: 204 };
     case 'POST /ebay/sales': {
       const sku = field(await readJson(request), 'sku');
@@ -227,17 +318,13 @@ async function handleFull(
       const order = deps.fakeEbay.sell(ebayItemId);
       return { status: 201, body: { orderId: order.orderId } };
     }
-    default: {
-      const linked = /^POST \/sessions\/(poshmark|mercari|depop)$/.exec(route)?.[1];
-      if (linked === undefined) return undefined;
-      const marketplace = linked as AutomatedMarketplace;
-      // The first seller's Depop uses the API; the second seller's is the linked session.
-      const seller = marketplace === 'depop' ? full.sellers.second : full.sellers.primary;
+    case 'POST /sessions/ebay':
       return {
         status: 201,
-        body: { connectionId: await full.linker.link(seller.accountId, marketplace) },
+        body: { connectionId: await full.ebayLinker.link(full.sellers.second.accountId) },
       };
-    }
+    default:
+      return undefined;
   }
 }
 
@@ -353,7 +440,7 @@ function depopFaultRule(
 }
 
 interface AutomationFaultRule {
-  marketplace: AutomatedMarketplace;
+  marketplace: FaultedSite;
   action: string;
   fault: { type: (typeof AUTOMATION_FAULTS)[number]; message?: string };
   times: number;
@@ -362,8 +449,8 @@ interface AutomationFaultRule {
 function automationFaultRule(body: unknown): AutomationFaultRule | string {
   if (typeof body !== 'object' || body === null) return 'expected a JSON object';
   const { marketplace, action, fault, times } = body as Record<string, unknown>;
-  if (marketplace !== 'poshmark' && marketplace !== 'mercari' && marketplace !== 'depop') {
-    return 'marketplace must be one of poshmark, mercari, depop';
+  if (marketplace !== 'poshmark' && marketplace !== 'mercari' && marketplace !== 'ebay') {
+    return 'marketplace must be one of poshmark, mercari, ebay';
   }
   const actions = AUTOMATION_ACTIONS[marketplace];
   if (typeof action !== 'string' || !actions.includes(action)) {
@@ -394,14 +481,43 @@ function injectAutomationFault(fakes: MarketplaceFakes, rule: AutomationFaultRul
         times: rule.times,
       });
       return;
-    case 'depop':
-      fakes.depopSite.inject({
-        action: rule.action as Parameters<MarketplaceFakes['depopSite']['inject']>[0]['action'],
+    case 'ebay':
+      fakes.ebaySite.inject({
+        action: rule.action as Parameters<MarketplaceFakes['ebaySite']['inject']>[0]['action'],
         fault,
         times: rule.times,
       });
       return;
   }
+}
+
+const DEPOP_SITE_ACTIONS: readonly FakeDepopSiteAction[] = [
+  'create',
+  'update',
+  'delete',
+  'read',
+  'health',
+  'form',
+];
+const DEPOP_SITE_FAULTS = ['captcha', 'bot_check', 'login_challenge', 'session_expired'] as const;
+
+/** A check the fake Depop site shows, as a request asks for it, or why it is refused. */
+function depopSiteFaultRule(body: unknown):
+  | {
+      action: FakeDepopSiteAction;
+      fault: { type: (typeof DEPOP_SITE_FAULTS)[number] };
+      times: number;
+    }
+  | string {
+  if (typeof body !== 'object' || body === null) return 'expected a JSON object';
+  const { action, fault, times } = body as Record<string, unknown>;
+  const knownAction = DEPOP_SITE_ACTIONS.find((candidate) => candidate === action);
+  if (knownAction === undefined) return `action must be one of ${DEPOP_SITE_ACTIONS.join(', ')}`;
+  const parsed = faultOf(fault, DEPOP_SITE_FAULTS);
+  if (typeof parsed === 'string') return parsed;
+  const count = timesOf(times);
+  if (typeof count === 'string') return count;
+  return { action: knownAction, fault: { type: parsed.type }, times: count };
 }
 
 /** A fault every fake site has, in the shape they share. */

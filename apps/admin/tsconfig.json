@@ -8,7 +8,9 @@
   "include": ["src"],
   "references": [
     { "path": "../../packages/ai" },
+    { "path": "../../packages/connections" },
     { "path": "../../packages/db" },
+    { "path": "../../packages/marketplaces" },
     { "path": "../../packages/shared" },
     { "path": "../../packages/testing" }
   ]

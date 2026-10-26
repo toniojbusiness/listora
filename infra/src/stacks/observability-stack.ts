@@ -362,6 +362,14 @@ export class ObservabilityStack extends ListoraStack {
       1,
       { evaluationPeriods: 1 },
     );
+    alarm(
+      'deletion-overdue',
+      'An account or marketplace connection deletion is still unfinished 8 days after it was ' +
+        'asked for: personal data that should be gone may still be held.',
+      trust('OverdueDeletions', 'Maximum'),
+      1,
+      { evaluationPeriods: 1 },
+    );
     const latencies = Object.entries(settings.delistLatencyAlarmMinutes);
     for (const [marketplace, minutes] of latencies) {
       const limit =

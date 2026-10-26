@@ -30,7 +30,10 @@ final class ShareExtensionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment = environment
         app.launch()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        // Signed in, the app shows its tabs; signed out, the welcome screen.
+        let shown = app.tabBars.firstMatch.waitForExistence(timeout: 10)
+            || app.descendants(matching: .any)["signIn.welcome"].exists
+        XCTAssertTrue(shown, "the app did not finish launching")
     }
 
     private func startServer() throws -> StubAPIServer {
@@ -56,8 +59,11 @@ final class ShareExtensionUITests: XCTestCase {
         let closeSheet = safari.buttons
             .matching(NSPredicate(format: "label == 'Close' AND identifier != 'StopButton'"))
             .firstMatch
-        for attempt in 1 ... 5 where !listora.exists {
-            if closeSheet.exists {
+        // Safari is only asked for its elements while it runs in the foreground: asking a Safari that
+        // is still starting or quitting fails the test (kAXErrorServerNotFound) instead of waiting.
+        let showsListora = { [safari] in safari.state == .runningForeground && listora.exists }
+        for attempt in 1 ... 5 where !showsListora() {
+            if safari.state == .runningForeground, closeSheet.exists {
                 closeSheet.tap()
             }
             let page = try XCTUnwrap(URL(string: server.baseURL + StubAPIServer.sharePagePath + "?attempt=\(attempt)"))
@@ -69,7 +75,7 @@ final class ShareExtensionUITests: XCTestCase {
                 _ = listora.waitForExistence(timeout: 15)
             }
         }
-        XCTAssertTrue(listora.exists, "Listora is not in the share sheet\n\(safari.debugDescription)")
+        XCTAssertTrue(showsListora(), "Listora is not in the share sheet\n\(safari.debugDescription)")
         listora.tap()
     }
 

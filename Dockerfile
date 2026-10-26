@@ -15,6 +15,9 @@ WORKDIR /app
 # Amazon RDS certificate authorities, so connections verify the database certificate
 # (DATABASE_URL uses sslmode=verify-full in AWS).
 ADD --chmod=644 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /etc/ssl/certs/rds-global-bundle.pem
+# Some BuildKit versions (Docker 29) also give the directories ADD creates mode 644, which leaves
+# /etc/ssl unsearchable and stops node from reading OpenSSL's config as the unprivileged user.
+RUN chmod 755 /etc/ssl /etc/ssl/certs
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/rds-global-bundle.pem
 
 # The application: manifests and the shared packages first, so the dependency layer is reused
@@ -41,15 +44,24 @@ RUN version=$(node -p "require('/tmp/playwright-version/package-lock.json').pack
   && rm -rf /var/lib/apt/lists/* /root/.npm /tmp/playwright-version
 
 # The browser runner. The task's root file system is read-only; Chromium's profile and caches
-# go to /tmp, which ECS mounts writable.
+# go to /tmp, a volume ECS mounts writable. Fargate creates that volume owned by root with mode
+# 0755, which the unprivileged user cannot write (Chromium then does not start), unless the
+# image declares the path a VOLUME: then it copies the image's directory, owner included, into
+# it. So /tmp belongs to node here, and the task definition mounts the volume at this path.
 FROM chromium AS runner
 ENV HOME=/tmp
 COPY --from=base /app /app
+RUN chown node:node /tmp
 USER node
+VOLUME ["/tmp"]
+# Fails the build, whatever the builder, if the unprivileged user cannot start node.
+RUN node -e '' && test -r "$NODE_EXTRA_CA_CERTS"
 CMD ["node", "apps/worker/src/runner/main.ts"]
 
 # Files stay owned by root; the processes run unprivileged and never write to the image.
 FROM base AS app
 USER node
+# Fails the build, whatever the builder, if the unprivileged user cannot start node.
+RUN node -e '' && test -r "$NODE_EXTRA_CA_CERTS"
 EXPOSE 3000
 CMD ["node", "apps/api/src/main.ts"]

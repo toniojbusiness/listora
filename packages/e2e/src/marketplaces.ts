@@ -1,10 +1,16 @@
 /**
- * The other three marketplaces of the full local stack (`marketplaces: 'all'`), as a seller who
- * uses them all has them: Depop through its Selling API (the fake Depop, bound to the stack's one
- * Depop API connection), and Poshmark and Mercari in browser sessions the seller linked (the fake
- * Poshmark and the fake Mercari site, driven by the browser runner the worker starts). The fake
- * Depop site serves Depop automation, which only a Depop connection without the API uses: the
- * stack's second seller links a Depop session (stack.ts).
+ * The other marketplaces of the full local stack (`marketplaces: 'all'`), as a seller who uses
+ * them all has them:
+ *
+ * - Depop through its Selling API (the fake Depop), bound to the stack's one Depop API
+ *   connection. An API connection takes precedence over Depop automation, which the default
+ *   stack's fake Depop site serves.
+ * - Poshmark and Mercari (the fake Poshmark and the fake Mercari site) run on the seller's
+ *   iPhone, where they run in production (docs/features/phone-execution.md): the app links them
+ *   in Link accounts and its phone runtime acts on these fakes in the simulator.
+ * - The stack's second seller has no eBay API connection: their eBay is automated in the cloud,
+ *   in a session linked here (the fake eBay site, driven by the browser runner the worker
+ *   starts), the one marketplace whose automation runs in the cloud.
  *
  * Automation runs at the fastest pace the safety rules allow (`PACING_FLOOR`) and the most runs
  * they allow (`LIMITS_CEILING`), so a listing takes seconds, not minutes, and stays well inside
@@ -13,25 +19,26 @@
 import { randomBytes } from 'node:crypto';
 
 import {
-  FakeDepopSite,
+  FakeEbaySite,
   FakeMercariSite,
   FakePoshmark,
   LIMITS_CEILING,
   linkAutomationSession,
   loadAutomationSettings,
   PACING_FLOOR,
-  type AutomatedMarketplace,
 } from '@listora/automation';
-import { LocalTokenVault, SessionVault, type SessionCookie } from '@listora/connections';
+import { LocalTokenVault, SessionVault } from '@listora/connections';
 import type { Db } from '@listora/db';
 import { FakeDepop } from '@listora/marketplaces';
 import { createLogger } from '@listora/shared';
 
 export interface MarketplaceFakes {
+  /** The Depop Selling API. */
   readonly depop: FakeDepop;
   readonly poshmark: FakePoshmark;
   readonly mercari: FakeMercariSite;
-  readonly depopSite: FakeDepopSite;
+  /** eBay's website, which the second seller's eBay automation acts on. */
+  readonly ebaySite: FakeEbaySite;
   /** What the API and the worker need to use them (the Depop connection comes later). */
   readonly env: Readonly<Record<string, string>>;
   close(): Promise<void>;
@@ -47,19 +54,19 @@ export async function startMarketplaceFakes(): Promise<MarketplaceFakes> {
     started.push(poshmark);
     const mercari = await FakeMercariSite.start();
     started.push(mercari);
-    const depopSite = await FakeDepopSite.start();
-    started.push(depopSite);
+    const ebaySite = await FakeEbaySite.start();
+    started.push(ebaySite);
     return {
       depop,
       poshmark,
       mercari,
-      depopSite,
+      ebaySite,
       env: {
         DEPOP_ENV: 'fake',
         DEPOP_FAKE_URL: depop.url,
         FAKE_POSHMARK_URL: poshmark.url,
         FAKE_MERCARI_SITE_URL: mercari.url,
-        FAKE_DEPOP_SITE_URL: depopSite.url,
+        FAKE_EBAY_SITE_URL: ebaySite.url,
         ...automationPace(),
       },
       close: async () => {
@@ -76,7 +83,7 @@ export async function startMarketplaceFakes(): Promise<MarketplaceFakes> {
 function automationPace(): Record<string, string> {
   const range = ([min, max]: readonly [number, number]) => `${String(min)}-${String(max)}`;
   return Object.fromEntries(
-    (['POSHMARK', 'MERCARI', 'DEPOP'] as const).flatMap((name) => [
+    (['POSHMARK', 'MERCARI', 'DEPOP', 'EBAY'] as const).flatMap((name) => [
       [`AUTOMATION_${name}_PACE_MS`, range(PACING_FLOOR.actionDelayMs)],
       [`AUTOMATION_${name}_SESSION_GAP_MS`, range(PACING_FLOOR.sessionGapMs)],
       [`AUTOMATION_${name}_RUNS_PER_HOUR`, String(LIMITS_CEILING.runsPerHour)],
@@ -119,22 +126,23 @@ export async function insertDepopConnection(
 }
 
 /**
- * Links the seller's browser sessions as the app's linking screen does
- * (`linkAutomationSession`): with the cookies the fake site issues a logged-in seller, sealed
- * with the stack's token key, for the profile the worker and the runner use.
+ * Links the second seller's eBay session for cloud automation, as the app's linking does
+ * (`linkAutomationSession`): with the cookie the fake eBay site issues a signed-in seller, sealed
+ * with the stack's token key, for the profile the worker and the runner use. eBay runs in the
+ * cloud by default, so no phone is involved.
  */
-export class SessionLinker {
+export class EbaySessionLinker {
   readonly #db: Db;
   readonly #vault: SessionVault;
   readonly #settings: ReturnType<typeof loadAutomationSettings>;
-  readonly #fakes: MarketplaceFakes;
+  readonly #site: FakeEbaySite;
 
   constructor(options: {
     db: Db;
     tokenKey: Buffer;
-    /** The worker's environment, which decides each marketplace's profile. */
+    /** The worker's environment, which decides eBay's profile. */
     workerEnv: NodeJS.ProcessEnv;
-    fakes: MarketplaceFakes;
+    site: FakeEbaySite;
   }) {
     this.#db = options.db;
     this.#vault = new SessionVault({
@@ -142,27 +150,16 @@ export class SessionLinker {
       logger: createLogger({ service: 'e2e-stack', level: 'silent' }),
     });
     this.#settings = loadAutomationSettings(options.workerEnv);
-    this.#fakes = options.fakes;
+    this.#site = options.site;
   }
 
   /** Links (or relinks) a fresh session; returns the connection's id. */
-  async link(accountId: string, marketplace: AutomatedMarketplace): Promise<string> {
+  async link(accountId: string): Promise<string> {
     const { connectionId } = await linkAutomationSession(
       this.#db,
-      { vault: this.#vault, profile: this.#settings.profiles[marketplace] },
-      { accountId, marketplace, cookies: [this.#cookie(marketplace)] },
+      { vault: this.#vault, profile: this.#settings.profiles.ebay },
+      { accountId, marketplace: 'ebay', cookies: [this.#site.issueSession()] },
     );
     return connectionId;
-  }
-
-  #cookie(marketplace: AutomatedMarketplace): SessionCookie {
-    switch (marketplace) {
-      case 'poshmark':
-        return this.#fakes.poshmark.issueSession();
-      case 'mercari':
-        return this.#fakes.mercari.issueSession();
-      case 'depop':
-        return this.#fakes.depopSite.issueSession();
-    }
   }
 }

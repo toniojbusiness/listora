@@ -43,39 +43,18 @@ import { assertNever, type Logger } from '@listora/shared';
 import type { AutomatedMarketplace, AutomationProfile } from '../profiles.ts';
 import { challengeMessage } from '../safety/challenges.ts';
 import type { ScriptFailure, ScriptResult, StepRunner } from '../runner/types.ts';
+import {
+  isWriteCall,
+  runScriptCall,
+  type AutomationScripts,
+  type ScriptCall,
+  type ScriptSet,
+  type WriteResult,
+  type WriteScriptName,
+} from './script-call.ts';
 import type { AutomationSessions, SessionRequest, SessionRun } from './sessions.ts';
 
-/** What a write script reports when it ran to its end. */
-export type WriteResult =
-  /** The marketplace took the change; the engine still reads it back to verify. */
-  | { type: 'applied'; externalListingId?: string; revision?: number }
-  /** The marketplace refused it (a validation message on its form): retrying cannot help. */
-  | { type: 'rejected'; code: string; message: string; fixHint?: string };
-
-export type WriteScript<P extends AssistedListingPayload> = (
-  op: OperationRequest<P>,
-  step: StepRunner,
-) => Promise<WriteResult>;
-
-export interface AutomationScripts<P extends AssistedListingPayload> {
-  create?: WriteScript<P>;
-  revise?: WriteScript<P>;
-  price?: WriteScript<P>;
-  end?: WriteScript<P>;
-  relist?: WriteScript<P>;
-  markSold?: WriteScript<P>;
-  /**
-   * Reads the listing (by its id, else by the seller's SKU). Must say `authoritative` only for
-   * the marketplace's own "removed" answer for that id. Only reads: no step may mutate.
-   */
-  read: (ref: ListingRef, step: StepRunner) => Promise<RemoteListingState>;
-  /** Opens a page only a logged-in seller sees, to show the session works. Only reads. */
-  health: (step: StepRunner) => Promise<void>;
-  /** The seller's orders sold at or after `since`, for sale checks. Only reads. */
-  orders?: (since: Date | null, step: StepRunner) => Promise<RemoteOrder[]>;
-  /** The seller's listings, for imports and drift checks. Only reads. */
-  listings?: (step: StepRunner) => Promise<RemoteListings>;
-}
+export type { AutomationScripts, WriteResult, WriteScript } from './script-call.ts';
 
 const SCRIPT_FOR_KIND = {
   create: 'create',
@@ -84,7 +63,7 @@ const SCRIPT_FOR_KIND = {
   end: 'end',
   relist: 'relist',
   mark_sold: 'markSold',
-} as const satisfies Record<WriteOperationKind, keyof AutomationScripts<AssistedListingPayload>>;
+} as const satisfies Record<WriteOperationKind, WriteScriptName>;
 
 export interface AutomationAdapterOptions<P extends AssistedListingPayload> {
   marketplace: AutomatedMarketplace;
@@ -93,6 +72,11 @@ export interface AutomationAdapterOptions<P extends AssistedListingPayload> {
   /** Serves the kinds without a script, and every step that has to fall back to the user. */
   assisted: AssistedAdapter;
   scripts: AutomationScripts<P>;
+  /**
+   * Which script set `scripts` is and the site it drives, so a call can be run by another host
+   * (the phone) from the same definitions.
+   */
+  scriptSet: ScriptSet;
   /** `revision` when the read script returns the listing's revision, else `none`. */
   readFreshness: 'revision' | 'none';
   /** The marketplace's payload; it extends the assisted one, which a fallback task copies from. */
@@ -173,9 +157,12 @@ export class AutomationAdapter<
     if (connection === null) return this.#assistedTask(op, { automation: 'no_connection' });
     let run: SessionRun<WriteResult>;
     try {
-      run = await this.#options.sessions.use(
-        this.#request(connection, 'operation', op.operationId, op.kind),
-        (session, signal) => session.run(op.kind, (step) => script(op, step), signal),
+      run = await this.#use<WriteResult>(
+        connection,
+        'operation',
+        op.operationId,
+        op.kind,
+        { script: SCRIPT_FOR_KIND[op.kind], op },
         ctx.signal,
       );
     } catch (error) {
@@ -193,10 +180,12 @@ export class AutomationAdapter<
 
   async readListing(ref: ListingRef, ctx: AdapterContext): Promise<RemoteListingState> {
     const connection = this.#connection(ctx);
-    const run = await this.#options.sessions.use(
-      this.#request(connection, 'operation', ctx.operationId ?? null, 'read listing'),
-      (session, signal) =>
-        session.read('read listing', (step) => this.#options.scripts.read(ref, step), signal),
+    const run = await this.#use<RemoteListingState>(
+      connection,
+      'operation',
+      ctx.operationId ?? null,
+      'read listing',
+      { script: 'read', ref },
       ctx.signal,
     );
     return this.#readValue(run, 'read the listing');
@@ -205,12 +194,14 @@ export class AutomationAdapter<
   async healthCheck(ctx: AdapterContext): Promise<Health> {
     const connection = ctx.connection;
     if (connection === null) return { status: 'ok' };
-    let run: SessionRun<void>;
+    let run: SessionRun<undefined>;
     try {
-      run = await this.#options.sessions.use(
-        this.#request(connection, 'health', null, 'health check'),
-        (session, signal) =>
-          session.read('health check', (step) => this.#options.scripts.health(step), signal),
+      run = await this.#use<undefined>(
+        connection,
+        'health',
+        null,
+        'health check',
+        { script: 'health' },
         ctx.signal,
       );
     } catch {
@@ -244,24 +235,32 @@ export class AutomationAdapter<
   }
 
   async listOrdersSince(since: Date | null, ctx: AdapterContext): Promise<RemoteOrder[]> {
-    const orders = this.#options.scripts.orders;
-    if (orders === undefined) throw new Error(`Listora doesn't read ${this.#name} orders`);
+    if (this.#options.scripts.orders === undefined) {
+      throw new Error(`Listora doesn't read ${this.#name} orders`);
+    }
     const connection = this.#connection(ctx);
-    const run = await this.#options.sessions.use(
-      this.#request(connection, 'sale_check', null, 'sold orders'),
-      (session, signal) => session.read('sold orders', (step) => orders(since, step), signal),
+    const run = await this.#use<RemoteOrder[]>(
+      connection,
+      'sale_check',
+      null,
+      'sold orders',
+      { script: 'orders', since: since === null ? null : since.toISOString() },
       ctx.signal,
     );
     return this.#readValue(run, 'check sales');
   }
 
   async listListings(ctx: AdapterContext): Promise<RemoteListings> {
-    const listings = this.#options.scripts.listings;
-    if (listings === undefined) throw new Error(`Listora doesn't list ${this.#name} listings`);
+    if (this.#options.scripts.listings === undefined) {
+      throw new Error(`Listora doesn't list ${this.#name} listings`);
+    }
     const connection = this.#connection(ctx);
-    const run = await this.#options.sessions.use(
-      this.#request(connection, 'operation', null, 'list listings'),
-      (session, signal) => session.read('list listings', (step) => listings(step), signal),
+    const run = await this.#use<RemoteListings>(
+      connection,
+      'operation',
+      null,
+      'list listings',
+      { script: 'listings' },
       ctx.signal,
     );
     return this.#readValue(run, 'list your listings');
@@ -357,8 +356,18 @@ export class AutomationAdapter<
               'an automation script no longer understands the page; falling back to the user',
             );
             return this.#assistedTask(op, { ...excerpt, automation: 'page_changed' });
+          case 'stopped_for_check':
+            return mutated
+              ? unknown()
+              : {
+                  type: 'transient',
+                  code: failure.code,
+                  message: `${this.#name} wants you to complete a check on your iPhone. Open Listora there to finish it.`,
+                  excerpt,
+                };
           case 'unreachable':
           case 'aborted':
+          case 'browser_unavailable':
           case 'script_error':
             return mutated ? unknown() : transient();
           default:
@@ -392,18 +401,37 @@ export class AutomationAdapter<
     return why === undefined ? outcome : { ...outcome, excerpt: { ...outcome.excerpt, ...why } };
   }
 
-  #request(
+  /**
+   * Runs one script call in the connection's session: a write call as a run, every other as a
+   * read. The request carries the call as data, so a host other than this process (the phone)
+   * can run the same script.
+   */
+  #use<T>(
     connection: NonNullable<AdapterContext['connection']>,
     purpose: SessionRequest['purpose'],
     operationIdOrNull: string | null,
-    script: string,
-  ): SessionRequest {
-    return {
+    name: string,
+    call: ScriptCall<P>,
+    signal: AbortSignal,
+  ): Promise<SessionRun<T>> {
+    const request: SessionRequest = {
       connection,
       purpose,
       operationId: purpose === 'operation' ? operationIdOrNull : null,
-      script,
+      script: name,
+      scriptSet: this.#options.scriptSet,
+      call: call,
     };
+    const script = (step: StepRunner): Promise<T> =>
+      runScriptCall(this.#options.scripts, call, step) as Promise<T>;
+    return this.#options.sessions.use(
+      request,
+      (session, sessionSignal) =>
+        isWriteCall(call as ScriptCall)
+          ? session.run(name, script, sessionSignal)
+          : session.read(name, script, sessionSignal),
+      signal,
+    );
   }
 
   #connection(ctx: AdapterContext): NonNullable<AdapterContext['connection']> {
@@ -416,8 +444,19 @@ export class AutomationAdapter<
     return {
       status: 'degraded',
       code,
-      message: `Listora couldn't check your ${this.#name} login just now.`,
+      message: degradedMessage(code, this.#name),
     };
+  }
+}
+
+function degradedMessage(code: string, name: string): string {
+  switch (code) {
+    case 'browser_unavailable':
+      return `Listora's browser didn't start, so it couldn't check your ${name} sign-in. The problem is on Listora's side, not ${name}'s.`;
+    case 'stopped_for_check':
+      return `${name} wants you to complete a check on your iPhone before Listora can confirm your sign-in. Open Listora there to finish it.`;
+    default:
+      return `Listora couldn't check your ${name} sign-in just now.`;
   }
 }
 

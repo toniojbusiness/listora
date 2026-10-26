@@ -6,7 +6,9 @@ import SwiftUI
 import UIKit
 
 /// The Share Extension entry point: reads what was shared (only its URLs, text, and title;
-/// never the page itself) and shows `ShareLinkView`, which links the listing to an item.
+/// never the page itself) and shows `ShareLinkView`, which links the listing to an item. While
+/// Listora's sign-in page for a marketplace waits for the sign-in link that marketplace emailed
+/// (Depop), a share of that link goes to the sign-in page instead (`SignInLinkHandoff`).
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -25,7 +27,13 @@ final class ShareViewController: UIViewController {
         }
         let root: AnyView
         do {
-            root = try AnyView(ShareLinkView(model: makeModel(content: content), onClose: close))
+            let configuration = try Self.configuration()
+            let signInLinks = KeychainSignInLinkHandoff(accessGroup: configuration.sessionKeychainGroup)
+            if let request = signInLinks.deliver(from: content) {
+                root = AnyView(SignInLinkSentView(name: request.name, onClose: close))
+            } else {
+                root = AnyView(ShareLinkView(model: makeModel(configuration, content: content), onClose: close))
+            }
         } catch {
             // The extension must never crash the sharing app: explain instead.
             root = AnyView(NavigationStack {
@@ -45,16 +53,41 @@ final class ShareViewController: UIViewController {
         host.didMove(toParent: self)
     }
 
-    private func makeModel(content: SharedContent) throws(ConfigurationError) -> ShareLinkModel {
+    private static func configuration() throws(ConfigurationError) -> AppConfiguration {
         var configuration = try AppConfiguration(bundle: .main)
         #if DEBUG
             configuration = DevOverrides.applied(to: configuration)
         #endif
-        // The session the app signed in with, from the App Group keychain.
+        return configuration
+    }
+
+    private func makeModel(_ configuration: AppConfiguration, content: SharedContent) -> ShareLinkModel {
+        // The session the app signed in with, from the App Group keychain, renewed with the same
+        // Cognito client as the app's (AppDependencies) when its token expires.
         let accessTokens = AccessTokenStore(
-            storage: KeychainAccessGrantStorage.session(appGroup: configuration.appGroupIdentifier),
+            storage: KeychainAccessGrantStorage.session(accessGroup: configuration.sessionKeychainGroup),
+            refresher: configuration.cognito.map { CognitoSignInClient(region: $0.region, clientID: $0.clientID) },
         )
         let api = APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens)
         return ShareLinkModel(content: content, service: APIListingLinkService(api: api, accessTokens: accessTokens))
+    }
+}
+
+/// The shared sign-in link is waiting for Listora's sign-in page: the user goes back to Listora,
+/// where it opens. (An extension cannot open its app itself.)
+private struct SignInLinkSentView: View {
+    let name: String
+    let onClose: @MainActor () -> Void
+
+    var body: some View {
+        NavigationStack {
+            EmptyStateView(
+                systemImage: "checkmark.circle",
+                title: "Sign-in link sent to Listora",
+                message: "Go back to Listora to finish signing in to \(name). It opens there, not in your browser.",
+                action: .init("Done", handler: onClose),
+            )
+            .accessibilityIdentifier("share.signInLinkSent")
+        }
     }
 }

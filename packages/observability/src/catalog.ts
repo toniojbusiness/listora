@@ -88,6 +88,13 @@ export const TRUST_METRICS = {
     dimensionSets: [[]],
     description: 'Connections the seller must link again (reauth_required or revoked).',
   },
+  OverdueDeletions: {
+    unit: 'Count',
+    dimensionSets: [[]],
+    description:
+      'Account and connection deletions still unfinished past their completion deadline (8 ' +
+      'days): personal data that should be gone may still be held (docs/features/privacy.md).',
+  },
 } as const satisfies Record<string, MetricDefinition>;
 
 export type TrustMetricName = keyof typeof TRUST_METRICS;

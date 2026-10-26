@@ -269,6 +269,7 @@ const CLOSED_RESPONSE_ENUMS = [
   'PriceTierName',
   'UserTaskUrgency',
   // Values the client chooses and the server echoes.
+  'DevicePlatform',
   'ImageContentType',
   'ItemCondition',
   'MeasurementUnit',

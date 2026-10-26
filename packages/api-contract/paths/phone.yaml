@@ -1,0 +1,94 @@
+/v1/devices/{installationId}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/InstallationId'
+  put:
+    tags: [phone]
+    operationId: registerDevice
+    summary: Register this device
+    description: |
+      The app registers its installation (an id it keeps in its Keychain) on every launch and
+      whenever its APNs token changes: its name, the phone runtime version it speaks, and
+      where push notifications reach it. The device that links a marketplace runs that
+      marketplace's automated steps when they run on the phone.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/phone.yaml#/DeviceRegistration'
+    responses:
+      '200':
+        description: The device.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/phone.yaml#/Device'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/phone-runs:
+  post:
+    tags: [phone]
+    operationId: claimPhoneRun
+    summary: Claim the next work waiting for this phone
+    description: |
+      Claims the next due work waiting for the device (delists after a sale first) and
+      returns its first script call; no `run` when nothing waits. The claim holds for a few
+      minutes from each call and answer; a phone that stops answering lets it lapse, and the
+      work is recovered on the server. `409 app_update_required` when the app's runtime
+      speaks another version of calls than the server's.
+    parameters:
+      - $ref: '../components/parameters.yaml#/IdempotencyKey'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/phone.yaml#/PhoneRunClaim'
+    responses:
+      '200':
+        description: The claimed run, or none.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/phone.yaml#/PhoneRunResult'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/phone-runs/{runId}/calls/{index}:
+  parameters:
+    - $ref: '../components/parameters.yaml#/RunId'
+    - $ref: '../components/parameters.yaml#/CallIndex'
+  put:
+    tags: [phone]
+    operationId: answerPhoneCall
+    summary: Answer a phone call of a run
+    description: |
+      The phone's answer for the run's call `index`, as its runtime returned it. The server
+      records it, runs the work on with it, and returns the next call; no `run` once the work
+      is done (its result recorded). Sending the same answer again changes nothing. `404`
+      when the run is over or lapsed; `409 invalid_state_transition` for an answer to a call
+      the run is not waiting for.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/phone.yaml#/PhoneCallAnswer'
+    responses:
+      '200':
+        description: The run's next call, or none.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/phone.yaml#/PhoneRunResult'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '409':
+        $ref: '../components/responses.yaml#/Conflict'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

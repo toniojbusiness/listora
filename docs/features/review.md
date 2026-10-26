@@ -22,7 +22,9 @@ reopened item whose photos changed since its analysis was applied is analyzed ag
 - **Review, confidence first.** Every detail with its value, its source (AI, Tag, Barcode, or
   You), and the analysis's confidence. Details proposed below 0.6 (the analysis prompt's own
   "a person should check it" line) and empty details every marketplace needs (title, category,
-  condition) come first under "Check these", lowest confidence first. The order is fixed while
+  condition, and the size of clothing and shoes, which eBay, Poshmark, Mercari, and Depop all
+  refuse to list without) come first under "Check these", lowest confidence first; Continue waits
+  until they are filled in. An item without photos says so at once and offers Edit photos. The order is fixed while
   the seller edits, so rows never jump. Each detail edits in place, and the typed text is kept
   when the seller continues or opens another detail; canonical ones (category, department, size
   type, condition) are menus of the vocabulary in `Resources/vocabulary.json`, a copy of
@@ -37,11 +39,19 @@ reopened item whose photos changed since its analysis was applied is analyzed ag
   replace them (`applyAnalysis` keeps `user` details).
 - **Cost** on an in-app number pad (whole dollars or cents; no keyboard to open or dismiss), the
   purchase date, and where it was bought, with recent places as one-tap choices.
-- **Price.** "Don't sell below" per marketplace (tap for the breakdown), the quick sale,
-  recommended, and higher profit tiers, the AI estimate with its confidence, and research links
-  that open in Safari. Every source label is the server's, shown as sent. Sold data bound to one
+- **Price.** The quick sale, recommended, and higher profit tiers, each marked when it is below
+  a marketplace's floor; "Don't sell below" per marketplace, marked when the chosen price is
+  under it (tap for the breakdown); the seller's own price on the keypad, with the highest floor
+  to stay above; the AI estimate with its confidence; and research links that open in Safari.
+  Prices are in tabular digits in one column, so the options and floors compare at a glance.
+  Every source label is the server's, shown as sent. Sold data bound to one
   marketplace (Depop Pricing Inspiration) is not shown here, since this is no listing context.
 - **Save** stores the price, the highest floor, and status `ready`, and shows the SKU.
+- **Voice and fast corrections.** Hold the mic and say what to change, touch and hold a detail
+  for common values, or swipe to the next detail to check: [voice.md](voice.md).
+
+A batch's rapid review ([batch.md](batch.md#rapid-review)) shows each item on one page with the
+same model, and saves its details, cost, and price in one tap.
 
 ## Interaction time
 

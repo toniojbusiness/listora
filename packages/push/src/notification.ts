@@ -22,6 +22,12 @@ export interface PushNotification {
   threadId: string | null;
   /** Ids the app opens when the notification is tapped, such as `itemId`. */
   data: Readonly<Record<string, string>>;
+  /**
+   * Also wakes the app in the background as it arrives (APNs `content-available`), so it can run
+   * work that waits for the phone, such as the delists after a sale
+   * (docs/features/phone-execution.md). iOS may not wake it; tapping the notification does.
+   */
+  wakesApp?: boolean;
 }
 
 export class InvalidPushNotificationError extends Error {
@@ -43,7 +49,7 @@ export function parsePushNotification(value: unknown): PushNotification {
     throw new InvalidPushNotificationError('expected an object');
   }
   const record = value as Record<string, unknown>;
-  const { accountId, category, title, body, urgency, threadId, data } = record;
+  const { accountId, category, title, body, urgency, threadId, data, wakesApp } = record;
   if (typeof accountId !== 'string' || accountId === '') {
     throw new InvalidPushNotificationError('accountId is required');
   }
@@ -70,6 +76,9 @@ export function parsePushNotification(value: unknown): PushNotification {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     throw new InvalidPushNotificationError('data must be an object');
   }
+  if (wakesApp !== undefined && typeof wakesApp !== 'boolean') {
+    throw new InvalidPushNotificationError('wakesApp must be a boolean');
+  }
   const entries = Object.entries(data as Record<string, unknown>);
   for (const [key, entry] of entries) {
     if (!DATA_KEY.test(key) || typeof entry !== 'string') {
@@ -84,5 +93,6 @@ export function parsePushNotification(value: unknown): PushNotification {
     urgency: knownUrgency,
     threadId,
     data: Object.fromEntries(entries) as Record<string, string>,
+    ...(wakesApp === true ? { wakesApp: true } : {}),
   };
 }

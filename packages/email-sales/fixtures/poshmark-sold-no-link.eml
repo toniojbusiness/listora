@@ -1,0 +1,15 @@
+From: Poshmark <orders@poshmark.com>
+To: seller.jane@example.com
+Subject: You made a sale on Poshmark!
+Date: Sat, 24 Oct 2026 21:00:00 +0000
+Message-ID: <sold.no-link.0001@poshmark.com>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Congratulations! Your item sold.
+
+Item: Patagonia Better Sweater Fleece Jacket
+Price: $62.00
+Order ID: 7731f0a1c2b3d4e5f6a7b8d0
+
+Open the Poshmark app to see your sale.

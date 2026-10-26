@@ -1,6 +1,7 @@
 /**
  * The push notifications auto-delist sends (docs/features/auto-delist.md). Each names the item
- * and says what is left and who does it: Listora (API listings) or the seller (assisted ones).
+ * and says what is left and who does it: Listora (API and automated listings), the seller's
+ * iPhone (automated listings that run there), or the seller (assisted ones).
  * They are time-sensitive, grouped per item on the device, and open the item when tapped.
  */
 import type { Marketplace } from '@listora/db';
@@ -44,23 +45,34 @@ function push(
   };
 }
 
-/** Right after the sale: what Listora delists itself and what the seller has to. */
+/**
+ * Right after the sale: what Listora delists itself, what it delists from the seller's iPhone
+ * once the notification is tapped (docs/features/phone-execution.md), and what the seller has
+ * to. With delists on the phone it also tries to wake the app at once, which iOS may not do.
+ */
 export function soldNotification(
   context: PushContext & { delistRunId: string },
-  targets: { listora: readonly Marketplace[]; seller: readonly Marketplace[] },
+  targets: {
+    listora: readonly Marketplace[];
+    phone?: readonly Marketplace[];
+    seller: readonly Marketplace[];
+  },
 ): PushNotification {
+  const phone = targets.phone ?? [];
   const parts = [`${context.label} sold on ${MARKETPLACE_NAMES[context.soldOn]}.`];
   if (targets.listora.length > 0) {
     parts.push(`Listora is delisting it on ${listNames(targets.listora)}.`);
   }
+  if (phone.length > 0) parts.push(`Tap to delist it on ${listNames(phone)} from your iPhone.`);
   if (targets.seller.length > 0) parts.push(`Delist it on ${listNames(targets.seller)} now.`);
-  return push(
+  const notification = push(
     context,
     'item_sold',
     `Sold on ${MARKETPLACE_NAMES[context.soldOn]}`,
     parts.join(' '),
     { delistRunId: context.delistRunId },
   );
+  return phone.length > 0 ? { ...notification, wakesApp: true } : notification;
 }
 
 /** What is still open, by who has to act. */
@@ -74,7 +86,18 @@ function openParts(results: readonly DelistResult[]): string[] {
   if (failed.length > 0) {
     parts.push(`Delisting failed on ${listNames(failed)}; open Listora to retry.`);
   }
-  const pending = where(['pending', 'verifying']);
+  const open = results.filter(
+    (result) => result.state === 'pending' || result.state === 'verifying',
+  );
+  const onPhone = open
+    .filter((result) => result.operation.phoneWait?.running === false)
+    .map((result) => result.marketplace);
+  if (onPhone.length > 0) {
+    parts.push(`Open Listora on your iPhone to delist it on ${listNames(onPhone)}.`);
+  }
+  const pending = open
+    .filter((result) => result.operation.phoneWait?.running !== false)
+    .map((result) => result.marketplace);
   if (pending.length > 0) parts.push(`Listora is still delisting it on ${listNames(pending)}.`);
   return parts;
 }
@@ -84,14 +107,17 @@ export function reminderNotification(
   context: PushContext & { delistRunId: string },
   open: readonly DelistResult[],
 ): PushNotification {
-  return push(
-    context,
-    'delist_reminder',
-    `Still listed: ${context.label}`,
-    [`It sold on ${MARKETPLACE_NAMES[context.soldOn]} 10 minutes ago.`, ...openParts(open)].join(
-      ' ',
+  return wakeForPhone(
+    open,
+    push(
+      context,
+      'delist_reminder',
+      `Still listed: ${context.label}`,
+      [`It sold on ${MARKETPLACE_NAMES[context.soldOn]} 10 minutes ago.`, ...openParts(open)].join(
+        ' ',
+      ),
+      { delistRunId: context.delistRunId },
     ),
-    { delistRunId: context.delistRunId },
   );
 }
 
@@ -100,16 +126,29 @@ export function escalationNotification(
   context: PushContext & { delistRunId: string },
   open: readonly DelistResult[],
 ): PushNotification {
-  return push(
-    context,
-    'delist_escalation',
-    `Double-sale risk: ${context.label}`,
-    [
-      `It sold on ${MARKETPLACE_NAMES[context.soldOn]} 30 minutes ago and is still listed on ${listNames(open.map((result) => result.marketplace))}.`,
-      ...openParts(open),
-    ].join(' '),
-    { delistRunId: context.delistRunId },
+  return wakeForPhone(
+    open,
+    push(
+      context,
+      'delist_escalation',
+      `Double-sale risk: ${context.label}`,
+      [
+        `It sold on ${MARKETPLACE_NAMES[context.soldOn]} 30 minutes ago and is still listed on ${listNames(open.map((result) => result.marketplace))}.`,
+        ...openParts(open),
+      ].join(' '),
+      { delistRunId: context.delistRunId },
+    ),
   );
+}
+
+/** An alert about delists that may wait for the seller's iPhone also tries to wake the app. */
+function wakeForPhone(
+  open: readonly DelistResult[],
+  notification: PushNotification,
+): PushNotification {
+  return open.some((result) => result.mode === 'automation')
+    ? { ...notification, wakesApp: true }
+    : notification;
 }
 
 /** An item that had sold sold again: one of the orders must be canceled. */

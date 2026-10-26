@@ -11,6 +11,7 @@
     { "path": "../../packages/accounts" },
     { "path": "../../packages/testing" },
     { "path": "../../packages/db" },
+    { "path": "../../packages/email-sales" },
     { "path": "../../packages/marketplaces" },
     { "path": "../../packages/observability" },
     { "path": "../../packages/connections" },
@@ -19,9 +20,12 @@
     { "path": "../../packages/auto-delist" },
     { "path": "../../packages/sales" },
     { "path": "../../packages/storage" },
+    { "path": "../../packages/today" },
     { "path": "../../packages/ai" },
     { "path": "../../packages/photos" },
     { "path": "../../packages/analysis" },
+    { "path": "../../packages/batches" },
+    { "path": "../../packages/retention" },
     { "path": "../../packages/automation" }
   ]
 }

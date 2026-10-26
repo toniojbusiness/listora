@@ -2,17 +2,20 @@ import DesignSystem
 import ListoraAPI
 import SwiftUI
 
-/// The seller's items and their status on every marketplace, with search and filters. The list
-/// is read from the server each time it appears and on pull to refresh, so a newly saved item
-/// shows up right away. `header` sits above the list, below the search field: the app's
-/// banners (a marketplace connection that needs attention) come from the caller (AppFeature),
-/// since a feature never imports another.
+/// The seller's items and their status on every marketplace, with search and filters, as a grid
+/// of large photos or as a list (``InventoryLayout``). The items are read from the server each
+/// time the screen appears and on pull to refresh, so a newly saved item shows up right away.
+/// `header` sits above the list, below the search
+/// field: the app's banners (a marketplace connection that needs attention) come from the caller
+/// (AppFeature), since a feature never imports another.
 public struct InventoryView<Header: View>: View {
     private let environment: InventoryEnvironment
     private let onAddItem: @MainActor () -> Void
     private let header: Header
     @State private var model: InventoryListModel
     @State private var path: [ItemRoute] = []
+    @AppStorage(InventoryLayout.storageKey) private var layout = InventoryLayout.standard
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(
         environment: InventoryEnvironment,
@@ -32,12 +35,26 @@ public struct InventoryView<Header: View>: View {
                 .background(Palette.background)
                 .navigationTitle("Inventory")
                 .searchable(text: $model.query.search, prompt: "SKU, title, or brand")
-                .toolbar { ToolbarItem(placement: .topBarTrailing) { InventoryFilterMenu(model: model) } }
+                .toolbar {
+                    // Only with items to lay out.
+                    if !model.items.isEmpty {
+                        ToolbarItem(placement: .topBarTrailing) { layoutButton }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) { InventoryFilterMenu(model: model) }
+                }
                 .navigationDestination(for: ItemRoute.self) { route in
+                    // A standard push: a zoom transition would close the item on the pull-down
+                    // that refreshes it.
                     ItemDetailView(environment: environment, itemID: route.itemID)
                 }
                 // Runs each time the list appears (a tab switch, back from an item) and when the
                 // query changes; typing waits a moment so each keystroke is not a request.
+                .onAppear {
+                    if let status = environment.takeRequestedStatus() {
+                        path = []
+                        model.query.status = status
+                    }
+                }
                 .task(id: model.query) {
                     if !model.query.search.isEmpty {
                         try? await Task.sleep(for: .milliseconds(300))
@@ -48,8 +65,34 @@ public struct InventoryView<Header: View>: View {
         }
     }
 
-    @ViewBuilder
+    private var layoutButton: some View {
+        Button {
+            Motion.perform { layout = layout.other }
+        } label: {
+            Label(layout.switchTitle, systemImage: layout.switchSystemImage)
+        }
+        .sensoryFeedback(.selection, trigger: layout)
+        .accessibilityIdentifier("inventory.layout")
+    }
+
+    /// One column at accessibility sizes, so titles and statuses keep their full width; otherwise
+    /// as many columns of at least 150 points as fit (two on every iPhone).
+    private var gridColumns: [GridItem] {
+        if dynamicTypeSize.isAccessibilitySize {
+            [GridItem(.flexible())]
+        } else {
+            [GridItem(.adaptive(minimum: 150), spacing: Spacing.md, alignment: .top)]
+        }
+    }
+
     private var content: some View {
+        phaseContent
+            .motion(value: model.phase)
+            .motion(value: layout)
+    }
+
+    @ViewBuilder
+    private var phaseContent: some View {
         switch model.phase {
         case .loading where model.items.isEmpty:
             loading
@@ -57,9 +100,8 @@ public struct InventoryView<Header: View>: View {
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.questionmark",
                 title: "Sign in to see your inventory",
-                message: "Your items and their status on every marketplace show up here once you sign in. "
-                    + "You can take photos for a new item now.",
-                action: .init("Add item", systemImage: "camera.fill", handler: onAddItem),
+                message: "Your items and their status on every marketplace show up here once you sign in.",
+                action: .init("Sign in", systemImage: "person.crop.circle", handler: environment.onSignIn),
             )
             .accessibilityIdentifier("inventory.signedOut")
         case let .failed(message) where model.items.isEmpty:
@@ -79,18 +121,24 @@ public struct InventoryView<Header: View>: View {
         }
     }
 
+    @ViewBuilder
     private var loading: some View {
-        ScrollView {
-            VStack(spacing: Spacing.sm) {
-                ForEach(0 ..< 5, id: \.self) { _ in
-                    SkeletonRow().cardStyle(.outlined)
+        switch layout {
+        case .grid:
+            ScrollView {
+                LazyVGrid(columns: gridColumns, spacing: Spacing.lg) {
+                    ForEach(0 ..< 6, id: \.self) { _ in
+                        SkeletonPhotoTile()
+                    }
                 }
+                .padding(Spacing.md)
             }
-            .padding(Spacing.md)
+            .scrollDisabled(true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Loading inventory")
+        case .list:
+            SkeletonList(label: "Loading inventory")
         }
-        .scrollDisabled(true)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Loading inventory")
     }
 
     @ViewBuilder
@@ -121,97 +169,57 @@ public struct InventoryView<Header: View>: View {
 
     private var list: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: Spacing.md) {
                 if model.isFiltered {
                     ActiveFilters(model: model)
                 }
-                ForEach(model.items, id: \.id) { item in
-                    NavigationLink(value: ItemRoute(itemID: item.id)) {
-                        InventoryRow(item: item)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("inventory.row.\(item.sku)")
-                    .task {
-                        if item.id == model.items.last?.id {
-                            await model.loadMore()
+                switch layout {
+                case .grid:
+                    LazyVGrid(columns: gridColumns, alignment: .leading, spacing: Spacing.lg) {
+                        ForEach(model.items, id: \.id) { item in
+                            link(to: item) { InventoryGridCell(item: item) }
+                        }
+                        if model.isLoadingMore {
+                            SkeletonPhotoTile()
                         }
                     }
-                }
-                if model.isLoadingMore {
-                    SkeletonRow().cardStyle(.outlined)
+                case .list:
+                    LazyVStack(alignment: .leading, spacing: Spacing.sm) {
+                        ForEach(model.items, id: \.id) { item in
+                            link(to: item) { InventoryRow(item: item) }
+                        }
+                        if model.isLoadingMore {
+                            SkeletonRow().cardStyle(.flat)
+                        }
+                    }
+                    .frame(maxWidth: Layout.readableWidth)
+                    .frame(maxWidth: .infinity)
                 }
             }
             .padding(Spacing.md)
-            .frame(maxWidth: Layout.readableWidth)
-            .frame(maxWidth: .infinity)
         }
         .refreshable { await model.load() }
+    }
+
+    /// An item's cell or row, opening the item, and loading the next page when the last one
+    /// appears.
+    private func link(to item: ItemSummary, @ViewBuilder label: () -> some View) -> some View {
+        NavigationLink(value: ItemRoute(itemID: item.id)) {
+            label()
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("inventory.row.\(item.sku)")
+        .task {
+            if item.id == model.items.last?.id {
+                await model.loadMore()
+            }
+        }
     }
 }
 
 /// An item in the navigation path.
 struct ItemRoute: Hashable {
     let itemID: String
-}
-
-/// One item: cover photo, title, SKU, status, price, and its status on each marketplace.
-struct InventoryRow: View {
-    let item: ItemSummary
-
-    var body: some View {
-        HStack(alignment: .top, spacing: Spacing.sm) {
-            PhotoView(url: item.coverPhoto?.urls?.thumbnail, cornerRadius: Radius.small)
-                .frame(width: 72, height: 72)
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                    Text(item.title ?? "Untitled item")
-                        .font(Typography.headline)
-                        .foregroundStyle(Palette.textPrimary)
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if let price = item.listPrice {
-                        Text(Formatting.money(price))
-                            .font(Typography.price)
-                            .foregroundStyle(Palette.brand)
-                    }
-                }
-                Text("\(item.sku) · \(item.status.label)")
-                    .font(Typography.footnote.monospacedDigit())
-                    .foregroundStyle(Palette.textSecondary)
-                if !item.listings.isEmpty {
-                    FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
-                        ForEach(item.listings, id: \.listingId) { listing in
-                            MarketplaceBadge(listing: listing)
-                        }
-                    }
-                    .padding(.top, Spacing.xxs)
-                }
-            }
-            Image(systemName: "chevron.right")
-                .font(Typography.footnote.weight(.semibold))
-                .foregroundStyle(Palette.textSecondary)
-                .padding(.top, Spacing.xxs)
-                .accessibilityHidden(true)
-        }
-        .cardStyle(.outlined, padding: Spacing.sm)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// "eBay" and the listing's status pill, exactly as the server words it.
-struct MarketplaceBadge: View {
-    let listing: Components.Schemas.ListingStatusSummary
-
-    var body: some View {
-        HStack(spacing: Spacing.xxs) {
-            Text(Formatting.marketplaceName(listing.marketplace.id))
-                .font(Typography.label)
-                .foregroundStyle(Palette.textPrimary)
-            StatusBadge(listing.statusDisplay.label, tone: StatusTone(listing.statusDisplay.tone))
-        }
-        .accessibilityElement(children: .combine)
-    }
 }
 
 /// The filters in effect as chips, with a way to clear them.

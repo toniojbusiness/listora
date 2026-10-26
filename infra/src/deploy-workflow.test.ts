@@ -10,6 +10,7 @@ import { stackList, synthesize } from './test-support.ts';
 
 interface Step {
   name?: string;
+  if?: string;
   uses?: string;
   run?: string;
   with?: Record<string, unknown>;
@@ -18,6 +19,7 @@ interface Job {
   if?: string;
   environment?: string;
   permissions?: Record<string, string>;
+  env?: Record<string, string>;
   steps: Step[];
 }
 
@@ -86,13 +88,24 @@ describe('deploy workflow', () => {
     return index;
   };
 
-  it('deploys every stack except deploy-access, which only an administrator deploys', () => {
+  it('deploys every stack of every environment except deploy-access, which only an administrator deploys', () => {
     const deployed = new Set(deploys.flatMap((deploy) => deploy.stacks));
-    const { stacks } = synthesize('staging');
-    const expected = stackList(stacks)
-      .map((stack) => stack.stackName.replace('listora-staging-', ''))
-      .filter((name) => name !== 'deploy-access');
-    expect([...deployed].sort()).toEqual(expected.sort());
+    const expected = new Set(
+      ENVIRONMENT_NAMES.flatMap((environment) =>
+        stackList(synthesize(environment).stacks)
+          .map((stack) => stack.stackName.replace(`listora-${environment}-`, ''))
+          .filter((name) => name !== 'deploy-access'),
+      ),
+    );
+    expect([...deployed].sort()).toEqual([...expected].sort());
+  });
+
+  it('deploys the user pool only in personal, after the email stack and before the services', () => {
+    const step = job.steps[deployIndex('auth')];
+    expect(step?.if).toBe("inputs.environment == 'personal'");
+    expect(deployIndex('email')).toBeLessThan(deployIndex('auth'));
+    expect(deployIndex('auth')).toBeLessThan(deployIndex('compute'));
+    expect(job.env?.['LISTORA_OWNER_EMAIL']).toBe('${{ vars.OWNER_EMAIL }}');
   });
 
   it('builds and pushes both images, application and browser runner, tagged with the commit', () => {
@@ -121,7 +134,8 @@ describe('deploy workflow', () => {
     const run = readFileSync(new URL('../../scripts/run-migrations.sh', import.meta.url), 'utf8');
     const names = migrateTaskNames('$environment');
     expect(run).toContain(`cluster="${names.cluster}"`);
-    expect(run).toContain(`--task-definition "${names.family}"`);
+    expect(run).toContain(`task_definition=\${3:-${names.family}}`);
+    expect(run).toContain(`--task-definition "$task_definition"`);
     expect(run).toContain(`--stack-name "${names.stack}"`);
     for (const output of Object.values(MIGRATE_OUTPUTS)) expect(run).toContain(`output ${output}`);
     // The stack says whether the task needs a public address (public-IP egress, no NAT).

@@ -4,7 +4,14 @@
  * the step became the user's (title, description, price, photos in posting order); photos are
  * served as the contract's `Photo`, with the URLs they have now.
  */
-import type { CopyField, Photo, UserTask, UserTaskStatus } from '@listora/api-contract';
+import type {
+  CopyField,
+  Photo,
+  UserTask,
+  UserTaskItem,
+  UserTaskSaleEmail,
+  UserTaskStatus,
+} from '@listora/api-contract';
 import type {
   DbExecutor,
   Marketplace,
@@ -12,11 +19,12 @@ import type {
   UserTaskStatus as TaskStatus,
 } from '@listora/db';
 import { MARKETPLACES } from '@listora/db';
+import { emailSaleOfTask, type EmailSaleTaskPayload } from '@listora/email-sales';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 
 import { photoFromRow, type PhotoRow, type PublicUrls } from '../photos/mapping.ts';
 import type { Tenant } from '../tenancy.ts';
-import { coverPhotoRows, photoRowsById, type TaskRow } from './repository.ts';
+import { coverPhotoRows, itemSummaryRows, photoRowsById, type TaskRow } from './repository.ts';
 
 /** The contract's task statuses and the database's: a confirmed task is `done` in the table. */
 export const STATUS_TO_DB = {
@@ -52,32 +60,51 @@ export async function taskViews(
   const photoIds = copyAssists.flatMap((copy) =>
     (copy?.photos ?? []).map(({ photoId }) => photoId).filter((id) => UUID.test(id)),
   );
-  const itemIds = [...new Set(rows.flatMap((row) => (row.item_id === null ? [] : [row.item_id])))];
-  const [photos, covers] = await Promise.all([
+  const emails = rows.map((row) => emailOf(row));
+  const candidateIds = emails.flatMap((email) => email?.emailSale.candidateItemIds ?? []);
+  const itemIds = [
+    ...new Set([
+      ...rows.flatMap((row) => (row.item_id === null ? [] : [row.item_id])),
+      ...candidateIds,
+    ]),
+  ];
+  const [photos, covers, candidates] = await Promise.all([
     photoRowsById(db, tenant, [...new Set(photoIds)]),
     coverPhotoRows(db, tenant, itemIds),
+    itemSummaryRows(db, tenant, [...new Set(candidateIds)]),
   ]);
   const photoById = new Map(photos.map((photo) => [photo.id, photo]));
   const coverByItem = new Map(covers.map((photo) => [photo.item_id, photo]));
+  const itemById = new Map(candidates.map((item) => [item.id, item]));
   return rows.map((row, index) =>
-    taskView(row, copyAssists[index], { photoById, coverByItem, urls }),
+    taskView(row, copyAssists[index], emails[index], { photoById, coverByItem, itemById, urls }),
   );
 }
 
 interface PhotoLookup {
   photoById: Map<string, PhotoRow>;
   coverByItem: Map<string, PhotoRow>;
+  /** A sale email's candidate items. */
+  itemById: Map<string, { id: string; sku: string; title: string | null }>;
   urls: PublicUrls;
+}
+
+/** The sale email a confirm or review task was made from, if it was. */
+function emailOf(row: TaskRow): EmailSaleTaskPayload | undefined {
+  return row.kind === 'confirm_sale' || row.kind === 'review_match'
+    ? emailSaleOfTask(row.payload)
+    : undefined;
 }
 
 function taskView(
   row: TaskRow,
   copy: CopyAssistPayload | undefined,
+  email: EmailSaleTaskPayload | undefined,
   photos: PhotoLookup,
 ): UserTask {
   const marketplace = marketplaceOf(row) ?? undefined;
   const cover = row.item_id === null ? undefined : photos.coverByItem.get(row.item_id);
-  const { title, instructions } = wording(row);
+  const { title, instructions } = email === undefined ? wording(row) : emailWording(row, email);
   const copyAssist = copy === undefined ? undefined : copyAssistView(copy, photos);
   return {
     id: row.id,
@@ -103,6 +130,7 @@ function taskView(
     ...(row.sale_id === null ? {} : { saleId: row.sale_id }),
     ...(row.deep_link === null ? {} : { deepLink: row.deep_link }),
     ...(copyAssist === undefined ? {} : { copyAssist }),
+    ...(email === undefined ? {} : { saleEmail: saleEmailView(email, photos) }),
     createdAt: row.created_at.toISOString(),
     ...(row.completed_at === null ? {} : { completedAt: row.completed_at.toISOString() }),
   };
@@ -212,6 +240,62 @@ function wording(row: TaskRow): { title: string; instructions: string } {
         instructions: 'Update Listora to finish this task.',
       };
   }
+}
+
+function saleEmailView(email: EmailSaleTaskPayload, photos: PhotoLookup): UserTaskSaleEmail {
+  const { emailSale } = email;
+  const candidates: UserTaskItem[] = emailSale.candidateItemIds.flatMap((id) => {
+    const item = photos.itemById.get(id);
+    if (item === undefined) return [];
+    const cover = photos.coverByItem.get(id);
+    return [
+      {
+        id,
+        sku: item.sku,
+        ...(item.title === null ? {} : { title: item.title }),
+        ...(cover === undefined ? {} : { coverPhoto: photoFromRow(cover, photos.urls) }),
+      },
+    ];
+  });
+  return {
+    reason: emailSale.reason,
+    receivedAt: emailSale.receivedAt,
+    excerpt: emailSale.excerpt,
+    ...(emailSale.title === null ? {} : { title: emailSale.title }),
+    ...(emailSale.priceCents === null
+      ? {}
+      : { salePrice: { amountCents: emailSale.priceCents, currency: 'USD' } }),
+    soldAt: emailSale.soldAt,
+    ...(emailSale.orderNumber === null ? {} : { orderNumber: emailSale.orderNumber }),
+    candidates,
+  };
+}
+
+/** A sale email's task: what the email said, and what the user's answer does. */
+function emailWording(
+  row: TaskRow,
+  email: EmailSaleTaskPayload,
+): { title: string; instructions: string } {
+  const name = MARKETPLACE_NAMES[email.marketplace];
+  const { emailSale } = email;
+  const what = emailSale.title ?? 'an item';
+  const price =
+    emailSale.priceCents === null ? '' : ` for $${amount({ amountCents: emailSale.priceCents })}`;
+  if (row.kind === 'confirm_sale') {
+    return {
+      title: `Sold on ${name}? Confirm to delist`,
+      instructions: `A ${name} sale email says ${what} sold${price}. Confirm it to record the sale and delist it everywhere else, or dismiss it if it did not sell.`,
+    };
+  }
+  return emailSale.reason === 'unknown_format'
+    ? {
+        title: `Which item sold on ${name}?`,
+        instructions: `Listora got a ${name} sale email it couldn't read. Check the ${name} app: if one of your items sold, mark it sold from its item screen to delist it everywhere else. Then tap Done.`,
+      }
+    : {
+        title: `Which item sold on ${name}?`,
+        instructions: `A ${name} sale email says ${what} sold${price}, and more than one of your items matches. Pick the one that sold to delist it everywhere else.`,
+      };
 }
 
 function listWording(kind: OperationKind | null, name: string) {

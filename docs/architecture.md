@@ -25,20 +25,20 @@ These two rules from the product owner override every other design choice.
 
 ## 2. Stack
 
-| Area       | Choice                                                                                            | Why                                                                                       |
-| ---------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| iPhone app | Native Swift 6 / SwiftUI, iOS 18+, XcodeGen, local SPM modules, GRDB                              | Camera, Vision OCR, barcodes, background upload, Share Extension, and StoreKit are native |
-| Backend    | TypeScript on Node 26: Fastify API plus a worker process                                          | One language for the API, worker, infra (CDK), and the later web app                      |
-| Contract   | OpenAPI 3.1 in `packages/api-contract` → generated TS types and Swift client; CI fails on drift   | Client and server cannot drift apart                                                      |
-| Database   | PostgreSQL 18 (Homebrew locally, RDS in prod), Kysely, plain SQL migrations                       | Relational inventory, strong constraints, JSONB for marketplace payloads                  |
-| Jobs       | Graphile Worker (Postgres-backed), enqueued in the same transaction as the operation row          | No second datastore; an operation can't be recorded without its job, or the reverse       |
-| Photos     | Client sends JPEG without GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives    | Marketplaces fetch images by URL; GPS stripping protects privacy                          |
-| Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                    | Managed and in the same AWS account                                                       |
-| Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                    | App Store rule 3.1.3(b)                                                                   |
-| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK (`infra`)   | Standard, robust, one security boundary                                                   |
-| Push       | APNs (token-based key); fake driver in dev                                                        | Delist alerts and assisted tasks                                                          |
-| Automation | Playwright's headless Chromium in the on-demand browser runner (Fargate; a child process locally) | Poshmark, Mercari, and Depop without an API ([automation.md](features/automation.md))     |
-| Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                        | No extra package manager or build system                                                  |
+| Area       | Choice                                                                                            | Why                                                                                           |
+| ---------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| iPhone app | Native Swift 6 / SwiftUI, iOS 18+, XcodeGen, local SPM modules, GRDB                              | Camera, Vision OCR, barcodes, background upload, Share Extension, and StoreKit are native     |
+| Backend    | TypeScript on Node 26: Fastify API plus a worker process                                          | One language for the API, worker, infra (CDK), and the later web app                          |
+| Contract   | OpenAPI 3.1 in `packages/api-contract` → generated TS types and Swift client; CI fails on drift   | Client and server cannot drift apart                                                          |
+| Database   | PostgreSQL 18 (Homebrew locally, RDS in prod), Kysely, plain SQL migrations                       | Relational inventory, strong constraints, JSONB for marketplace payloads                      |
+| Jobs       | Graphile Worker (Postgres-backed), enqueued in the same transaction as the operation row          | No second datastore; an operation can't be recorded without its job, or the reverse           |
+| Photos     | Client sends JPEG without GPS; S3 + CloudFront (local-disk driver in dev); `sharp` derivatives    | Marketplaces fetch images by URL; GPS stripping protects privacy                              |
+| Auth       | Amazon Cognito (Sign in with Apple, email OTP); dev OTP driver                                    | Managed and in the same AWS account                                                           |
+| Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                    | App Store rule 3.1.3(b)                                                                       |
+| Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK (`infra`)   | Standard, robust, one security boundary                                                       |
+| Push       | APNs (token-based key); fake driver in dev                                                        | Delist alerts and assisted tasks                                                              |
+| Automation | Playwright's headless Chromium in the browser runner (Fargate), or the iPhone app's own web views | Poshmark, Mercari, Depop, and eBay until their APIs ([automation.md](features/automation.md)) |
+| Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                        | No extra package manager or build system                                                      |
 
 ### TypeScript conventions
 
@@ -79,12 +79,14 @@ The iOS conventions are in [features/ios.md](features/ios.md).
 apps/
   api/          Fastify HTTP API (@listora/api)
   worker/       Background worker: operation engine, plus one module per feature's jobs in
-                src/features/ (account deletion, AI spend check, item analysis, photo
-                processing, trust metrics, the daily connection health check, the delist SLA,
-                push delivery, sale fees); and the on-demand browser runner (src/runner/main.ts)
+                src/features/ (account deletion, connection deletion, data retention, AI spend
+                check, item analysis, batch items' analysis start, photo processing, trust
+                metrics, the daily connection health check, the delist SLA, push delivery, sale
+                fees, the morning summary, sale email ingest); and the
+                on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
-                and account blocks (@listora/admin)
+                and account blocks, marketplace data purges (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
@@ -94,12 +96,15 @@ packages/
   analysis/     Item analysis: canonical vocabulary, marketplace copy limits, prompt assembly,
                 the strict output schema, provenance, escalation, the analysis job
                 (@listora/analysis)
+  batches/      Batch listing: batches and their items' state, the job that starts each submitted
+                item's analysis once its photos are processed (@listora/batches)
   pricing/      Pricing v1: versioned fee tables, cost floor, AI-estimate tiers, research
                 links, sold-data label guard; pure, no I/O (@listora/pricing)
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
-  db/           SQL migrations, migration runner, Kysely types, SKU allocator (@listora/db)
-  storage/      Object storage: local-disk driver with signed upload URLs, S3 driver
-                (@listora/storage)
+  db/           SQL migrations, migration runner, Kysely types, SKU allocator, deletion
+                completion records (@listora/db)
+  storage/      Object storage: local-disk driver with signed upload URLs, S3 driver, checked
+                purges (@listora/storage)
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
                 the photo processing job, an item's photo-set hash (@listora/photos)
   marketplaces/ Marketplace adapter framework: interface, capabilities, registry, listing content,
@@ -108,24 +113,32 @@ packages/
                 fault injection (@listora/marketplaces)
   connections/  Marketplace account connections: OAuth connect, the token vault (local key or KMS)
                 for OAuth tokens and browser sessions, the session vault, use-time credentials
-                with single-flight refresh, health checks, revocation (@listora/connections)
+                with single-flight refresh, health checks, revocation, unlinking and its
+                deletion job (@listora/connections)
   automation/   Browser automation (decision D1): the Playwright runner, its safety rules, the
                 automation adapter base, sale-check scheduling, the runner launcher, the
-                fake marketplace site, and the Poshmark, Mercari, and Depop adapters with their
-                fake sites (poshmark/, mercari/, depop/) (@listora/automation)
+                fake marketplace site, and the Poshmark, Mercari, Depop, and eBay adapters with
+                their fake sites (poshmark/, mercari/, depop/, ebay/) (@listora/automation)
   operations/   Operation engine: enqueue, state machine, executor, crash recovery, listing
                 drift resync (@listora/operations)
   sales/        Sale intake: inbound events, recording sales (which starts their auto-delist);
                 the sale lifecycle, fee lines, payout and profit, the profit dashboard's math;
                 eBay notifications, the order poll, eBay account deletion (@listora/sales)
+  email-sales/  Email sale detection: forwarding addresses, the folder and SES ingest drivers,
+                DKIM and SPF checks, the sold-email parsers, matching, confirm and review tasks
+                (@listora/email-sales)
   auto-delist/  The auto-delist orchestrator: the fan-out after a sale, delist runs and their
                 per-marketplace truth, SLA re-alerts, double-sale incidents (@listora/auto-delist)
   push/         Push notifications: the notification, the sender interface and its recording
                 fake, the outbox job (@listora/push)
+  today/        The Today screen: card rules, the summary's plain queries, the money summary, the
+                morning summary job and its setting (@listora/today)
   accounts/     Account lifecycle: deleted identities, the account deletion tombstone and its job,
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
                 (@listora/observability)
+  retention/    Data retention: how long logs and raw payloads are kept, the daily job that
+                deletes what expired (@listora/retention)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
@@ -140,7 +153,8 @@ scripts/
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
   ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
 Dockerfile      Images: `app` runs the API and the worker; `runner` adds headless Chromium
-docs/           This overview, the roadmap, and one doc per feature in docs/features/
+docs/           This overview, the roadmap, one doc per feature in docs/features/, and the
+                privacy policy and terms drafts in docs/legal/
 Makefile        iOS commands (make ios-test, ios-lint, ...)
 ```
 
@@ -182,12 +196,15 @@ src/
   contract/      Validators compiled from the bundled contract, and contractRoute()
   auth/          AuthDriver interface; the dev driver (with its /dev/auth endpoints) and the
                  Cognito driver
+  profile/       The profile Settings shows (getProfile, replaceProfile)
   account/       Account deletion (deleteAccount); the job that finishes it is in
                  @listora/accounts
   tenancy.ts     Tenant resolution: the tenancy guard
   idempotency.ts Idempotency-Key handling for POSTs
   items/ photos/ One folder per resource: routes.ts, feature.ts, repository.ts, mapping and views
   analyses/      Start, get, escalate, and apply analyses; the guard pre-check
+  batches/       Batches of items photographed in one session: items by position, submits, the
+                 measured interaction
   uploads/       Upload sessions (createUploadSession, getUploadSession) and the file claim
   storage/       The local storage driver's HTTP routes (signed PUTs, public GETs)
   pricing/       getItemPricing: loads cost, snapshots, and actual fees for @listora/pricing
@@ -195,13 +212,22 @@ src/
   listings/      Draft listings, the listing actions (publish, price, revise, end, relist,
                  verify) queued on the operation engine, honest views, shared-listing links
   operations/    Operations, their history, Retry, and Cancel
-  tasks/         The task inbox: assisted steps, and the user's confirmation or dismissal
+  tasks/         The task inbox: assisted steps, and the user's confirmation or dismissal;
+                 a sale email's confirm and review tasks
+  sale-emails/   The sale email forwarding address, its status and setting, `POST /dev/email`
   connections/   Marketplace connections, the health summary and Retry check, connect attempts,
                  and the public OAuth callback
+  marketplace-sessions/  Linking marketplaces by signing in: stores the session the app hands
+                 over and reports its check (docs/features/marketplace-linking.md)
+  phone/         The seller's devices, and the marketplace work their iPhone claims and
+                 answers (docs/features/phone-execution.md)
   sales/         The sales feed (listSales, getSale) with each sale's money, delist runs, and
                  double sales; Mark as sold (createSale), the lifecycle, and the relist question
   profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
+  today/         The Today summary (getToday) and the morning summary setting
+  voice/         interpretVoiceCorrection: the text model's reading of a spoken correction
   webhooks/      eBay's notification endpoint (`/webhooks/ebay`, outside `/v1` and the contract)
+  perf/          The synthetic seller and the latency benchmark (`npm run perf:api`); not served
 ```
 
 - **Routes come from the contract.** `contractRoute(app, deps, 'createItem', handler)` takes
@@ -244,23 +270,23 @@ Nothing requires a real credential to build or test. Every external service sits
 interface with a fake or dev driver, selected by an environment variable. Each switch below
 lands with the task that introduces that dependency, and its keys are added to `.env.example`.
 
-| Dependency       | Dev/test                                                                                                                                                                | Production                 | Switch                                |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------- |
-| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                                                              | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`   |
-| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                                         | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                |
-| Assisted         | Poshmark, Mercari, and Depop run as assisted adapters until a seller links a session (D1) or connects Depop's API                                                       | The same                   | none                                  |
-| Automation       | Fake marketplace site (`npm run dev:fake-site`) in local headless Chromium                                                                                              | Per-marketplace adapters   | `FAKE_AUTOMATION_SITE_URL`            |
-| Browser runner   | A child process of the worker (`npm run dev:runner` by hand)                                                                                                            | ECS service, 0 to 1 tasks  | `BROWSER_RUNNER_LAUNCH`               |
-| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                                        | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`            |
-| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash, `default.json` for any other photo set)                                                                             | Anthropic API              | `AI_PROVIDER=fake\|anthropic`         |
-| eBay             | `fake-ebay` server (OAuth consent, Commerce Identity, Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`  |
-| Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`)              | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production` |
-| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email`                                                                                                                    | SES inbound                | `EMAIL_INGEST=folder\|ses`            |
-| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                                      | Cognito                    | `AUTH_DRIVER=dev\|cognito`            |
-| Payments         | Fake Stripe client + StoreKit configuration file                                                                                                                        | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`         |
-| Push             | Recording fake that logs each notification (`packages/push`)                                                                                                            | APNs (with device tokens)  | `PUSH_DRIVER=fake`                    |
-| Token encryption | Local AES-GCM key from `.env` (`TOKEN_ENCRYPTION_KEY`), for OAuth tokens and browser sessions                                                                           | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                    |
-| iOS              | iPhone 17 simulator, photo-library fixtures                                                                                                                             | Device / TestFlight        | xcconfig `API_BASE_URL`               |
+| Dependency       | Dev/test                                                                                                                                                                | Production                 | Switch                                        |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | --------------------------------------------- |
+| Postgres         | `scripts/dev-db.sh` cluster in `.local/pg`                                                                                                                              | RDS                        | `DATABASE_URL`, `TEST_DATABASE_URL`           |
+| Marketplaces     | Fake marketplace with fault injection (`@listora/marketplaces`, `npm run dev:fake-marketplace`)                                                                         | Real adapters (T-15, T-24) | `FAKE_MARKETPLACE_URL`                        |
+| Assisted         | Poshmark, Mercari, Depop, and eBay (without its API keys) run as assisted adapters until a seller links a session (D1) or connects the API                              | The same                   | none                                          |
+| Automation       | Fake marketplace site (`npm run dev:fake-site`) and each marketplace's fake site in local headless Chromium                                                             | Per-marketplace adapters   | `FAKE_AUTOMATION_SITE_URL`, `FAKE_*_SITE_URL` |
+| Browser runner   | A child process of the worker (`npm run dev:runner` by hand)                                                                                                            | ECS service, 0 to 1 tasks  | `BROWSER_RUNNER_LAUNCH`                       |
+| Storage          | Local-disk driver in `.local/storage`, with signed upload URLs served by the API                                                                                        | S3 + CloudFront            | `STORAGE_DRIVER=local\|s3`                    |
+| AI               | `FakeAiProvider` (fixtures keyed by photo-set hash, `default.json` for any other photo set)                                                                             | Anthropic API              | `AI_PROVIDER=fake\|anthropic`                 |
+| eBay             | `fake-ebay` server (OAuth consent, Commerce Identity, Trading XML subset, Media, Taxonomy, Fulfillment, signed notifications, fault injection; `npm run dev:fake-ebay`) | Sandbox, then production   | `EBAY_ENV=fake\|sandbox\|production`          |
+| Depop            | `fake-depop` checked against Depop's published OpenAPI spec (OAuth with PKCE, rotating tokens, signed webhooks, fault injection; `npm run dev:fake-depop`)              | Sandbox, then production   | `DEPOP_ENV=fake\|sandbox\|production`         |
+| Email ingest     | Folder drop `.local/inbox/*.eml` + `POST /dev/email` ([email-sales.md](features/email-sales.md))                                                                        | SES inbound → S3 + SQS     | `EMAIL_INGEST=folder\|ses\|off`               |
+| Auth             | Dev OTP printed to the API log (`POST /dev/auth/codes`, then `/dev/auth/sessions`)                                                                                      | Cognito                    | `AUTH_DRIVER=dev\|cognito`                    |
+| Payments         | Fake Stripe client + StoreKit configuration file                                                                                                                        | Stripe, App Store          | `BILLING_DRIVER=fake\|stripe`                 |
+| Push             | Recording fake that logs each notification (`packages/push`)                                                                                                            | APNs (with device tokens)  | `PUSH_DRIVER=fake`                            |
+| Token encryption | Local AES-GCM key from `.env` (`TOKEN_ENCRYPTION_KEY`), for OAuth tokens and browser sessions                                                                           | KMS envelope encryption    | `TOKEN_KMS_KEY_ID`                            |
+| iOS              | iPhone 17 simulator, photo-library fixtures                                                                                                                             | Device / TestFlight        | xcconfig `API_BASE_URL`                       |
 
 Live smoke tests for real providers skip automatically when their credential is absent. Fakes
 must stay true to the real contract: shapes, error codes, and failure modes.
@@ -271,8 +297,11 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
 
 - **Tenancy.** Every table has a non-null `account_id`, except `account` itself, `app_user`
   (a person's identity is global, and `membership` links it to accounts), the deleted
-  identity tables `deleted_identity`, `account_deletion`, and `account_deletion_grant`, and the
-  platform tables `ai_kill_switch` and `ai_control_audit`, which belong to no single tenant. Child
+  identity tables `deleted_identity`, `account_deletion`, `account_deletion_grant`, and
+  `account_deletion_object`, the deletion tables `connection_deletion`,
+  `connection_deletion_object`, and `deletion_record` ([privacy.md](features/privacy.md#data)),
+  and the platform tables `ai_kill_switch` and `ai_control_audit`, which belong to no single
+  tenant. Child
   rows reference parents through composite `(account_id, <parent>_id)` foreign keys, so the
   database rejects a row that points at another tenant's data. Deleting an account deletes
   all of its data.
@@ -286,8 +315,10 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
 - **History is kept.** A trigger rejects updates and deletes on the append-only tables, and
   deletes on `marketplace_operation`. The only changes it lets through are foreign-key actions
   caused by deleting a parent row (for example deleting the account), never direct statements
-  or other triggers. So an operation and its `operation_event` history go away only with the
-  account.
+  or other triggers, and the retention job's deletes of expired rows, which name the one table
+  they delete from in the transaction setting `listora.retention_delete`
+  ([privacy.md](features/privacy.md#retention)). So an operation goes away only with the
+  account, and its `operation_event` history with the account or 180 days after it settled.
 - **Invariants in the schema.** An operation can be `succeeded` only with `success_evidence`
   (`read_back` or `user_confirmation`), and `failed` only with a user-readable error. A create,
   revise, or relist has listing `content`, and no other kind does. Assisted connections can
@@ -306,14 +337,17 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
   batches by later POSTs once expired).
 - **Elsewhere:** connections and connect attempts in [connections.md](features/connections.md#data);
   automation runs and sale-check schedules in [automation.md](features/automation.md#data);
-  inventory, photos, and history in [items.md](features/items.md); uploads in
+  inventory, photos, and history in [items.md](features/items.md); batches in
+  [batch.md](features/batch.md#data); uploads in
   [photos.md](features/photos.md); AI in [ai.md](features/ai.md); marketplaces in
   [marketplaces.md](features/marketplaces.md#data); sales, delist runs, and user tasks in
   [operations.md](features/operations.md#data) (double-sale incidents in
   [auto-delist.md](features/auto-delist.md#data), the lifecycle and fee columns in
   [sales.md](features/sales.md#data), the profit dashboard's index in
   [profit.md](features/profit.md#data)); pricing in [pricing.md](features/pricing.md#data);
-  deleted identities and account deletion in [auth.md](features/auth.md#data). Billing
+  deleted identities and account deletion in [auth.md](features/auth.md#data); the morning
+  summary setting in [today.md](features/today.md#data); sale email inboxes in
+  [email-sales.md](features/email-sales.md#data). Billing
   (`subscription`, `entitlement`, `usage_counter`) has no doc of its own until billing lands (T-28);
   `usage_counter` holds the AI plan quotas ([ai.md](features/ai.md)).
 
@@ -383,36 +417,49 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 
 ## 8. Feature docs
 
-| File                                                             | Covers                                                                        |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [features/operations.md](features/operations.md)                 | The operation engine, the honest status vocabulary                            |
-| [features/auto-delist.md](features/auto-delist.md)               | Sale intake, the delist fan-out, delist runs, SLA re-alerts, double sales     |
-| [features/connections.md](features/connections.md)               | Connecting accounts, the token vault, health checks, the health dashboard     |
-| [features/push.md](features/push.md)                             | Push notifications: the outbox job and the drivers                            |
-| [features/marketplaces.md](features/marketplaces.md)             | The adapter interface, capabilities, assisted adapters, conformance, listings |
-| [features/ebay.md](features/ebay.md)                             | The eBay adapter, the fake eBay, the sandbox check                            |
-| [features/ebay-notifications.md](features/ebay-notifications.md) | eBay notifications, the order poll, eBay account deletion                     |
-| [features/depop.md](features/depop.md)                           | Depop: the partner API adapter, dormant until access is granted               |
-| [features/depop-automation.md](features/depop-automation.md)     | The Depop automation adapter until then, its mappings, the fake Depop site    |
-| [features/automation.md](features/automation.md)                 | Browser automation for marketplaces without an API (decision D1)              |
-| [features/poshmark.md](features/poshmark.md)                     | The Poshmark automation adapter, its mapping tables, and the fake Poshmark    |
-| [features/mercari.md](features/mercari.md)                       | The Mercari automation adapter, its mappings, the fake Mercari site           |
-| [features/ai.md](features/ai.md)                                 | The AI pipeline, item analysis, cost metering and controls                    |
-| [features/pricing.md](features/pricing.md)                       | Pricing data rules, floors, fee tables, tiers, the label guard                |
-| [features/photos.md](features/photos.md)                         | Uploads, storage drivers, photo processing                                    |
-| [features/items.md](features/items.md)                           | Inventory items, item status, the audit log                                   |
-| [features/auth.md](features/auth.md)                             | Sign-in drivers, the Cognito user pool, account deletion                      |
-| [features/infra.md](features/infra.md)                           | Hosting and deploys                                                           |
-| [features/costs.md](features/costs.md)                           | The personal environment's monthly cost                                       |
-| [features/observability.md](features/observability.md)           | Logs, request ids, the signals alarms key on                                  |
-| [features/ios.md](features/ios.md)                               | iOS app conventions                                                           |
-| [features/review.md](features/review.md)                         | The iPhone review, cost, and price screens and the interaction-time metric    |
-| [features/design.md](features/design.md)                         | The iPhone app's design system, screenshots, and UI audit                     |
-| [features/inventory.md](features/inventory.md)                   | The Inventory tab, the item screen, the listing flow and its API              |
-| [features/sales.md](features/sales.md)                           | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI   |
-| [features/tasks.md](features/tasks.md)                           | Assisted mode: the task inbox, copy-assist, confirmations, reminders          |
-| [features/profit.md](features/profit.md)                         | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule  |
-| [features/e2e.md](features/e2e.md)                               | The full-stack end-to-end suite, the full local stack, nightly CI             |
+| File                                                               | Covers                                                                        |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| [features/operations.md](features/operations.md)                   | The operation engine, the honest status vocabulary                            |
+| [features/auto-delist.md](features/auto-delist.md)                 | Sale intake, the delist fan-out, delist runs, SLA re-alerts, double sales     |
+| [features/connections.md](features/connections.md)                 | Connecting accounts, the token vault, health checks, the health dashboard     |
+| [features/push.md](features/push.md)                               | Push notifications: the outbox job and the drivers                            |
+| [features/marketplaces.md](features/marketplaces.md)               | The adapter interface, capabilities, assisted adapters, conformance, listings |
+| [features/ebay.md](features/ebay.md)                               | The eBay adapter, the fake eBay, the sandbox check                            |
+| [features/ebay-notifications.md](features/ebay-notifications.md)   | eBay notifications, the order poll, eBay account deletion                     |
+| [features/depop.md](features/depop.md)                             | Depop: the partner API adapter, dormant until access is granted               |
+| [features/depop-automation.md](features/depop-automation.md)       | The Depop automation adapter until then, its mappings, the fake Depop site    |
+| [features/ebay-automation.md](features/ebay-automation.md)         | The eBay automation adapter until the API keys exist, the fake eBay site      |
+| [features/automation.md](features/automation.md)                   | Browser automation for marketplaces without an API (decision D1)              |
+| [features/poshmark.md](features/poshmark.md)                       | The Poshmark automation adapter, its mapping tables, and the fake Poshmark    |
+| [features/marketplace-linking.md](features/marketplace-linking.md) | Linking marketplaces from the iPhone by signing in, and each session's check  |
+| [features/phone-execution.md](features/phone-execution.md)         | Running marketplaces' automated steps on the seller's iPhone                  |
+| [features/mercari.md](features/mercari.md)                         | The Mercari automation adapter, its mappings, the fake Mercari site           |
+| [features/ai.md](features/ai.md)                                   | The AI pipeline, item analysis, cost metering and controls                    |
+| [features/pricing.md](features/pricing.md)                         | Pricing data rules, floors, fee tables, tiers, the label guard                |
+| [features/photos.md](features/photos.md)                           | Uploads, storage drivers, photo processing                                    |
+| [features/items.md](features/items.md)                             | Inventory items, item status, the audit log                                   |
+| [features/auth.md](features/auth.md)                               | Sign-in drivers, the Cognito user pool, account deletion                      |
+| [features/profile.md](features/profile.md)                         | Profile and settings: the avatar, names, the photo, diagnostics, the API      |
+| [features/infra.md](features/infra.md)                             | Hosting and deploys                                                           |
+| [features/costs.md](features/costs.md)                             | The personal environment's monthly cost                                       |
+| [features/observability.md](features/observability.md)             | Logs, request ids, the signals alarms key on                                  |
+| [features/ios.md](features/ios.md)                                 | iOS app conventions                                                           |
+| [features/review.md](features/review.md)                           | The iPhone review, cost, and price screens and the interaction-time metric    |
+| [features/batch.md](features/batch.md)                             | Batch listing: a whole haul shot at once, grouped, analyzed, rapid review     |
+| [features/design.md](features/design.md)                           | The iPhone app's design system, screenshots, and UI audit                     |
+| [features/inventory.md](features/inventory.md)                     | The Inventory tab, the item screen, the listing flow and its API              |
+| [features/sales.md](features/sales.md)                             | Mark as sold, the sale lifecycle, relisting by choice, fees, profit and ROI   |
+| [features/email-sales.md](features/email-sales.md)                 | Sale emails: forwarding address, SES ingest, DKIM/SPF, parsers, matching      |
+| [features/tasks.md](features/tasks.md)                             | Assisted mode: the task inbox, copy-assist, confirmations, reminders          |
+| [features/profit.md](features/profit.md)                           | The profit dashboard: periods, breakdowns, dead stock, the eBay licence rule  |
+| [features/today.md](features/today.md)                             | The Today tab (the home), its card rules and money summary, the morning push  |
+| [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"          |
+| [features/security.md](features/security.md)                       | The security review: findings, severities, fixes, and follow-ups              |
+| [features/performance.md](features/performance.md)                 | Latency, idle cost, AI cost per item, and the API benchmark at 2,000 items    |
+| [features/privacy.md](features/privacy.md)                         | Deletions with completion records, unlinking, retention, photo metadata       |
+| [features/threat-model.md](features/threat-model.md)               | Assets, trust boundaries, the main threats, and where each is mitigated       |
+| [features/bugs.md](features/bugs.md)                               | The bug bash: each bug found, how to see it, its fix and test, the follow-ups |
+| [features/e2e.md](features/e2e.md)                                 | The full-stack end-to-end suite, the full local stack, nightly CI             |
 
 ### Former section numbers
 

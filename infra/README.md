@@ -24,7 +24,7 @@ staging and prod; personal swaps a few pieces for cheaper ones (below).
 | `data`          | RDS PostgreSQL 18: encrypted, private, TLS required, daily backups (7 days staging, 30 prod), storage autoscaling, Multi-AZ and deletion protection in prod, a final snapshot on removal. The password is generated into `listora/<env>/database`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `migrate`       | The schema migration task `listora-<env>-migrate` (its own cluster, log group `/listora/<env>/migrate`, and roles): the worker's database access running `node packages/db/src/cli.ts latest` from the deployed image. Outputs the task subnets, worker security group, and public IP setting for `ecs run-task`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `storage`       | Private photo bucket (versioned, TLS only, old versions expire after 30 days, the browser runner's `automation/` screenshots after 30 days at most) and a CloudFront distribution that serves only `public/` objects by exact key, for marketplace image fetch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `email`         | SES domain identity (Easy DKIM), MX for `in.<domain>`, and a receipt rule that scans each message and stores it under `inbound/` in a private bucket (kept 90 days). Without a domain, only the empty bucket.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `email`         | SES domain identity (Easy DKIM), MX for `in.<domain>`, a receipt rule that scans each message, stores it under `inbound/` in a private bucket, and notifies an SNS topic that feeds the worker's encrypted SQS queue (with a dead-letter queue); the worker deletes each message once processed, and a lifecycle rule removes any left after 14 days. Without a domain, only the empty bucket. See docs/features/email-sales.md.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `compute`       | ECS cluster with Fargate services `api` and `worker` (one image, private subnets, CPU autoscaling, rollback on a failed deploy), an HTTPS ALB at `api.<domain>` health-checked on `/health/live`, service log groups, and a task role per service; and the browser runner's `runner` service (its own image, 0 tasks while idle, at most 1, `/listora/<env>/runner` logs).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `observability` | Alarm topic (optional email subscription) and baseline alarms: API 5xx, ALB 5xx, unhealthy tasks, p95 latency, running tasks (below desired with Container Insights, below the minimum without), CPU, and memory per service, database CPU, storage, and memory, plus RDS low-storage events (including storage autoscaling at its ceiling) and an EventBridge rule that sends unplanned ECS task stops (crash loops) to the topic. Trust alarms on the worker's metrics (namespace `Listora`): an operation unverified for 30 minutes, any failed delist, an account's AI cost today over `aiDailyCostAlarmUsd`, a connection that needs relinking (a level alarm that suits one seller; multi-seller environments should switch to alarming on increases), and per marketplace, p95 delist latency over an hour above `delistLatencyAlarmMinutes` and a verified-success rate below 90% over a day. Behind the HTTP API (personal), `api-5xx` fires on any server error in 2 of 3 five-minute periods. Log groups sit with the stacks that write them; retention is 30 days in staging and 90 in prod. |
 
@@ -69,7 +69,11 @@ and never a CAPTCHA or bot check solved (it stops and falls back to an assisted 
   deploy workflow builds and pushes it next to the application image, with the same tag.
 - **Task.** Read-only root file system with a writable `/tmp` volume for Chromium, the worker's
   network place and security group (the database, internet egress, no ingress), and
-  `PGPASSWORD` only.
+  `PGPASSWORD` only. Fargate creates that volume owned by root (mode 0755) unless the image
+  declares its path a `VOLUME`, so the runner stage declares `/tmp` one, owned by the
+  unprivileged user the runner runs as; without it Chromium cannot start. A test checks that
+  the image declares every path the task mounts, and the container smoke test runs the runner
+  on the image's own volume instead of a tmpfs.
 
 **The iPhone app.** The personal environment is the production environment for now, so the
 iOS `Prod-Release` configuration's `API_BASE_URL` points at it (there is no separate Personal
@@ -90,10 +94,12 @@ load balancer serves only `api.<domain>`. Without a domain:
   `*.cloudfront.net` domain (the storage stack's `PhotoCdnDomain` output), with or without a
   domain.
 - **Sales.** SES receives mail only for a verified domain, so email-forwarded sale detection
-  is off: the email stack holds only its empty bucket, with no SES identity, MX record, or
-  receipt rules. Sales are still detected by the scheduled automation checks (about every 12
-  hours) and by marketplace API webhooks; forwarded sale emails are enabled once a domain is
-  added.
+  is off: the email stack holds only its empty bucket, with no SES identity, MX record, receipt
+  rules, topic, or queue, and the containers run with `EMAIL_INGEST=off` (the app shows the
+  sale emails section as not available yet). Sales are still detected by the scheduled
+  automation checks (about every 12 hours) and by marketplace API webhooks; forwarded sale
+  emails are enabled once a domain is added
+  ([docs/features/email-sales.md](../docs/features/email-sales.md)).
 
 **Adding a domain later.** Without a domain, every URL registered with a third party points
 at the execute-api URL: the marketplace OAuth redirect (`/v1/connections/{marketplace}/callback`,
@@ -108,8 +114,9 @@ them breaks; turning it off is a separate, later step:
    URL, the Depop redirect URI, each marketplace's webhook endpoints, the Stripe webhook
    endpoint, and the App Store Server Notifications URL.
 3. Set the new `ApiUrl` in the app (step 8) and ship a TestFlight build.
-4. Activate the receipt rule set (step 6) and point the marketplaces' sale emails at
-   `in.<domain>`.
+4. Activate the receipt rule set (step 6). Each account's forwarding address (Settings > Link
+   accounts > Sale emails) is then at `in.<domain>`, and the containers read sale emails
+   (`EMAIL_INGEST=ses`).
 5. Confirm everything works at the new URL: connect a marketplace, see a webhook and a Stripe
    and App Store notification arrive, and check that the app in use is the new build.
 6. Only then, optionally, set `disableDefaultEndpoint: true` in personal's `ingress`
@@ -136,8 +143,9 @@ them breaks; turning it off is a separate, later step:
 - **Task roles (least privilege).** Both services: read and write the photo bucket, and
   `kms:GenerateDataKey` on the token key (`TOKEN_KMS_KEY_ID`), to seal marketplace credentials.
   Worker only: `kms:Decrypt` on the token key for OAuth tokens only (the encryption context
-  purpose `listora-marketplace-tokens`; only the worker opens tokens, at use time), read raw
-  sale email under `inbound/`, and start the browser runner (`ecs:UpdateService` on the
+  purpose `listora-marketplace-tokens`; only the worker opens tokens, at use time), read and
+  delete raw sale email under `inbound/` and consume the sale email queue (with a domain), and
+  start the browser runner (`ecs:UpdateService` on the
   `runner` service). The runner: `kms:Decrypt` and `kms:GenerateDataKey` for browser sessions
   only (the purpose `listora-marketplace-session`), put objects under `automation/`
   (screenshots), and scale its own service to zero. A combined task's role holds both
@@ -165,12 +173,13 @@ them breaks; turning it off is a separate, later step:
 
 Run from the repository root.
 
-| Command                                  | What it does                                                                                                                                |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run infra:synth`                    | `cdk synth` for every environment, plus personal with a domain, with placeholder settings and AWS credentials hidden (offline)              |
-| `npx vitest run --project unit infra`    | Infra tests: config, assertions per stack and environment, template snapshots, deploy and TestFlight workflows                              |
-| `npx vitest run --project unit infra -u` | Refresh the template snapshots in `src/__snapshots__/` after an intended change; review the diff                                            |
-| `scripts/deploy-personal.sh --dry-run`   | The personal deploy's offline checks and the steps it would run ([Deploying the personal environment](#deploying-the-personal-environment)) |
+| Command                                            | What it does                                                                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run infra:synth`                              | `cdk synth` for every environment, plus personal with a domain, with placeholder settings and AWS credentials hidden (offline)              |
+| `npx vitest run --project unit infra`              | Infra tests: config, assertions per stack and environment, template snapshots, deploy and TestFlight workflows                              |
+| `npx vitest run --project unit infra -u`           | Refresh the template snapshots in `src/__snapshots__/` after an intended change; review the diff                                            |
+| `scripts/deploy-personal.sh --dry-run`             | The personal deploy's offline checks and the steps it would run ([Deploying the personal environment](#deploying-the-personal-environment)) |
+| `scripts/deploy-personal.sh --code-only --dry-run` | The fast path's offline checks and steps, for a commit that changes only code ([Code-only deploys](#code-only-deploys))                     |
 
 Commands that talk to AWS (`cdk diff`, `cdk deploy`) run from `infra/` with that account's
 credentials and the settings below, for example `npx cdk diff -c env=staging`.
@@ -191,6 +200,7 @@ and fails fast, naming the missing or invalid key without printing its value.
 | `hostedZoneId`      | `LISTORA_HOSTED_ZONE_ID`     | yes      | Route 53 public hosted zone for `domain`; set with `domain`      |
 | `imageTag`          | `LISTORA_IMAGE_TAG`          | yes      | Image tag to run (the commit SHA); `latest` is refused           |
 | `alarmEmail`        | `LISTORA_ALARM_EMAIL`        | no       | Subscribed to the alarm topic                                    |
+| `ownerEmail`        | `LISTORA_OWNER_EMAIL`        | personal | The only person who can sign in (owner pool); refused elsewhere  |
 | `githubRepository`  | `LISTORA_GITHUB_REPOSITORY`  | no       | Repository allowed to deploy; default `toniojbusiness/listora`   |
 | `availabilityZones` | `LISTORA_AVAILABILITY_ZONES` | no       | Two zones of the region, comma-separated; default: the first two |
 
@@ -202,36 +212,47 @@ involved. It deploys only to the captain's account `976033325938` (pinned in the
 other account is refused) and runs the same steps in the same order as the workflow.
 
 **Before the first run:** sign in to the account's AWS CLI profile (for example
-`aws sso login --profile prequal-main`), start Docker (`LISTORA_CONTAINER_CLI=finch` uses Finch
+`aws sso login --profile prequal-main`; one sign-in covers the whole deploy, since `cdk` gets
+the profile's credentials from the AWS CLI through `credential_process` in a private config the
+script removes on exit, instead of the hour-long SSO token `cdk` cannot renew), start Docker (`LISTORA_CONTAINER_CLI=finch` uses Finch
 instead), and put the Anthropic key in `~/.config/listora/anthropic.env` as one
-`ANTHROPIC_API_KEY=...` line. Optional settings (`LISTORA_AWS_REGION`,
+`ANTHROPIC_API_KEY=...` line. Export `LISTORA_OWNER_EMAIL`, the address you sign in to the app
+with: the user pool's only user (docs/features/auth.md, The owner pool). Optional settings (`LISTORA_AWS_REGION`,
 `LISTORA_AVAILABILITY_ZONES`, `LISTORA_ALARM_EMAIL`, `LISTORA_DOMAIN` with
 `LISTORA_HOSTED_ZONE_ID`) come from the environment, as for `cdk` ([Settings](#settings)).
 
 ```sh
 scripts/deploy-personal.sh --dry-run --profile prequal-main   # offline: checks and prints every step
 scripts/deploy-personal.sh --profile prequal-main             # deploys
+scripts/deploy-personal.sh --code-only --profile prequal-main # a commit that changes only code, fast
 ```
 
 From a clean checkout of the commit to deploy (the image is tagged with it), the script:
 
-1. **Checks locally**: the tools, a clean checkout, and the Anthropic key file (never printed).
+1. **Checks locally**: the tools, a clean checkout, `LISTORA_OWNER_EMAIL`, and the Anthropic
+   key file (never printed).
 2. **Verifies the account**: `aws sts get-caller-identity` must be `976033325938`.
 3. **Checks the zones and the stacks**: refuses `use1-az3` (no API Gateway VPC links) and
    suggests a `LISTORA_AVAILABILITY_ZONES` value; refuses any stack that is busy, failed, or
    `ROLLBACK_COMPLETE`, so it never deletes or replaces something that exists.
 4. **Synthesizes offline** with the real settings into `infra/cdk.out/deploy-personal` and
    deploys exactly that assembly. It checks the templates first: the database has deletion
-   protection, the API's `AUTH_DRIVER` is `dev` or `cognito`, and `AI_PROVIDER` is not `fake`.
-5. **Makes sure the CDK bootstrap is the restricted one** ([Trust boundary](#trust-boundary)).
-   It first checks `CDKToolkit`: a bootstrap with any other execution policy (the default
-   `AdministratorAccess` included) stops the script before it changes anything, since
-   re-bootstrapping changes every CDK app in the account. Then it creates the managed policy
-   `listora-personal-cdk-execution` from `src/deploy/execution-policy.ts` (or makes the
-   committed document its default version), and bootstraps an account that has none with:
+   protection, the API's `AUTH_DRIVER` is `cognito` (the dev driver is refused), the user pool
+   allows no sign-up and its only user is `LISTORA_OWNER_EMAIL`, and `AI_PROVIDER` is not
+   `fake`.
+5. **Makes sure Listora's own CDK bootstrap is the restricted one**
+   ([Trust boundary](#trust-boundary)). Listora bootstraps separately from any other CDK app
+   in the account: qualifier `listora` and toolkit stack `CDKToolkit-listora`
+   (`src/bootstrap.ts`; `cdk.json` makes every `cdk` command use them), so the account's
+   default `CDKToolkit` and the apps deploying through it are never touched. The script first
+   checks `CDKToolkit-listora`: one with any other execution policy stops it before it changes
+   anything. Then it creates the managed policy `listora-personal-cdk-execution` from
+   `src/deploy/execution-policy.ts` (or makes the committed document its default version), and
+   bootstraps when `CDKToolkit-listora` does not exist yet with:
 
    ```sh
    npx cdk bootstrap aws://976033325938/us-east-1 --profile prequal-main \
+     --qualifier listora --toolkit-stack-name CDKToolkit-listora \
      --cloudformation-execution-policies arn:aws:iam::976033325938:policy/listora-personal-cdk-execution \
      --termination-protection
    ```
@@ -239,28 +260,109 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
 6. **Deploys** the registry, builds the `app` and `runner` images for `linux/amd64` (the
    tasks run on X86_64) and pushes them (reusing an image already pushed for the commit), then
    the state stacks and the migrate stack.
-7. **Stores the Anthropic key** in `listora/personal/anthropic-api-key` from a private
+7. **Waits until SES has verified the owner's address** (and, with a domain, the domain), then
+   deploys the auth stack (the user pool). The pool emails the sign-in codes through SES, which
+   sends only to verified addresses while the account is in the SES sandbox. **The one manual
+   step:** on the first deploy, the email stack makes the owner's address an SES identity and
+   AWS emails it "Amazon Web Services - Email Address Verification Request"; click its link
+   while the script waits (30 minutes at most; run the script again after that). No email?
+   `aws ses verify-email-identity --email-address <owner> --profile <profile>` sends it again.
+   Later deploys find it verified and go straight on. If the account already has the owner's
+   address as an SES identity that no Listora stack owns, the script leaves it alone
+   (`ownerEmailIdentity=existing`, `LISTORA_OWNER_EMAIL_IDENTITY`) and only waits until it is
+   verified, since CloudFormation cannot create an identity that already exists.
+8. **Stores the Anthropic key** in `listora/personal/anthropic-api-key` from a private
    temporary file, only when it differs; if the services were already running, it restarts
    them so they read it.
-8. **Runs the migrations** (`scripts/run-migrations.sh`, the workflow's step), then deploys
-   compute and observability.
-9. **Waits for health** (`/health/ready` with the database ok, 10 minutes at most), runs the
-   **smoke test**, and prints the API URL and the line to put in the iPhone app's Prod
-   configuration.
+9. **Runs the migrations** (`scripts/run-migrations.sh`, the workflow's step, with the migrate
+   stack's own task definition), then deploys compute and observability. If a
+   [code-only deploy](#code-only-deploys) left a service on a revision the stack did not make
+   (CloudFormation changes a service only when its template changes, as on a rollback to the
+   commit it last deployed), it moves the service back to the stack's task definition.
+10. **Waits for health** (`/health/ready` with the database ok, 10 minutes at most), runs the
+    **smoke test**, and prints the API URL and the app client id to put in the iPhone app's
+    Prod configuration.
 
 **Smoke test** (`src/deploy/smoke.ts`, also runnable on its own): `/health/live` and
-`/health/ready`, a sign-in with the configured driver, then it creates a draft item, reads it,
-deletes it, and checks that it is gone. With the `dev` driver it requests a code, reads it from
-the API's log group `/listora/personal/api`, and finally deletes the throwaway account it
-signed in to. With `cognito` it signs in with `LISTORA_SMOKE_ID_TOKEN`, an ID token of a
-dedicated smoke user, whose account it keeps. It never starts an analysis or touches a
-marketplace, so it costs no AI usage. A failed step fails the deploy with the step's name.
+`/health/ready`, a `401` for a request without a token, a sign-in with the configured driver,
+then it creates a draft item, reads it, deletes it, and checks that it is gone. With the `dev`
+driver it requests a code, reads it from the API's log group, and finally deletes the
+throwaway account it signed in to. With `cognito` it also checks that the dev sign-in is off
+(`404`), and signs in only with `LISTORA_SMOKE_ID_TOKEN`, an ID token of a user of the pool,
+whose account it keeps. Personal's pool has one user, the owner, so the deploy runs without
+one and skips the signed-in steps; to run them against your own account, pass your ID token:
+`LISTORA_SMOKE_ID_TOKEN=<token> node infra/src/deploy/smoke.ts --api-url <url> --auth cognito`.
+It never starts an analysis or touches a marketplace, so it costs no AI usage. A failed step
+fails the deploy with the step's name.
 
-**Point the iPhone app at it.** Set the printed URL in `apps/ios/Config/Prod.xcconfig`, keeping
-the `$()` that stops xcconfig from reading `//` as a comment, for example
-`API_BASE_URL = https:/$()/abc123.execute-api.us-east-1.amazonaws.com`, then ship a TestFlight
-build ([apps/ios/README.md](../apps/ios/README.md#environments)). The URL changes only when a
-domain is added ([Without a domain](#without-a-domain)).
+**Point the iPhone app at it.** Set the printed values in `apps/ios/Config/Prod.xcconfig`,
+keeping the `$()` that stops xcconfig from reading `//` as a comment, for example:
+
+```text
+API_BASE_URL = https:/$()/abc123.execute-api.us-east-1.amazonaws.com
+COGNITO_REGION = us-east-1
+COGNITO_CLIENT_ID = 1example23456789abcdefghij
+```
+
+Then ship a TestFlight build ([apps/ios/README.md](../apps/ios/README.md#environments)) and
+sign in from Settings with `LISTORA_OWNER_EMAIL`: the app emails you a code. The URL changes
+only when a domain is added ([Without a domain](#without-a-domain)); the client id only if the
+auth stack is replaced.
+
+**The owner's account.** The auth stack creates the owner's Cognito user, verified and without
+a password, so the first sign-in is an emailed code like every later one. Changing
+`LISTORA_OWNER_EMAIL` replaces that user, and the new one signs in to a new, empty Listora
+account (the account belongs to the Cognito user's `sub`). Deleting the account in the app
+deletes the Cognito user too; to sign in again, recreate it with
+`aws cognito-idp admin-create-user --user-pool-id <UserPoolId output> --username <owner>
+--user-attributes Name=email,Value=<owner> Name=email_verified,Value=true --message-action
+SUPPRESS --profile <profile>`.
+
+### Code-only deploys
+
+Most commits change only code, and redeploying every stack through CloudFormation for them is
+slow (a compute stack update alone takes about four minutes). `--code-only` is the fast path:
+
+```sh
+scripts/deploy-personal.sh --code-only --profile prequal-main
+```
+
+It runs the same local checks, account check, stack checks, and offline synthesis as the full
+deploy, then:
+
+1. **Refuses anything but code**, changing nothing: it checks Listora's bootstrap and execution
+   policy without updating them, and compares every synthesized template with the deployed one
+   (`aws cloudformation get-template`), ignoring only the image tag. Any other difference (a new
+   resource, setting, container variable, or secret), or an Anthropic key in
+   `~/.config/listora/anthropic.env` that differs from the stored one, stops it with the
+   stacks that differ and the full deploy command to run instead. So does a stack that does not
+   exist yet: the first deploy is always a full one.
+2. **Builds and pushes the images** as the full deploy does, with layer caching: each image
+   carries its cache (`--cache-to type=inline`), and the build reuses the layers of the images
+   the services run (`--cache-from`) as well as the builder's own cache, so a code change
+   rebuilds and pushes only its small source layers.
+3. **Runs the migrations only when there are new ones**: when `packages/db/migrations` differs
+   between the commit the services run (their image tag) and this one, or when that commit is
+   not in the checkout. It registers a revision of the migrate stack's task definition with the
+   new image and runs it with `scripts/run-migrations.sh`; a failed migration stops the deploy
+   before any service moves.
+4. **Moves the services to the new images through ECS**, without CloudFormation: for each
+   service (`app`, `runner`) it registers a revision of the task definition the compute stack
+   made, with only the image tags changed, points the service at it (`aws ecs update-service`),
+   and waits until ECS reports the rollout complete with only the new revision running. If the
+   circuit breaker rolls the service back, the deploy fails; it never reports a release that is
+   not running.
+5. **Waits for health and runs the smoke test**, as the full deploy does.
+
+Personal's app service replaces its one task in place (`deployments: 'replace'` in
+`src/config.ts`: minimum healthy 0%), on every deploy: the old task stops while the new one
+starts, so the API answers nothing for about a minute. Staging and prod keep `rolling`. The
+deploy times are in [docs/features/infra.md](../docs/features/infra.md#deploy-times).
+
+The services then run revisions that CloudFormation did not make; the stacks still describe the
+commit of the last full deploy. The next full deploy brings them back in line: it replaces the
+revisions with its own, also when its commit is the one CloudFormation already has. The Deploy
+workflow does not do that check, so after a code-only deploy, deploy personal with the script.
 
 ### Rollback
 
@@ -274,17 +376,20 @@ domain is added ([Without a domain](#without-a-domain)).
   (`aws cloudformation update-termination-protection --no-enable-termination-protection
 --stack-name <stack>`) and remove it (`aws cloudformation delete-stack --stack-name <stack>`).
   Never do this for the data stack without checking what it holds.
-- **A bad release.** Check out the last good commit and run the script again: its image is
-  still in ECR, so nothing is rebuilt, and because migrations are expand-then-contract, the
-  older code runs on the newer schema. Do not revert migrations in the deployed database.
+- **A bad release.** Check out the last good commit and run the script again (with
+  `--code-only` when the releases between differ only in code): its image is still in ECR, so
+  nothing is rebuilt, and because migrations are expand-then-contract, the older code runs on
+  the newer schema. Do not revert migrations in the deployed database.
 - **A bad Anthropic key.** Fix `~/.config/listora/anthropic.env` and run the script again.
 
 ### Teardown
 
 Removing the personal environment destroys its data; there is no undo except the final
-database snapshot. Remove the stacks in reverse order (observability, compute, email, storage,
-migrate, data, secrets, network, registry), turning off each stack's termination protection
-first. Before the data stack:
+database snapshot. Remove the stacks in reverse order (observability, compute, auth, email,
+storage, migrate, data, secrets, network, registry), turning off each stack's termination
+protection first. The user pool has deletion protection and is retained: turn the protection
+off (`aws cognito-idp update-user-pool --deletion-protection INACTIVE ...`) and delete it by
+hand. Before the data stack:
 
 - **The database has deletion protection.** Turn it off on purpose, or removing the stack
   fails: `aws rds modify-db-instance --db-instance-identifier <id> --no-deletion-protection
@@ -295,8 +400,9 @@ first. Before the data stack:
   secrets, and the KMS token key (schedule its deletion; every stored marketplace token becomes
   unreadable).
 
-The bootstrap (`CDKToolkit`, termination-protected) and the `listora-personal-cdk-execution`
-policy can stay; remove them last if the account will run no CDK app.
+Listora's bootstrap (`CDKToolkit-listora`, termination-protected) and the
+`listora-personal-cdk-execution` policy go last. Leave the account's default `CDKToolkit` alone:
+other apps deploy through it.
 
 ## First deploy of an environment
 
@@ -319,8 +425,10 @@ account. The examples use staging.
    `listora-<env>-cdk-execution` from `node src/deploy/execution-policy.ts <env> <account>`
    (`aws iam create-policy --policy-name listora-<env>-cdk-execution --policy-document
 file://policy.json`), then from `infra/`:
-   `npx cdk bootstrap aws://<account>/us-east-1 --cloudformation-execution-policies
-arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protection`. The
+   `npx cdk bootstrap aws://<account>/us-east-1 --qualifier listora --toolkit-stack-name
+CDKToolkit-listora --cloudformation-execution-policies
+arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protection`
+   (Listora's own bootstrap, beside any other app's; `src/bootstrap.ts`). The
    bootstrap's CloudFormation execution policy is the ceiling on what any deploy can change;
    see [Trust boundary](#trust-boundary). It allows no OIDC provider, so `deploy-access`
    (step 3) cannot deploy through this bootstrap, by design: the administrator deploys its
@@ -335,7 +443,10 @@ arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protecti
    reviewers, and deployment branches limited to `main`. Add the environment variables
    `AWS_ACCOUNT_ID`, `AWS_REGION`, `DOMAIN`,
    `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL` and `AVAILABILITY_ZONES` (personal without a
-   domain leaves out `DOMAIN` and `HOSTED_ZONE_ID`). No secrets are needed.
+   domain leaves out `DOMAIN` and `HOSTED_ZONE_ID`; personal also needs `OWNER_EMAIL`, the one
+   person its user pool lets sign in). No secrets are needed. Deploy personal the first time
+   with `scripts/deploy-personal.sh`, which waits for the owner to click SES's verification
+   link before it deploys the user pool; the workflow's user pool step does not wait.
 5. **Deploy.** Run the **Deploy** workflow (Actions tab) on `main` with `staging`. It tests
    and synthesizes offline, assumes the deploy role through OIDC, deploys the registry, builds
    and pushes the application and runner images tagged with the commit, deploys the state
@@ -358,7 +469,9 @@ listora/staging/<name> --secret-string ...`, then redeploy or force a new ECS de
    `aws cloudformation describe-stacks --stack-name listora-personal-compute --query
 "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text`. Set it as
    `API_BASE_URL` in `apps/ios/Config/Prod.xcconfig` (see
-   [apps/ios/README.md](../apps/ios/README.md#environments)) before the next TestFlight build.
+   [apps/ios/README.md](../apps/ios/README.md#environments)) before the next TestFlight build,
+   and `COGNITO_CLIENT_ID` from the auth stack's `AppClientId` output (`COGNITO_REGION` is the
+   region).
    Run this again whenever the URL changes (adding a domain later changes it; see
    [Adding a domain later](#without-a-domain)).
 
@@ -384,7 +497,9 @@ users, groups, OIDC providers, Organizations, or account settings, so a deploy c
 rewrite the deploy role's own permissions. Every environment bootstraps with it (step 2).
 
 **Follow-up (T-33, security hardening):** a permissions boundary on every role the stacks
-create, since a stack's own role can still be given any inline permission.
+create, since a stack's own role can still be given any inline permission, and scoping the
+service grants to Listora's tagged resources: they are service-wide, and the personal account
+also holds another app's stacks.
 
 ## Conventions
 

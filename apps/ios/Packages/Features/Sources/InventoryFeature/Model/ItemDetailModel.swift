@@ -93,6 +93,42 @@ final class ItemDetailModel {
         }
     }
 
+    /// The item's "Don't sell below" price on `marketplace`, for the price change to warn below
+    /// it; nil without a cost or when the server can't say.
+    func floor(on marketplace: String) async -> Money? {
+        let floors = try? await service.floors(itemID: itemID)
+        return floors?.first { $0.marketplace.value1?.rawValue == marketplace || $0.marketplace.value2 == marketplace }?
+            .floorPrice
+    }
+
+    /// Saves the item's size (empty removes it), the detail a marketplace most often refuses a
+    /// clothing listing without. A change made elsewhere meanwhile (`409`) is read again and the
+    /// size applied to it once. Returns the failure to show, or nil once saved.
+    func saveSize(_ size: String) async -> String? {
+        guard var current = item else { return "The item isn't loaded yet." }
+        let label = size.trimmingCharacters(in: .whitespacesAndNewlines)
+        for attempt in 1 ... 2 {
+            var details = current.details
+            details.sizeLabel = label.isEmpty ? nil : label
+            do {
+                let saved = try await service.replaceItem(
+                    id: itemID,
+                    with: .init(expectedVersion: current.version, details: details),
+                )
+                await apply(saved)
+                return nil
+            } catch {
+                guard error.statusCode == 409, attempt == 1,
+                      let latest = try? await service.item(id: itemID)
+                else {
+                    return error.message
+                }
+                current = latest
+            }
+        }
+        return nil
+    }
+
     /// Loads an operation's events the first time its history is opened, and again while it runs.
     func loadEvents(operationID: String) async {
         if let events = try? await service.events(operationID: operationID) {

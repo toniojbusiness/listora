@@ -16,14 +16,15 @@
  */
 import { sql } from 'kysely';
 
-import type { AutomationRunOutcome, Db, Marketplace } from '@listora/db';
+import type { AutomationRunOutcome, Db, DbExecutor, Marketplace } from '@listora/db';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { assertNever, type Logger } from '@listora/shared';
 import { sameCookies, type LoadedSession, type SessionVault } from '@listora/connections';
 
-import { isAutomatedMarketplace, type AutomationProfile } from '../profiles.ts';
+import { isAutomatedMarketplace, type AutomationProfile, type RunLimits } from '../profiles.ts';
 import { challengeMessage } from '../safety/challenges.ts';
 import { Pacing, type PacingOptions } from '../safety/pacing.ts';
+import { sanitizedError } from '../safety/redaction.ts';
 import type { AutomationSession, BrowserRunner, ScriptResult } from '../runner/types.ts';
 import type { AutomationSessions, SessionRequest, SessionRun } from './sessions.ts';
 
@@ -116,27 +117,32 @@ export class RunnerSessions implements AutomationSessions {
 
     let result: ScriptResult<T>;
     let cookies: Awaited<ReturnType<AutomationSession['close']>> = [];
+    let opened = false;
     try {
       const session = await this.#options.runner.openSession(
         { profile, cookies: loaded.cookies, accountId: loaded.accountId, runId: run.id },
         signal,
       );
+      opened = true;
       try {
         result = await body(session, signal);
       } finally {
         cookies = await session.close();
       }
     } catch (error) {
-      log.error({ err: error }, 'the browser session could not run');
+      log.error({ err: sanitizedError(error), opened }, 'the browser session could not run');
       result = {
         ok: false,
         mutated: false,
         steps: [],
         failure: {
           kind: 'error',
-          step: 'open session',
-          code: signal.aborted ? 'aborted' : 'script_error',
-          message: 'the browser could not open the session',
+          step: opened ? 'run session' : 'open session',
+          // A browser that did not start never asked the marketplace anything.
+          code: signal.aborted ? 'aborted' : opened ? 'script_error' : 'browser_unavailable',
+          message: opened
+            ? 'the browser session stopped unexpectedly'
+            : 'the browser could not open the session',
           retryAfterMs: null,
           screenshotKey: null,
         },
@@ -179,31 +185,11 @@ export class RunnerSessions implements AutomationSessions {
   }
 
   /** Milliseconds until the account may run again, or `null` when it may now. */
-  async #rateLimit(
+  #rateLimit(
     key: { accountId: string; connectionId: string },
     profile: AutomationProfile,
   ): Promise<number | null> {
-    const windows = [
-      { ms: HOUR_MS, limit: profile.limits.runsPerHour },
-      { ms: DAY_MS, limit: profile.limits.runsPerDay },
-    ];
-    let wait: number | null = null;
-    for (const window of windows) {
-      // The run that has to age out of the window before another fits.
-      const { rows } = await sql<{ started_at: Date }>`
-        select started_at from automation_run
-        where account_id = ${key.accountId} and connection_id = ${key.connectionId}
-          and started_at > now() - make_interval(secs => ${window.ms / 1000})
-        order by started_at desc
-        offset ${window.limit - 1} limit 1
-      `.execute(this.#options.db);
-      const oldest = rows[0]?.started_at;
-      if (oldest !== undefined) {
-        const freesAt = oldest.getTime() + window.ms - Date.now();
-        wait = Math.max(wait ?? 0, freesAt, 1_000);
-      }
-    }
-    return wait;
+    return rateLimitWait(this.#options.db, key, profile.limits);
   }
 
   /** Waits out the rest of the pause since the account's last run started. */
@@ -227,7 +213,41 @@ export class RunnerSessions implements AutomationSessions {
   }
 }
 
-function runOutcome(result: ScriptResult<unknown>): AutomationRunOutcome {
+/**
+ * Milliseconds until the seller's connection may get another run, or `null` when it may now:
+ * at most `limits` runs per hour and per day, counted in `automation_run` across every runner,
+ * restart, and phone.
+ */
+export async function rateLimitWait(
+  db: DbExecutor,
+  key: { accountId: string; connectionId: string },
+  limits: RunLimits,
+): Promise<number | null> {
+  const windows = [
+    { ms: HOUR_MS, limit: limits.runsPerHour },
+    { ms: DAY_MS, limit: limits.runsPerDay },
+  ];
+  let wait: number | null = null;
+  for (const window of windows) {
+    // The run that has to age out of the window before another fits.
+    const { rows } = await sql<{ started_at: Date }>`
+      select started_at from automation_run
+      where account_id = ${key.accountId} and connection_id = ${key.connectionId}
+        and started_at > now() - make_interval(secs => ${window.ms / 1000})
+      order by started_at desc
+      offset ${window.limit - 1} limit 1
+    `.execute(db);
+    const oldest = rows[0]?.started_at;
+    if (oldest !== undefined) {
+      const freesAt = oldest.getTime() + window.ms - Date.now();
+      wait = Math.max(wait ?? 0, freesAt, 1_000);
+    }
+  }
+  return wait;
+}
+
+/** How a run ended, for its `automation_run` record. */
+export function runOutcome(result: ScriptResult<unknown>): AutomationRunOutcome {
   if (result.ok) return 'succeeded';
   const { failure } = result;
   switch (failure.kind) {

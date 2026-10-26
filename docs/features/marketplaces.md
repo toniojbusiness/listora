@@ -67,12 +67,12 @@ tokens or browser session at use time from its own source (eBay's `EbaySellerSou
 `@listora/connections` implements over the token vault, [connections.md](connections.md); the
 browser runner's session vault).
 
-| Marketplace | Mode                                                                         | Listing lifecycle                                                                                                                          | Sale detection                                                  |
-| ----------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| eBay        | API                                                                          | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs                          | `ORDER_CONFIRMATION` webhook + 5-minute poll                    |
-| Depop       | API after partner approval; browser automation until then, assisted fallback | `PUT` by a SKU Listora names per listing (`AJ-000184-D1`, `-D2` after a relist), `PATCH`, `DELETE`/mark-as-sold; verify with `GET`         | `v1:order.*` webhooks (`X-Depop-Signature`) + orders poll       |
-| Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms | DKIM-verified forwarded emails, scheduled browser check, manual |
-| Mercari     | Browser automation (permitted; no public API), assisted fallback             | Same as Poshmark ([mercari.md](mercari.md)); ends by deactivating, relists by activating                                                   | Forwarded emails, scheduled browser check, manual               |
+| Marketplace | Mode                                                                            | Listing lifecycle                                                                                                                                                                                     | Sale detection                                                                      |
+| ----------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| eBay        | API; browser automation until Listora's developer keys exist, assisted fallback | Trading API Add/Revise/End/Relist (keeps listings editable in Seller Hub); Media, Taxonomy, Fulfillment REST APIs; automated: the listing form, Seller Hub ([ebay-automation.md](ebay-automation.md)) | `ORDER_CONFIRMATION` webhook + 5-minute poll; automated: scheduled Seller Hub check |
+| Depop       | API after partner approval; browser automation until then, assisted fallback    | `PUT` by a SKU Listora names per listing (`AJ-000184-D1`, `-D2` after a relist), `PATCH`, `DELETE`/mark-as-sold; verify with `GET`                                                                    | `v1:order.*` webhooks (`X-Depop-Signature`) + orders poll                           |
+| Poshmark    | Browser automation (permitted by Poshmark), assisted fallback                   | The runner acts in the seller's session and reads the listing back; fallback: copy-assist, photos saved in order, deep link, user confirms                                                            | DKIM-verified forwarded emails, scheduled browser check, manual                     |
+| Mercari     | Browser automation (permitted; no public API), assisted fallback                | Same as Poshmark ([mercari.md](mercari.md)); ends by deactivating, relists by activating                                                                                                              | Forwarded emails, scheduled browser check, manual                                   |
 
 **Capabilities route every operation.** `operationMode(capabilities, kind)` (`capabilities.ts`)
 reads the flag for the kind (`create`, `updateDetails` for a revise, `updatePrice`, `delist` for
@@ -143,10 +143,11 @@ adapter whose marketplace has no such marker declares `readFreshness: 'none'` an
 `revision: null`.
 
 **Assisted adapters.** `AssistedAdapter` (`assisted/assisted-adapter.ts`) is the base for assisted
-mode. `createPoshmarkAdapter`, `createMercariAdapter`, and `createDepopAssistedAdapter` configure
-it: those marketplaces run on it until the browser runner (decision D1,
-[automation.md](automation.md)) or Depop's partner API takes over, and it stays their fallback when
-automation meets a check it must not pass. `execute` never contacts the marketplace: it returns
+mode. `createPoshmarkAdapter`, `createMercariAdapter`, `createDepopAssistedAdapter`, and
+`createEbayAssistedAdapter` configure it: those marketplaces run on it until the browser runner
+(decision D1, [automation.md](automation.md)) or their API (Depop's partner API, eBay's once
+Listora's developer keys exist) takes over, and it stays their fallback when automation meets a
+check it must not pass. `execute` never contacts the marketplace: it returns
 `pendingUser` with a user task, `list_manually` (create, relist), `edit_manually` (revise, price),
 or `delist_manually` (end), with a deep link and a copy-assist payload (title, description, price,
 and photo URLs in posting order). The engine records the task in the same transaction as the

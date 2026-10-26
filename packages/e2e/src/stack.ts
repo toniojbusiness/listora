@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { FakeDepopSite } from '@listora/automation';
 import type { Db } from '@listora/db';
 import { createMigratedDatabase } from '@listora/db/testing';
 import { FakeEbay } from '@listora/marketplaces';
@@ -12,9 +13,9 @@ import { startNodeProcess, type StartedProcess } from '@listora/testing';
 
 import { startStackControl, type FullStackControl } from './control.ts';
 import {
+  EbaySessionLinker,
   ebayNotificationEnv,
   insertDepopConnection,
-  SessionLinker,
   startMarketplaceFakes,
 } from './marketplaces.ts';
 import { connectEbay, type StackApi } from './seed.ts';
@@ -24,15 +25,15 @@ const WORKER_ENTRY = fileURLToPath(new URL('../../../apps/worker/src/main.ts', i
 
 /** The signed-in user every stack starts with. */
 export const E2E_EMAIL = 'e2e@listora.test';
-/** The full stack's second seller, whose Depop runs in a linked browser session. */
+/** The full stack's second seller, whose eBay is automated in the cloud. */
 export const E2E_SECOND_EMAIL = 'e2e-second@listora.test';
 
 /**
- * Which marketplaces the stack's seller uses. `ebay`: eBay through its API (the fake eBay), and
- * the others assisted, as for a seller who connected only eBay. `all`: also Depop through its API
- * (the fake Depop) and Poshmark and Mercari in linked browser sessions (their fake sites, driven
- * by the browser runner), with eBay's notifications delivered to the API, and a second seller
- * whose Depop is automated (the fake Depop site); see marketplaces.ts.
+ * Which marketplaces the stack's seller uses. `ebay`: eBay through its API (the fake eBay), Depop
+ * on the phone (the fake Depop site), and the others assisted. `all`: also Depop through its API
+ * (the fake Depop), Poshmark and Mercari on the phone (their fake sites), eBay's notifications
+ * delivered to the API, and a second seller whose eBay is automated in the cloud (the fake eBay
+ * site, driven by the browser runner); see marketplaces.ts.
  */
 export type StackMarketplaces = 'ebay' | 'all';
 
@@ -54,13 +55,18 @@ export interface StackSeller {
   readonly accessToken: string;
 }
 
-export interface LocalStack extends StackSeller {
+export interface LocalStack {
   /** The API's base URL (`http://127.0.0.1:<port>`), also where its stored photos are served. */
   readonly apiUrl: string;
-  /** The stack's control endpoint for UI tests (faults, seeded items; control.ts). */
+  readonly email: string;
+  /** A dev session token for ``email``, valid for a day. */
+  readonly accessToken: string;
+  /** The stack's control endpoint for UI tests (eBay faults, ready items; control.ts). */
   readonly controlUrl: string;
+  /** The fake Depop site the phone runtime acts on in the simulator. */
+  readonly fakeDepopUrl: string;
   readonly marketplaces: StackMarketplaces;
-  /** With `all` marketplaces: the second seller, whose Depop is automated. */
+  /** With `all` marketplaces: the second seller, whose eBay is automated in the cloud. */
   readonly secondSeller?: StackSeller;
   /** Stops every process, writes their logs, and drops the database and the stored files. */
   stop(): Promise<void>;
@@ -70,13 +76,14 @@ export interface LocalStack extends StackSeller {
  * The API and the worker as `npm run dev:api` and `npm run dev:worker` run them, with the fakes
  * of docs/architecture.md section 5: dev sign-in, local photo storage, the fake AI provider, and
  * the fake eBay (in this process, with a token vault key of the stack's own), with the user's
- * eBay account connected through its consent page. With `all` marketplaces, also the fakes of
- * marketplaces.ts and the browser runner, which the worker starts as a child process. Each stack
- * has a scratch database on the test cluster (`scripts/dev-db.sh`), a storage directory, and
- * ports of its own, so it never touches the developer's dev data or a running dev API. The
- * worker never escalates on its own (`AI_AUTO_ESCALATE=off`), so a test decides when "Identify
- * harder" runs, and its operation delays are a tenth of production's
- * (`OPERATION_RETRY_DELAY_SCALE`), so an eBay change is confirmed in seconds.
+ * eBay account connected through its consent page. Each stack has a scratch database on the
+ * test cluster (`scripts/dev-db.sh`), a storage directory, and ports of its own, so it never
+ * touches the developer's dev data or a running dev API. With `all` marketplaces it also starts
+ * the fakes of marketplaces.ts and lets the worker start the browser runner as a child process.
+ * The worker never escalates on its own
+ * (`AI_AUTO_ESCALATE=off`), so a test decides when "Identify harder" runs, and its operation
+ * delays are a tenth of production's (`OPERATION_RETRY_DELAY_SCALE`), so an eBay change is
+ * confirmed in seconds.
  */
 export async function startLocalStack(options: LocalStackOptions): Promise<LocalStack> {
   const startTimeoutMs = options.startTimeoutMs ?? 30_000;
@@ -104,6 +111,10 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       consentRedirect: { acceptUrl: `${apiUrl}/v1/connections/ebay/callback` },
     });
     closers.push(() => fakeEbay.close());
+    // Depop runs on the phone (docs/features/phone-execution.md): the app's phone runtime acts
+    // on this fake Depop site in the simulator, through the stack's API.
+    const fakeDepop = await FakeDepopSite.start();
+    closers.push(() => fakeDepop.close());
     const fakes = marketplaces === 'all' ? await startMarketplaceFakes() : undefined;
     if (fakes !== undefined) closers.push(() => fakes.close());
     const tokenKey = randomBytes(32);
@@ -115,10 +126,16 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       STORAGE_LOCAL_DIR: storageDir,
       STORAGE_LOCAL_BASE_URL: apiUrl,
       STORAGE_LOCAL_SIGNING_SECRET: randomBytes(32).toString('base64'),
+      // Forwarded sale emails: dropped by the API's POST /dev/email, read by the worker.
+      EMAIL_INGEST: 'folder',
+      EMAIL_INBOX_DIR: join(storageDir, 'inbox'),
       AI_PROVIDER: 'fake',
       AI_FAKE_FIXTURES_DIR: options.fakeAiFixturesDir,
       EBAY_ENV: 'fake',
       EBAY_FAKE_URL: fakeEbay.url,
+      FAKE_DEPOP_SITE_URL: fakeDepop.url,
+      // The phone's runs are recorded by the API, under the worker's retry delays.
+      OPERATION_RETRY_DELAY_SCALE: '0.1',
       TOKEN_ENCRYPTION_KEY: tokenKey.toString('base64'),
       ...(fakes === undefined ? {} : { ...fakes.env, ...ebayNotificationEnv(apiUrl) }),
     };
@@ -143,11 +160,7 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       fakes === undefined
         ? undefined
         : { apiUrl, accessToken: await signIn(api, apiUrl, E2E_SECOND_EMAIL) };
-    const workerEnv: NodeJS.ProcessEnv = {
-      ...shared,
-      AI_AUTO_ESCALATE: 'off',
-      OPERATION_RETRY_DELAY_SCALE: '0.1',
-    };
+    const workerEnv: NodeJS.ProcessEnv = { ...shared, AI_AUTO_ESCALATE: 'off' };
     let full: FullStackControl | undefined;
     if (fakes !== undefined && second !== undefined) {
       const primaryAccount = await accountIdOf(database.db, primary, E2E_EMAIL);
@@ -162,14 +175,16 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
         // Up for the whole run once started, so no step waits for a browser to start again.
         RUNNER_IDLE_EXIT_SECONDS: '0',
       });
-      const linker = new SessionLinker({ db: database.db, tokenKey, workerEnv, fakes });
-      for (const marketplace of ['poshmark', 'mercari'] as const) {
-        await linker.link(primaryAccount, marketplace);
-      }
-      await linker.link(secondAccount, 'depop');
+      const ebayLinker = new EbaySessionLinker({
+        db: database.db,
+        tokenKey,
+        workerEnv,
+        site: fakes.ebaySite,
+      });
+      await ebayLinker.link(secondAccount);
       full = {
         fakes,
-        linker,
+        ebayLinker,
         sellers: {
           primary: { ...primary, accountId: primaryAccount },
           second: { ...second, accountId: secondAccount },
@@ -185,7 +200,9 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
     const control = await startStackControl({
       api: primary,
       fakeEbay,
+      fakeDepop,
       db: database.db,
+      apiProcess: api,
       ...(full === undefined ? {} : { full }),
     });
     closers.push(() => control.close());
@@ -194,6 +211,7 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       email: E2E_EMAIL,
       accessToken,
       controlUrl: control.url,
+      fakeDepopUrl: fakeDepop.url,
       marketplaces,
       ...(second === undefined
         ? {}
@@ -275,7 +293,13 @@ async function writeLogs(
 export function stackEnvironment(
   stack: Pick<
     LocalStack,
-    'apiUrl' | 'accessToken' | 'email' | 'controlUrl' | 'marketplaces' | 'secondSeller'
+    | 'apiUrl'
+    | 'accessToken'
+    | 'email'
+    | 'controlUrl'
+    | 'fakeDepopUrl'
+    | 'marketplaces'
+    | 'secondSeller'
   >,
 ): Record<string, string> {
   const settings = {
@@ -283,6 +307,7 @@ export function stackEnvironment(
     LISTORA_E2E_ACCESS_TOKEN: stack.accessToken,
     LISTORA_E2E_EMAIL: stack.email,
     LISTORA_E2E_CONTROL_URL: stack.controlUrl,
+    LISTORA_E2E_FAKE_DEPOP_URL: stack.fakeDepopUrl,
     LISTORA_E2E_MARKETPLACES: stack.marketplaces,
     ...(stack.secondSeller === undefined
       ? {}

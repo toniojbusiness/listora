@@ -15,6 +15,7 @@ import {
   type MarketplaceListingTable,
   type MarketplaceOperationTable,
 } from '@listora/db';
+import { REFUSED_CONTENT_ERROR } from '@listora/operations';
 import { sql, type Selectable } from 'kysely';
 
 import type { Tenant } from '../tenancy.ts';
@@ -208,8 +209,11 @@ export async function latestOperations(
   return byListing;
 }
 
-/** Whether any operation was ever queued for the listing (canceled ones included). */
-export async function hasOperations(
+/**
+ * Whether the listing has an operation that may have reached the marketplace: canceled ones and
+ * ones Listora refused before sending (`REFUSED_CONTENT_ERROR`) don't count.
+ */
+export async function hasSentOperations(
   db: DbExecutor,
   tenant: Tenant,
   listingId: string,
@@ -220,6 +224,12 @@ export async function hasOperations(
     .where('account_id', '=', tenant.accountId)
     .where('listing_id', '=', listingId)
     .where('status', '<>', 'canceled')
+    .where((eb) =>
+      eb.or([
+        eb('status', '<>', 'failed'),
+        eb('error_code', 'is distinct from', REFUSED_CONTENT_ERROR),
+      ]),
+    )
     .limit(1)
     .executeTakeFirst();
   return row !== undefined;

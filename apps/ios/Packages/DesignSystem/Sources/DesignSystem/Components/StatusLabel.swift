@@ -20,7 +20,7 @@ public struct StatusLabel: View {
         } icon: {
             Image(systemName: tone.systemImage)
         }
-        .font(Typography.callout.weight(.semibold))
+        .font(Typography.emphasis)
         .foregroundStyle(tone.color)
         // VoiceOver reads the status once, as given; the icon only repeats the tone.
         .accessibilityElement(children: .ignore)
@@ -47,8 +47,9 @@ public struct StatusBadge: View {
                 Image(systemName: tone.systemImage)
                     .imageScale(.small)
             }
+            // Never truncated: the label is the server's honest status, read in full.
             Text(label)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(Typography.label)
         .foregroundStyle(tone.color)

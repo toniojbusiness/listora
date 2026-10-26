@@ -25,6 +25,7 @@ export const SERVICE_PREFIXES: Readonly<Record<string, string>> = {
   CertificateManager: 'acm',
   CloudFront: 'cloudfront',
   CloudWatch: 'cloudwatch',
+  Cognito: 'cognito-idp',
   EC2: 'ec2',
   ECR: 'ecr',
   ECS: 'ecs',
@@ -39,6 +40,7 @@ export const SERVICE_PREFIXES: Readonly<Record<string, string>> = {
   SES: 'ses',
   SNS: 'sns',
   SecretsManager: 'secretsmanager',
+  SQS: 'sqs',
   ServiceDiscovery: 'servicediscovery',
 };
 
@@ -85,8 +87,9 @@ export interface PolicyDocument {
 /**
  * What CloudFormation may do while deploying one environment's stacks:
  *
- * - every action of the services the stacks use (`SERVICE_PREFIXES`), and reading the CDK
- *   bootstrap version parameter;
+ * - every action of the services the stacks use (`SERVICE_PREFIXES`), reading the CDK
+ *   bootstrap version parameter, and reading the environment's own stacks, which every weak
+ *   cross-stack reference (`Fn::GetStackOutput`) needs;
  * - IAM only on roles named after the environment's stacks (`listora-<env>-*`, which
  *   CloudFormation's generated role names start with too), attaching only
  *   `ATTACHABLE_MANAGED_POLICIES`, plus the service-linked roles AWS creates on first use;
@@ -95,9 +98,11 @@ export interface PolicyDocument {
  *   policy and lifetime, and never an IAM user, group, or account setting (nothing grants them).
  *
  * Service actions are granted whole (`ec2:*`), so a deploy can still change any resource of
- * those services in the account; the account holds only this environment. The remaining gap
- * (a stack's role can be given any inline permission) closes with a permissions boundary on
- * every role, the T-33 follow-up in infra/README.md.
+ * those services in the account, including another app's when the account is shared (the
+ * personal account is). What a deploy changes is what the reviewed templates say; scoping
+ * these grants to Listora's tagged resources, and a permissions boundary on every role (a
+ * stack's role can still be given any inline permission), are the T-33 follow-up in
+ * infra/README.md.
  */
 export function cdkExecutionPolicy(environment: EnvironmentName, account: string): PolicyDocument {
   const role = (name: string) => `arn:aws:iam::${account}:role/${name}`;
@@ -116,6 +121,12 @@ export function cdkExecutionPolicy(environment: EnvironmentName, account: string
         Effect: 'Allow',
         Action: ['ssm:GetParameter', 'ssm:GetParameters'],
         Resource: `arn:aws:ssm:*:${account}:parameter/cdk-bootstrap/*`,
+      },
+      {
+        Sid: 'ReadOwnStackOutputs',
+        Effect: 'Allow',
+        Action: 'cloudformation:DescribeStacks',
+        Resource: `arn:aws:cloudformation:*:${account}:stack/listora-${environment}-*/*`,
       },
       {
         Sid: 'StackRoles',
