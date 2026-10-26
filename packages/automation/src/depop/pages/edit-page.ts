@@ -8,7 +8,13 @@
  */
 import type { PageDriver } from '../../runner/types.ts';
 import { DEPOP_PATHS } from '../site.ts';
-import { absolute, changed, expectElement, lookAgain, type DepopSite } from './common.ts';
+import {
+  absolute,
+  awaitElement,
+  changed,
+  lookAgain,
+  type DepopSite,
+} from './common.ts';
 import { LISTING_FORM } from './listing-form.ts';
 
 /**
@@ -39,7 +45,8 @@ export async function openEditor(
 
 /** Checks the product page has its Delete listing button, before the step that deletes. */
 export async function expectDelete(page: PageDriver): Promise<void> {
-  await expectElement(page, EDIT_PAGE.delete, 'product page', 'Delete listing button');
+  // Drawn by the page's scripts for its seller, a moment after the page loads.
+  await awaitElement(page, EDIT_PAGE.delete, 'product page', 'Delete listing button');
 }
 
 /**

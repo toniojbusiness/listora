@@ -5889,7 +5889,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 	/** Checks the product page has its Delete listing button, before the step that deletes. */
 	async function expectDelete(page) {
-		await expectElement$2(page, EDIT_PAGE$1.delete, "product page", "Delete listing button");
+		await awaitElement$1(page, EDIT_PAGE$1.delete, "product page", "Delete listing button");
 	}
 	/**
 	* Deletes the listing the product page shows: Delete listing, then the dialog's own Delete
