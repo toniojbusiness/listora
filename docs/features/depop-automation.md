@@ -231,4 +231,16 @@ ideally with the product owner watching. Check each of these in order:
 6. The limits in `DEPOP_LIMITS`.
 
 When the live site differs, the step stops before it sends anything and the user does it, so
-this check can never cause a false success. Fixing a mismatch means changing one page module.
+this check can never cause a false success. The run logs what the page has instead
+([automation.md](automation.md#how-it-works), "When a page changes"). Fixing a mismatch means
+changing one page module.
+
+Seen on a real session (2026-10-26, from that evidence):
+
+- Item 1 is confirmed. The selling hub ("Selling Hub - Depop") is drawn by Depop's scripts, with
+  the signed-in user's avatar in the header's user menu (`userNavItem-wrapper`, `avatar`), and has
+  no `sellingHub` mark. The health check waits for the avatar.
+- Depop's pages no longer embed `script#__NEXT_DATA__`. They load their data from Depop's own API
+  (`webapi.depop.com/.../api/v1/...`, including `users/me` calls), so the reads that use the
+  embedded data (the product, selling, and sold items pages) need a new source. That is the next
+  fix, from more of that evidence.

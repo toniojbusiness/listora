@@ -13,7 +13,7 @@
  *   POST /login/email-link/            email me a sign-in link: "sends" a one-time link (`signInLinks()`)
  *   GET  /login/magic-link/?token=     the emailed link: signs in once and sets the session cookie
  *   GET  /login/verify/                a login code step
- *   GET  /sellinghub/                  the selling hub ([data-testid="sellingHub"])
+ *   GET  /sellinghub/                  the selling hub, drawn by its script ([data-testid="avatar"])
  *   GET  /products/create/             the sell form; POST lists (multipart, photos)
  *   GET  /products/:slug/              a product's page (its data: text, price, status, change)
  *   GET  /products/edit/:slug/         the edit form; POST saves it
@@ -510,11 +510,7 @@ export class FakeDepopSite {
       case 'health':
         return {
           status: 200,
-          body: page(
-            'Selling hub | Depop',
-            `<main data-testid="sellingHub"><h1>Selling hub</h1><p data-testid="sellerUsername">${escape(session.seller)}</p></main>`,
-            { seller: { username: session.seller } },
-          ),
+          body: plainPage('Selling Hub - Depop', hubPage(session.seller)),
         };
       case 'form':
         if (route.slug === null) {
@@ -802,6 +798,20 @@ function page(title: string, body: string, pageProps: Record<string, unknown>): 
 }
 
 /** A page without embedded data. */
+/**
+ * The selling hub as Depop serves it (read 2026-10-26): no page data, and a header its scripts
+ * draw after the document is ready, with the signed-in user's avatar in the user menu.
+ */
+function hubPage(seller: string): string {
+  const header =
+    '<div data-testid="userNavItem-wrapper"><img data-testid="avatar" alt="" src="data:,"></div>';
+  return (
+    `<header data-testid="header" id="header"></header><main><h1>Selling hub</h1>` +
+    `<p data-testid="sellerUsername">${escape(seller)}</p></main>` +
+    `<script>setTimeout(() => { document.getElementById('header').innerHTML = ${JSON.stringify(header)}; }, 300);</script>`
+  );
+}
+
 function plainPage(title: string, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(title)}</title></head><body>${body}</body></html>`;
 }
