@@ -97,11 +97,12 @@ public final class LinkAccountsModel {
         confirmingUnlink = nil
     }
 
-    /// The user confirmed: unlinks the marketplace, then shows the server's state of it. It
-    /// shows as not linked only once the server says so.
-    public func confirmUnlink() async {
-        guard let link = confirmingUnlink else { return }
+    /// The user confirmed unlinking `link`: unlinks it, then shows the server's state of it. It
+    /// shows as not linked only once the server says so. The link comes from the confirmation
+    /// itself, since dismissing the confirmation clears `confirmingUnlink` before its button acts.
+    public func confirmUnlink(_ link: MarketplaceLink) async {
         confirmingUnlink = nil
+        guard link.canUnlink, !isBusy(link.marketplace) else { return }
         await unlink(link.marketplace)
     }
 

@@ -159,10 +159,12 @@ struct APIMarketplaceSessionServiceTests {
         do {
             try await service(server).unlink("poshmark")
             Issue.record("the unlink did not fail")
-        } catch {
+        } catch let error as APIFailure {
             #expect(error.statusCode == 503)
             #expect(error.message == "Listora is busy. Try again.")
             #expect(error.retryable)
+        } catch {
+            Issue.record("unexpected error \(error)")
         }
     }
 }

@@ -76,7 +76,7 @@ final class LinkAccountsUITests: XCTestCase {
 
         // Unlinking asks first, then shows not linked once the server unlinked it.
         app.buttons["linkAccounts.unlink.poshmark"].tap()
-        let confirm = app.buttons["linkAccounts.confirmUnlink"]
+        let confirm = app.buttons["linkAccounts.confirmUnlink"].firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), "no confirmation\n\(app.debugDescription)")
         snapshot("4-unlink-confirmation")
         confirm.tap()

@@ -31,6 +31,15 @@ public struct LinkAccountsView: View {
                             onRetry: { Task { await model.retry(link.marketplace) } },
                             onUnlink: { model.requestUnlink(link) },
                             onRetryUnlink: { Task { await model.retryUnlink(link.marketplace) } },
+                            confirmingUnlink: Binding(
+                                get: { model.confirmingUnlink == link },
+                                set: {
+                                    if !$0 {
+                                        model.cancelUnlink()
+                                    }
+                                },
+                            ),
+                            onConfirmUnlink: { Task { await model.confirmUnlink(link) } },
                         )
                     }
                 } footer: {
@@ -48,29 +57,6 @@ public struct LinkAccountsView: View {
         .navigationTitle("Link accounts")
         .task { await model.load() }
         .refreshable { await model.load() }
-        .confirmationDialog(
-            model.confirmingUnlink.map { "Unlink \($0.name)?" } ?? "",
-            isPresented: Binding(
-                get: { model.confirmingUnlink != nil },
-                set: {
-                    if !$0 {
-                        model.cancelUnlink()
-                    }
-                },
-            ),
-            titleVisibility: .visible,
-            presenting: model.confirmingUnlink,
-        ) { link in
-            Button("Unlink \(link.name)", role: .destructive) { Task { await model.confirmUnlink() } }
-                .accessibilityIdentifier("linkAccounts.confirmUnlink")
-            Button("Cancel", role: .cancel) { model.cancelUnlink() }
-        } message: { link in
-            Text(
-                "Listora deletes its \(link.name) sign-in and what it read from \(link.name), and asks "
-                    + "\(link.name) to end its access. Your items, listings, and sales stay. Listings stay on "
-                    + "\(link.name), but Listora can't update them until you link it again.",
-            )
-        }
         .sheet(item: $model.signingIn) { link in
             MarketplaceSignInView(
                 link: link,
@@ -104,6 +90,9 @@ private struct LinkAccountRow: View {
     let onRetry: () -> Void
     let onUnlink: () -> Void
     let onRetryUnlink: () -> Void
+    /// The confirmation, attached to this row's Unlink button so it opens next to it.
+    @Binding var confirmingUnlink: Bool
+    let onConfirmUnlink: () -> Void
 
     private var busy: Bool {
         progress == .sending || progress == .unlinking
@@ -178,7 +167,25 @@ private struct LinkAccountRow: View {
             if link.canUnlink, !busy {
                 Button("Unlink", role: .destructive, action: onUnlink)
                     .buttonStyle(.listora(.destructiveText, size: .compact))
+                    // A text-only button: line its text up with the row's, not its padding.
+                    .padding(.leading, -Spacing.sm)
                     .accessibilityIdentifier("linkAccounts.unlink.\(link.marketplace)")
+                    .confirmationDialog(
+                        "Unlink \(link.name)?",
+                        isPresented: $confirmingUnlink,
+                        titleVisibility: .visible,
+                    ) {
+                        Button("Unlink \(link.name)", role: .destructive, action: onConfirmUnlink)
+                            .accessibilityIdentifier("linkAccounts.confirmUnlink")
+                        Button("Cancel", role: .cancel) { confirmingUnlink = false }
+                    } message: {
+                        Text(
+                            "Listora deletes its \(link.name) sign-in and what it read from \(link.name), "
+                                + "and asks \(link.name) to end its access. Your items, listings, and sales stay. "
+                                + "Listings stay on \(link.name), but Listora can't update them until you link "
+                                + "it again.",
+                        )
+                    }
             }
         }
         .padding(.vertical, Spacing.xxs)
