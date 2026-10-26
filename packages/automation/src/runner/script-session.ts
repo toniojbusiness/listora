@@ -278,7 +278,8 @@ export class ScriptSession implements AutomationSession {
           failure: failure.kind,
           ...(failure.kind === 'challenge' ? { challenge: failure.challenge } : {}),
           ...(failure.kind === 'error' ? { code: failure.code, reason: failure.message } : {}),
-          ...(failure.kind === 'error' && failure.evidence !== undefined
+          ...((failure.kind === 'error' || failure.kind === 'timeout') &&
+          failure.evidence !== undefined
             ? { evidence: failure.evidence }
             : {}),
           origin: originForLog(this.#safeUrl()),
@@ -366,7 +367,12 @@ export class ScriptSession implements AutomationSession {
       }
     }
     if (thrown instanceof StepTimeoutError) {
-      return { kind: 'timeout', step, screenshotKey: await this.#screenshot() };
+      return {
+        kind: 'timeout',
+        step,
+        screenshotKey: await this.#screenshot(),
+        ...(await this.#evidence()),
+      };
     }
     if (thrown instanceof StepError) {
       const screenshotKey = thrown.code === 'aborted' ? null : await this.#screenshot();

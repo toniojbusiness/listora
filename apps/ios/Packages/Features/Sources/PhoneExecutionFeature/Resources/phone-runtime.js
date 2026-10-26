@@ -283,7 +283,7 @@
 		int64: [/* @__PURE__*/ BigInt("-9223372036854775808"), /* @__PURE__*/ BigInt("9223372036854775807")],
 		uint64: [/* @__PURE__*/ BigInt(0), /* @__PURE__*/ BigInt("18446744073709551615")]
 	};
-	function pick(schema, mask) {
+	function pick$1(schema, mask) {
 		const currDef = schema._zod.def;
 		const checks = currDef.checks;
 		if (checks && checks.length > 0) throw new Error(".pick() cannot be used on object schemas containing refinements");
@@ -5185,7 +5185,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			return merge(this, other);
 		},
 		pick(mask) {
-			return pick(this, mask);
+			return pick$1(this, mask);
 		},
 		omit(mask) {
 			return omit(this, mask);
@@ -5811,21 +5811,34 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/depop/pages/listing-form.ts
+/**
+	* Read on a real session (2026-10-26, from the evidence a stopped run logs): the sell page is
+	* drawn by Depop's scripts, with the photos input `#upload-input__input`, the description
+	* `textarea#description`, the price `#priceAmount__input`, and its pickers as comboboxes, each
+	* an input, a toggle button, and a menu of options (`#group-` for the category, `#brand-`,
+	* `#condition-`, `#colour-`, ...). How the category combobox lists Depop's categories, the size
+	* picker, the Post button's words, and Depop's validation message are confirmed from the
+	* evidence of the next run that reaches them.
+	*/
 	const LISTING_FORM$2 = {
-		form: "form[data-testid=\"listingForm\"]",
-		photos: "input[type=\"file\"][data-testid=\"listingForm__photos\"]",
-		description: "textarea[data-testid=\"listingForm__description\"]",
-		category: (level) => `select[data-testid="listingForm__category${String(level)}"]`,
-		size: "select[data-testid=\"listingForm__size\"]",
-		brand: "input[data-testid=\"listingForm__brand\"]",
-		brandSuggestions: "[data-testid=\"listingForm__brandSuggestions\"]",
-		brandSuggestion: "[data-testid=\"listingForm__brandSuggestion\"]",
-		condition: (value) => `input[name="condition"][value="${value}"]`,
-		price: "input[data-testid=\"listingForm__price\"]",
-		post: "button[data-testid=\"listingForm__post\"]",
-		save: "button[data-testid=\"listingForm__save\"]",
-		error: "[data-testid=\"listingForm__error\"]"
+		/** The form is there once its description field is. */
+		form: "textarea#description",
+		photos: "input#upload-input__input[type=\"file\"]",
+		description: "textarea#description",
+		price: "input#priceAmount__input",
+		post: "button[type=\"submit\"]:text-is(\"Post\")",
+		save: "button[type=\"submit\"]:text-is(\"Save\")",
+		error: "[role=\"alert\"]"
 	};
+	/** One of Depop's combobox pickers (`group` is the category). */
+	function combo(name) {
+		return {
+			input: `input#${name}-input`,
+			toggle: `button#${name}-toggle-button`,
+			option: (text) => `ul#${name}-menu [role="option"]:text-is("${text.replaceAll("\"", "\\\"")}")`,
+			anyOption: `ul#${name}-menu [role="option"]`
+		};
+	}
 	const FORM$2 = "listing form";
 	/** Opens the sell page's empty form. */
 	async function openSellForm$1(page, site) {
@@ -5837,21 +5850,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* in the order given; `null` leaves the listing's photos as they are (an edit).
 	*/
 	async function fillListing$2(page, payload, sku, photos) {
-		await expectElement$2(page, LISTING_FORM$2.form, FORM$2, FORM$2);
+		await awaitElement$1(page, LISTING_FORM$2.form, FORM$2, FORM$2);
 		if (photos !== null) {
 			await expectElement$2(page, LISTING_FORM$2.photos, FORM$2, "photo input");
 			await page.upload(LISTING_FORM$2.photos, photos);
 		}
-		await expectElement$2(page, LISTING_FORM$2.description, FORM$2, "description field");
 		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
 		if (payload.category === null) throw new Error("a listing without a category passed validation");
-		for (const [level, name] of payload.category.entries()) await pickOption$1(page, LISTING_FORM$2.category(level), name, `category level ${String(level + 1)}`);
+		for (const [level, name] of payload.category.entries()) await pick(page, "group", name, `category level ${String(level + 1)}`);
 		if (payload.size !== null) await pickSize$1(page, payload.size);
 		await pickBrand$1(page, payload.brand);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
-		const condition = LISTING_FORM$2.condition(payload.condition.value);
-		await expectElement$2(page, condition, FORM$2, `condition "${payload.condition.label}"`);
-		await page.check(condition, true);
+		await pick(page, "condition", payload.condition.label, `condition "${payload.condition.label}"`);
 		await fillPrice$2(page, payload.price.amountCents);
 	}
 	/** Fills only the price (a price change on the edit page). */
@@ -5877,33 +5887,37 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			slug
 		};
 	}
-	/** Picks the option labeled `label` (the options may appear only after an earlier pick). */
-	async function pickOption$1(page, select, label, what) {
-		await expectElement$2(page, select, FORM$2, what);
-		await page.waitFor(`${select} option:not([value=""])`, "attached");
-		if (!(await page.texts(`${select} option`)).includes(label)) throw changed$2(FORM$2, `offers no ${what} "${label}"`);
-		await page.select(select, label);
+	/** Opens one of the form's comboboxes and picks the option with exactly this text. */
+	async function pick(page, name, text, what) {
+		const box = combo(name);
+		await expectElement$2(page, box.toggle, FORM$2, `${what} picker`);
+		if (!await page.exists(box.anyOption)) await page.click(box.toggle);
+		await awaitElement$1(page, box.anyOption, FORM$2, `${what} options`);
+		await expectElement$2(page, box.option(text), FORM$2, `${what} "${text}"`);
+		await page.click(box.option(text));
 	}
 	async function pickSize$1(page, size) {
-		await expectElement$2(page, LISTING_FORM$2.size, FORM$2, "size list");
-		await page.waitFor(`${LISTING_FORM$2.size} option:not([value=""])`, "attached");
-		const label = (await page.texts(`${LISTING_FORM$2.size} option`)).find((option) => sizeOptionMatches$1(option, size));
+		const box = combo("size");
+		await expectElement$2(page, box.toggle, FORM$2, "size picker");
+		if (!await page.exists(box.anyOption)) await page.click(box.toggle);
+		await awaitElement$1(page, box.anyOption, FORM$2, "size options");
+		const label = (await page.texts(box.anyOption)).find((option) => sizeOptionMatches$1(option, size));
 		if (label === void 0) throw changed$2(FORM$2, `offers no size "${size}" for this category`);
-		await page.select(LISTING_FORM$2.size, label);
+		await page.click(box.option(label));
 	}
 	/** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
 	async function pickBrand$1(page, brand) {
-		await expectElement$2(page, LISTING_FORM$2.brand, FORM$2, "brand search");
-		await page.fill(LISTING_FORM$2.brand, "");
+		const box = combo("brand");
+		await expectElement$2(page, box.input, FORM$2, "brand search");
 		if (brand === null) return;
-		await page.type(LISTING_FORM$2.brand, brand);
-		await page.waitFor(LISTING_FORM$2.brandSuggestions);
-		const index = (await page.texts(LISTING_FORM$2.brandSuggestion)).findIndex((suggestion) => suggestion.toLowerCase() === brand.toLowerCase());
-		if (index === -1) {
-			await page.fill(LISTING_FORM$2.brand, "");
+		await page.type(box.input, brand);
+		await awaitElement$1(page, box.anyOption, FORM$2, "brand suggestions");
+		const exact = (await page.texts(box.anyOption)).find((suggestion) => suggestion.toLowerCase() === brand.toLowerCase());
+		if (exact === void 0) {
+			await page.fill(box.input, "");
 			return;
 		}
-		await page.click(`${LISTING_FORM$2.brandSuggestion} >> nth=${String(index)}`);
+		await page.click(box.option(exact));
 	}
 
 // src/depop/pages/edit-page.ts
@@ -7092,10 +7106,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	}
 
 // src/mercari/pages/account-page.ts
-	const ACCOUNT_PAGE = { ownAccount: "[data-testid=\"EditProfileButton\"]" };
+	const ACCOUNT_PAGE = {
+		ownAccount: "[data-testid=\"EditProfileButton\"]",
+		/** The link to the seller's done sales (read 2026-10-26: not `/mypage/listings/sold/`). */
+		sales: "a[data-testid=\"Sales\"]"
+	};
 	async function openAccount(page, site) {
 		await page.goto(absolute(site, MERCARI_PATHS.account));
 		await awaitElement(page, ACCOUNT_PAGE.ownAccount, "account page", "edit profile button");
+	}
+	/** The path of the seller's done-sales tab, as the account page's Sales link gives it. */
+	async function salesTabPath(page, site) {
+		await openAccount(page, site);
+		await awaitElement(page, ACCOUNT_PAGE.sales, "account page", "sales link");
+		const href = await page.attribute(ACCOUNT_PAGE.sales, "href");
+		const path = href === null ? null : new URL(href, site.origin).pathname;
+		if (path === null || !/^\/mypage\/listings\/[a-z_]+\/$/.test(path)) throw changed("account page", "has a sales link Listora does not understand");
+		return path;
 	}
 
 // src/mercari/sizes.ts
@@ -7317,8 +7344,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		next: "a[data-testid=\"NextPage\"]"
 	};
 	/** Opens one page of a tab and reads its rows. */
-	async function readListingsPage(page, site, tab, pageNumber) {
-		await page.goto(absolute(site, MERCARI_PATHS.listings(tab, pageNumber)));
+	async function readListingsPage(page, site, tab, pageNumber, path) {
+		const url = path === void 0 ? absolute(site, MERCARI_PATHS.listings(tab, pageNumber)) : absolute(site, pageNumber > 1 ? `${path}?page=${String(pageNumber)}` : path);
+		await page.goto(url);
 		const name = `${tab.replace("_", " ")} listings page`;
 		await awaitElement(page, `${LISTINGS_PAGE.empty}, ${LISTINGS_PAGE.list}`, name, "listing list");
 		if (await page.exists(LISTINGS_PAGE.empty)) return {
@@ -7495,8 +7523,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			health: (step) => step("open your account", { mutates: false }, (page) => openAccount(page, site)),
 			orders: async (since, step) => {
 				const orders = [];
+				const soldPath = await step("find the sales tab", { mutates: false }, (page) => salesTabPath(page, site));
 				for (const tab of ["in_progress", "sold"]) for (let number = 1; number <= 5; number += 1) {
-					const shown = await step(`read the ${tab.replace("_", " ")} sales`, { mutates: false }, (page) => readListingsPage(page, site, tab, number));
+					const shown = await step(`read the ${tab.replace("_", " ")} sales`, { mutates: false }, (page) => readListingsPage(page, site, tab, number, tab === "sold" ? soldPath : void 0));
 					for (const row of shown.rows) {
 						if (row.soldAt === null || row.priceCents === null) continue;
 						if (since !== null && row.soldAt < since) continue;
@@ -8775,7 +8804,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						code: failure.code,
 						reason: failure.message
 					} : {},
-					...failure.kind === "error" && failure.evidence !== void 0 ? { evidence: failure.evidence } : {},
+					...(failure.kind === "error" || failure.kind === "timeout") && failure.evidence !== void 0 ? { evidence: failure.evidence } : {},
 					origin: originForLog(this.#safeUrl()),
 					mutated,
 					...this.#deps.networkSummary === void 0 ? {} : { network: this.#deps.networkSummary() }
@@ -8847,7 +8876,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (thrown instanceof StepTimeoutError) return {
 				kind: "timeout",
 				step,
-				screenshotKey: await this.#screenshot()
+				screenshotKey: await this.#screenshot(),
+				...await this.#evidence()
 			};
 			if (thrown instanceof StepError) {
 				const screenshotKey = thrown.code === "aborted" ? null : await this.#screenshot();

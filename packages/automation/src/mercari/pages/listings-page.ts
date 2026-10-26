@@ -43,8 +43,14 @@ export async function readListingsPage(
   site: MercariSite,
   tab: MercariListingTab,
   pageNumber: number,
+  /** The tab's own path, where the site names it (the done sales', from the account page). */
+  path?: string,
 ): Promise<ListingsPage> {
-  await page.goto(absolute(site, MERCARI_PATHS.listings(tab, pageNumber)));
+  const url =
+    path === undefined
+      ? absolute(site, MERCARI_PATHS.listings(tab, pageNumber))
+      : absolute(site, pageNumber > 1 ? `${path}?page=${String(pageNumber)}` : path);
+  await page.goto(url);
   const name = `${tab.replace('_', ' ')} listings page`;
   await awaitElement(page, `${LISTINGS_PAGE.empty}, ${LISTINGS_PAGE.list}`, name, 'listing list');
   if (await page.exists(LISTINGS_PAGE.empty)) return { rows: [], hasNext: false };

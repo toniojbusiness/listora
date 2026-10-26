@@ -13,7 +13,7 @@ import {
 import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
 import type { PageDriver, StepRunner } from '../runner/types.ts';
-import { openAccount } from './pages/account-page.ts';
+import { openAccount, salesTabPath } from './pages/account-page.ts';
 import { changed, type MercariSite } from './pages/common.ts';
 import { activate, deactivate, openEditor } from './pages/edit-page.ts';
 import { itemUrl, readItem, readShownItem, type ItemRead } from './pages/item-page.ts';
@@ -216,12 +216,17 @@ export function createMercariScripts(
       step('open your account', { mutates: false }, (page) => openAccount(page, site)),
     orders: async (since, step) => {
       const orders: RemoteOrder[] = [];
+      // The done sales' tab is wherever the account page's Sales link goes (not `/sold/`).
+      const soldPath = await step('find the sales tab', { mutates: false }, (page) =>
+        salesTabPath(page, site),
+      );
       for (const tab of ['in_progress', 'sold'] as const) {
         for (let number = 1; number <= MAX_SOLD_PAGES; number += 1) {
           const shown = await step(
             `read the ${tab.replace('_', ' ')} sales`,
             { mutates: false },
-            (page) => readListingsPage(page, site, tab, number),
+            (page) =>
+              readListingsPage(page, site, tab, number, tab === 'sold' ? soldPath : undefined),
           );
           for (const row of shown.rows) {
             if (row.soldAt === null || row.priceCents === null) continue;

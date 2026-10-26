@@ -776,6 +776,7 @@ function accountPage(): string {
     '<section data-testid="SellerInfo"><h1 data-testid="DisplayName">Your account</h1>' +
     '<a data-testid="EditProfileButton" href="/mypage/profile/">Edit profile</a></section>' +
     '<div data-testid="Balance">$0</div>' +
+    '<a data-testid="Sales" href="/mypage/listings/sold/">Sales</a>' +
     '<form data-testid="LogoutForm" method="post" action="/logout"><button>Log out</button></form>';
   return `<main id="mypage"></main><script>setTimeout(() => { document.getElementById('mypage').innerHTML = ${JSON.stringify(drawn)}; }, 300);</script>`;
 }

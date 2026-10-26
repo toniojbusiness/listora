@@ -79,7 +79,13 @@ export type ScriptFailure =
   /** A page automation must never pass; the session must be relinked. */
   | { kind: 'challenge'; challenge: ChallengeKind; step: string; screenshotKey: string | null }
   /** The step ran out of time; its effect, if it mutates, is unknown. */
-  | { kind: 'timeout'; step: string; screenshotKey: string | null }
+  | {
+      kind: 'timeout';
+      step: string;
+      screenshotKey: string | null;
+      /** What the page had when the step ran out of time, structure only, for the log line. */
+      evidence?: PageEvidence;
+    }
   | {
       kind: 'error';
       step: string;

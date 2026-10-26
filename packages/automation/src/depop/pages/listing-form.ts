@@ -23,21 +23,36 @@ import { sizeOptionMatches } from '../sizes.ts';
 import { absolute, awaitElement, changed, expectElement, type DepopSite } from './common.ts';
 import { PRODUCT_PAGE } from './product-page.ts';
 
+/**
+ * Read on a real session (2026-10-26, from the evidence a stopped run logs): the sell page is
+ * drawn by Depop's scripts, with the photos input `#upload-input__input`, the description
+ * `textarea#description`, the price `#priceAmount__input`, and its pickers as comboboxes, each
+ * an input, a toggle button, and a menu of options (`#group-` for the category, `#brand-`,
+ * `#condition-`, `#colour-`, ...). How the category combobox lists Depop's categories, the size
+ * picker, the Post button's words, and Depop's validation message are confirmed from the
+ * evidence of the next run that reaches them.
+ */
 export const LISTING_FORM = {
-  form: 'form[data-testid="listingForm"]',
-  photos: 'input[type="file"][data-testid="listingForm__photos"]',
-  description: 'textarea[data-testid="listingForm__description"]',
-  category: (level: number) => `select[data-testid="listingForm__category${String(level)}"]`,
-  size: 'select[data-testid="listingForm__size"]',
-  brand: 'input[data-testid="listingForm__brand"]',
-  brandSuggestions: '[data-testid="listingForm__brandSuggestions"]',
-  brandSuggestion: '[data-testid="listingForm__brandSuggestion"]',
-  condition: (value: string) => `input[name="condition"][value="${value}"]`,
-  price: 'input[data-testid="listingForm__price"]',
-  post: 'button[data-testid="listingForm__post"]',
-  save: 'button[data-testid="listingForm__save"]',
-  error: '[data-testid="listingForm__error"]',
+  /** The form is there once its description field is. */
+  form: 'textarea#description',
+  photos: 'input#upload-input__input[type="file"]',
+  description: 'textarea#description',
+  price: 'input#priceAmount__input',
+  post: 'button[type="submit"]:text-is("Post")',
+  save: 'button[type="submit"]:text-is("Save")',
+  error: '[role="alert"]',
 } as const;
+
+/** One of Depop's combobox pickers (`group` is the category). */
+function combo(name: string) {
+  return {
+    input: `input#${name}-input`,
+    toggle: `button#${name}-toggle-button`,
+    option: (text: string) =>
+      `ul#${name}-menu [role="option"]:text-is("${text.replaceAll('"', '\\"')}")`,
+    anyOption: `ul#${name}-menu [role="option"]`,
+  } as const;
+}
 
 const FORM = 'listing form';
 
@@ -58,30 +73,22 @@ export async function fillListing(
   sku: string,
   photos: readonly UploadFile[] | null,
 ): Promise<void> {
-  await expectElement(page, LISTING_FORM.form, FORM, FORM);
+  await awaitElement(page, LISTING_FORM.form, FORM, FORM);
   if (photos !== null) {
     await expectElement(page, LISTING_FORM.photos, FORM, 'photo input');
     await page.upload(LISTING_FORM.photos, photos);
   }
-  await expectElement(page, LISTING_FORM.description, FORM, 'description field');
   await page.fill(LISTING_FORM.description, depopListingText(payload, sku));
   if (payload.category === null) throw new Error('a listing without a category passed validation');
   for (const [level, name] of payload.category.entries()) {
-    await pickOption(
-      page,
-      LISTING_FORM.category(level),
-      name,
-      `category level ${String(level + 1)}`,
-    );
+    await pick(page, 'group', name, `category level ${String(level + 1)}`);
   }
   if (payload.size !== null) await pickSize(page, payload.size);
   await pickBrand(page, payload.brand);
   if (payload.condition === null) {
     throw new Error('a listing without a condition passed validation');
   }
-  const condition = LISTING_FORM.condition(payload.condition.value);
-  await expectElement(page, condition, FORM, `condition "${payload.condition.label}"`);
-  await page.check(condition, true);
+  await pick(page, 'condition', payload.condition.label, `condition "${payload.condition.label}"`);
   await fillPrice(page, payload.price.amountCents);
 }
 
@@ -111,43 +118,40 @@ export async function submitListing(page: PageDriver, button: 'post' | 'save'): 
   return { type: 'posted', slug };
 }
 
-/** Picks the option labeled `label` (the options may appear only after an earlier pick). */
-async function pickOption(
-  page: PageDriver,
-  select: string,
-  label: string,
-  what: string,
-): Promise<void> {
-  await expectElement(page, select, FORM, what);
-  await page.waitFor(`${select} option:not([value=""])`, 'attached');
-  const offered = await page.texts(`${select} option`);
-  if (!offered.includes(label)) throw changed(FORM, `offers no ${what} "${label}"`);
-  await page.select(select, label);
+/** Opens one of the form's comboboxes and picks the option with exactly this text. */
+async function pick(page: PageDriver, name: string, text: string, what: string): Promise<void> {
+  const box = combo(name);
+  await expectElement(page, box.toggle, FORM, `${what} picker`);
+  if (!(await page.exists(box.anyOption))) await page.click(box.toggle);
+  await awaitElement(page, box.anyOption, FORM, `${what} options`);
+  await expectElement(page, box.option(text), FORM, `${what} "${text}"`);
+  await page.click(box.option(text));
 }
 
 async function pickSize(page: PageDriver, size: string): Promise<void> {
-  await expectElement(page, LISTING_FORM.size, FORM, 'size list');
-  await page.waitFor(`${LISTING_FORM.size} option:not([value=""])`, 'attached');
-  const offered = await page.texts(`${LISTING_FORM.size} option`);
+  const box = combo('size');
+  await expectElement(page, box.toggle, FORM, 'size picker');
+  if (!(await page.exists(box.anyOption))) await page.click(box.toggle);
+  await awaitElement(page, box.anyOption, FORM, 'size options');
+  const offered = await page.texts(box.anyOption);
   const label = offered.find((option) => sizeOptionMatches(option, size));
   if (label === undefined) throw changed(FORM, `offers no size "${size}" for this category`);
-  await page.select(LISTING_FORM.size, label);
+  await page.click(box.option(label));
 }
 
 /** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
 async function pickBrand(page: PageDriver, brand: string | null): Promise<void> {
-  await expectElement(page, LISTING_FORM.brand, FORM, 'brand search');
-  await page.fill(LISTING_FORM.brand, '');
+  const box = combo('brand');
+  await expectElement(page, box.input, FORM, 'brand search');
   if (brand === null) return;
-  await page.type(LISTING_FORM.brand, brand);
-  await page.waitFor(LISTING_FORM.brandSuggestions);
-  const suggestions = await page.texts(LISTING_FORM.brandSuggestion);
-  const index = suggestions.findIndex(
-    (suggestion) => suggestion.toLowerCase() === brand.toLowerCase(),
-  );
-  if (index === -1) {
-    await page.fill(LISTING_FORM.brand, '');
+  await page.type(box.input, brand);
+  await awaitElement(page, box.anyOption, FORM, 'brand suggestions');
+  const suggestions = await page.texts(box.anyOption);
+  const exact = suggestions.find((suggestion) => suggestion.toLowerCase() === brand.toLowerCase());
+  // Without an exact suggestion the listing goes without a brand: the form takes only its own.
+  if (exact === undefined) {
+    await page.fill(box.input, '');
     return;
   }
-  await page.click(`${LISTING_FORM.brandSuggestion} >> nth=${String(index)}`);
+  await page.click(box.option(exact));
 }
