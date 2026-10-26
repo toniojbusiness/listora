@@ -6,9 +6,10 @@
  * pages (`/products/<slug>/`); a product's SKU is read on its own page (product-page.ts).
  *
  * The seller's username is the shop's address. A signed-in page names it only in the header's
- * user menu, whose link to the seller's profile appears once the menu (`#userNavItem-button`)
- * opens: the one link to a single-name path the open menu adds. Both are Listora's model, to be
- * confirmed by the evidence a stopped run logs.
+ * user menu (`#userNavItem-button`): read on the captain's real session (2026-10-26), the open
+ * menu offers "Your profile" (`actionMenu__nav-profileLinkButton`), "Your selling hub",
+ * "Purchases", "Settings", "Resolution Center", and "Log out", so the profile is found by its
+ * test id rather than as the only new link.
  */
 import type { PageDriver } from '../../runner/types.ts';
 import { DEPOP_PATHS, slugFromPath } from '../site.ts';
@@ -17,7 +18,10 @@ import { HUB_PAGE } from './hub-page.ts';
 
 export const SHOP_PAGE = {
   userMenu: 'button#userNavItem-button',
-  links: 'a[href]',
+  /** The open menu's "Your profile": a link, or a holder of one. */
+  profile: '[data-testid="actionMenu__nav-profileLinkButton"]',
+  profileLink:
+    'a[data-testid="actionMenu__nav-profileLinkButton"], [data-testid="actionMenu__nav-profileLinkButton"] a',
   productLinks: 'a[href*="/products/"]',
 } as const;
 
@@ -39,22 +43,25 @@ const LOOK_EVERY_MS = 500;
 export async function findSeller(page: PageDriver, site: DepopSite): Promise<string> {
   await page.goto(absolute(site, DEPOP_PATHS.hub));
   await awaitElement(page, HUB_PAGE.signedInUser, 'selling hub', "signed-in user's avatar");
-  const before = new Set(await profilePaths(page, site));
   await page.click(SHOP_PAGE.userMenu);
   const end = Date.now() + APPEAR_MS;
   for (;;) {
     // The menu's button may also open the profile itself.
     const shown = usernameOf(new URL(page.url()).pathname);
     if (shown !== null) return shown;
-    const added = [...new Set(await profilePaths(page, site))].filter((path) => !before.has(path));
-    if (added.length === 1 && added[0] !== undefined) {
-      const username = usernameOf(added[0]);
-      if (username !== null) return username;
+    if (await page.exists(SHOP_PAGE.profile)) {
+      const hrefs = (await page.attributes(SHOP_PAGE.profileLink, 'href')).flatMap((href) => {
+        const path = href === null ? null : sitePath(href, site);
+        return path === null ? [] : [path];
+      });
+      const names = [...new Set(hrefs.map(usernameOf))];
+      if (names.length === 1 && names[0] !== null && names[0] !== undefined) return names[0];
+      throw changed(
+        'user menu',
+        `has a profile item with ${String(names.length)} shop links, not one`,
+      );
     }
-    if (added.length > 1) {
-      throw changed('user menu', `offers ${String(added.length)} profile links, not one`);
-    }
-    if (Date.now() >= end) throw changed('user menu', "has no link to the seller's shop");
+    if (Date.now() >= end) throw changed('user menu', 'has no profile item');
     await lookAgain(page, LOOK_EVERY_MS);
   }
 }
@@ -85,16 +92,11 @@ export async function newestProducts(
   return slugs;
 }
 
-/** The page's links to single-name paths on the site (`/janedoe/`), as paths. */
-async function profilePaths(page: PageDriver, site: DepopSite): Promise<string[]> {
-  const paths: string[] = [];
-  for (const href of await page.attributes(SHOP_PAGE.links, 'href')) {
-    if (href === null || !URL.canParse(href, site.origin)) continue;
-    const url = new URL(href, site.origin);
-    if (url.origin !== site.origin) continue;
-    if (usernameOf(url.pathname) !== null) paths.push(url.pathname);
-  }
-  return paths;
+/** A link's path when it is on the site, else `null`. */
+function sitePath(href: string, site: DepopSite): string | null {
+  if (!URL.canParse(href, site.origin)) return null;
+  const url = new URL(href, site.origin);
+  return url.origin === site.origin ? url.pathname : null;
 }
 
 function usernameOf(path: string): string | null {

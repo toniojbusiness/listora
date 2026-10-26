@@ -6112,7 +6112,9 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 // src/depop/pages/shop-page.ts
 	const SHOP_PAGE = {
 		userMenu: "button#userNavItem-button",
-		links: "a[href]",
+		/** The open menu's "Your profile": a link, or a holder of one. */
+		profile: "[data-testid=\"actionMenu__nav-profileLinkButton\"]",
+		profileLink: "a[data-testid=\"actionMenu__nav-profileLinkButton\"], [data-testid=\"actionMenu__nav-profileLinkButton\"] a",
 		productLinks: "a[href*=\"/products/\"]"
 	};
 	/** A Depop username, the one segment of a shop's path. */
@@ -6126,19 +6128,21 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	async function findSeller(page, site) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
 		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
-		const before = new Set(await profilePaths(page, site));
 		await page.click(SHOP_PAGE.userMenu);
 		const end = Date.now() + APPEAR_MS;
 		for (;;) {
 			const shown = usernameOf(new URL(page.url()).pathname);
 			if (shown !== null) return shown;
-			const added = [...new Set(await profilePaths(page, site))].filter((path) => !before.has(path));
-			if (added.length === 1 && added[0] !== void 0) {
-				const username = usernameOf(added[0]);
-				if (username !== null) return username;
+			if (await page.exists(SHOP_PAGE.profile)) {
+				const hrefs = (await page.attributes(SHOP_PAGE.profileLink, "href")).flatMap((href) => {
+					const path = href === null ? null : sitePath(href, site);
+					return path === null ? [] : [path];
+				});
+				const names = [...new Set(hrefs.map(usernameOf))];
+				if (names.length === 1 && names[0] !== null && names[0] !== void 0) return names[0];
+				throw changed$2("user menu", `has a profile item with ${String(names.length)} shop links, not one`);
 			}
-			if (added.length > 1) throw changed$2("user menu", `offers ${String(added.length)} profile links, not one`);
-			if (Date.now() >= end) throw changed$2("user menu", "has no link to the seller's shop");
+			if (Date.now() >= end) throw changed$2("user menu", "has no profile item");
 			await lookAgain(page, LOOK_EVERY_MS$1);
 		}
 	}
@@ -6160,16 +6164,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		}
 		return slugs;
 	}
-	/** The page's links to single-name paths on the site (`/janedoe/`), as paths. */
-	async function profilePaths(page, site) {
-		const paths = [];
-		for (const href of await page.attributes(SHOP_PAGE.links, "href")) {
-			if (href === null || !URL.canParse(href, site.origin)) continue;
-			const url = new URL(href, site.origin);
-			if (url.origin !== site.origin) continue;
-			if (usernameOf(url.pathname) !== null) paths.push(url.pathname);
-		}
-		return paths;
+	/** A link's path when it is on the site, else `null`. */
+	function sitePath(href, site) {
+		if (!URL.canParse(href, site.origin)) return null;
+		const url = new URL(href, site.origin);
+		return url.origin === site.origin ? url.pathname : null;
 	}
 	function usernameOf(path) {
 		const segment = /^\/([^/]+)\/?$/.exec(path)?.[1];
@@ -8050,8 +8049,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		originalPrice: "input[data-vv-name=\"originalPrice\"]",
 		/** The listing price, as the form a seller's session shows names it. */
 		listingPrice: "input[data-vv-name=\"listingPrice\"]",
-		/** The cover-photo editor's Apply, there only while the editor is open. */
-		applyPhoto: "button[data-et-name=\"apply\"]",
+		/**
+		* The cover-photo editor (`.image-edit-modal`, in one of Poshmark's modals) and its Apply, in
+		* the modal's footer; the form has another Apply of its own.
+		*/
+		photoEditor: ".image-edit-modal",
+		applyPhoto: ".modal:has(.image-edit-modal) .modal__footer button[data-et-name=\"apply\"]",
 		sku: "input[data-vv-name=\"sku\"]",
 		/** A picker: `[data-test="<name>"]`, opened by its summary, with labeled choices. */
 		picker: (name) => `details[data-test="${name}"]`,
@@ -8090,12 +8093,14 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		await expectField(page, FORM_SELECTORS.photos, "photo input");
 		await page.upload(FORM_SELECTORS.photos, photos);
 		const end = Date.now() + EDITOR_OPENS_MS;
-		while (!await page.exists(FORM_SELECTORS.applyPhoto)) {
+		while (!await page.exists(FORM_SELECTORS.photoEditor)) {
 			if (Date.now() >= end) return;
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
 		}
+		const applies = await page.count(FORM_SELECTORS.applyPhoto);
+		if (applies !== 1) throw new PageChangedError(`Poshmark's cover-photo editor has ${String(applies)} Apply buttons, not one`);
 		await page.click(FORM_SELECTORS.applyPhoto);
-		await page.waitFor(FORM_SELECTORS.applyPhoto, "detached");
+		await page.waitFor(FORM_SELECTORS.photoEditor, "detached");
 	}
 	/** Title, description, brand, and prices. On the edit form this replaces what the listing had. */
 	async function fillText(page, payload) {

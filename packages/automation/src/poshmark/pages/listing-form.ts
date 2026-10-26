@@ -45,8 +45,12 @@ export const FORM_SELECTORS = {
   originalPrice: 'input[data-vv-name="originalPrice"]',
   /** The listing price, as the form a seller's session shows names it. */
   listingPrice: 'input[data-vv-name="listingPrice"]',
-  /** The cover-photo editor's Apply, there only while the editor is open. */
-  applyPhoto: 'button[data-et-name="apply"]',
+  /**
+   * The cover-photo editor (`.image-edit-modal`, in one of Poshmark's modals) and its Apply, in
+   * the modal's footer; the form has another Apply of its own.
+   */
+  photoEditor: '.image-edit-modal',
+  applyPhoto: '.modal:has(.image-edit-modal) .modal__footer button[data-et-name="apply"]',
   sku: 'input[data-vv-name="sku"]',
   /** A picker: `[data-test="<name>"]`, opened by its summary, with labeled choices. */
   picker: (name: Picker) => `details[data-test="${name}"]`,
@@ -92,12 +96,18 @@ export async function addPhotos(page: PageDriver, photos: readonly UploadFile[])
   await expectField(page, FORM_SELECTORS.photos, 'photo input');
   await page.upload(FORM_SELECTORS.photos, photos);
   const end = Date.now() + EDITOR_OPENS_MS;
-  while (!(await page.exists(FORM_SELECTORS.applyPhoto))) {
+  while (!(await page.exists(FORM_SELECTORS.photoEditor))) {
     if (Date.now() >= end) return;
     await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
   }
+  const applies = await page.count(FORM_SELECTORS.applyPhoto);
+  if (applies !== 1) {
+    throw new PageChangedError(
+      `Poshmark's cover-photo editor has ${String(applies)} Apply buttons, not one`,
+    );
+  }
   await page.click(FORM_SELECTORS.applyPhoto);
-  await page.waitFor(FORM_SELECTORS.applyPhoto, 'detached');
+  await page.waitFor(FORM_SELECTORS.photoEditor, 'detached');
 }
 
 /** Title, description, brand, and prices. On the edit form this replaces what the listing had. */
