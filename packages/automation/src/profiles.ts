@@ -6,7 +6,7 @@
  * data, which screenshots black out. The per-marketplace automation adapters add their own
  * challenge signs and private selectors as they learn the sites' pages.
  */
-import type { Marketplace } from '@listora/db';
+import type { ExecutionLocation, Marketplace } from '@listora/db';
 import type { AutomatedMarketplace } from '@listora/marketplaces';
 
 import { DEPOP_CHALLENGE_SIGNS, DEPOP_PRIVATE_SELECTORS } from './depop/site.ts';
@@ -62,6 +62,13 @@ export interface AutomationProfile {
   readonly challenges: ChallengeSigns;
   /** Elements screenshots black out besides every form field (names, addresses, messages). */
   readonly privateSelectors: readonly string[];
+  /**
+   * Where a newly linked connection's automated steps run (docs/features/phone-execution.md):
+   * on the seller's iPhone for the marketplaces that refuse Listora's cloud browser, in the
+   * cloud otherwise. `AUTOMATION_<MARKETPLACE>_RUNS_ON` changes it; each connection keeps its
+   * own location afterwards.
+   */
+  readonly runsOn: ExecutionLocation;
 }
 
 /** The pace of a careful person: a second or two between actions, a run every few seconds. */
@@ -102,6 +109,8 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     limits: DEFAULT_LIMITS,
     challenges: COMMON_SIGNS,
     privateSelectors: [],
+    // Poshmark serves the cloud runner its pages without their data.
+    runsOn: 'phone',
   },
   mercari: {
     marketplace: 'mercari',
@@ -112,6 +121,8 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     limits: DEFAULT_LIMITS,
     challenges: MERCARI_CHALLENGE_SIGNS,
     privateSelectors: MERCARI_PRIVATE_SELECTORS,
+    // Mercari shows the cloud runner a bot check.
+    runsOn: 'phone',
   },
   depop: {
     marketplace: 'depop',
@@ -122,6 +133,8 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     limits: DEFAULT_LIMITS,
     challenges: DEPOP_CHALLENGE_SIGNS,
     privateSelectors: DEPOP_PRIVATE_SELECTORS,
+    // Depop blocks the cloud runner's address.
+    runsOn: 'phone',
   },
   ebay: {
     marketplace: 'ebay',
@@ -134,6 +147,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     limits: DEFAULT_LIMITS,
     challenges: EBAY_CHALLENGE_SIGNS,
     privateSelectors: EBAY_PRIVATE_SELECTORS,
+    runsOn: 'cloud',
   },
 };
 

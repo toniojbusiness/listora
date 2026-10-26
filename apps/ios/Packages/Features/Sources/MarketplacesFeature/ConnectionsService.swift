@@ -24,6 +24,11 @@ public protocol ConnectionsService: Sendable {
         marketplace: Components.Schemas.KnownMarketplace,
         id: String,
     ) async throws(APIFailure) -> Components.Schemas.ConnectionAuthorization
+    /// Moves a linked marketplace's automated steps to the cloud or to this phone.
+    func setExecution(
+        marketplace: Components.Schemas.KnownMarketplace,
+        location: Components.Schemas.KnownExecutionLocation,
+    ) async throws(APIFailure) -> Components.Schemas.Connection
 }
 
 /// ``ConnectionsService`` over the generated client.
@@ -49,6 +54,30 @@ public struct APIConnectionsService: ConnectionsService {
         switch output {
         case let .ok(response):
             return try body { try response.body.json }
+        case let .default(statusCode, response):
+            throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    public func setExecution(
+        marketplace: Components.Schemas.KnownMarketplace,
+        location: Components.Schemas.KnownExecutionLocation,
+    ) async throws(APIFailure) -> Components.Schemas.Connection {
+        let output = try await call {
+            try await client.setConnectionExecution(
+                path: .init(marketplace: marketplace),
+                body: .json(.init(location: location)),
+            )
+        }
+        switch output {
+        case let .ok(response):
+            return try body { try response.body.json }
+        case let .notFound(response):
+            throw APIFailure(statusCode: 404, response: response)
+        case let .conflict(response):
+            throw APIFailure(statusCode: 409, response: response)
+        case let .unprocessableContent(response):
+            throw APIFailure(statusCode: 422, response: response)
         case let .default(statusCode, response):
             throw APIFailure(statusCode: statusCode, response: response)
         }

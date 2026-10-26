@@ -9,17 +9,23 @@ links a session, and whenever automation must stop, are in
 
 **Decision D1, revised 2026-10-24.** D1 (the Poshmark and Mercari posture) was "assisted
 only". The marketplaces granted the product owner permission to automate where no API exists,
-Listora is for the product owner's personal use, and everything runs in the cloud. eBay granted
-the same permission for the product owner's own account. So Poshmark, Mercari, Depop (until its
-partner API is granted), and eBay (until its API is connected) use cloud browser automation:
-the headless-Chromium browser runner (`browserRunner` in `infra/src/config.ts`) acts on
-sessions the user logs into from the iPhone app.
+Listora is for the product owner's personal use. eBay granted the same permission for the
+product owner's own account. So Poshmark, Mercari, Depop (until its partner API is granted), and
+eBay (until its API is connected) use browser automation on sessions the user logs into from the
+iPhone app.
+
+**Where it runs, 2026-10-25.** Depop blocks the cloud runner's address, Mercari shows it a bot
+check, and Poshmark serves it pages without their data, so the automated steps of Poshmark,
+Mercari, and Depop run in the iPhone app by default, in the seller's own session on their own
+device ([phone-execution.md](phone-execution.md)). The app runs the same scripts as the
+headless-Chromium browser runner (`browserRunner` in `infra/src/config.ts`), which still runs
+eBay automation and any connection moved back to the cloud.
 
 - Session cookies are stored encrypted with the token key, by the same envelope encryption as
   OAuth tokens. Passwords never are.
-- Actions are human-paced, within per-seller rate limits.
+- Actions are human-paced, within per-seller rate limits, wherever they run.
 - The runner never solves or bypasses a CAPTCHA or bot check: it stops and falls back to an
-  assisted task.
+  assisted task. On the phone the check is shown to the seller to complete themselves.
 - Every action is still confirmed by read-back ([operations.md](operations.md)), never reported
   as a false success.
 
@@ -99,12 +105,15 @@ from the app
   `ConnectionAwareAdapter` serves its automation adapter under an `automation` connection whose
   session works (`connected` or `degraded`), its API adapter (eBay, Depop) under an `api`
   connection, and its assisted adapter otherwise ([marketplaces.md](marketplaces.md#adapter-model)).
-  The API builds no automation adapters, so it reports an automation connection's steps as
-  assisted. The worker and the runner build the same
+  The API's routes build no automation adapters, so they report an automation connection's steps
+  as assisted; only the API's phone runs build them (`phoneWorkAdapters`,
+  [phone-execution.md](phone-execution.md)). The worker and the runner build the same
   automation adapters (the worker's have no browser), so both route each operation to the same
   mode.
-- **Where it runs.** Automated steps need a browser, which only the runner has. The worker hands
-  such a step to the runner's task on the same listing queue ([operations.md](operations.md))
+- **Where it runs.** Automated steps need a browser: the runner's, or the iPhone app's for a
+  connection that runs on the phone, whose steps wait in `phone_work` for the app instead
+  ([phone-execution.md](phone-execution.md)). The worker hands a runner step to the runner's task
+  on the same listing queue ([operations.md](operations.md))
   and starts the runner (`launcher.ts`): locally as a child process, in AWS by setting the
   runner's ECS service to one task. A runner holds a Postgres session named
   `listora-browser-runner:<id>`, takes only automated steps, sale checks, and session checks (`RUNNER_TASKS`), one at a time, and
@@ -130,8 +139,8 @@ from the app
   starting the runner.
 - **Linking** (`linkAutomationSession`, called by the API's `linkMarketplaceSession`) stores the
   cookies the app captured (on the marketplace's domains only), revives the connection, moves the
-  marketplace's unconnected listings to it, asks the runner for a read-only **session check**
-  (`session-checks/`), and makes a first sale check due at once; relinking takes the same way.
+  marketplace's unconnected listings to it, asks for a read-only **session check**
+  (`session-checks/`) where the connection runs (the runner, or the phone that linked it), and makes a first sale check due at once; relinking takes the same way.
   The app shows a marketplace as linked only after its session check passed, on Link accounts and
   Marketplaces alike. The flow, from the app's sign-in web view to the check, is in
   [marketplace-linking.md](marketplace-linking.md).
@@ -166,6 +175,7 @@ never skips them.
 | `FAKE_EBAY_SITE_URL`                         | The eBay adapter drives the fake eBay site instead of ebay.com          |
 | `AUTOMATION_STEP_TIMEOUT_MS`, `_CALL_`       | One script step's timeout, and one automated call's                     |
 | `AUTOMATION_<MARKETPLACE>_*`                 | Pacing, the pause between sessions, and the per-seller rate limits      |
+| `AUTOMATION_<MARKETPLACE>_RUNS_ON`           | Where new connections' steps run: `phone` or `cloud`                    |
 | `SALE_CHECK_DEFAULT_HOURS`, `_MIN_`, `_MAX_` | The sale-check interval without history, and the adapted one's bounds   |
 | `BROWSER_RUNNER_LAUNCH`, `BROWSER_RUNNER_*`  | How the worker starts the runner (`process`, `ecs`, or `none`)          |
 | `RUNNER_IDLE_EXIT_SECONDS`                   | How long the runner stays up with nothing to do                         |
@@ -179,8 +189,8 @@ never skips them.
   `degraded`: one waiting for a relink holds none, so nothing retries around a check (a
   database constraint). `credential_version` is bumped by every session write (link, rotation,
   relink), so a runner holding an older session never overwrites a newer one.
-- **`automation_run`**: one browser session the runner opened, for an operation step, a sale
-  check, or a health check: the script, its outcome, the check it met (`challenge_kind`), the
+- **`automation_run`**: one browser session the runner or the phone opened (`host`), for an
+  operation step, a sale check, or a health check: the script, its outcome, the check it met (`challenge_kind`), the
   failed step, an error code, and the key of its redacted screenshot (deleted with the
   account, or with the connection when the seller unlinks it, [privacy.md](privacy.md)). It is the per-seller rate limits' count, and the record of what automation did and
   where it stopped.

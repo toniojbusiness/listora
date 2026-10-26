@@ -51,9 +51,9 @@ KnownIntegrationMode:
   type: string
   description: |
     `api`: Listora acts through the marketplace's official API and verifies by read-back.
-    `automation`: Listora's browser runner acts in the seller's own marketplace session
-    (where the marketplace permits it and has no API) and verifies by read-back through that
-    session. `assisted`: Listora prepares the work and the user does the final step in the
+    `automation`: Listora's browser runner, or the iPhone app (`execution`), acts in the
+    seller's own marketplace session (where the marketplace permits it and has no API) and
+    verifies by read-back through that session. `assisted`: Listora prepares the work and the user does the final step in the
     marketplace app, then confirms.
   enum: [api, automation, assisted]
 StatusTone:

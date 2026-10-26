@@ -53,6 +53,7 @@ function setup(scripts: AutomationScripts<AssistedListingPayload> = SCRIPTS) {
     sessions,
     assisted: createMercariAdapter(),
     scripts,
+    scriptSet: { name: 'mercari', marketplace: 'mercari', siteUrl: 'https://www.mercari.com' },
     readFreshness: 'none',
     logger: silentLogger,
   });
@@ -153,8 +154,16 @@ describe('AutomationAdapter', () => {
       revision: 4,
       excerpt: { script: 'create', steps: ['a step'], result: 'applied' },
     });
+    // The call goes as data too, so another host (the phone) can run the same script.
     expect(sessions.requests).toEqual([
-      { connection, purpose: 'operation', operationId: 'op-1', script: 'create' },
+      {
+        connection,
+        purpose: 'operation',
+        operationId: 'op-1',
+        script: 'create',
+        scriptSet: { name: 'mercari', marketplace: 'mercari', siteUrl: 'https://www.mercari.com' },
+        call: { script: 'create', op: createOp() },
+      },
     ]);
   });
 

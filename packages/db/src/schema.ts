@@ -28,6 +28,7 @@ import type {
   AnalysisStatus,
   AnalysisTier,
   AuditActorKind,
+  AutomationRunHost,
   AutomationRunOutcome,
   AutomationRunPurpose,
   AuthProvider,
@@ -36,6 +37,8 @@ import type {
   ConnectionMode,
   ConnectionStatus,
   DelistRunListingSource,
+  DevicePlatform,
+  ExecutionLocation,
   DelistRunStatus,
   FeeKind,
   FeeSource,
@@ -49,11 +52,13 @@ import type {
   OperationOrigin,
   OperationStatus,
   ImageContentType,
+  PhoneWorkPurpose,
   PhotoRole,
   PhotoStatus,
   Plan,
   PreArchiveItemStatus,
   PricingSource,
+  PushEnvironment,
   SaleCheckOutcome,
   SaleCheckReason,
   SaleDetectionSource,
@@ -364,6 +369,10 @@ export interface MarketplaceConnectionTable {
   last_checked_at: NullableTimestamp;
   /** When the seller last asked for a check; pending while later than `last_checked_at`. */
   check_requested_at: NullableTimestamp;
+  /** Where its automated steps run: the cloud runner, or the phone (phone-execution.md). */
+  runs_on: Generated<ExecutionLocation>;
+  /** The device that runs them on the phone: the one that linked the session. */
+  phone_device_id: Nullable<string>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -779,6 +788,8 @@ export interface AutomationRunTable {
   error_code: Nullable<string>;
   /** A private storage key of the redacted screenshot taken when the run failed. */
   screenshot_key: Nullable<string>;
+  /** Where it ran: the browser runner, or the phone. */
+  host: Generated<AutomationRunHost>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -815,6 +826,53 @@ export interface SessionCheckTable {
   failure_message: Nullable<string>;
   requested_at: Generated<Date>;
   finished_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+// Phone execution (docs/features/phone-execution.md) ----------------------------------------
+
+/** A device the seller runs the app on: where pushes go, and which phone runs a connection. */
+export interface AppDeviceTable {
+  id: Id;
+  account_id: string;
+  /** Made by the app and kept in its Keychain; the API names devices by it. */
+  installation_id: string;
+  user_id: string;
+  name: string;
+  platform: DevicePlatform;
+  app_version: Nullable<string>;
+  /** The version of phone calls its runtime speaks. */
+  runtime_version: Nullable<number>;
+  /** APNs device token (hex), with its APNs environment, or neither. */
+  push_token: Nullable<string>;
+  push_environment: Nullable<PushEnvironment>;
+  last_seen_at: Generated<Date>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** Work handed to the phone: an automated operation step or a session check, and its run. */
+export interface PhoneWorkTable {
+  id: Id;
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  purpose: PhoneWorkPurpose;
+  operation_id: Nullable<string>;
+  check_id: Nullable<string>;
+  priority: Generated<number>;
+  waiting_since: Generated<Date>;
+  due_at: Generated<Date>;
+  notified_at: NullableTimestamp;
+  claimed_at: NullableTimestamp;
+  lease_expires_at: NullableTimestamp;
+  /** What the claim decided (null while it waits). */
+  step: NullableJsonb<JsonObject>;
+  /** The script calls the phone answered so far, in order. */
+  transcript: DefaultedJsonb<JsonArray>;
+  /** The call the phone runs now. */
+  pending_call: NullableJsonb<JsonObject>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -936,6 +994,8 @@ export interface Database {
   automation_run: AutomationRunTable;
   sale_check_schedule: SaleCheckScheduleTable;
   session_check: SessionCheckTable;
+  app_device: AppDeviceTable;
+  phone_work: PhoneWorkTable;
   today_summary_setting: TodaySummarySettingTable;
   sale_email_inbox: SaleEmailInboxTable;
   item_batch: ItemBatchTable;

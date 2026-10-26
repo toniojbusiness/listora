@@ -32,6 +32,7 @@ describe('loadApiConfig', () => {
       },
       automation: loadAutomationSettings({}),
       emailIngest: loadEmailIngestConfig({}),
+      operationRetryDelayScale: 1,
     });
   });
 

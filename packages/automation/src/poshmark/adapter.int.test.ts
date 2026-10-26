@@ -30,7 +30,7 @@ const sizedPhotos: PhotoSource = {
     return Promise.resolve({
       name: url.split('/').at(-1) ?? 'photo.jpg',
       mimeType: 'image/jpeg',
-      buffer: Buffer.alloc(length ?? 5, 0xff),
+      bytes: Buffer.alloc(length ?? 5, 0xff),
     });
   },
 };

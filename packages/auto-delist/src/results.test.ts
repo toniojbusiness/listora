@@ -97,6 +97,19 @@ describe('delist results', () => {
     }
   });
 
+  it('summarizes a run whose delists wait for the iPhone as waiting there', () => {
+    const waiting = { phoneWait: { since: new Date(), running: false } };
+    expect(
+      summarizeDelistRun([
+        { marketplace: 'depop', state: 'pending', operation: waiting },
+        { marketplace: 'ebay', state: 'delisted' },
+      ]),
+    ).toEqual({
+      status: 'in_progress',
+      display: { tone: 'in_progress', label: 'Waiting on your iPhone to delist on Depop' },
+    });
+  });
+
   it('summarizes a run: completed only when every listing is delisted or confirmed', () => {
     const run = (...states: [Marketplace, DelistResultState][]) =>
       summarizeDelistRun(states.map(([marketplace, state]) => ({ marketplace, state })));

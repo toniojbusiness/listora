@@ -72,6 +72,11 @@ export interface ApiConfig {
    * shows, and with the folder driver the folder `POST /dev/email` drops messages in.
    */
   emailIngest: EmailIngestConfig;
+  /**
+   * OPERATION_RETRY_DELAY_SCALE: the operation engine's retry and confirmation delays, as the
+   * worker's, for the steps phones run (the API records their results).
+   */
+  operationRetryDelayScale: number;
 }
 
 export class ConfigError extends Error {
@@ -130,6 +135,13 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(LOG_LEVELS, { error: `LOG_LEVEL must be one of ${LOG_LEVELS.join(', ')}` })
     .default('info'),
+  OPERATION_RETRY_DELAY_SCALE: z
+    .string()
+    .default('')
+    .transform((value) => (value === '' ? 1 : Number(value)))
+    .refine((value) => value >= 0.001 && value <= 1, {
+      error: 'OPERATION_RETRY_DELAY_SCALE must be a number from 0.001 to 1',
+    }),
 });
 type Env = z.infer<typeof envSchema>;
 
@@ -219,5 +231,6 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     marketplaces,
     automation,
     emailIngest,
+    operationRetryDelayScale: values.OPERATION_RETRY_DELAY_SCALE,
   };
 }

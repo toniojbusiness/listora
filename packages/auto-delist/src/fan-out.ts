@@ -206,8 +206,11 @@ async function startItem(
     .execute();
 
   if (targets.length > 0) {
-    const byListora = targets.filter((target) => target.mode === 'api');
-    const bySeller = targets.filter((target) => target.mode !== 'api');
+    const automated = (target: DelistTarget): boolean =>
+      target.mode === 'api' || target.mode === 'automation';
+    const byListora = targets.filter((target) => automated(target) && !target.onPhone);
+    const onPhone = targets.filter((target) => target.onPhone);
+    const bySeller = targets.filter((target) => !automated(target));
     await enqueuePush(
       trx,
       soldNotification(
@@ -221,6 +224,7 @@ async function startItem(
         },
         {
           listora: byListora.map((target) => target.marketplace),
+          phone: onPhone.map((target) => target.marketplace),
           seller: bySeller.map((target) => target.marketplace),
         },
       ),
@@ -234,8 +238,10 @@ interface DelistTarget {
   listingId: string;
   marketplace: Marketplace;
   kind: 'end' | 'mark_sold';
-  /** How the engine will run it today; anything but `api` is the seller's to do. */
+  /** How the engine will run it today: `api` and `automation` are Listora's, the rest the seller's. */
   mode: OperationMode;
+  /** An automated delist that runs on the seller's iPhone (docs/features/phone-execution.md). */
+  onPhone: boolean;
 }
 
 /**
@@ -268,6 +274,7 @@ async function prepareTargets(
       'connection.id as connection_id',
       'connection.mode as connection_mode',
       'connection.status as connection_status',
+      'connection.runs_on as connection_runs_on',
     ])
     .where('listing.account_id', '=', input.accountId)
     .where('listing.item_id', '=', input.itemId)
@@ -313,11 +320,13 @@ async function prepareTargets(
       capabilities !== undefined && operationMode(capabilities, 'mark_sold') === 'api'
         ? 'mark_sold'
         : 'end';
+    const mode = capabilities === undefined ? 'unsupported' : operationMode(capabilities, kind);
     targets.push({
       listingId: listing.id,
       marketplace: listing.marketplace,
       kind,
-      mode: capabilities === undefined ? 'unsupported' : operationMode(capabilities, kind),
+      mode,
+      onPhone: mode === 'automation' && listing.connection_runs_on === 'phone',
     });
   }
   return targets;

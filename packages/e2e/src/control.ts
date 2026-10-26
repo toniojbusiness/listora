@@ -16,13 +16,29 @@
  *   (`createListedItem`), answering `{ id, sku, listingId }`.
  * - `POST /today/sold-item`: a ready item (as above) kept in bin `B-12` that sold on eBay an hour
  *   ago and ships by tomorrow, answering `{ id, sku, saleId, saleItemId }`: a Today "ship" card.
+ * - `POST /items/depop`: a ready item (as above) whose Depop listing is being published, answering
+ *   `{ id, sku, listingId }`. Depop runs on the phone, so the publish waits for the app to run it.
+ * - `POST /depop/faults` `{ action, fault, times? }`: the fake Depop site (which the phone
+ *   runtime drives in the simulator, docs/features/phone-execution.md) shows a check on matching
+ *   pages (`FakeDepopSite.inject`): a CAPTCHA, a bot check, a login code, or a signed-out page.
+ * - `DELETE /depop/faults`: removes every fault.
+ * - `GET /depop/products`: the fake Depop's products, `[{ slug, status, priceCents, description }]`.
+ * - `POST /depop/sessions` `{ seller? }`: a signed-in session cookie on the fake Depop, as signing
+ *   in there would set, answering `{ name, value, domain, path }`.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
 import type { Db } from '@listora/db';
+import type { FakeDepopSite, FakeDepopSiteAction } from '@listora/automation';
 import type { FakeEbay, FakeEbayAction, FakeEbayFault } from '@listora/marketplaces';
 
-import { createListedItem, createReadyItem, recordSoldItem, type StackApi } from './seed.ts';
+import {
+  createListedItem,
+  createQueuedDepopListing,
+  createReadyItem,
+  recordSoldItem,
+  type StackApi,
+} from './seed.ts';
 
 const ACTIONS: readonly FakeEbayAction[] = ['add', 'revise', 'end', 'relist', 'get_item', 'media'];
 const FAULTS = ['reject', 'server_error', 'system_error', 'rate_limited'] as const;
@@ -36,6 +52,7 @@ export interface StackControl {
 interface ControlDependencies {
   api: StackApi;
   fakeEbay: FakeEbay;
+  fakeDepop: FakeDepopSite;
   /** The stack's database, for the connection states the daily check would record. */
   db: Db;
 }
@@ -96,6 +113,11 @@ async function handle(
         status: 201,
         body: await createListedItem(deps.api, detailsIn(await readJson(request))),
       };
+    case 'POST /items/depop':
+      return {
+        status: 201,
+        body: await createQueuedDepopListing(deps.api, detailsIn(await readJson(request))),
+      };
     case 'POST /connections/ebay': {
       const body = await readJson(request);
       const status =
@@ -111,6 +133,40 @@ async function handle(
       }
       await setEbayConnection(deps.db, state);
       return { status: 204 };
+    }
+    case 'POST /depop/faults': {
+      const rule = depopFaultRule(await readJson(request));
+      if (typeof rule === 'string') return { status: 422, body: { error: rule } };
+      deps.fakeDepop.inject(rule);
+      return { status: 204 };
+    }
+    case 'DELETE /depop/faults':
+      deps.fakeDepop.clearFaults();
+      return { status: 204 };
+    case 'GET /depop/products':
+      return {
+        status: 200,
+        body: deps.fakeDepop.products().map((product) => ({
+          slug: product.slug,
+          status: product.status,
+          priceCents: product.priceCents,
+          description: product.description,
+        })),
+      };
+    case 'POST /depop/sessions': {
+      const body = await readJson(request);
+      const seller =
+        typeof body === 'object' &&
+        body !== null &&
+        'seller' in body &&
+        typeof body.seller === 'string'
+          ? body.seller
+          : 'e2e-seller';
+      const cookie = deps.fakeDepop.issueSession(seller);
+      return {
+        status: 201,
+        body: { name: cookie.name, value: cookie.value, domain: cookie.domain, path: cookie.path },
+      };
     }
     case 'POST /today/sold-item': {
       const item = await createReadyItem(deps.api, { title: 'Wrangler Western Shirt' });
@@ -185,6 +241,37 @@ function faultRule(
       ? { type: 'reject', ...(typeof message === 'string' ? { message } : {}) }
       : { type: knownType };
   return { action: knownAction, fault: chosen, times: count };
+}
+
+const DEPOP_ACTIONS: readonly FakeDepopSiteAction[] = [
+  'create',
+  'update',
+  'delete',
+  'read',
+  'health',
+  'form',
+];
+const DEPOP_FAULTS = ['captcha', 'bot_check', 'login_challenge', 'session_expired'] as const;
+
+/** A check the fake Depop shows, as a request asks for it, or why it is refused. */
+function depopFaultRule(
+  body: unknown,
+):
+  | { action: FakeDepopSiteAction; fault: { type: (typeof DEPOP_FAULTS)[number] }; times: number }
+  | string {
+  if (typeof body !== 'object' || body === null) return 'expected a JSON object';
+  const { action, fault, times } = body as Record<string, unknown>;
+  const knownAction = DEPOP_ACTIONS.find((candidate) => candidate === action);
+  if (knownAction === undefined) return `action must be one of ${DEPOP_ACTIONS.join(', ')}`;
+  const type =
+    typeof fault === 'object' && fault !== null ? (fault as { type?: unknown }).type : undefined;
+  const knownType = DEPOP_FAULTS.find((candidate) => candidate === type);
+  if (knownType === undefined) return `fault.type must be one of ${DEPOP_FAULTS.join(', ')}`;
+  const count = times ?? 1;
+  if (typeof count !== 'number' || !Number.isInteger(count) || count < 1 || count > 100) {
+    return 'times must be an integer from 1 to 100';
+  }
+  return { action: knownAction, fault: { type: knownType }, times: count };
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {

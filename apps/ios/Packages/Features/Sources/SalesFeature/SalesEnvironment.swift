@@ -15,13 +15,17 @@ public final class SalesEnvironment {
     /// Opens the sign-in, for a signed-out screen's Sign in button.
     let onSignIn: @MainActor () -> Void
 
+    /// `phoneWork` runs at once the marketplace changes a sale queued for this phone.
     public convenience init(
         apiClient: APIClient,
         accessTokens: AccessTokenStore,
         onSignIn: @escaping @MainActor () -> Void = {},
+        phoneWork: (any PhoneWorkTrigger)? = nil,
     ) {
         self.init(
-            service: APISalesService(client: apiClient.client),
+            service: APISalesService(client: apiClient.client) { [weak phoneWork] in
+                phoneWork?.runPhoneWork(.userAction)
+            },
             profitService: APIProfitService(client: apiClient.client),
             isSignedIn: { accessTokens.grant != nil },
             onSignIn: onSignIn,

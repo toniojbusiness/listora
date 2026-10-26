@@ -5,6 +5,7 @@ import Foundation
 import InventoryFeature
 import MarketplaceLinkingFeature
 import MarketplacesFeature
+import PhoneExecutionFeature
 import PhotoSignalsFeature
 import ReviewFeature
 import SalesFeature
@@ -51,6 +52,9 @@ public struct AppDependencies {
     public let marketplaces: MarketplacesModel
     /// Link accounts: sign in on Poshmark, Mercari, Depop, and eBay for Listora to automate them.
     public let linkAccounts: LinkAccountsModel
+    /// The marketplace work Listora hands this phone, run in the seller's own session here
+    /// (docs/features/phone-execution.md).
+    public let phone: PhoneExecutionEnvironment
 
     public init(
         configuration: AppConfiguration,
@@ -87,13 +91,16 @@ public struct AppDependencies {
             apiClient: apiClient, meter: meter, listingCopy: listingCopy,
             transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
         )
-        sales = SalesEnvironment(apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn)
+        phone = PhoneExecutionEnvironment(apiClient: apiClient, accessTokens: accessTokens, version: version)
+        sales = SalesEnvironment(
+            apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn, phoneWork: phone.runner,
+        )
         tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn)
         inventory = InventoryEnvironment(
             apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy,
             saleScreens: Self.saleScreens(sales),
             taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
-            onSignIn: showSignIn,
+            onSignIn: showSignIn, phoneWork: phone.runner,
         )
         inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
         self.review = review
@@ -105,33 +112,56 @@ public struct AppDependencies {
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
-        let connections = APIConnectionsService(client: apiClient.client)
-        let marketplaces = MarketplacesModel(service: connections, isSignedIn: { accessTokens.grant != nil })
-        self.marketplaces = marketplaces
-        linkAccounts = Self.makeLinkAccounts(apiClient)
+        marketplaces = Self.makeMarketplaces(apiClient, accessTokens, phone)
+        linkAccounts = Self.makeLinkAccounts(apiClient, phone)
         today = Self.makeToday(apiClient, accessTokens, (inventory, sales), marketplaces, showSignIn)
-        accountDeletion = Self.makeAccountDeletion(apiClient, accessTokens, signIn)
+        accountDeletion = Self.makeAccountDeletion(apiClient, accessTokens, signIn, phone.sessions)
     }
 
     /// Deleting the account (Settings). It signs out, but its result (the marketplaces to revoke by
-    /// hand) stays on screen until Settings closes; then the sign-in shows.
+    /// hand) stays on screen until Settings closes; then the sign-in shows. It also removes the
+    /// marketplace sessions this phone kept for the account.
     private static func makeAccountDeletion(
         _ apiClient: APIClient,
         _ accessTokens: AccessTokenStore,
         _ signIn: SignInModel,
+        _ sessions: any MarketplaceSessionStore,
     ) -> AccountDeletionModel {
         AccountDeletionModel(
             service: APIAccountDeletionService(client: apiClient.client),
             isSignedIn: { accessTokens.grant != nil },
-            signOut: { signIn.signOutKeepingScreen() },
+            signOut: {
+                signIn.signOutKeepingScreen()
+                sessions.removeAll()
+            },
         )
     }
 
-    /// Link accounts: the marketplaces linked by signing in, and the sale email forwarding.
-    private static func makeLinkAccounts(_ apiClient: APIClient) -> LinkAccountsModel {
+    /// Marketplaces: each connection's health, and where its automated steps run.
+    private static func makeMarketplaces(
+        _ apiClient: APIClient,
+        _ accessTokens: AccessTokenStore,
+        _ phone: PhoneExecutionEnvironment,
+    ) -> MarketplacesModel {
+        let model = MarketplacesModel(
+            service: APIConnectionsService(client: apiClient.client),
+            isSignedIn: { accessTokens.grant != nil },
+        )
+        model.phoneWork = phone.runner
+        return model
+    }
+
+    /// Link accounts: the marketplaces linked by signing in, and the sale email forwarding. A
+    /// sign-in's cookies stay on this phone too, which runs the marketplace when it runs here.
+    private static func makeLinkAccounts(
+        _ apiClient: APIClient,
+        _ phone: PhoneExecutionEnvironment,
+    ) -> LinkAccountsModel {
         LinkAccountsModel(
             service: APIMarketplaceSessionService(api: apiClient),
             saleEmails: SaleEmailsModel(service: APISaleEmailsService(api: apiClient)),
+            sessions: phone.sessions,
+            phoneWork: phone.runner,
         )
     }
 
@@ -194,7 +224,8 @@ public struct AppDependencies {
         )
     }
 
-    /// `LISTORA_RESET_LOCAL_DATA`: no drafts, no saved copy or interaction times, signed out.
+    /// `LISTORA_RESET_LOCAL_DATA`: no drafts, no saved copy or interaction times, no marketplace
+    /// sessions on the phone, signed out.
     private static func resetLocalData(
         _ directories: [URL],
         _ interactionStorage: UserDefaultsInteractionStorage,
@@ -205,6 +236,7 @@ public struct AppDependencies {
             try? FileManager.default.removeItem(at: directory)
         }
         interactionStorage.reset()
+        KeychainMarketplaceSessionStore().removeAll()
         ReviewEnvironment.resetLocalData(defaults: defaults)
         AddItemEnvironment.resetLocalData(defaults: defaults)
         accessGrantStorage.save(nil)
@@ -221,11 +253,24 @@ public struct AppDependencies {
     /// The background URLSession that photo uploads use; the app scene handles its events.
     public static let backgroundUploadSessionIdentifier = AddItemEnvironment.backgroundSessionIdentifier
 
-    /// Starts work that runs whether or not a screen is visible: the photo upload queue, and
-    /// opening the Tasks tab from a tapped task reminder.
+    /// Starts work that runs whether or not a screen is visible: the photo upload queue,
+    /// opening the Tasks tab from a tapped task reminder, and the marketplace work this phone
+    /// runs: on a push, on background app refresh, and overnight (docs/features/phone-execution.md).
     public func startBackgroundWork() {
         addItem.start()
-        tasks.startNotifications()
+        let runner = phone.runner
+        tasks.startNotifications { await runner.runUntilDone(.push) }
+        ListoraAppDelegate.phone = phone
+        Self.registerBackgroundWork(runner)
+    }
+
+    private static var backgroundWorkRegistered = false
+
+    /// The background tasks' handlers, once (iOS refuses a second registration).
+    private static func registerBackgroundWork(_ runner: PhoneRunner) {
+        guard !backgroundWorkRegistered, Bundle.main.bundleURL.pathExtension == "app" else { return }
+        backgroundWorkRegistered = true
+        PhoneBackgroundWork.register { [weak runner] in runner }
     }
 
     /// Call when the system wakes the app for the upload session's events.

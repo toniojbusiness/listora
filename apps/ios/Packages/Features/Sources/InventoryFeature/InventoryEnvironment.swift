@@ -58,6 +58,7 @@ public final class InventoryEnvironment {
     /// A status filter for the list to apply when it next appears (the Today card for drafts).
     private var requestedStatus: Components.Schemas.KnownItemStatus?
 
+    /// `phoneWork` runs at once the listing changes queued for this phone.
     public convenience init(
         apiClient: APIClient,
         accessTokens: AccessTokenStore,
@@ -65,9 +66,12 @@ public final class InventoryEnvironment {
         saleScreens: SaleScreens? = nil,
         taskDestination: TaskDestination? = nil,
         onSignIn: @escaping @MainActor () -> Void = {},
+        phoneWork: (any PhoneWorkTrigger)? = nil,
     ) {
         self.init(
-            service: APIInventoryService(client: apiClient.client),
+            service: APIInventoryService(client: apiClient.client) { [weak phoneWork] in
+                phoneWork?.runPhoneWork(.userAction)
+            },
             listingCopy: listingCopy,
             isSignedIn: { accessTokens.grant != nil },
             onSignIn: onSignIn,

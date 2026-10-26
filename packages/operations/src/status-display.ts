@@ -44,7 +44,14 @@ export interface ListingStatusInput {
     /** The failure's code; a failure the same content can never get past is not retryable. */
     errorCode?: string | null;
     successEvidence: SuccessEvidence | null;
+    /**
+     * Its step waits for the phone, or the phone runs it now (docs/features/phone-execution.md);
+     * absent when its steps run in the cloud.
+     */
+    phoneWait?: PhoneWaitInput | null;
   } | null;
+  /** Now, for how long a step has waited for the phone (default: the clock). */
+  now?: Date;
   /** Attempts an operation gets (default: the engine's default retry policy). */
   maxAttempts?: number;
 }
@@ -119,6 +126,12 @@ const RESULT = {
 
 type OperationInput = NonNullable<ListingStatusInput['operation']>;
 
+/** A step handed to the phone (`phoneWaits` in phone-queue.ts). */
+export interface PhoneWaitInput {
+  since: Date;
+  running: boolean;
+}
+
 export function describeListingStatus(input: ListingStatusInput): StatusDisplay {
   const { operation } = input;
   if (operation === null || operation.status === 'canceled') {
@@ -134,7 +147,7 @@ export function describeListingStatus(input: ListingStatusInput): StatusDisplay 
       input.listingStatus,
     );
   }
-  return describeUnsettled(operation, name, input.maxAttempts);
+  return describeUnsettled(operation, name, input.maxAttempts, input.now);
 }
 
 /**
@@ -146,6 +159,7 @@ export function describeOperation(input: {
   marketplace: Marketplace;
   operation: OperationInput;
   maxAttempts?: number;
+  now?: Date;
 }): StatusDisplay {
   const { operation } = input;
   const name = MARKETPLACE_NAMES[input.marketplace];
@@ -166,7 +180,7 @@ export function describeOperation(input: {
     case 'verifying':
     case 'needs_user_action':
     case 'failed':
-      return describeUnsettled(operation, name, input.maxAttempts);
+      return describeUnsettled(operation, name, input.maxAttempts, input.now);
     default:
       return assertNever(operation.status, 'operation status');
   }
@@ -177,9 +191,21 @@ function describeUnsettled(
   operation: OperationInput,
   name: string,
   attemptsPerOperation: number | undefined,
+  now: Date | undefined,
 ): StatusDisplay {
   const detail = operation.errorMessage === null ? {} : { detail: operation.errorMessage };
   const { kind } = operation;
+  const wait = operation.phoneWait;
+  if (wait !== undefined && wait !== null && UNSETTLED_ON_PHONE.includes(operation.status)) {
+    const doing = operation.status === 'verifying' ? 'Checking' : IN_PROGRESS[kind];
+    if (wait.running) return { tone: 'in_progress', label: `${doing} on your iPhone...` };
+    const waited = waitedFor((now ?? new Date()).getTime() - wait.since.getTime());
+    return {
+      tone: 'in_progress',
+      label: `${doing}... waiting on your iPhone (${waited})`,
+      detail: `Open Listora on your iPhone to finish this on ${name}. It has waited ${waited}.`,
+    };
+  }
   switch (operation.status) {
     case 'queued':
     case 'running':
@@ -203,6 +229,23 @@ function describeUnsettled(
     default:
       return assertNever(operation.status, 'operation status');
   }
+}
+
+/** The statuses in which a step can wait for the phone. */
+const UNSETTLED_ON_PHONE: readonly OperationStatus[] = ['queued', 'retrying', 'verifying'];
+
+/** "less than a minute", "12 min", "3 h 5 min", "2 days". */
+export function waitedFor(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (minutes < 1) return 'less than a minute';
+  if (minutes < 60) return `${String(minutes)} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    const rest = minutes % 60;
+    return rest === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(rest)} min`;
+  }
+  const days = Math.floor(hours / 24);
+  return days === 1 ? '1 day' : `${String(days)} days`;
 }
 
 /**

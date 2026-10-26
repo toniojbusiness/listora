@@ -1,6 +1,7 @@
-import { requestSessionRecheck } from '@listora/automation';
+import { requestSessionRecheck, setExecutionLocation } from '@listora/automation';
 import {
   accountConnections,
+  accountExecutionState,
   accountSessionChecks,
   completeAuthorization,
   CONNECTION_CHECK_TASK,
@@ -10,6 +11,7 @@ import {
   startConnectionDeletion,
   type CompleteAuthorizationDependencies,
   type ConnectionRow,
+  type ExecutionState,
   type SessionCheckState,
   type TokenSealer,
 } from '@listora/connections';
@@ -76,16 +78,21 @@ export function registerConnectionRoutes(
 ): void {
   const canConnect = (marketplace: Marketplace): boolean =>
     deps.oauth[marketplace] !== undefined && deps.sealer !== undefined;
-  const context = (sessionChecks: ReadonlyMap<string, SessionCheckState>, now = deps.now()) => ({
+  const context = (
+    state: { sessionChecks: ReadonlyMap<string, SessionCheckState>; execution: ExecutionState },
+    now = deps.now(),
+  ) => ({
     adapters: deps.adapters,
     canConnect,
-    sessionChecks,
+    sessionChecks: state.sessionChecks,
+    execution: state.execution,
     now,
   });
 
   contractRoute(app, deps, 'listConnections', async ({ tenant, db }) => {
-    const { connections, sessionChecks } = await accountState(db, tenant.accountId);
-    const viewContext = context(sessionChecks);
+    const state = await accountState(db, tenant.accountId);
+    const { connections } = state;
+    const viewContext = context(state);
     return {
       status: 200,
       body: {
@@ -97,13 +104,13 @@ export function registerConnectionRoutes(
   });
 
   contractRoute(app, deps, 'getConnection', async ({ tenant, db, params }) => {
-    const { connections, sessionChecks } = await accountState(db, tenant.accountId);
+    const state = await accountState(db, tenant.accountId);
     return {
       status: 200,
       body: connectionView(
         params.marketplace,
-        connections.get(params.marketplace),
-        context(sessionChecks),
+        state.connections.get(params.marketplace),
+        context(state),
       ),
     };
   });
@@ -145,19 +152,20 @@ export function registerConnectionRoutes(
       },
       'marketplace connection unlinked; its data was deleted',
     );
+    const state = await accountState(db, tenant.accountId);
     return {
       status: 200,
-      body: connectionView(params.marketplace, undefined, context(new Map())),
+      body: connectionView(params.marketplace, undefined, context(state)),
     };
   });
 
   contractRoute(app, deps, 'getConnectionHealth', async ({ tenant, db }) => {
-    const { connections, sessionChecks } = await accountState(db, tenant.accountId);
+    const state = await accountState(db, tenant.accountId);
     const inbox = await findSaleEmailInbox(db, tenant.accountId);
     return {
       status: 200,
       body: {
-        ...connectionHealthView(connections, context(sessionChecks)),
+        ...connectionHealthView(state.connections, context(state)),
         saleForwarding: saleForwardingView(inbox, inboundDomain),
       },
     };
@@ -181,13 +189,13 @@ export function registerConnectionRoutes(
           `Listora has no ${name} sign-in to check. Link ${name} again.`,
         );
       }
-      const { connections, sessionChecks } = await accountState(db, tenant.accountId);
+      const state = await accountState(db, tenant.accountId);
       return {
         status: 202,
         body: connectionView(
           params.marketplace,
-          connections.get(params.marketplace),
-          context(sessionChecks, now),
+          state.connections.get(params.marketplace),
+          context(state, now),
         ),
       };
     }
@@ -211,13 +219,39 @@ export function registerConnectionRoutes(
       payload: { connectionId: connection.id },
       jobKey: `connection_check:${connection.id}`,
     });
-    const { connections, sessionChecks } = await accountState(db, tenant.accountId);
+    const state = await accountState(db, tenant.accountId);
     return {
       status: 202,
       body: connectionView(
         params.marketplace,
-        connections.get(params.marketplace),
-        context(sessionChecks, now),
+        state.connections.get(params.marketplace),
+        context(state, now),
+      ),
+    };
+  });
+
+  // Where the connection's automated steps run: the cloud runner, or the phone that linked it.
+  contractRoute(app, deps, 'setConnectionExecution', async ({ tenant, db, params, body }) => {
+    const name = MARKETPLACE_NAMES[params.marketplace];
+    const linked = (await accountConnections(db, tenant.accountId)).get(params.marketplace);
+    if (linked?.mode !== 'automation') {
+      throw new ApiError(
+        'invalid_state_transition',
+        `${name} isn't linked by signing in, so there is nothing to run on your iPhone.`,
+      );
+    }
+    await setExecutionLocation(
+      db,
+      { accountId: tenant.accountId, connectionId: linked.id },
+      body.location,
+    );
+    const state = await accountState(db, tenant.accountId);
+    return {
+      status: 200,
+      body: connectionView(
+        params.marketplace,
+        state.connections.get(params.marketplace),
+        context(state),
       ),
     };
   });
@@ -277,10 +311,10 @@ export function registerConnectionRoutes(
       const now = deps.now();
       let connection;
       if (row.status === 'completed' && row.connection_id !== null) {
-        const { connections, sessionChecks } = await accountState(db, tenant.accountId);
-        const found = connections.get(params.marketplace);
+        const state = await accountState(db, tenant.accountId);
+        const found = state.connections.get(params.marketplace);
         if (found?.id === row.connection_id) {
-          connection = connectionView(params.marketplace, found, context(sessionChecks, now));
+          connection = connectionView(params.marketplace, found, context(state, now));
         }
       }
       return {
@@ -304,9 +338,14 @@ async function accountState(
 ): Promise<{
   connections: Map<Marketplace, ConnectionRow>;
   sessionChecks: Map<string, SessionCheckState>;
+  execution: ExecutionState;
 }> {
   const connections = await accountConnections(db, accountId);
-  return { connections, sessionChecks: await accountSessionChecks(db, accountId) };
+  return {
+    connections,
+    sessionChecks: await accountSessionChecks(db, accountId),
+    execution: await accountExecutionState(db, accountId),
+  };
 }
 
 /**

@@ -10,7 +10,8 @@ KnownMarketplaceSessionStatus:
   type: string
   description: |
     `not_linked`: no session. `checking`: a session was just linked (or checked again) and
-    the browser runner is checking it, for at most 15 minutes. `linked`: the check passed,
+    Listora is checking it where the marketplace runs (the browser runner, for at most 15
+    minutes, or the seller's iPhone, the next time Listora runs there). `linked`: the check passed,
     and Listora automates the marketplace in that session. `needs_relink`: the marketplace
     rejected the session, or showed a check automation must not pass; the user signs in
     again. `check_failed`: Listora could not confirm the session works: its check failed or
@@ -43,7 +44,8 @@ MarketplaceSession:
   type: object
   description: |
     A marketplace linked by signing in (`connect: session`). It is shown as linked only
-    after the browser runner confirmed the marketplace accepts the session.
+    after the session check (on the browser runner or the seller's iPhone) confirmed the
+    marketplace accepts the session.
   required: [marketplace, status, statusDisplay, login]
   properties:
     marketplace:
@@ -67,6 +69,9 @@ MarketplaceSession:
     issue:
       $ref: './connections.yaml#/ConnectionIssue'
       description: Why the session needs relinking, or why its check failed.
+    execution:
+      $ref: './phone.yaml#/ConnectionExecution'
+      description: Where its automated steps run; present once it is linked.
 MarketplaceSessionList:
   type: object
   required: [data]
@@ -131,3 +136,8 @@ MarketplaceSessionLink:
       minLength: 1
       maxLength: 200
       description: The seller's name on the marketplace, when the app knows it.
+    installationId:
+      $ref: './common.yaml#/Id'
+      description: |
+        The registered device that linked it (`registerDevice`), which then runs the
+        marketplace's automated steps when they run on the phone.

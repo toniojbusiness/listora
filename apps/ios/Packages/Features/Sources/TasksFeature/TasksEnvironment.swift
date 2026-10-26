@@ -45,11 +45,12 @@ public final class TasksEnvironment {
 
     private var notificationRouter: TaskNotificationRouter?
 
-    /// Shows task reminders while the app is open and opens the Tasks tab when one is tapped.
-    /// Only an app has a notification center, so test hosts and previews skip it.
-    public func startNotifications() {
+    /// Shows task reminders while the app is open and opens the Tasks tab when one is tapped;
+    /// `onOther` runs for any other notification as it shows or is tapped (a sale's push). Only
+    /// an app has a notification center, so test hosts and previews skip it.
+    public func startNotifications(onOther: @escaping @Sendable () async -> Void = {}) {
         guard notificationRouter == nil, UserNotificationReminders.isAvailable else { return }
-        notificationRouter = TaskNotificationRouter.install()
+        notificationRouter = TaskNotificationRouter.install(onOther: onOther)
     }
 
     func makeDetailModel(task: UserTask) -> TaskDetailModel {

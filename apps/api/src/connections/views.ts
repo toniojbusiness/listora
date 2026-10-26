@@ -7,11 +7,15 @@ import type {
 import {
   authorizationState,
   describeConnection,
+  describeExecution,
+  phoneSessionState,
   summarizeConnectionHealth,
   type AuthorizationFailureCode,
   type AuthorizationRow,
   type ConnectionRow,
   type ConnectionView,
+  type ExecutionState,
+  type ExecutionView,
   type SessionCheckState,
 } from '@listora/connections';
 import { MARKETPLACES, type Marketplace } from '@listora/db';
@@ -26,6 +30,8 @@ export interface ConnectionViewContext {
   canConnect: (marketplace: Marketplace) => boolean;
   /** The account's session checks by connection id: how automation connections are shown. */
   sessionChecks: ReadonlyMap<string, SessionCheckState>;
+  /** The account's devices and what waits for its phones: where automated steps run. */
+  execution: ExecutionState;
   now: Date;
 }
 
@@ -78,12 +84,14 @@ function describe(
   context: ConnectionViewContext,
 ): ConnectionView {
   const canConnect = context.canConnect(marketplace);
+  const phone = row === undefined ? undefined : phoneSessionState(row, context.execution);
   return describeConnection({
     marketplace,
     row,
     defaultMode: defaultMode(capabilitiesOf(marketplace, row, context), canConnect),
     canConnect,
     sessionCheck: row === undefined ? null : (context.sessionChecks.get(row.id) ?? null),
+    ...(phone === undefined ? {} : { phone }),
     now: context.now,
   });
 }
@@ -107,6 +115,7 @@ function contractConnection(
   const { marketplace } = view;
   const canConnect = context.canConnect(marketplace);
   const capabilities = capabilitiesOf(marketplace, row, context);
+  const execution = row === undefined ? undefined : describeExecution(row, context.execution);
   return {
     marketplace: view.marketplace,
     mode: view.mode,
@@ -131,6 +140,27 @@ function contractConnection(
             message: view.lastIssue.message,
             occurredAt: view.lastIssue.occurredAt.toISOString(),
           },
+        }),
+    ...(execution === undefined ? {} : { execution: executionView(execution) }),
+  };
+}
+
+/** The contract's `ConnectionExecution`, which Link accounts shows the same way. */
+export function executionView(execution: ExecutionView): NonNullable<Connection['execution']> {
+  return {
+    location: execution.location,
+    label: execution.label,
+    ...(execution.device === undefined
+      ? {}
+      : {
+          deviceInstallationId: execution.device.installationId,
+          deviceName: execution.device.name,
+        }),
+    ...(execution.waiting === undefined
+      ? {}
+      : {
+          waiting: execution.waiting.count,
+          waitingSince: execution.waiting.since.toISOString(),
         }),
   };
 }

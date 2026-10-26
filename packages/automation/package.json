@@ -12,7 +12,8 @@
     "fake-poshmark": "node --env-file-if-exists=../../.env src/poshmark/fake/cli.ts",
     "fake-mercari": "node --env-file-if-exists=../../.env src/mercari/fake/cli.ts",
     "fake-depop-site": "node --env-file-if-exists=../../.env src/depop/fake/cli.ts",
-    "fake-ebay-site": "node --env-file-if-exists=../../.env src/ebay/fake/cli.ts"
+    "fake-ebay-site": "node --env-file-if-exists=../../.env src/ebay/fake/cli.ts",
+    "phone:bundle": "node src/phone/bundle.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ecs": "^3.1156.0",
@@ -20,6 +21,7 @@
     "@listora/db": "*",
     "@listora/marketplaces": "*",
     "@listora/operations": "*",
+    "@listora/push": "*",
     "@listora/sales": "*",
     "@listora/shared": "*",
     "@listora/storage": "*",
@@ -31,6 +33,7 @@
   "devDependencies": {
     "@listora/testing": "*",
     "@types/pg": "^8.23.1",
+    "rolldown": "~1.2.14",
     "sharp": "^0.35.5"
   }
 }

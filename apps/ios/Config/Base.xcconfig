@@ -27,6 +27,10 @@ APP_GROUP_IDENTIFIER = group.$(BASE_BUNDLE_IDENTIFIER)$(BUNDLE_ID_SUFFIX)
 // register App Groups.
 SESSION_KEYCHAIN_GROUP = $(APP_GROUP_IDENTIFIER)
 
+// The APNs environment the app's push entitlement names (aps-environment): Apple's sandbox for
+// development builds; Staging and Prod override it with production.
+APS_ENVIRONMENT = development
+
 // The Cognito user pool client the app signs in with outside Dev (docs/features/auth.md): the
 // pool's region and the app client id, neither a secret. An empty client id means the build has
 // no sign-in (Settings says so); Dev signs in with the local API's dev driver instead.

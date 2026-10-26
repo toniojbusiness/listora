@@ -5,6 +5,7 @@ import {
   PostgresUsageStore,
 } from '@listora/ai';
 import { graphileAnalysisJobs } from '@listora/analysis';
+import { phoneWorkAdapters } from '@listora/automation';
 import { createOAuthClients, createTokenVault, sealOnly, SessionVault } from '@listora/connections';
 import { addJob, createDatabase, createPool } from '@listora/db';
 import {
@@ -13,6 +14,7 @@ import {
   EbayNotificationVerifier,
   EbayOAuthClient,
 } from '@listora/marketplaces';
+import { scaledRetryPolicy } from '@listora/operations';
 import { graphilePhotoJobs } from '@listora/photos';
 import { ebaySellerSubscriptionsJob } from '@listora/sales';
 import { createLogger, handleShutdownSignals } from '@listora/shared';
@@ -35,6 +37,9 @@ const tokenVault =
   config.marketplaces.tokenVault === undefined
     ? undefined
     : createTokenVault(config.marketplaces.tokenVault);
+
+const sessionVault =
+  tokenVault === undefined ? undefined : new SessionVault({ vault: tokenVault, logger });
 
 const app = buildApp({
   logger,
@@ -84,9 +89,20 @@ const app = buildApp({
         },
       }),
   // Linked sessions are sealed with the same vault; only the browser runner opens them.
-  marketplaceSessions: {
-    vault: tokenVault === undefined ? undefined : new SessionVault({ vault: tokenVault, logger }),
+  marketplaceSessions: { vault: sessionVault, profiles: config.automation.profiles },
+  // The marketplace work phones run (docs/features/phone-execution.md): the API runs each step
+  // with the phone's answers, under the same retry policy as the worker.
+  phone: {
+    db,
+    adapters: phoneWorkAdapters(config.automation, config.marketplaces, logger),
     profiles: config.automation.profiles,
+    ...(sessionVault === undefined ? {} : { vault: sessionVault }),
+    policy: scaledRetryPolicy(config.operationRetryDelayScale),
+    saleChecks: config.automation.saleChecks,
+    logger,
+    stepTimeoutMs: config.automation.stepTimeoutMs,
+    callTimeoutMs: config.automation.callTimeoutMs,
+    blockedRecheckMs: 5 * 60_000,
   },
   saleEmails: { ingest: config.emailIngest },
   pingDatabase: () => pingDatabase(pool),

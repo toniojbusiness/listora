@@ -68,6 +68,9 @@ enum ListingRequest: Equatable, Sendable {
 /// ``InventoryService`` over the generated client.
 struct APIInventoryService: InventoryService {
     let client: Client
+    /// Runs once the server queued a marketplace change: the phone takes at once the changes
+    /// that run on it (docs/features/phone-execution.md).
+    var queued: @MainActor @Sendable () -> Void = {}
 
     func items(_ query: InventoryQuery, cursor: String?) async throws(APIFailure) -> ItemPage {
         let search = query.search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -199,13 +202,16 @@ struct APIInventoryService: InventoryService {
     }
 
     func perform(_ action: ListingRequest, idempotencyKey key: String) async throws(APIFailure) -> Listing {
-        switch action {
+        let listing: Listing = switch action {
         case let .publish(listingID): try await publish(listingID: listingID, key: key)
-        case let .changePrice(listingID, price): try await changePrice(listingID: listingID, price: price, key: key)
+        case let .changePrice(listingID, price):
+            try await changePrice(listingID: listingID, price: price, key: key)
         case let .end(listingID, reason): try await end(listingID: listingID, reason: reason, key: key)
         case let .relist(listingID): try await relist(listingID: listingID, key: key)
         case let .verify(listingID): try await verify(listingID: listingID, key: key)
         }
+        await queued()
+        return listing
     }
 
     private func publish(listingID: String, key: String) async throws(APIFailure) -> Listing {
@@ -290,7 +296,10 @@ struct APIInventoryService: InventoryService {
             )
         }
         switch output {
-        case let .accepted(response): return try body { try response.body.json }
+        case let .accepted(response):
+            let operation = try body { try response.body.json }
+            await queued()
+            return operation
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .conflict(response): throw APIFailure(statusCode: 409, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)

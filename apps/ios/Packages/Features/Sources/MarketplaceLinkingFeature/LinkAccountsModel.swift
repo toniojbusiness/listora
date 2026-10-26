@@ -1,4 +1,5 @@
 import APIClient
+import Core
 import Foundation
 import Observation
 
@@ -43,7 +44,11 @@ public final class LinkAccountsModel {
     /// The marketplace the user asked to unlink, waiting for them to confirm.
     public var confirmingUnlink: MarketplaceLink?
 
+    /// This app installation, which the server knows the phone that links a marketplace by.
+    public let installationID: String
     private let service: any MarketplaceSessionService
+    private let sessions: (any MarketplaceSessionStore)?
+    private weak var phoneWork: (any PhoneWorkTrigger)?
     private let makeIdempotencyKey: @Sendable () -> String
     private let sleep: @Sendable (Duration) async throws -> Void
     private let pollInterval: Duration
@@ -56,9 +61,15 @@ public final class LinkAccountsModel {
     /// server decides every check within 15 minutes (it then says the check didn't finish), so
     /// the default polls a little longer than that and never leaves a row on Checking... while
     /// the server has an answer.
+    /// `sessions` keeps each sign-in's cookies on this phone too, which runs the marketplace when
+    /// it runs on the phone (docs/features/phone-execution.md); `phoneWork` runs the session's
+    /// check there at once.
     public init(
         service: any MarketplaceSessionService,
         saleEmails: SaleEmailsModel? = nil,
+        sessions: (any MarketplaceSessionStore)? = nil,
+        phoneWork: (any PhoneWorkTrigger)? = nil,
+        installationID: String = Installation.id(),
         makeIdempotencyKey: @escaping @Sendable () -> String = { UUID().uuidString },
         pollInterval: Duration = .seconds(3),
         maxPolls: Int = 320,
@@ -67,6 +78,9 @@ public final class LinkAccountsModel {
     ) {
         self.service = service
         self.saleEmails = saleEmails
+        self.sessions = sessions
+        self.phoneWork = phoneWork
+        self.installationID = installationID
         self.makeIdempotencyKey = makeIdempotencyKey
         self.pollInterval = pollInterval
         self.maxPolls = maxPolls
@@ -90,6 +104,15 @@ public final class LinkAccountsModel {
             for link in links where link.state == .checking {
                 group.addTask { await self.followCheck(link.marketplace) }
             }
+        }
+    }
+
+    /// Reads every marketplace's status again (the phone just ran work for one), leaving alone
+    /// the rows that are being linked, checked, or unlinked.
+    public func refresh() async {
+        guard loadState == .loaded, let fresh = try? await service.list() else { return }
+        for link in fresh where progress[link.marketplace] == nil {
+            replace(link)
         }
     }
 
@@ -134,6 +157,8 @@ public final class LinkAccountsModel {
             return
         }
         progress[marketplace] = nil
+        // The session this phone kept for it goes too.
+        sessions?.save([], for: marketplace)
         do {
             try await replace(service.get(marketplace))
         } catch {
@@ -171,6 +196,11 @@ public final class LinkAccountsModel {
             ))
             return
         }
+        // The phone keeps the session it signed in with: the marketplace may run here.
+        sessions?.save(
+            cookies.map(StoredCookie.init).filter { $0.belongs(to: link.cookieDomains) },
+            for: link.marketplace,
+        )
         let attempt = (cookies: captured, key: makeIdempotencyKey())
         unsent[link.marketplace] = attempt
         await send(link.marketplace, attempt)
@@ -188,6 +218,9 @@ public final class LinkAccountsModel {
             return
         }
         progress[link.marketplace] = nil
+        if link.runsOn?.phone == true {
+            phoneWork?.runPhoneWork(.userAction)
+        }
         do {
             try await replace(service.get(link.marketplace))
         } catch {
@@ -206,11 +239,22 @@ public final class LinkAccountsModel {
 
     private func send(_ marketplace: String, _ attempt: (cookies: [CapturedCookie], key: String)) async {
         progress[marketplace] = .sending
+        // The link names this phone, which Listora must know first.
+        await phoneWork?.prepareForWork()
         do {
-            let updated = try await service.link(marketplace, cookies: attempt.cookies, idempotencyKey: attempt.key)
+            let updated = try await service.link(
+                marketplace,
+                cookies: attempt.cookies,
+                installationID: installationID,
+                idempotencyKey: attempt.key,
+            )
             unsent[marketplace] = nil
             progress[marketplace] = nil
             replace(updated)
+            // A marketplace that runs here is checked here: the phone takes the check now.
+            if updated.runsOn?.phone == true {
+                phoneWork?.runPhoneWork(.userAction)
+            }
         } catch {
             progress[marketplace] = .failed(error)
             return
