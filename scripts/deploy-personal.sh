@@ -194,15 +194,23 @@ else
     done
     info "zones: $zones"
   fi
+  # All at once (each call takes a second or two), then checked in order.
+  pids=()
   for name in "${stacks[@]}"; do
+    aws_ cloudformation describe-stacks --stack-name "listora-$ENVIRONMENT-$name" --output json \
+      >"$workdir/stack-$name.json" 2>"$workdir/stack-$name.err" &
+    pids+=("$!")
+  done
+  for index in "${!stacks[@]}"; do
+    name=${stacks[$index]}
     stack="listora-$ENVIRONMENT-$name"
-    if ! described=$(aws_ cloudformation describe-stacks --stack-name "$stack" --output json 2>"$workdir/err"); then
-      grep -q 'does not exist' "$workdir/err" || fail "cannot describe $stack: $(cat "$workdir/err")"
+    if ! wait "${pids[$index]}"; then
+      grep -q 'does not exist' "$workdir/stack-$name.err" || fail "cannot describe $stack: $(cat "$workdir/stack-$name.err")"
       [[ "$code_only" == false ]] ||
         fail "$stack does not exist yet, so --code-only has nothing to update; deploy in full (without --code-only)"
       continue
     fi
-    status=$(jq -r '.Stacks[0].StackStatus' <<<"$described")
+    status=$(jq -r '.Stacks[0].StackStatus' "$workdir/stack-$name.json")
     case "$status" in
       *_IN_PROGRESS) fail "$stack is $status; wait for it to finish, then run this again" ;;
       ROLLBACK_COMPLETE | *_FAILED)
