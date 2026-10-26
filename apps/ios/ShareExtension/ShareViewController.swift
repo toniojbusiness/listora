@@ -53,7 +53,7 @@ final class ShareViewController: UIViewController {
         // The session the app signed in with, from the App Group keychain, renewed with the same
         // Cognito client as the app's (AppDependencies) when its token expires.
         let accessTokens = AccessTokenStore(
-            storage: KeychainAccessGrantStorage.session(appGroup: configuration.appGroupIdentifier),
+            storage: KeychainAccessGrantStorage.session(accessGroup: configuration.sessionKeychainGroup),
             refresher: configuration.cognito.map { CognitoSignInClient(region: $0.region, clientID: $0.clientID) },
         )
         let api = APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens)

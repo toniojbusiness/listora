@@ -7,11 +7,13 @@ struct AppConfigurationTests {
         environment: String? = "dev",
         url: String? = "http://127.0.0.1:3000",
         appGroup: String? = "group.com.listora.app.dev",
+        sessionKeychainGroup: String? = "group.com.listora.app.dev",
     ) -> [String: Any] {
         var info: [String: Any] = [:]
         info[AppConfiguration.InfoKey.environment] = environment
         info[AppConfiguration.InfoKey.apiBaseURL] = url
         info[AppConfiguration.InfoKey.appGroup] = appGroup
+        info[AppConfiguration.InfoKey.sessionKeychainGroup] = sessionKeychainGroup
         return info
     }
 
@@ -21,6 +23,29 @@ struct AppConfigurationTests {
         #expect(config.environment == .dev)
         #expect(config.apiBaseURL == URL(string: "http://127.0.0.1:3000"))
         #expect(config.appGroupIdentifier == "group.com.listora.app.dev")
+        #expect(config.sessionKeychainGroup == "group.com.listora.app.dev")
+    }
+
+    @Test
+    func `reads the session's keychain group, which a personal device build sets apart from the App Group`() throws {
+        let config = try AppConfiguration(infoDictionary: info(
+            environment: "prod",
+            url: "https://api.example.com",
+            appGroup: "group.com.example.listora",
+            sessionKeychainGroup: "ABCDE12345.com.example.listora.session",
+        ))
+        #expect(config.appGroupIdentifier == "group.com.example.listora")
+        #expect(config.sessionKeychainGroup == "ABCDE12345.com.example.listora.session")
+    }
+
+    @Test
+    func `requires the session's keychain group`() {
+        #expect(throws: ConfigurationError.missing(key: "ListoraSessionKeychainGroup")) {
+            try AppConfiguration(infoDictionary: info(sessionKeychainGroup: nil))
+        }
+        #expect(throws: ConfigurationError.missing(key: "ListoraSessionKeychainGroup")) {
+            try AppConfiguration(infoDictionary: info(sessionKeychainGroup: "$(SESSION_KEYCHAIN_GROUP)"))
+        }
     }
 
     @Test

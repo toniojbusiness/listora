@@ -38,6 +38,7 @@ struct AppDependenciesTests {
             AppConfiguration.InfoKey.environment: environment,
             AppConfiguration.InfoKey.apiBaseURL: url,
             AppConfiguration.InfoKey.appGroup: "group.com.listora.app.staging",
+            AppConfiguration.InfoKey.sessionKeychainGroup: "group.com.listora.app.staging",
             AppConfiguration.InfoKey.cognitoRegion: "us-east-1",
             AppConfiguration.InfoKey.cognitoClientID: cognitoClientID,
             "CFBundleShortVersionString": "1.0",
