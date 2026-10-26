@@ -12,6 +12,7 @@ import { createLogger } from '@listora/shared';
 
 import { fakeSiteProfile, testRunner } from '../test-support.ts';
 import { PlaywrightBrowserRunner } from './browser-runner.ts';
+import { PageChangedError } from './errors.ts';
 import type { PlaywrightSession } from './session.ts';
 import type { AutomationSession } from './types.ts';
 
@@ -330,6 +331,55 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
       await second.close();
       const broken = lines.filter((line) => line['msg'] === 'automation script stopped').at(-1);
       expect(broken?.['network']).toEqual({ errors: { [`${new URL(site.url).origin} 500`]: 1 } });
+    } finally {
+      await logged.close();
+    }
+  });
+
+  it('logs what a page it no longer understands has instead, structure only', async () => {
+    // So the one page module that names the missing part can be fixed against the real page.
+    const lines: Record<string, unknown>[] = [];
+    const logged = new PlaywrightBrowserRunner({
+      logger: createLogger({
+        service: 'automation-test',
+        level: 'warn',
+        destination: {
+          write: (line: string) => lines.push(JSON.parse(line) as Record<string, unknown>),
+        },
+      }),
+      screenshots,
+      stepTimeoutMs: 3_000,
+    });
+    try {
+      const seller = `seller${String(Date.now())}`;
+      const browser = await logged.openSession(
+        { profile, cookies: [site.issueSession(seller)], accountId: 'acct', runId: 'run-changed' },
+        signal(),
+      );
+      const result = await browser.read(
+        'changed page',
+        (step) =>
+          step('open the account', { mutates: false }, async (page) => {
+            await page.goto(`${site.url}/`);
+            if (!(await page.exists('[data-testid="MyPage"]'))) {
+              throw new PageChangedError('the account page has no account section');
+            }
+          }),
+        signal(),
+      );
+      await browser.close();
+      expect(result).toMatchObject({ ok: false, failure: { code: 'element_missing' } });
+      const stopped = lines.find((line) => line['msg'] === 'automation script stopped');
+      expect(stopped?.['evidence']).toEqual({
+        path: '/',
+        title: 'Your account',
+        testIds: [],
+        links: [],
+        requests: [],
+        scripts: [],
+        data: [],
+      });
+      expect(JSON.stringify(lines)).not.toContain(seller);
     } finally {
       await logged.close();
     }

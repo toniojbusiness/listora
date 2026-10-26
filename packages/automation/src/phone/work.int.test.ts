@@ -16,6 +16,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { LocalTokenVault, SessionVault } from '@listora/connections';
 import { createInventoryItem, type Db } from '@listora/db';
+import { createLogger } from '@listora/shared';
 import { createMigratedDatabase, insertAccount, type MigratedDatabase } from '@listora/db/testing';
 import { createMarketplaceAdapters, type AdapterLookup } from '@listora/marketplaces';
 import { sampleListingContent } from '@listora/marketplaces/testing';
@@ -301,6 +302,43 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     // A device that runs no marketplace asks only rarely.
     await setExecutionLocation(db, { accountId, connectionId }, 'cloud');
     expect(await nextPhoneClaimSeconds(db, device)).toBe(PHONE_UNUSED_CLAIM_SECONDS);
+  });
+
+  it("logs what a page the phone's script no longer understands has instead, structure only", async () => {
+    const lines: Record<string, unknown>[] = [];
+    const quiet = phone;
+    phone = {
+      ...quiet,
+      logger: createLogger({
+        service: 'phone-test',
+        level: 'warn',
+        destination: {
+          write: (line: string) => lines.push(JSON.parse(line) as Record<string, unknown>),
+        },
+      }),
+    };
+    try {
+      site.inject({ action: 'health', fault: { type: 'redesigned' } });
+      await runPhone();
+    } finally {
+      phone = quiet;
+    }
+    const stopped = lines.find(
+      (line) => line['msg'] === 'automation script stopped' && line['code'] === 'element_missing',
+    );
+    expect(stopped).toMatchObject({
+      host: 'phone',
+      marketplace: 'depop',
+      evidence: { path: expect.any(String) as string, testIds: expect.any(Array) as string[] },
+    });
+    expect(JSON.stringify(lines)).not.toContain(`seller-${accountId}`);
+    // Only the log line has it: the run's transcript keeps the answer without it.
+    const kept = await db
+      .selectFrom('phone_work')
+      .select('transcript')
+      .where('account_id', '=', accountId)
+      .execute();
+    expect(JSON.stringify(kept)).not.toContain('evidence');
   });
 
   it('publishes and delists on the phone, each confirmed by a read-back there', async () => {

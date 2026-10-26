@@ -85,6 +85,15 @@ from the app
   `PageChangedError` when a page's data is not what it reads, which ends the run as
   `element_missing`). The fake site's adapter (`fake-site/`) is the reference and passes the
   shared conformance suite in a real browser.
+- **When a page changes** (`safety/evidence.ts`). A run that ends as `element_missing` also logs
+  what the page has instead, as structure only (`evidence` on `automation script stopped`, from
+  the runner or, through the server, from the phone): the path and title reduced to structural
+  words (`/closet/<x>`), the page's test ids, its links to the seller's own pages and their ids,
+  its own API calls on the marketplace's domains (with a GraphQL operation's name), its data
+  scripts, and a skeleton of its data globals (`__INITIAL_STATE__.auth.isUserLoggedIn: true`,
+  key paths and value types only). No username, name, id, or typed value survives. It is never
+  stored. It is how a page module gets fixed against a real page that only a seller's own
+  session can see.
 - **Poshmark** (`poshmark/`, [poshmark.md](poshmark.md)) is automated on poshmark.com, or on the
   fake Poshmark with `FAKE_POSHMARK_URL`. With only `FAKE_AUTOMATION_SITE_URL` set, development
   drives the fake site instead, so a development setup never drives a real marketplace.

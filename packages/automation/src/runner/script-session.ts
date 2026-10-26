@@ -27,6 +27,12 @@ import {
   type PageSignals,
 } from '../safety/challenges.ts';
 import type { Pacing } from '../safety/pacing.ts';
+import {
+  DATA_GLOBALS,
+  EVIDENCE_SCRIPT,
+  redactEvidence,
+  type PageEvidence,
+} from '../safety/evidence.ts';
 import { originForLog, sanitizeMessage } from '../safety/redaction.ts';
 import { PageChangedError } from './errors.ts';
 import type {
@@ -126,6 +132,8 @@ export interface PageBackend {
   pageData(name: string): Promise<unknown>;
   /** Evaluates `inspectionScript`'s source in the page. */
   inspect(script: string): Promise<InspectedPage>;
+  /** Evaluates a read-only page script of Listora's own (`EVIDENCE_SCRIPT`) and returns its value. */
+  read(script: string): Promise<unknown>;
   /**
    * A redacted screenshot of the page now, stored where the host keeps them, and its key; `null`
    * when there is none (no page, a page off the marketplace, or a host without screenshots).
@@ -176,6 +184,9 @@ class StepError extends Error {
 }
 
 class StepTimeoutError extends Error {}
+
+/** How long a page Listora no longer understands settles before its evidence is read. */
+const EVIDENCE_SETTLE_MS = 3_000;
 
 /** Bounds of what an inspection reads of the page. */
 const INSPECTED_TEXT_LENGTH = 4_000;
@@ -267,6 +278,9 @@ export class ScriptSession implements AutomationSession {
           failure: failure.kind,
           ...(failure.kind === 'challenge' ? { challenge: failure.challenge } : {}),
           ...(failure.kind === 'error' ? { code: failure.code, reason: failure.message } : {}),
+          ...(failure.kind === 'error' && failure.evidence !== undefined
+            ? { evidence: failure.evidence }
+            : {}),
           origin: originForLog(this.#safeUrl()),
           mutated,
           ...(this.#deps.networkSummary === undefined
@@ -356,13 +370,18 @@ export class ScriptSession implements AutomationSession {
     }
     if (thrown instanceof StepError) {
       const screenshotKey = thrown.code === 'aborted' ? null : await this.#screenshot();
-      return { ...error(step, thrown.code, thrown.message), screenshotKey };
+      return {
+        ...error(step, thrown.code, thrown.message),
+        screenshotKey,
+        ...(thrown.code === 'element_missing' ? await this.#evidence() : {}),
+      };
     }
     if (signal.aborted) return error(step, 'aborted', 'the run was stopped');
     if (thrown instanceof PageChangedError) {
       return {
         ...error(step, 'element_missing', sanitizeMessage(thrown.message, this.#typed)),
         screenshotKey: await this.#screenshot(),
+        ...(await this.#evidence()),
       };
     }
     const message = thrown instanceof Error ? thrown.message : String(thrown);
@@ -379,6 +398,28 @@ export class ScriptSession implements AutomationSession {
 
   #screenshot(): Promise<string | null> {
     return this.#backend.screenshot(this.#typed).catch(() => null);
+  }
+
+  /** What the page has instead of what the script expected, structure only; none if unreadable. */
+  async #evidence(): Promise<{ evidence?: PageEvidence }> {
+    try {
+      // A page its own scripts are still drawing shows what they drew by then, which also tells
+      // whether waiting for the missing part would have found it.
+      await new Promise((resolve) => setTimeout(resolve, EVIDENCE_SETTLE_MS));
+      const raw = await this.#backend.read(EVIDENCE_SCRIPT);
+      const data: Record<string, unknown> = {};
+      for (const name of DATA_GLOBALS) {
+        const value = await this.#backend.pageData(name).catch(() => null);
+        if (value !== null) data[name] = value;
+      }
+      const evidence = redactEvidence(raw, data, {
+        cookieDomains: this.#deps.profile.cookieDomains,
+        typed: this.#typed,
+      });
+      return evidence === null ? {} : { evidence };
+    } catch {
+      return {};
+    }
   }
 
   #safeUrl(): string {

@@ -256,6 +256,10 @@ class PlaywrightBackend implements PageBackend {
     return element(this.#page.evaluate<InspectedPage>(script));
   }
 
+  read(script: string): Promise<unknown> {
+    return element(this.#page.evaluate<unknown>(script));
+  }
+
   async screenshot(typed: ReadonlySet<string>): Promise<string | null> {
     if (this.#page.isClosed()) return null;
     const url = URL.canParse(this.#page.url()) ? new URL(this.#page.url()) : null;

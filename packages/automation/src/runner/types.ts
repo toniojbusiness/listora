@@ -9,6 +9,7 @@ import type { ChallengeKind, Marketplace } from '@listora/db';
 import type { SessionCookie } from '@listora/connections';
 
 import type { AutomationProfile } from '../profiles.ts';
+import type { PageEvidence } from '../safety/evidence.ts';
 
 /** A file a script uploads through a file input (a listing photo). */
 export interface UploadFile {
@@ -87,6 +88,11 @@ export type ScriptFailure =
       message: string;
       retryAfterMs: number | null;
       screenshotKey: string | null;
+      /**
+       * For a page the script no longer understands (`element_missing`): what the page has
+       * instead, structure only (safety/evidence.ts), for the log line; never stored.
+       */
+      evidence?: PageEvidence;
     };
 
 export type ScriptErrorCode =
