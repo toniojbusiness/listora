@@ -76,6 +76,36 @@ describe('loadAutomationSettings', () => {
     ]);
   });
 
+  it('keeps the marketplaces that refuse the cloud off it, unless configured back', () => {
+    const defaults = loadAutomationSettings({});
+    expect(defaults.profiles.poshmark).toMatchObject({ runsOn: 'phone', cloudAllowed: false });
+    expect(defaults.profiles.mercari).toMatchObject({ runsOn: 'phone', cloudAllowed: false });
+    expect(defaults.profiles.depop).toMatchObject({ runsOn: 'phone', cloudAllowed: false });
+    expect(defaults.profiles.ebay).toMatchObject({ runsOn: 'cloud', cloudAllowed: true });
+
+    const reopened = loadAutomationSettings({
+      AUTOMATION_DEPOP_CLOUD_ALLOWED: 'true',
+      AUTOMATION_DEPOP_RUNS_ON: 'cloud',
+    });
+    expect(reopened.profiles.depop).toMatchObject({ runsOn: 'cloud', cloudAllowed: true });
+  });
+
+  it('refuses a cloud default for a marketplace the cloud is not allowed for', () => {
+    expect(() =>
+      loadAutomationSettings({
+        AUTOMATION_MERCARI_RUNS_ON: 'cloud',
+        AUTOMATION_EBAY_CLOUD_ALLOWED: 'yes',
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        issues: [
+          'AUTOMATION_MERCARI_RUNS_ON can be cloud only when AUTOMATION_MERCARI_CLOUD_ALLOWED is true',
+          'AUTOMATION_EBAY_CLOUD_ALLOWED must be true or false',
+        ],
+      }),
+    );
+  });
+
   it('points every automated marketplace at the fake site, local only', () => {
     const settings = loadAutomationSettings({ FAKE_AUTOMATION_SITE_URL: 'http://127.0.0.1:4400' });
     expect(settings.fakeSiteUrl).toBe('http://127.0.0.1:4400');

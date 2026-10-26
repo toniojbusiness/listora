@@ -10570,7 +10570,9 @@ public enum Operations {
     /// Moves the connection's automated steps to Listora's cloud browser runner or to the
     /// iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
     /// moves to the cloud with it; a run the phone is in the middle of finishes there.
-    /// `409 invalid_state_transition` for a marketplace that is not linked by signing in.
+    /// `409 invalid_state_transition` for a marketplace that is not linked by signing in;
+    /// `409 marketplace_action_unavailable` for a move to the cloud of a marketplace that
+    /// refuses Listora's cloud servers (`execution.cloudAllowed` false).
     ///
     ///
     /// - Remark: HTTP `PUT /v1/connections/{marketplace}/execution`.

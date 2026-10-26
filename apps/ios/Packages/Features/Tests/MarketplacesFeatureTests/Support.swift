@@ -3,6 +3,37 @@ import Foundation
 import ListoraAPI
 import MarketplacesFeature
 
+/// The phone the tests' Depop runs on, unless `device` says another.
+let depopPhone = "0199a1f0-0000-7000-8000-0000000000d1"
+let depopCloudBlocked = "Depop blocks cloud servers, so Listora runs it from your phone"
+
+/// A Depop connection linked by signing in, on a phone or in the cloud.
+func depopConnection(
+    onPhone: Bool,
+    waiting: Int = 0,
+    cloudAllowed: Bool = true,
+    device: String = depopPhone,
+) throws -> Components.Schemas.Connection {
+    let cloud: [String: Any] = cloudAllowed
+        ? ["cloudAllowed": true]
+        : ["cloudAllowed": false, "cloudBlockedReason": depopCloudBlocked]
+    let place: [String: Any] = onPhone
+        ? [
+            "location": "phone", "label": "Runs on your iPhone", "deviceInstallationId": device,
+            "deviceName": "Sam's iPhone", "waiting": waiting,
+        ]
+        : ["location": "cloud", "label": "Runs in Listora's cloud"]
+    return try connection(
+        marketplace: "depop",
+        mode: "assisted",
+        status: "connected",
+        tone: "success",
+        label: "Linked",
+        connect: "none",
+        execution: place.merging(cloud) { $1 },
+    )
+}
+
 /// A connection as the server sends it, with the parts a test cares about.
 func connection(
     marketplace: String = "ebay",

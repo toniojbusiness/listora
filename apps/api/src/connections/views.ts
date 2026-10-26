@@ -12,6 +12,7 @@ import {
   summarizeConnectionHealth,
   type AuthorizationFailureCode,
   type AuthorizationRow,
+  type CloudAccess,
   type ConnectionRow,
   type ConnectionView,
   type ExecutionState,
@@ -32,6 +33,8 @@ export interface ConnectionViewContext {
   sessionChecks: ReadonlyMap<string, SessionCheckState>;
   /** The account's devices and what waits for its phones: where automated steps run. */
   execution: ExecutionState;
+  /** Whether each marketplace may run in Listora's cloud (`cloudAccess`). */
+  cloudAccess: (marketplace: Marketplace) => CloudAccess;
   now: Date;
 }
 
@@ -115,7 +118,10 @@ function contractConnection(
   const { marketplace } = view;
   const canConnect = context.canConnect(marketplace);
   const capabilities = capabilitiesOf(marketplace, row, context);
-  const execution = row === undefined ? undefined : describeExecution(row, context.execution);
+  const execution =
+    row === undefined
+      ? undefined
+      : describeExecution(row, context.execution, context.cloudAccess(marketplace));
   return {
     marketplace: view.marketplace,
     mode: view.mode,
@@ -162,6 +168,8 @@ export function executionView(execution: ExecutionView): NonNullable<Connection[
           waiting: execution.waiting.count,
           waitingSince: execution.waiting.since.toISOString(),
         }),
+    cloudAllowed: execution.cloud.allowed,
+    ...(execution.cloud.allowed ? {} : { cloudBlockedReason: execution.cloud.reason }),
   };
 }
 

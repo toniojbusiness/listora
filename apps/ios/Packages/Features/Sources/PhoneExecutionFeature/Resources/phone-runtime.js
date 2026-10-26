@@ -7920,7 +7920,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				challengeSelectors: []
 			},
 			privateSelectors: [],
-			runsOn: "phone"
+			runsOn: "phone",
+			cloudAllowed: false
 		},
 		mercari: {
 			marketplace: "mercari",
@@ -7932,7 +7933,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			limits: DEFAULT_LIMITS,
 			challenges: MERCARI_CHALLENGE_SIGNS,
 			privateSelectors: MERCARI_PRIVATE_SELECTORS,
-			runsOn: "phone"
+			runsOn: "phone",
+			cloudAllowed: false
 		},
 		depop: {
 			marketplace: "depop",
@@ -7944,7 +7946,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			limits: DEFAULT_LIMITS,
 			challenges: DEPOP_CHALLENGE_SIGNS,
 			privateSelectors: DEPOP_PRIVATE_SELECTORS,
-			runsOn: "phone"
+			runsOn: "phone",
+			cloudAllowed: false
 		},
 		ebay: {
 			marketplace: "ebay",
@@ -7960,7 +7963,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			limits: DEFAULT_LIMITS,
 			challenges: EBAY_CHALLENGE_SIGNS,
 			privateSelectors: EBAY_PRIVATE_SELECTORS,
-			runsOn: "cloud"
+			runsOn: "cloud",
+			cloudAllowed: true
 		}
 	};
 	/** The built-in profile of a marketplace; settings.ts applies the configured pacing and limits. */

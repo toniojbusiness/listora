@@ -1,4 +1,10 @@
-import { requestSessionRecheck, setExecutionLocation } from '@listora/automation';
+import {
+  cloudAccess,
+  requestSessionRecheck,
+  setExecutionLocation,
+  type AutomatedMarketplace,
+  type AutomationProfile,
+} from '@listora/automation';
 import {
   accountConnections,
   accountExecutionState,
@@ -59,6 +65,8 @@ export interface ConnectionsDependencies {
 
 export interface ConnectionRouteDependencies extends RouteDependencies, ConnectionsDependencies {
   now: () => Date;
+  /** Each automated marketplace's profile: whether it may run in Listora's cloud. */
+  marketplaceSessions: { profiles: Readonly<Record<AutomatedMarketplace, AutomationProfile>> };
   /** Sale email forwarding, which the health summary reports on. */
   saleEmails: SaleEmailsDependencies;
 }
@@ -78,6 +86,8 @@ export function registerConnectionRoutes(
 ): void {
   const canConnect = (marketplace: Marketplace): boolean =>
     deps.oauth[marketplace] !== undefined && deps.sealer !== undefined;
+  const cloudAccessOf = (marketplace: Marketplace) =>
+    cloudAccess(deps.marketplaceSessions.profiles, marketplace);
   const context = (
     state: { sessionChecks: ReadonlyMap<string, SessionCheckState>; execution: ExecutionState },
     now = deps.now(),
@@ -86,6 +96,7 @@ export function registerConnectionRoutes(
     canConnect,
     sessionChecks: state.sessionChecks,
     execution: state.execution,
+    cloudAccess: cloudAccessOf,
     now,
   });
 
@@ -239,6 +250,10 @@ export function registerConnectionRoutes(
         'invalid_state_transition',
         `${name} isn't linked by signing in, so there is nothing to run on your iPhone.`,
       );
+    }
+    const cloud = cloudAccessOf(params.marketplace);
+    if (body.location === 'cloud' && !cloud.allowed) {
+      throw new ApiError('marketplace_action_unavailable', `${cloud.reason}.`);
     }
     await setExecutionLocation(
       db,

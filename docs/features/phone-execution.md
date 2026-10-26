@@ -4,8 +4,8 @@ Some marketplaces refuse Listora's cloud browser: Depop blocks the runner's addr
 shows it a bot check, and Poshmark serves its signed-in pages without their data ("Something
 went wrong"). Relinking cannot fix any of that. So their automated steps run in the iPhone app
 instead, in the seller's own session, on their own device and network. Only eBay stays in the
-cloud, on its API. Each connection says where its automated steps run, and any marketplace can
-move back to the cloud.
+cloud, on its API. Each connection says where its automated steps run, and a marketplace can
+move back to the cloud once configuration allows the cloud for it again.
 
 The server keeps one operation queue and decides every outcome. The phone only runs the same
 marketplace scripts the browser runner runs ([automation.md](automation.md)) and reports what
@@ -32,16 +32,24 @@ Code:
   `AUTOMATION_<MARKETPLACE>_RUNS_ON`). eBay automation and every API or assisted step stay where
   they always run. `PUT /v1/connections/{marketplace}/execution` moves one marketplace, and the work that
   waits (and no phone runs at the moment) moves with it.
+- **Whether the cloud is allowed.** Each profile's `cloudAllowed` says whether a marketplace may
+  run in the cloud at all: false for Poshmark, Mercari, and Depop, which refuse the cloud runner,
+  true for eBay (`AUTOMATION_<MARKETPLACE>_CLOUD_ALLOWED` changes it, so a marketplace can go back
+  to the cloud without an app update). The connection's `execution.cloudAllowed` carries it, with
+  `cloudBlockedReason` ("Depop blocks cloud servers, so Listora runs it from your phone") while
+  it is false. The app then offers no "Run in the cloud" and shows that reason, and the API
+  refuses a move to the cloud with `409 marketplace_action_unavailable`. A connection already in
+  the cloud can still move to the phone.
 - **Status from one source.** The connection's `execution` (in `listConnections`,
   `getConnection`, `listMarketplaceSessions`, and the health summary) says where it runs
   ("Runs on your iPhone", the device's name, how many changes wait and since when), and the
   status display says what the phone found: `Linked` (runs from your iPhone), `Checking on your
 iPhone...` while its check waits for the phone (saying so when it tries again after an attempt
   that didn't get through), or `Link on your iPhone` while no phone holds a session for it
-  (whatever the cloud found before). A marketplace that runs on the phone never
-  asks the seller to sign in again unless the phone's own check found the session signed out. Link
-  accounts shows "Runs on this iPhone" for this installation's marketplaces, and Marketplaces
-  shows where each one runs with a button to move it.
+  (whatever the cloud found before). A marketplace that runs on the phone never asks the seller
+  to sign in again unless the phone's own check found the session signed out. Link
+  accounts and Marketplaces show "Runs on this iPhone" for this installation's marketplaces, and
+  Marketplaces has a button to move each one where the cloud is allowed.
 - **Linking.** The app registers its device (`registerDevice`, keyed by an installation id kept
   in the Keychain) before it sends a sign-in, and the link names that installation. The phone
   keeps the sign-in's own cookies in its Keychain (readable after first unlock, never synced),
@@ -147,10 +155,12 @@ ends. Signed out, it runs nothing.
 - **Server** (`phone/work.int.test.ts`, `apps/api/src/phone/phone.int.test.ts`): routing per
   connection, the lifecycle (waiting for the phone, running, verified, failed, waiting too
   long), a check tried again once due and when the phone is told to claim, lapsed leases,
-  idempotent answers, the runtime version.
+  idempotent answers, the runtime version, and the refused move of a marketplace that blocks
+  the cloud.
 - **App, unit** (`PhoneExecutionFeatureTests`): the runner's loop, one run at a time, retried
   answers, registration, and claiming again when the server says while the app is open; Link
-  accounts and Marketplaces show where each marketplace runs and trigger the phone.
+  accounts and Marketplaces show where each marketplace runs and trigger the phone; Marketplaces
+  offers the cloud only where the server allows it (`MarketplaceExecutionTests`).
 - **App, end to end** (`PhoneExecutionUITests`, on the local stack): linking Depop on the fake
   Depop site and its check on the phone; a bot check handed to the seller, completed, and the
   run going on; a listing published and ended from the phone, waiting on the phone while the
