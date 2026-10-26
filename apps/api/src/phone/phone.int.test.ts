@@ -10,7 +10,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { PHONE_RUNTIME_VERSION } from '@listora/automation';
+import { PHONE_RUNTIME_VERSION, PHONE_UNUSED_CLAIM_SECONDS } from '@listora/automation';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestApi, type TestApi } from '../test-support.ts';
@@ -152,7 +152,10 @@ describe('the phone API (real Postgres)', () => {
     expect(outdated.error.code).toBe('app_update_required');
     const otherPhone = randomUUID();
     await register({ name: 'iPad', platform: 'ios' }, otherPhone);
-    expect((await claim(PHONE_RUNTIME_VERSION, otherPhone)).body).toEqual({});
+    // Nothing runs on it, so it is told to look again only rarely.
+    expect((await claim(PHONE_RUNTIME_VERSION, otherPhone)).body).toEqual({
+      nextClaimInSeconds: PHONE_UNUSED_CLAIM_SECONDS,
+    });
   });
 
   it('asks to link on the phone a marketplace no phone holds a session for', async () => {
@@ -241,7 +244,8 @@ describe('a marketplace configured back to the cloud (real Postgres)', () => {
       token,
       body: { installationId, runtimeVersion: PHONE_RUNTIME_VERSION },
     });
-    expect(claimed.body).toEqual({});
+    // Nothing runs on the phone now, so it is told to look again only rarely.
+    expect(claimed.body).toEqual({ nextClaimInSeconds: PHONE_UNUSED_CLAIM_SECONDS });
     const back = await api.call('setConnectionExecution', {
       token,
       params: { marketplace: 'depop' },

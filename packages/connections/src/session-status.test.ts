@@ -15,6 +15,7 @@ const LINKED_AT = new Date(NOW.getTime() - 60_000);
 function check(overrides: Partial<SessionCheckState> = {}): SessionCheckState {
   return {
     status: 'pending',
+    attempts: 0,
     failureCode: null,
     failureMessage: null,
     requestedAt: LINKED_AT,
@@ -27,6 +28,7 @@ function session(
   sessionCheck: SessionCheckState | null,
   connection: Partial<AutomationSessionInput['connection']> = {},
   now = NOW,
+  phone?: AutomationSessionInput['phone'],
 ) {
   return describeAutomationSession({
     marketplace: 'poshmark',
@@ -41,6 +43,7 @@ function session(
     },
     check: sessionCheck,
     now,
+    ...(phone === undefined ? {} : { phone }),
   });
 }
 
@@ -61,6 +64,28 @@ describe('describeAutomationSession', () => {
       state: 'linked',
       statusDisplay: { tone: 'success', label: 'Linked', detail: 'Signed in as closet_queen.' },
       canCheck: false,
+    });
+  });
+
+  it('says when it waits for the phone, and when it tries again after an attempt that failed', () => {
+    const waiting = { linked: true, checkWaiting: true };
+    expect(session(check(), {}, NOW, waiting).statusDisplay).toEqual({
+      tone: 'checking',
+      label: 'Checking on your iPhone...',
+      detail: 'Open Listora on your iPhone to finish checking your Poshmark sign-in.',
+    });
+    const retrying = {
+      tone: 'checking',
+      detail:
+        "Listora couldn't check your Poshmark sign-in on its last try and tries again in a moment.",
+    };
+    expect(session(check({ attempts: 1 }), {}, NOW, waiting).statusDisplay).toEqual({
+      ...retrying,
+      label: 'Checking on your iPhone...',
+    });
+    expect(session(check({ attempts: 2 })).statusDisplay).toEqual({
+      ...retrying,
+      label: 'Checking...',
     });
   });
 

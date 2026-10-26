@@ -8,6 +8,7 @@ import type { PhoneRunResult } from '@listora/api-contract';
 import {
   answerPhoneCall,
   claimPhoneRun,
+  nextPhoneClaimSeconds,
   PhoneCallConflictError,
   PhoneRunGoneError,
   PhoneRuntimeMismatchError,
@@ -42,7 +43,14 @@ export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDepend
         deviceId: device.id,
         runtimeVersion: body.runtimeVersion,
       });
-      return { status: 200, body: runResult(run) };
+      const result = runResult(run);
+      if (result.run !== undefined) return { status: 200, body: result };
+      // Nothing to run now: the app asks again then, while it is open.
+      const nextClaimInSeconds = await nextPhoneClaimSeconds(db, {
+        accountId: tenant.accountId,
+        deviceId: device.id,
+      });
+      return { status: 200, body: { nextClaimInSeconds } };
     } catch (error) {
       throw apiError(error);
     }

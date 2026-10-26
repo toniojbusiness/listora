@@ -15,6 +15,7 @@ import type { Pacing } from '../safety/pacing.ts';
 import { sanitizedError, SCREENSHOT_MASK_SELECTORS } from '../safety/redaction.ts';
 import {
   PageBackendError,
+  parsePageData,
   ScriptSession,
   type InspectedPage,
   type PageBackend,
@@ -238,6 +239,17 @@ class PlaywrightBackend implements PageBackend {
           name,
         ),
     );
+  }
+
+  async pageData(name: string): Promise<unknown> {
+    // `page.evaluate` runs in the page's own world, where its scripts keep their data.
+    const text = await element(
+      this.#page.evaluate((key) => {
+        const value: unknown = (globalThis as Record<string, unknown>)[key];
+        return value === undefined ? null : JSON.stringify(value);
+      }, name),
+    );
+    return parsePageData(text);
   }
 
   inspect(script: string): Promise<InspectedPage> {

@@ -5,10 +5,11 @@
  * two screens always say the same thing about the same session.
  *
  * A session is `linked` only after the browser runner's check of it passed (`session_check`).
- * Until then it is `checking`, for at most `SESSION_CHECK_DEADLINE_MS`. A check that failed,
- * that has not finished by then (a runner that never started, a lost job), or that was never
- * asked for is `not_confirmed`, with the reason, and the seller can check the same session
- * again without signing in (`requestConnectionCheck`). A session the marketplace rejected, or
+ * Until then it is `checking`, for at most `SESSION_CHECK_DEADLINE_MS`, and says so while it
+ * tries again after an attempt that didn't get through. A check that failed, that has not
+ * finished by then (a runner that never started, a lost job), or that was never asked for is
+ * `not_confirmed`, with the reason, and the seller can check the same session again without
+ * signing in (`requestConnectionCheck`). A session the marketplace rejected, or
  * one that met a check automation must not pass, is `needs_relink`.
  */
 import type { ConnectionStatus, DbExecutor, Marketplace, SessionCheckStatus } from '@listora/db';
@@ -24,6 +25,8 @@ export const SESSION_CHECK_DEADLINE_MS = 15 * 60_000;
 /** The check of the newest session linked on an automation connection (`session_check`). */
 export interface SessionCheckState {
   status: SessionCheckStatus;
+  /** Attempts so far; a pending check with some tries again after one that didn't get through. */
+  attempts: number;
   failureCode: string | null;
   failureMessage: string | null;
   /** When this check was asked for: by the link, or by checking again. */
@@ -122,13 +125,16 @@ export function describeAutomationSession(input: AutomationSessionInput): Automa
     };
   }
   if (check?.status === 'pending' && phone?.checkWaiting === true) {
-    // The phone checks it the next time Listora runs there; it is waiting, not stuck.
+    // The phone checks it the next time Listora runs there (within seconds while the app is
+    // open); it is waiting, not stuck.
     return {
       state: 'checking',
       statusDisplay: {
         tone: 'checking',
         label: 'Checking on your iPhone...',
-        detail: `Open Listora on your iPhone to finish checking your ${name} sign-in.`,
+        detail:
+          retrying(name, check) ??
+          `Open Listora on your iPhone to finish checking your ${name} sign-in.`,
       },
       canCheck: false,
     };
@@ -142,7 +148,7 @@ export function describeAutomationSession(input: AutomationSessionInput): Automa
       statusDisplay: {
         tone: 'checking',
         label: 'Checking...',
-        detail: `Listora is checking that ${name} accepts your sign-in.`,
+        detail: retrying(name, check) ?? `Listora is checking that ${name} accepts your sign-in.`,
       },
       canCheck: false,
     };
@@ -158,6 +164,13 @@ export function describeAutomationSession(input: AutomationSessionInput): Automa
     issue,
     canCheck: true,
   };
+}
+
+/** For a check that tries again after an attempt that didn't get through, that it does. */
+function retrying(name: string, check: SessionCheckState): string | null {
+  return check.attempts === 0
+    ? null
+    : `Listora couldn't check your ${name} sign-in on its last try and tries again in a moment.`;
 }
 
 /** Why a session that is not linked and not being checked is not confirmed. */
@@ -197,6 +210,7 @@ export async function accountSessionChecks(
     .select([
       'connection_id',
       'status',
+      'attempts',
       'failure_code',
       'failure_message',
       'requested_at',
@@ -209,6 +223,7 @@ export async function accountSessionChecks(
       row.connection_id,
       {
         status: row.status,
+        attempts: row.attempts,
         failureCode: row.failure_code,
         failureMessage: row.failure_message,
         requestedAt: row.requested_at,

@@ -43,7 +43,10 @@ and reposting.
 
 **Reads.** Listing and closet pages embed their data as `window.__INITIAL_STATE__`, with the
 listing records Poshmark's own API returns. The adapter reads those (exact prices, status codes,
-and change times) rather than the visible text. Statuses map from `inventory.status`:
+and change times) rather than the visible text. The script that embeds them removes itself from
+the page as soon as it ran, so a loaded page has them only in its global, which the page driver
+reads in the page's own script world (`pageData`); the fake Poshmark removes its script the
+same way. Statuses map from `inventory.status`:
 `available` and `reserved` (a buyer is checking out) are `active`, `not_for_sale` is `ended`,
 and `sold_out` is `sold`. The revision is the newest of `updated_at`, `status_changed_at`, and
 `inventory.status_changed_at`, in milliseconds. Those times have one-second resolution; every

@@ -8,9 +8,10 @@ import Observation
 /// and answers, until nothing waits. The server decides everything from the answers; the phone
 /// never reports anything as done itself.
 ///
-/// It runs when the app opens, after the seller links a marketplace or changes a listing, when
-/// a push notification arrives or is tapped, on background app refresh, and overnight while the
-/// phone charges. One run at a time: a trigger during a run makes it look again once it ends.
+/// It runs while the app is open (at once, then again whenever Listora says to look next), after
+/// the seller links a marketplace or changes a listing, when a push notification arrives or is
+/// tapped, on background app refresh, and overnight while the phone charges. One run at a time: a
+/// trigger during a run makes it look again once it ends.
 @MainActor
 @Observable
 public final class PhoneRunner: PhoneWorkTrigger {
@@ -25,6 +26,8 @@ public final class PhoneRunner: PhoneWorkTrigger {
     /// couldn't be reached); `nil` once a run gets through.
     public private(set) var problem: String?
     public private(set) var lastRunAt: Date?
+    /// How long until the next look while the app is open, as Listora said after its last claim.
+    private var nextLook: Duration?
 
     private let service: any PhoneWorkService
     private let runtime: any PhoneRuntime
@@ -39,6 +42,9 @@ public final class PhoneRunner: PhoneWorkTrigger {
     private var again = false
     /// Work one run claims at most, so a run always ends.
     private let maxRuns: Int
+    /// The wait between looks while the app is open when Listora said nothing (it couldn't be
+    /// reached).
+    static let fallbackLook: Duration = .seconds(30)
 
     public init(
         service: any PhoneWorkService,
@@ -67,6 +73,22 @@ public final class PhoneRunner: PhoneWorkTrigger {
     public func runUntilDone(_ reason: PhoneWorkReason) async {
         runPhoneWork(reason)
         await task?.value
+    }
+
+    /// While the app is open: runs the waiting work now, then again whenever Listora says to
+    /// look next, sooner when work for this phone is due then (a check tried again after a
+    /// failed attempt). So work queued or due meanwhile starts within seconds with no push, which
+    /// iOS may drop and a build signed with a personal team never gets. Returns once the calling
+    /// task is canceled (the app left the foreground).
+    public func follow() async {
+        while !Task.isCancelled {
+            await runUntilDone(.opened)
+            do {
+                try await sleep(nextLook ?? Self.fallbackLook)
+            } catch {
+                return
+            }
+        }
     }
 
     public func prepareForWork() async {
@@ -100,6 +122,8 @@ public final class PhoneRunner: PhoneWorkTrigger {
     }
 
     private func runOnce() async {
+        // Only a claim that found nothing says when to look next.
+        nextLook = nil
         guard isSignedIn() else { return }
         let id = installationID()
         let version: Int
@@ -120,15 +144,16 @@ public final class PhoneRunner: PhoneWorkTrigger {
             lastRunAt = Date()
         }
         for _ in 0 ..< maxRuns {
-            let claimed: PhoneRun?
+            let claimed: PhoneClaim
             do {
                 claimed = try await service.claim(installationID: id, runtimeVersion: version)
             } catch {
                 problem = error.message
                 return
             }
-            guard var run = claimed else {
+            guard var run = claimed.run else {
                 problem = nil
+                nextLook = claimed.nextClaimIn
                 return
             }
             while let call = run.call {

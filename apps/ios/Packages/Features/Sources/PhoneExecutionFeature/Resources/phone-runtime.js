@@ -7336,40 +7336,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* rather than the visible text: it holds exact values (a price, a status code, a timestamp) where
 	* the page shows formatted ones, and its keys change far less often than its markup.
 	*
+	* That script removes itself from the page as soon as it ran (`document.currentScript` is taken
+	* out, read 2026-10-26), so by the time a page is ready its data is only in the page's global
+	* `window.__INITIAL_STATE__`, which `pageData` reads.
+	*
 	* Every shape is checked; a page whose data no longer has what Listora reads throws
 	* `PageChangedError`, so the step goes to the user instead of reading a wrong value.
 	*/
-	const STATE_MARKER = "window.__INITIAL_STATE__";
+	/** The page global Poshmark's pages keep their data in. */
+	const STATE_GLOBAL = "__INITIAL_STATE__";
 	/** The page's embedded data; `page` names the page in errors ("the listing page"). */
 	async function readPageState(driver, page) {
-		const script = (await driver.texts("script:not([src])")).find((text) => text.startsWith(STATE_MARKER));
-		if (script === void 0) throw new PageChangedError(`Poshmark's ${page} no longer embeds the data Listora reads`);
-		const start = script.indexOf("{", 24);
-		const end = start === -1 ? -1 : jsonEnd(script, start);
-		try {
-			if (end === -1) throw new Error("unterminated");
-			return JSON.parse(script.slice(start, end));
-		} catch {
-			throw new PageChangedError(`Poshmark's ${page} embeds data Listora can't parse`);
-		}
-	}
-	/** The index just past the JSON object that starts at `start` (strings may hold braces). */
-	function jsonEnd(text, start) {
-		let depth = 0;
-		let inString = false;
-		for (let index = start; index < text.length; index += 1) {
-			const char = text[index];
-			if (inString) {
-				if (char === "\\") index += 1;
-				else if (char === "\"") inString = false;
-			} else if (char === "\"") inString = true;
-			else if (char === "{") depth += 1;
-			else if (char === "}") {
-				depth -= 1;
-				if (depth === 0) return index + 1;
-			}
-		}
-		return -1;
+		const state = await driver.pageData(STATE_GLOBAL);
+		if (state === null || typeof state !== "object" || Array.isArray(state)) throw new PageChangedError(`Poshmark's ${page} no longer embeds the data Listora reads`);
+		return state;
 	}
 	/** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
 	function expectShape(schema, value, page) {
@@ -8166,6 +8146,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			this.failure = failure;
 		}
 	};
+	/**
+	* A page's data as a backend's `pageData` reads it: the JSON its global serializes to (the page
+	* serializes it, so only JSON values cross), or `null` when the page has none.
+	*/
+	function parsePageData(text) {
+		if (text === null || text === void 0) return null;
+		if (typeof text !== "string") throw new PageBackendError("other", "the page sent no data");
+		try {
+			return JSON.parse(text);
+		} catch {
+			throw new PageBackendError("other", "the page's data is not JSON");
+		}
+	}
 	/** The page stopped the run: a check, a rate limit, or a marketplace error. */
 	var PageProblemError = class extends Error {
 		problem;
@@ -8539,6 +8532,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		}
 		attributes(selector, name) {
 			return this.#query((backend) => backend.attributes(selector, name));
+		}
+		pageData(name) {
+			return this.#query((backend) => backend.pageData(name));
 		}
 		/** A paced action, inspected afterwards. */
 		async #act(action) {
@@ -8975,6 +8971,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (!Array.isArray(values)) throw new PageBackendError("other", "the page sent no list");
 			return values.map(expectText);
 		}
+		async pageData(name) {
+			return parsePageData(await this.#call("element", () => this.#host.pageData(name, this.#waitMs + HOST_MARGIN_MS)));
+		}
 		async inspect(script) {
 			this.#state = await this.#call("navigation", () => this.#host.state());
 			return await this.#call("element", () => this.#host.evaluate(`return ${script};`, {}, this.#waitMs + HOST_MARGIN_MS));
@@ -9234,6 +9233,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			evaluate: (body, args, timeoutMs) => call("evaluate", {
 				body,
 				args,
+				timeoutMs
+			}),
+			pageData: async (name, timeoutMs) => await call("pageData", {
+				name,
 				timeoutMs
 			}),
 			settle: async (timeoutMs) => await call("settle", { timeoutMs }),

@@ -34,6 +34,40 @@ struct PhoneRunnerTests {
     }
 
     @Test
+    func `while the app is open, it looks again when Listora says, so a check tried again later runs`() async {
+        // The first attempt of a check failed and the check is due again in 3 seconds: nothing
+        // else (no push, no reopening) brings the phone back to it.
+        let service = FakeWorkService(claims: [
+            .wait(.seconds(3)),
+            .run(PhoneRun(id: "run-1", purpose: "session_check", marketplace: "poshmark", call: .call(0))),
+            .wait(.seconds(10)),
+        ])
+        await service.script(answers: ["run-1": [.over]])
+        let runtime = FakeRuntime()
+        let sleeps = Sleeps(until: 2)
+        let runner = makeRunner(service, runtime, sleep: { try await sleeps.sleep($0) })
+
+        await runner.follow()
+
+        #expect(sleeps.slept == [.seconds(3), .seconds(10)])
+        #expect(runtime.ran == ["poshmark:0"])
+        #expect(await service.claims == 3)
+    }
+
+    @Test
+    func `while the app is open, it keeps looking while Listora can't be reached`() async {
+        let service = FakeWorkService(claims: [.unreachable, .none])
+        let sleeps = Sleeps(until: 2)
+        let runner = makeRunner(service, FakeRuntime(), sleep: { try await sleeps.sleep($0) })
+
+        await runner.follow()
+
+        #expect(sleeps.slept == [PhoneRunner.fallbackLook, PhoneRunner.fallbackLook])
+        #expect(await service.claims == 2)
+        #expect(runner.problem == nil)
+    }
+
+    @Test
     func `does nothing while signed out`() async {
         let service = FakeWorkService(claims: [.none])
         let runner = makeRunner(service, FakeRuntime(), signedIn: false)
@@ -154,15 +188,39 @@ struct PhoneRunnerTests {
         #expect(await service.registrations.count == 1)
     }
 
-    private func makeRunner(_ service: FakeWorkService, _ runtime: FakeRuntime, signedIn: Bool = true) -> PhoneRunner {
+    private func makeRunner(
+        _ service: FakeWorkService,
+        _ runtime: FakeRuntime,
+        signedIn: Bool = true,
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { _ in },
+    ) -> PhoneRunner {
         PhoneRunner(
             service: service,
             runtime: runtime,
             installationID: { "install-1" },
             isSignedIn: { signedIn },
             device: { DeviceRegistration(name: "Test iPhone", appVersion: "1.0", runtimeVersion: 0) },
-            sleep: { _ in },
+            sleep: sleep,
         )
+    }
+}
+
+/// The runner's waits, recorded; the `until`th ends the follow loop, as the app leaving the
+/// foreground cancels it.
+@MainActor
+final class Sleeps {
+    private(set) var slept: [Duration] = []
+    private let until: Int
+
+    init(until: Int) {
+        self.until = until
+    }
+
+    func sleep(_ duration: Duration) throws {
+        slept.append(duration)
+        if slept.count == until {
+            throw CancellationError()
+        }
     }
 }
 
@@ -176,6 +234,8 @@ extension PhoneRun.Call {
 enum Reply {
     case run(PhoneRun)
     case none
+    /// Nothing to run; ask again after this.
+    case wait(Duration)
     case over
     case unreachable
     case conflict
@@ -201,12 +261,16 @@ actor FakeWorkService: PhoneWorkService {
         registrations.append(device)
     }
 
-    func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneRun? {
+    func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneClaim {
         #expect(installationID == "install-1")
         #expect(runtimeVersion == 1)
         claims += 1
-        guard !claimReplies.isEmpty else { return nil }
-        return try Self.resolve(claimReplies.removeFirst())
+        guard !claimReplies.isEmpty else { return PhoneClaim(run: nil) }
+        let reply = claimReplies.removeFirst()
+        if case let .wait(duration) = reply {
+            return PhoneClaim(run: nil, nextClaimIn: duration)
+        }
+        return try PhoneClaim(run: Self.resolve(reply))
     }
 
     func answer(
@@ -226,7 +290,7 @@ actor FakeWorkService: PhoneWorkService {
     private static func resolve(_ reply: Reply) throws(APIFailure) -> PhoneRun? {
         switch reply {
         case let .run(run): run
-        case .none, .over: nil
+        case .none, .over, .wait: nil
         case .unreachable:
             throw APIFailure(statusCode: nil, code: "network", message: "Listora couldn't be reached.", retryable: true)
         case .conflict:

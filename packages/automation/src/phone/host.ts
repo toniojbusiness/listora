@@ -45,6 +45,12 @@ export interface PhoneHost {
    * arguments, and resolves to its JSON result (WebKit's `callAsyncJavaScript`).
    */
   evaluate(body: string, args: Record<string, unknown>, timeoutMs: number): Promise<unknown>;
+  /**
+   * The page's own global `name` serialized as JSON by the page (`JSON.stringify`), or `null`
+   * when it has none. Unlike `evaluate`, this one fixed read runs in the page's own script
+   * world, the only place a page's own data lives.
+   */
+  pageData(name: string, timeoutMs: number): Promise<string | null>;
   /** Waits, within `timeoutMs`, for a page load an action may have started to finish. */
   settle(timeoutMs: number): Promise<HostPageState>;
   /** The main frame now. */

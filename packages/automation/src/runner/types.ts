@@ -49,6 +49,12 @@ export interface PageDriver {
   texts(selector: string): Promise<string[]>;
   attribute(selector: string, name: string): Promise<string | null>;
   attributes(selector: string, name: string): Promise<(string | null)[]>;
+  /**
+   * The data the page keeps for its own scripts in the global `name` (`window.<name>`), as
+   * JSON, or `null` when it has none. A page whose data comes in an inline script that removes
+   * itself once it ran (Poshmark's `window.__INITIAL_STATE__`) has it only there.
+   */
+  pageData(name: string): Promise<unknown>;
 }
 
 export interface StepOptions {

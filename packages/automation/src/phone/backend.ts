@@ -8,7 +8,11 @@
  * the seller's page never leaves their phone.
  */
 import type { InspectedPage, PageBackend } from '../runner/script-session.ts';
-import { PageBackendError, type PageBackendFailure } from '../runner/script-session.ts';
+import {
+  PageBackendError,
+  parsePageData,
+  type PageBackendFailure,
+} from '../runner/script-session.ts';
 import type { UploadFile } from '../runner/types.ts';
 import { CHECK, CLICK, FILL, FOCUS, PRESS, QUERY, SELECT, UPLOAD, WAIT_FOR } from './dom.ts';
 import { HOST_FAILURES, type HostPageState, type PhoneHost } from './host.ts';
@@ -138,6 +142,12 @@ export class BridgeBackend implements PageBackend {
     const values = await this.#page(QUERY, { selector, what: 'attributes', name });
     if (!Array.isArray(values)) throw new PageBackendError('other', 'the page sent no list');
     return values.map(expectText);
+  }
+
+  async pageData(name: string): Promise<unknown> {
+    return parsePageData(
+      await this.#call('element', () => this.#host.pageData(name, this.#waitMs + HOST_MARGIN_MS)),
+    );
   }
 
   async inspect(script: string): Promise<InspectedPage> {
