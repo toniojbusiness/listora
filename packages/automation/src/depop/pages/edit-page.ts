@@ -10,7 +10,6 @@ import type { PageDriver } from '../../runner/types.ts';
 import { DEPOP_PATHS } from '../site.ts';
 import { absolute, expectElement, type DepopSite } from './common.ts';
 import { LISTING_FORM } from './listing-form.ts';
-import { PRODUCT_PAGE } from './product-page.ts';
 
 export const EDIT_PAGE = {
   delete: 'button[data-testid="listingForm__delete"]',
@@ -33,5 +32,6 @@ export async function deleteListing(page: PageDriver): Promise<void> {
   await expectElement(page, EDIT_PAGE.delete, 'edit page', 'Delete button');
   page.acceptNextDialog();
   await page.click(EDIT_PAGE.delete);
-  await page.waitFor(PRODUCT_PAGE.root);
+  // Depop opens the product's page; the operation's check reads it.
+  await page.waitForPath(/^\/products\/[^/]+\/?$/);
 }

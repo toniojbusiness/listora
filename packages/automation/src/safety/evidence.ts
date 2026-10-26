@@ -82,13 +82,13 @@ export const EVIDENCE_SCRIPT = `(() => {
     .map((script) => ({ id: script.id || null, type: script.type || null }))
     .slice(0, 40);
   const named = ['data-testid', 'data-test', 'data-vv-name', 'data-et-name', 'name', 'id', 'role', 'aria-label', 'placeholder'];
-  const controls = [...document.querySelectorAll('input, textarea, select, button, [role="button"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"], [contenteditable="true"]')]
+  const controls = [...document.querySelectorAll('input, textarea, select, button, summary, [role="button"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"], [contenteditable="true"], [data-et-name]:not(a), [data-test]:not(a)')]
     .slice(0, 120)
     .map((element) => ({
       tag: element.tagName.toLowerCase(),
       type: element.getAttribute('type'),
       names: named.flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
-      text: element.tagName === 'BUTTON' || element.getAttribute('role') === 'button' ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : null,
+      text: element.tagName === 'BUTTON' || element.tagName === 'SUMMARY' || element.getAttribute('role') === 'button' || (element.hasAttribute('data-et-name') && !/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName)) ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : null,
     }));
   const choices = [...new Set([...document.querySelectorAll('option, [role="option"], [role="menuitem"], [role="radio"], label, legend')]
     .map((element) => (element.textContent || '').replace(/\\s+/g, ' ').trim())
@@ -114,7 +114,11 @@ const STRUCTURAL_WORDS = new Set(
     'feeds followers following gateway inquiries insights internal mobile overview payout ' +
     'payouts pending preferences presentation private public purchase receipt receipts referrals ' +
     'reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary ' +
-    'transaction transactions verification verifications'
+    'transaction transactions verification verifications ' +
+    // The words of listing forms: their fields, pickers, and buttons.
+    'add apply cancel choose color colour condition continue cover department description ' +
+    'designer discard done enter next optional photo photos post price quantity required save ' +
+    'select single size sizes style subcategory title type update upload'
   ).split(' '),
 );
 

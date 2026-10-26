@@ -13,19 +13,21 @@ import {
 import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
 import { listingSku } from '../adapter/sku-line.ts';
-import type { PageDriver, StepRunner } from '../runner/types.ts';
+import type { StepRunner } from '../runner/types.ts';
 import { changed, type DepopSite } from './pages/common.ts';
 import { deleteListing, openEditor } from './pages/edit-page.ts';
 import { openHub } from './pages/hub-page.ts';
 import {
+  expectSubmit,
   fillListing,
   fillPrice,
   openSellForm,
   submitListing,
   type Submitted,
 } from './pages/listing-form.ts';
-import { readProduct, readShownProduct, type ProductPageRead } from './pages/product-page.ts';
+import { readProduct, type ProductPageRead } from './pages/product-page.ts';
 import { readSellingPage } from './pages/selling-page.ts';
+import { findSeller, newestProducts } from './pages/shop-page.ts';
 import { readSoldItemsPage } from './pages/sold-items-page.ts';
 import { type DepopAutomationPayload } from './payload.ts';
 
@@ -68,26 +70,37 @@ export function createDepopScripts(
     fixHint: 'Relist the item as a new Depop listing.',
   });
 
-  /** The listing the newest listings for sale hold under this SKU, if any. */
+  /**
+   * The listing the seller's newest listings for sale hold under this SKU, if any. Their shop
+   * links to them; each one's SKU is on its own page, so a listing found by SKU reads exactly as
+   * it does by its slug.
+   */
   async function findBySku(step: StepRunner, sku: string): Promise<ProductPageRead | null> {
-    const recent = await step('look at the newest listings', { mutates: false }, (page) =>
-      readSellingPage(page, site, 1),
+    const seller = await step('find the seller', { mutates: false }, (page) =>
+      findSeller(page, site),
     );
-    const match = recent.products.slice(0, SKU_LOOKUP_DEPTH).find((product) => product.sku === sku);
-    if (match === undefined) return null;
-    // The product's own page, so a listing found by SKU reads exactly as it does by its slug.
-    return step('read the listing', { mutates: false }, (page) =>
-      readProduct(page, site, match.listing.externalListingId),
+    const slugs = await step('look at the newest listings', { mutates: false }, (page) =>
+      newestProducts(page, site, seller, SKU_LOOKUP_DEPTH),
     );
+    for (const slug of slugs) {
+      const read = await step('read the listing', { mutates: false }, (page) =>
+        readProduct(page, site, slug),
+      );
+      if (read.sku === sku) return read;
+    }
+    return null;
   }
 
-  /** After a submit: Depop's refusal, or the product it opened, with its revision. */
-  async function submitted(page: PageDriver, outcome: Submitted): Promise<WriteResult> {
+  /**
+   * After a submit: Depop's refusal, or the product it opened. The product is read back by the
+   * operation's check, not here: the submit already happened, and its page may not show the
+   * product for a moment.
+   */
+  function submitted(outcome: Submitted): WriteResult {
     if (outcome.type === 'refused') {
       return { type: 'rejected', code: 'validation_failed', message: outcome.message };
     }
-    const shown = await readShownProduct(page, site);
-    return { ...revisionOf(shown), externalListingId: outcome.slug };
+    return { type: 'applied', externalListingId: outcome.slug };
   }
 
   /** Posts a new listing (a create, or a relist); a later attempt first looks for it. */
@@ -108,12 +121,13 @@ export function createDepopScripts(
     const files = await step('get the photos', { mutates: false }, (_page, signal) =>
       Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
     );
-    await step('fill in the listing', { mutates: false }, async (page) => {
+    await step('fill in the listing', { mutates: false, timeoutMs: 90_000 }, async (page) => {
       await openSellForm(page, site);
       await fillListing(page, payload, sku, files);
+      await expectSubmit(page, 'post');
     });
-    return step('post', { mutates: true }, async (page) =>
-      submitted(page, await submitListing(page, 'post')),
+    return step('post', { mutates: true, timeoutMs: 60_000 }, async (page) =>
+      submitted(await submitListing(page, 'post')),
     );
   }
 
@@ -145,11 +159,12 @@ export function createDepopScripts(
       if (payload === null) throw new Error('a revise has a payload');
       const opened = await editor(op, step);
       if (!('slug' in opened)) return opened;
-      await step('fill in the changes', { mutates: false }, (page) =>
-        fillListing(page, payload, listingSku(op.listing), null),
-      );
-      return step('save', { mutates: true }, async (page) =>
-        submitted(page, await submitListing(page, 'save')),
+      await step('fill in the changes', { mutates: false }, async (page) => {
+        await fillListing(page, payload, listingSku(op.listing), null);
+        await expectSubmit(page, 'save');
+      });
+      return step('save', { mutates: true, timeoutMs: 60_000 }, async (page) =>
+        submitted(await submitListing(page, 'save')),
       );
     },
     price: async (op, step) => {
@@ -166,9 +181,12 @@ export function createDepopScripts(
       }
       const opened = await editor(op, step);
       if (!('slug' in opened)) return opened;
-      await step('fill in the price', { mutates: false }, (page) => fillPrice(page, priceCents));
-      return step('save', { mutates: true }, async (page) =>
-        submitted(page, await submitListing(page, 'save')),
+      await step('fill in the price', { mutates: false }, async (page) => {
+        await fillPrice(page, priceCents);
+        await expectSubmit(page, 'save');
+      });
+      return step('save', { mutates: true, timeoutMs: 60_000 }, async (page) =>
+        submitted(await submitListing(page, 'save')),
       );
     },
     end: async (op, step) => {
@@ -184,7 +202,7 @@ export function createDepopScripts(
       if (!('slug' in opened)) return opened;
       return step('delete', { mutates: true }, async (page) => {
         await deleteListing(page);
-        return revisionOf(await readShownProduct(page, site));
+        return { type: 'applied' };
       });
     },
     relist: async (op, step) => {

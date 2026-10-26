@@ -17,11 +17,12 @@ export const DEPOP_SITE_URL = 'https://www.depop.com';
 
 /**
  * A Depop product slug: the seller's username and words of the listing, lowercase and joined by
- * hyphens (`jdoe-levis-trucker-jacket`). The Selling API addresses the same products by it
+ * hyphens (`jdoe-levis-trucker-jacket`); a username may have underscores and periods
+ * (`365_nails-black-and-white-nail-set`). The Selling API addresses the same products by it
  * (`/api/v1/products/by-slug/{slug}/`), so a listing automated today is still found once the
  * seller connects the API. At least one hyphen, so `/products/create/` is never a product.
  */
-export const DEPOP_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)+$/;
+export const DEPOP_SLUG = /^[a-z0-9][a-z0-9._]*(?:-[a-z0-9_]+)+$/;
 
 /** Paths on Depop's site, relative to its origin. */
 export const DEPOP_PATHS = {

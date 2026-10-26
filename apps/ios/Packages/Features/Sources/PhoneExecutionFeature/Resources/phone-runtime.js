@@ -5540,11 +5540,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 // src/depop/site.ts
 /**
 	* A Depop product slug: the seller's username and words of the listing, lowercase and joined by
-	* hyphens (`jdoe-levis-trucker-jacket`). The Selling API addresses the same products by it
+	* hyphens (`jdoe-levis-trucker-jacket`); a username may have underscores and periods
+	* (`365_nails-black-and-white-nail-set`). The Selling API addresses the same products by it
 	* (`/api/v1/products/by-slug/{slug}/`), so a listing automated today is still found once the
 	* seller connects the API. At least one hyphen, so `/products/create/` is never a product.
 	*/
-	const DEPOP_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)+$/;
+	const DEPOP_SLUG = /^[a-z0-9][a-z0-9._]*(?:-[a-z0-9_]+)+$/;
 	/** Paths on Depop's site, relative to its origin. */
 	const DEPOP_PATHS = {
 		/** The selling hub's home, which only a logged-in seller sees. */
@@ -5622,6 +5623,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	function changed$2(pageName, problem) {
 		return new PageChangedError(`Depop's ${pageName} ${problem}; the page may have changed.`);
 	}
+	/**
+	* Looks at the page again after a moment: the driver inspects it (a check that came up stops
+	* the run) and learns its address anew, which the page's own scripts may have changed without
+	* loading a page (Depop opens a new listing that way).
+	*/
+	async function lookAgain(page, ms) {
+		await new Promise((resolve) => setTimeout(resolve, ms));
+		await page.waitFor("body", "attached");
+	}
 
 // src/depop/sizes.ts
 /**
@@ -5643,173 +5653,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return `${String(Math.floor(cents / 100))}.${String(cents % 100).padStart(2, "0")}`;
 	}
 
-// src/depop/pages/page-data.ts
-/**
-	* The data Depop's pages are rendered from. Depop's site is a Next.js app, and every page embeds
-	* its data as JSON in `script#__NEXT_DATA__` (`props.pageProps`). Reads use it rather than the
-	* visible text: it holds exact values (a decimal price, a status code, a change time) where the
-	* page shows formatted ones ("$45", "Listed 2 days ago"), and its keys change far less often
-	* than its markup. The keys are Listora's model of Depop's pages (docs/features/depop-automation.md,
-	* "Live verification").
-	*
-	* Every shape is checked; a page whose data no longer has what Listora reads throws
-	* `PageChangedError`, so the step goes to the user instead of reading a wrong value.
-	*/
-	const PAGE_DATA = "script#__NEXT_DATA__";
-	/** The page's `props.pageProps`; `page` names the page in errors ("product page"). */
-	async function readPageProps(driver, page) {
-		const script = await driver.text(PAGE_DATA);
-		if (script === null) throw new PageChangedError(`Depop's ${page} no longer embeds the data Listora reads`);
-		let data;
-		try {
-			data = JSON.parse(script);
-		} catch {
-			throw new PageChangedError(`Depop's ${page} embeds data Listora can't parse`);
-		}
-		return expectShape$1(object({ props: object({ pageProps: unknown() }) }), data, page).props.pageProps;
-	}
-	/** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
-	function expectShape$1(schema, value, page) {
-		const parsed = schema.safeParse(value);
-		if (parsed.success) return parsed.data;
-		const path = parsed.error.issues[0]?.path.map(String).join(".") ?? "";
-		throw new PageChangedError(`Depop's ${page} no longer has the ${path === "" ? "data" : path} Listora reads`);
-	}
-	const price = object({
-		priceAmount: string(),
-		currencyName: string()
-	});
-	/** One product, as product pages and the selling hub embed it. */
-	const productRecordSchema = object({
-		slug: string().regex(DEPOP_SLUG),
-		/** `ONSALE`, `SOLD`, `MARKED_AS_SOLD`, `DELETED`, or `BANNED` (STATUSES). */
-		status: string(),
-		/** The whole listing text: copy, Listora's SKU line, hashtags. */
-		description: string(),
-		price,
-		/** Depop's last change to the product, to the second. */
-		dateUpdated: string()
-	});
-	/** One sold item, as the sold items page embeds it (no buyer details are read). */
-	const soldItemSchema = object({
-		slug: string().regex(DEPOP_SLUG),
-		description: string(),
-		price,
-		soldAt: string()
-	});
-	/**
-	* Depop's product statuses, as the Selling API names them too (`STATUS_ONSALE`, ...). Deleted
-	* and banned products are `ended`, as the Depop API adapter reads them: Depop keeps them, and a
-	* listing Listora ended stays readable as ended.
-	*/
-	const STATUSES = {
-		ONSALE: "active",
-		SOLD: "sold",
-		MARKED_AS_SOLD: "sold",
-		DELETED: "ended",
-		BANNED: "ended"
-	};
-	/**
-	* A product record as a read-back: Listora's status, a cents price, the copy without the SKU
-	* line and hashtags, and a revision.
-	*/
-	function productRead(record, site, page) {
-		const status = STATUSES[record.status];
-		if (status === void 0) throw new PageChangedError(`Depop's ${page} shows a product status Listora doesn't know`);
-		const { description, sku } = listingCopy(record.description);
-		return {
-			listing: {
-				found: true,
-				externalListingId: record.slug,
-				externalUrl: productUrl(site, record.slug),
-				status,
-				title: null,
-				description,
-				priceCents: dollars$1(record.price, page),
-				currency: "USD",
-				revision: revision$1(record.dateUpdated, page)
-			},
-			sku
-		};
-	}
-	/** The listing's own copy and Listora's SKU from a product's text (copy, SKU line, hashtags). */
-	function listingCopy(text) {
-		return splitSkuLine(splitDepopDescription(text).description);
-	}
-	/**
-	* The listing's revision: its last change time in milliseconds. Depop keeps it to the second;
-	* Listora's own changes to one seller's listings are always more than a second apart (every
-	* change is its own browser session, and sessions are at least two seconds apart,
-	* `PACING_FLOOR`), so each one has a newer revision.
-	*/
-	function revision$1(value, page) {
-		const time = Date.parse(value);
-		if (!Number.isSafeInteger(time) || time < 0) throw new PageChangedError(`Depop's ${page} shows a change time Listora can't read`);
-		return time;
-	}
-	/** A US dollar price (`"45.00"`) in cents. */
-	function dollars$1(value, page) {
-		if (value.currencyName !== "USD") throw new PageChangedError(`Depop's ${page} shows a price that is not in US dollars`);
-		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value.priceAmount);
-		if (match?.[1] === void 0) throw new PageChangedError(`Depop's ${page} shows a price Listora can't read`);
-		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
-	}
-
-// src/depop/pages/product-page.ts
-/**
-	* A product's page (`/products/<slug>/`), as its seller sees it: the read-back every automated
-	* Depop step is verified by. It reads the product the page embeds (page-data.ts).
-	*
-	* - Status: Depop's product status (on sale, sold, deleted). A product the seller deleted stays
-	*   readable as `ended`, so an end is confirmed by its read-back.
-	* - Freshness: the product's last change time, in milliseconds, is its revision.
-	* - Absence: never definitive. A page without a product (a 404) could be a listing not visible
-	*   yet, as Depop says of its API too ("A newly created listing can take a short time to become
-	*   retrievable").
-	*/
-	/** The page's own element, which only a product's page has. */
-	const PRODUCT_PAGE = { root: "[data-testid=\"productPage\"]" };
-	const PAGE$10 = "product page";
-	const productPageSchema = object({ product: productRecordSchema.nullable().optional() });
-	/** Opens the product's page and reads it. */
-	async function readProduct(page, site, slug) {
-		await page.goto(productUrl(site, slug));
-		if (page.status() === 404) return {
-			state: {
-				found: false,
-				authoritative: false
-			},
-			sku: null
-		};
-		const props = expectShape$1(productPageSchema, await readPageProps(page, PAGE$10), PAGE$10);
-		if (props.product === null || props.product === void 0) return {
-			state: {
-				found: false,
-				authoritative: false
-			},
-			sku: null
-		};
-		if (props.product.slug !== slug) throw changed$2(PAGE$10, "shows a different product");
-		const read = productRead(props.product, site, PAGE$10);
-		return {
-			state: read.listing,
-			sku: read.sku
-		};
-	}
-	/** Reads the product page the browser shows now (after a form sent it there). */
-	async function readShownProduct(page, site) {
-		const slug = slugFromPath(new URL(page.url()).pathname);
-		if (slug === null) throw changed$2(PAGE$10, "is not at a product address");
-		await expectElement$2(page, PRODUCT_PAGE.root, PAGE$10, "product details");
-		const props = expectShape$1(productPageSchema, await readPageProps(page, PAGE$10), PAGE$10);
-		if (props.product?.slug !== slug) throw changed$2(PAGE$10, "shows no product");
-		const read = productRead(props.product, site, PAGE$10);
-		return {
-			state: read.listing,
-			sku: read.sku
-		};
-	}
-
 // src/depop/pages/listing-form.ts
 /**
 	* Read on a real session (2026-10-26, from the evidence a stopped run logs): the sell page is
@@ -5828,8 +5671,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		price: "input#priceAmount__input",
 		post: "button[type=\"submit\"]:text-is(\"Post\")",
 		save: "button[type=\"submit\"]:text-is(\"Save\")",
-		error: "[role=\"alert\"]"
+		/** "Post and add another": checked, Depop opens a new empty form instead of the listing. */
+		postAnother: "input#post-another[type=\"checkbox\"]",
+		error: "[role=\"alert\"]",
+		/** A field Depop marks as needing a fix. */
+		invalid: "[aria-invalid=\"true\"]"
 	};
+	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
+	const ANSWER_MS = 45e3;
+	const LOOK_EVERY_MS$2 = 500;
 	/** One of Depop's combobox pickers (`group` is the category). */
 	function combo(name) {
 		return {
@@ -5863,29 +5713,63 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
 		await pick(page, "condition", payload.condition.label, `condition "${payload.condition.label}"`);
 		await fillPrice$2(page, payload.price.amountCents);
+		await expectComplete(page);
+	}
+	/**
+	* The filled form, before anything is submitted: no field marked as needing a fix and no
+	* message, so the submit sends a form Listora understands.
+	*/
+	async function expectComplete(page) {
+		const invalid = await page.count(LISTING_FORM$2.invalid);
+		if (invalid > 0) throw changed$2(FORM$2, `marks ${String(invalid)} filled field(s) as needing a fix`);
+		if ((await messages(page)).length > 0) throw changed$2(FORM$2, "shows a message before posting");
+	}
+	/**
+	* Checks the form has its Post (sell) or Save (edit) button, before the step that submits it
+	* starts: that step counts as one that may have changed the listing.
+	*/
+	async function expectSubmit(page, button) {
+		await expectElement$2(page, LISTING_FORM$2[button], FORM$2, `${button === "post" ? "Post" : "Save"} button`);
 	}
 	/** Fills only the price (a price change on the edit page). */
 	async function fillPrice$2(page, cents) {
 		await expectElement$2(page, LISTING_FORM$2.price, FORM$2, "price field");
 		await page.fill(LISTING_FORM$2.price, depopPriceField(cents));
 	}
-	/** Submits the form with its Post (sell) or Save (edit) button. */
+	/**
+	* Submits the form with its Post (sell) or Save (edit) button, and waits for Depop's answer:
+	* the product's page, or the form again with Depop's message or a field marked as needing a
+	* fix. Anything else (a page Listora doesn't know, or no answer in time) leaves the outcome
+	* unknown, so the operation's check reads the listing back.
+	*/
 	async function submitListing$2(page, button) {
 		const selector = LISTING_FORM$2[button];
 		await expectElement$2(page, selector, FORM$2, `${button === "post" ? "Post" : "Save"} button`);
+		if (button === "post" && await page.exists(LISTING_FORM$2.postAnother)) await page.check(LISTING_FORM$2.postAnother, false);
 		await page.click(selector);
-		await page.waitFor(`${LISTING_FORM$2.error}, ${PRODUCT_PAGE.root}`);
-		const message = await page.text(LISTING_FORM$2.error);
-		if (message !== null) return {
-			type: "refused",
-			message
-		};
-		const slug = slugFromPath(new URL(page.url()).pathname);
-		if (slug === null) throw changed$2(FORM$2, "opened a page that is not a product");
-		return {
-			type: "posted",
-			slug
-		};
+		const end = Date.now() + ANSWER_MS;
+		for (;;) {
+			const slug = slugFromPath(new URL(page.url()).pathname);
+			if (slug !== null) return {
+				type: "posted",
+				slug
+			};
+			const shown = await messages(page);
+			if (shown.length > 0) return {
+				type: "refused",
+				message: shown.join(" ")
+			};
+			if (await page.count(LISTING_FORM$2.invalid) > 0) return {
+				type: "refused",
+				message: "Depop didn't take the listing: it marked a field as needing a fix."
+			};
+			if (Date.now() >= end) throw changed$2(FORM$2, "showed no product and no message after the submit");
+			await lookAgain(page, LOOK_EVERY_MS$2);
+		}
+	}
+	/** Depop's messages on the form (its alerts with text). */
+	async function messages(page) {
+		return (await page.texts(LISTING_FORM$2.error)).filter((text) => text !== "");
 	}
 	/** Opens one of the form's comboboxes and picks the option with exactly this text. */
 	async function pick(page, name, text, what) {
@@ -5932,7 +5816,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		await expectElement$2(page, EDIT_PAGE$1.delete, "edit page", "Delete button");
 		page.acceptNextDialog();
 		await page.click(EDIT_PAGE$1.delete);
-		await page.waitFor(PRODUCT_PAGE.root);
+		await page.waitForPath(/^\/products\/[^/]+\/?$/);
 	}
 
 // src/depop/pages/hub-page.ts
@@ -5940,6 +5824,267 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function openHub(page, site) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
 		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
+	}
+
+// src/depop/pages/flight-data.ts
+/** The page's inline scripts, where the payload's chunks are. */
+	const INLINE_SCRIPTS = "script:not([src])";
+	const CHUNK_PREFIX = "self.__next_f.push(";
+	/** A row: its hex id, an optional type tag, then its JSON (`6:[...]`, `a:I[...]`). */
+	const ROW = /^[0-9a-f]+:[A-Z]{0,2}(?=[[{"])/;
+	/** Bounds on the search through a page's rows, which are a few hundred kilobytes. */
+	const MAX_DEPTH$1 = 48;
+	const MAX_NODES = 4e5;
+	/** The JSON values of the page's payload rows, in order; empty for a page without one. */
+	async function flightRows(page) {
+		const stream = (await page.texts(INLINE_SCRIPTS)).flatMap((script) => {
+			const chunk = flightChunk(script);
+			return chunk === null ? [] : [chunk];
+		}).join("");
+		const rows = [];
+		for (const line of stream.split("\n")) {
+			const head = ROW.exec(line);
+			if (head === null) continue;
+			try {
+				rows.push(JSON.parse(line.slice(head[0].length)));
+			} catch {}
+		}
+		return rows;
+	}
+	/** One inline script's chunk of rows (`self.__next_f.push([1, "..."])`), else `null`. */
+	function flightChunk(script) {
+		const text = script.trim();
+		if (!text.startsWith(CHUNK_PREFIX) || !text.endsWith(")")) return null;
+		try {
+			const value = JSON.parse(text.slice(19, -1));
+			return Array.isArray(value) && value[0] === 1 && typeof value[1] === "string" ? value[1] : null;
+		} catch {
+			return null;
+		}
+	}
+	/** Every object in the rows that `matches` says is the one wanted, in the order found. */
+	function findRecords(rows, matches) {
+		const found = [];
+		let nodes = 0;
+		const walk = (node, depth) => {
+			if (node === null || typeof node !== "object" || depth > MAX_DEPTH$1) return;
+			nodes += 1;
+			if (nodes > MAX_NODES) return;
+			const values = Array.isArray(node) ? node : Object.values(node);
+			if (!Array.isArray(node) && matches(node)) found.push(node);
+			for (const value of values) walk(value, depth + 1);
+		};
+		for (const row of rows) walk(row, 0);
+		return found;
+	}
+
+// src/depop/pages/page-data.ts
+/**
+	* The data Depop's pages are rendered from. Depop's site is a Next.js app, and every page embeds
+	* its data as JSON in `script#__NEXT_DATA__` (`props.pageProps`). Reads use it rather than the
+	* visible text: it holds exact values (a decimal price, a status code, a change time) where the
+	* page shows formatted ones ("$45", "Listed 2 days ago"), and its keys change far less often
+	* than its markup. The keys are Listora's model of Depop's pages (docs/features/depop-automation.md,
+	* "Live verification").
+	*
+	* Every shape is checked; a page whose data no longer has what Listora reads throws
+	* `PageChangedError`, so the step goes to the user instead of reading a wrong value.
+	*/
+	const PAGE_DATA = "script#__NEXT_DATA__";
+	/** The page's `props.pageProps`; `page` names the page in errors ("product page"). */
+	async function readPageProps(driver, page) {
+		const script = await driver.text(PAGE_DATA);
+		if (script === null) throw new PageChangedError(`Depop's ${page} no longer embeds the data Listora reads`);
+		let data;
+		try {
+			data = JSON.parse(script);
+		} catch {
+			throw new PageChangedError(`Depop's ${page} embeds data Listora can't parse`);
+		}
+		return expectShape$1(object({ props: object({ pageProps: unknown() }) }), data, page).props.pageProps;
+	}
+	/** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
+	function expectShape$1(schema, value, page) {
+		const parsed = schema.safeParse(value);
+		if (parsed.success) return parsed.data;
+		const path = parsed.error.issues[0]?.path.map(String).join(".") ?? "";
+		throw new PageChangedError(`Depop's ${page} no longer has the ${path === "" ? "data" : path} Listora reads`);
+	}
+	const price = object({
+		priceAmount: string(),
+		currencyName: string()
+	});
+	/** One product, as product pages and the selling hub embed it. */
+	const productRecordSchema$1 = object({
+		slug: string().regex(DEPOP_SLUG),
+		/** `ONSALE`, `SOLD`, `MARKED_AS_SOLD`, `DELETED`, or `BANNED` (STATUSES). */
+		status: string(),
+		/** The whole listing text: copy, Listora's SKU line, hashtags. */
+		description: string(),
+		price,
+		/** Depop's last change to the product, to the second. */
+		dateUpdated: string()
+	});
+	/** One sold item, as the sold items page embeds it (no buyer details are read). */
+	const soldItemSchema = object({
+		slug: string().regex(DEPOP_SLUG),
+		description: string(),
+		price,
+		soldAt: string()
+	});
+	/**
+	* Depop's product statuses, as the Selling API names them too (`STATUS_ONSALE`, ...). Deleted
+	* and banned products are `ended`, as the Depop API adapter reads them: Depop keeps them, and a
+	* listing Listora ended stays readable as ended.
+	*/
+	const STATUSES$1 = {
+		ONSALE: "active",
+		SOLD: "sold",
+		MARKED_AS_SOLD: "sold",
+		DELETED: "ended",
+		BANNED: "ended"
+	};
+	/**
+	* A product record as a read-back: Listora's status, a cents price, the copy without the SKU
+	* line and hashtags, and a revision.
+	*/
+	function productRead(record, site, page) {
+		const status = STATUSES$1[record.status];
+		if (status === void 0) throw new PageChangedError(`Depop's ${page} shows a product status Listora doesn't know`);
+		const { description, sku } = listingCopy(record.description);
+		return {
+			listing: {
+				found: true,
+				externalListingId: record.slug,
+				externalUrl: productUrl(site, record.slug),
+				status,
+				title: null,
+				description,
+				priceCents: dollars$1(record.price, page),
+				currency: "USD",
+				revision: revision$1(record.dateUpdated, page)
+			},
+			sku
+		};
+	}
+	/** The listing's own copy and Listora's SKU from a product's text (copy, SKU line, hashtags). */
+	function listingCopy(text) {
+		return splitSkuLine(splitDepopDescription(text).description);
+	}
+	/**
+	* The listing's revision: its last change time in milliseconds. Depop keeps it to the second;
+	* Listora's own changes to one seller's listings are always more than a second apart (every
+	* change is its own browser session, and sessions are at least two seconds apart,
+	* `PACING_FLOOR`), so each one has a newer revision.
+	*/
+	function revision$1(value, page) {
+		const time = Date.parse(value);
+		if (!Number.isSafeInteger(time) || time < 0) throw new PageChangedError(`Depop's ${page} shows a change time Listora can't read`);
+		return time;
+	}
+	/** A US dollar price (`"45.00"`) in cents. */
+	function dollars$1(value, page) {
+		if (value.currencyName !== "USD") throw new PageChangedError(`Depop's ${page} shows a price that is not in US dollars`);
+		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value.priceAmount);
+		if (match?.[1] === void 0) throw new PageChangedError(`Depop's ${page} shows a price Listora can't read`);
+		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
+	}
+
+// src/depop/pages/product-page.ts
+/**
+	* A product's page (`/products/<slug>/`), as its seller sees it: the read-back every automated
+	* Depop step is verified by.
+	*
+	* Read on Depop's real product pages (2026, captured copies of public pages): the page is an App
+	* Router page (flight-data.ts) whose rows hold the product as its first query loaded it
+	* (`["product_basic_by_slug", slug]`): `slug`, `status` (`STATUS_ONSALE`, ...), and the whole
+	* listing `description` (copy, Listora's SKU line, hashtags). The price is in the page's
+	* schema.org data (`script[data-testid="meta__jsonLd"]`, a `Product` whose `offers` has the
+	* `price`, its `priceCurrency`, and the product's `url`). The page no longer says when the
+	* product last changed, so a read has no revision, and the adapter confirms a change by reading
+	* it twice (`readFreshness: 'none'`).
+	*
+	* - Status: Depop's product status (on sale, sold, deleted).
+	* - Absence: never definitive. A page without a product (a 404) could be a listing not visible
+	*   yet, as Depop says of its API too ("A newly created listing can take a short time to become
+	*   retrievable").
+	*/
+	const PRODUCT_PAGE = { 
+	/** The page's schema.org data: the product, with its offer's price. */
+structuredData: "script[data-testid=\"meta__jsonLd\"]" };
+	const PAGE$10 = "product page";
+	/** The product as the page's first query loaded it. */
+	const productRecordSchema = object({
+		slug: string().regex(DEPOP_SLUG),
+		/** `STATUS_ONSALE`, `STATUS_SOLD`, ... (STATUSES). */
+		status: string(),
+		description: string()
+	});
+	const structuredDataSchema = object({ offers: object({
+		url: string(),
+		price: union([string(), number()]),
+		priceCurrency: string()
+	}) });
+	/**
+	* Depop's product statuses, as its Selling API names them too. Deleted and banned products are
+	* `ended`, as the Depop API adapter reads them: Depop keeps them, and a listing Listora ended
+	* stays readable as ended.
+	*/
+	const STATUSES = {
+		STATUS_ONSALE: "active",
+		STATUS_SOLD: "sold",
+		STATUS_MARKED_AS_SOLD: "sold",
+		STATUS_DELETED: "ended",
+		STATUS_BANNED: "ended"
+	};
+	/** Opens the product's page and reads it. */
+	async function readProduct(page, site, slug) {
+		await page.goto(productUrl(site, slug));
+		if (page.status() === 404) return {
+			state: {
+				found: false,
+				authoritative: false
+			},
+			sku: null
+		};
+		const records = findRecords(await flightRows(page), (record) => record["slug"] === slug && "status" in record && "description" in record);
+		if (records.length === 0) throw changed$2(PAGE$10, "has none of the product data Listora reads");
+		const product = expectShape$1(productRecordSchema, records[0], PAGE$10);
+		const status = STATUSES[product.status];
+		if (status === void 0) throw changed$2(PAGE$10, "shows a product status Listora does not know");
+		const priceCents = await offerPrice(page, slug);
+		const { description, sku } = listingCopy(product.description);
+		return {
+			state: {
+				found: true,
+				externalListingId: product.slug,
+				externalUrl: productUrl(site, product.slug),
+				status,
+				title: null,
+				description,
+				priceCents,
+				currency: "USD",
+				revision: null
+			},
+			sku
+		};
+	}
+	/** The product's price in cents, from the page's schema.org offer for this product. */
+	async function offerPrice(page, slug) {
+		const text = await page.text(PRODUCT_PAGE.structuredData);
+		if (text === null) throw changed$2(PAGE$10, "has no product data (structured data)");
+		let data;
+		try {
+			data = JSON.parse(text);
+		} catch {
+			throw changed$2(PAGE$10, "has structured data Listora can't parse");
+		}
+		const { offers } = expectShape$1(structuredDataSchema, data, PAGE$10);
+		if (!offers.url.includes(`/products/${slug}/`)) throw changed$2(PAGE$10, "offers a different product");
+		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$10, "shows a price that is not in US dollars");
+		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
+		if (match?.[1] === void 0) throw changed$2(PAGE$10, "shows a price Listora can't read");
+		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
 	}
 
 // src/depop/pages/selling-page.ts
@@ -5951,7 +6096,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	const PAGE$9 = "selling page";
 	const sellingPageSchema = object({
-		products: array(productRecordSchema),
+		products: array(productRecordSchema$1),
 		hasMore: boolean()
 	});
 	/** Opens one page of the seller's listings for sale and reads it. */
@@ -5962,6 +6107,80 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			products: props.products.map((record) => productRead(record, site, PAGE$9)),
 			hasMore: props.hasMore
 		};
+	}
+
+// src/depop/pages/shop-page.ts
+	const SHOP_PAGE = {
+		userMenu: "button#userNavItem-button",
+		links: "a[href]",
+		productLinks: "a[href*=\"/products/\"]"
+	};
+	/** A Depop username, the one segment of a shop's path. */
+	const USERNAME = /^[a-z0-9][a-z0-9._]{1,29}$/i;
+	/** Depop's own top-level pages, which a single-name path may also be. */
+	const SITE_PATHS = new Set("about app blog brand brands category checkout cookies discover download explore help legal likes login messages news privacy products safety search sell sellinghub settings shop signup sitemap terms".split(" "));
+	/** How long the menu and the shop's product list get to appear, and how often they are looked at. */
+	const APPEAR_MS = 8e3;
+	const LOOK_EVERY_MS$1 = 500;
+	/** The signed-in seller's username, from the profile link in the header's user menu. */
+	async function findSeller(page, site) {
+		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
+		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
+		const before = new Set(await profilePaths(page, site));
+		await page.click(SHOP_PAGE.userMenu);
+		const end = Date.now() + APPEAR_MS;
+		for (;;) {
+			const shown = usernameOf(new URL(page.url()).pathname);
+			if (shown !== null) return shown;
+			const added = [...new Set(await profilePaths(page, site))].filter((path) => !before.has(path));
+			if (added.length === 1 && added[0] !== void 0) {
+				const username = usernameOf(added[0]);
+				if (username !== null) return username;
+			}
+			if (added.length > 1) throw changed$2("user menu", `offers ${String(added.length)} profile links, not one`);
+			if (Date.now() >= end) throw changed$2("user menu", "has no link to the seller's shop");
+			await lookAgain(page, LOOK_EVERY_MS$1);
+		}
+	}
+	/**
+	* The slugs of the newest products the seller's shop shows, newest first, at most `limit`; none
+	* for a shop with nothing for sale (or one whose list didn't come in time, so absence is never
+	* definitive).
+	*/
+	async function newestProducts(page, site, username, limit) {
+		await page.goto(absolute$2(site, `/${encodeURIComponent(username)}/`));
+		if (page.status() === 404) throw changed$2("shop page", "is not there for the signed-in seller");
+		const end = Date.now() + APPEAR_MS;
+		while (!await page.exists(SHOP_PAGE.productLinks) && Date.now() < end) await lookAgain(page, LOOK_EVERY_MS$1);
+		const slugs = [];
+		for (const href of await page.attributes(SHOP_PAGE.productLinks, "href")) {
+			const slug = href === null ? null : slugOf(href, site);
+			if (slug !== null && !slugs.includes(slug)) slugs.push(slug);
+			if (slugs.length >= limit) break;
+		}
+		return slugs;
+	}
+	/** The page's links to single-name paths on the site (`/janedoe/`), as paths. */
+	async function profilePaths(page, site) {
+		const paths = [];
+		for (const href of await page.attributes(SHOP_PAGE.links, "href")) {
+			if (href === null || !URL.canParse(href, site.origin)) continue;
+			const url = new URL(href, site.origin);
+			if (url.origin !== site.origin) continue;
+			if (usernameOf(url.pathname) !== null) paths.push(url.pathname);
+		}
+		return paths;
+	}
+	function usernameOf(path) {
+		const segment = /^\/([^/]+)\/?$/.exec(path)?.[1];
+		if (segment === void 0) return null;
+		const name = decodeURIComponent(segment);
+		return USERNAME.test(name) && !SITE_PATHS.has(name.toLowerCase()) ? name : null;
+	}
+	function slugOf(href, site) {
+		if (!URL.canParse(href, site.origin)) return null;
+		const url = new URL(href, site.origin);
+		return url.origin === site.origin ? slugFromPath(url.pathname) : null;
 	}
 
 // src/depop/pages/sold-items-page.ts
@@ -6022,21 +6241,33 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			message: "This listing was deleted on Depop, so it cannot be changed.",
 			fixHint: "Relist the item as a new Depop listing."
 		});
-		/** The listing the newest listings for sale hold under this SKU, if any. */
+		/**
+		* The listing the seller's newest listings for sale hold under this SKU, if any. Their shop
+		* links to them; each one's SKU is on its own page, so a listing found by SKU reads exactly as
+		* it does by its slug.
+		*/
 		async function findBySku(step, sku) {
-			const match = (await step("look at the newest listings", { mutates: false }, (page) => readSellingPage(page, site, 1))).products.slice(0, 8).find((product) => product.sku === sku);
-			if (match === void 0) return null;
-			return step("read the listing", { mutates: false }, (page) => readProduct(page, site, match.listing.externalListingId));
+			const seller = await step("find the seller", { mutates: false }, (page) => findSeller(page, site));
+			const slugs = await step("look at the newest listings", { mutates: false }, (page) => newestProducts(page, site, seller, 8));
+			for (const slug of slugs) {
+				const read = await step("read the listing", { mutates: false }, (page) => readProduct(page, site, slug));
+				if (read.sku === sku) return read;
+			}
+			return null;
 		}
-		/** After a submit: Depop's refusal, or the product it opened, with its revision. */
-		async function submitted(page, outcome) {
+		/**
+		* After a submit: Depop's refusal, or the product it opened. The product is read back by the
+		* operation's check, not here: the submit already happened, and its page may not show the
+		* product for a moment.
+		*/
+		function submitted(outcome) {
 			if (outcome.type === "refused") return {
 				type: "rejected",
 				code: "validation_failed",
 				message: outcome.message
 			};
 			return {
-				...revisionOf$2(await readShownProduct(page, site)),
+				type: "applied",
 				externalListingId: outcome.slug
 			};
 		}
@@ -6053,11 +6284,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				};
 			}
 			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-			await step("fill in the listing", { mutates: false }, async (page) => {
+			await step("fill in the listing", {
+				mutates: false,
+				timeoutMs: 9e4
+			}, async (page) => {
 				await openSellForm$1(page, site);
 				await fillListing$2(page, payload, sku, files);
+				await expectSubmit(page, "post");
 			});
-			return step("post", { mutates: true }, async (page) => submitted(page, await submitListing$2(page, "post")));
+			return step("post", {
+				mutates: true,
+				timeoutMs: 6e4
+			}, async (page) => submitted(await submitListing$2(page, "post")));
 		}
 		/** Opens the editor of a listing on sale; a result instead when it can't be edited. */
 		async function editor(op, step) {
@@ -6077,8 +6315,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				if (payload === null) throw new Error("a revise has a payload");
 				const opened = await editor(op, step);
 				if (!("slug" in opened)) return opened;
-				await step("fill in the changes", { mutates: false }, (page) => fillListing$2(page, payload, listingSku(op.listing), null));
-				return step("save", { mutates: true }, async (page) => submitted(page, await submitListing$2(page, "save")));
+				await step("fill in the changes", { mutates: false }, async (page) => {
+					await fillListing$2(page, payload, listingSku(op.listing), null);
+					await expectSubmit(page, "save");
+				});
+				return step("save", {
+					mutates: true,
+					timeoutMs: 6e4
+				}, async (page) => submitted(await submitListing$2(page, "save")));
 			},
 			price: async (op, step) => {
 				const priceCents = op.desired.priceCents;
@@ -6094,8 +6338,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				};
 				const opened = await editor(op, step);
 				if (!("slug" in opened)) return opened;
-				await step("fill in the price", { mutates: false }, (page) => fillPrice$2(page, priceCents));
-				return step("save", { mutates: true }, async (page) => submitted(page, await submitListing$2(page, "save")));
+				await step("fill in the price", { mutates: false }, async (page) => {
+					await fillPrice$2(page, priceCents);
+					await expectSubmit(page, "save");
+				});
+				return step("save", {
+					mutates: true,
+					timeoutMs: 6e4
+				}, async (page) => submitted(await submitListing$2(page, "save")));
 			},
 			end: async (op, step) => {
 				const slug = op.listing.externalListingId;
@@ -6107,7 +6357,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				if (!("slug" in opened)) return opened;
 				return step("delete", { mutates: true }, async (page) => {
 					await deleteListing(page);
-					return revisionOf$2(await readShownProduct(page, site));
+					return { type: "applied" };
 				});
 			},
 			relist: async (op, step) => {
@@ -7458,13 +7708,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					};
 				}
 				const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-				if (await step("open the sell page", { mutates: false }, (page) => openSellForm(page, site)) === "verification_required") return {
+				if (await step("open the sell page", {
+					mutates: false,
+					timeoutMs: 6e4
+				}, (page) => openSellForm(page, site)) === "verification_required") return {
 					type: "rejected",
 					code: "account_verification_required",
 					message: "Mercari asks you to verify your account before you can list.",
 					fixHint: "Open Mercari, start a listing, tap Verify, and finish its steps. Then list again."
 				};
-				await step("fill in the listing", { mutates: false }, (page) => fillListing(page, payload, sku, files));
+				await step("fill in the listing", {
+					mutates: false,
+					timeoutMs: 9e4
+				}, (page) => fillListing(page, payload, sku, files));
 				return step("list", { mutates: true }, async (page) => submitted(page, await submitListing(page, "list")));
 			},
 			revise: async (op, step) => {
@@ -7768,7 +8024,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* `inputPrice` for the listing price, `sku`), the photos input is `#img-file-input`, and a new
 	* listing is published in two steps, Next (`data-et-name="next"`) and then List on the share
 	* step (`data-et-name="list"`), while a change is saved with Update (`data-et-name="update"`).
-	* Poshmark's validation messages are `.form__error-message`. The pickers (catalog, size,
+	* Poshmark's validation messages are `.form__error-message`. Read on the captain's real session
+	* (2026-10-26, from the evidence of a run that stopped there): picking the photos opens Poshmark's
+	* cover-photo editor (`ImageEditModal`, drawn only while open), which keeps the photos only once
+	* its Apply (`data-et-name="apply"`) confirms them, and the listing price field is
+	* `data-vv-name="listingPrice"`; there is no `data-vv-name="brand"` field. The pickers (catalog, size,
 	* condition, availability) and the brand field are Listora's model still, confirmed on a real
 	* session from the evidence a stopped run logs. A selector that no longer matches ends the step
 	* as `element_missing` before anything is submitted, so the step goes to the user. The fake
@@ -7788,8 +8048,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		description: "textarea[data-vv-name=\"description\"]",
 		brand: "input[data-vv-name=\"brand\"]",
 		originalPrice: "input[data-vv-name=\"originalPrice\"]",
-		/** The listing price (the suggested-price dialog's own field is `inputMinimumPrice`). */
-		listingPrice: "input[data-vv-name=\"inputPrice\"]:not([name=\"inputMinimumPrice\"])",
+		/** The listing price, as the form a seller's session shows names it. */
+		listingPrice: "input[data-vv-name=\"listingPrice\"]",
+		/** The cover-photo editor's Apply, there only while the editor is open. */
+		applyPhoto: "button[data-et-name=\"apply\"]",
 		sku: "input[data-vv-name=\"sku\"]",
 		/** A picker: `[data-test="<name>"]`, opened by its summary, with labeled choices. */
 		picker: (name) => `details[data-test="${name}"]`,
@@ -7817,17 +8079,41 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		}
 		return true;
 	}
-	/** Adds the photos in posting order; the first is the cover. */
+	/** How long the cover-photo editor gets to open after the photos are picked. */
+	const EDITOR_OPENS_MS = 6e3;
+	const LOOK_EVERY_MS = 500;
+	/**
+	* Adds the photos in posting order; the first is the cover. Poshmark's cover-photo editor opens
+	* on them, and they are kept once its Apply confirms the cover as it is.
+	*/
 	async function addPhotos(page, photos) {
+		await expectField(page, FORM_SELECTORS.photos, "photo input");
 		await page.upload(FORM_SELECTORS.photos, photos);
+		const end = Date.now() + EDITOR_OPENS_MS;
+		while (!await page.exists(FORM_SELECTORS.applyPhoto)) {
+			if (Date.now() >= end) return;
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
+		}
+		await page.click(FORM_SELECTORS.applyPhoto);
+		await page.waitFor(FORM_SELECTORS.applyPhoto, "detached");
 	}
 	/** Title, description, brand, and prices. On the edit form this replaces what the listing had. */
 	async function fillText(page, payload) {
+		await expectField(page, FORM_SELECTORS.title, "title field");
 		await page.fill(FORM_SELECTORS.title, payload.title);
+		await expectField(page, FORM_SELECTORS.description, "description field");
 		await page.fill(FORM_SELECTORS.description, payload.description);
-		await page.fill(FORM_SELECTORS.brand, payload.brand ?? "");
+		await expectField(page, FORM_SELECTORS.originalPrice, "original price field");
 		await page.fill(FORM_SELECTORS.originalPrice, payload.originalPrice === null ? "" : wholeDollars(payload.originalPrice.amountCents));
 		await setPrice(page, payload.price.amountCents);
+		if (payload.brand !== null) {
+			await expectField(page, FORM_SELECTORS.brand, "brand field");
+			await page.fill(FORM_SELECTORS.brand, payload.brand);
+		}
+	}
+	/** A field the form must have; without it the step ends at once, before anything is sent. */
+	async function expectField(page, selector, what) {
+		if (!await page.exists(selector)) throw new PageChangedError(`Poshmark's listing form has no ${what} (${selector})`);
 	}
 	/** The department, category, and (when the form offers it) subcategory. */
 	async function chooseCatalog(page, catalog) {
@@ -7849,6 +8135,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		await page.fill(FORM_SELECTORS.sku, sku);
 	}
 	async function setPrice(page, priceCents) {
+		await expectField(page, FORM_SELECTORS.listingPrice, "listing price field");
 		await page.fill(FORM_SELECTORS.listingPrice, wholeDollars(priceCents));
 	}
 	async function setAvailability(page, availability) {
@@ -8124,8 +8411,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 					externalListingId: existing
 				};
 				const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-				if (!await step("open the listing form", { mutates: false }, (page) => openForm(page, site.createListing()))) throw new PageChangedError("Poshmark's listing form isn't there");
-				await step("add the photos", { mutates: false }, (page) => addPhotos(page, files));
+				if (!await step("open the listing form", {
+					mutates: false,
+					timeoutMs: 6e4
+				}, (page) => openForm(page, site.createListing()))) throw new PageChangedError("Poshmark's listing form isn't there");
+				await step("add the photos", {
+					mutates: false,
+					timeoutMs: 6e4
+				}, (page) => addPhotos(page, files));
 				await fillListing(step, payload);
 				await step("set the SKU and availability", { mutates: false }, async (page) => {
 					await fillSku(page, sku);
@@ -8493,13 +8786,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     .map((script) => ({ id: script.id || null, type: script.type || null }))
     .slice(0, 40);
   const named = ['data-testid', 'data-test', 'data-vv-name', 'data-et-name', 'name', 'id', 'role', 'aria-label', 'placeholder'];
-  const controls = [...document.querySelectorAll('input, textarea, select, button, [role="button"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"], [contenteditable="true"]')]
+  const controls = [...document.querySelectorAll('input, textarea, select, button, summary, [role="button"], [role="combobox"], [role="listbox"], [role="radio"], [role="checkbox"], [contenteditable="true"], [data-et-name]:not(a), [data-test]:not(a)')]
     .slice(0, 120)
     .map((element) => ({
       tag: element.tagName.toLowerCase(),
       type: element.getAttribute('type'),
       names: named.flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
-      text: element.tagName === 'BUTTON' || element.getAttribute('role') === 'button' ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : null,
+      text: element.tagName === 'BUTTON' || element.tagName === 'SUMMARY' || element.getAttribute('role') === 'button' || (element.hasAttribute('data-et-name') && !/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName)) ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : null,
     }));
   const choices = [...new Set([...document.querySelectorAll('option, [role="option"], [role="menuitem"], [role="radio"], label, legend')]
     .map((element) => (element.textContent || '').replace(/\\s+/g, ' ').trim())
@@ -8507,7 +8800,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices };
 })()`;
 	/** Words of paths, titles, and labels that say what a page is, never whose it is. */
-	const STRUCTURAL_WORDS = new Set("a about access account accounts active and api apps are auth back brand brands bundles buy category categories closet closets config create create-listing current dashboard denied depop drafts ebay edit edit-listing error experiments feature features feed flags for found graphql health home hub human identity in in_progress inactive inbox info item items just likes list listing listings log log-in log-out login logout marketplace me mercari messages moment my my-page mypage new news not notifications of offers on order orders page poshmark product products profile profiles purchases rest robot sales search sell seller selling session sessions settings shipping shop sign sign-in sign-out signin signout sold something status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with wrong www you your address addresses balance bff buyer buyers complete completed count counts details draft feeds followers following gateway inquiries insights internal mobile overview payout payouts pending preferences presentation private public purchase receipt receipts referrals reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary transaction transactions verification verifications".split(" "));
+	const STRUCTURAL_WORDS = new Set("a about access account accounts active and api apps are auth back brand brands bundles buy category categories closet closets config create create-listing current dashboard denied depop drafts ebay edit edit-listing error experiments feature features feed flags for found graphql health home hub human identity in in_progress inactive inbox info item items just likes list listing listings log log-in log-out login logout marketplace me mercari messages moment my my-page mypage new news not notifications of offers on order orders page poshmark product products profile profiles purchases rest robot sales search sell seller selling session sessions settings shipping shop sign sign-in sign-out signin signout sold something status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with wrong www you your address addresses balance bff buyer buyers complete completed count counts details draft feeds followers following gateway inquiries insights internal mobile overview payout payouts pending preferences presentation private public purchase receipt receipts referrals reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary transaction transactions verification verifications add apply cancel choose color colour condition continue cover department description designer discard done enter next optional photo photos post price quantity required save select single size sizes style subcategory title type update upload".split(" "));
 	/** Keys whose children are keyed by a user, an id, or a name. */
 	const KEYED_BY_RECORD = /^(users|profiles|closets|accounts|byId|entities|people|members)$/i;
 	/** Subtrees of a page's data the skeleton follows down: who is signed in, and Next.js props. */

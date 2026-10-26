@@ -221,12 +221,17 @@ export function createPoshmarkScripts(
       const files = await step('get the photos', { mutates: false }, (_page, signal) =>
         Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
       );
-      const opened = await step('open the listing form', { mutates: false }, (page) =>
-        openForm(page, site.createListing()),
+      // Poshmark's listing editor is a heavy page: it gets more time than a step's default.
+      const opened = await step(
+        'open the listing form',
+        { mutates: false, timeoutMs: 60_000 },
+        (page) => openForm(page, site.createListing()),
       );
       // Poshmark sends a seller to the form, never to a 404, so a missing one is a changed page.
       if (!opened) throw new PageChangedError("Poshmark's listing form isn't there");
-      await step('add the photos', { mutates: false }, (page) => addPhotos(page, files));
+      await step('add the photos', { mutates: false, timeoutMs: 60_000 }, (page) =>
+        addPhotos(page, files),
+      );
       await fillListing(step, payload);
       await step('set the SKU and availability', { mutates: false }, async (page) => {
         await fillSku(page, sku);

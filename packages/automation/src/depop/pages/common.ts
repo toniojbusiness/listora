@@ -56,3 +56,13 @@ export async function awaitElement(
 export function changed(pageName: string, problem: string): PageChangedError {
   return new PageChangedError(`Depop's ${pageName} ${problem}; the page may have changed.`);
 }
+
+/**
+ * Looks at the page again after a moment: the driver inspects it (a check that came up stops
+ * the run) and learns its address anew, which the page's own scripts may have changed without
+ * loading a page (Depop opens a new listing that way).
+ */
+export async function lookAgain(page: PageDriver, ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+  await page.waitFor('body', 'attached');
+}

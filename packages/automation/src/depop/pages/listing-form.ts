@@ -14,14 +14,20 @@
  * seller with none gets Depop's own message asking for one (a rejection the user can fix).
  *
  * After submitting, the form either shows Depop's validation message (a rejection in Depop's own
- * words) or opens the product's page.
+ * words) or opens the product's page (`/products/<slug>/`, where Depop shows a new listing).
  */
 import type { PageDriver, UploadFile } from '../../runner/types.ts';
 import { depopListingText, depopPriceField, type DepopAutomationPayload } from '../payload.ts';
 import { DEPOP_PATHS, slugFromPath } from '../site.ts';
 import { sizeOptionMatches } from '../sizes.ts';
-import { absolute, awaitElement, changed, expectElement, type DepopSite } from './common.ts';
-import { PRODUCT_PAGE } from './product-page.ts';
+import {
+  absolute,
+  awaitElement,
+  changed,
+  expectElement,
+  lookAgain,
+  type DepopSite,
+} from './common.ts';
 
 /**
  * Read on a real session (2026-10-26, from the evidence a stopped run logs): the sell page is
@@ -40,8 +46,16 @@ export const LISTING_FORM = {
   price: 'input#priceAmount__input',
   post: 'button[type="submit"]:text-is("Post")',
   save: 'button[type="submit"]:text-is("Save")',
+  /** "Post and add another": checked, Depop opens a new empty form instead of the listing. */
+  postAnother: 'input#post-another[type="checkbox"]',
   error: '[role="alert"]',
+  /** A field Depop marks as needing a fix. */
+  invalid: '[aria-invalid="true"]',
 } as const;
+
+/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
+const ANSWER_MS = 45_000;
+const LOOK_EVERY_MS = 500;
 
 /** One of Depop's combobox pickers (`group` is the category). */
 function combo(name: string) {
@@ -90,6 +104,32 @@ export async function fillListing(
   }
   await pick(page, 'condition', payload.condition.label, `condition "${payload.condition.label}"`);
   await fillPrice(page, payload.price.amountCents);
+  await expectComplete(page);
+}
+
+/**
+ * The filled form, before anything is submitted: no field marked as needing a fix and no
+ * message, so the submit sends a form Listora understands.
+ */
+async function expectComplete(page: PageDriver): Promise<void> {
+  const invalid = await page.count(LISTING_FORM.invalid);
+  if (invalid > 0) {
+    throw changed(FORM, `marks ${String(invalid)} filled field(s) as needing a fix`);
+  }
+  if ((await messages(page)).length > 0) throw changed(FORM, 'shows a message before posting');
+}
+
+/**
+ * Checks the form has its Post (sell) or Save (edit) button, before the step that submits it
+ * starts: that step counts as one that may have changed the listing.
+ */
+export async function expectSubmit(page: PageDriver, button: 'post' | 'save'): Promise<void> {
+  await expectElement(
+    page,
+    LISTING_FORM[button],
+    FORM,
+    `${button === 'post' ? 'Post' : 'Save'} button`,
+  );
 }
 
 /** Fills only the price (a price change on the edit page). */
@@ -104,18 +144,39 @@ export type Submitted =
   /** Depop opened the product's page. */
   | { type: 'posted'; slug: string };
 
-/** Submits the form with its Post (sell) or Save (edit) button. */
+/**
+ * Submits the form with its Post (sell) or Save (edit) button, and waits for Depop's answer:
+ * the product's page, or the form again with Depop's message or a field marked as needing a
+ * fix. Anything else (a page Listora doesn't know, or no answer in time) leaves the outcome
+ * unknown, so the operation's check reads the listing back.
+ */
 export async function submitListing(page: PageDriver, button: 'post' | 'save'): Promise<Submitted> {
   const selector = LISTING_FORM[button];
   await expectElement(page, selector, FORM, `${button === 'post' ? 'Post' : 'Save'} button`);
+  if (button === 'post' && (await page.exists(LISTING_FORM.postAnother))) {
+    await page.check(LISTING_FORM.postAnother, false);
+  }
   await page.click(selector);
-  // Whichever comes: the form again with Depop's message, or the product's page.
-  await page.waitFor(`${LISTING_FORM.error}, ${PRODUCT_PAGE.root}`);
-  const message = await page.text(LISTING_FORM.error);
-  if (message !== null) return { type: 'refused', message };
-  const slug = slugFromPath(new URL(page.url()).pathname);
-  if (slug === null) throw changed(FORM, 'opened a page that is not a product');
-  return { type: 'posted', slug };
+  const end = Date.now() + ANSWER_MS;
+  for (;;) {
+    const slug = slugFromPath(new URL(page.url()).pathname);
+    if (slug !== null) return { type: 'posted', slug };
+    const shown = await messages(page);
+    if (shown.length > 0) return { type: 'refused', message: shown.join(' ') };
+    if ((await page.count(LISTING_FORM.invalid)) > 0) {
+      return {
+        type: 'refused',
+        message: "Depop didn't take the listing: it marked a field as needing a fix.",
+      };
+    }
+    if (Date.now() >= end) throw changed(FORM, 'showed no product and no message after the submit');
+    await lookAgain(page, LOOK_EVERY_MS);
+  }
+}
+
+/** Depop's messages on the form (its alerts with text). */
+async function messages(page: PageDriver): Promise<string[]> {
+  return (await page.texts(LISTING_FORM.error)).filter((text) => text !== '');
 }
 
 /** Opens one of the form's comboboxes and picks the option with exactly this text. */

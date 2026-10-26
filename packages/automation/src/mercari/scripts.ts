@@ -129,8 +129,10 @@ export function createMercariScripts(
       const files = await step('get the photos', { mutates: false }, (_page, signal) =>
         Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
       );
-      const opened = await step('open the sell page', { mutates: false }, (page) =>
-        openSellForm(page, site),
+      const opened = await step(
+        'open the sell page',
+        { mutates: false, timeoutMs: 60_000 },
+        (page) => openSellForm(page, site),
       );
       if (opened === 'verification_required') {
         return {
@@ -141,7 +143,7 @@ export function createMercariScripts(
             'Open Mercari, start a listing, tap Verify, and finish its steps. Then list again.',
         };
       }
-      await step('fill in the listing', { mutates: false }, (page) =>
+      await step('fill in the listing', { mutates: false, timeoutMs: 90_000 }, (page) =>
         fillListing(page, payload, sku, files),
       );
       return step('list', { mutates: true }, async (page) =>

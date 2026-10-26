@@ -8,7 +8,11 @@
  * `inputPrice` for the listing price, `sku`), the photos input is `#img-file-input`, and a new
  * listing is published in two steps, Next (`data-et-name="next"`) and then List on the share
  * step (`data-et-name="list"`), while a change is saved with Update (`data-et-name="update"`).
- * Poshmark's validation messages are `.form__error-message`. The pickers (catalog, size,
+ * Poshmark's validation messages are `.form__error-message`. Read on the captain's real session
+ * (2026-10-26, from the evidence of a run that stopped there): picking the photos opens Poshmark's
+ * cover-photo editor (`ImageEditModal`, drawn only while open), which keeps the photos only once
+ * its Apply (`data-et-name="apply"`) confirms them, and the listing price field is
+ * `data-vv-name="listingPrice"`; there is no `data-vv-name="brand"` field. The pickers (catalog, size,
  * condition, availability) and the brand field are Listora's model still, confirmed on a real
  * session from the evidence a stopped run logs. A selector that no longer matches ends the step
  * as `element_missing` before anything is submitted, so the step goes to the user. The fake
@@ -39,8 +43,10 @@ export const FORM_SELECTORS = {
   description: 'textarea[data-vv-name="description"]',
   brand: 'input[data-vv-name="brand"]',
   originalPrice: 'input[data-vv-name="originalPrice"]',
-  /** The listing price (the suggested-price dialog's own field is `inputMinimumPrice`). */
-  listingPrice: 'input[data-vv-name="inputPrice"]:not([name="inputMinimumPrice"])',
+  /** The listing price, as the form a seller's session shows names it. */
+  listingPrice: 'input[data-vv-name="listingPrice"]',
+  /** The cover-photo editor's Apply, there only while the editor is open. */
+  applyPhoto: 'button[data-et-name="apply"]',
   sku: 'input[data-vv-name="sku"]',
   /** A picker: `[data-test="<name>"]`, opened by its summary, with labeled choices. */
   picker: (name: Picker) => `details[data-test="${name}"]`,
@@ -74,21 +80,49 @@ export async function openForm(page: PageDriver, url: string): Promise<boolean> 
   return true;
 }
 
-/** Adds the photos in posting order; the first is the cover. */
+/** How long the cover-photo editor gets to open after the photos are picked. */
+const EDITOR_OPENS_MS = 6_000;
+const LOOK_EVERY_MS = 500;
+
+/**
+ * Adds the photos in posting order; the first is the cover. Poshmark's cover-photo editor opens
+ * on them, and they are kept once its Apply confirms the cover as it is.
+ */
 export async function addPhotos(page: PageDriver, photos: readonly UploadFile[]): Promise<void> {
+  await expectField(page, FORM_SELECTORS.photos, 'photo input');
   await page.upload(FORM_SELECTORS.photos, photos);
+  const end = Date.now() + EDITOR_OPENS_MS;
+  while (!(await page.exists(FORM_SELECTORS.applyPhoto))) {
+    if (Date.now() >= end) return;
+    await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
+  }
+  await page.click(FORM_SELECTORS.applyPhoto);
+  await page.waitFor(FORM_SELECTORS.applyPhoto, 'detached');
 }
 
 /** Title, description, brand, and prices. On the edit form this replaces what the listing had. */
 export async function fillText(page: PageDriver, payload: PoshmarkListingPayload): Promise<void> {
+  await expectField(page, FORM_SELECTORS.title, 'title field');
   await page.fill(FORM_SELECTORS.title, payload.title);
+  await expectField(page, FORM_SELECTORS.description, 'description field');
   await page.fill(FORM_SELECTORS.description, payload.description);
-  await page.fill(FORM_SELECTORS.brand, payload.brand ?? '');
+  await expectField(page, FORM_SELECTORS.originalPrice, 'original price field');
   await page.fill(
     FORM_SELECTORS.originalPrice,
     payload.originalPrice === null ? '' : wholeDollars(payload.originalPrice.amountCents),
   );
   await setPrice(page, payload.price.amountCents);
+  if (payload.brand !== null) {
+    await expectField(page, FORM_SELECTORS.brand, 'brand field');
+    await page.fill(FORM_SELECTORS.brand, payload.brand);
+  }
+}
+
+/** A field the form must have; without it the step ends at once, before anything is sent. */
+async function expectField(page: PageDriver, selector: string, what: string): Promise<void> {
+  if (!(await page.exists(selector))) {
+    throw new PageChangedError(`Poshmark's listing form has no ${what} (${selector})`);
+  }
 }
 
 /** The department, category, and (when the form offers it) subcategory. */
@@ -119,6 +153,7 @@ export async function fillSku(page: PageDriver, sku: string): Promise<void> {
 }
 
 export async function setPrice(page: PageDriver, priceCents: number): Promise<void> {
+  await expectField(page, FORM_SELECTORS.listingPrice, 'listing price field');
   await page.fill(FORM_SELECTORS.listingPrice, wholeDollars(priceCents));
 }
 
