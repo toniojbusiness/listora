@@ -3,12 +3,18 @@
  * a time with a "Next" link: `active` (on sale), `inactive` (deactivated), `in_progress` (sold,
  * waiting to ship), and `sold` (done). Each row links to its listing and shows the title and
  * price; sold rows also show when the item sold (`time[datetime]`).
+ *
+ * Read on a real session (2026-10-26): Mercari's scripts draw a tab after its document is ready,
+ * from its own API (`userItemsQuery`), and a tab with nothing in it shows `ZeroListings` instead
+ * of rows. The rows' markup is not confirmed yet: that session had none.
  */
 import type { PageDriver } from '../../runner/types.ts';
 import { itemIdFromPath, MERCARI_PATHS, type MercariListingTab } from '../site.ts';
-import { absolute, changed, parsePrice, type MercariSite } from './common.ts';
+import { absolute, awaitElement, changed, parsePrice, type MercariSite } from './common.ts';
 
 export const LISTINGS_PAGE = {
+  /** What an empty tab shows instead of its rows. */
+  empty: '[data-testid="ZeroListings"]',
   list: '[data-testid="ListingList"]',
   row: '[data-testid="ListingList"] [data-testid="ListingRow"]',
   link: '[data-testid="ListingList"] [data-testid="ListingRow"] a[data-testid="ListingLink"]',
@@ -40,7 +46,8 @@ export async function readListingsPage(
 ): Promise<ListingsPage> {
   await page.goto(absolute(site, MERCARI_PATHS.listings(tab, pageNumber)));
   const name = `${tab.replace('_', ' ')} listings page`;
-  if (!(await page.exists(LISTINGS_PAGE.list))) throw changed(name, 'has no listing list');
+  await awaitElement(page, `${LISTINGS_PAGE.empty}, ${LISTINGS_PAGE.list}`, name, 'listing list');
+  if (await page.exists(LISTINGS_PAGE.empty)) return { rows: [], hasNext: false };
   const sold = tab === 'in_progress' || tab === 'sold';
   const [links, titles, prices, soldAts] = await Promise.all([
     page.attributes(LISTINGS_PAGE.link, 'href'),

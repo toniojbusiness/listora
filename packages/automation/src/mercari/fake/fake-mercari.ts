@@ -863,7 +863,13 @@ function listingsPage(
   const next = more
     ? `<a data-testid="NextPage" href="/mypage/listings/${tab}/?page=${String(number + 1)}">Next</a>`
     : '';
-  return `<main><h1>Listings</h1><ul data-testid="ListingList">${items}</ul>${next}</main>`;
+  // As Mercari's tabs are (read 2026-10-26): drawn by script once the data loaded, and an empty
+  // tab shows `ZeroListings` instead of a list.
+  const drawn =
+    rows.length === 0
+      ? '<div data-testid="ZeroListings">No listings yet</div>'
+      : `<ul data-testid="ListingList">${items}</ul>${next}`;
+  return `<main data-testid="MyListings"><h1>Listings</h1><div id="tab"></div></main><script>setTimeout(() => { document.getElementById('tab').innerHTML = ${JSON.stringify(drawn)}; }, 300);</script>`;
 }
 
 /**
