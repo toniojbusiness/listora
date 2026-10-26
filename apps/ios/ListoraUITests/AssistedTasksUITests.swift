@@ -133,23 +133,27 @@ final class AssistedTasksUITests: XCTestCase {
         ))
         app.buttons["task.copy.price"].tap()
 
+        // The steps scroll under the Done bar, so each one is brought clear of it before a tap:
+        // a tap on a step behind the bar would land on Done and finish the task.
+        let bar = app.buttons["task.done"]
         let save = app.buttons["task.savePhotos"]
-        save.swipeUpIfHidden(in: app)
+        save.scrollClear(of: bar, in: app)
         save.tap()
         allowPhotoAccessIfAsked()
         XCTAssertTrue(app.descendants(matching: .any)["task.photosSaved"].waitForExistence(timeout: 30))
 
         // The link opens Poshmark (Safari in the simulator); come back to finish.
         let open = app.buttons["task.open"]
-        open.swipeUpIfHidden(in: app)
+        open.scrollClear(of: bar, in: app)
         open.tap()
         let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
         XCTAssertTrue(safari.wait(for: .runningForeground, timeout: 15), "Poshmark did not open")
         app.activate()
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+        XCTAssertTrue(bar.waitForExistence(timeout: 5), "the task closed before Done")
 
         let link = app.textFields["task.link"]
-        link.swipeUpIfHidden(in: app)
+        link.scrollClear(of: bar, in: app)
         link.tap()
         link.typeText(listingURL)
         keepScreenshot("Link pasted")
@@ -245,5 +249,22 @@ extension XCUIElement {
             app.swipeUp()
             left -= 1
         }
+    }
+
+    /// Scrolls the app until the element is on screen and wholly above `bar`, a bottom action bar
+    /// the content scrolls under. XCUITest counts an element under such a bar as hittable, and
+    /// taps the bar instead. Short drags, so the element doesn't overshoot past the top.
+    func scrollClear(of bar: XCUIElement, in app: XCUIApplication, attempts: Int = 8) {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        for _ in 0 ..< attempts {
+            let barTop = bar.exists ? bar.frame.minY : app.frame.maxY
+            if isHittable, frame.maxY <= barTop {
+                return
+            }
+            // Below the bar, or off screen at the bottom: content up. Off screen at the top: down.
+            let dy: CGFloat = frame.minY < app.frame.midY && !isHittable ? 200 : -200
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: dy)))
+        }
+        XCTFail("\(identifier) is not on screen above \(bar.identifier): \(frame)")
     }
 }

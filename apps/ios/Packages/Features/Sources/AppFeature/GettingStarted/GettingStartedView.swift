@@ -133,22 +133,30 @@ private struct StepPage: View {
     }
 }
 
-/// Which page is showing, as dots; VoiceOver reads "Step 2 of 3".
+/// Which page is showing, as dots; VoiceOver reads "Step 2 of 3". Its accessibility frame is a
+/// full tap target (the audit checks every element's), drawn over the space around the dots so
+/// the layout stays 8 points tall.
 private struct PageDots: View {
     let count: Int
     let current: Int
+
+    private static let dotHeight: CGFloat = 8
 
     var body: some View {
         HStack(spacing: Spacing.xs) {
             ForEach(0 ..< count, id: \.self) { index in
                 Capsule()
                     .fill(index == current ? Palette.brand.color : Palette.separator.color)
-                    .frame(width: index == current ? 22 : 8, height: 8)
+                    .frame(width: index == current ? 22 : 8, height: Self.dotHeight)
             }
         }
         .motion(Motion.snappy, value: current)
+        .frame(minWidth: Layout.minimumTapTarget, minHeight: Layout.minimumTapTarget)
+        .contentShape(.accessibility, Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \(current + 1) of \(count)")
+        .accessibilityIdentifier("gettingStarted.pageDots")
+        .padding(.vertical, -(Layout.minimumTapTarget - Self.dotHeight) / 2)
     }
 }
 

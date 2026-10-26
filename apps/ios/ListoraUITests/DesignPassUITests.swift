@@ -23,6 +23,14 @@ final class DesignPassUITests: XCTestCase {
         app.launch()
         let guide = app.buttons["gettingStarted.skip"]
         XCTAssertTrue(guide.waitForExistence(timeout: 10))
+        // Every control, and the page dots VoiceOver reads, is at least a 44-point tap target.
+        let targets = ["gettingStarted.skip", "gettingStarted.continue", "gettingStarted.linkAccounts"]
+            .map { app.buttons[$0] } + [app.descendants(matching: .any)["gettingStarted.pageDots"]]
+        for target in targets {
+            XCTAssertTrue(target.exists, target.debugDescription)
+            XCTAssertGreaterThanOrEqual(target.frame.width, 44, "\(target.identifier): \(target.frame)")
+            XCTAssertGreaterThanOrEqual(target.frame.height, 44, "\(target.identifier): \(target.frame)")
+        }
         for step in 1 ... 2 {
             XCTAssertTrue(app.descendants(matching: .any)["gettingStarted.step.\(step)"].waitForExistence(timeout: 5))
             app.buttons["gettingStarted.continue"].tap()
