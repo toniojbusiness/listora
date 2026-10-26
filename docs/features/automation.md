@@ -48,7 +48,11 @@ from the app
   and task credential endpoints are), or internal host names. Images, scripts, and styles from
   other public hosts (the marketplaces' CDNs) still load. Chromium follows HTTP redirects
   without asking, so a redirect hop is not checked. If a redirect sends the main frame
-  elsewhere, the page inspection below stops the run.
+  elsewhere, the page inspection below stops the run. A run that stops logs its session's
+  network, by origin only (`NetworkLog`, `runner/network-log.ts`): the requests these rules
+  refused, the responses with an error status, and the requests that failed. So a page that
+  broke because of Listora's rules can be told apart from one the marketplace answered with
+  errors.
 - **Safety rules** (`safety/`, `profiles.ts`). Pacing: a random delay before every action and
   keystroke, and between a seller's sessions, per marketplace (`AUTOMATION_<MARKETPLACE>_*`),
   never below the floors in `profiles.ts`. Rate limits: runs per hour and per day per seller,

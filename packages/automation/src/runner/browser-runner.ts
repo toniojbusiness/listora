@@ -15,6 +15,7 @@ import { cookieOnDomains } from '@listora/connections';
 import type { AutomationProfile } from '../profiles.ts';
 import { requestAllowed } from '../safety/network.ts';
 import { Pacing, type PacingOptions } from '../safety/pacing.ts';
+import { NetworkLog } from './network-log.ts';
 import { loadChromium } from './playwright.ts';
 import type { ScreenshotStore } from './screenshots.ts';
 import { PlaywrightSession } from './session.ts';
@@ -66,7 +67,8 @@ export class PlaywrightBrowserRunner implements BrowserRunner {
           origins: [],
         },
       });
-      const page = await guardNetwork(context, spec.profile)
+      const network = new NetworkLog();
+      const page = await guardNetwork(context, spec.profile, network)
         .then(() => context.newPage())
         .catch(async (error: unknown) => {
           await context.close().catch(() => undefined);
@@ -80,6 +82,7 @@ export class PlaywrightBrowserRunner implements BrowserRunner {
         stepTimeoutMs: this.#options.stepTimeoutMs ?? 30_000,
         accountId: spec.accountId,
         runId: spec.runId,
+        network,
         onClosed: release,
       });
     } catch (error) {
@@ -159,9 +162,13 @@ export class PlaywrightBrowserRunner implements BrowserRunner {
 /**
  * Checks every request of the session before Chromium sends it (safety/network.ts): the main
  * frame stays on the marketplace, and nothing reaches a private address. A refused request
- * fails in the page as if blocked by the client.
+ * fails in the page as if blocked by the client, and is counted in the session's network log.
  */
-async function guardNetwork(context: BrowserContext, profile: AutomationProfile): Promise<void> {
+async function guardNetwork(
+  context: BrowserContext,
+  profile: AutomationProfile,
+  network: NetworkLog,
+): Promise<void> {
   await context.route('**/*', async (route: Route) => {
     const request = route.request();
     let mainFrame = false;
@@ -172,14 +179,18 @@ async function guardNetwork(context: BrowserContext, profile: AutomationProfile)
         // A request without a frame (a service worker's; they are blocked) is no navigation.
       }
     }
-    await (requestAllowed(request.url(), mainFrame, profile)
-      ? route.fallback()
-      : route.abort('blockedbyclient'));
+    if (requestAllowed(request.url(), mainFrame, profile)) {
+      await route.fallback();
+    } else {
+      network.refused(request.url());
+      await route.abort('blockedbyclient');
+    }
   });
   await context.routeWebSocket(/.*/, async (socket) => {
     if (requestAllowed(socket.url(), false, profile)) {
       socket.connectToServer();
     } else {
+      network.refused(socket.url());
       await socket.close({ code: 1008, reason: 'blocked' });
     }
   });
