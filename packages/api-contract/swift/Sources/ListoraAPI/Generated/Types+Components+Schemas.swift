@@ -6314,6 +6314,19 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ConnectionExecution/waitingSince`.
             public var waitingSince: Components.Schemas.Timestamp?
+            /// Whether the connection may run in Listora's cloud. False for a marketplace that
+            /// refuses Listora's cloud servers: the app does not offer the cloud, and
+            /// `setConnectionExecution` refuses a move there.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/cloudAllowed`.
+            public var cloudAllowed: Swift.Bool
+            /// Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
+            /// blocks cloud servers, so Listora runs it from your phone").
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/cloudBlockedReason`.
+            public var cloudBlockedReason: Swift.String?
             /// Creates a new `ConnectionExecution`.
             ///
             /// - Parameters:
@@ -6323,13 +6336,17 @@ extension Components {
             ///   - deviceName:
             ///   - waiting: Changes and checks waiting for that phone to run them.
             ///   - waitingSince: Since when the oldest of them waits.
+            ///   - cloudAllowed: Whether the connection may run in Listora's cloud. False for a marketplace that
+            ///   - cloudBlockedReason: Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
             public init(
                 location: Components.Schemas.ExecutionLocation,
                 label: Swift.String,
                 deviceInstallationId: Components.Schemas.Id? = nil,
                 deviceName: Swift.String? = nil,
                 waiting: Swift.Int32? = nil,
-                waitingSince: Components.Schemas.Timestamp? = nil
+                waitingSince: Components.Schemas.Timestamp? = nil,
+                cloudAllowed: Swift.Bool,
+                cloudBlockedReason: Swift.String? = nil
             ) {
                 self.location = location
                 self.label = label
@@ -6337,6 +6354,8 @@ extension Components {
                 self.deviceName = deviceName
                 self.waiting = waiting
                 self.waitingSince = waitingSince
+                self.cloudAllowed = cloudAllowed
+                self.cloudBlockedReason = cloudBlockedReason
             }
             public enum CodingKeys: String, CodingKey {
                 case location
@@ -6345,6 +6364,8 @@ extension Components {
                 case deviceName
                 case waiting
                 case waitingSince
+                case cloudAllowed
+                case cloudBlockedReason
             }
         }
         /// - Remark: Generated from `#/components/schemas/ConnectionExecutionChange`.

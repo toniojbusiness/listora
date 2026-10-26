@@ -55,18 +55,47 @@ public struct MarketplaceRow: Identifiable, Equatable, Sendable {
     public struct Execution: Equatable, Sendable {
         public let label: String
         public let onPhone: Bool
+        /// It runs on this app's installation.
+        public let onThisPhone: Bool
         public let deviceName: String?
         /// Changes and checks waiting for that phone.
         public let waiting: Int
+        /// Whether the server lets it run in Listora's cloud; the app offers the cloud only then.
+        public let cloudAllowed: Bool
+        /// Why it can't run in the cloud, in the server's words, when it can't.
+        public let cloudBlockedReason: String?
 
-        /// "Runs on Sam's iPhone · 2 waiting".
+        /// "Runs on this iPhone · 2 waiting", "Runs on Sam's iPhone".
         public var text: String {
-            let place = onPhone ? deviceName.map { "Runs on \($0)" } ?? label : label
+            let place = if onThisPhone {
+                "Runs on this iPhone"
+            } else if onPhone {
+                deviceName.map { "Runs on \($0)" } ?? label
+            } else {
+                label
+            }
             return waiting > 0 ? "\(place) · \(waiting) waiting" : place
+        }
+
+        /// The move this row offers: from the cloud to the phone, or from the phone to the
+        /// cloud only when the server allows the cloud; nil when there is none.
+        public var move: Move? {
+            if !onPhone {
+                return .toPhone
+            }
+            return cloudAllowed ? .toCloud : nil
         }
     }
 
-    public init(connection: Components.Schemas.Connection) {
+    /// A move of a row's automated steps (``Execution/move``).
+    public enum Move: Equatable, Sendable {
+        case toCloud
+        case toPhone
+    }
+
+    /// `installationID`: this app's installation, so a marketplace that runs here says
+    /// "Runs on this iPhone".
+    public init(connection: Components.Schemas.Connection, installationID: String? = nil) {
         let marketplace = connection.marketplace.value1
         id = marketplace?.rawValue ?? connection.marketplace.value2 ?? "unknown"
         self.marketplace = marketplace
@@ -78,11 +107,15 @@ public struct MarketplaceRow: Identifiable, Equatable, Sendable {
         lastOkAt = connection.lastOkAt
         actions = Self.actions(of: connection, known: marketplace != nil)
         execution = connection.execution.map { execution in
-            Execution(
+            let onPhone = execution.location.value1 == .phone
+            return Execution(
                 label: execution.label,
-                onPhone: execution.location.value1 == .phone,
+                onPhone: onPhone,
+                onThisPhone: onPhone && installationID != nil && execution.deviceInstallationId == installationID,
                 deviceName: execution.deviceName,
                 waiting: Int(execution.waiting ?? 0),
+                cloudAllowed: execution.cloudAllowed,
+                cloudBlockedReason: execution.cloudAllowed ? nil : execution.cloudBlockedReason,
             )
         }
     }

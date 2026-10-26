@@ -68,7 +68,7 @@ export {
   scaleRunnerServiceToZero,
 } from './launcher.ts';
 export type { LauncherDependencies, RunnerLauncher, RunnerLaunchConfig } from './launcher.ts';
-export { setExecutionLocation } from './execution.ts';
+export { cloudAccess, setExecutionLocation } from './execution.ts';
 export { linkAutomationSession } from './link.ts';
 export type { LinkAutomationInput } from './link.ts';
 export {

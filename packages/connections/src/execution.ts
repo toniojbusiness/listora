@@ -17,11 +17,18 @@ export interface ExecutionState {
   checksWaiting: ReadonlySet<string>;
 }
 
+/**
+ * Whether a marketplace's automated steps may run in Listora's cloud (its automation profile's
+ * `cloudAllowed`), and why not, in one line the app shows.
+ */
+export type CloudAccess = { allowed: true } | { allowed: false; reason: string };
+
 export interface ExecutionView {
   location: ExecutionLocation;
   label: string;
   device?: { installationId: string; name: string };
   waiting?: { count: number; since: Date };
+  cloud: CloudAccess;
 }
 
 /** What the session's description needs of where it runs (`describeAutomationSession`). */
@@ -44,10 +51,11 @@ export function describeExecution(
     phone_device_id: string | null;
   },
   state: ExecutionState,
+  cloud: CloudAccess,
 ): ExecutionView | undefined {
   if (connection.mode !== 'automation') return undefined;
   if (connection.runs_on === 'cloud')
-    return { location: 'cloud', label: "Runs in Listora's cloud" };
+    return { location: 'cloud', label: "Runs in Listora's cloud", cloud };
   const device =
     connection.phone_device_id === null ? undefined : state.devices.get(connection.phone_device_id);
   const waiting = state.waiting.get(connection.id);
@@ -56,6 +64,7 @@ export function describeExecution(
       location: 'phone',
       label: 'Link it on your iPhone to run it there',
       ...(waiting === undefined ? {} : { waiting }),
+      cloud,
     };
   }
   return {
@@ -63,6 +72,7 @@ export function describeExecution(
     label: 'Runs on your iPhone',
     device,
     ...(waiting === undefined ? {} : { waiting }),
+    cloud,
   };
 }
 

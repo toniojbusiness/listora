@@ -127,7 +127,8 @@ thing.
   API health check. Without a linked session, Poshmark, Mercari, Depop, and eBay (without its API
   keys) show Not linked.
 - **In the app** (`MarketplacesFeature`): one card per marketplace with its mode, status, detail,
-  last successful check, where it runs (with Run on this iPhone or Run in the cloud), and actions
+  last successful check, where it runs (with Run on this iPhone, or Run in the cloud where the
+  server allows the cloud, else why not: [phone-execution.md](phone-execution.md)), and actions
   (Connect, Reconnect, Retry check; the main one filled); a
   Sale emails card; and `ConnectionAttentionBanner`, which Inventory shows above the list while
   anything needs attention and which opens Marketplaces in Settings. The Settings gear in the

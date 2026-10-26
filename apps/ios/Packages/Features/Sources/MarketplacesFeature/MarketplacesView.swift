@@ -218,13 +218,22 @@ struct MarketplaceRowView: View {
                         .accessibilityLabel(execution.text)
                         .accessibilityIdentifier("marketplaces.\(row.id).runsOn")
                     Spacer(minLength: 0)
-                    Button(execution.onPhone ? "Run in the cloud" : "Run on this iPhone") {
-                        onMove(!execution.onPhone)
+                    if let move = execution.move {
+                        Button(move == .toCloud ? "Run in the cloud" : "Run on this iPhone") {
+                            onMove(move == .toPhone)
+                        }
+                        .buttonStyle(.listoraTertiary)
+                        .loading(moving)
+                        .disabled(!isEnabled || moving)
+                        .accessibilityIdentifier("marketplaces.\(row.id).move")
                     }
-                    .buttonStyle(.listoraTertiary)
-                    .loading(moving)
-                    .disabled(!isEnabled || moving)
-                    .accessibilityIdentifier("marketplaces.\(row.id).move")
+                }
+                if let reason = execution.cloudBlockedReason {
+                    Text(reason)
+                        .font(Typography.footnote)
+                        .foregroundStyle(Palette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("marketplaces.\(row.id).cloudBlocked")
                 }
             }
             if !row.actions.isEmpty {

@@ -1166,7 +1166,9 @@ export interface paths {
          * @description Moves the connection's automated steps to Listora's cloud browser runner or to the
          *     iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
          *     moves to the cloud with it; a run the phone is in the middle of finishes there.
-         *     `409 invalid_state_transition` for a marketplace that is not linked by signing in.
+         *     `409 invalid_state_transition` for a marketplace that is not linked by signing in;
+         *     `409 marketplace_action_unavailable` for a move to the cloud of a marketplace that
+         *     refuses Listora's cloud servers (`execution.cloudAllowed` false).
          */
         put: operations["setConnectionExecution"];
         post?: never;
@@ -3153,6 +3155,17 @@ export interface components {
             waiting?: number;
             /** @description Since when the oldest of them waits. */
             waitingSince?: components["schemas"]["Timestamp"];
+            /**
+             * @description Whether the connection may run in Listora's cloud. False for a marketplace that
+             *     refuses Listora's cloud servers: the app does not offer the cloud, and
+             *     `setConnectionExecution` refuses a move there.
+             */
+            cloudAllowed: boolean;
+            /**
+             * @description Why it can't run in the cloud, in one line, when `cloudAllowed` is false ("Depop
+             *     blocks cloud servers, so Listora runs it from your phone").
+             */
+            cloudBlockedReason?: string;
         };
         ConnectionExecutionChange: {
             location: components["schemas"]["KnownExecutionLocation"];
