@@ -8362,8 +8362,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		};
 	}
 	/** Waits for the listing's page, where Poshmark goes once it saved the listing. */
+	/**
+	* Waits for where Poshmark goes once it saved the listing: the listing's page, or (read on the
+	* captain's session, 2026-10-26: after List on a new listing) the seller's closet.
+	*/
 	async function saved(page) {
-		await page.waitForPath(/^\/listing\//);
+		await page.waitForPath(/^\/(listing|closet)\//);
 		return {
 			type: "saved",
 			path: new URL(page.url()).pathname
@@ -8371,9 +8375,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	}
 	/** The seller's private SKU on the edit form (only its seller sees it). */
 	async function privateSku(page) {
-		const value = await page.attribute(FORM_SELECTORS.sku, "value");
+		const state = await page.pageData("__INITIAL_STATE__");
+		const parsed = editorSkuSchema.safeParse(state);
+		const value = (parsed.success ? parsed.data.$_listing_editor.post.seller_private_info.sku ?? null : null) ?? await page.attribute(FORM_SELECTORS.sku, "value");
 		return value === null || value.trim() === "" ? null : value.trim();
 	}
+	const editorSkuSchema = object({ $_listing_editor: object({ post: object({ seller_private_info: object({ sku: string().nullable().optional() }) }) }) });
 	function wholeDollars(cents) {
 		return String(Math.round(cents / 100));
 	}
@@ -8532,7 +8539,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		/** The listing page a saved form led to, as an applied write with its id and revision. */
 		async function applied(step, path) {
 			const id = listingIdFromPath(path);
-			if (id === null) throw new Error("Poshmark saved the listing but showed no listing page");
+			if (id === null) return { type: "applied" };
 			return step("read the saved listing", { mutates: false }, async (page) => {
 				const record = await openListing(page, site, id);
 				return record === null ? {

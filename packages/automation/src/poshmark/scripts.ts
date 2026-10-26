@@ -136,7 +136,9 @@ export function createPoshmarkScripts(
   /** The listing page a saved form led to, as an applied write with its id and revision. */
   async function applied(step: StepRunner, path: string): Promise<WriteResult> {
     const id = listingIdFromPath(path);
-    if (id === null) throw new Error('Poshmark saved the listing but showed no listing page');
+    // After List, Poshmark shows the closet, which doesn't name the new listing: the
+    // operation's check finds it by its SKU.
+    if (id === null) return { type: 'applied' };
     return step('read the saved listing', { mutates: false }, async (page) => {
       const record = await openListing(page, site, id);
       return record === null

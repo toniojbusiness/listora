@@ -19,6 +19,8 @@
  *
  * Only `submit` changes anything: filling the form is not saved until it is submitted.
  */
+import { z } from 'zod';
+
 import { PageChangedError } from '../../runner/errors.ts';
 import type { PageDriver, UploadFile } from '../../runner/types.ts';
 import type { PoshmarkCatalog } from '../catalog.ts';
@@ -345,16 +347,36 @@ async function refusal(page: PageDriver): Promise<{ type: 'refused'; message: st
 }
 
 /** Waits for the listing's page, where Poshmark goes once it saved the listing. */
+/**
+ * Waits for where Poshmark goes once it saved the listing: the listing's page, or (read on the
+ * captain's session, 2026-10-26: after List on a new listing) the seller's closet.
+ */
 async function saved(page: PageDriver): Promise<{ type: 'saved'; path: string }> {
-  await page.waitForPath(/^\/listing\//);
+  await page.waitForPath(/^\/(listing|closet)\//);
   return { type: 'saved', path: new URL(page.url()).pathname };
 }
 
 /** The seller's private SKU on the edit form (only its seller sees it). */
 export async function privateSku(page: PageDriver): Promise<string | null> {
-  const value = await page.attribute(FORM_SELECTORS.sku, 'value');
+  // Read on the captain's session (2026-10-26): the form's field has no value attribute (Vue
+  // sets the value itself); the edit form's data holds it at
+  // `$_listing_editor.post.seller_private_info.sku`.
+  const state = await page.pageData('__INITIAL_STATE__');
+  const parsed = editorSkuSchema.safeParse(state);
+  const fromState = parsed.success
+    ? (parsed.data.$_listing_editor.post.seller_private_info.sku ?? null)
+    : null;
+  const value = fromState ?? (await page.attribute(FORM_SELECTORS.sku, 'value'));
   return value === null || value.trim() === '' ? null : value.trim();
 }
+
+const editorSkuSchema = z.object({
+  $_listing_editor: z.object({
+    post: z.object({
+      seller_private_info: z.object({ sku: z.string().nullable().optional() }),
+    }),
+  }),
+});
 
 function wholeDollars(cents: number): string {
   return String(Math.round(cents / 100));
