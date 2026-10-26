@@ -132,6 +132,22 @@ describe('LocalDiskStorage', () => {
     );
   });
 
+  it('lists the keys under a prefix, in order and up to a limit', async () => {
+    const put = (key: string) => storage.put(key, BODY, { contentType: 'image/jpeg' });
+    await put('photos/acct-1/photo-b/token/original.jpg');
+    await put('photos/acct-1/photo-a/token/ai.jpg');
+    await put('photos/acct-2/photo-c/token/ai.jpg');
+    expect(await storage.list('photos/acct-1/')).toEqual([
+      'photos/acct-1/photo-a/token/ai.jpg',
+      'photos/acct-1/photo-b/token/original.jpg',
+    ]);
+    expect(await storage.list('photos/acct-1/', 1)).toEqual(['photos/acct-1/photo-a/token/ai.jpg']);
+    expect(await storage.list('photos/acct-3/')).toEqual([]);
+    await expect(storage.list('photos/acct-1')).rejects.toThrow(/invalid storage key/);
+    await expect(storage.list('../')).rejects.toThrow(/invalid storage key/);
+    await expect(storage.list('photos/', 1001)).rejects.toThrow(RangeError);
+  });
+
   it('serves only public keys at a public URL', () => {
     expect(storage.publicUrl('public/token/thumbnail.jpg')).toBe(
       'http://127.0.0.1:3000/storage/public/token/thumbnail.jpg',

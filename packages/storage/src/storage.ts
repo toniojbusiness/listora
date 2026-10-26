@@ -92,6 +92,11 @@ export interface ObjectStorage {
   put(key: string, body: Uint8Array, options: PutOptions): Promise<void>;
   /** Deletes the object; deleting a missing object succeeds. */
   delete(key: string): Promise<void>;
+  /**
+   * Up to `limit` (at most 1000) keys under `prefix`, a key prefix ending in `/`, in key order.
+   * Deletions use it to find every object of an account, and to check none is left.
+   */
+  list(prefix: string, limit?: number): Promise<string[]>;
   /** The URL anyone can read a public key at (see `PUBLIC_KEY_PREFIX`). */
   publicUrl(key: string): string;
 }
@@ -105,6 +110,24 @@ export function hexToBase64(hex: string): string {
 
 export function base64ToHex(base64: string): string {
   return Buffer.from(base64, 'base64').toString('hex');
+}
+
+/** The most keys one `list` call returns (S3's page size). */
+export const MAX_LIST_KEYS = 1000;
+
+/** Throws for a prefix that is not a valid key followed by `/`. */
+export function assertStoragePrefix(prefix: string): void {
+  if (!prefix.endsWith('/') || !isStorageKey(prefix.slice(0, -1))) {
+    throw new StorageKeyError(prefix);
+  }
+}
+
+export function listLimit(limit: number | undefined): number {
+  const value = limit ?? MAX_LIST_KEYS;
+  if (!Number.isInteger(value) || value < 1 || value > MAX_LIST_KEYS) {
+    throw new RangeError(`list limit must be 1 to ${String(MAX_LIST_KEYS)}`);
+  }
+  return value;
 }
 
 export function assertPublicKey(key: string): void {

@@ -1,9 +1,12 @@
 import { lockIdentity, startAccountDeletion, type GrantToKeep } from '@listora/accounts';
+import { SCREENSHOT_PREFIX } from '@listora/automation';
 import type { DbTransaction, Marketplace } from '@listora/db';
+import { storageKeys } from '@listora/photos';
 
 import type { Identity } from '../auth/driver.ts';
 import { ApiError } from '../errors.ts';
 import type { PhotoRow } from '../photos/mapping.ts';
+import { photoObjectKeys } from '../photos/stored-objects.ts';
 import type { Tenant } from '../tenancy.ts';
 
 /** An API connection of the deleted account, as the deletion reports it. */
@@ -109,7 +112,24 @@ export async function deleteUserData(
     );
   }
 
-  const { deletedAt } = await startAccountDeletion(trx, { identity, grants });
+  // The job deletes every stored object again and checks it is gone, in case the API's own
+  // deletion after the commit fails: the ones these rows name, and everything under the
+  // account's prefixes.
+  const { deletedAt } = await startAccountDeletion(trx, {
+    identity,
+    userId: tenant.userId,
+    grants,
+    ...(owner
+      ? {
+          accountId: tenant.accountId,
+          objectKeys: [...photos.flatMap(photoObjectKeys), ...uploadKeys, ...screenshotKeys],
+          objectPrefixes: [
+            ...storageKeys.accountPrefixes(tenant.accountId),
+            `${SCREENSHOT_PREFIX}${tenant.accountId}/`,
+          ],
+        }
+      : {}),
+  });
   if (owner) await trx.deleteFrom('account').where('id', '=', tenant.accountId).execute();
   // Cascades to the person's memberships; their AI usage and audit entries stay with the
   // account (if it remains) without the reference.

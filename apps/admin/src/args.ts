@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
 
 import { parseUtcDay, usagePeriodRange, type AiControlChange, type UsagePeriod } from '@listora/ai';
+import { MARKETPLACES, type Marketplace } from '@listora/db';
 
 export const USAGE = `Usage: npm run admin -- <command> [options]
 
@@ -22,6 +23,12 @@ AI controls (every change is recorded in the audit trail):
   ai-block list
   ai-block on|off <account-id> --actor <name> --reason <text>
   ai-audit [--account ID] [--limit N]                  the audit trail, newest first (default 50)
+
+Marketplace data (docs/features/privacy.md):
+  marketplace-purge <marketplace> --mode api|automation --actor <name> --reason <text> [--confirm]
+                       delete the data of every connection to the marketplace in that mode, in
+                       every account, as when the marketplace ends Listora's access (for example
+                       Depop's partner API); without --confirm it only counts them
 
 Options:
   --day YYYY-MM-DD    a UTC day
@@ -82,6 +89,14 @@ export type Command =
       readonly accountId: string | undefined;
       readonly limit: number;
       readonly json: boolean;
+    }
+  | {
+      readonly name: 'marketplace-purge';
+      readonly marketplace: Marketplace;
+      readonly mode: 'api' | 'automation';
+      /** Who ran it and why, for the log line (the same as an AI control change's). */
+      readonly change: { readonly actor: string; readonly reason: string };
+      readonly confirm: boolean;
     };
 
 const OPTIONS = {
@@ -91,6 +106,8 @@ const OPTIONS = {
   account: { type: 'string' },
   actor: { type: 'string' },
   reason: { type: 'string' },
+  mode: { type: 'string' },
+  confirm: { type: 'boolean' },
   json: { type: 'boolean' },
   help: { type: 'boolean' },
 } as const;
@@ -144,6 +161,28 @@ export function parseCommand(argv: readonly string[], now: Date = new Date()): C
         limit: parseLimit(values, 50),
         json: values.json === true,
       };
+    case 'marketplace-purge': {
+      expectArgs(
+        'marketplace-purge',
+        action === undefined ? rest : [action, ...rest],
+        1,
+        'a marketplace',
+      );
+      allowOnly('marketplace-purge', values, ['mode', 'actor', 'reason', 'confirm']);
+      if (!(MARKETPLACES as readonly string[]).includes(action ?? '')) {
+        throw new UsageError(`marketplace must be one of ${MARKETPLACES.join(', ')}`);
+      }
+      if (values.mode !== 'api' && values.mode !== 'automation') {
+        throw new UsageError('--mode is required: api or automation');
+      }
+      return {
+        name: 'marketplace-purge',
+        marketplace: action as Marketplace,
+        mode: values.mode,
+        change: parseChange(values),
+        confirm: values.confirm === true,
+      };
+    }
     case undefined:
       throw new UsageError('missing command');
     default:
@@ -294,13 +333,18 @@ function accountId(value: string | undefined): string {
   return value.toLowerCase();
 }
 
-function expectArgs(command: string, args: readonly (string | undefined)[], count: number): void {
+function expectArgs(
+  command: string,
+  args: readonly (string | undefined)[],
+  count: number,
+  what = 'an account id',
+): void {
   const given = args.filter((arg) => arg !== undefined);
   if (given.length !== count) {
     throw new UsageError(
       count === 0
         ? `${command} takes no arguments, got ${given.join(' ')}`
-        : `${command} needs an account id`,
+        : `${command} needs ${what}`,
     );
   }
 }

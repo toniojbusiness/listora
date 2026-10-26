@@ -11,15 +11,28 @@
  *    revocation deletes the grant's tokens. When the revocation window has passed, an
  *    unconfirmed grant's tokens are deleted too and it is recorded as `manual`: the seller must
  *    remove Listora in the marketplace's settings.
- * 3. When nothing is open, deletes the tombstone; otherwise schedules the next run, later each
- *    time.
+ * 3. Deletes the account's stored objects (the ones the deleted rows named, and everything
+ *    under the account's key prefixes) and reads each back until storage no longer has it.
+ * 4. When nothing is open, checks that no row anywhere still references the deleted account or
+ *    user, then writes the deletion's completion record (`deletion_record`) and deletes the
+ *    tombstone in one transaction. Otherwise it schedules the next run, later each time; a
+ *    deletion still open after `completionDeadlineMs` logs an error on every run (and the
+ *    trust metrics count it, which the overdue deletion alarm keys on).
  *
  * Every step's result is committed before the next step, and every step is safe to repeat, so a
  * crash or a database failure at any point only means the next run (Graphile retries a failed
  * job) repeats the step that was not recorded.
  */
-import type { AccountDeletionTable, Db, Marketplace } from '@listora/db';
+import {
+  DELETION_COMPLETION_DEADLINE_MS,
+  recordDeletion,
+  rowsReferencing,
+  type AccountDeletionTable,
+  type Db,
+  type Marketplace,
+} from '@listora/db';
 import { assertNever, type Logger } from '@listora/shared';
+import { purgeObjects, type ObjectStorage } from '@listora/storage';
 import { sql, type Selectable } from 'kysely';
 
 import type { CognitoUserAdmin } from './cognito-user-admin.ts';
@@ -32,12 +45,18 @@ export interface AccountDeletionPolicy {
   readonly delaysMs: readonly number[];
   /** How long after the deletion the job keeps asking marketplaces to revoke their grants. */
   readonly revocationWindowMs: number;
+  /**
+   * The bound every deletion finishes within: the revocation window plus a day. A deletion
+   * still open past it is overdue (an identity provider or storage that keeps failing).
+   */
+  readonly completionDeadlineMs: number;
 }
 
-/** 1 m, 5 m, 15 m, 1 h, 3 h, then every 6 h; marketplace revocations for 7 days. */
+/** 1 m, 5 m, 15 m, 1 h, 3 h, then every 6 h; marketplace revocations for 7 days; done in 8. */
 export const DEFAULT_ACCOUNT_DELETION_POLICY: AccountDeletionPolicy = {
   delaysMs: [60_000, 300_000, 900_000, 3_600_000, 10_800_000, 21_600_000],
   revocationWindowMs: 7 * 86_400_000,
+  completionDeadlineMs: DELETION_COMPLETION_DEADLINE_MS,
 };
 
 export interface AccountDeletionDependencies {
@@ -48,6 +67,8 @@ export interface AccountDeletionDependencies {
    */
   cognito: CognitoUserAdmin | undefined;
   marketplaceAccess: MarketplaceAccessRevoker;
+  /** The photo storage the API and worker share, for the account's stored objects. */
+  storage: ObjectStorage;
   logger: Logger;
   policy?: AccountDeletionPolicy;
   /** Milliseconds since the epoch; injectable for tests. */
@@ -112,21 +133,61 @@ export async function completeAccountDeletion(
     }
   }
 
-  if (identityDeleted && stillPending === 0) {
+  const objectsDeleted =
+    deletion.objects_deleted_at !== null || (await deleteObjects(deps, deletion, log));
+  const leftRows = await remainingRows(deps, deletion);
+  if (Object.keys(leftRows).length > 0) {
+    // The API deletes every row in the deletion's transaction, so this is a bug: never record
+    // the deletion as complete while it is not.
+    log.error({ remainingRows: leftRows }, 'rows of a deleted account remain; not completing');
+  }
+
+  if (
+    identityDeleted &&
+    stillPending === 0 &&
+    objectsDeleted &&
+    Object.keys(leftRows).length === 0
+  ) {
     const grants = await db
       .selectFrom('account_deletion_grant')
       .select(['marketplace', 'outcome'])
       .where('deletion_id', '=', deletionId)
       .execute();
-    await db.deleteFrom('account_deletion').where('id', '=', deletionId).execute();
-    log.info(
-      {
-        revoked: marketplacesWith(grants, 'revoked'),
-        revokeManually: marketplacesWith(grants, 'manual'),
-      },
-      'account deletion completed',
-    );
+    const outcome = {
+      revoked: marketplacesWith(grants, 'revoked'),
+      revokeManually: marketplacesWith(grants, 'manual'),
+    };
+    await db.transaction().execute(async (trx) => {
+      await recordDeletion(trx, {
+        id: deletionId,
+        kind: 'account',
+        reason: 'user_request',
+        requestedAt: deletion.requested_at,
+        summary: {
+          accountDeleted: deletion.account_id !== null,
+          identityProvider: deletion.auth_provider,
+          ...outcome,
+          verified: { rows: 0, objects: 0 },
+          attempts: deletion.attempts + 1,
+        },
+      });
+      await trx.deleteFrom('account_deletion').where('id', '=', deletionId).execute();
+    });
+    log.info(outcome, 'account deletion completed');
     return 'completed';
+  }
+
+  if (now() - deletion.requested_at.getTime() > policy.completionDeadlineMs) {
+    log.error(
+      {
+        event: 'account_deletion_overdue',
+        identityDeleted,
+        grantsPending: stillPending,
+        objectsDeleted,
+        rowsLeft: Object.keys(leftRows).length,
+      },
+      'account deletion is overdue',
+    );
   }
 
   await db.transaction().execute(async (trx) => {
@@ -199,6 +260,57 @@ async function deleteIdentity(
       .execute();
   });
   return true;
+}
+
+/** Deletes the deletion's stored objects; true once storage has none of them left. */
+async function deleteObjects(
+  deps: AccountDeletionDependencies,
+  deletion: DeletionRow,
+  log: Logger,
+): Promise<boolean> {
+  const keys = await deps.db
+    .selectFrom('account_deletion_object')
+    .select('storage_key')
+    .where('deletion_id', '=', deletion.id)
+    .execute();
+  const result = await purgeObjects(deps.storage, {
+    keys: keys.map((row) => row.storage_key),
+    prefixes: deletion.storage_prefixes,
+  });
+  if (result.remaining.length > 0) {
+    log.warn(
+      { remaining: result.remaining.length, deleted: result.deleted },
+      'could not delete every stored object of a deleted account yet; retrying',
+    );
+    return false;
+  }
+  await deps.db.transaction().execute(async (trx) => {
+    await trx
+      .deleteFrom('account_deletion_object')
+      .where('deletion_id', '=', deletion.id)
+      .execute();
+    await trx
+      .updateTable('account_deletion')
+      .set({ objects_deleted_at: sql<Date>`now()` })
+      .where('id', '=', deletion.id)
+      .execute();
+  });
+  return true;
+}
+
+/** Rows that still reference the deleted account or user, by `table.column`. */
+async function remainingRows(
+  deps: AccountDeletionDependencies,
+  deletion: DeletionRow,
+): Promise<Record<string, number>> {
+  const left: Record<string, number> = {};
+  if (deletion.account_id !== null) {
+    Object.assign(left, await rowsReferencing(deps.db, 'account', deletion.account_id));
+  }
+  if (deletion.user_id !== null) {
+    Object.assign(left, await rowsReferencing(deps.db, 'app_user', deletion.user_id));
+  }
+  return left;
 }
 
 async function revokeGrant(

@@ -71,8 +71,16 @@ export interface AccountDeletionRequest {
     /** The provider's admin API name for the user (Cognito's `username`). */
     username?: string;
   };
+  /** The deleted user. */
+  userId: string;
+  /** The deleted account, when its owner deleted it (not when a member left it). */
+  accountId?: string;
   /** Marketplace grants to revoke: the account's API connections that still hold tokens. */
   grants: readonly GrantToKeep[];
+  /** Stored objects the deleted rows named (photo derivatives, uploads, screenshots). */
+  objectKeys?: readonly string[];
+  /** Key prefixes that hold only the deleted account's objects. */
+  objectPrefixes?: readonly string[];
 }
 
 export interface StartedAccountDeletion {
@@ -103,6 +111,9 @@ export async function startAccountDeletion(
         identity.provider === 'cognito' ? (identity.username ?? identity.subject) : null,
       // Dev users exist only as signed tokens, so there is nothing to wait for.
       identity_deleted_at: identity.provider === 'dev' ? deletedAt : null,
+      account_id: request.accountId ?? null,
+      user_id: request.userId,
+      storage_prefixes: [...(request.objectPrefixes ?? [])],
     })
     .returning('id')
     .executeTakeFirstOrThrow();
@@ -117,6 +128,13 @@ export async function startAccountDeletion(
           token_ciphertext: grant.tokenCiphertext,
         })),
       )
+      .execute();
+  }
+  const objectKeys = [...new Set(request.objectKeys ?? [])];
+  if (objectKeys.length > 0) {
+    await trx
+      .insertInto('account_deletion_object')
+      .values(objectKeys.map((key) => ({ deletion_id: deletionId, storage_key: key })))
       .execute();
   }
   await scheduleAccountDeletionJob(trx, deletionId, null);

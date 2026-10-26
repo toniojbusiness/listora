@@ -1,0 +1,20 @@
+{
+  "name": "@listora/retention",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Data retention: how long logs, raw payloads, and other records are kept, and the daily job that deletes what expired.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/connections": "*",
+    "@listora/db": "*",
+    "@listora/operations": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

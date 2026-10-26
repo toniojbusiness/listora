@@ -182,7 +182,7 @@ never skips them.
 - **`automation_run`**: one browser session the runner opened, for an operation step, a sale
   check, or a health check: the script, its outcome, the check it met (`challenge_kind`), the
   failed step, an error code, and the key of its redacted screenshot (deleted with the
-  account). It is the per-seller rate limits' count, and the record of what automation did and
+  account, or with the connection when the seller unlinks it, [privacy.md](privacy.md)). It is the per-seller rate limits' count, and the record of what automation did and
   where it stopped.
 - **`sale_check_schedule`**: when each automation connection is next checked for sales and why
   (`scheduled`, `email`, `retry`, or `linked`), the last check's time and outcome, and the

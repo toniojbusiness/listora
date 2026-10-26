@@ -95,6 +95,31 @@ describe('parseCommand', () => {
     });
   });
 
+  it('parses a marketplace purge, a dry run unless confirmed', () => {
+    expect(
+      parse('marketplace-purge', 'depop', '--mode', 'api', '--actor', 'alice', '--reason', 'ended'),
+    ).toEqual({
+      name: 'marketplace-purge',
+      marketplace: 'depop',
+      mode: 'api',
+      change: { actor: 'alice', reason: 'ended' },
+      confirm: false,
+    });
+    expect(
+      parse(
+        'marketplace-purge',
+        'depop',
+        '--mode',
+        'api',
+        '--actor',
+        'a',
+        '--reason',
+        'r',
+        '--confirm',
+      ),
+    ).toMatchObject({ confirm: true });
+  });
+
   it('shows help for --help anywhere', () => {
     expect(parse('--help')).toEqual({ name: 'help' });
     expect(parse('ai-cost', 'accounts', '--help')).toEqual({ name: 'help' });
@@ -140,6 +165,11 @@ describe('parseCommand', () => {
     [['ai-block', 'pause', ACCOUNT], 'ai-block pause needs list, on, or off'],
     [['ai-audit', 'all'], 'ai-audit takes no arguments, got all'],
     [['ai-cost', 'accounts', '--verbose'], "Unknown option '--verbose'"],
+    [['marketplace-purge'], 'marketplace-purge needs a marketplace'],
+    [['marketplace-purge', 'etsy', '--mode', 'api'], 'marketplace must be one of ebay, depop'],
+    [['marketplace-purge', 'depop'], '--mode is required: api or automation'],
+    [['marketplace-purge', 'depop', '--mode', 'api'], '--actor is required'],
+    [['marketplace-purge', 'depop', '--json'], 'marketplace-purge does not take --json'],
   ])('rejects %j', (argv, message) => {
     expect(usageError(...argv)).toContain(message);
   });

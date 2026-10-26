@@ -317,10 +317,12 @@ actor FakeSessionService: MarketplaceSessionService {
     private var linkFailures: [APIFailure]
     private let getFailure: APIFailure?
     private let listFailure: APIFailure?
+    private var unlinkFailures: [APIFailure]
     private let checkFailure: APIFailure?
     private(set) var sentLinks: [SentLink] = []
     private(set) var checkRequests: [(marketplace: String, key: String)] = []
     private(set) var gets = 0
+    private(set) var unlinked: [String] = []
 
     init(
         list: [MarketplaceLink],
@@ -329,6 +331,7 @@ actor FakeSessionService: MarketplaceSessionService {
         linkFailures: [APIFailure] = [],
         getFailure: APIFailure? = nil,
         listFailure: APIFailure? = nil,
+        unlinkFailures: [APIFailure] = [],
         checkFailure: APIFailure? = nil,
     ) {
         listed = list
@@ -337,6 +340,7 @@ actor FakeSessionService: MarketplaceSessionService {
         self.linkFailures = linkFailures
         self.getFailure = getFailure
         self.listFailure = listFailure
+        self.unlinkFailures = unlinkFailures
         self.checkFailure = checkFailure
     }
 
@@ -375,5 +379,12 @@ actor FakeSessionService: MarketplaceSessionService {
             throw linkFailures.removeFirst()
         }
         return linked
+    }
+
+    func unlink(_ marketplace: String) async throws(APIFailure) {
+        unlinked.append(marketplace)
+        if !unlinkFailures.isEmpty {
+            throw unlinkFailures.removeFirst()
+        }
     }
 }

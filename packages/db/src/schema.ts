@@ -19,6 +19,9 @@ import type { CurrencyCode } from '@listora/shared';
 import type { JsonArray, JsonObject, JsonValue } from './json.ts';
 import type {
   AccountDeletionGrantOutcome,
+  ConnectionDeletionReason,
+  ConnectionDeletionRevocation,
+  DeletionRecordKind,
   AiControlAction,
   AiProvider,
   AiUsageOutcome,
@@ -698,6 +701,20 @@ export interface AccountDeletionTable {
   requested_at: CreatedAt;
   identity_deleted_at: NullableTimestamp;
   attempts: Generated<number>;
+  /** The deleted account; null when a member left an account that stays (or before T-33). */
+  account_id: Nullable<string>;
+  /** The deleted user; null for tombstones written before T-33. */
+  user_id: Nullable<string>;
+  /** Key prefixes that hold only the deleted account's objects. */
+  storage_prefixes: TextArray;
+  /** When every stored object of the deletion was deleted and checked gone. */
+  objects_deleted_at: NullableTimestamp;
+}
+
+/** A stored object an account deletion still has to delete. */
+export interface AccountDeletionObjectTable {
+  deletion_id: string;
+  storage_key: string;
 }
 
 /** A deleted account's marketplace grant; the encrypted tokens stay only while it is pending. */
@@ -707,6 +724,39 @@ export interface AccountDeletionGrantTable {
   marketplace: Marketplace;
   token_ciphertext: Nullable<Buffer>;
   outcome: Generated<AccountDeletionGrantOutcome>;
+}
+
+/**
+ * The tombstone of a marketplace connection whose data was deleted and whose
+ * `connection_deletion` job has not finished (revoking the grant, deleting stored objects).
+ */
+export interface ConnectionDeletionTable {
+  id: Id;
+  connection_id: string;
+  marketplace: Marketplace;
+  reason: ConnectionDeletionReason;
+  /** The grant's encrypted tokens, only while its revocation is pending. */
+  token_ciphertext: Nullable<Buffer>;
+  revocation: ConnectionDeletionRevocation;
+  requested_at: CreatedAt;
+  attempts: Generated<number>;
+}
+
+/** A stored object a connection deletion still has to delete. */
+export interface ConnectionDeletionObjectTable {
+  deletion_id: string;
+  storage_key: string;
+}
+
+/** The completion record of a finished deletion; it holds no personal data. */
+export interface DeletionRecordTable {
+  id: string;
+  kind: DeletionRecordKind;
+  reason: string;
+  marketplace: Nullable<Marketplace>;
+  requested_at: Timestamp;
+  completed_at: CreatedAt;
+  summary: DefaultedJsonb<JsonObject>;
 }
 
 // Browser automation --------------------------------------------------------------------------
@@ -879,6 +929,10 @@ export interface Database {
   deleted_identity: DeletedIdentityTable;
   account_deletion: AccountDeletionTable;
   account_deletion_grant: AccountDeletionGrantTable;
+  account_deletion_object: AccountDeletionObjectTable;
+  connection_deletion: ConnectionDeletionTable;
+  connection_deletion_object: ConnectionDeletionObjectTable;
+  deletion_record: DeletionRecordTable;
   automation_run: AutomationRunTable;
   sale_check_schedule: SaleCheckScheduleTable;
   session_check: SessionCheckTable;
