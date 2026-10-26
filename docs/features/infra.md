@@ -63,3 +63,4 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
   credentials hidden.
   Template snapshots in `infra/src/__snapshots__/` make every infrastructure change a
   reviewable diff.
+- **Fast deploys.** (in progress: measuring the full deploy of a code-only change.)
