@@ -93,12 +93,16 @@ public struct RootView: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active {
                 Task { await dependencies.marketplaces.refreshAttention() }
-                // Opening the app runs the marketplace work waiting for this phone (a sale's
-                // delists among it) at once.
-                dependencies.phone.runner.runPhoneWork(.opened)
             } else if phase == .background {
                 PhoneBackgroundWork.schedule()
             }
+        }
+        // While the app is open, the phone runs the marketplace work waiting for it (a sale's
+        // delists among it) at once, and again whenever Listora says, so work queued or due
+        // meanwhile (a check tried again) starts within seconds.
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active else { return }
+            await dependencies.phone.runner.follow()
         }
         .onReceive(NotificationCenter.default.publisher(for: TaskNotificationRouter.openTasks)) { _ in
             selection = .tasks

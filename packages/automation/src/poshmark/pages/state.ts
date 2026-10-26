@@ -5,6 +5,10 @@
  * rather than the visible text: it holds exact values (a price, a status code, a timestamp) where
  * the page shows formatted ones, and its keys change far less often than its markup.
  *
+ * That script removes itself from the page as soon as it ran (`document.currentScript` is taken
+ * out, read 2026-10-26), so by the time a page is ready its data is only in the page's global
+ * `window.__INITIAL_STATE__`, which `pageData` reads.
+ *
  * Every shape is checked; a page whose data no longer has what Listora reads throws
  * `PageChangedError`, so the step goes to the user instead of reading a wrong value.
  */
@@ -16,44 +20,16 @@ import { PageChangedError } from '../../runner/errors.ts';
 import type { PageDriver } from '../../runner/types.ts';
 import type { PoshmarkSite } from '../site.ts';
 
-const STATE_MARKER = 'window.__INITIAL_STATE__';
+/** The page global Poshmark's pages keep their data in. */
+const STATE_GLOBAL = '__INITIAL_STATE__';
 
 /** The page's embedded data; `page` names the page in errors ("the listing page"). */
 export async function readPageState(driver: PageDriver, page: string): Promise<unknown> {
-  const scripts = await driver.texts('script:not([src])');
-  const script = scripts.find((text) => text.startsWith(STATE_MARKER));
-  if (script === undefined) {
+  const state = await driver.pageData(STATE_GLOBAL);
+  if (state === null || typeof state !== 'object' || Array.isArray(state)) {
     throw new PageChangedError(`Poshmark's ${page} no longer embeds the data Listora reads`);
   }
-  const start = script.indexOf('{', STATE_MARKER.length);
-  const end = start === -1 ? -1 : jsonEnd(script, start);
-  try {
-    if (end === -1) throw new Error('unterminated');
-    return JSON.parse(script.slice(start, end)) as unknown;
-  } catch {
-    throw new PageChangedError(`Poshmark's ${page} embeds data Listora can't parse`);
-  }
-}
-
-/** The index just past the JSON object that starts at `start` (strings may hold braces). */
-function jsonEnd(text: string, start: number): number {
-  let depth = 0;
-  let inString = false;
-  for (let index = start; index < text.length; index += 1) {
-    const char = text[index];
-    if (inString) {
-      if (char === '\\') index += 1;
-      else if (char === '"') inString = false;
-    } else if (char === '"') {
-      inString = true;
-    } else if (char === '{') {
-      depth += 1;
-    } else if (char === '}') {
-      depth -= 1;
-      if (depth === 0) return index + 1;
-    }
-  }
-  return -1;
+  return state;
 }
 
 /** Checks `value` against `schema`; a mismatch names the page and the first missing field. */

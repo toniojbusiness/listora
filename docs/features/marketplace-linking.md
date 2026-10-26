@@ -122,7 +122,8 @@ connection that runs on the phone, the job hands the check to the phone instead 
 which runs the same script in the seller's session there. The outcomes below are the same. A
 check that waits for the phone says `Checking on your iPhone...` (it is waiting, not stuck, so the
 15-minute deadline does not apply), and a check the phone meets is handed to the seller to
-complete ([phone-execution.md](phone-execution.md#the-phone-runtime)).
+complete ([phone-execution.md](phone-execution.md#the-phone-runtime)). While a check tries again
+after an attempt that didn't get through, its status says so, wherever it runs.
 
 - **Passed** when the script read the seller's account page.
 - **Failed, relink** when the marketplace rejected the session or showed a CAPTCHA, a bot check,

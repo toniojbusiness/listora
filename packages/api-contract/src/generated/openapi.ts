@@ -3227,6 +3227,13 @@ export interface components {
         /** @description The run to continue, absent when there is nothing (more) to run. */
         PhoneRunResult: {
             run?: components["schemas"]["PhoneRun"];
+            /**
+             * Format: int32
+             * @description Present on a claim that found nothing to run: how long the app waits, while it is open,
+             *     before it claims again. Sooner when work for this phone is due then (a check tried
+             *     again after a failed attempt), so work never waits for a push or for the app to reopen.
+             */
+            nextClaimInSeconds?: number;
         };
         PhoneCallAnswer: {
             installationId: components["schemas"]["Id"];

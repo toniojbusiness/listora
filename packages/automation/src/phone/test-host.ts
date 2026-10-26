@@ -52,7 +52,7 @@ export class PlaywrightPhoneHost implements PhoneHost {
     return this.state();
   }
 
-  async evaluate(body: string, args: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
+  evaluate(body: string, args: Record<string, unknown>, timeoutMs: number): Promise<unknown> {
     const work = this.page.evaluate(
       async ([source, named]) => {
         const AsyncFunction = (async () => {
@@ -65,19 +65,16 @@ export class PlaywrightPhoneHost implements PhoneHost {
       },
       [body, args] as const,
     );
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const deadline = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        reject(new Error('timeout'));
-      }, timeoutMs);
-    });
-    try {
-      return await Promise.race([work, deadline]);
-    } catch (thrown) {
-      throw hostError(thrown);
-    } finally {
-      clearTimeout(timer);
-    }
+    return withDeadline(work, timeoutMs);
+  }
+
+  pageData(name: string, timeoutMs: number): Promise<string | null> {
+    // The app reads it in the page's own world, as `page.evaluate` does.
+    const work = this.page.evaluate((key) => {
+      const value: unknown = (globalThis as Record<string, unknown>)[key];
+      return value === undefined ? null : JSON.stringify(value);
+    }, name);
+    return withDeadline(work, timeoutMs);
   }
 
   async settle(timeoutMs: number): Promise<HostPageState> {
@@ -128,6 +125,23 @@ export class PlaywrightPhoneHost implements PhoneHost {
     this.#status = response.status();
     const retryAfter = Number(response.headers()['retry-after']);
     this.#retryAfter = Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter : null;
+  }
+}
+
+/** A page evaluation within `timeoutMs`, its failure in the host's terms. */
+async function withDeadline<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error('timeout'));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } catch (thrown) {
+    throw hostError(thrown);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

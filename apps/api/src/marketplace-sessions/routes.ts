@@ -202,6 +202,7 @@ async function sessionRows(
       'connection.granted_at',
       'connection.updated_at',
       'check.status as check_status',
+      'check.attempts',
       'check.failure_code',
       'check.failure_message',
       'check.requested_at',
@@ -229,6 +230,7 @@ async function sessionRows(
         ? null
         : {
             status: row.check_status,
+            attempts: row.attempts ?? 0,
             failureCode: row.failure_code,
             failureMessage: row.failure_message,
             requestedAt: row.requested_at,

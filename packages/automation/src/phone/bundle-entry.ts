@@ -27,6 +27,8 @@ function webkitHost(): PhoneHost {
     navigate: async (url, timeoutMs) =>
       (await call('navigate', { url, timeoutMs })) as HostPageState,
     evaluate: (body, args, timeoutMs) => call('evaluate', { body, args, timeoutMs }),
+    pageData: async (name, timeoutMs) =>
+      (await call('pageData', { name, timeoutMs })) as string | null,
     settle: async (timeoutMs) => (await call('settle', { timeoutMs })) as HostPageState,
     state: async () => (await call('state', {})) as HostPageState,
     acceptNextDialog: async () => {

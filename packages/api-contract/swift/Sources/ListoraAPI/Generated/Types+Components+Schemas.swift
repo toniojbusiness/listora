@@ -6710,15 +6710,28 @@ extension Components {
         public struct PhoneRunResult: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PhoneRunResult/run`.
             public var run: Components.Schemas.PhoneRun?
+            /// Present on a claim that found nothing to run: how long the app waits, while it is open,
+            /// before it claims again. Sooner when work for this phone is due then (a check tried
+            /// again after a failed attempt), so work never waits for a push or for the app to reopen.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneRunResult/nextClaimInSeconds`.
+            public var nextClaimInSeconds: Swift.Int32?
             /// Creates a new `PhoneRunResult`.
             ///
             /// - Parameters:
             ///   - run:
-            public init(run: Components.Schemas.PhoneRun? = nil) {
+            ///   - nextClaimInSeconds: Present on a claim that found nothing to run: how long the app waits, while it is open,
+            public init(
+                run: Components.Schemas.PhoneRun? = nil,
+                nextClaimInSeconds: Swift.Int32? = nil
+            ) {
                 self.run = run
+                self.nextClaimInSeconds = nextClaimInSeconds
             }
             public enum CodingKeys: String, CodingKey {
                 case run
+                case nextClaimInSeconds
             }
         }
         /// - Remark: Generated from `#/components/schemas/PhoneCallAnswer`.

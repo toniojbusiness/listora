@@ -1,9 +1,10 @@
 /**
  * The Poshmark automation adapter's own flows, in a real headless Chromium on the fake Poshmark
- * (beyond the shared conformance suite): every form field and the photo order, not for sale and
- * back, the private SKU lookup that keeps a retried create from posting twice, the closet listing
- * and sold items across closet pages, and every check and page change that has to stop the run
- * and hand the step to the user. No real Poshmark traffic.
+ * (beyond the shared conformance suite): reading each page's data where Poshmark keeps it, every
+ * form field and the photo order, not for sale and back, the private SKU lookup that keeps a
+ * retried create from posting twice, the closet listing and sold items across closet pages, and
+ * every check and page change that has to stop the run and hand the step to the user. No real
+ * Poshmark traffic.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -18,6 +19,7 @@ import { sampleListingContent, type SampleContentOverrides } from '@listora/mark
 
 import type { PhotoSource } from '../adapter/photos.ts';
 import { automationProfile, standInProfile } from '../profiles.ts';
+import { loadChromium } from '../runner/playwright.ts';
 import { FakeSiteSessions, QUICK_PACING, silentLogger, testRunner } from '../test-support.ts';
 import { createPoshmarkAutomationAdapter } from './adapter.ts';
 import { FakePoshmark } from './fake/fake-poshmark.ts';
@@ -225,6 +227,26 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
       found: true,
       externalListingId: first.type === 'confirmed' ? first.externalListingId : '',
     });
+  });
+
+  it("reads each page's data from its global once the script that embedded it removed itself", async () => {
+    // Poshmark's embedding script takes itself out of the page as soon as it ran, so a ready
+    // page has no trace of it in its markup (the fake does the same). Reading the markup made
+    // every session check on a real Poshmark session fail as a page Listora no longer understood.
+    const browser = await (await loadChromium()).launch();
+    try {
+      const page = await browser.newPage();
+      await page.goto(`${site.url}/closet/listora_closet`, { waitUntil: 'domcontentloaded' });
+      expect(
+        await page.evaluate(`({
+          inMarkup: document.documentElement.outerHTML.includes('__INITIAL_STATE__'),
+          inGlobal: '__INITIAL_STATE__' in window,
+        })`),
+      ).toEqual({ inMarkup: false, inGlobal: true });
+    } finally {
+      await browser.close();
+    }
+    expect(await adapter.healthCheck(ctx())).toEqual({ status: 'ok' });
   });
 
   it("lists the seller's closet across pages, and finds sold items for sale checks", async () => {
