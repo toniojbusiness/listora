@@ -62,7 +62,7 @@ struct LinkAccountsModelTests {
 
     @Test
     func `shows a failed check with the server's reason, and links again`() async throws {
-        let reason = "Listora couldn't check your Depop login just now. Link it again to retry."
+        let reason = "Listora couldn't check your Depop sign-in just now."
         let service = FakeSessionService(
             list: [.depop(.notLinked)],
             link: .depop(.checking),
@@ -75,9 +75,66 @@ struct LinkAccountsModelTests {
 
         let failed = try #require(model.links.first)
         #expect(failed.state == .checkFailed(message: reason))
-        #expect(failed.statusTone == .failed)
+        #expect(failed.statusTone == .actionNeeded)
         #expect(failed.canLink)
         #expect(failed.linkActionTitle == "Relink")
+        #expect(failed.canCheckAgain)
+    }
+
+    @Test
+    func `checks the session it holds again without a sign-in, and follows that check`() async throws {
+        let reason = "Listora's browser didn't start, so it couldn't check your Depop sign-in."
+        let service = FakeSessionService(
+            list: [.depop(.checkFailed(message: reason))],
+            link: .depop(.checking),
+            polls: [.depop(.checking), .depop(.checking), .depop(.linked)],
+        )
+        let model = makeModel(service)
+        await model.load()
+        let depop = try #require(model.links.first)
+
+        await model.checkAgain(depop)
+
+        #expect(await service.checkRequests.count == 1)
+        #expect(await service.sentLinks.isEmpty)
+        #expect(model.signingIn == nil)
+        #expect(model.links.first?.state == .linked)
+        #expect(model.progress.isEmpty)
+    }
+
+    @Test
+    func `says so when Listora could not be asked to check again, and keeps the row`() async throws {
+        let reason = "Listora couldn't check your Depop sign-in just now."
+        let service = FakeSessionService(
+            list: [.depop(.checkFailed(message: reason))],
+            link: .depop(.checking),
+            polls: [],
+            checkFailure: .networkUnavailable,
+        )
+        let model = makeModel(service)
+        await model.load()
+        try await model.checkAgain(#require(model.links.first))
+
+        #expect(model.progress["depop"] == .checkFailed(.networkUnavailable))
+        #expect(model.links.first?.state == .checkFailed(message: reason))
+        #expect(await service.gets == 0)
+    }
+
+    @Test
+    func `follows a check for as long as the server may take to decide it`() async {
+        // The server decides within 15 minutes; at one read every 3 seconds that is 300 reads.
+        let service = FakeSessionService(
+            list: [.poshmark(.checking)],
+            link: .poshmark(.checking),
+            polls: Array(repeating: .poshmark(.checking), count: 300) + [.poshmark(.checkFailed(
+                message: "Listora's check of your Poshmark sign-in didn't finish.",
+            ))],
+        )
+        let model = LinkAccountsModel(service: service, sleep: { _ in })
+        await model.load()
+        #expect(model.links.first?.state == .checkFailed(
+            message: "Listora's check of your Poshmark sign-in didn't finish.",
+        ))
     }
 
     @Test
@@ -229,7 +286,7 @@ extension MarketplaceLink {
         case .checking: ("Checking...", .checking)
         case .linked: ("Linked", .success)
         case .needsRelink: ("Sign in again", .actionNeeded)
-        case .checkFailed: ("Not confirmed - Link again", .failed)
+        case .checkFailed: ("Not confirmed", .actionNeeded)
         case .apiConnected: ("Connected through the \(name) API", .neutral)
         case .unknown: ("Something new", .neutral)
         }
@@ -260,8 +317,12 @@ actor FakeSessionService: MarketplaceSessionService {
     private var linkFailures: [APIFailure]
     private let getFailure: APIFailure?
     private let listFailure: APIFailure?
+    private var unlinkFailures: [APIFailure]
+    private let checkFailure: APIFailure?
     private(set) var sentLinks: [SentLink] = []
+    private(set) var checkRequests: [(marketplace: String, key: String)] = []
     private(set) var gets = 0
+    private(set) var unlinked: [String] = []
 
     init(
         list: [MarketplaceLink],
@@ -270,6 +331,8 @@ actor FakeSessionService: MarketplaceSessionService {
         linkFailures: [APIFailure] = [],
         getFailure: APIFailure? = nil,
         listFailure: APIFailure? = nil,
+        unlinkFailures: [APIFailure] = [],
+        checkFailure: APIFailure? = nil,
     ) {
         listed = list
         linked = link
@@ -277,6 +340,15 @@ actor FakeSessionService: MarketplaceSessionService {
         self.linkFailures = linkFailures
         self.getFailure = getFailure
         self.listFailure = listFailure
+        self.unlinkFailures = unlinkFailures
+        self.checkFailure = checkFailure
+    }
+
+    func requestCheck(_ marketplace: String, idempotencyKey: String) async throws(APIFailure) {
+        checkRequests.append((marketplace, idempotencyKey))
+        if let checkFailure {
+            throw checkFailure
+        }
     }
 
     func list() async throws(APIFailure) -> [MarketplaceLink] {
@@ -307,5 +379,12 @@ actor FakeSessionService: MarketplaceSessionService {
             throw linkFailures.removeFirst()
         }
         return linked
+    }
+
+    func unlink(_ marketplace: String) async throws(APIFailure) {
+        unlinked.append(marketplace)
+        if !unlinkFailures.isEmpty {
+            throw unlinkFailures.removeFirst()
+        }
     }
 }

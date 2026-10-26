@@ -14,7 +14,6 @@ public struct TodayView<Settings: View>: View {
     @State private var path: [TodayDestination] = []
     @State private var summarySettings: SummarySettingsModel?
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.signIn) private var signIn
 
     /// `onOpenDrafts` shows the drafts, which live in another tab, as `onAddItem` opens Add (the
     /// caught-up screen's action); `settings` is the header's button that opens Settings.
@@ -86,7 +85,7 @@ public struct TodayView<Settings: View>: View {
                 title: "Sign in to see your day",
                 message: "Today shows what needs you, like what to ship and what to delist, "
                     + "and how this week's sales are going.",
-                action: .signIn(signIn),
+                action: .init("Sign in", systemImage: "person.crop.circle", handler: environment.onSignIn),
             )
             .accessibilityIdentifier("today.signedOut")
         case let .failed(message):

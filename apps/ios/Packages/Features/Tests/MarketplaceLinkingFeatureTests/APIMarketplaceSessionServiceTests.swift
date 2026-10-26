@@ -106,6 +106,25 @@ struct APIMarketplaceSessionServiceTests {
     }
 
     @Test
+    func `asks for a check of the session Listora holds as the connection's Retry check`() async throws {
+        let server = CannedServer(status: 202, body: """
+        {"marketplace":"depop","mode":"automation","status":"connected",
+         "statusDisplay":{"tone":"checking","label":"Checking..."},
+         "capabilities":{"connect":"none","create":"automation","updatePrice":"automation",
+           "updateDetails":"automation","delist":"automation","relist":"automation",
+           "markSold":"automation","verifyRead":"automation","importListings":"none",
+           "saleDetection":[],"imageTransport":"upload"},
+         "availableActions":[]}
+        """)
+        try await service(server).requestCheck("depop", idempotencyKey: "check-1")
+
+        let request = try #require(server.requests.first)
+        #expect(request.method == "POST")
+        #expect(request.path == "/v1/connections/depop/checks")
+        #expect(request.header("Idempotency-Key") == "check-1")
+    }
+
+    @Test
     func `reports a refused session with the server's message`() async throws {
         let server = CannedServer(status: 422, body: """
         {"error":{"code":"validation_failed","message":"Listora couldn't use this Poshmark sign-in. Sign in again.",
@@ -119,6 +138,52 @@ struct APIMarketplaceSessionServiceTests {
             #expect(error.statusCode == 422)
             #expect(error.message == "Listora couldn't use this Poshmark sign-in. Sign in again.")
             #expect(!error.retryable)
+        }
+    }
+
+    /// A `Connection` for an unlinked marketplace, in the contract's shape.
+    private static let unlinkedConnection = """
+    {"marketplace":"poshmark","mode":"assisted","status":"not_connected",
+     "statusDisplay":{"tone":"neutral","label":"Not linked"},
+     "capabilities":{"connect":"none","create":"assisted","updatePrice":"assisted","updateDetails":"assisted",
+       "delist":"assisted","relist":"assisted","markSold":"assisted","verifyRead":"user_confirm",
+       "importListings":"none","saleDetection":["manual"],"imageTransport":"url_fetch"},
+     "availableActions":[]}
+    """
+
+    @Test
+    func `unlinks with a DELETE of the marketplace's connection`() async throws {
+        let server = CannedServer(status: 200, body: Self.unlinkedConnection)
+        try await service(server).unlink("poshmark")
+        let request = try #require(server.requests.first)
+        #expect(request.method == "DELETE")
+        #expect(request.path == "/v1/connections/poshmark")
+    }
+
+    @Test
+    func `treats nothing linked as unlinked, so a retry after a lost answer succeeds`() async throws {
+        let server = CannedServer(status: 404, body: """
+        {"error":{"code":"not_found","message":"No Poshmark account is linked to Listora.","retryable":false,
+         "requestId":"r1"}}
+        """)
+        try await service(server).unlink("poshmark")
+    }
+
+    @Test
+    func `reports a failed unlink with the server's words`() async throws {
+        let server = CannedServer(status: 503, body: """
+        {"error":{"code":"service_unavailable","message":"Listora is busy. Try again.","retryable":true,
+         "requestId":"r2"}}
+        """)
+        do {
+            try await service(server).unlink("poshmark")
+            Issue.record("the unlink did not fail")
+        } catch let error as APIFailure {
+            #expect(error.statusCode == 503)
+            #expect(error.message == "Listora is busy. Try again.")
+            #expect(error.retryable)
+        } catch {
+            Issue.record("unexpected error \(error)")
         }
     }
 }

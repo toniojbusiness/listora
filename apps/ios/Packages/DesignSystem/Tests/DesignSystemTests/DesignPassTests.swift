@@ -60,17 +60,6 @@ struct DesignPassTests {
     }
 
     @Test
-    func `a signed-out empty state offers sign-in only where the app does`() {
-        var opened = 0
-        let action = SignInAction { opened += 1 }
-        #expect(EmptyStateView.Action.signIn(nil) == nil)
-        let signIn = EmptyStateView.Action.signIn(action)
-        #expect(signIn?.title == "Sign in")
-        signIn?.handler()
-        #expect(opened == 1)
-    }
-
-    @Test
     func `a photo grid's loading tile is square on top, like the cell it stands in for`() {
         everyVariant { width, typeSize, scheme in
             let cell = (width - 3 * Spacing.md) / 2

@@ -113,33 +113,6 @@ public struct EmptyStateView: View {
     }
 }
 
-/// Opens the app's sign-in, so a signed-out screen's empty state can offer it as its action. The
-/// app's root sets it (``SwiftUI/EnvironmentValues/signIn``); screens without it offer no sign-in.
-public struct SignInAction: Sendable {
-    private let handler: @MainActor () -> Void
-
-    public init(_ handler: @escaping @MainActor () -> Void) {
-        self.handler = handler
-    }
-
-    @MainActor
-    public func callAsFunction() {
-        handler()
-    }
-}
-
-extension EnvironmentValues {
-    /// How a signed-out screen opens sign-in; nil where the app offers none.
-    @Entry public var signIn: SignInAction?
-}
-
-extension EmptyStateView.Action {
-    /// "Sign in", for a signed-out screen; nil when the app offers no sign-in there.
-    public static func signIn(_ action: SignInAction?) -> Self? {
-        action.map { action in Self("Sign in", systemImage: "person.crop.circle") { action() } }
-    }
-}
-
 #Preview("Light") {
     EmptyStateView(
         systemImage: "shippingbox",

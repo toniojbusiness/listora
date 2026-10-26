@@ -56,6 +56,11 @@ export const storageKeys = {
       ? `public/${publicToken}/${kind}.jpg`
       : `photos/${accountId}/${photoId}/${publicToken}/${kind}.jpg`,
   newPublicToken: (): string => randomBytes(16).toString('hex'),
+  /** The prefixes that hold only `accountId`'s uploads and private derivatives. */
+  accountPrefixes: (accountId: string): string[] => [
+    `uploads/${accountId}/`,
+    `photos/${accountId}/`,
+  ],
 };
 
 /** Reads `photo.derivatives`; undefined until the photo is processed (an empty object). */

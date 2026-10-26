@@ -20,9 +20,17 @@ public final class LinkAccountsModel {
     public enum LinkProgress: Equatable {
         /// Sending the session to Listora.
         case sending
+        /// Asking Listora to check the session it holds again.
+        case requestingCheck
         /// The session did not reach Listora (or was refused). Retry resends the same sign-in
         /// with the same Idempotency-Key when `error.retryable`; otherwise the user signs in again.
         case failed(APIFailure)
+        /// Listora could not be asked to check again; Check again asks again.
+        case checkFailed(APIFailure)
+        /// Asking Listora to unlink the marketplace.
+        case unlinking
+        /// The unlink did not go through; the marketplace is still linked. Retry asks again.
+        case unlinkFailed(APIFailure)
     }
 
     public private(set) var links: [MarketplaceLink] = []
@@ -32,6 +40,8 @@ public final class LinkAccountsModel {
     public var signingIn: MarketplaceLink?
     /// The sale emails section; nil where the screen shows none.
     public let saleEmails: SaleEmailsModel?
+    /// The marketplace the user asked to unlink, waiting for them to confirm.
+    public var confirmingUnlink: MarketplaceLink?
 
     private let service: any MarketplaceSessionService
     private let makeIdempotencyKey: @Sendable () -> String
@@ -42,12 +52,16 @@ public final class LinkAccountsModel {
     /// The sign-in each failed link would resend: its cookies and its Idempotency-Key.
     private var unsent: [String: (cookies: [CapturedCookie], key: String)] = [:]
 
+    /// `pollInterval` and `maxPolls`: how often and how long a running check is read again. The
+    /// server decides every check within 15 minutes (it then says the check didn't finish), so
+    /// the default polls a little longer than that and never leaves a row on Checking... while
+    /// the server has an answer.
     public init(
         service: any MarketplaceSessionService,
         saleEmails: SaleEmailsModel? = nil,
         makeIdempotencyKey: @escaping @Sendable () -> String = { UUID().uuidString },
         pollInterval: Duration = .seconds(3),
-        maxPolls: Int = 100,
+        maxPolls: Int = 320,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
         now: @escaping @Sendable () -> Date = { Date() },
     ) {
@@ -81,8 +95,61 @@ public final class LinkAccountsModel {
 
     /// Opens the marketplace's sign-in page.
     public func startLinking(_ link: MarketplaceLink) {
-        guard link.canLink, progress[link.marketplace] != .sending else { return }
+        guard link.canLink, !isBusy(link.marketplace) else { return }
         signingIn = link
+    }
+
+    /// Asks the user to confirm unlinking: it deletes what Listora holds for the marketplace.
+    public func requestUnlink(_ link: MarketplaceLink) {
+        guard link.canUnlink, !isBusy(link.marketplace) else { return }
+        confirmingUnlink = link
+    }
+
+    public func cancelUnlink() {
+        confirmingUnlink = nil
+    }
+
+    /// The user confirmed unlinking `link`: unlinks it, then shows the server's state of it. It
+    /// shows as not linked only once the server says so. The link comes from the confirmation
+    /// itself, since dismissing the confirmation clears `confirmingUnlink` before its button acts.
+    public func confirmUnlink(_ link: MarketplaceLink) async {
+        confirmingUnlink = nil
+        guard link.canUnlink, !isBusy(link.marketplace) else { return }
+        await unlink(link.marketplace)
+    }
+
+    /// Asks again after an unlink that did not go through.
+    public func retryUnlink(_ marketplace: String) async {
+        guard case let .unlinkFailed(error) = progress[marketplace], error.retryable else { return }
+        await unlink(marketplace)
+    }
+
+    private func unlink(_ marketplace: String) async {
+        progress[marketplace] = .unlinking
+        unsent[marketplace] = nil
+        do {
+            try await service.unlink(marketplace)
+        } catch {
+            progress[marketplace] = .unlinkFailed(error)
+            return
+        }
+        progress[marketplace] = nil
+        do {
+            try await replace(service.get(marketplace))
+        } catch {
+            // The server confirmed the unlink but its fresh state could not be read: show what
+            // it confirmed, so the row never keeps saying Linked.
+            if let link = links.first(where: { $0.marketplace == marketplace }) {
+                replace(link.unlinked())
+            }
+        }
+    }
+
+    private func isBusy(_ marketplace: String) -> Bool {
+        switch progress[marketplace] {
+        case .sending, .requestingCheck, .unlinking: true
+        case .failed, .checkFailed, .unlinkFailed, nil: false
+        }
     }
 
     public func cancelSignIn() {
@@ -107,6 +174,27 @@ public final class LinkAccountsModel {
         let attempt = (cookies: captured, key: makeIdempotencyKey())
         unsent[link.marketplace] = attempt
         await send(link.marketplace, attempt)
+    }
+
+    /// Check again: asks Listora to check the session it already holds, then follows that check.
+    /// The user does not sign in again.
+    public func checkAgain(_ link: MarketplaceLink) async {
+        guard link.canCheckAgain, !isBusy(link.marketplace) else { return }
+        progress[link.marketplace] = .requestingCheck
+        do {
+            try await service.requestCheck(link.marketplace, idempotencyKey: makeIdempotencyKey())
+        } catch {
+            progress[link.marketplace] = .checkFailed(error)
+            return
+        }
+        progress[link.marketplace] = nil
+        do {
+            try await replace(service.get(link.marketplace))
+        } catch {
+            // The check was asked for: show it as the server would until a poll reads it.
+            replace(link.checking)
+        }
+        await followCheck(link.marketplace)
     }
 
     /// Resends a sign-in that did not reach Listora, with the same Idempotency-Key.

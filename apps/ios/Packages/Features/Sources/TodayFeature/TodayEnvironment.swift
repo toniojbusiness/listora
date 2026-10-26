@@ -10,6 +10,8 @@ public final class TodayEnvironment {
     let service: any TodayService
     /// Whether a session exists; signed out, the screen never calls the API.
     let isSignedIn: @MainActor () -> Bool
+    /// Opens the sign-in, for a signed-out screen's Sign in button.
+    let onSignIn: @MainActor () -> Void
     /// The item screen, pushed on Today's navigation stack.
     let itemDestination: @MainActor (String) -> AnyView
     /// A sale's screen, pushed on Today's navigation stack.
@@ -23,10 +25,12 @@ public final class TodayEnvironment {
         itemDestination: @escaping @MainActor (String) -> AnyView,
         saleDestination: @escaping @MainActor (String) -> AnyView,
         marketplacesDestination: @escaping @MainActor () -> AnyView,
+        onSignIn: @escaping @MainActor () -> Void = {},
     ) {
         self.init(
             service: APITodayService(client: apiClient.client),
             isSignedIn: { accessTokens.grant != nil },
+            onSignIn: onSignIn,
             itemDestination: itemDestination,
             saleDestination: saleDestination,
             marketplacesDestination: marketplacesDestination,
@@ -36,12 +40,14 @@ public final class TodayEnvironment {
     init(
         service: any TodayService,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
+        onSignIn: @escaping @MainActor () -> Void = {},
         itemDestination: @escaping @MainActor (String) -> AnyView = { _ in AnyView(EmptyView()) },
         saleDestination: @escaping @MainActor (String) -> AnyView = { _ in AnyView(EmptyView()) },
         marketplacesDestination: @escaping @MainActor () -> AnyView = { AnyView(EmptyView()) },
     ) {
         self.service = service
         self.isSignedIn = isSignedIn
+        self.onSignIn = onSignIn
         self.itemDestination = itemDestination
         self.saleDestination = saleDestination
         self.marketplacesDestination = marketplacesDestination

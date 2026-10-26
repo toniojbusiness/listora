@@ -289,3 +289,67 @@ describe('AI controls (real Postgres)', () => {
     expect(logLines()).toEqual([]);
   });
 });
+
+describe('marketplace-purge (real Postgres)', () => {
+  const operator = ['--actor', 'ops-alice', '--reason', 'Depop ended partner access'];
+
+  async function connection(accountId: string, mode: 'api' | 'automation'): Promise<string> {
+    const row = await db
+      .insertInto('marketplace_connection')
+      .values({
+        account_id: accountId,
+        marketplace: 'depop',
+        mode,
+        external_user_id: mode === 'api' ? `depop-${accountId}` : null,
+        token_ciphertext: Buffer.from('sealed'),
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
+  it('counts first, then deletes every connection in that mode and leaves the rest', async () => {
+    const charlie = await insertAccount(db, 'Charlie Closet');
+    const apiOne = await connection(alpha, 'api');
+    const apiTwo = await connection(charlie, 'api');
+    const automation = await connection(bravo, 'automation');
+    const remaining = async () =>
+      (
+        await db
+          .selectFrom('marketplace_connection')
+          .select('id')
+          .where('id', 'in', [apiOne, apiTwo, automation])
+          .execute()
+      ).map((row) => row.id);
+
+    expect(await run(['marketplace-purge', 'depop', '--mode', 'api', ...operator])).toBe(
+      '2 Depop api connections would be deleted. Run again with --confirm to delete them.\n',
+    );
+    expect((await remaining()).sort()).toEqual([apiOne, apiTwo, automation].sort());
+
+    output = '';
+    expect(
+      await run(['marketplace-purge', 'depop', '--mode', 'api', ...operator, '--confirm']),
+    ).toBe(
+      'Deleted the data of 2 Depop api connections. The worker revokes their grants and records each deletion.\n',
+    );
+    expect(await remaining()).toEqual([automation]);
+    const tombstones = await db
+      .selectFrom('connection_deletion')
+      .select(['connection_id', 'reason', 'revocation'])
+      .where('connection_id', 'in', [apiOne, apiTwo])
+      .execute();
+    expect(tombstones).toHaveLength(2);
+    expect(tombstones.every((row) => row.reason === 'marketplace_terminated')).toBe(true);
+    expect(tombstones.every((row) => row.revocation === 'pending')).toBe(true);
+    expect(logLines()).toContainEqual(
+      expect.objectContaining({
+        event: 'marketplace_purge',
+        marketplace: 'depop',
+        mode: 'api',
+        connections: 2,
+        actor: 'ops-alice',
+      }),
+    );
+  });
+});

@@ -48,7 +48,11 @@ from the app
   and task credential endpoints are), or internal host names. Images, scripts, and styles from
   other public hosts (the marketplaces' CDNs) still load. Chromium follows HTTP redirects
   without asking, so a redirect hop is not checked. If a redirect sends the main frame
-  elsewhere, the page inspection below stops the run.
+  elsewhere, the page inspection below stops the run. A run that stops logs its session's
+  network, by origin only (`NetworkLog`, `runner/network-log.ts`): the requests these rules
+  refused, the responses with an error status, and the requests that failed. So a page that
+  broke because of Listora's rules can be told apart from one the marketplace answered with
+  errors.
 - **Safety rules** (`safety/`, `profiles.ts`). Pacing: a random delay before every action and
   keystroke, and between a seller's sessions, per marketplace (`AUTOMATION_<MARKETPLACE>_*`),
   never below the floors in `profiles.ts`. Rate limits: runs per hour and per day per seller,
@@ -128,11 +132,14 @@ from the app
   cookies the app captured (on the marketplace's domains only), revives the connection, moves the
   marketplace's unconnected listings to it, asks the runner for a read-only **session check**
   (`session-checks/`), and makes a first sale check due at once; relinking takes the same way.
-  The app shows a marketplace as linked only after its session check passed. The flow, from the
-  app's sign-in web view to the check, is in [marketplace-linking.md](marketplace-linking.md).
+  The app shows a marketplace as linked only after its session check passed, on Link accounts and
+  Marketplaces alike. The flow, from the app's sign-in web view to the check, is in
+  [marketplace-linking.md](marketplace-linking.md).
 - **Hosting.** The runner is the compute stack's `runner` service, from the Dockerfile's
   `runner` stage (the application's files on top of headless Chromium, its own ECR repository),
-  with no task while idle and never two at once ([infra.md](infra.md)).
+  with no task while idle and never two at once ([infra.md](infra.md)). A session the runner's
+  browser cannot open (Chromium did not start) ends as `browser_unavailable`: a failure on
+  Listora's side, never reported as the marketplace's answer.
 
 ## Local development
 
@@ -175,7 +182,7 @@ never skips them.
 - **`automation_run`**: one browser session the runner opened, for an operation step, a sale
   check, or a health check: the script, its outcome, the check it met (`challenge_kind`), the
   failed step, an error code, and the key of its redacted screenshot (deleted with the
-  account). It is the per-seller rate limits' count, and the record of what automation did and
+  account, or with the connection when the seller unlinks it, [privacy.md](privacy.md)). It is the per-seller rate limits' count, and the record of what automation did and
   where it stopped.
 - **`sale_check_schedule`**: when each automation connection is next checked for sales and why
   (`scheduled`, `email`, `retry`, or `linked`), the last check's time and outcome, and the

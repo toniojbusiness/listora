@@ -29,6 +29,21 @@ import { stackList, synthesize } from './test-support.ts';
 
 type Resource = { Type: string; Properties?: Record<string, unknown> } & Record<string, unknown>;
 
+/** The Dockerfile's `runner` stage: the paths it declares volumes and the ones its user owns. */
+function runnerImageStage(): { volumes: string[]; owned: string[] } {
+  const dockerfile = readFileSync(new URL('../../Dockerfile', import.meta.url), 'utf8');
+  const stage = dockerfile.split(/^FROM /m).find((part) => /^\S+ AS runner\b/.test(part));
+  if (stage === undefined) throw new Error('the Dockerfile has no runner stage');
+  const user = /^USER (\S+)$/m.exec(stage)?.[1];
+  const volumes = [...stage.matchAll(/^VOLUME \[(.*)\]$/gm)].flatMap(
+    (match) => JSON.parse(`[${match[1] ?? ''}]`) as string[],
+  );
+  const owned = [...stage.matchAll(/^RUN chown (\S+):\S+ (.+)$/gm)]
+    .filter((match) => match[1] === user)
+    .flatMap((match) => (match[2] ?? '').split(' '));
+  return { volumes, owned };
+}
+
 /** Each environment, plus personal with a domain (it deploys without one until then). */
 const synthesized = new Map(
   PLACEHOLDER_SHAPES.map((shape) => [shape.name, synthesize(shape.environment, shape.overrides)]),
@@ -636,6 +651,15 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       expect(runner['MountPoints']).toEqual([
         { ContainerPath: '/tmp', ReadOnly: false, SourceVolume: 'tmp' },
       ]);
+      // Fargate creates each bind mount owned by root (0755) unless the image declares its path
+      // a VOLUME; the runner runs unprivileged, so it could not write /tmp and Chromium would
+      // not start (as on 2026-10-25: EACCES on mkdtemp). The runner image declares every
+      // mount and owns it.
+      const stage = runnerImageStage();
+      for (const mount of runner['MountPoints'] as { ContainerPath: string }[]) {
+        expect(stage.volumes).toContain(mount.ContainerPath);
+        expect(stage.owned).toContain(mount.ContainerPath);
+      }
       // The runner image repository's, not the application's.
       expect(JSON.stringify(runner['Image'])).toMatch(/OutputFnGetAttRunner/);
       expect(JSON.stringify(runner['Image'])).not.toMatch(/OutputFnGetAttApp/);
@@ -790,6 +814,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
 
     it('runs tasks where the task egress places them, with rollback on failed deploys', () => {
       const publicIp = settings.network.taskEgress.via === 'public-ip';
+      // `replace` stops the old tasks while the new ones start; `rolling` keeps them serving.
+      const minimumHealthy = settings.deployments === 'replace' ? 0 : 100;
       for (const service of appServices()) {
         // Autoscaling owns the task count; a template count would reset it on every deploy.
         expect(service.Properties?.['DesiredCount']).toBeUndefined();
@@ -800,7 +826,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           },
           DeploymentConfiguration: {
             DeploymentCircuitBreaker: { Enable: true, Rollback: true },
-            MinimumHealthyPercent: 100,
+            MinimumHealthyPercent: minimumHealthy,
             MaximumPercent: 200,
           },
         });
@@ -1147,6 +1173,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           'delist-failed',
           'ai-daily-cost',
           'connection-needs-relink',
+          'deletion-overdue',
           ...MARKETPLACES.map((marketplace) => `delist-latency-${marketplace}`),
           ...MARKETPLACES.map((marketplace) => `verified-success-${marketplace}`),
           'database-cpu',
@@ -1165,9 +1192,9 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
 
     if (environment === 'personal') {
       it('has the alarm count docs/features/costs.md prices', () => {
-        // Ten beyond the always-free ten standard alarms, at $0.10 each a month.
+        // Eleven beyond the always-free ten standard alarms, at $0.10 each a month.
         const count = resources(t, 'AWS::CloudWatch::Alarm').length;
-        expect(count).toBe(20);
+        expect(count).toBe(21);
         const costs = readFileSync(
           new URL('../../docs/features/costs.md', import.meta.url),
           'utf8',
@@ -1261,6 +1288,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         'delist-failed': ['DelistFailed', 'Sum', 1],
         'ai-daily-cost': ['AiDailyCostUsd', 'Maximum', settings.aiDailyCostAlarmUsd],
         'connection-needs-relink': ['ConnectionsNeedingRelink', 'Maximum', 1],
+        'deletion-overdue': ['OverdueDeletions', 'Maximum', 1],
       } as const;
       for (const [name, [metricName, statistic, threshold]] of Object.entries(expected)) {
         const alarm = alarmNamed(name);

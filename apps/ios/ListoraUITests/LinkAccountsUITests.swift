@@ -3,7 +3,7 @@ import XCTest
 /// Links Poshmark from Settings > Link accounts against `StubAPIServer`: the app opens a fake
 /// marketplace's sign-in page in its own web view, the user signs in there, and the app hands
 /// the stub API that site's session cookie, never the password. The marketplace shows as linked
-/// only after the stub's check says so.
+/// only after the stub's check says so. A linked marketplace unlinks after a confirmation.
 @MainActor
 final class LinkAccountsUITests: XCTestCase {
     private let app = XCUIApplication()
@@ -57,7 +57,12 @@ final class LinkAccountsUITests: XCTestCase {
             "Mercari logged Listora out. Log in again.",
         )
         XCTAssertEqual(app.buttons["linkAccounts.link.mercari"].label, "Relink")
-        XCTAssertEqual(element("linkAccounts.status.depop").label, "Not linked")
+        XCTAssertEqual(element("linkAccounts.status.depop").label, "Not confirmed")
+        XCTAssertEqual(
+            element("linkAccounts.detail.depop").label,
+            "Listora's browser didn't start, so it couldn't check your Depop sign-in. The problem is on "
+                + "Listora's side, not Depop's. Check again, or link Depop again if it keeps failing.",
+        )
         XCTAssertEqual(element("linkAccounts.status.ebay").label, "Not linked")
         snapshot("1-link-accounts")
 
@@ -73,6 +78,92 @@ final class LinkAccountsUITests: XCTestCase {
         XCTAssertEqual(app.buttons["linkAccounts.link.poshmark"].label, "Relink")
 
         try assertSentTheCookieButNotThePassword(server)
+    }
+
+    /// A linked Poshmark is unlinked after a confirmation, and shows as not linked once the stub
+    /// API unlinked it. It starts linked, so it needs no sign-in page.
+    func testUnlinksAMarketplaceAfterAConfirmation() throws {
+        let server = try StubAPIServer()
+        try server.start()
+        server.linkPoshmark()
+        self.server = server
+        app.launchEnvironment = [
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
+            "LISTORA_DEV_API_BASE_URL": server.baseURL,
+        ]
+        app.launch()
+
+        let settings = app.buttons["settings.open"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        let linkAccounts = app.buttons["settings.linkAccounts"]
+        XCTAssertTrue(linkAccounts.waitForExistence(timeout: 5), "no Link accounts\n\(app.debugDescription)")
+        linkAccounts.tap()
+
+        let poshmarkStatus = element("linkAccounts.status.poshmark")
+        XCTAssertTrue(poshmarkStatus.waitForExistence(timeout: 10), "no list\n\(app.debugDescription)")
+        XCTAssertEqual(poshmarkStatus.label, "Linked")
+        // Nothing to unlink where nothing is linked.
+        XCTAssertFalse(app.buttons["linkAccounts.unlink.ebay"].exists)
+
+        app.buttons["linkAccounts.unlink.poshmark"].tap()
+        let confirm = app.buttons["linkAccounts.confirmUnlink"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "no confirmation\n\(app.debugDescription)")
+        XCTAssertFalse(server.requests.contains { $0.method == "DELETE" })
+        snapshot("1-unlink-confirmation")
+        confirm.tap()
+
+        expectation(for: NSPredicate(format: "label == %@", "Not linked"), evaluatedWith: poshmarkStatus)
+        waitForExpectations(timeout: 10)
+        XCTAssertEqual(app.buttons["linkAccounts.link.poshmark"].label, "Link")
+        XCTAssertFalse(app.buttons["linkAccounts.unlink.poshmark"].exists)
+        XCTAssertEqual(
+            server.requests.count { $0.method == "DELETE" && $0.path == "/v1/connections/poshmark" },
+            1,
+        )
+        snapshot("2-unlinked")
+    }
+
+    func testChecksASignInAgainWithoutSigningInAgain() throws {
+        let server = try StubAPIServer()
+        try server.start()
+        self.server = server
+        app.launchEnvironment = [
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_ACCESS_TOKEN": "ui-test-token",
+            "LISTORA_DEV_API_BASE_URL": server.baseURL,
+        ]
+        app.launch()
+
+        let settings = app.buttons["settings.open"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        settings.tap()
+        app.buttons["settings.linkAccounts"].tap()
+
+        let depopStatus = element("linkAccounts.status.depop")
+        XCTAssertTrue(depopStatus.waitForExistence(timeout: 10), "no list\n\(app.debugDescription)")
+        XCTAssertEqual(depopStatus.label, "Not confirmed")
+        // The sign-in Listora holds may be fine: Check again needs no sign-in, Relink stays.
+        let checkAgain = app.buttons["linkAccounts.checkAgain.depop"]
+        XCTAssertTrue(checkAgain.exists)
+        XCTAssertEqual(app.buttons["linkAccounts.link.depop"].label, "Relink")
+        XCTAssertFalse(app.buttons["linkAccounts.checkAgain.poshmark"].exists)
+        snapshot("1-not-confirmed")
+
+        checkAgain.tap()
+
+        let linked = NSPredicate(format: "label == %@", "Linked")
+        expectation(for: linked, evaluatedWith: depopStatus)
+        waitForExpectations(timeout: 20)
+        snapshot("2-checked-again")
+        XCTAssertFalse(app.webViews.firstMatch.exists, "Check again opened a sign-in page")
+        let check = try XCTUnwrap(server.requests.first {
+            $0.method == "POST" && $0.path == "/v1/connections/depop/checks"
+        })
+        XCTAssertNotNil(check.headers["idempotency-key"])
+        let relinked = server.requests.contains { $0.method == "POST" && $0.path.hasPrefix("/v1/marketplace-sessions") }
+        XCTAssertFalse(relinked, "Check again sent a new sign-in")
     }
 
     /// The sale emails section: the account's own forwarding address, Gmail's confirmation code

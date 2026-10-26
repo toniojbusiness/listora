@@ -156,7 +156,6 @@ export class SessionVault {
             display_name: input.displayName ?? null,
             token_ciphertext: ciphertext,
             status: 'connected',
-            last_ok_at: sql<Date>`now()`,
             granted_at: sql<Date>`now()`,
           })
           .returning('credential_version')
@@ -173,7 +172,8 @@ export class SessionVault {
             last_error: null,
             last_error_code: null,
             last_error_at: null,
-            last_ok_at: sql<Date>`now()`,
+            // Nothing has accepted this session yet: its check (or a run) shows when it does.
+            last_ok_at: null,
             granted_at: sql<Date>`now()`,
             ...(input.displayName === undefined ? {} : { display_name: input.displayName }),
           })

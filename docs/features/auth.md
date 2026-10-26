@@ -4,7 +4,7 @@ How people sign in to Listora and delete their account (plan task T-31, decision
 API side is in `apps/api/src/auth/` and `apps/api/src/account/`, the account deletion job
 the worker runs is in `packages/accounts`, the personal environment's user pool is
 `infra/src/stacks/auth-stack.ts`, and the app's sign-in is `CognitoSignInClient` (APIClient)
-and `SignInModel` (SettingsFeature) in `apps/ios`. The API conventions every route follows, the
+and `SignInModel` (SignInFeature) in `apps/ios`. The API conventions every route follows, the
 tenancy guard included, are in [architecture.md](../architecture.md#4-api-conventions).
 
 ## Drivers
@@ -120,7 +120,7 @@ them in the Keychain and refreshes them with the refresh token (`REFRESH_TOKEN_A
 - **Email one-time code** uses Cognito's passwordless sign-in (choice-based authentication).
   A returning person calls `InitiateAuth` with `AuthFlow=USER_AUTH` and
   `PREFERRED_CHALLENGE=EMAIL_OTP`, then `RespondToAuthChallenge` with `EMAIL_OTP_CODE`; the app
-  does this today (`CognitoSignInClient`, from Settings), against the owner pool. Cognito's
+  does this today (`CognitoSignInClient`, from the welcome screen), against the owner pool. Cognito's
   errors are shown in the app's own words, and a challenge other than `EMAIL_OTP` is refused.
   With public sign-up (later), a new person calls `SignUp` with only their email (no password)
   and `ConfirmSignUp` with the emailed code; the returned session signs them in through
@@ -205,9 +205,10 @@ database at once, and leaves the rest to a job:
    API connection the marketplace has not revoked yet); and enqueues the tombstone's
    `account_deletion` job in Graphile Worker. Either all of it commits or none of it does, so
    any error (a retryable `500` or `503` included) means nothing was deleted, and the app
-   retries with the same token. After the commit, the API deletes the stored objects of the
-   account's photos and uploads (a failure is logged, as for `deleteItem`: no row references
-   the object any more) and answers `200`.
+   retries with the same token. The tombstone also lists the stored objects the deleted rows
+   named and the account's key prefixes. After the commit, the API deletes the stored objects
+   of the account's photos, uploads, and automation screenshots (a failure is logged: the job
+   deletes them again) and answers `200`.
 2. **The worker's job** (`completeAccountDeletion` in `packages/accounts/src/job.ts`), until
    it is done:
    - deletes the person at the identity provider: for Cognito, `AdminGetUser` first checks that
@@ -225,8 +226,16 @@ database at once, and leaves the rest to a job:
      them as `manual` (the log line says which marketplaces the seller must revoke themselves).
      A marketplace the worker cannot revoke with (no OAuth client or no token vault) always
      ends this way.
-   - then deletes the tombstone. While anything is open, it runs again later (after 1 m, 5 m,
-     15 m, 1 h, 3 h, then every 6 h; revocations get a last try when the 7 days end).
+   - deletes every stored object of the account (the ones the rows named, and everything under
+     `uploads/<account>/`, `photos/<account>/`, and `automation/<account>/`) and reads each back
+     until storage no longer has it;
+   - checks that no row anywhere still references the deleted account or user (every foreign
+     key to `account` and `app_user`, read from the catalog), then writes the deletion's
+     completion record (`deletion_record`, without personal data) and deletes the tombstone in
+     one transaction. While anything is open, it runs again later (after 1 m, 5 m, 15 m, 1 h,
+     3 h, then every 6 h; revocations get a last try when the 7 days end), and a deletion still
+     open after 8 days is overdue: it logs an error on every run and raises the
+     `deletion-overdue` alarm ([privacy.md](privacy.md)).
 
    Each step's result is committed before the next one, and each step is safe to repeat, so a
    crash or a database failure between steps only means the next run (Graphile retries a job
@@ -236,8 +245,8 @@ The response lists every API connection by marketplace (and the seller's name th
 `revoked: true` only when the marketplace had confirmed it before the deletion. Every entry
 with `revoked: false` names a marketplace whose access the person must revoke manually: the
 app lists them and tells the person to remove Listora in each one's settings, since the job's
-later outcome never reaches the app (Listora keeps no record of the deleted person beyond the
-job's log line). In the app it is Settings > Delete account (shown while someone is signed in,
+later outcome never reaches the app (Listora keeps no record of the deleted person: the
+completion record has only counts and outcomes). In the app it is Settings > Delete account (shown while someone is signed in,
 `AccountDeletionModel` in `SettingsFeature`): it says what deleting removes and keeps, asks to
 confirm, then signs out and lists these marketplaces. A `401` answer means an earlier try already
 deleted the account, so it reads as deleted too; any other error deletes nothing and can be
@@ -282,4 +291,7 @@ The tenancy tables (`account`, `app_user`, `membership`) are in
 - **Account deletion:** `account_deletion` (the tombstone of a committed deletion whose job
   has not finished: the identity's SHA-256 and provider username, attempts) and
   `account_deletion_grant` (the deleted account's marketplace grants still to revoke, with
-  their encrypted tokens only while pending). The job deletes the tombstone when it is done.
+  their encrypted tokens only while pending), and `account_deletion_object` (stored objects
+  still to delete). The job deletes the tombstone when it is done, and leaves a
+  `deletion_record` ([privacy.md](privacy.md#data)). The tombstone's `account_id` and `user_id`
+  say what the job checks.

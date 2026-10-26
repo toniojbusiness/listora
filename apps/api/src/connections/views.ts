@@ -12,6 +12,7 @@ import {
   type AuthorizationRow,
   type ConnectionRow,
   type ConnectionView,
+  type SessionCheckState,
 } from '@listora/connections';
 import { MARKETPLACES, type Marketplace } from '@listora/db';
 import type { AdapterRegistry, MarketplaceCapabilities } from '@listora/marketplaces';
@@ -23,6 +24,8 @@ export interface ConnectionViewContext {
   adapters: AdapterRegistry;
   /** Whether this process can connect the marketplace (an OAuth client and a token vault). */
   canConnect: (marketplace: Marketplace) => boolean;
+  /** The account's session checks by connection id: how automation connections are shown. */
+  sessionChecks: ReadonlyMap<string, SessionCheckState>;
   now: Date;
 }
 
@@ -80,6 +83,7 @@ function describe(
     row,
     defaultMode: defaultMode(capabilitiesOf(marketplace, row, context), canConnect),
     canConnect,
+    sessionCheck: row === undefined ? null : (context.sessionChecks.get(row.id) ?? null),
     now: context.now,
   });
 }

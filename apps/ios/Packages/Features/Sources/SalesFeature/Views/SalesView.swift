@@ -10,7 +10,6 @@ public struct SalesView<Settings: View>: View {
     private let settings: Settings
     private let onOpenInventory: (@MainActor () -> Void)?
     @State private var model: SalesListModel
-    @Environment(\.signIn) private var signIn
 
     /// `settings` is the header's button that opens Settings; `onOpenInventory` opens Inventory,
     /// the empty list's action.
@@ -34,7 +33,7 @@ public struct SalesView<Settings: View>: View {
                     SaleDetailView(environment: environment, saleID: route.saleID)
                 }
                 .navigationDestination(for: ProfitRoute.self) { _ in
-                    ProfitView(model: environment.makeProfitModel())
+                    ProfitView(model: environment.makeProfitModel(), onSignIn: environment.onSignIn)
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -65,7 +64,7 @@ public struct SalesView<Settings: View>: View {
                 systemImage: "person.crop.circle.badge.questionmark",
                 title: "Sign in to see your sales",
                 message: "Every sale, its fees, and its profit show up here once you sign in.",
-                action: .signIn(signIn),
+                action: .init("Sign in", systemImage: "person.crop.circle", handler: environment.onSignIn),
             )
         case let .failed(message) where model.sales.isEmpty:
             EmptyStateView(

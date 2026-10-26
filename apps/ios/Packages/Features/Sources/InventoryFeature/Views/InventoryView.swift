@@ -100,9 +100,8 @@ public struct InventoryView<Header: View>: View {
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.questionmark",
                 title: "Sign in to see your inventory",
-                message: "Your items and their status on every marketplace show up here once you sign in. "
-                    + "You can take photos for a new item now.",
-                action: .init("Add item", systemImage: "camera.fill", handler: onAddItem),
+                message: "Your items and their status on every marketplace show up here once you sign in.",
+                action: .init("Sign in", systemImage: "person.crop.circle", handler: environment.onSignIn),
             )
             .accessibilityIdentifier("inventory.signedOut")
         case let .failed(message) where model.items.isEmpty:

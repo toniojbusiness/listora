@@ -2,6 +2,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   NoSuchKey,
   NotFound,
   PutObjectCommand,
@@ -13,9 +14,11 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   assertPublicKey,
   assertStorageKey,
+  assertStoragePrefix,
   base64ToHex,
   CHECKSUM_SHA256_HEADER,
   hexToBase64,
+  listLimit,
   PUBLIC_KEY_PREFIX,
   type ObjectStorage,
   type PutOptions,
@@ -168,6 +171,16 @@ export class S3Storage implements ObjectStorage {
   async delete(key: string): Promise<void> {
     assertStorageKey(key);
     await this.#client.send(new DeleteObjectCommand({ Bucket: this.#bucket, Key: key }));
+  }
+
+  async list(prefix: string, limit?: number): Promise<string[]> {
+    assertStoragePrefix(prefix);
+    const output = await this.#client.send(
+      new ListObjectsV2Command({ Bucket: this.#bucket, Prefix: prefix, MaxKeys: listLimit(limit) }),
+    );
+    return (output.Contents ?? []).flatMap((object) =>
+      object.Key === undefined ? [] : [object.Key],
+    );
   }
 
   publicUrl(key: string): string {

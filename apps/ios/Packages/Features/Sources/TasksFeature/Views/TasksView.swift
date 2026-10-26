@@ -9,7 +9,6 @@ public struct TasksView: View {
     private let environment: TasksEnvironment
     @State private var path: [UserTask] = []
     @State private var toast: Toast?
-    @Environment(\.signIn) private var signIn
 
     public init(environment: TasksEnvironment) {
         self.environment = environment
@@ -52,7 +51,7 @@ public struct TasksView: View {
                 systemImage: "person.crop.circle.badge.questionmark",
                 title: "Sign in to see your tasks",
                 message: "Marketplace steps that need you show up here once you're signed in.",
-                action: .signIn(signIn),
+                action: .init("Sign in", systemImage: "person.crop.circle", handler: environment.onSignIn),
             )
         case let .failed(message) where inbox.tasks.isEmpty:
             EmptyStateView(

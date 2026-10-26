@@ -95,6 +95,27 @@ export async function readMetadata(bytes: Uint8Array): Promise<ImageMetadataSumm
   };
 }
 
+/**
+ * The JPEG's segment markers before its image data (`0xe1` is APP1: EXIF or XMP; `0xed` is
+ * APP13: IPTC; `0xe2` is APP2: ICC), read from the bytes themselves rather than through an image
+ * library, so a library that hides a segment cannot hide it from the test.
+ */
+export function jpegHeaderMarkers(bytes: Uint8Array): number[] {
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) throw new Error('not a JPEG');
+  const markers: number[] = [];
+  let offset = 2;
+  while (offset + 4 <= bytes.length) {
+    if (bytes[offset] !== 0xff) throw new Error(`no marker at byte ${String(offset)}`);
+    const marker = bytes[offset + 1] ?? 0;
+    // Start of scan: the compressed pixels follow.
+    if (marker === 0xda) break;
+    markers.push(marker);
+    const length = ((bytes[offset + 2] ?? 0) << 8) | (bytes[offset + 3] ?? 0);
+    offset += 2 + length;
+  }
+  return markers;
+}
+
 /** Every file under a directory, as storage keys (relative slash paths). */
 export async function listKeys(rootDir: string): Promise<string[]> {
   const entries = await readdir(rootDir, { recursive: true, withFileTypes: true });

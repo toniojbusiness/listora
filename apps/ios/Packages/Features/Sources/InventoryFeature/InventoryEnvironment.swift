@@ -46,6 +46,8 @@ public final class InventoryEnvironment {
     let detailTiming: DetailTiming
     /// Whether a session exists; signed out, the inventory never calls the API.
     let isSignedIn: @MainActor () -> Bool
+    /// Opens the sign-in, for a signed-out screen's Sign in button.
+    let onSignIn: @MainActor () -> Void
     /// "Mark as sold" and the sale screen; without them the item screen offers neither.
     let saleScreens: SaleScreens?
     /// The task screen for an assisted step; without one, the item screen offers no "Open task".
@@ -62,11 +64,13 @@ public final class InventoryEnvironment {
         listingCopy: ListingCopyStore,
         saleScreens: SaleScreens? = nil,
         taskDestination: TaskDestination? = nil,
+        onSignIn: @escaping @MainActor () -> Void = {},
     ) {
         self.init(
             service: APIInventoryService(client: apiClient.client),
             listingCopy: listingCopy,
             isSignedIn: { accessTokens.grant != nil },
+            onSignIn: onSignIn,
             saleScreens: saleScreens,
             taskDestination: taskDestination,
         )
@@ -77,6 +81,7 @@ public final class InventoryEnvironment {
         listingCopy: ListingCopyStore,
         detailTiming: DetailTiming = .standard,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
+        onSignIn: @escaping @MainActor () -> Void = {},
         saleScreens: SaleScreens? = nil,
         taskDestination: TaskDestination? = nil,
     ) {
@@ -84,6 +89,7 @@ public final class InventoryEnvironment {
         self.listingCopy = listingCopy
         self.detailTiming = detailTiming
         self.isSignedIn = isSignedIn
+        self.onSignIn = onSignIn
         self.saleScreens = saleScreens
         self.taskDestination = taskDestination
     }

@@ -65,7 +65,17 @@ official OAuth 2.0 authorization code grant; Listora never sees a marketplace pa
   deletes the tokens; a notice older than the current grant changes nothing. eBay's notice
   arrives at `/webhooks/ebay`, which verifies it and records it at once
   ([ebay-notifications.md](ebay-notifications.md)). Account deletion revokes grants through the
-  marketplace's revocation endpoint (`OAuthGrantRevoker`).
+  marketplace's revocation endpoint (`OAuthGrantRevoker`). A connection still revoked 30 days
+  later, never reconnected, has the rest of its data deleted as if it were unlinked
+  ([privacy.md](privacy.md)).
+- **Unlinking.** `disconnectConnection` (`DELETE /v1/connections/{marketplace}`) deletes the
+  connection and the marketplace data that came through it at once (`startConnectionDeletion`
+  in `deletion.ts`: the tokens or session, the marketplace's user id and name, its automation
+  runs, session checks, and sale-check schedule, its listings' read-backs, and marketplace events
+  about the seller) and answers with the marketplace `not_connected`; `404` when none is linked.
+  Items, listings, and sales stay. The `connection_deletion` job then revokes an OAuth grant
+  through the marketplace's revocation endpoint (for up to 7 days), deletes the runs'
+  screenshots, checks, and records the deletion ([privacy.md](privacy.md)).
 
 ## Health dashboard
 
@@ -101,10 +111,17 @@ thing.
   ([push.md](push.md)). A connection that is already broken never sends it again; reconnecting
   and breaking anew does. A grant that ran out is recorded by the daily check without asking the
   marketplace, so it notifies too.
-- **Automation sessions** (decision D1, [automation.md](automation.md)) join the same model when
-  the session vault lands: a session the marketplace rejects is a connection that needs relinking,
-  shown and notified like `reauth_required`. Until then Poshmark, Mercari, Depop, and eBay
-  (without its API keys) show Not linked.
+- **Automation sessions** (decision D1, [automation.md](automation.md)). An `automation`
+  connection is shown as its linked session's check says (`describeAutomationSession`,
+  session-status.ts), the same description Link accounts renders
+  ([marketplace-linking.md](marketplace-linking.md)), so the two screens never disagree: Checking...,
+  Linked (only after the browser runner's check passed; `lastOkAt` is that check, or a later run
+  whose refreshed cookies the marketplace sent), Not confirmed (the check failed or did not finish
+  within 15 minutes; attention `not_confirmed`, action `check`), or Sign in again (the marketplace
+  rejected the session, shown and notified like `reauth_required`). Retry check on an automation
+  connection checks the stored session again (`requestSessionRecheck`) instead of queueing the
+  API health check. Without a linked session, Poshmark, Mercari, Depop, and eBay (without its API
+  keys) show Not linked.
 - **In the app** (`MarketplacesFeature`): one card per marketplace with its mode, status, detail,
   last successful check, and actions (Connect, Reconnect, Retry check; the main one filled); a
   Sale emails card; and `ConnectionAttentionBanner`, which Inventory shows above the list while

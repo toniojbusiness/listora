@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { loadAutomationSettings, SESSION_CHECK_TASK } from '@listora/automation';
+import { SESSION_CHECK_DEADLINE_MS } from '@listora/connections';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -220,15 +221,19 @@ describe('marketplace sessions (real Postgres)', () => {
     await setCheck({
       status: 'failed',
       failure_code: 'step_timeout',
-      failure_message:
-        "Listora couldn't check your Poshmark login just now. Link it again to retry.",
+      failure_message: "Listora couldn't check your Poshmark sign-in just now.",
     });
     expect((await get('poshmark')).body).toMatchObject({
       status: 'check_failed',
-      statusDisplay: { tone: 'failed', label: 'Not confirmed - Link again' },
+      statusDisplay: {
+        tone: 'action_needed',
+        label: 'Not confirmed',
+        detail:
+          "Listora couldn't check your Poshmark sign-in just now. Check again, or link Poshmark again if it keeps failing.",
+      },
       issue: {
         code: 'step_timeout',
-        message: "Listora couldn't check your Poshmark login just now. Link it again to retry.",
+        message: "Listora couldn't check your Poshmark sign-in just now.",
       },
     });
   });
@@ -340,6 +345,241 @@ describe('marketplace sessions (real Postgres)', () => {
 
   it('never logs a cookie value, even for refused requests', () => {
     expect(JSON.stringify(api.logLines)).not.toContain(SECRET);
+  });
+});
+
+/**
+ * Link accounts (`getMarketplaceSession`) and Marketplaces (`getConnection`, the health
+ * summary) describe a linked session the same way, whatever its check found (on 2026-10-25 Link
+ * accounts said "Not confirmed - Link again" while Marketplaces said "Connected"), a check never
+ * stays "Checking..." past its deadline, and a sign-in Listora could not confirm can be checked
+ * again without signing in again.
+ */
+describe('a linked session on both screens (real Postgres)', () => {
+  const SELLER = 'linking.screens@example.com';
+  let api: TestApi;
+  let token: string;
+  let accountId: string;
+
+  beforeAll(async () => {
+    api = await createTestApi('sessions_screens');
+    token = await api.signIn(SELLER);
+    accountId = (await api.tenantOf(SELLER)).accountId;
+  });
+
+  afterAll(async () => {
+    await api.close();
+  });
+
+  const linkPoshmark = () =>
+    api.call('linkMarketplaceSession', {
+      token,
+      params: { marketplace: 'poshmark' },
+      body: { cookies: [cookie()] },
+    });
+
+  const check = () =>
+    api.db
+      .selectFrom('session_check')
+      .selectAll()
+      .where('account_id', '=', accountId)
+      .where('marketplace', '=', 'poshmark')
+      .executeTakeFirstOrThrow();
+
+  const setCheck = (values: Record<string, unknown>) =>
+    api.db
+      .updateTable('session_check')
+      .set(values)
+      .where('account_id', '=', accountId)
+      .where('marketplace', '=', 'poshmark')
+      .execute();
+
+  /** What each screen shows for Poshmark. */
+  const screens = async () => {
+    const session = await api.call('getMarketplaceSession', {
+      token,
+      params: { marketplace: 'poshmark' },
+    });
+    const connection = await api.call('getConnection', {
+      token,
+      params: { marketplace: 'poshmark' },
+    });
+    const health = await api.call('getConnectionHealth', { token });
+    const listed = health.body.connections.find((entry) => entry.marketplace === 'poshmark');
+    expect(listed?.statusDisplay).toEqual(connection.body.statusDisplay);
+    return { session: session.body, connection: connection.body, health: health.body };
+  };
+
+  const expectSameStatus = async () => {
+    const shown = await screens();
+    expect(shown.connection.statusDisplay).toEqual(shown.session.statusDisplay);
+    expect(shown.connection.lastIssue).toEqual(shown.session.issue);
+    return shown;
+  };
+
+  it('says Checking... on both while the check runs, and Linked on both once it passed', async () => {
+    expect((await linkPoshmark()).status).toBe(201);
+    const checking = await expectSameStatus();
+    expect(checking.session).toMatchObject({
+      status: 'checking',
+      statusDisplay: { tone: 'checking', label: 'Checking...' },
+    });
+    expect(checking.connection).toMatchObject({ mode: 'automation', availableActions: [] });
+    expect(checking.health.attention).toEqual([]);
+
+    await setCheck({ status: 'passed', attempts: 1, finished_at: new Date() });
+    const linked = await expectSameStatus();
+    expect(linked.session).toMatchObject({
+      status: 'linked',
+      statusDisplay: { tone: 'success', label: 'Linked' },
+    });
+    expect(linked.connection.availableActions).toEqual([]);
+    expect(linked.connection.lastOkAt).toBe(linked.session.checkedAt);
+    expect(linked.health.needsAttention).toBe(false);
+  });
+
+  it('says Not confirmed on both, with the reason and Retry check, when the check failed', async () => {
+    // As the runner recorded it on 2026-10-25, when its browser could not start.
+    await setCheck({
+      status: 'failed',
+      attempts: 3,
+      failure_code: 'browser_unavailable',
+      failure_message:
+        "Listora's browser didn't start, so it couldn't check your Poshmark sign-in. The problem is on Listora's side, not Poshmark's.",
+      finished_at: new Date(),
+    });
+    const failed = await expectSameStatus();
+    expect(failed.session).toMatchObject({
+      status: 'check_failed',
+      statusDisplay: {
+        tone: 'action_needed',
+        label: 'Not confirmed',
+        detail:
+          "Listora's browser didn't start, so it couldn't check your Poshmark sign-in. The problem is on Listora's side, not Poshmark's. Check again, or link Poshmark again if it keeps failing.",
+      },
+      issue: { code: 'browser_unavailable' },
+    });
+    // Never "Connected" for a session Listora could not confirm.
+    expect(failed.connection.availableActions).toEqual(['check']);
+    expect(failed.connection.lastOkAt).toBeUndefined();
+    expect(failed.health).toMatchObject({
+      needsAttention: true,
+      banner: { tone: 'action_needed', label: 'Poshmark sign-in not confirmed' },
+      attention: [{ marketplace: 'poshmark', reason: 'not_confirmed' }],
+    });
+  });
+
+  it('checks the same sign-in again without a relink, and lets a running check finish', async () => {
+    const before = await check();
+    const stored = await api.db
+      .selectFrom('marketplace_connection')
+      .select(['token_ciphertext', 'credential_version'])
+      .where('account_id', '=', accountId)
+      .where('marketplace', '=', 'poshmark')
+      .executeTakeFirstOrThrow();
+    const checked = await api.call('requestConnectionCheck', {
+      token,
+      params: { marketplace: 'poshmark' },
+      idempotencyKey: randomUUID(),
+    });
+    expect(checked.status).toBe(202);
+    expect(checked.body).toMatchObject({
+      mode: 'automation',
+      statusDisplay: { tone: 'checking', label: 'Checking...' },
+      availableActions: [],
+    });
+    const after = await check();
+    expect(after).toMatchObject({ status: 'pending', attempts: 0, failure_code: null });
+    expect(after.check_id).not.toBe(before.check_id);
+    const { rows } = await sql<{ payload: { checkId: string } }>`
+      select job.payload from graphile_worker._private_jobs job
+      join graphile_worker._private_tasks task on task.id = job.task_id
+      where task.identifier = ${SESSION_CHECK_TASK} and job.key = ${`session-check:${after.connection_id}`}
+    `.execute(api.db);
+    expect(rows.map((row) => row.payload.checkId)).toEqual([after.check_id]);
+    // The same session: nothing was linked or rewritten.
+    expect(
+      await api.db
+        .selectFrom('marketplace_connection')
+        .select(['token_ciphertext', 'credential_version'])
+        .where('account_id', '=', accountId)
+        .where('marketplace', '=', 'poshmark')
+        .executeTakeFirstOrThrow(),
+    ).toEqual(stored);
+    expect((await expectSameStatus()).session.status).toBe('checking');
+
+    // Asking again while that check runs leaves it to finish.
+    const again = await api.call('requestConnectionCheck', {
+      token,
+      params: { marketplace: 'poshmark' },
+      idempotencyKey: randomUUID(),
+    });
+    expect(again.status).toBe(202);
+    expect((await check()).check_id).toBe(after.check_id);
+  });
+
+  it('never stays Checking... past the deadline: a check that did not finish is not confirmed', async () => {
+    await setCheck({
+      status: 'pending',
+      finished_at: null,
+      failure_code: null,
+      failure_message: null,
+      requested_at: new Date(api.clock.now - SESSION_CHECK_DEADLINE_MS - 1_000),
+    });
+    const stuck = await expectSameStatus();
+    expect(stuck.session).toMatchObject({
+      status: 'check_failed',
+      statusDisplay: { tone: 'action_needed', label: 'Not confirmed' },
+      issue: {
+        code: 'check_timed_out',
+        message: "Listora's check of your Poshmark sign-in didn't finish.",
+      },
+    });
+    expect(stuck.connection.availableActions).toEqual(['check']);
+
+    // Retry check starts a new check of the same session.
+    const before = await check();
+    const checked = await api.call('requestConnectionCheck', {
+      token,
+      params: { marketplace: 'poshmark' },
+      idempotencyKey: randomUUID(),
+    });
+    expect(checked.status).toBe(202);
+    expect((await check()).check_id).not.toBe(before.check_id);
+    expect((await expectSameStatus()).session.status).toBe('checking');
+  });
+
+  it('says Sign in again on both once the marketplace rejected the session, with no check', async () => {
+    const connection = await api.db
+      .selectFrom('marketplace_connection')
+      .selectAll()
+      .where('account_id', '=', accountId)
+      .where('marketplace', '=', 'poshmark')
+      .executeTakeFirstOrThrow();
+    await api.vault.markNeedsRelink(
+      api.db,
+      { accountId, connectionId: connection.id, version: connection.credential_version },
+      { kind: 'captcha', message: 'Poshmark showed a check Listora must not pass. Log in again.' },
+    );
+    const rejected = await expectSameStatus();
+    expect(rejected.session).toMatchObject({
+      status: 'needs_relink',
+      statusDisplay: { tone: 'action_needed', label: 'Sign in again' },
+      issue: { code: 'captcha' },
+    });
+    expect(rejected.health.attention).toMatchObject([
+      { marketplace: 'poshmark', reason: 'reconnect' },
+    ]);
+    const refused = await api.call('requestConnectionCheck', {
+      token,
+      params: { marketplace: 'poshmark' },
+      idempotencyKey: randomUUID(),
+    });
+    expect(refused.status).toBe(409);
+    expect(refused.error).toMatchObject({
+      code: 'invalid_state_transition',
+      message: 'Listora has no Poshmark sign-in to check. Link Poshmark again.',
+    });
   });
 });
 

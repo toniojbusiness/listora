@@ -44,11 +44,16 @@ RUN version=$(node -p "require('/tmp/playwright-version/package-lock.json').pack
   && rm -rf /var/lib/apt/lists/* /root/.npm /tmp/playwright-version
 
 # The browser runner. The task's root file system is read-only; Chromium's profile and caches
-# go to /tmp, which ECS mounts writable.
+# go to /tmp, a volume ECS mounts writable. Fargate creates that volume owned by root with mode
+# 0755, which the unprivileged user cannot write (Chromium then does not start), unless the
+# image declares the path a VOLUME: then it copies the image's directory, owner included, into
+# it. So /tmp belongs to node here, and the task definition mounts the volume at this path.
 FROM chromium AS runner
 ENV HOME=/tmp
 COPY --from=base /app /app
+RUN chown node:node /tmp
 USER node
+VOLUME ["/tmp"]
 # Fails the build, whatever the builder, if the unprivileged user cannot start node.
 RUN node -e '' && test -r "$NODE_EXTRA_CA_CERTS"
 CMD ["node", "apps/worker/src/runner/main.ts"]

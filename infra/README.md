@@ -69,7 +69,11 @@ and never a CAPTCHA or bot check solved (it stops and falls back to an assisted 
   deploy workflow builds and pushes it next to the application image, with the same tag.
 - **Task.** Read-only root file system with a writable `/tmp` volume for Chromium, the worker's
   network place and security group (the database, internet egress, no ingress), and
-  `PGPASSWORD` only.
+  `PGPASSWORD` only. Fargate creates that volume owned by root (mode 0755) unless the image
+  declares its path a `VOLUME`, so the runner stage declares `/tmp` one, owned by the
+  unprivileged user the runner runs as; without it Chromium cannot start. A test checks that
+  the image declares every path the task mounts, and the container smoke test runs the runner
+  on the image's own volume instead of a tmpfs.
 
 **The iPhone app.** The personal environment is the production environment for now, so the
 iOS `Prod-Release` configuration's `API_BASE_URL` points at it (there is no separate Personal
@@ -169,12 +173,13 @@ them breaks; turning it off is a separate, later step:
 
 Run from the repository root.
 
-| Command                                  | What it does                                                                                                                                |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run infra:synth`                    | `cdk synth` for every environment, plus personal with a domain, with placeholder settings and AWS credentials hidden (offline)              |
-| `npx vitest run --project unit infra`    | Infra tests: config, assertions per stack and environment, template snapshots, deploy and TestFlight workflows                              |
-| `npx vitest run --project unit infra -u` | Refresh the template snapshots in `src/__snapshots__/` after an intended change; review the diff                                            |
-| `scripts/deploy-personal.sh --dry-run`   | The personal deploy's offline checks and the steps it would run ([Deploying the personal environment](#deploying-the-personal-environment)) |
+| Command                                            | What it does                                                                                                                                |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run infra:synth`                              | `cdk synth` for every environment, plus personal with a domain, with placeholder settings and AWS credentials hidden (offline)              |
+| `npx vitest run --project unit infra`              | Infra tests: config, assertions per stack and environment, template snapshots, deploy and TestFlight workflows                              |
+| `npx vitest run --project unit infra -u`           | Refresh the template snapshots in `src/__snapshots__/` after an intended change; review the diff                                            |
+| `scripts/deploy-personal.sh --dry-run`             | The personal deploy's offline checks and the steps it would run ([Deploying the personal environment](#deploying-the-personal-environment)) |
+| `scripts/deploy-personal.sh --code-only --dry-run` | The fast path's offline checks and steps, for a commit that changes only code ([Code-only deploys](#code-only-deploys))                     |
 
 Commands that talk to AWS (`cdk diff`, `cdk deploy`) run from `infra/` with that account's
 credentials and the settings below, for example `npx cdk diff -c env=staging`.
@@ -219,6 +224,7 @@ with: the user pool's only user (docs/features/auth.md, The owner pool). Optiona
 ```sh
 scripts/deploy-personal.sh --dry-run --profile prequal-main   # offline: checks and prints every step
 scripts/deploy-personal.sh --profile prequal-main             # deploys
+scripts/deploy-personal.sh --code-only --profile prequal-main # a commit that changes only code, fast
 ```
 
 From a clean checkout of the commit to deploy (the image is tagged with it), the script:
@@ -268,8 +274,11 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
 8. **Stores the Anthropic key** in `listora/personal/anthropic-api-key` from a private
    temporary file, only when it differs; if the services were already running, it restarts
    them so they read it.
-9. **Runs the migrations** (`scripts/run-migrations.sh`, the workflow's step), then deploys
-   compute and observability.
+9. **Runs the migrations** (`scripts/run-migrations.sh`, the workflow's step, with the migrate
+   stack's own task definition), then deploys compute and observability. If a
+   [code-only deploy](#code-only-deploys) left a service on a revision the stack did not make
+   (CloudFormation changes a service only when its template changes, as on a rollback to the
+   commit it last deployed), it moves the service back to the stack's task definition.
 10. **Waits for health** (`/health/ready` with the database ok, 10 minutes at most), runs the
     **smoke test**, and prints the API URL and the app client id to put in the iPhone app's
     Prod configuration.
@@ -309,6 +318,52 @@ deletes the Cognito user too; to sign in again, recreate it with
 --user-attributes Name=email,Value=<owner> Name=email_verified,Value=true --message-action
 SUPPRESS --profile <profile>`.
 
+### Code-only deploys
+
+Most commits change only code, and redeploying every stack through CloudFormation for them is
+slow (a compute stack update alone takes about four minutes). `--code-only` is the fast path:
+
+```sh
+scripts/deploy-personal.sh --code-only --profile prequal-main
+```
+
+It runs the same local checks, account check, stack checks, and offline synthesis as the full
+deploy, then:
+
+1. **Refuses anything but code**, changing nothing: it checks Listora's bootstrap and execution
+   policy without updating them, and compares every synthesized template with the deployed one
+   (`aws cloudformation get-template`), ignoring only the image tag. Any other difference (a new
+   resource, setting, container variable, or secret), or an Anthropic key in
+   `~/.config/listora/anthropic.env` that differs from the stored one, stops it with the
+   stacks that differ and the full deploy command to run instead. So does a stack that does not
+   exist yet: the first deploy is always a full one.
+2. **Builds and pushes the images** as the full deploy does, with layer caching: each image
+   carries its cache (`--cache-to type=inline`), and the build reuses the layers of the images
+   the services run (`--cache-from`) as well as the builder's own cache, so a code change
+   rebuilds and pushes only its small source layers.
+3. **Runs the migrations only when there are new ones**: when `packages/db/migrations` differs
+   between the commit the services run (their image tag) and this one, or when that commit is
+   not in the checkout. It registers a revision of the migrate stack's task definition with the
+   new image and runs it with `scripts/run-migrations.sh`; a failed migration stops the deploy
+   before any service moves.
+4. **Moves the services to the new images through ECS**, without CloudFormation: for each
+   service (`app`, `runner`) it registers a revision of the task definition the compute stack
+   made, with only the image tags changed, points the service at it (`aws ecs update-service`),
+   and waits until ECS reports the rollout complete with only the new revision running. If the
+   circuit breaker rolls the service back, the deploy fails; it never reports a release that is
+   not running.
+5. **Waits for health and runs the smoke test**, as the full deploy does.
+
+Personal's app service replaces its one task in place (`deployments: 'replace'` in
+`src/config.ts`: minimum healthy 0%), on every deploy: the old task stops while the new one
+starts, so the API answers nothing for about a minute. Staging and prod keep `rolling`. The
+deploy times are in [docs/features/infra.md](../docs/features/infra.md#deploy-times).
+
+The services then run revisions that CloudFormation did not make; the stacks still describe the
+commit of the last full deploy. The next full deploy brings them back in line: it replaces the
+revisions with its own, also when its commit is the one CloudFormation already has. The Deploy
+workflow does not do that check, so after a code-only deploy, deploy personal with the script.
+
 ### Rollback
 
 - **A failed deploy step.** The script stops at the first failure. CloudFormation rolls the
@@ -321,9 +376,10 @@ SUPPRESS --profile <profile>`.
   (`aws cloudformation update-termination-protection --no-enable-termination-protection
 --stack-name <stack>`) and remove it (`aws cloudformation delete-stack --stack-name <stack>`).
   Never do this for the data stack without checking what it holds.
-- **A bad release.** Check out the last good commit and run the script again: its image is
-  still in ECR, so nothing is rebuilt, and because migrations are expand-then-contract, the
-  older code runs on the newer schema. Do not revert migrations in the deployed database.
+- **A bad release.** Check out the last good commit and run the script again (with
+  `--code-only` when the releases between differ only in code): its image is still in ECR, so
+  nothing is rebuilt, and because migrations are expand-then-contract, the older code runs on
+  the newer schema. Do not revert migrations in the deployed database.
 - **A bad Anthropic key.** Fix `~/.config/listora/anthropic.env` and run the script again.
 
 ### Teardown

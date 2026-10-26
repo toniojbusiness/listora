@@ -117,27 +117,32 @@ export class RunnerSessions implements AutomationSessions {
 
     let result: ScriptResult<T>;
     let cookies: Awaited<ReturnType<AutomationSession['close']>> = [];
+    let opened = false;
     try {
       const session = await this.#options.runner.openSession(
         { profile, cookies: loaded.cookies, accountId: loaded.accountId, runId: run.id },
         signal,
       );
+      opened = true;
       try {
         result = await body(session, signal);
       } finally {
         cookies = await session.close();
       }
     } catch (error) {
-      log.error({ err: sanitizedError(error) }, 'the browser session could not run');
+      log.error({ err: sanitizedError(error), opened }, 'the browser session could not run');
       result = {
         ok: false,
         mutated: false,
         steps: [],
         failure: {
           kind: 'error',
-          step: 'open session',
-          code: signal.aborted ? 'aborted' : 'script_error',
-          message: 'the browser could not open the session',
+          step: opened ? 'run session' : 'open session',
+          // A browser that did not start never asked the marketplace anything.
+          code: signal.aborted ? 'aborted' : opened ? 'script_error' : 'browser_unavailable',
+          message: opened
+            ? 'the browser session stopped unexpectedly'
+            : 'the browser could not open the session',
           retryAfterMs: null,
           screenshotKey: null,
         },

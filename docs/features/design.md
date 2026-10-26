@@ -106,7 +106,7 @@ looks the same on every screen. The table with each style's use is in `Typograph
 | `ListoraTextField`                         | Labeled field with focus outline, hint, and error                                                                                                 |
 | `PriceField`, `PriceInput`                 | Price entry in minor units on the decimal keypad; input kept valid as typed                                                                       |
 | `SectionHeader`                            | Small-capitals heading with optional explanation and action                                                                                       |
-| `EmptyStateView`                           | Illustration, title, message, optional numbered steps, one action; `.signIn(_:)` for signed-out screens (the root's `signIn` environment action)  |
+| `EmptyStateView`                           | Illustration, title, message, optional numbered steps, one action                                                                                 |
 | `SpotIllustration`                         | The empty-state art: two tilted cards with an SF Symbol on a soft circle, drawn from the palette; fixed size, so the action stays on screen       |
 | `SkeletonBlock`, `SkeletonRow`             | Loading placeholders with a shimmer (a pulse with Reduce Motion)                                                                                  |
 | `SkeletonPhotoTile`, `SkeletonList`        | A photo grid cell that is loading; a screen of placeholders shaped like its rows, read once by VoiceOver. Screens load with these, not spinners  |
@@ -130,7 +130,7 @@ screens 15 to 26) and the inventory and item screens (`testInventoryTour`, 27 to
 the local stack with the fake AI and fake eBay, as `ReviewFlowUITests` and `ListingFlowUITests`
 do, so the target starts it like `ios-test`; the inventory tour also shows Sales and Tasks empty
 (38, 39), the list layout (45), and "Mark as sold" with the celebration (46, 47). The signed-out
-and stub passes show Sales signed out (35) and the lists that fail to load (36, 37), and
+and stub passes show Sales with no server answering (35) and the lists that fail to load (36, 37), and
 `testDesignPassTour` the welcome steps (40 to 42) and a photo before and after its background
 cleanup (43, 44). `IOS_SCREENSHOT_TESTS` narrows the tour to one test.
 The before and after sheets of design system v2 are in [design/](design/), one per screen
@@ -140,6 +140,13 @@ had no "before": the simulator could not show it. Sheets 15 to 34 are the second
 review flow and the inventory (below). The analysis progress (15) shows only when the analysis is slow enough to catch, so
 some of its cells are empty too, and the "before" custom price (24, 25) was $269 rather than a
 price under the floors.
+
+The tour starts on the signed-out welcome screen (`00a`, then the code screen and a wrong code,
+`00b` and `00c`), since the app shows its tabs only once someone is signed in
+([auth.md](auth.md), apps/ios/README.md "Signing in"); the rest of the first pass is signed in
+with no server answering, so screens 00 to 11 show what loads from the phone and the failures
+of what does not. Sheets `00a` and `00b` show the welcome screen against the old signed-out
+Today ("before" only in light and dark), and the code screen.
 
 ## Design pass: layout and feel
 
@@ -157,8 +164,8 @@ and the largest text size, and the iPhone 17e and iPhone 17 Pro Max at both size
   Add Item).
 - **Loading and empty states.** Every screen loads with skeletons shaped like its content (the
   photo grid, cards, rows), not a spinner. Every empty screen has the illustration and one clear
-  button: sign in when signed out, add an item when Today is caught up, go to Inventory when
-  there are no sales, check again when no task is open, close in the Share Extension.
+  button: add an item when Today is caught up, go to Inventory when there are no sales, check
+  again when no task is open, close in the Share Extension.
 - **First-run welcome** (`GettingStartedView`, AppFeature): right after the first sign-in on the
   iPhone, three short steps, one per page (link your marketplaces, add your first item, see it
   listed), with Skip always at hand. Its last button opens Add; "Link accounts now" opens
@@ -173,7 +180,7 @@ and the largest text size, and the iPhone 17e and iPhone 17 Pro Max at both size
 | Screen                  | What looked off                                                                                         | What changed                                                                                                                       |
 | ----------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Inventory               | Small 72-point thumbnails in boxed rows; an item was hard to find by its photo.                         | A grid of large photos with the status on the photo and every marketplace's status in full; the list a tap away.                   |
-| Empty and failed states | A lone icon tile; several (Today and Tasks caught up, signed out, no sales) had no button at all.       | The illustration and one clear action on every one.                                                                                |
+| Empty and failed states | A lone icon tile; several (Today and Tasks caught up, no sales) had no button at all.                   | The illustration and one clear action on every one.                                                                                |
 | Loading                 | Tasks, a task, the morning summary, Link accounts, the sale email address, and a batch showed spinners. | Skeletons shaped like the content.                                                                                                 |
 | Cards                   | Every card had a hairline border as well as a shadow, so stacked cards read as a grid of boxes.         | Light mode drops the border; the surface and a softer shadow carry the card.                                                       |
 | Type                    | Card headings ("eBay", "Take photos once") were serif next to SF row titles; views tweaked weights.     | Serif only for screen-level display text; named styles for values, metadata, and tag text instead of per-view weights.             |

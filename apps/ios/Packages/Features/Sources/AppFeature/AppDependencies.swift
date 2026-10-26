@@ -9,6 +9,7 @@ import PhotoSignalsFeature
 import ReviewFeature
 import SalesFeature
 import SettingsFeature
+import SignInFeature
 import SwiftUI
 import TagReadingFeature
 import TasksFeature
@@ -41,8 +42,8 @@ public struct AppDependencies {
     public let tasks: TasksEnvironment
     /// The Today screen, whose cards open the item and marketplace screens.
     public let today: TodayEnvironment
-    /// Signing in from Settings: the local API's dev driver in Dev builds, otherwise the
-    /// environment's Cognito user pool, with an emailed code.
+    /// The session and the sign-in screens, the root while nobody is signed in: the local API's dev
+    /// driver in Dev builds, otherwise the environment's Cognito user pool, with an emailed code.
     public let signIn: SignInModel
     /// Settings > Delete account.
     public let accountDeletion: AccountDeletionModel
@@ -74,9 +75,11 @@ public struct AppDependencies {
         if launchOptions.resetLocalData {
             Self.resetLocalData([dataDirectory, listingCopyDirectory], interactionStorage, defaults, accessGrantStorage)
         }
-        let cognito = Self.cognitoClient(configuration)
-        let accessTokens = Self.makeAccessTokens(accessGrantStorage, cognito, configuration, launchOptions)
+        let (accessTokens, signIn) = Self.session(configuration, accessGrantStorage, launchOptions)
         self.accessTokens = accessTokens
+        self.signIn = signIn
+        // A screen that finds itself signed out (its server answered 401) opens the sign-in.
+        let showSignIn: @MainActor () -> Void = { signIn.showSignIn() }
         apiClient = APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens)
         tagReader = VisionTagReader()
         let meter = InteractionMeter(storage: interactionStorage)
@@ -86,12 +89,13 @@ public struct AppDependencies {
             apiClient: apiClient, meter: meter, listingCopy: listingCopy,
             transcriber: Self.transcriber(for: launchOptions), defaults: defaults,
         )
-        sales = SalesEnvironment(apiClient: apiClient, accessTokens: accessTokens)
-        tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens)
+        sales = SalesEnvironment(apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn)
+        tasks = TasksEnvironment(apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn)
         inventory = InventoryEnvironment(
             apiClient: apiClient, accessTokens: accessTokens, listingCopy: listingCopy,
             saleScreens: Self.saleScreens(sales),
             taskDestination: tasks.taskScreen(itemID:operationID:onFinished:),
+            onSignIn: showSignIn,
         )
         inventory.reviewScreen = { request, onFinished in AnyView(review.flow(for: request, onFinished: onFinished)) }
         self.review = review
@@ -103,28 +107,27 @@ public struct AppDependencies {
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
-        marketplaces = MarketplacesModel(
-            service: APIConnectionsService(client: apiClient.client),
-            isSignedIn: { accessTokens.grant != nil },
-        )
+        marketplaces = MarketplacesModel(service: APIConnectionsService(client: apiClient.client)) {
+            accessTokens.grant != nil
+        }
         linkAccounts = Self.makeLinkAccounts(apiClient)
-        today = Self.makeToday(apiClient, accessTokens, inventory, sales, marketplaces)
-        (signIn, accountDeletion) = Self.makeAccount(configuration, cognito, apiClient, accessTokens)
+        today = Self.makeToday(apiClient, accessTokens, (inventory, sales), marketplaces, showSignIn)
+        accountDeletion = Self.makeAccountDeletion(apiClient, accessTokens, signIn)
         gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
     }
 
-    /// The session, signed in with the launch's session in Dev UI tests (`LISTORA_DEV_ACCESS_TOKEN`).
-    private static func makeAccessTokens(
-        _ storage: any AccessGrantStorage,
-        _ cognito: CognitoSignInClient?,
-        _ configuration: AppConfiguration,
-        _ launchOptions: DebugLaunchOptions,
-    ) -> AccessTokenStore {
-        let accessTokens = AccessTokenStore(storage: storage, refresher: cognito)
-        if let grant = launchOptions.accessGrant, configuration.environment == .dev {
-            accessTokens.signIn(grant)
-        }
-        return accessTokens
+    /// Deleting the account (Settings). It signs out, but its result (the marketplaces to revoke by
+    /// hand) stays on screen until Settings closes; then the sign-in shows.
+    private static func makeAccountDeletion(
+        _ apiClient: APIClient,
+        _ accessTokens: AccessTokenStore,
+        _ signIn: SignInModel,
+    ) -> AccountDeletionModel {
+        AccountDeletionModel(
+            service: APIAccountDeletionService(client: apiClient.client),
+            isSignedIn: { accessTokens.grant != nil },
+            signOut: { signIn.signOutKeepingScreen() },
+        )
     }
 
     /// Link accounts: the marketplaces linked by signing in, and the sale email forwarding.
@@ -133,6 +136,39 @@ public struct AppDependencies {
             service: APIMarketplaceSessionService(api: apiClient),
             saleEmails: SaleEmailsModel(service: APISaleEmailsService(api: apiClient)),
         )
+    }
+
+    /// The Today screen, whose cards open the item, sale, and marketplace connection screens.
+    private static func makeToday(
+        _ apiClient: APIClient,
+        _ accessTokens: AccessTokenStore,
+        _ screens: (inventory: InventoryEnvironment, sales: SalesEnvironment),
+        _ marketplaces: MarketplacesModel,
+        _ showSignIn: @escaping @MainActor () -> Void,
+    ) -> TodayEnvironment {
+        TodayEnvironment(
+            apiClient: apiClient,
+            accessTokens: accessTokens,
+            itemDestination: { itemID in AnyView(screens.inventory.itemDetail(itemID: itemID)) },
+            saleDestination: { saleID in AnyView(screens.sales.saleScreen(saleID: saleID)) },
+            marketplacesDestination: { AnyView(MarketplacesView(model: marketplaces)) },
+            onSignIn: showSignIn,
+        )
+    }
+
+    /// The session, and the sign-in that starts and follows it. In Dev, UI tests can start signed
+    /// in (`LISTORA_DEV_ACCESS_TOKEN`).
+    private static func session(
+        _ configuration: AppConfiguration,
+        _ storage: any AccessGrantStorage,
+        _ launchOptions: DebugLaunchOptions,
+    ) -> (AccessTokenStore, SignInModel) {
+        let cognito = cognitoClient(configuration)
+        let accessTokens = AccessTokenStore(storage: storage, refresher: cognito)
+        if let grant = launchOptions.accessGrant, configuration.environment == .dev {
+            accessTokens.signIn(grant)
+        }
+        return (accessTokens, SignInModel(method: signInMethod(configuration, cognito), tokens: accessTokens))
     }
 
     /// The Cognito client of a build with a user pool app client. The Share Extension builds the
@@ -151,22 +187,6 @@ public struct AppDependencies {
             return DevSignIn(client: DevSignInClient(baseURL: configuration.apiBaseURL))
         }
         return cognito.map(EmailCodeSignIn.init(client:))
-    }
-
-    /// Settings' account section: signing in, and deleting the account.
-    private static func makeAccount(
-        _ configuration: AppConfiguration,
-        _ cognito: CognitoSignInClient?,
-        _ apiClient: APIClient,
-        _ accessTokens: AccessTokenStore,
-    ) -> (SignInModel, AccountDeletionModel) {
-        let signIn = SignInModel(method: signInMethod(configuration, cognito), tokens: accessTokens)
-        let deletion = AccountDeletionModel(
-            service: APIAccountDeletionService(client: apiClient.client),
-            isSignedIn: { accessTokens.grant != nil },
-            signOut: { accessTokens.signOut() },
-        )
-        return (signIn, deletion)
     }
 
     /// The sales screens the item screen opens, from the sales feature.
@@ -193,23 +213,6 @@ public struct AppDependencies {
         GettingStartedModel.resetLocalData(defaults: defaults)
         InventoryEnvironment.resetLocalData(defaults: defaults)
         accessGrantStorage.save(nil)
-    }
-
-    /// The Today screen, whose cards open the item, sale, and marketplace connection screens.
-    private static func makeToday(
-        _ apiClient: APIClient,
-        _ accessTokens: AccessTokenStore,
-        _ inventory: InventoryEnvironment,
-        _ sales: SalesEnvironment,
-        _ marketplaces: MarketplacesModel,
-    ) -> TodayEnvironment {
-        TodayEnvironment(
-            apiClient: apiClient,
-            accessTokens: accessTokens,
-            itemDestination: { itemID in AnyView(inventory.itemDetail(itemID: itemID)) },
-            saleDestination: { saleID in AnyView(sales.saleScreen(saleID: saleID)) },
-            marketplacesDestination: { AnyView(MarketplacesView(model: marketplaces)) },
-        )
     }
 
     /// The microphone, or in UI tests the transcript they script (`LISTORA_VOICE_TRANSCRIPT`).
@@ -261,7 +264,7 @@ public struct AppDependencies {
 /// Switches UI tests set through the launch environment. Only debug builds read them; release
 /// builds always get ``none``.
 public struct DebugLaunchOptions: Equatable, Sendable {
-    /// `LISTORA_RESET_LOCAL_DATA=1`: start with no drafts and signed out.
+    /// `LISTORA_RESET_LOCAL_DATA=1`: start with no drafts and signed out, on the welcome screen.
     public var resetLocalData = false
     /// `LISTORA_FIXTURE_PHOTOS=<folder>`: "Import photos" adds that folder's JPEGs.
     public var fixturePhotosDirectory: URL?

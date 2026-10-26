@@ -34,12 +34,13 @@ marketplace and kind and per marketplace, `OperationFailed` per marketplace and 
 job runs ahead of every operation step in the queue, so a backlog cannot silence it):
 `StuckOperations` and `OldestStuckOperationAge` per status (verifying, retrying, needs_user_action),
 `OldestUnverifiedOperationAge`, `AiDailyCostUsd` per account (UTC day), `MarketplaceConnections` per
-marketplace and status, and `ConnectionsNeedingRelink`. The observability stack alarms on an
+marketplace and status, `ConnectionsNeedingRelink`, and `OverdueDeletions`. The observability stack alarms on an
 operation unverified for 30 minutes, any failed delist, an account's AI cost today over
 `aiDailyCostAlarmUsd`, a connection needing relink, and per marketplace on p95 delist latency over
 an hour above `delistLatencyAlarmMinutes` (10 minutes for eBay's API, 13 hours for the
 browser-automated marketplaces and their 12-hour sale checks) and a verified-success rate below 90%
-over a day, and on every service running fewer tasks than it should, and sends unplanned task stops
+over a day, on any account or connection deletion unfinished after 8 days (`OverdueDeletions`,
+[privacy.md](privacy.md)), and on every service running fewer tasks than it should, and sends unplanned task stops
 to the alarm topic. The relink alarm fires on a level, which suits one seller; an environment with
 many sellers should alarm on increases instead, so one unlinked connection does not mask the next. A
 new metric adds a catalog entry; keep dimensions few, since CloudWatch bills each combination of

@@ -12,7 +12,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DERIVATIVE_KINDS, parsePhotoDerivatives, storageKeys } from './derivatives.ts';
 import { processPhoto, type PhotoProcessingDependencies } from './job.ts';
 import { itemPhotoSet } from './photo-set.ts';
-import { fixtureJpeg, listKeys, readMetadata } from './test-support.ts';
+import { fixtureJpeg, jpegHeaderMarkers, listKeys, readMetadata } from './test-support.ts';
 
 const logger = createLogger({ service: 'photos-test', level: 'silent' });
 
@@ -132,7 +132,29 @@ describe('processPhoto (real Postgres and local storage)', () => {
         hasIptc: false,
         hasIcc: false,
       });
+      // And in the raw bytes: no APP1 (EXIF, XMP), APP2 (ICC), or APP13 (IPTC) segment at all,
+      // and none of the fixture's metadata text (long enough never to occur by chance).
+      const markers = jpegHeaderMarkers(bytes);
+      expect(
+        markers.filter((marker) => [0xe1, 0xe2, 0xed].includes(marker)),
+        kind,
+      ).toEqual([]);
+      const text = Buffer.from(bytes).toString('latin1');
+      for (const needle of [
+        'Exif\0\0',
+        'exif:GPSLatitude',
+        '37,47.3N',
+        'http://ns.adobe.com',
+        'iPhone 17 Pro',
+        'F2LXK0QPHG7F',
+      ]) {
+        expect(text.includes(needle), `${kind} contains ${JSON.stringify(needle)}`).toBe(false);
+      }
     }
+    // The fixture really carried them, so the checks above can fail.
+    const sourceMarkers = jpegHeaderMarkers(gpsPhoto);
+    expect(sourceMarkers).toContain(0xe1);
+    expect(Buffer.from(gpsPhoto).toString('latin1')).toContain('37,47.3N');
   });
 
   it('does nothing when it runs again for a processed photo', async () => {
@@ -344,6 +366,7 @@ function storageMethods(storage: ObjectStorage): ObjectStorage {
     get: (key) => storage.get(key),
     put: (key, body, options) => storage.put(key, body, options),
     delete: (key) => storage.delete(key),
+    list: (prefix, limit) => storage.list(prefix, limit),
     publicUrl: (key) => storage.publicUrl(key),
   };
 }

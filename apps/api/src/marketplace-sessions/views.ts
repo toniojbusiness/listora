@@ -1,17 +1,15 @@
 /**
  * The `MarketplaceSession` view: a marketplace linked by signing in, with an honest status.
- * It is `linked` only after the browser runner's check of the current session passed
- * (`session_check`); a session that is stored but not checked yet is `checking`, and one the
- * marketplace rejected is `needs_relink` (docs/features/marketplace-linking.md).
+ * The status is the one Marketplaces shows for the same connection: both render
+ * `describeAutomationSession`. A session is `linked` only after the browser runner's check of it
+ * passed (`session_check`); one stored but not checked yet is `checking`, for a bounded time; a
+ * check that failed or did not finish is `check_failed`, which the seller can check again; and a
+ * session the marketplace rejected is `needs_relink` (docs/features/marketplace-linking.md).
  */
-import type { MarketplaceSession, StatusDisplay } from '@listora/api-contract';
+import type { MarketplaceSession } from '@listora/api-contract';
 import type { AutomationProfile } from '@listora/automation';
-import type {
-  ConnectionMode,
-  ConnectionStatus,
-  Marketplace,
-  SessionCheckStatus,
-} from '@listora/db';
+import { describeAutomationSession, type SessionCheckState } from '@listora/connections';
+import type { ConnectionMode, ConnectionStatus, Marketplace } from '@listora/db';
 import { assertNever } from '@listora/shared';
 
 import { marketplaceName } from '../listings/views.ts';
@@ -24,21 +22,20 @@ export interface SessionRow {
     status: ConnectionStatus;
     displayName: string | null;
     lastError: string | null;
+    lastErrorCode: string | null;
+    lastErrorAt: Date | null;
+    /** When the current session was linked. */
+    linkedAt: Date | null;
     updatedAt: Date;
   } | null;
   /** The check of the newest linked session, when there is one. */
-  check: {
-    status: SessionCheckStatus;
-    failureCode: string | null;
-    failureMessage: string | null;
-    requestedAt: Date;
-    finishedAt: Date | null;
-  } | null;
+  check: SessionCheckState | null;
 }
 
 export function marketplaceSessionView(
   row: SessionRow,
   profile: Pick<AutomationProfile, 'loginUrl' | 'cookieDomains'>,
+  now: Date,
 ): MarketplaceSession {
   const name = marketplaceName(row.marketplace);
   const login = { url: profile.loginUrl, cookieDomains: [...profile.cookieDomains] };
@@ -59,64 +56,44 @@ export function marketplaceSessionView(
     };
   }
 
-  const linked = {
+  const session = describeAutomationSession({
+    marketplace: row.marketplace,
+    connection,
+    check,
+    now,
+  });
+  return {
     ...base,
     ...(connection.displayName === null ? {} : { displayName: connection.displayName }),
-    ...(check === null ? {} : { linkedAt: check.requestedAt.toISOString() }),
+    ...(connection.linkedAt === null ? {} : { linkedAt: connection.linkedAt.toISOString() }),
     ...(check?.finishedAt ? { checkedAt: check.finishedAt.toISOString() } : {}),
+    status: sessionStatus(session.state),
+    statusDisplay: session.statusDisplay,
+    ...(session.issue === undefined
+      ? {}
+      : {
+          issue: {
+            code: session.issue.code,
+            message: session.issue.message,
+            occurredAt: session.issue.occurredAt.toISOString(),
+          },
+        }),
   };
-  switch (connection.status) {
-    case 'reauth_required':
-    case 'revoked': {
-      const message =
-        connection.lastError ??
-        check?.failureMessage ??
-        `Sign in to ${name} again to keep automating.`;
-      return {
-        ...linked,
-        status: 'needs_relink',
-        statusDisplay: { tone: 'action_needed', label: 'Sign in again', detail: message },
-        issue: {
-          code:
-            check?.status === 'failed'
-              ? (check.failureCode ?? 'reauth_required')
-              : 'reauth_required',
-          message,
-          occurredAt: connection.updatedAt.toISOString(),
-        },
-      };
-    }
-    case 'connected':
-    case 'degraded':
-      return { ...linked, ...checkedStatus(check) };
-    default:
-      return assertNever(connection.status, 'connection status');
-  }
 }
 
-function checkedStatus(
-  check: SessionRow['check'],
-): Pick<MarketplaceSession, 'status' | 'statusDisplay' | 'issue'> {
-  const checking: StatusDisplay = { tone: 'checking', label: 'Checking...' };
-  if (check === null) return { status: 'checking', statusDisplay: checking };
-  switch (check.status) {
-    case 'pending':
-      return { status: 'checking', statusDisplay: checking };
-    case 'passed':
-      return { status: 'linked', statusDisplay: { tone: 'success', label: 'Linked' } };
-    case 'failed': {
-      const message = check.failureMessage ?? 'Listora could not check this sign-in.';
-      return {
-        status: 'check_failed',
-        statusDisplay: { tone: 'failed', label: 'Not confirmed - Link again', detail: message },
-        issue: {
-          code: check.failureCode ?? 'check_failed',
-          message,
-          occurredAt: (check.finishedAt ?? check.requestedAt).toISOString(),
-        },
-      };
-    }
+function sessionStatus(
+  state: ReturnType<typeof describeAutomationSession>['state'],
+): MarketplaceSession['status'] {
+  switch (state) {
+    case 'checking':
+      return 'checking';
+    case 'linked':
+      return 'linked';
+    case 'not_confirmed':
+      return 'check_failed';
+    case 'needs_relink':
+      return 'needs_relink';
     default:
-      return assertNever(check.status, 'session check status');
+      return assertNever(state, 'session state');
   }
 }

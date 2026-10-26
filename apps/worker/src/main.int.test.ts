@@ -454,6 +454,7 @@ describe('worker process (real Postgres)', () => {
     const { deletionId } = await database.db.transaction().execute((trx) =>
       startAccountDeletion(trx, {
         identity: { provider: 'dev', subject: 'wendy.worker@example.com' },
+        userId: crypto.randomUUID(),
         grants: [],
       }),
     );

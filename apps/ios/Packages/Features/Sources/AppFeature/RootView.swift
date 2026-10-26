@@ -7,12 +7,15 @@ import MarketplaceLinkingFeature
 import MarketplacesFeature
 import SalesFeature
 import SettingsFeature
+import SignInFeature
 import SwiftUI
 import TasksFeature
 import TodayFeature
 
-/// The app's root: one tab per top-level area, and Settings over them, opened from the gear in the
-/// Today and Sales headers. While a marketplace connection needs attention, Inventory shows the
+/// The app's root: the welcome and sign-in screens while nobody is signed in, and once someone is,
+/// one tab per top-level area, and Settings over them, opened from the gear in the Today and Sales
+/// headers. The session ending anywhere (sign-out, a `401`, a refresh the pool refuses, expiry)
+/// brings the sign-in back. While a marketplace connection needs attention, Inventory shows the
 /// connection banner, which opens Marketplaces in Settings, and the gear has a dot.
 public struct RootView: View {
     private let dependencies: AppDependencies
@@ -22,6 +25,7 @@ public struct RootView: View {
     /// What to open once the first-run guide has closed (a sheet cannot open while it closes).
     @State private var afterGettingStarted: [SettingsDestination]?
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(dependencies: AppDependencies, initialTab: AppTab = .today) {
         self.dependencies = dependencies
@@ -29,17 +33,28 @@ public struct RootView: View {
     }
 
     public var body: some View {
-        TabView(selection: $selection) {
-            ForEach(AppTab.allCases) { tab in
-                Tab(tab.title, systemImage: tab.systemImage, value: tab) {
-                    screen(for: tab)
-                }
-                .badge(badgeCount(for: tab))
+        ZStack {
+            if dependencies.signIn.isSignedIn {
+                tabs
+                    .transition(.opacity)
+            } else {
+                SignInFlowView(model: dependencies.signIn)
+                    .transition(.opacity)
             }
         }
-        .tint(Palette.brand.color)
-        .environment(\.signIn, SignInAction { openSettings() })
-        .sheet(isPresented: $showsSettings) { settings }
+        .animation(Motion.animation(Motion.standard, reduceMotion: reduceMotion), value: dependencies.signIn.isSignedIn)
+        .solidBarEdges()
+        .background { WindowTapCounter { [meter = dependencies.interactionMeter] in meter.recordTap() } }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            dependencies.interactionMeter.setAppActive(phase == .active)
+            if phase == .active {
+                dependencies.signIn.refresh()
+            }
+        }
+        // The first-run guide follows the session from launch, so it shows after a sign-in only.
+        .onChange(of: dependencies.signIn.isSignedIn, initial: true) { _, signedIn in
+            dependencies.gettingStarted.signedInChanged(signedIn)
+        }
         .fullScreenCover(
             isPresented: Bindable(dependencies.gettingStarted).isPresented,
             onDismiss: {
@@ -50,15 +65,31 @@ public struct RootView: View {
             },
             content: { gettingStarted },
         )
-        .task {
-            for await grant in dependencies.accessTokens.changes() {
-                dependencies.gettingStarted.signedInChanged(grant != nil)
+        .onChange(of: dependencies.signIn.isSignedIn) { _, signedIn in
+            // The next person (or the same one, again) starts on Today with nothing open.
+            if !signedIn {
+                showsSettings = false
+                settingsPath = []
+                selection = .today
             }
         }
-        .solidBarEdges()
-        .background { WindowTapCounter { [meter = dependencies.interactionMeter] in meter.recordTap() } }
+        .task { await dependencies.signIn.follow() }
+        .task { dependencies.startBackgroundWork() }
+    }
+
+    private var tabs: some View {
+        TabView(selection: $selection) {
+            ForEach(AppTab.allCases) { tab in
+                Tab(tab.title, systemImage: tab.systemImage, value: tab) {
+                    screen(for: tab)
+                }
+                .badge(badgeCount(for: tab))
+            }
+        }
+        .tint(Palette.brand.color)
+        // Deleting the account keeps its result on screen; closing Settings then shows the sign-in.
+        .sheet(isPresented: $showsSettings, onDismiss: { dependencies.signIn.finishSignOut() }, content: { settings })
         .onChange(of: scenePhase, initial: true) { _, phase in
-            dependencies.interactionMeter.setAppActive(phase == .active)
             if phase == .active {
                 Task { await dependencies.marketplaces.refreshAttention() }
             }
@@ -66,7 +97,6 @@ public struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: TaskNotificationRouter.openTasks)) { _ in
             selection = .tasks
         }
-        .task { dependencies.startBackgroundWork() }
         // The badge follows the server while the app is open, and when it comes back.
         .task(id: scenePhase == .active) {
             guard scenePhase == .active else { return }
@@ -155,7 +185,9 @@ extension RootView {
     private var settings: some View {
         SettingsView(
             content: SettingsContent(configuration: dependencies.configuration, version: dependencies.version),
-            signIn: dependencies.signIn,
+            account: dependencies.signIn.stage.signedInEmail.map { email in
+                SettingsAccount(email: email) { dependencies.signIn.signOut() }
+            },
             accountDeletion: dependencies.accountDeletion,
             path: $settingsPath,
             marketplacesAttention: dependencies.marketplaces.attention == nil ? nil : "Needs attention",

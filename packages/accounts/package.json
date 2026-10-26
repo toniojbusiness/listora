@@ -12,6 +12,7 @@
     "@aws-sdk/client-cognito-identity-provider": "^3.1156.0",
     "@listora/db": "*",
     "@listora/shared": "*",
+    "@listora/storage": "*",
     "kysely": "^0.29.7"
   },
   "devDependencies": {

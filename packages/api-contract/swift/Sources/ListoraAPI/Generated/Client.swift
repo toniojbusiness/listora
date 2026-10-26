@@ -6244,8 +6244,12 @@ public struct Client: APIProtocol {
     }
     /// Disconnect a marketplace account
     ///
-    /// Revokes and deletes the stored tokens. Existing listings stay on the marketplace but
-    /// Listora can no longer change or verify them until the account is connected again.
+    /// Unlinks the marketplace: deletes the stored tokens or session and the marketplace data
+    /// that came through the connection (the marketplace's user id and name, listing read-backs,
+    /// marketplace events, automation runs and their screenshots), and asks the marketplace to
+    /// revoke Listora's access. Items, listings, and sales stay. Existing listings stay on the
+    /// marketplace but Listora can no longer change or verify them until the account is
+    /// connected again. `404` when no account of the marketplace is linked.
     ///
     ///
     /// - Remark: HTTP `DELETE /v1/connections/{marketplace}`.
@@ -6691,12 +6695,15 @@ public struct Client: APIProtocol {
     }
     /// Check a marketplace connection now (Retry check)
     ///
-    /// Queues the same cheap read the daily health check makes, for this connection only. The
-    /// answer is the connection with a `Checking` status; read it again (or
-    /// `getConnectionHealth`) to see what the check found. Offered as the `check` action on a
-    /// connection with a problem. `409 invalid_state_transition` for a connection a check
-    /// cannot change (not connected, or waiting for the seller to reconnect);
-    /// `409 marketplace_action_unavailable` when this server cannot check the marketplace.
+    /// Queues the same cheap read the daily health check makes, for this connection only. For
+    /// an automation connection it asks the browser runner to check the sign-in already linked
+    /// again, as after linking (`getMarketplaceSession`), without the seller signing in again;
+    /// a check still running is left to finish. The answer is the connection with a `Checking`
+    /// status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
+    /// the check found. Offered as the `check` action on a connection with a problem.
+    /// `409 invalid_state_transition` for a connection a check cannot change (not connected,
+    /// or waiting for the seller to reconnect or link again); `409
+    /// marketplace_action_unavailable` when this server cannot check the marketplace.
     ///
     ///
     /// - Remark: HTTP `POST /v1/connections/{marketplace}/checks`.

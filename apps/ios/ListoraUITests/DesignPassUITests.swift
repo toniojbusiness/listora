@@ -19,6 +19,7 @@ final class DesignPassUITests: XCTestCase {
 
     func testGettingStartedWalksThroughThreeStepsOnceAndOpensAdd() {
         app.launchEnvironment = ["LISTORA_RESET_LOCAL_DATA": "1", "LISTORA_SHOW_GETTING_STARTED": "1"]
+        app.signInWithoutServer()
         app.launch()
         let guide = app.buttons["gettingStarted.skip"]
         XCTAssertTrue(guide.waitForExistence(timeout: 10))
@@ -34,7 +35,8 @@ final class DesignPassUITests: XCTestCase {
 
         // Done is done: a relaunch, even signed in, does not show it again.
         app.terminate()
-        app.launchEnvironment = ["LISTORA_DEV_ACCESS_TOKEN": "ui-test-token"]
+        app.launchEnvironment = [:]
+        app.signInWithoutServer()
         app.launch()
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
         XCTAssertFalse(guide.waitForExistence(timeout: 2))
@@ -42,6 +44,7 @@ final class DesignPassUITests: XCTestCase {
 
     func testGettingStartedCanBeSkippedOrOpenLinkAccounts() {
         app.launchEnvironment = ["LISTORA_RESET_LOCAL_DATA": "1", "LISTORA_SHOW_GETTING_STARTED": "1"]
+        app.signInWithoutServer()
         app.launch()
         let guide = app.buttons["gettingStarted.skip"]
         XCTAssertTrue(guide.waitForExistence(timeout: 10))
@@ -64,6 +67,7 @@ final class DesignPassUITests: XCTestCase {
             "LISTORA_RESET_LOCAL_DATA": "1",
             "LISTORA_FIXTURE_PHOTOS": bundled("BatchFixtures"),
         ]
+        app.signInWithoutServer()
         app.launch()
         let tab = app.tabBars.buttons["Add"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10))
