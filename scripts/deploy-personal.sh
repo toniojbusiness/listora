@@ -649,12 +649,16 @@ else
     # deploy, deploying the commit it last deployed (a rollback) would leave the service on the
     # newer images: point each service back at the task definition the stack made for it.
     definitions=$(service_task_definitions) || fail "cannot read the services of listora-$ENVIRONMENT-compute"
+    moved=()
     while read -r service definition <&3; do
       [[ "$definition" != unknown && "$(running_task_definition "$service")" != "$definition" ]] || continue
       start_rollout "$service" "$definition"
-      wait_for_rollout "$service" "$definition"
-      info "$service: back on the stack's task definition ${definition##*/}"
+      moved+=("$service" "$definition")
     done 3<<<"$definitions"
+    for ((index = 0; index < ${#moved[@]}; index += 2)); do
+      wait_for_rollout "${moved[$index]}" "${moved[$((index + 1))]}"
+      info "${moved[$index]}: back on the stack's task definition ${moved[$((index + 1))]##*/}"
+    done
     if [[ "$secret_changed" == true ]]; then
       # Tasks read secrets when they start, so running tasks need replacing to see the new key.
       for service in $(aws_ ecs list-services --cluster "$cluster" --query 'serviceArns[]' --output text); do

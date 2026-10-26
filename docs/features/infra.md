@@ -87,7 +87,10 @@ images with a warm builder cache), for a commit that changes no image input (doc
 | Full, before (`deploy-personal.sh`, rolling task replacement) | 7m52s | compute stack update 4m43s, migrations 53s, other stacks 47s |
 | Full, after (task replaced in place)                          | 7m04s | compute stack update 3m45s, migrations 67s, other stacks 51s |
 | `--code-only`, rolling task replacement                       | 4m27s | ECS rollout 3m24s, images 28s, checks 32s                    |
-| `--code-only`, task replaced in place                         | TBD   | TBD                                                          |
+| `--code-only`, task replaced in place                         | 4m02s | ECS rollout 2m56s, images 28s, checks 36s                    |
 
-Most of what remains is ECS: starting a Fargate task (about a minute), then up to two more
-minutes before ECS reports the rollout complete, which the deploy waits for.
+Most of what remains is ECS: starting a Fargate task takes about a minute, and ECS reports
+the rollout complete one to two minutes after the new task is healthy and the old one has
+stopped. The deploy waits for that, so a rollout the circuit breaker undoes is never reported
+as deployed. A rollback to the commit of the last full deploy, after a code-only one, took 7m17s
+(the full deploy, plus moving the services back to the stacks' task definitions).
