@@ -63,6 +63,13 @@ final class PhoneExecutionUITests: XCTestCase {
             "no emailed link steps\n\(app.debugDescription)",
         )
         XCTAssertTrue(app.staticTexts["Depop emailed you a sign-in link?"].exists)
+        XCTAssertEqual(
+            element("signIn.emailedLinkSteps").label,
+            "Don't tap it: it would sign you in to your browser, not Listora. "
+                + "Press and hold the Depop link. If a preview opens, tap Hide preview, then Copy link. "
+                + "Then come back and tap Paste sign-in link.",
+        )
+        XCTAssertTrue(app.staticTexts["Or press and hold the link, tap Share, then Listora."].exists)
         let web = app.webViews.firstMatch
         let email = web.textFields.element(boundBy: 1)
         XCTAssertTrue(email.waitForExistence(timeout: 20), "the sign-in page did not load\n\(app.debugDescription)")

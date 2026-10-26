@@ -38,8 +38,9 @@ before delisting" ([email-sales.md](email-sales.md)).
 Depop may email a "tap to sign in" link. Tapped in the email, it opens the phone's default
 browser (Safari or Chrome) and signs in there, where Listora never gets the session; Listora
 cannot claim Depop's links (its universal links belong to Depop). So Depop's sign-in page in
-Listora shows the steps under the page: "Don't tap it. Press and hold it, tap Copy, then come
-back here and paste it", with the system's **Paste** button (`PasteButton`, so iOS shows no
+Listora shows the steps under the page: "Press and hold the Depop link. If a preview opens, tap
+Hide preview, then Copy link. Then come back and tap Paste sign-in link" (Gmail opens a page
+preview on press and hold; Apple Mail shows Copy Link directly), with the system's **Paste** button (`PasteButton`, so iOS shows no
 paste permission prompt), and "Or press and hold the link, tap Share, then Listora". Either way
 the link opens in the same sign-in page (the same web view and data store), and **I'm signed
 in** hands over its cookies as for any sign-in. Depop's own password or code sign-in, when its
