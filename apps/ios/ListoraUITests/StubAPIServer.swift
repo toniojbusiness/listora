@@ -160,18 +160,17 @@ final class StubAPIServer: @unchecked Sendable {
             // Saved as sent.
             return Self.http(status: "200 OK", body: request.body)
         default:
-            if let linking = respondToLinkAccounts(method: request.method, path: path, body: request.body) {
-                return linking
-            }
-            return Self.http(
-                status: "404 Not Found",
-                body: #"{"error":{"code":"not_found","message":"No stub for this request.","retryable":false,"#
-                    + #""requestId":"stub"}}"#,
-            )
+            return respondToLinkAccounts(method: request.method, path: path, body: request.body)
+                ?? respondToDevSignIn(request, path: path)
+                ?? Self.http(
+                    status: "404 Not Found",
+                    body: #"{"error":{"code":"not_found","message":"No stub for this request.","retryable":false,"#
+                        + #""requestId":"stub"}}"#,
+                )
         }
     }
 
-    private static func http(
+    static func http(
         status: String,
         contentType: String = "application/json",
         extraHeaders: [String] = [],

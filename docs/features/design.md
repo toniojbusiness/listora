@@ -120,6 +120,13 @@ review flow and the inventory (below). The analysis progress (15) shows only whe
 some of its cells are empty too, and the "before" custom price (24, 25) was $269 rather than a
 price under the floors.
 
+The tour starts on the signed-out welcome screen (`00a`, then the code screen and a wrong code,
+`00b` and `00c`), since the app shows its tabs only once someone is signed in
+([auth.md](auth.md), apps/ios/README.md "Signing in"); the rest of the first pass is signed in
+with no server answering, so screens 00 to 11 show what loads from the phone and the failures
+of what does not. Sheets `00a` and `00b` show the welcome screen against the old signed-out
+Today ("before" only in light and dark), and the code screen.
+
 ## UI audit (before design system v2)
 
 Taken on the iPhone 17 simulator from `main` at `c30276e`, in the four variants above.

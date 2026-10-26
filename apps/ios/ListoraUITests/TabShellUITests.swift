@@ -1,15 +1,16 @@
 import XCTest
 
-/// Drives the real app on the simulator, signed out: the tab shell and what each screen shows.
+/// Drives the real app on the simulator, signed in without a server: the tab shell and its
+/// screens. Signing in and out is `SignInUITests`.
 @MainActor
 final class TabShellUITests: XCTestCase {
     private let app = XCUIApplication()
 
     override func setUp() async throws {
         continueAfterFailure = false
-        // Signed out and without drafts, whatever an earlier test left behind: Add Item shows its
-        // guide and no screen talks to a server.
+        // Without drafts, whatever an earlier test left behind: Add Item shows its guide.
         app.launchEnvironment["LISTORA_RESET_LOCAL_DATA"] = "1"
+        app.signInWithoutServer()
         app.launch()
     }
 
@@ -21,7 +22,6 @@ final class TabShellUITests: XCTestCase {
         }
         XCTAssertTrue(tabBar.buttons["Today"].isSelected)
         XCTAssertTrue(app.navigationBars["Today"].exists)
-        XCTAssertTrue(app.staticTexts["Sign in to see your day"].waitForExistence(timeout: 5))
         // Settings is not a tab: the gear in the header opens it.
         XCTAssertFalse(tabBar.buttons["Settings"].exists)
         XCTAssertTrue(app.buttons["settings.open"].exists)
@@ -30,31 +30,15 @@ final class TabShellUITests: XCTestCase {
     func testEachTabShowsItsScreen() {
         let tabBar = app.tabBars.firstMatch
         XCTAssertTrue(tabBar.waitForExistence(timeout: 10))
-        // The Add tab's screen is titled Add Item.
-        let expected: [(tab: String, text: String)] = [
-            ("Inventory", "Sign in to see your inventory"),
-            ("Add", "Take photos once"),
-            ("Tasks", "Sign in to see your tasks"),
-            ("Sales", "Sign in to see your sales"),
-            ("Today", "Sign in to see your day"),
-        ]
-        for (tab, text) in expected {
+        // The Add tab's screen is titled Add Item. Without a server, the others say they could
+        // not load, with Try again.
+        for tab in ["Inventory", "Add", "Tasks", "Sales", "Today"] {
             tabBar.buttons[tab].tap()
             let screen = tab == "Add" ? "Add Item" : tab
             XCTAssertTrue(app.navigationBars[screen].waitForExistence(timeout: 5), "no \(screen) screen")
-            XCTAssertTrue(app.staticTexts[text].exists, "\(tab) does not show \(text)")
+            XCTAssertTrue(tabBar.buttons[tab].isSelected)
         }
-    }
-
-    func testAddItemFromTheSignedOutInventorySwitchesTabs() {
-        let inventory = app.tabBars.buttons["Inventory"]
-        XCTAssertTrue(inventory.waitForExistence(timeout: 10))
-        inventory.tap()
-        let addItem = app.buttons["Add item"]
-        XCTAssertTrue(addItem.waitForExistence(timeout: 10))
-        addItem.tap()
-        XCTAssertTrue(app.navigationBars["Add Item"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.tabBars.buttons["Add"].isSelected)
+        XCTAssertFalse(app.staticTexts["Sign in to see your day"].exists, "signed in, nothing asks to sign in")
     }
 
     func testSettingsShowsTheDevEnvironmentAndLocalAPI() {

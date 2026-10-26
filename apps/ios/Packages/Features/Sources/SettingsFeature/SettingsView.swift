@@ -15,6 +15,18 @@ public struct SettingsContent: Equatable, Sendable {
     }
 }
 
+/// Who is signed in, and how to sign out. Settings opens only over the signed-in app; signing in
+/// is the app's root screen while nobody is (SignInFeature).
+public struct SettingsAccount {
+    public let email: String
+    public let signOut: @MainActor () -> Void
+
+    public init(email: String, signOut: @escaping @MainActor () -> Void) {
+        self.email = email
+        self.signOut = signOut
+    }
+}
+
 /// A screen Settings opens, also from elsewhere in the app (the connection banner opens
 /// Marketplaces).
 public enum SettingsDestination: Hashable, Sendable {
@@ -24,15 +36,14 @@ public enum SettingsDestination: Hashable, Sendable {
 }
 
 /// Account, marketplace connections, and app information, opened over the app from the gear in
-/// the Today and Sales headers. The account section signs in: with an emailed code from the
-/// environment's user pool, or in Dev builds with the developer sign-in against the local API;
-/// while someone is signed in, it offers account deletion (App Store Review Guideline 5.1.1(v)).
+/// the Today and Sales headers. The account section says who is signed in, signs out, and offers
+/// account deletion (App Store Review Guideline 5.1.1(v)).
 /// The Marketplaces and Link accounts screens come from the caller
 /// (AppFeature), since a feature never imports another; so does `path`, so the caller can open
 /// them.
 public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
     private let content: SettingsContent
-    private let signIn: SignInModel?
+    private let account: SettingsAccount?
     private let accountDeletion: AccountDeletionModel?
     private let marketplaces: Marketplaces?
     private let linkAccounts: LinkAccounts?
@@ -44,7 +55,7 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
 
     public init(
         content: SettingsContent,
-        signIn: SignInModel? = nil,
+        account: SettingsAccount? = nil,
         accountDeletion: AccountDeletionModel? = nil,
         path: Binding<[SettingsDestination]>,
         marketplacesAttention: String? = nil,
@@ -53,7 +64,7 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
         @ViewBuilder linkAccounts: () -> LinkAccounts,
     ) {
         self.content = content
-        self.signIn = signIn
+        self.account = account
         self.accountDeletion = accountDeletion
         _path = path
         self.marketplacesAttention = marketplacesAttention
@@ -96,20 +107,33 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
                     }
                     .listRowBackground(Palette.surface.color)
                 }
-                if let signIn {
-                    SignInSection(model: signIn)
-                        .listRowBackground(Palette.surface.color)
-                }
-                if let accountDeletion, accountDeletion.isSignedIn {
+                if account != nil || accountDeletion?.isSignedIn == true {
                     Section {
-                        NavigationLink(value: SettingsDestination.deleteAccount) {
-                            ListRow(
-                                "Delete account",
-                                subtitle: "Remove your items, sales, and history from Listora.",
-                                systemImage: "person.crop.circle.badge.xmark",
-                            )
+                        if let account {
+                            ListRow("Signed in as") {
+                                IconTile(systemImage: "person.crop.circle.badge.checkmark", tone: .success)
+                            } trailing: {
+                                Text(account.email)
+                                    .foregroundStyle(Palette.textSecondary)
+                                    // An address does not read well aloud: "Email", then the address.
+                                    .accessibilityLabel("Email")
+                                    .accessibilityValue(account.email)
+                                    .accessibilityIdentifier("signIn.signedInEmail")
+                            }
+                            Button("Sign out", role: .destructive, action: account.signOut)
+                                .buttonStyle(.listora(.destructiveText, size: .large))
+                                .accessibilityIdentifier("signIn.signOut")
                         }
-                        .accessibilityIdentifier("settings.deleteAccount")
+                        if accountDeletion?.isSignedIn == true {
+                            NavigationLink(value: SettingsDestination.deleteAccount) {
+                                ListRow(
+                                    "Delete account",
+                                    subtitle: "Remove your items, sales, and history from Listora.",
+                                    systemImage: "person.crop.circle.badge.xmark",
+                                )
+                            }
+                            .accessibilityIdentifier("settings.deleteAccount")
+                        }
                     } header: {
                         SectionHeader("Account")
                     }
@@ -155,7 +179,7 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
                 }
             }
             .onAppear { accountDeletion?.refresh() }
-            .onChange(of: signIn?.stage) { accountDeletion?.refresh() }
+            .onChange(of: account?.email) { accountDeletion?.refresh() }
         }
     }
 
@@ -186,9 +210,9 @@ public struct SettingsView<Marketplaces: View, LinkAccounts: View>: View {
 
 extension SettingsView where Marketplaces == EmptyView, LinkAccounts == EmptyView {
     /// Settings without the Marketplaces and Link accounts screens.
-    public init(content: SettingsContent, signIn: SignInModel? = nil) {
+    public init(content: SettingsContent, account: SettingsAccount? = nil) {
         self.content = content
-        self.signIn = signIn
+        self.account = account
         accountDeletion = nil
         marketplaces = nil
         linkAccounts = nil
@@ -209,105 +233,4 @@ extension SettingsView where Marketplaces == EmptyView, LinkAccounts == EmptyVie
         configuration: configuration,
         version: AppVersion(marketing: "1.0", build: "1"),
     ))
-}
-
-/// Signing in: the email, then the code. The developer sign-in reads its code from the local API's
-/// log; the email-code sign-in gets it by email from the environment's user pool.
-struct SignInSection: View {
-    @Bindable var model: SignInModel
-
-    var body: some View {
-        Section {
-            VStack(alignment: .leading, spacing: Spacing.md) {
-                switch model.stage {
-                case .unavailable:
-                    Banner(
-                        "This build can't sign in: it has no Cognito app client (COGNITO_CLIENT_ID in its xcconfig).",
-                        tone: .failed,
-                    )
-                    .accessibilityIdentifier("signIn.unavailable")
-                case .enterEmail:
-                    ListoraTextField("Email", hint: emailHint) {
-                        TextField(
-                            "Email",
-                            text: $model.email,
-                            prompt: Text("you@example.com").foregroundStyle(Palette.textSecondary),
-                        )
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.send)
-                        .onSubmit {
-                            if model.canRequestCode {
-                                Task { await model.requestCode() }
-                            }
-                        }
-                        .accessibilityIdentifier("signIn.email")
-                    }
-                    Button(model.kind == .developer ? "Send code" : "Email me a code") {
-                        Task { await model.requestCode() }
-                    }
-                    .buttonStyle(.listoraPrimary)
-                    .disabled(!model.canRequestCode)
-                    .loading(model.isWorking)
-                    .accessibilityIdentifier("signIn.sendCode")
-                case .enterCode:
-                    ListoraTextField("Code", hint: codeHint) {
-                        TextField(
-                            "Code",
-                            text: $model.code,
-                            prompt: Text("123456").foregroundStyle(Palette.textSecondary),
-                        )
-                        .textContentType(.oneTimeCode)
-                        .keyboardType(.numberPad)
-                        .accessibilityIdentifier("signIn.code")
-                    }
-                    Button("Sign in") { Task { await model.signIn() } }
-                        .buttonStyle(.listoraPrimary)
-                        .disabled(!model.canSignIn)
-                        .loading(model.isWorking)
-                        .accessibilityIdentifier("signIn.signIn")
-                    Button("Send a new code") { Task { await model.requestCode() } }
-                        .buttonStyle(.listoraTertiary)
-                        .disabled(model.isWorking)
-                        .accessibilityIdentifier("signIn.resend")
-                    Button("Use a different email") { model.startOver() }
-                        .buttonStyle(.listoraTertiary)
-                        .disabled(model.isWorking)
-                case let .signedIn(email):
-                    ListRow("Signed in as") {
-                        IconTile(systemImage: "person.crop.circle.badge.checkmark", tone: .success)
-                    } trailing: {
-                        Text(email)
-                            .foregroundStyle(Palette.textSecondary)
-                            .accessibilityIdentifier("signIn.signedInEmail")
-                    }
-                    Button("Sign out", role: .destructive) { model.signOut() }
-                        .buttonStyle(.listora(.destructiveText, size: .large))
-                        .accessibilityIdentifier("signIn.signOut")
-                }
-                if let message = model.message {
-                    Banner(message, tone: .failed)
-                        .accessibilityIdentifier("signIn.message")
-                }
-            }
-            .padding(.vertical, Spacing.xs)
-        } header: {
-            SectionHeader(model.kind == .developer ? "Developer sign-in" : "Account")
-        }
-        .onAppear { model.refresh() }
-    }
-
-    private var emailHint: String {
-        model.kind == .developer
-            ? "Dev builds only. Start the API with AUTH_DRIVER=dev."
-            : "We'll email you a code to sign in. No password needed."
-    }
-
-    private var codeHint: String {
-        model.kind == .developer
-            ? "Enter the code from the API's log for \(model.email)."
-            : "Enter the code we emailed to \(model.email). It works for 10 minutes."
-    }
 }

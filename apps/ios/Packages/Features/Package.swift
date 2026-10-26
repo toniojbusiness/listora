@@ -15,6 +15,7 @@ let package = Package(
         .library(name: "ReviewFeature", targets: ["ReviewFeature"]),
         .library(name: "TasksFeature", targets: ["TasksFeature"]),
         .library(name: "SettingsFeature", targets: ["SettingsFeature"]),
+        .library(name: "SignInFeature", targets: ["SignInFeature"]),
         .library(name: "MarketplacesFeature", targets: ["MarketplacesFeature"]),
         .library(name: "TagReadingFeature", targets: ["TagReadingFeature"]),
         .library(name: "VoiceInputFeature", targets: ["VoiceInputFeature"]),
@@ -45,6 +46,7 @@ let package = Package(
                 "ReviewFeature",
                 "TasksFeature",
                 "SettingsFeature",
+                "SignInFeature",
                 "MarketplacesFeature",
                 "TagReadingFeature",
                 "MarketplaceLinkingFeature",
@@ -92,6 +94,8 @@ let package = Package(
             name: "SettingsFeature",
             dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
+        // The welcome and sign-in screens, the app's root while nobody is signed in.
+        .target(name: "SignInFeature", dependencies: ["DesignSystem", "APIClient"]),
         .target(
             name: "MarketplacesFeature",
             dependencies: ["DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
@@ -118,7 +122,7 @@ let package = Package(
                 .product(name: "ListoraAPI", package: "swift"),
             ],
         ),
-        .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient", "SettingsFeature"]),
+        .testTarget(name: "AppFeatureTests", dependencies: ["AppFeature", "Core", "APIClient", "SignInFeature"]),
         .testTarget(
             name: "TodayFeatureTests",
             dependencies: ["TodayFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
@@ -159,6 +163,7 @@ let package = Package(
             name: "SettingsFeatureTests",
             dependencies: ["SettingsFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
+        .testTarget(name: "SignInFeatureTests", dependencies: ["SignInFeature", "APIClient"]),
         .testTarget(
             name: "MarketplacesFeatureTests",
             dependencies: ["MarketplacesFeature", "APIClient", .product(name: "ListoraAPI", package: "swift")],

@@ -30,7 +30,10 @@ final class ShareExtensionUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment = environment
         app.launch()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+        // Signed in, the app shows its tabs; signed out, the welcome screen.
+        let shown = app.tabBars.firstMatch.waitForExistence(timeout: 10)
+            || app.descendants(matching: .any)["signIn.welcome"].exists
+        XCTAssertTrue(shown, "the app did not finish launching")
     }
 
     private func startServer() throws -> StubAPIServer {
