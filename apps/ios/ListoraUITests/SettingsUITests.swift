@@ -30,6 +30,14 @@ final class SettingsUITests: XCTestCase {
         app.descendants(matching: .any)[identifier].firstMatch
     }
 
+    /// Scrolls Settings until the row is built and on screen: a list builds only what it shows.
+    private func reveal(_ target: XCUIElement) -> XCUIElement {
+        for _ in 0 ..< 6 where !(target.exists && target.isHittable) {
+            app.collectionViews.firstMatch.swipeUp()
+        }
+        return target
+    }
+
     private func openSettings() {
         let settings = app.buttons["settings.open"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
@@ -81,11 +89,7 @@ final class SettingsUITests: XCTestCase {
             "signIn.signOut",
             "settings.deleteAccount",
         ] {
-            let target = app.buttons[row]
-            for _ in 0 ..< 4 where !target.exists {
-                app.swipeUp()
-            }
-            XCTAssertTrue(target.exists, "no \(row)\n\(app.debugDescription)")
+            XCTAssertTrue(reveal(app.buttons[row]).exists, "no \(row)\n\(app.debugDescription)")
         }
         // No server address, environment, or other developer detail in the list.
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'http'")).firstMatch.exists)
@@ -93,37 +97,31 @@ final class SettingsUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Dev"].exists)
 
         // The version, in plain words; a long press opens Diagnostics for support.
-        let version = element("settings.version")
-        for _ in 0 ..< 4 where !version.isHittable {
-            app.swipeUp()
-        }
+        let version = reveal(element("settings.version"))
         XCTAssertTrue(version.label.hasPrefix("Listora "), version.label)
         XCTAssertFalse(version.label.contains("("), "the build number stays in Diagnostics")
         version.press(forDuration: 1.2)
         XCTAssertTrue(app.navigationBars["Diagnostics"].waitForExistence(timeout: 5))
-        XCTAssertEqual(element("diagnostics.environment").label, "Dev")
+        // Each row reads as its label, then its value.
+        XCTAssertEqual(element("diagnostics.environment").label, "Environment, Dev")
         let address = element("diagnostics.apiBaseURL").label
-        XCTAssertTrue(address.hasPrefix("http://"), address)
+        XCTAssertTrue(address.hasPrefix("Server, http://"), address)
     }
 
     func testOpensHelpThePrivacyPolicyAndTheTerms() {
         openSettings()
-        let help = app.buttons["settings.help"]
-        for _ in 0 ..< 4 where !help.isHittable {
-            app.swipeUp()
-        }
-        help.tap()
+        reveal(app.buttons["settings.help"]).tap()
         XCTAssertTrue(app.navigationBars["Help and contact"].waitForExistence(timeout: 5))
         // Dev names no support address.
         XCTAssertTrue(element("help.noContact").exists)
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
-        app.buttons["settings.privacy"].tap()
+        reveal(app.buttons["settings.privacy"]).tap()
         XCTAssertTrue(element("legal.privacy-policy").waitForExistence(timeout: 5), "\(app.debugDescription)")
         XCTAssertTrue(app.staticTexts["Summary"].exists)
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
-        app.buttons["settings.terms"].tap()
+        reveal(app.buttons["settings.terms"]).tap()
         XCTAssertTrue(element("legal.terms-of-service").waitForExistence(timeout: 5))
     }
 }

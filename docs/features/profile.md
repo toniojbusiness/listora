@@ -19,7 +19,8 @@ profile API in `apps/api/src/profile/`.
 - **Marketplaces**: Linked marketplaces opens Link accounts
   ([marketplace-linking.md](marketplace-linking.md)) and shows one line about every marketplace:
   the server's attention banner while a connection needs the seller (with "Needs attention"),
-  otherwise how many connections the server reports working ("2 working", "None linked yet").
+  otherwise how many connections the server reports with a problem ("1 needs attention") or
+  working ("2 working", "None linked yet").
   How Listora connects opens the Marketplaces screen ([connections.md](connections.md)), where
   eBay's API connects.
 - **Selling**: Notifications holds the morning summary ([today.md](today.md)), "Ask before

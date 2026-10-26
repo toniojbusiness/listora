@@ -52,9 +52,10 @@ struct MarketplacesHealthModelTests {
                     label: "Not linked",
                 )]),
                 .success([connection(status: "not_connected", tone: "neutral", label: "Not linked")]),
+                .success([connection(status: "reconnect_needed", tone: "action_needed", label: "Reconnect needed")]),
                 .success(connected()),
             ],
-            banners: [nil, nil, nil, BannerSpec(tone: "action_needed", label: "Reconnect eBay", detail: nil)],
+            banners: [nil, nil, nil, nil, BannerSpec(tone: "action_needed", label: "Reconnect eBay", detail: nil)],
         )
         let model = MarketplacesModel(service: service)
         #expect(model.healthLine == nil)
@@ -64,6 +65,9 @@ struct MarketplacesHealthModelTests {
         #expect(model.healthLine == HealthLine(text: "1 working", needsAttention: false))
         await model.load()
         #expect(model.healthLine == HealthLine(text: "None linked yet", needsAttention: false))
+        // A connection with a problem is not "none linked", even without the server's banner.
+        await model.load()
+        #expect(model.healthLine == HealthLine(text: "1 needs attention", needsAttention: true))
         await model.load()
         #expect(model.healthLine == HealthLine(text: "Reconnect eBay", needsAttention: true))
     }

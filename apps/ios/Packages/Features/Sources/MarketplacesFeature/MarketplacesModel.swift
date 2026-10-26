@@ -76,12 +76,20 @@ public final class MarketplacesModel {
     }
 
     /// One line about every marketplace, for Settings: the server's banner while a connection
-    /// needs attention, otherwise how many the server reports working. Nil before the first read.
+    /// needs attention, otherwise how many connections the server reports with a problem or
+    /// working. Nil before the first read.
     public var healthLine: HealthLine? {
         if let attention {
             return HealthLine(text: attention.title, needsAttention: attention.needsAction)
         }
         guard !rows.isEmpty else { return nil }
+        let problems = rows.count { $0.tone == .failed || $0.tone == .actionNeeded }
+        if problems > 0 {
+            return HealthLine(
+                text: problems == 1 ? "1 needs attention" : "\(problems) need attention",
+                needsAttention: true,
+            )
+        }
         let working = rows.count { $0.tone == .success }
         let text = switch working {
         case 0: "None linked yet"

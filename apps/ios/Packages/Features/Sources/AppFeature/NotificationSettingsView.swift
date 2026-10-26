@@ -59,6 +59,8 @@ struct NotificationSettingsView: View {
                 SectionHeader("After a sale")
             } footer: {
                 Text("Otherwise Listora delists a sold item everywhere else at once.")
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.textSecondary)
             }
             .listRowBackground(Palette.surface.color)
         }
