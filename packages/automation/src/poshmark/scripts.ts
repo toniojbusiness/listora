@@ -16,6 +16,8 @@ import {
   chooseCatalog,
   chooseSizeAndCondition,
   fillSku,
+  fillBrand,
+  fillPrices,
   fillText,
   openForm,
   privateSku,
@@ -150,11 +152,19 @@ export function createPoshmarkScripts(
       // Validation refuses such a payload before any attempt; this guards the form all the same.
       throw new Error('the listing has no Poshmark catalog, size, or condition');
     }
-    await step('fill in the text and prices', { mutates: false }, (page) =>
+    await step('fill in the title and description', { mutates: false, timeoutMs: 60_000 }, (page) =>
       fillText(page, payload),
     );
-    await step('choose the category', { mutates: false }, (page) => chooseCatalog(page, catalog));
-    await step('choose the size and condition', { mutates: false }, (page) =>
+    await step('fill in the prices', { mutates: false, timeoutMs: 60_000 }, (page) =>
+      fillPrices(page, payload),
+    );
+    await step('fill in the brand', { mutates: false, timeoutMs: 60_000 }, (page) =>
+      fillBrand(page, payload.brand),
+    );
+    await step('choose the category', { mutates: false, timeoutMs: 60_000 }, (page) =>
+      chooseCatalog(page, catalog),
+    );
+    await step('choose the size and condition', { mutates: false, timeoutMs: 60_000 }, (page) =>
       chooseSizeAndCondition(page, size, condition),
     );
   }

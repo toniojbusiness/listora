@@ -5675,18 +5675,32 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		postAnother: "input#post-another[type=\"checkbox\"]",
 		error: "[role=\"alert\"]",
 		/** A field Depop marks as needing a fix. */
-		invalid: "[aria-invalid=\"true\"]"
+		invalid: "[aria-invalid=\"true\"]",
+		/**
+		* Read on the captain's session (2026-10-26): once photos are added, Depop fills in item info
+		* from them itself (a brand, a condition, a suggested category), and says so with this mark.
+		*/
+		itemInfoAdded: "[data-testid=\"Item info added\"]",
+		clearBrand: "button[data-testid=\"brandButton__clear\"]"
 	};
+	/** How long Depop gets to fill in item info from the photos before Listora fills the form. */
+	const ITEM_INFO_MS = 15e3;
 	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 	const ANSWER_MS = 45e3;
 	const LOOK_EVERY_MS$2 = 500;
-	/** One of Depop's combobox pickers (`group` is the category). */
+	/**
+	* One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps
+	* its options while closed and shows them through a style variable (`--display: block`), so
+	* options are only clicked in an open menu.
+	*/
 	function combo(name) {
+		const open = `ul#${name}-menu[style*="--display: block"]`;
 		return {
 			input: `input#${name}-input`,
 			toggle: `button#${name}-toggle-button`,
-			option: (text) => `ul#${name}-menu [role="option"]:text-is("${text.replaceAll("\"", "\\\"")}")`,
-			anyOption: `ul#${name}-menu [role="option"]`
+			open,
+			option: (text) => `${open} [role="option"]:text-is("${text.replaceAll("\"", "\\\"")}")`,
+			anyOption: `${open} [role="option"]`
 		};
 	}
 	const FORM$2 = "listing form";
@@ -5704,10 +5718,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		if (photos !== null) {
 			await awaitElement$1(page, LISTING_FORM$2.photos, FORM$2, "photo input");
 			await page.upload(LISTING_FORM$2.photos, photos);
+			await appears$1(page, LISTING_FORM$2.itemInfoAdded, ITEM_INFO_MS);
 		}
 		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
 		if (payload.category === null) throw new Error("a listing without a category passed validation");
-		for (const [level, name] of payload.category.entries()) await pick$1(page, "group", name, `category level ${String(level + 1)}`);
+		await pickCategory(page, payload.category);
 		if (payload.size !== null) await pickSize$1(page, payload.size);
 		await pickBrand$1(page, payload.brand);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
@@ -5771,19 +5786,58 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function messages(page) {
 		return (await page.texts(LISTING_FORM$2.error)).filter((text) => text !== "");
 	}
+	/**
+	* Picks the category. Read on the captain's session (2026-10-26): the category picker is one
+	* searchable list (`ul#group-menu`) of groups, each headed by its department and category
+	* ("Men > Tops", "Women > Tops", "Kids > Tops", "Everything else > Home") and holding that
+	* category's product types as options ("T-shirts"). The product type is searched for, then
+	* picked in its group; a group the list doesn't have stops the step before anything is sent.
+	*/
+	async function pickCategory(page, path) {
+		const [department, category, type] = path;
+		if (department === void 0 || category === void 0 || type === void 0) throw new Error("a category path has a department, a category, and a product type");
+		const box = combo("group");
+		await expectElement$2(page, box.input, FORM$2, "category search");
+		await page.type(box.input, type);
+		await awaitElement$1(page, box.anyOption, FORM$2, "category options");
+		const group = `${FORM_DEPARTMENTS[department] ?? department} > ${category}`;
+		const index = (await page.texts(CATEGORY_GROUP_HEADERS)).map((text) => text.replace(/\s+/g, " ").trim()).indexOf(group);
+		if (index < 0) throw changed$2(FORM$2, `has no category group "${group}"`);
+		const option = `${CATEGORY_GROUPS} >> nth=${String(index)} >> [role="option"]:text-is("${type.replaceAll("\"", "\\\"")}")`;
+		if (await page.count(option) !== 1) throw changed$2(FORM$2, `has no one "${type}" in the category group "${group}"`);
+		await page.click(option);
+	}
+	/** The category picker's groups and their headers ("Men > Tops"), in the same order. */
+	const CATEGORY_GROUPS = "ul#group-menu > div";
+	const CATEGORY_GROUP_HEADERS = "ul#group-menu > div > div:first-child p";
+	/** Listora's department names as the category picker heads its groups. */
+	const FORM_DEPARTMENTS = {
+		Menswear: "Men",
+		Womenswear: "Women",
+		Kidswear: "Kids"
+	};
+	/** Whether `selector` is on the page within `ms` (a part Depop's scripts draw). */
+	async function appears$1(page, selector, ms) {
+		const end = Date.now() + ms;
+		for (;;) {
+			if (await page.exists(selector)) return true;
+			if (Date.now() >= end) return false;
+			await lookAgain(page, 500);
+		}
+	}
 	/** Opens one of the form's comboboxes and picks the option with exactly this text. */
 	async function pick$1(page, name, text, what) {
 		const box = combo(name);
 		await expectElement$2(page, box.toggle, FORM$2, `${what} picker`);
-		if (!await page.exists(box.anyOption)) await page.click(box.toggle);
+		if (!await page.exists(box.open)) await page.click(box.toggle);
 		await awaitElement$1(page, box.anyOption, FORM$2, `${what} options`);
 		await expectElement$2(page, box.option(text), FORM$2, `${what} "${text}"`);
 		await page.click(box.option(text));
 	}
 	async function pickSize$1(page, size) {
-		const box = combo("size");
+		const box = combo("variants");
 		await expectElement$2(page, box.toggle, FORM$2, "size picker");
-		if (!await page.exists(box.anyOption)) await page.click(box.toggle);
+		if (!await page.exists(box.open)) await page.click(box.toggle);
 		await awaitElement$1(page, box.anyOption, FORM$2, "size options");
 		const label = (await page.texts(box.anyOption)).find((option) => sizeOptionMatches$1(option, size));
 		if (label === void 0) throw changed$2(FORM$2, `offers no size "${size}" for this category`);
@@ -5792,6 +5846,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
 	async function pickBrand$1(page, brand) {
 		const box = combo("brand");
+		if (await page.exists(LISTING_FORM$2.clearBrand)) await page.click(LISTING_FORM$2.clearBrand);
 		await expectElement$2(page, box.input, FORM$2, "brand search");
 		if (brand === null) return;
 		await page.type(box.input, brand);
@@ -6297,7 +6352,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
 			await step("fill in the listing", {
 				mutates: false,
-				timeoutMs: 9e4
+				timeoutMs: 12e4
 			}, async (page) => {
 				await openSellForm$1(page, site);
 				await fillListing$2(page, payload, sku, files);
@@ -8133,19 +8188,24 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		await page.click(FORM_SELECTORS.applyPhoto);
 		await page.waitFor(FORM_SELECTORS.photoEditor, "detached");
 	}
-	/** Title, description, brand, and prices. On the edit form this replaces what the listing had. */
+	/** Title and description. On the edit form this replaces what the listing had. */
 	async function fillText(page, payload) {
 		await expectField(page, FORM_SELECTORS.title, "title field");
 		await page.fill(FORM_SELECTORS.title, payload.title);
 		await expectField(page, FORM_SELECTORS.description, "description field");
 		await page.fill(FORM_SELECTORS.description, payload.description);
+	}
+	/** The original price and the listing price. */
+	async function fillPrices(page, payload) {
 		await expectField(page, FORM_SELECTORS.originalPrice, "original price field");
 		await page.fill(FORM_SELECTORS.originalPrice, payload.originalPrice === null ? "" : wholeDollars(payload.originalPrice.amountCents));
 		await setPrice(page, payload.price.amountCents);
-		if (payload.brand !== null) {
-			await expectField(page, FORM_SELECTORS.brand, "brand field");
-			await page.fill(FORM_SELECTORS.brand, payload.brand);
-		}
+	}
+	/** The brand, typed into the brand field (Poshmark takes a brand its suggestions don't list). */
+	async function fillBrand(page, brand) {
+		if (brand === null) return;
+		await expectField(page, FORM_SELECTORS.brand, "brand field");
+		await page.fill(FORM_SELECTORS.brand, brand);
 	}
 	/** A field the form must have; without it the step ends at once, before anything is sent. */
 	async function expectField(page, selector, what) {
@@ -8419,9 +8479,26 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		async function fillListing(step, payload) {
 			const { catalog, size, condition } = payload;
 			if (catalog === null || size === null || condition === null) throw new Error("the listing has no Poshmark catalog, size, or condition");
-			await step("fill in the text and prices", { mutates: false }, (page) => fillText(page, payload));
-			await step("choose the category", { mutates: false }, (page) => chooseCatalog(page, catalog));
-			await step("choose the size and condition", { mutates: false }, (page) => chooseSizeAndCondition(page, size, condition));
+			await step("fill in the title and description", {
+				mutates: false,
+				timeoutMs: 6e4
+			}, (page) => fillText(page, payload));
+			await step("fill in the prices", {
+				mutates: false,
+				timeoutMs: 6e4
+			}, (page) => fillPrices(page, payload));
+			await step("fill in the brand", {
+				mutates: false,
+				timeoutMs: 6e4
+			}, (page) => fillBrand(page, payload.brand));
+			await step("choose the category", {
+				mutates: false,
+				timeoutMs: 6e4
+			}, (page) => chooseCatalog(page, catalog));
+			await step("choose the size and condition", {
+				mutates: false,
+				timeoutMs: 6e4
+			}, (page) => chooseSizeAndCondition(page, size, condition));
 		}
 		/** Saves the open form; Poshmark's validation messages are a rejection in its own words. */
 		async function save(step, button) {
@@ -8860,7 +8937,30 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
   const choices = [...new Set([...document.querySelectorAll('option, [role="option"], [role="menuitem"], [role="radio"], label, legend')]
     .map((element) => (element.textContent || '').replace(/\\s+/g, ' ').trim())
     .filter((text) => text !== '' && text.length <= 40 && !/[0-9@]/.test(text)))].slice(0, 150);
-  return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices };
+  const describe = (element) => {
+    const role = element.getAttribute('role');
+    const text = (element.children.length === 0 || role === 'option' || role === 'group' || role === 'presentation' || element.tagName === 'LI') ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : '';
+    return {
+      tag: element.tagName.toLowerCase(),
+      names: ['role', 'id', 'aria-label', 'aria-labelledby', 'aria-selected', 'data-testid'].flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
+      text,
+    };
+  };
+  const lists = [];
+  for (const list of document.querySelectorAll('[role="listbox"], [role="menu"]')) {
+    if (list.children.length === 0) continue;
+    lists.push({ depth: 0, ...describe(list) });
+    const walk = (node, depth) => {
+      for (const child of node.children) {
+        if (lists.length >= 120) return;
+        lists.push({ depth, ...describe(child) });
+        if (depth < 3) walk(child, depth + 1);
+      }
+    };
+    walk(list, 1);
+    if (lists.length >= 120) break;
+  }
+  return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices, lists };
 })()`;
 	/** Words of paths, titles, and labels that say what a page is, never whose it is. */
 	const STRUCTURAL_WORDS = new Set("a about access account accounts active and api apps are auth back brand brands bundles buy category categories closet closets config create create-listing current dashboard denied depop drafts ebay edit edit-listing error experiments feature features feed flags for found graphql health home hub human identity in in_progress inactive inbox info item items just likes list listing listings log log-in log-out login logout marketplace me mercari messages moment my my-page mypage new news not notifications of offers on order orders page poshmark product products profile profiles purchases rest robot sales search sell seller selling session sessions settings shipping shop sign sign-in sign-out signin signout sold something status the to up us user users v1 v2 v3 v4 verify viewer vm-rest web welcome went with wrong www you your address addresses balance bff buyer buyers complete completed count counts details draft feeds followers following gateway inquiries insights internal mobile overview payout payouts pending preferences presentation private public purchase receipt receipts referrals reviews saved searches sellers sellinghub selling-hub shipped sold-items stats summary transaction transactions verification verifications add apply cancel choose color colour condition continue cover department description designer discard done enter next optional photo photos post price quantity required save select single size sizes style subcategory title type update upload".split(" "));
@@ -8899,7 +8999,13 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 			names: array(tuple([string(), string()])),
 			text: string().nullable()
 		})).default([]),
-		choices: array(string()).default([])
+		choices: array(string()).default([]),
+		lists: array(object({
+			depth: number(),
+			tag: string(),
+			names: array(tuple([string(), string()])),
+			text: string()
+		})).default([])
 	});
 	/** Attributes that name a control as the site's code does, kept as they are (digits reduced). */
 	const CODE_NAMES = /* @__PURE__ */ new Set([
@@ -8952,7 +9058,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				...control.names.map(([name, value]) => CODE_NAMES.has(name) ? `${name}:${reducedId(value)}` : `${name}:${reducedWords(value)}`),
 				control.text === null || control.text === "" ? null : `text:${reducedWords(control.text)}`
 			].filter((part) => part !== null).join(" ")))),
-			choices: distinct(read.choices.filter((text) => !/[0-9@]/.test(text)).map(clean))
+			choices: distinct(read.choices.filter((text) => !/[0-9@]/.test(text)).map(clean)),
+			lists: read.lists.map((item) => clean([
+				`${"  ".repeat(Math.min(item.depth, 4))}${item.tag}`,
+				...item.names.map(([name, value]) => name === "aria-label" ? `${name}:${reducedWords(value)}` : `${name}:${reducedId(value)}`),
+				item.text === "" ? null : `text:${/[0-9@]/.test(item.text) ? "<x>" : item.text}`
+			].filter((part) => part !== null).join(" ")))
 		};
 	}
 	/** `/closet/janedoe/edit` → `/closet/<x>/edit`: only structural words stay. */
@@ -9035,7 +9146,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		scripts: array(string().max(MAX_ITEM_LENGTH)).max(40),
 		data: array(string().max(MAX_ITEM_LENGTH)).max(MAX_DATA_LINES),
 		controls: array(string().max(MAX_ITEM_LENGTH)).max(120).default([]),
-		choices: array(string().max(MAX_ITEM_LENGTH)).max(150).default([])
+		choices: array(string().max(MAX_ITEM_LENGTH)).max(150).default([]),
+		lists: array(string().max(MAX_ITEM_LENGTH)).max(121).default([])
 	});
 
 // src/safety/redaction.ts

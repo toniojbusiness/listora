@@ -51,20 +51,34 @@ export const LISTING_FORM = {
   error: '[role="alert"]',
   /** A field Depop marks as needing a fix. */
   invalid: '[aria-invalid="true"]',
+  /**
+   * Read on the captain's session (2026-10-26): once photos are added, Depop fills in item info
+   * from them itself (a brand, a condition, a suggested category), and says so with this mark.
+   */
+  itemInfoAdded: '[data-testid="Item info added"]',
+  clearBrand: 'button[data-testid="brandButton__clear"]',
 } as const;
+
+/** How long Depop gets to fill in item info from the photos before Listora fills the form. */
+const ITEM_INFO_MS = 15_000;
 
 /** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 const ANSWER_MS = 45_000;
 const LOOK_EVERY_MS = 500;
 
-/** One of Depop's combobox pickers (`group` is the category). */
+/**
+ * One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps
+ * its options while closed and shows them through a style variable (`--display: block`), so
+ * options are only clicked in an open menu.
+ */
 function combo(name: string) {
+  const open = `ul#${name}-menu[style*="--display: block"]`;
   return {
     input: `input#${name}-input`,
     toggle: `button#${name}-toggle-button`,
-    option: (text: string) =>
-      `ul#${name}-menu [role="option"]:text-is("${text.replaceAll('"', '\\"')}")`,
-    anyOption: `ul#${name}-menu [role="option"]`,
+    open,
+    option: (text: string) => `${open} [role="option"]:text-is("${text.replaceAll('"', '\\"')}")`,
+    anyOption: `${open} [role="option"]`,
   } as const;
 }
 
@@ -92,12 +106,12 @@ export async function fillListing(
     // Drawn with the rest of the form, a moment after its description field.
     await awaitElement(page, LISTING_FORM.photos, FORM, 'photo input');
     await page.upload(LISTING_FORM.photos, photos);
+    // Depop's own fill from the photos comes first, so Listora's values are the ones kept.
+    await appears(page, LISTING_FORM.itemInfoAdded, ITEM_INFO_MS);
   }
   await page.fill(LISTING_FORM.description, depopListingText(payload, sku));
   if (payload.category === null) throw new Error('a listing without a category passed validation');
-  for (const [level, name] of payload.category.entries()) {
-    await pick(page, 'group', name, `category level ${String(level + 1)}`);
-  }
+  await pickCategory(page, payload.category);
   if (payload.size !== null) await pickSize(page, payload.size);
   await pickBrand(page, payload.brand);
   if (payload.condition === null) {
@@ -180,20 +194,69 @@ async function messages(page: PageDriver): Promise<string[]> {
   return (await page.texts(LISTING_FORM.error)).filter((text) => text !== '');
 }
 
+/**
+ * Picks the category. Read on the captain's session (2026-10-26): the category picker is one
+ * searchable list (`ul#group-menu`) of groups, each headed by its department and category
+ * ("Men > Tops", "Women > Tops", "Kids > Tops", "Everything else > Home") and holding that
+ * category's product types as options ("T-shirts"). The product type is searched for, then
+ * picked in its group; a group the list doesn't have stops the step before anything is sent.
+ */
+async function pickCategory(page: PageDriver, path: readonly string[]): Promise<void> {
+  const [department, category, type] = path;
+  if (department === undefined || category === undefined || type === undefined) {
+    throw new Error('a category path has a department, a category, and a product type');
+  }
+  const box = combo('group');
+  await expectElement(page, box.input, FORM, 'category search');
+  await page.type(box.input, type);
+  await awaitElement(page, box.anyOption, FORM, 'category options');
+  const group = `${FORM_DEPARTMENTS[department] ?? department} > ${category}`;
+  const headers = (await page.texts(CATEGORY_GROUP_HEADERS)).map((text) =>
+    text.replace(/\s+/g, ' ').trim(),
+  );
+  const index = headers.indexOf(group);
+  if (index < 0) throw changed(FORM, `has no category group "${group}"`);
+  const option = `${CATEGORY_GROUPS} >> nth=${String(index)} >> [role="option"]:text-is("${type.replaceAll('"', '\\"')}")`;
+  if ((await page.count(option)) !== 1) {
+    throw changed(FORM, `has no one "${type}" in the category group "${group}"`);
+  }
+  await page.click(option);
+}
+
+/** The category picker's groups and their headers ("Men > Tops"), in the same order. */
+const CATEGORY_GROUPS = 'ul#group-menu > div';
+const CATEGORY_GROUP_HEADERS = 'ul#group-menu > div > div:first-child p';
+/** Listora's department names as the category picker heads its groups. */
+const FORM_DEPARTMENTS: Readonly<Record<string, string>> = {
+  Menswear: 'Men',
+  Womenswear: 'Women',
+  Kidswear: 'Kids',
+};
+
+/** Whether `selector` is on the page within `ms` (a part Depop's scripts draw). */
+async function appears(page: PageDriver, selector: string, ms: number): Promise<boolean> {
+  const end = Date.now() + ms;
+  for (;;) {
+    if (await page.exists(selector)) return true;
+    if (Date.now() >= end) return false;
+    await lookAgain(page, 500);
+  }
+}
+
 /** Opens one of the form's comboboxes and picks the option with exactly this text. */
 async function pick(page: PageDriver, name: string, text: string, what: string): Promise<void> {
   const box = combo(name);
   await expectElement(page, box.toggle, FORM, `${what} picker`);
-  if (!(await page.exists(box.anyOption))) await page.click(box.toggle);
+  if (!(await page.exists(box.open))) await page.click(box.toggle);
   await awaitElement(page, box.anyOption, FORM, `${what} options`);
   await expectElement(page, box.option(text), FORM, `${what} "${text}"`);
   await page.click(box.option(text));
 }
 
 async function pickSize(page: PageDriver, size: string): Promise<void> {
-  const box = combo('size');
+  const box = combo('variants');
   await expectElement(page, box.toggle, FORM, 'size picker');
-  if (!(await page.exists(box.anyOption))) await page.click(box.toggle);
+  if (!(await page.exists(box.open))) await page.click(box.toggle);
   await awaitElement(page, box.anyOption, FORM, 'size options');
   const offered = await page.texts(box.anyOption);
   const label = offered.find((option) => sizeOptionMatches(option, size));
@@ -204,6 +267,8 @@ async function pickSize(page: PageDriver, size: string): Promise<void> {
 /** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
 async function pickBrand(page: PageDriver, brand: string | null): Promise<void> {
   const box = combo('brand');
+  // A brand Depop filled in from the photos is cleared, so the listing's own is the one kept.
+  if (await page.exists(LISTING_FORM.clearBrand)) await page.click(LISTING_FORM.clearBrand);
   await expectElement(page, box.input, FORM, 'brand search');
   if (brand === null) return;
   await page.type(box.input, brand);

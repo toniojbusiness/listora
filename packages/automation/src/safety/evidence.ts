@@ -39,6 +39,11 @@ export interface PageEvidence {
   choices: string[];
   /** The page's own data: `__INITIAL_STATE__.auth.isUserLoggedIn: true`. */
   data: string[];
+  /**
+   * The open pickers' structure (listboxes and menus, a few levels down), indented by depth:
+   * how their groups and options are built, so a choice can be found in its group.
+   */
+  lists: string[];
 }
 
 /** The page globals marketplaces keep their data in. */
@@ -93,7 +98,30 @@ export const EVIDENCE_SCRIPT = `(() => {
   const choices = [...new Set([...document.querySelectorAll('option, [role="option"], [role="menuitem"], [role="radio"], label, legend')]
     .map((element) => (element.textContent || '').replace(/\\s+/g, ' ').trim())
     .filter((text) => text !== '' && text.length <= 40 && !/[0-9@]/.test(text)))].slice(0, 150);
-  return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices };
+  const describe = (element) => {
+    const role = element.getAttribute('role');
+    const text = (element.children.length === 0 || role === 'option' || role === 'group' || role === 'presentation' || element.tagName === 'LI') ? (element.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : '';
+    return {
+      tag: element.tagName.toLowerCase(),
+      names: ['role', 'id', 'aria-label', 'aria-labelledby', 'aria-selected', 'data-testid'].flatMap((name) => { const value = element.getAttribute(name); return value ? [[name, value.slice(0, 60)]] : []; }),
+      text,
+    };
+  };
+  const lists = [];
+  for (const list of document.querySelectorAll('[role="listbox"], [role="menu"]')) {
+    if (list.children.length === 0) continue;
+    lists.push({ depth: 0, ...describe(list) });
+    const walk = (node, depth) => {
+      for (const child of node.children) {
+        if (lists.length >= 120) return;
+        lists.push({ depth, ...describe(child) });
+        if (depth < 3) walk(child, depth + 1);
+      }
+    };
+    walk(list, 1);
+    if (lists.length >= 120) break;
+  }
+  return { path: location.pathname, title: document.title, testIds, links, requests, scripts, controls, choices, lists };
 })()`;
 
 /** Words of paths, titles, and labels that say what a page is, never whose it is. */
@@ -166,6 +194,16 @@ const rawSchema = z.object({
     )
     .default([]),
   choices: z.array(z.string()).default([]),
+  lists: z
+    .array(
+      z.object({
+        depth: z.number(),
+        tag: z.string(),
+        names: z.array(z.tuple([z.string(), z.string()])),
+        text: z.string(),
+      }),
+    )
+    .default([]),
 });
 
 /** Attributes that name a control as the site's code does, kept as they are (digits reduced). */
@@ -258,6 +296,21 @@ export function redactEvidence(
       ),
     ),
     choices: distinct(read.choices.filter((text) => !/[0-9@]/.test(text)).map(clean)),
+    lists: read.lists.map((item) =>
+      clean(
+        [
+          `${'  '.repeat(Math.min(item.depth, 4))}${item.tag}`,
+          ...item.names.map(([name, value]) =>
+            name === 'aria-label'
+              ? `${name}:${reducedWords(value)}`
+              : `${name}:${reducedId(value)}`,
+          ),
+          item.text === '' ? null : `text:${/[0-9@]/.test(item.text) ? '<x>' : item.text}`,
+        ]
+          .filter((part) => part !== null)
+          .join(' '),
+      ),
+    ),
   };
 }
 
@@ -359,4 +412,5 @@ export const pageEvidenceSchema = z.object({
   data: z.array(z.string().max(MAX_ITEM_LENGTH)).max(MAX_DATA_LINES),
   controls: z.array(z.string().max(MAX_ITEM_LENGTH)).max(120).default([]),
   choices: z.array(z.string().max(MAX_ITEM_LENGTH)).max(150).default([]),
+  lists: z.array(z.string().max(MAX_ITEM_LENGTH)).max(121).default([]),
 }) satisfies z.ZodType<PageEvidence>;

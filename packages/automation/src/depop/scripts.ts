@@ -121,7 +121,7 @@ export function createDepopScripts(
     const files = await step('get the photos', { mutates: false }, (_page, signal) =>
       Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
     );
-    await step('fill in the listing', { mutates: false, timeoutMs: 90_000 }, async (page) => {
+    await step('fill in the listing', { mutates: false, timeoutMs: 120_000 }, async (page) => {
       await openSellForm(page, site);
       await fillListing(page, payload, sku, files);
       await expectSubmit(page, 'post');

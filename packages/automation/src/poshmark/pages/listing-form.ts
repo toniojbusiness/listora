@@ -134,22 +134,29 @@ export async function addPhotos(page: PageDriver, photos: readonly UploadFile[])
   await page.waitFor(FORM_SELECTORS.photoEditor, 'detached');
 }
 
-/** Title, description, brand, and prices. On the edit form this replaces what the listing had. */
+/** Title and description. On the edit form this replaces what the listing had. */
 export async function fillText(page: PageDriver, payload: PoshmarkListingPayload): Promise<void> {
   await expectField(page, FORM_SELECTORS.title, 'title field');
   await page.fill(FORM_SELECTORS.title, payload.title);
   await expectField(page, FORM_SELECTORS.description, 'description field');
   await page.fill(FORM_SELECTORS.description, payload.description);
+}
+
+/** The original price and the listing price. */
+export async function fillPrices(page: PageDriver, payload: PoshmarkListingPayload): Promise<void> {
   await expectField(page, FORM_SELECTORS.originalPrice, 'original price field');
   await page.fill(
     FORM_SELECTORS.originalPrice,
     payload.originalPrice === null ? '' : wholeDollars(payload.originalPrice.amountCents),
   );
   await setPrice(page, payload.price.amountCents);
-  if (payload.brand !== null) {
-    await expectField(page, FORM_SELECTORS.brand, 'brand field');
-    await page.fill(FORM_SELECTORS.brand, payload.brand);
-  }
+}
+
+/** The brand, typed into the brand field (Poshmark takes a brand its suggestions don't list). */
+export async function fillBrand(page: PageDriver, brand: string | null): Promise<void> {
+  if (brand === null) return;
+  await expectField(page, FORM_SELECTORS.brand, 'brand field');
+  await page.fill(FORM_SELECTORS.brand, brand);
 }
 
 /** A field the form must have; without it the step ends at once, before anything is sent. */
