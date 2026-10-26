@@ -13,7 +13,13 @@ import {
   type SessionCheckState,
   type TokenSealer,
 } from '@listora/connections';
-import { addJob, inTransaction, MARKETPLACES, type DbExecutor, type Marketplace } from '@listora/db';
+import {
+  addJob,
+  inTransaction,
+  MARKETPLACES,
+  type DbExecutor,
+  type Marketplace,
+} from '@listora/db';
 import { findSaleEmailInbox, inboundDomainOf } from '@listora/email-sales';
 import {
   isMarketplace,

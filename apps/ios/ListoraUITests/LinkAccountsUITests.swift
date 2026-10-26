@@ -105,7 +105,7 @@ final class LinkAccountsUITests: XCTestCase {
         XCTAssertTrue(poshmarkStatus.waitForExistence(timeout: 10), "no list\n\(app.debugDescription)")
         XCTAssertEqual(poshmarkStatus.label, "Linked")
         // Nothing to unlink where nothing is linked.
-        XCTAssertFalse(app.buttons["linkAccounts.unlink.depop"].exists)
+        XCTAssertFalse(app.buttons["linkAccounts.unlink.ebay"].exists)
 
         app.buttons["linkAccounts.unlink.poshmark"].tap()
         let confirm = app.buttons["linkAccounts.confirmUnlink"].firstMatch
