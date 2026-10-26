@@ -45,6 +45,8 @@ public final class MarketplacesModel {
     public weak var phoneWork: (any PhoneWorkTrigger)?
     /// The row whose automated steps are moving between the cloud and this phone.
     public private(set) var moving: String?
+    /// This app's installation: a marketplace that runs here says "Runs on this iPhone".
+    private let installationID: String
 
     /// `pollInterval` and `maxPolls`: how often and how long a requested check is read again. An
     /// API connection's check takes seconds; the browser runner's check of a linked sign-in can
@@ -54,6 +56,7 @@ public final class MarketplacesModel {
     public init(
         service: any ConnectionsService,
         isSignedIn: @escaping @MainActor () -> Bool = { true },
+        installationID: String = Installation.id(),
         pollInterval: Duration = .seconds(3),
         maxPolls: Int = 320,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
@@ -63,6 +66,7 @@ public final class MarketplacesModel {
         self.maxPolls = maxPolls
         self.sleep = sleep
         self.isSignedIn = isSignedIn
+        self.installationID = installationID
     }
 
     /// Reloads for the app's banner (on launch, on return to the app, when Inventory appears):
@@ -125,10 +129,10 @@ public final class MarketplacesModel {
         notice = nil
         let checking: MarketplaceRow
         do {
-            checking = try await MarketplaceRow(connection: service.requestCheck(
-                marketplace: marketplace,
-                idempotencyKey: UUID().uuidString,
-            ))
+            checking = try await MarketplaceRow(
+                connection: service.requestCheck(marketplace: marketplace, idempotencyKey: UUID().uuidString),
+                installationID: installationID,
+            )
         } catch {
             requestingCheck = nil
             notice = ConnectionNotice(tone: .failure, message: error.message)
@@ -168,7 +172,7 @@ public final class MarketplacesModel {
                 marketplace: marketplace,
                 location: toPhone ? .phone : .cloud,
             )
-            replace(MarketplaceRow(connection: moved))
+            replace(MarketplaceRow(connection: moved, installationID: installationID))
             notice = ConnectionNotice(
                 tone: .success,
                 message: toPhone ? "\(row.name) runs on this iPhone now." : "\(row.name) runs in Listora's cloud now.",
@@ -182,7 +186,7 @@ public final class MarketplacesModel {
     }
 
     private func apply(_ summary: Components.Schemas.ConnectionHealthSummary) {
-        rows = summary.connections.map(MarketplaceRow.init(connection:))
+        rows = summary.connections.map { MarketplaceRow(connection: $0, installationID: installationID) }
         attention = summary.banner.flatMap { banner in
             summary.needsAttention ? AttentionBanner(banner: banner, count: summary.attention.count) : nil
         }

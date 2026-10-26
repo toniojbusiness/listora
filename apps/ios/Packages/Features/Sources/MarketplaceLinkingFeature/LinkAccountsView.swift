@@ -70,7 +70,7 @@ public struct LinkAccountsView: View {
         .refreshable { await model.load() }
         .sheet(item: $model.signingIn) { link in
             MarketplaceSignInView(
-                link: link,
+                model: model.signInPage(for: link),
                 onCancel: { model.cancelSignIn() },
                 onSignedIn: { cookies in Task { await model.finishSignIn(link, cookies: cookies) } },
             )

@@ -50,7 +50,7 @@ struct APIMarketplaceSessionServiceTests {
            "issue":{"code":"session_rejected","message":"Mercari logged Listora out.",
                     "occurredAt":"2026-10-24T12:00:00Z"}},
           {"marketplace":"depop","status":"paused_by_depop","statusDisplay":{"tone":"sparkly","label":"Paused"},
-           "login":{"url":"https://www.depop.com/login/","cookieDomains":["depop.com"]}}
+           "login":{"url":"https://www.depop.com/login/","cookieDomains":["depop.com"],"emailsSignInLinks":true}}
         ]}
         """)
         let links = try await service(server).list()
@@ -67,6 +67,9 @@ struct APIMarketplaceSessionServiceTests {
         #expect(links[2].statusLabel == "Paused")
         #expect(links[2].statusTone == .neutral)
         #expect(links[2].canLink)
+        // Depop signs in with an emailed link; a login without the field emails none.
+        #expect(links[2].emailsSignInLinks)
+        #expect(!links[0].emailsSignInLinks)
         #expect(server.requests.first?.path == "/v1/marketplace-sessions")
     }
 
@@ -76,7 +79,8 @@ struct APIMarketplaceSessionServiceTests {
         {"marketplace":"poshmark","status":"checking","statusDisplay":{"tone":"checking","label":"Checking..."},
          "login":{"url":"https://poshmark.com/login","cookieDomains":["poshmark.com"]},
          "execution":{"location":"phone","label":"Runs on your iPhone",
-           "deviceInstallationId":"0199a1f0-0000-7000-8000-0000000000d1","deviceName":"Sam's iPhone","waiting":1}}
+           "deviceInstallationId":"0199a1f0-0000-7000-8000-0000000000d1","deviceName":"Sam's iPhone","waiting":1,
+           "cloudAllowed":false}}
         """)
         let linked = try await service(server).link(
             "poshmark",

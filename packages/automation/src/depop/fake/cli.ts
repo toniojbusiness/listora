@@ -15,6 +15,11 @@ if (url.hostname !== '127.0.0.1' && url.hostname !== 'localhost') {
   process.exit(1);
 }
 
-const site = await FakeDepopSite.start(url.port === '' ? 80 : Number(url.port));
+const site = await FakeDepopSite.start(url.port === '' ? 80 : Number(url.port), {
+  // The "email" with the sign-in link: copy it into the app's Depop sign-in page.
+  onSignInLink: (link) => {
+    logger.info({ link }, 'fake Depop emailed a sign-in link');
+  },
+});
 handleShutdownSignals({ logger, shutdown: () => site.close() });
 logger.info({ url: site.url }, 'fake Depop site ready');
