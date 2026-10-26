@@ -5,6 +5,7 @@ import DesignSystem
 import InventoryFeature
 import MarketplaceLinkingFeature
 import MarketplacesFeature
+import PhoneExecutionFeature
 import SalesFeature
 import SettingsFeature
 import SignInFeature
@@ -92,6 +93,11 @@ public struct RootView: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active {
                 Task { await dependencies.marketplaces.refreshAttention() }
+                // Opening the app runs the marketplace work waiting for this phone (a sale's
+                // delists among it) at once.
+                dependencies.phone.runner.runPhoneWork(.opened)
+            } else if phase == .background {
+                PhoneBackgroundWork.schedule()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: TaskNotificationRouter.openTasks)) { _ in

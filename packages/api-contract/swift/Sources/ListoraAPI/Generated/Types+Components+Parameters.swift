@@ -49,5 +49,15 @@ extension Components {
         public typealias TaskId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/MarketplacePath`.
         public typealias MarketplacePath = Components.Schemas.KnownMarketplace
+        /// The app installation's id, which it keeps in its Keychain.
+        ///
+        /// - Remark: Generated from `#/components/parameters/InstallationId`.
+        public typealias InstallationId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/RunId`.
+        public typealias RunId = Components.Schemas.Id
+        /// The call's place in its run, from 0 (path parameters are text).
+        ///
+        /// - Remark: Generated from `#/components/parameters/CallIndex`.
+        public typealias CallIndex = Swift.String
     }
 }

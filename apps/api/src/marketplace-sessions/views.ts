@@ -8,10 +8,15 @@
  */
 import type { MarketplaceSession } from '@listora/api-contract';
 import type { AutomationProfile } from '@listora/automation';
-import { describeAutomationSession, type SessionCheckState } from '@listora/connections';
+import {
+  describeAutomationSession,
+  type ExecutionView,
+  type SessionCheckState,
+} from '@listora/connections';
 import type { ConnectionMode, ConnectionStatus, Marketplace } from '@listora/db';
 import { assertNever } from '@listora/shared';
 
+import { executionView } from '../connections/views.ts';
 import { marketplaceName } from '../listings/views.ts';
 
 export interface SessionRow {
@@ -27,6 +32,10 @@ export interface SessionRow {
     /** When the current session was linked. */
     linkedAt: Date | null;
     updatedAt: Date;
+    /** Where its automated steps run (`describeExecution`). */
+    execution?: ExecutionView | undefined;
+    /** Present when they run on the phone (`phoneSessionState`). */
+    phone?: { linked: boolean; checkWaiting: boolean } | undefined;
   } | null;
   /** The check of the newest linked session, when there is one. */
   check: SessionCheckState | null;
@@ -61,6 +70,7 @@ export function marketplaceSessionView(
     connection,
     check,
     now,
+    ...(connection.phone === undefined ? {} : { phone: connection.phone }),
   });
   return {
     ...base,
@@ -69,6 +79,9 @@ export function marketplaceSessionView(
     ...(check?.finishedAt ? { checkedAt: check.finishedAt.toISOString() } : {}),
     status: sessionStatus(session.state),
     statusDisplay: session.statusDisplay,
+    ...(connection.execution === undefined
+      ? {}
+      : { execution: executionView(connection.execution) }),
     ...(session.issue === undefined
       ? {}
       : {

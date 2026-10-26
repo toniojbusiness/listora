@@ -1,4 +1,5 @@
 import AuthenticationServices
+import Core
 import DesignSystem
 import SwiftUI
 
@@ -80,15 +81,18 @@ public struct MarketplacesView: View {
                         row: row,
                         busyAction: busyAction(for: row),
                         isEnabled: model.connecting == nil && model.requestingCheck == nil,
-                    ) { action in
-                        switch action {
-                        case .connect, .reconnect:
-                            let authenticate = webAuthenticationSession.authenticator()
-                            Task { await model.connect(row, authenticate: authenticate) }
-                        case .check:
-                            Task { await model.check(row) }
-                        }
-                    }
+                        moving: model.moving == row.id,
+                        onMove: { toPhone in Task { await model.move(row, toPhone: toPhone) } },
+                        perform: { action in
+                            switch action {
+                            case .connect, .reconnect:
+                                let authenticate = webAuthenticationSession.authenticator()
+                                Task { await model.connect(row, authenticate: authenticate) }
+                            case .check:
+                                Task { await model.check(row) }
+                            }
+                        },
+                    )
                 }
                 if let forwarding = model.saleForwarding {
                     SectionHeader("Sale emails")
@@ -103,6 +107,9 @@ public struct MarketplacesView: View {
             .motion(value: model.rows)
         }
         .refreshable { await model.load() }
+        .onReceive(NotificationCenter.default.publisher(for: .phoneWorkFinished)) { _ in
+            Task { await model.load() }
+        }
     }
 
     private func busyAction(for row: MarketplaceRow) -> MarketplaceRow.Action? {
@@ -155,6 +162,9 @@ struct MarketplaceRowView: View {
     /// The action running for this row right now.
     let busyAction: MarketplaceRow.Action?
     let isEnabled: Bool
+    var moving = false
+    /// Moves its automated steps to this phone (true) or to Listora's cloud.
+    var onMove: (Bool) -> Void = { _ in }
     let perform: (MarketplaceRow.Action) -> Void
 
     var body: some View {
@@ -198,6 +208,24 @@ struct MarketplaceRowView: View {
                 .font(Typography.footnote)
                 .foregroundStyle(Palette.textSecondary)
                 .accessibilityIdentifier("marketplaces.\(row.id).lastOk")
+            }
+            if let execution = row.execution {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                    Label(execution.text, systemImage: execution.onPhone ? "iphone" : "cloud")
+                        .font(Typography.footnote)
+                        .foregroundStyle(Palette.textSecondary)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(execution.text)
+                        .accessibilityIdentifier("marketplaces.\(row.id).runsOn")
+                    Spacer(minLength: 0)
+                    Button(execution.onPhone ? "Run in the cloud" : "Run on this iPhone") {
+                        onMove(!execution.onPhone)
+                    }
+                    .buttonStyle(.listoraTertiary)
+                    .loading(moving)
+                    .disabled(!isEnabled || moving)
+                    .accessibilityIdentifier("marketplaces.\(row.id).move")
+                }
             }
             if !row.actions.isEmpty {
                 VStack(spacing: Spacing.xs) {

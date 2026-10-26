@@ -37,7 +37,7 @@ These two rules from the product owner override every other design choice.
 | Billing    | Stripe (web) plus StoreKit 2 (in-app), with entitlements unified on the server                    | App Store rule 3.1.3(b)                                                                       |
 | Hosting    | AWS: ECS Fargate, ALB, RDS, S3/CloudFront, SES, KMS, Secrets Manager, CloudWatch; CDK (`infra`)   | Standard, robust, one security boundary                                                       |
 | Push       | APNs (token-based key); fake driver in dev                                                        | Delist alerts and assisted tasks                                                              |
-| Automation | Playwright's headless Chromium in the on-demand browser runner (Fargate; a child process locally) | Poshmark, Mercari, Depop, and eBay until their APIs ([automation.md](features/automation.md)) |
+| Automation | Playwright's headless Chromium in the browser runner (Fargate), or the iPhone app's own web views | Poshmark, Mercari, Depop, and eBay until their APIs ([automation.md](features/automation.md)) |
 | Tooling    | npm workspaces, TypeScript strict, ESLint (flat config) + Prettier, Vitest                        | No extra package manager or build system                                                      |
 
 ### TypeScript conventions
@@ -217,6 +217,8 @@ src/
                  and the public OAuth callback
   marketplace-sessions/  Linking marketplaces by signing in: stores the session the app hands
                  over and reports its check (docs/features/marketplace-linking.md)
+  phone/         The seller's devices, and the marketplace work their iPhone claims and
+                 answers (docs/features/phone-execution.md)
   sales/         The sales feed (listSales, getSale) with each sale's money, delist runs, and
                  double sales; Mark as sold (createSale), the lifecycle, and the relist question
   profit/        The profit dashboard (getProfit): the period's totals, breakdowns, dead stock
@@ -424,6 +426,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/automation.md](features/automation.md)                   | Browser automation for marketplaces without an API (decision D1)              |
 | [features/poshmark.md](features/poshmark.md)                       | The Poshmark automation adapter, its mapping tables, and the fake Poshmark    |
 | [features/marketplace-linking.md](features/marketplace-linking.md) | Linking marketplaces from the iPhone by signing in, and each session's check  |
+| [features/phone-execution.md](features/phone-execution.md)         | Running marketplaces' automated steps on the seller's iPhone                  |
 | [features/mercari.md](features/mercari.md)                         | The Mercari automation adapter, its mappings, the fake Mercari site           |
 | [features/ai.md](features/ai.md)                                   | The AI pipeline, item analysis, cost metering and controls                    |
 | [features/pricing.md](features/pricing.md)                         | Pricing data rules, floors, fee tables, tiers, the label guard                |

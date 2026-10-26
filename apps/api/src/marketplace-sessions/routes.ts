@@ -15,7 +15,10 @@ import {
   type AutomationProfile,
 } from '@listora/automation';
 import {
+  accountExecutionState,
   ConnectionModeConflictError,
+  describeExecution,
+  phoneSessionState,
   SessionCookieError,
   type SessionCookie,
   type SessionVault,
@@ -27,6 +30,7 @@ import type { FastifyInstance } from 'fastify';
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
 import { ApiError, notFound, validationFailed } from '../errors.ts';
 import { marketplaceName } from '../listings/views.ts';
+import { findDevice } from '../phone/devices.ts';
 import type { Tenant } from '../tenancy.ts';
 import { marketplaceSessionView, type SessionRow } from './views.ts';
 
@@ -85,6 +89,18 @@ export function registerMarketplaceSessionRoutes(
         `Listora can't link ${name} accounts yet.`,
       );
     }
+    // The device that links it runs its automated steps when they run on the phone.
+    let deviceId: string | null = null;
+    if (body.installationId !== undefined) {
+      const device = await findDevice(db, tenant, body.installationId);
+      if (device === undefined) {
+        throw validationFailed(
+          [{ field: 'installationId', message: 'This device is not registered.' }],
+          'Listora does not know this iPhone yet. Try again in a moment.',
+        );
+      }
+      deviceId = device.id;
+    }
     try {
       await linkAutomationSession(
         db,
@@ -94,6 +110,7 @@ export function registerMarketplaceSessionRoutes(
           marketplace,
           cookies: body.cookies.map(sessionCookie),
           ...(body.displayName === undefined ? {} : { displayName: body.displayName.trim() }),
+          deviceId,
         },
       );
     } catch (error) {
@@ -163,6 +180,7 @@ async function sessionRows(
   tenant: Tenant,
   marketplaces: readonly Marketplace[],
 ): Promise<SessionRow[]> {
+  const execution = await accountExecutionState(db, tenant.accountId);
   const rows = await db
     .selectFrom('marketplace_connection as connection')
     .leftJoin('session_check as check', (join) =>
@@ -171,8 +189,11 @@ async function sessionRows(
         .onRef('check.connection_id', '=', 'connection.id'),
     )
     .select([
+      'connection.id',
       'connection.marketplace',
       'connection.mode',
+      'connection.runs_on',
+      'connection.phone_device_id',
       'connection.status',
       'connection.display_name',
       'connection.last_error',
@@ -194,6 +215,8 @@ async function sessionRows(
     connection: {
       mode: row.mode,
       status: row.status,
+      execution: describeExecution(row, execution),
+      phone: phoneSessionState(row, execution),
       displayName: row.display_name,
       lastError: row.last_error,
       lastErrorCode: row.last_error_code,

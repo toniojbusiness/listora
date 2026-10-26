@@ -24,6 +24,8 @@ import {
   DEFAULT_RETRY_POLICY,
   describeListingStatus,
   maxAttempts,
+  phoneWaits,
+  type PhoneWaitInput,
   type StatusDisplay,
 } from '@listora/operations';
 import { assertNever } from '@listora/shared';
@@ -56,6 +58,8 @@ export interface DelistOperationFacts {
   attempts: number;
   errorMessage: string | null;
   successEvidence: SuccessEvidence | null;
+  /** Its step waits for the seller's iPhone, or the phone runs it now (phone-execution.md). */
+  phoneWait?: PhoneWaitInput | null;
 }
 
 export interface DelistResult {
@@ -166,7 +170,9 @@ export function describeDelistResult(input: {
 
 /** The run's status and summary label, from its results. */
 export function summarizeDelistRun(
-  results: readonly Pick<DelistResult, 'marketplace' | 'state'>[],
+  results: readonly (Pick<DelistResult, 'marketplace' | 'state'> & {
+    operation?: Pick<DelistOperationFacts, 'phoneWait'>;
+  })[],
 ): { status: DelistRunStatus; display: StatusDisplay } {
   if (results.length === 0) {
     return { status: 'completed', display: { tone: 'neutral', label: 'Not listed anywhere else' } };
@@ -195,6 +201,20 @@ export function summarizeDelistRun(
     return {
       status: 'attention_needed',
       display: { tone: 'action_needed', label: `Delist canceled on ${where(['canceled'])}` },
+    };
+  }
+  const onPhone = results.filter(
+    (result) =>
+      (result.state === 'pending' || result.state === 'verifying') &&
+      result.operation?.phoneWait?.running === false,
+  );
+  if (onPhone.length > 0) {
+    return {
+      status: 'in_progress',
+      display: {
+        tone: 'in_progress',
+        label: `Waiting on your iPhone to delist on ${listNames(onPhone.map((result) => result.marketplace))}`,
+      },
     };
   }
   return {
@@ -314,6 +334,11 @@ export async function loadDelistRuns(
     if (current === undefined || task.status === 'open') taskFor.set(task.operation_id, task.id);
   }
 
+  const waits = await phoneWaits(
+    executor,
+    accountId,
+    operations.map((op) => op.id),
+  );
   const max = maxAttempts(DEFAULT_RETRY_POLICY);
   const resultsFor = new Map<string, DelistResult[]>();
   for (const op of operations) {
@@ -324,6 +349,7 @@ export async function loadDelistRuns(
       attempts: op.attempts,
       errorMessage: op.error_message,
       successEvidence: op.success_evidence,
+      phoneWait: waits.get(op.id) ?? null,
     };
     const result: DelistResult = {
       listingId: op.listing_id,

@@ -65,6 +65,8 @@ tags:
     description: The Today screen (what needs the seller, and the money summary) and its morning summary.
   - name: voice
     description: Spoken corrections on the review screen that the app could not parse itself.
+  - name: phone
+    description: The seller's devices, and the marketplace work their iPhone runs (docs/features/phone-execution.md).
 paths:
   /health/live:
     get:
@@ -1567,8 +1569,8 @@ paths:
       summary: Check a marketplace connection now (Retry check)
       description: |
         Queues the same cheap read the daily health check makes, for this connection only. For
-        an automation connection it asks the browser runner to check the sign-in already linked
-        again, as after linking (`getMarketplaceSession`), without the seller signing in again;
+        an automation connection it asks for a check of the sign-in already linked again, where
+        the connection runs (the browser runner or the seller's iPhone), as after linking (`getMarketplaceSession`), without the seller signing in again;
         a check still running is left to finish. The answer is the connection with a `Checking`
         status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
         the check found. Offered as the `check` action on a connection with a problem.
@@ -1588,6 +1590,40 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/connections/{marketplace}/execution:
+    parameters:
+      - $ref: '#/components/parameters/MarketplacePath'
+    put:
+      tags:
+        - connections
+      operationId: setConnectionExecution
+      summary: Choose where a connection's automated steps run
+      description: |
+        Moves the connection's automated steps to Listora's cloud browser runner or to the
+        iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
+        moves to the cloud with it; a run the phone is in the middle of finishes there.
+        `409 invalid_state_transition` for a marketplace that is not linked by signing in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectionExecutionChange'
+      responses:
+        '200':
+          description: The connection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Connection'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
   /v1/connection-health:
@@ -1662,8 +1698,9 @@ paths:
         in a web view with its own data store, including any two-step check. The app sends
         that site's cookies (only those on `login.cookieDomains`), never the password, which
         Listora never sees. The server stores them encrypted with the token key (KMS envelope
-        encryption) on the account's automation connection for the marketplace, and asks the
-        browser runner for one read-only check that the marketplace accepts them. The reply is
+        encryption) on the account's automation connection for the marketplace, and asks for one
+        read-only check that the marketplace accepts them, where the connection runs: the
+        browser runner, or the iPhone that linked it (`installationId`). The reply is
         `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
         takes the same way and replaces the earlier session. Cookie values are never logged
         or returned.
@@ -2214,6 +2251,103 @@ paths:
           $ref: '#/components/responses/ValidationFailed'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/devices/{installationId}:
+    parameters:
+      - $ref: '#/components/parameters/InstallationId'
+    put:
+      tags:
+        - phone
+      operationId: registerDevice
+      summary: Register this device
+      description: |
+        The app registers its installation (an id it keeps in its Keychain) on every launch and
+        whenever its APNs token changes: its name, the phone runtime version it speaks, and
+        where push notifications reach it. The device that links a marketplace runs that
+        marketplace's automated steps when they run on the phone.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegistration'
+      responses:
+        '200':
+          description: The device.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/phone-runs:
+    post:
+      tags:
+        - phone
+      operationId: claimPhoneRun
+      summary: Claim the next work waiting for this phone
+      description: |
+        Claims the next due work waiting for the device (delists after a sale first) and
+        returns its first script call; no `run` when nothing waits. The claim holds for a few
+        minutes from each call and answer; a phone that stops answering lets it lapse, and the
+        work is recovered on the server. `409 app_update_required` when the app's runtime
+        speaks another version of calls than the server's.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneRunClaim'
+      responses:
+        '200':
+          description: The claimed run, or none.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhoneRunResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/phone-runs/{runId}/calls/{index}:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+      - $ref: '#/components/parameters/CallIndex'
+    put:
+      tags:
+        - phone
+      operationId: answerPhoneCall
+      summary: Answer a phone call of a run
+      description: |
+        The phone's answer for the run's call `index`, as its runtime returned it. The server
+        records it, runs the work on with it, and returns the next call; no `run` once the work
+        is done (its result recorded). Sending the same answer again changes nothing. `404`
+        when the run is over or lapsed; `409 invalid_state_transition` for an answer to a call
+        the run is not waiting for.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneCallAnswer'
+      responses:
+        '200':
+          description: The run's next call, or none.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhoneRunResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
 components:
   securitySchemes:
     bearerAuth:
@@ -2324,6 +2458,27 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/KnownMarketplace'
+    InstallationId:
+      name: installationId
+      in: path
+      required: true
+      description: The app installation's id, which it keeps in its Keychain.
+      schema:
+        $ref: '#/components/schemas/Id'
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    CallIndex:
+      name: index
+      in: path
+      required: true
+      description: The call's place in its run, from 0 (path parameters are text).
+      schema:
+        type: string
+        pattern: ^(0|[1-9][0-9]{0,3})$
   responses:
     DefaultError:
       description: Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
@@ -2448,9 +2603,9 @@ components:
       type: string
       description: |
         `api`: Listora acts through the marketplace's official API and verifies by read-back.
-        `automation`: Listora's browser runner acts in the seller's own marketplace session
-        (where the marketplace permits it and has no API) and verifies by read-back through that
-        session. `assisted`: Listora prepares the work and the user does the final step in the
+        `automation`: Listora's browser runner, or the iPhone app (`execution`), acts in the
+        seller's own marketplace session (where the marketplace permits it and has no API) and
+        verifies by read-back through that session. `assisted`: Listora prepares the work and the user does the final step in the
         marketplace app, then confirms.
       enum:
         - api
@@ -2598,7 +2753,7 @@ components:
         402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
         `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
         `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-        `marketplace_action_unavailable` 409; `payload_too_large` 413; `validation_failed`,
+        `marketplace_action_unavailable`, `app_update_required` 409; `payload_too_large` 413; `validation_failed`,
         `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
         `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
         and `marketplace_authorization_failed` appear only inside a failed
@@ -2618,6 +2773,7 @@ components:
         - marketplace_not_connected
         - marketplace_reauth_required
         - marketplace_action_unavailable
+        - app_update_required
         - payload_too_large
         - validation_failed
         - idempotency_key_reused
@@ -4703,8 +4859,8 @@ components:
     KnownCapabilityMode:
       type: string
       description: |
-        `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
-        seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+        `api`: through the marketplace's API. `automation`: by Listora's browser runner or the
+        seller's iPhone, in the seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
         `none`: not offered.
       enum:
         - api
@@ -4914,6 +5070,8 @@ components:
           description: When Listora last checked the connection, whatever it found.
         lastIssue:
           $ref: '#/components/schemas/ConnectionIssue'
+        execution:
+          $ref: '#/components/schemas/ConnectionExecution'
     ConnectionList:
       type: object
       required:
@@ -5080,7 +5238,8 @@ components:
       type: string
       description: |
         `not_linked`: no session. `checking`: a session was just linked (or checked again) and
-        the browser runner is checking it, for at most 15 minutes. `linked`: the check passed,
+        Listora is checking it where the marketplace runs (the browser runner, for at most 15
+        minutes, or the seller's iPhone, the next time Listora runs there). `linked`: the check passed,
         and Listora automates the marketplace in that session. `needs_relink`: the marketplace
         rejected the session, or showed a check automation must not pass; the user signs in
         again. `check_failed`: Listora could not confirm the session works: its check failed or
@@ -5121,7 +5280,8 @@ components:
       type: object
       description: |
         A marketplace linked by signing in (`connect: session`). It is shown as linked only
-        after the browser runner confirmed the marketplace accepts the session.
+        after the session check (on the browser runner or the seller's iPhone) confirmed the
+        marketplace accepts the session.
       required:
         - marketplace
         - status
@@ -5149,6 +5309,9 @@ components:
         issue:
           $ref: '#/components/schemas/ConnectionIssue'
           description: Why the session needs relinking, or why its check failed.
+        execution:
+          $ref: '#/components/schemas/ConnectionExecution'
+          description: Where its automated steps run; present once it is linked.
     MarketplaceSessionList:
       type: object
       required:
@@ -5226,6 +5389,212 @@ components:
           minLength: 1
           maxLength: 200
           description: The seller's name on the marketplace, when the app knows it.
+        installationId:
+          $ref: '#/components/schemas/Id'
+          description: |
+            The registered device that linked it (`registerDevice`), which then runs the
+            marketplace's automated steps when they run on the phone.
+    ExecutionLocation:
+      description: A `KnownExecutionLocation`, or a location added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownExecutionLocation'
+        - type: string
+          maxLength: 64
+    KnownExecutionLocation:
+      type: string
+      description: |
+        Where a connection's automated steps run: `cloud`, Listora's browser runner; `phone`, the
+        iPhone that linked the marketplace, in the seller's own session on their own network.
+      enum:
+        - cloud
+        - phone
+    ConnectionExecution:
+      type: object
+      description: |
+        Where the connection's automated steps run, and what waits for the phone. Present for a
+        marketplace that is automated in a linked session.
+      required:
+        - location
+        - label
+      properties:
+        location:
+          $ref: '#/components/schemas/ExecutionLocation'
+        label:
+          type: string
+          maxLength: 200
+          description: |
+            What to show: `Runs on your iPhone` or `Runs in Listora's cloud`, or why the phone
+            can't run it yet (`Link it on your iPhone to run it there`).
+        deviceInstallationId:
+          $ref: '#/components/schemas/Id'
+          description: The phone that runs it, when it runs on one (compare with your own).
+        deviceName:
+          type: string
+          maxLength: 100
+        waiting:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Changes and checks waiting for that phone to run them.
+        waitingSince:
+          $ref: '#/components/schemas/Timestamp'
+          description: Since when the oldest of them waits.
+    ConnectionExecutionChange:
+      type: object
+      additionalProperties: false
+      required:
+        - location
+      properties:
+        location:
+          $ref: '#/components/schemas/KnownExecutionLocation'
+    DevicePlatform:
+      type: string
+      enum:
+        - ios
+    PushEnvironment:
+      type: string
+      description: The APNs environment the device token belongs to.
+      enum:
+        - sandbox
+        - production
+    DeviceRegistration:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - platform
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: The device's name, as the seller sees it ("Tonio's iPhone").
+        platform:
+          $ref: '#/components/schemas/DevicePlatform'
+        appVersion:
+          type: string
+          minLength: 1
+          maxLength: 50
+        runtimeVersion:
+          type: integer
+          format: int32
+          minimum: 1
+          description: The version of phone calls the app's runtime speaks.
+        pushToken:
+          type: string
+          description: The APNs device token, hex; absent when the app has none.
+          minLength: 16
+          maxLength: 400
+          pattern: ^[0-9a-f]+$
+        pushEnvironment:
+          $ref: '#/components/schemas/PushEnvironment'
+    Device:
+      type: object
+      required:
+        - installationId
+        - name
+        - platform
+        - pushEnabled
+        - lastSeenAt
+      properties:
+        installationId:
+          $ref: '#/components/schemas/Id'
+        name:
+          type: string
+          maxLength: 100
+        platform:
+          $ref: '#/components/schemas/DevicePlatform'
+        pushEnabled:
+          type: boolean
+          description: Whether Listora can send this device push notifications.
+        lastSeenAt:
+          $ref: '#/components/schemas/Timestamp'
+    PhoneWorkPurpose:
+      description: A `KnownPhoneWorkPurpose`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownPhoneWorkPurpose'
+        - type: string
+          maxLength: 64
+    KnownPhoneWorkPurpose:
+      type: string
+      description: |
+        `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
+        or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
+        a look at the seller's sold orders.
+      enum:
+        - operation
+        - session_check
+        - sale_check
+    PhoneRunClaim:
+      type: object
+      additionalProperties: false
+      required:
+        - installationId
+        - runtimeVersion
+      properties:
+        installationId:
+          $ref: '#/components/schemas/Id'
+        runtimeVersion:
+          type: integer
+          format: int32
+          minimum: 1
+    PhoneCall:
+      type: object
+      description: |
+        One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,
+        and its result comes back as `answerPhoneCall`'s `answer`. Its shape is the runtime's
+        (`PhoneCallInput` in packages/automation/src/phone/runtime.ts), versioned by
+        `runtimeVersion`.
+      required:
+        - index
+        - input
+      properties:
+        index:
+          type: integer
+          format: int32
+          minimum: 0
+        input:
+          type: object
+          additionalProperties: true
+    PhoneRun:
+      type: object
+      description: |
+        The phone's run of one piece of work. While it has a `call`, the phone runs it and
+        answers; without one, the run is over and the phone claims the next.
+      required:
+        - id
+        - purpose
+        - marketplace
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        purpose:
+          $ref: '#/components/schemas/PhoneWorkPurpose'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        operationId:
+          $ref: '#/components/schemas/Id'
+        call:
+          $ref: '#/components/schemas/PhoneCall'
+    PhoneRunResult:
+      type: object
+      description: The run to continue, absent when there is nothing (more) to run.
+      properties:
+        run:
+          $ref: '#/components/schemas/PhoneRun'
+    PhoneCallAnswer:
+      type: object
+      additionalProperties: false
+      required:
+        - installationId
+        - answer
+      properties:
+        installationId:
+          $ref: '#/components/schemas/Id'
+        answer:
+          type: object
+          additionalProperties: true
+          description: What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged.
     SaleStatus:
       description: |
         A `KnownSaleStatus`, or a status added after this client was built. Clients show an

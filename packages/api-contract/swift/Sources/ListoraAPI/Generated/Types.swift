@@ -528,8 +528,8 @@ public protocol APIProtocol: Sendable {
     /// Check a marketplace connection now (Retry check)
     ///
     /// Queues the same cheap read the daily health check makes, for this connection only. For
-    /// an automation connection it asks the browser runner to check the sign-in already linked
-    /// again, as after linking (`getMarketplaceSession`), without the seller signing in again;
+    /// an automation connection it asks for a check of the sign-in already linked again, where
+    /// the connection runs (the browser runner or the seller's iPhone), as after linking (`getMarketplaceSession`), without the seller signing in again;
     /// a check still running is left to finish. The answer is the connection with a `Checking`
     /// status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
     /// the check found. Offered as the `check` action on a connection with a problem.
@@ -541,6 +541,17 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/connections/{marketplace}/checks`.
     /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/checks/post(requestConnectionCheck)`.
     func requestConnectionCheck(_ input: Operations.RequestConnectionCheck.Input) async throws -> Operations.RequestConnectionCheck.Output
+    /// Choose where a connection's automated steps run
+    ///
+    /// Moves the connection's automated steps to Listora's cloud browser runner or to the
+    /// iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
+    /// moves to the cloud with it; a run the phone is in the middle of finishes there.
+    /// `409 invalid_state_transition` for a marketplace that is not linked by signing in.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/connections/{marketplace}/execution`.
+    /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/execution/put(setConnectionExecution)`.
+    func setConnectionExecution(_ input: Operations.SetConnectionExecution.Input) async throws -> Operations.SetConnectionExecution.Output
     /// The account's connection health summary
     ///
     /// Every marketplace's connection (as `listConnections`), what needs the seller's
@@ -578,8 +589,9 @@ public protocol APIProtocol: Sendable {
     /// in a web view with its own data store, including any two-step check. The app sends
     /// that site's cookies (only those on `login.cookieDomains`), never the password, which
     /// Listora never sees. The server stores them encrypted with the token key (KMS envelope
-    /// encryption) on the account's automation connection for the marketplace, and asks the
-    /// browser runner for one read-only check that the marketplace accepts them. The reply is
+    /// encryption) on the account's automation connection for the marketplace, and asks for one
+    /// read-only check that the marketplace accepts them, where the connection runs: the
+    /// browser runner, or the iPhone that linked it (`installationId`). The reply is
     /// `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
     /// takes the same way and replaces the earlier session. Cookie values are never logged
     /// or returned.
@@ -761,6 +773,41 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PUT /v1/today/settings`.
     /// - Remark: Generated from `#/paths//v1/today/settings/put(replaceTodaySettings)`.
     func replaceTodaySettings(_ input: Operations.ReplaceTodaySettings.Input) async throws -> Operations.ReplaceTodaySettings.Output
+    /// Register this device
+    ///
+    /// The app registers its installation (an id it keeps in its Keychain) on every launch and
+    /// whenever its APNs token changes: its name, the phone runtime version it speaks, and
+    /// where push notifications reach it. The device that links a marketplace runs that
+    /// marketplace's automated steps when they run on the phone.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/devices/{installationId}`.
+    /// - Remark: Generated from `#/paths//v1/devices/{installationId}/put(registerDevice)`.
+    func registerDevice(_ input: Operations.RegisterDevice.Input) async throws -> Operations.RegisterDevice.Output
+    /// Claim the next work waiting for this phone
+    ///
+    /// Claims the next due work waiting for the device (delists after a sale first) and
+    /// returns its first script call; no `run` when nothing waits. The claim holds for a few
+    /// minutes from each call and answer; a phone that stops answering lets it lapse, and the
+    /// work is recovered on the server. `409 app_update_required` when the app's runtime
+    /// speaks another version of calls than the server's.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/phone-runs`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/post(claimPhoneRun)`.
+    func claimPhoneRun(_ input: Operations.ClaimPhoneRun.Input) async throws -> Operations.ClaimPhoneRun.Output
+    /// Answer a phone call of a run
+    ///
+    /// The phone's answer for the run's call `index`, as its runtime returned it. The server
+    /// records it, runs the work on with it, and returns the next call; no `run` once the work
+    /// is done (its result recorded). Sending the same answer again changes nothing. `404`
+    /// when the run is over or lapsed; `409 invalid_state_transition` for an answer to a call
+    /// the run is not waiting for.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/phone-runs/{runId}/calls/{index}`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/{runId}/calls/{index}/put(answerPhoneCall)`.
+    func answerPhoneCall(_ input: Operations.AnswerPhoneCall.Input) async throws -> Operations.AnswerPhoneCall.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -1694,8 +1741,8 @@ extension APIProtocol {
     /// Check a marketplace connection now (Retry check)
     ///
     /// Queues the same cheap read the daily health check makes, for this connection only. For
-    /// an automation connection it asks the browser runner to check the sign-in already linked
-    /// again, as after linking (`getMarketplaceSession`), without the seller signing in again;
+    /// an automation connection it asks for a check of the sign-in already linked again, where
+    /// the connection runs (the browser runner or the seller's iPhone), as after linking (`getMarketplaceSession`), without the seller signing in again;
     /// a check still running is left to finish. The answer is the connection with a `Checking`
     /// status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
     /// the check found. Offered as the `check` action on a connection with a problem.
@@ -1713,6 +1760,27 @@ extension APIProtocol {
         try await requestConnectionCheck(Operations.RequestConnectionCheck.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Choose where a connection's automated steps run
+    ///
+    /// Moves the connection's automated steps to Listora's cloud browser runner or to the
+    /// iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
+    /// moves to the cloud with it; a run the phone is in the middle of finishes there.
+    /// `409 invalid_state_transition` for a marketplace that is not linked by signing in.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/connections/{marketplace}/execution`.
+    /// - Remark: Generated from `#/paths//v1/connections/{marketplace}/execution/put(setConnectionExecution)`.
+    public func setConnectionExecution(
+        path: Operations.SetConnectionExecution.Input.Path,
+        headers: Operations.SetConnectionExecution.Input.Headers = .init(),
+        body: Operations.SetConnectionExecution.Input.Body
+    ) async throws -> Operations.SetConnectionExecution.Output {
+        try await setConnectionExecution(Operations.SetConnectionExecution.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// The account's connection health summary
@@ -1764,8 +1832,9 @@ extension APIProtocol {
     /// in a web view with its own data store, including any two-step check. The app sends
     /// that site's cookies (only those on `login.cookieDomains`), never the password, which
     /// Listora never sees. The server stores them encrypted with the token key (KMS envelope
-    /// encryption) on the account's automation connection for the marketplace, and asks the
-    /// browser runner for one read-only check that the marketplace accepts them. The reply is
+    /// encryption) on the account's automation connection for the marketplace, and asks for one
+    /// read-only check that the marketplace accepts them, where the connection runs: the
+    /// browser runner, or the iPhone that linked it (`installationId`). The reply is
     /// `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
     /// takes the same way and replaces the earlier session. Cookie values are never logged
     /// or returned.
@@ -2085,6 +2154,69 @@ extension APIProtocol {
         body: Operations.ReplaceTodaySettings.Input.Body
     ) async throws -> Operations.ReplaceTodaySettings.Output {
         try await replaceTodaySettings(Operations.ReplaceTodaySettings.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Register this device
+    ///
+    /// The app registers its installation (an id it keeps in its Keychain) on every launch and
+    /// whenever its APNs token changes: its name, the phone runtime version it speaks, and
+    /// where push notifications reach it. The device that links a marketplace runs that
+    /// marketplace's automated steps when they run on the phone.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/devices/{installationId}`.
+    /// - Remark: Generated from `#/paths//v1/devices/{installationId}/put(registerDevice)`.
+    public func registerDevice(
+        path: Operations.RegisterDevice.Input.Path,
+        headers: Operations.RegisterDevice.Input.Headers = .init(),
+        body: Operations.RegisterDevice.Input.Body
+    ) async throws -> Operations.RegisterDevice.Output {
+        try await registerDevice(Operations.RegisterDevice.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Claim the next work waiting for this phone
+    ///
+    /// Claims the next due work waiting for the device (delists after a sale first) and
+    /// returns its first script call; no `run` when nothing waits. The claim holds for a few
+    /// minutes from each call and answer; a phone that stops answering lets it lapse, and the
+    /// work is recovered on the server. `409 app_update_required` when the app's runtime
+    /// speaks another version of calls than the server's.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/phone-runs`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/post(claimPhoneRun)`.
+    public func claimPhoneRun(
+        headers: Operations.ClaimPhoneRun.Input.Headers,
+        body: Operations.ClaimPhoneRun.Input.Body
+    ) async throws -> Operations.ClaimPhoneRun.Output {
+        try await claimPhoneRun(Operations.ClaimPhoneRun.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Answer a phone call of a run
+    ///
+    /// The phone's answer for the run's call `index`, as its runtime returned it. The server
+    /// records it, runs the work on with it, and returns the next call; no `run` once the work
+    /// is done (its result recorded). Sending the same answer again changes nothing. `404`
+    /// when the run is over or lapsed; `409 invalid_state_transition` for an answer to a call
+    /// the run is not waiting for.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/phone-runs/{runId}/calls/{index}`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/{runId}/calls/{index}/put(answerPhoneCall)`.
+    public func answerPhoneCall(
+        path: Operations.AnswerPhoneCall.Input.Path,
+        headers: Operations.AnswerPhoneCall.Input.Headers = .init(),
+        body: Operations.AnswerPhoneCall.Input.Body
+    ) async throws -> Operations.AnswerPhoneCall.Output {
+        try await answerPhoneCall(Operations.AnswerPhoneCall.Input(
+            path: path,
             headers: headers,
             body: body
         ))

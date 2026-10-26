@@ -248,6 +248,23 @@ export type DeletionRecordKind = (typeof DELETION_RECORD_KINDS)[number];
 export const AUTOMATION_RUN_PURPOSES = ['operation', 'sale_check', 'health'] as const;
 export type AutomationRunPurpose = (typeof AUTOMATION_RUN_PURPOSES)[number];
 
+/** Where an automation connection's automated steps run (docs/features/phone-execution.md). */
+export const EXECUTION_LOCATIONS = ['cloud', 'phone'] as const;
+export type ExecutionLocation = (typeof EXECUTION_LOCATIONS)[number];
+
+/** Which host ran an automation run. */
+export const AUTOMATION_RUN_HOSTS = ['runner', 'phone'] as const;
+export type AutomationRunHost = (typeof AUTOMATION_RUN_HOSTS)[number];
+
+export const PHONE_WORK_PURPOSES = ['operation', 'session_check', 'sale_check'] as const;
+export type PhoneWorkPurpose = (typeof PHONE_WORK_PURPOSES)[number];
+
+export const DEVICE_PLATFORMS = ['ios'] as const;
+export type DevicePlatform = (typeof DEVICE_PLATFORMS)[number];
+
+export const PUSH_ENVIRONMENTS = ['sandbox', 'production'] as const;
+export type PushEnvironment = (typeof PUSH_ENVIRONMENTS)[number];
+
 export const AUTOMATION_RUN_OUTCOMES = [
   'succeeded',
   'failed',

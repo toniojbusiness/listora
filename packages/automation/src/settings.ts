@@ -4,6 +4,8 @@
  * never faster than `PACING_FLOOR` or above `LIMITS_CEILING`: a setting beyond them is refused,
  * so no configuration makes automation hurried. Errors name the bad key, never its value.
  */
+import type { ExecutionLocation } from '@listora/db';
+
 import {
   AUTOMATED_MARKETPLACES,
   automationProfile,
@@ -132,10 +134,12 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
         1,
         LIMITS_CEILING.runsPerDay,
       );
+      const runsOn = location(issues, env, `${prefix}_RUNS_ON`, base.runsOn);
       const profile: AutomationProfile = {
         ...base,
         pacing: { ...base.pacing, actionDelayMs, sessionGapMs },
         limits: { runsPerHour, runsPerDay },
+        runsOn,
       };
       // In development, a marketplace's stand-in replaces its real site, never the reverse.
       const ownFake = {
@@ -246,4 +250,18 @@ function delayRange(
     return fallback;
   }
   return [min, max];
+}
+
+/** `cloud` or `phone` (unset: the marketplace's own default). */
+function location(
+  issues: string[],
+  env: NodeJS.ProcessEnv,
+  key: string,
+  fallback: ExecutionLocation,
+): ExecutionLocation {
+  const raw = env[key]?.trim() ?? '';
+  if (raw === '') return fallback;
+  if (raw === 'cloud' || raw === 'phone') return raw;
+  issues.push(`${key} must be cloud or phone`);
+  return fallback;
 }

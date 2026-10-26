@@ -8,8 +8,9 @@
  * came from the seller's marketplace account through that connection:
  *
  * - the connection itself: its encrypted OAuth tokens or browser session, the marketplace's user
- *   id and name, its health and errors; with it go its automation runs, session checks, and
- *   sale-check schedule (foreign-key cascades), and connect attempts lose their link;
+ *   id and name, its health and errors; with it go its automation runs, session checks,
+ *   sale-check schedule, and the work waiting for the seller's iPhone (foreign-key cascades),
+ *   and connect attempts lose their link;
  * - the listings' read-backs from the marketplace (`remote_snapshot`) and their link to the
  *   connection, so nothing can act on them through it again;
  * - the marketplace events about that seller in the account (webhook and poll payloads).
@@ -427,6 +428,7 @@ async function remainingRows(db: Db, connectionId: string): Promise<string[]> {
       where connection_id = ${connectionId}
     union all select 'automation_run' from automation_run where connection_id = ${connectionId}
     union all select 'session_check' from session_check where connection_id = ${connectionId}
+    union all select 'phone_work' from phone_work where connection_id = ${connectionId}
     union all select 'sale_check_schedule' from sale_check_schedule
       where connection_id = ${connectionId}
     union all select 'connection_authorization' from connection_authorization

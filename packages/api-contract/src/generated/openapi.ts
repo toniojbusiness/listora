@@ -1135,8 +1135,8 @@ export interface paths {
         /**
          * Check a marketplace connection now (Retry check)
          * @description Queues the same cheap read the daily health check makes, for this connection only. For
-         *     an automation connection it asks the browser runner to check the sign-in already linked
-         *     again, as after linking (`getMarketplaceSession`), without the seller signing in again;
+         *     an automation connection it asks for a check of the sign-in already linked again, where
+         *     the connection runs (the browser runner or the seller's iPhone), as after linking (`getMarketplaceSession`), without the seller signing in again;
          *     a check still running is left to finish. The answer is the connection with a `Checking`
          *     status; read it again (or `getConnectionHealth`, or `getMarketplaceSession`) to see what
          *     the check found. Offered as the `check` action on a connection with a problem.
@@ -1145,6 +1145,31 @@ export interface paths {
          *     marketplace_action_unavailable` when this server cannot check the marketplace.
          */
         post: operations["requestConnectionCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connections/{marketplace}/execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose where a connection's automated steps run
+         * @description Moves the connection's automated steps to Listora's cloud browser runner or to the
+         *     iPhone that linked it (docs/features/phone-execution.md). Work waiting for the phone
+         *     moves to the cloud with it; a run the phone is in the middle of finishes there.
+         *     `409 invalid_state_transition` for a marketplace that is not linked by signing in.
+         */
+        put: operations["setConnectionExecution"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1219,8 +1244,9 @@ export interface paths {
          *     in a web view with its own data store, including any two-step check. The app sends
          *     that site's cookies (only those on `login.cookieDomains`), never the password, which
          *     Listora never sees. The server stores them encrypted with the token key (KMS envelope
-         *     encryption) on the account's automation connection for the marketplace, and asks the
-         *     browser runner for one read-only check that the marketplace accepts them. The reply is
+         *     encryption) on the account's automation connection for the marketplace, and asks for one
+         *     read-only check that the marketplace accepts them, where the connection runs: the
+         *     browser runner, or the iPhone that linked it (`installationId`). The reply is
          *     `checking`; poll `getMarketplaceSession` for `linked` or `check_failed`. Relinking
          *     takes the same way and replaces the earlier session. Cookie values are never logged
          *     or returned.
@@ -1611,6 +1637,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/devices/{installationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The app installation's id, which it keeps in its Keychain. */
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Register this device
+         * @description The app registers its installation (an id it keeps in its Keychain) on every launch and
+         *     whenever its APNs token changes: its name, the phone runtime version it speaks, and
+         *     where push notifications reach it. The device that links a marketplace runs that
+         *     marketplace's automated steps when they run on the phone.
+         */
+        put: operations["registerDevice"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/phone-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim the next work waiting for this phone
+         * @description Claims the next due work waiting for the device (delists after a sale first) and
+         *     returns its first script call; no `run` when nothing waits. The claim holds for a few
+         *     minutes from each call and answer; a phone that stops answering lets it lapse, and the
+         *     work is recovered on the server. `409 app_update_required` when the app's runtime
+         *     speaks another version of calls than the server's.
+         */
+        post: operations["claimPhoneRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/phone-runs/{runId}/calls/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+                /** @description The call's place in its run, from 0 (path parameters are text). */
+                index: components["parameters"]["CallIndex"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Answer a phone call of a run
+         * @description The phone's answer for the run's call `index`, as its runtime returned it. The server
+         *     records it, runs the work on with it, and returns the next call; no `run` once the work
+         *     is done (its result recorded). Sending the same answer again changes nothing. `404`
+         *     when the run is over or lapsed; `409 invalid_state_transition` for an answer to a call
+         *     the run is not waiting for.
+         */
+        put: operations["answerPhoneCall"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1655,9 +1759,9 @@ export interface components {
         IntegrationMode: components["schemas"]["KnownIntegrationMode"];
         /**
          * @description `api`: Listora acts through the marketplace's official API and verifies by read-back.
-         *     `automation`: Listora's browser runner acts in the seller's own marketplace session
-         *     (where the marketplace permits it and has no API) and verifies by read-back through that
-         *     session. `assisted`: Listora prepares the work and the user does the final step in the
+         *     `automation`: Listora's browser runner, or the iPhone app (`execution`), acts in the
+         *     seller's own marketplace session (where the marketplace permits it and has no API) and
+         *     verifies by read-back through that session. `assisted`: Listora prepares the work and the user does the final step in the
          *     marketplace app, then confirms.
          * @enum {string}
          */
@@ -1740,14 +1844,14 @@ export interface components {
          *     402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
          *     `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
          *     `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-         *     `marketplace_action_unavailable` 409; `payload_too_large` 413; `validation_failed`,
+         *     `marketplace_action_unavailable`, `app_update_required` 409; `payload_too_large` 413; `validation_failed`,
          *     `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
          *     `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
          *     and `marketplace_authorization_failed` appear only inside a failed
          *     `ConnectionAuthorization`.
          * @enum {string}
          */
-        KnownErrorCode: "invalid_request" | "unauthenticated" | "quota_exceeded" | "forbidden" | "not_found" | "version_conflict" | "invalid_state_transition" | "already_exists" | "idempotency_key_in_progress" | "upload_incomplete" | "upload_expired" | "marketplace_not_connected" | "marketplace_reauth_required" | "marketplace_action_unavailable" | "payload_too_large" | "validation_failed" | "idempotency_key_reused" | "rate_limited" | "ai_budget_exceeded" | "internal_error" | "service_unavailable" | "marketplace_authorization_denied" | "marketplace_authorization_failed";
+        KnownErrorCode: "invalid_request" | "unauthenticated" | "quota_exceeded" | "forbidden" | "not_found" | "version_conflict" | "invalid_state_transition" | "already_exists" | "idempotency_key_in_progress" | "upload_incomplete" | "upload_expired" | "marketplace_not_connected" | "marketplace_reauth_required" | "marketplace_action_unavailable" | "app_update_required" | "payload_too_large" | "validation_failed" | "idempotency_key_reused" | "rate_limited" | "ai_budget_exceeded" | "internal_error" | "service_unavailable" | "marketplace_authorization_denied" | "marketplace_authorization_failed";
         AccountDeletion: {
             deletedAt: components["schemas"]["Timestamp"];
             /** @description One entry per API marketplace connection the account had; assisted connections hold no access. */
@@ -2744,8 +2848,8 @@ export interface components {
          */
         CapabilityMode: components["schemas"]["KnownCapabilityMode"];
         /**
-         * @description `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
-         *     seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+         * @description `api`: through the marketplace's API. `automation`: by Listora's browser runner or the
+         *     seller's iPhone, in the seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
          *     `none`: not offered.
          * @enum {string}
          */
@@ -2849,6 +2953,7 @@ export interface components {
             /** @description When Listora last checked the connection, whatever it found. */
             lastCheckedAt?: components["schemas"]["Timestamp"];
             lastIssue?: components["schemas"]["ConnectionIssue"];
+            execution?: components["schemas"]["ConnectionExecution"];
         };
         ConnectionList: {
             data: components["schemas"]["Connection"][];
@@ -2936,7 +3041,8 @@ export interface components {
         MarketplaceSessionStatus: components["schemas"]["KnownMarketplaceSessionStatus"];
         /**
          * @description `not_linked`: no session. `checking`: a session was just linked (or checked again) and
-         *     the browser runner is checking it, for at most 15 minutes. `linked`: the check passed,
+         *     Listora is checking it where the marketplace runs (the browser runner, for at most 15
+         *     minutes, or the seller's iPhone, the next time Listora runs there). `linked`: the check passed,
          *     and Listora automates the marketplace in that session. `needs_relink`: the marketplace
          *     rejected the session, or showed a check automation must not pass; the user signs in
          *     again. `check_failed`: Listora could not confirm the session works: its check failed or
@@ -2962,7 +3068,8 @@ export interface components {
         };
         /**
          * @description A marketplace linked by signing in (`connect: session`). It is shown as linked only
-         *     after the browser runner confirmed the marketplace accepts the session.
+         *     after the session check (on the browser runner or the seller's iPhone) confirmed the
+         *     marketplace accepts the session.
          */
         MarketplaceSession: {
             marketplace: components["schemas"]["Marketplace"];
@@ -2977,6 +3084,8 @@ export interface components {
             checkedAt?: components["schemas"]["Timestamp"];
             /** @description Why the session needs relinking, or why its check failed. */
             issue?: components["schemas"]["ConnectionIssue"];
+            /** @description Where its automated steps run; present once it is linked. */
+            execution?: components["schemas"]["ConnectionExecution"];
         };
         MarketplaceSessionList: {
             data: components["schemas"]["MarketplaceSession"][];
@@ -3009,6 +3118,122 @@ export interface components {
             cookies: components["schemas"]["SessionCookie"][];
             /** @description The seller's name on the marketplace, when the app knows it. */
             displayName?: string;
+            /**
+             * @description The registered device that linked it (`registerDevice`), which then runs the
+             *     marketplace's automated steps when they run on the phone.
+             */
+            installationId?: components["schemas"]["Id"];
+        };
+        /** @description A `KnownExecutionLocation`, or a location added after this client was built. */
+        ExecutionLocation: components["schemas"]["KnownExecutionLocation"];
+        /**
+         * @description Where a connection's automated steps run: `cloud`, Listora's browser runner; `phone`, the
+         *     iPhone that linked the marketplace, in the seller's own session on their own network.
+         * @enum {string}
+         */
+        KnownExecutionLocation: "cloud" | "phone";
+        /**
+         * @description Where the connection's automated steps run, and what waits for the phone. Present for a
+         *     marketplace that is automated in a linked session.
+         */
+        ConnectionExecution: {
+            location: components["schemas"]["ExecutionLocation"];
+            /**
+             * @description What to show: `Runs on your iPhone` or `Runs in Listora's cloud`, or why the phone
+             *     can't run it yet (`Link it on your iPhone to run it there`).
+             */
+            label: string;
+            /** @description The phone that runs it, when it runs on one (compare with your own). */
+            deviceInstallationId?: components["schemas"]["Id"];
+            deviceName?: string;
+            /**
+             * Format: int32
+             * @description Changes and checks waiting for that phone to run them.
+             */
+            waiting?: number;
+            /** @description Since when the oldest of them waits. */
+            waitingSince?: components["schemas"]["Timestamp"];
+        };
+        ConnectionExecutionChange: {
+            location: components["schemas"]["KnownExecutionLocation"];
+        };
+        /** @enum {string} */
+        DevicePlatform: "ios";
+        /**
+         * @description The APNs environment the device token belongs to.
+         * @enum {string}
+         */
+        PushEnvironment: "sandbox" | "production";
+        DeviceRegistration: {
+            /** @description The device's name, as the seller sees it ("Tonio's iPhone"). */
+            name: string;
+            platform: components["schemas"]["DevicePlatform"];
+            appVersion?: string;
+            /**
+             * Format: int32
+             * @description The version of phone calls the app's runtime speaks.
+             */
+            runtimeVersion?: number;
+            /** @description The APNs device token, hex; absent when the app has none. */
+            pushToken?: string;
+            pushEnvironment?: components["schemas"]["PushEnvironment"];
+        };
+        Device: {
+            installationId: components["schemas"]["Id"];
+            name: string;
+            platform: components["schemas"]["DevicePlatform"];
+            /** @description Whether Listora can send this device push notifications. */
+            pushEnabled: boolean;
+            lastSeenAt: components["schemas"]["Timestamp"];
+        };
+        /** @description A `KnownPhoneWorkPurpose`, or one added after this client was built. */
+        PhoneWorkPurpose: components["schemas"]["KnownPhoneWorkPurpose"];
+        /**
+         * @description `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
+         *     or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
+         *     a look at the seller's sold orders.
+         * @enum {string}
+         */
+        KnownPhoneWorkPurpose: "operation" | "session_check" | "sale_check";
+        PhoneRunClaim: {
+            installationId: components["schemas"]["Id"];
+            /** Format: int32 */
+            runtimeVersion: number;
+        };
+        /**
+         * @description One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,
+         *     and its result comes back as `answerPhoneCall`'s `answer`. Its shape is the runtime's
+         *     (`PhoneCallInput` in packages/automation/src/phone/runtime.ts), versioned by
+         *     `runtimeVersion`.
+         */
+        PhoneCall: {
+            /** Format: int32 */
+            index: number;
+            input: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * @description The phone's run of one piece of work. While it has a `call`, the phone runs it and
+         *     answers; without one, the run is over and the phone claims the next.
+         */
+        PhoneRun: {
+            id: components["schemas"]["Id"];
+            purpose: components["schemas"]["PhoneWorkPurpose"];
+            marketplace: components["schemas"]["Marketplace"];
+            operationId?: components["schemas"]["Id"];
+            call?: components["schemas"]["PhoneCall"];
+        };
+        /** @description The run to continue, absent when there is nothing (more) to run. */
+        PhoneRunResult: {
+            run?: components["schemas"]["PhoneRun"];
+        };
+        PhoneCallAnswer: {
+            installationId: components["schemas"]["Id"];
+            /** @description What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged. */
+            answer: {
+                [key: string]: unknown;
+            };
         };
         /**
          * @description A `KnownSaleStatus`, or a status added after this client was built. Clients show an
@@ -3997,6 +4222,11 @@ export interface components {
         SaleId: components["schemas"]["Id"];
         TaskId: components["schemas"]["Id"];
         MarketplacePath: components["schemas"]["KnownMarketplace"];
+        /** @description The app installation's id, which it keeps in its Keychain. */
+        InstallationId: components["schemas"]["Id"];
+        RunId: components["schemas"]["Id"];
+        /** @description The call's place in its run, from 0 (path parameters are text). */
+        CallIndex: string;
     };
     requestBodies: never;
     headers: never;
@@ -4180,6 +4410,21 @@ export type MarketplaceSession = components['schemas']['MarketplaceSession'];
 export type MarketplaceSessionList = components['schemas']['MarketplaceSessionList'];
 export type SessionCookie = components['schemas']['SessionCookie'];
 export type MarketplaceSessionLink = components['schemas']['MarketplaceSessionLink'];
+export type ExecutionLocation = components['schemas']['ExecutionLocation'];
+export type KnownExecutionLocation = components['schemas']['KnownExecutionLocation'];
+export type ConnectionExecution = components['schemas']['ConnectionExecution'];
+export type ConnectionExecutionChange = components['schemas']['ConnectionExecutionChange'];
+export type DevicePlatform = components['schemas']['DevicePlatform'];
+export type PushEnvironment = components['schemas']['PushEnvironment'];
+export type DeviceRegistration = components['schemas']['DeviceRegistration'];
+export type Device = components['schemas']['Device'];
+export type PhoneWorkPurpose = components['schemas']['PhoneWorkPurpose'];
+export type KnownPhoneWorkPurpose = components['schemas']['KnownPhoneWorkPurpose'];
+export type PhoneRunClaim = components['schemas']['PhoneRunClaim'];
+export type PhoneCall = components['schemas']['PhoneCall'];
+export type PhoneRun = components['schemas']['PhoneRun'];
+export type PhoneRunResult = components['schemas']['PhoneRunResult'];
+export type PhoneCallAnswer = components['schemas']['PhoneCallAnswer'];
 export type SaleStatus = components['schemas']['SaleStatus'];
 export type KnownSaleStatus = components['schemas']['KnownSaleStatus'];
 export type SaleDetectionSource = components['schemas']['SaleDetectionSource'];
@@ -4285,6 +4530,9 @@ export type ParameterAuthorizationId = components['parameters']['AuthorizationId
 export type ParameterSaleId = components['parameters']['SaleId'];
 export type ParameterTaskId = components['parameters']['TaskId'];
 export type ParameterMarketplacePath = components['parameters']['MarketplacePath'];
+export type ParameterInstallationId = components['parameters']['InstallationId'];
+export type ParameterRunId = components['parameters']['RunId'];
+export type ParameterCallIndex = components['parameters']['CallIndex'];
 export type $defs = Record<string, never>;
 export interface operations {
     getLiveness: {
@@ -5914,6 +6162,36 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    setConnectionExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                marketplace: components["parameters"]["MarketplacePath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionExecutionChange"];
+            };
+        };
+        responses: {
+            /** @description The connection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     getConnectionHealth: {
         parameters: {
             query?: never;
@@ -6583,6 +6861,104 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    registerDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The app installation's id, which it keeps in its Keychain. */
+                installationId: components["parameters"]["InstallationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceRegistration"];
+            };
+        };
+        responses: {
+            /** @description The device. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Device"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    claimPhoneRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneRunClaim"];
+            };
+        };
+        responses: {
+            /** @description The claimed run, or none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneRunResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    answerPhoneCall: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["RunId"];
+                /** @description The call's place in its run, from 0 (path parameters are text). */
+                index: components["parameters"]["CallIndex"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhoneCallAnswer"];
+            };
+        };
+        responses: {
+            /** @description The run's next call, or none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneRunResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -6598,7 +6974,7 @@ export const knownIntegrationModeValues: ReadonlyArray<FlattenedDeepRequired<com
 export const knownStatusToneValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownStatusTone"]> = ["success", "in_progress", "checking", "failed", "action_needed", "neutral"];
 export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["marketplace_api", "user_confirmation"];
 export const knownProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownProvenance"]> = ["ai", "ocr", "barcode", "user"];
-export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownErrorCode"]> = ["invalid_request", "unauthenticated", "quota_exceeded", "forbidden", "not_found", "version_conflict", "invalid_state_transition", "already_exists", "idempotency_key_in_progress", "upload_incomplete", "upload_expired", "marketplace_not_connected", "marketplace_reauth_required", "marketplace_action_unavailable", "payload_too_large", "validation_failed", "idempotency_key_reused", "rate_limited", "ai_budget_exceeded", "internal_error", "service_unavailable", "marketplace_authorization_denied", "marketplace_authorization_failed"];
+export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownErrorCode"]> = ["invalid_request", "unauthenticated", "quota_exceeded", "forbidden", "not_found", "version_conflict", "invalid_state_transition", "already_exists", "idempotency_key_in_progress", "upload_incomplete", "upload_expired", "marketplace_not_connected", "marketplace_reauth_required", "marketplace_action_unavailable", "app_update_required", "payload_too_large", "validation_failed", "idempotency_key_reused", "rate_limited", "ai_budget_exceeded", "internal_error", "service_unavailable", "marketplace_authorization_denied", "marketplace_authorization_failed"];
 export const healthCheckStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["HealthCheckStatus"]> = ["ok", "unavailable"];
 export const knownItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownItemStatus"]> = ["draft", "ready", "listed", "sold_pending_delist", "sold", "shipped", "archived"];
 export const userSettableItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserSettableItemStatus"]> = ["draft", "ready", "archived"];
@@ -6638,6 +7014,10 @@ export const knownConnectionAttentionReasonValues: ReadonlyArray<FlattenedDeepRe
 export const knownSaleForwardingStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleForwardingStatus"]> = ["needs_domain", "not_set_up", "confirming", "working"];
 export const knownMarketplaceSessionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownMarketplaceSessionStatus"]> = ["not_linked", "checking", "linked", "needs_relink", "check_failed", "api_connected"];
 export const sessionCookieSameSiteValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["SessionCookie"]["sameSite"]> = ["strict", "lax", "none"];
+export const knownExecutionLocationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownExecutionLocation"]> = ["cloud", "phone"];
+export const devicePlatformValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DevicePlatform"]> = ["ios"];
+export const pushEnvironmentValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PushEnvironment"]> = ["sandbox", "production"];
+export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];

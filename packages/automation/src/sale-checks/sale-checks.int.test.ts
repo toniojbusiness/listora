@@ -85,7 +85,13 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
     linkAutomationSession(
       database.db,
       { vault, profile },
-      { accountId, marketplace: 'mercari', cookies: [site.issueSession(accountId)] },
+      // These are the cloud runner's checks; phone-work.int.test.ts runs them on the phone.
+      {
+        accountId,
+        marketplace: 'mercari',
+        cookies: [site.issueSession(accountId)],
+        runsOn: 'cloud',
+      },
     );
 
   const schedule = (connectionId: string) =>
@@ -340,7 +346,12 @@ describe('sale checks (real Postgres, headless Chromium)', () => {
     const poshmark = await linkAutomationSession(
       database.db,
       { vault, profile: { ...profile, marketplace: 'poshmark' } },
-      { accountId, marketplace: 'poshmark', cookies: [site.issueSession(accountId)] },
+      {
+        accountId,
+        marketplace: 'poshmark',
+        cookies: [site.issueSession(accountId)],
+        runsOn: 'cloud',
+      },
     );
     await sql`delete from graphile_worker._private_jobs where key = ${saleCheckJobKey(poshmark.connectionId)}`.execute(
       database.db,

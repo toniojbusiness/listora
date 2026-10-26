@@ -20,14 +20,53 @@ const context = {
   soldOn: 'ebay',
 } as const;
 
-const result = (marketplace: DelistResult['marketplace'], state: DelistResult['state']) =>
-  ({ marketplace, state }) as DelistResult;
+const result = (
+  marketplace: DelistResult['marketplace'],
+  state: DelistResult['state'],
+  extra: Partial<DelistResult> = {},
+) =>
+  ({
+    marketplace,
+    state,
+    mode: 'assisted',
+    operation: { phoneWait: null },
+    ...extra,
+  }) as unknown as DelistResult;
 
 describe('auto-delist notifications', () => {
   it('names the item by its title, or its SKU', () => {
     expect(itemLabel({ title: '  Jacket ', sku: 'AJ-000184' })).toBe('Jacket');
     expect(itemLabel({ title: null, sku: 'AJ-000184' })).toBe('AJ-000184');
     expect(itemLabel({ title: 'x'.repeat(80), sku: 'AJ-000184' })).toHaveLength(60);
+  });
+
+  it('says the delists that run from the iPhone happen on a tap, and wakes the app for them', () => {
+    const sold = soldNotification(context, {
+      listora: ['ebay'],
+      phone: ['depop', 'mercari'],
+      seller: [],
+    });
+    expect(parsePushNotification(sold)).toEqual(sold);
+    expect(sold).toMatchObject({
+      urgency: 'time_sensitive',
+      body: "Levi's trucker jacket sold on eBay. Listora is delisting it on eBay. Tap to delist it on Depop and Mercari from your iPhone.",
+      wakesApp: true,
+    });
+    expect(soldNotification(context, { listora: ['depop'], seller: [] })).not.toHaveProperty(
+      'wakesApp',
+    );
+    const open = [
+      result('depop', 'pending', {
+        mode: 'automation',
+        operation: {
+          phoneWait: { since: new Date(), running: false },
+        } as DelistResult['operation'],
+      }),
+    ];
+    expect(reminderNotification(context, open)).toMatchObject({
+      body: 'It sold on eBay 10 minutes ago. Open Listora on your iPhone to delist it on Depop.',
+      wakesApp: true,
+    });
   });
 
   it('says after the sale what Listora delists and what the seller has to', () => {

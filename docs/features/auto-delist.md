@@ -49,13 +49,16 @@ each sold item:
    listing's capabilities: `mark_sold` where the marketplace's API marks a sale made elsewhere
    (Depop: `mark-as-sold`), otherwise `end`. The engine runs it in the listing's mode: an API
    listing is ended and read back; an assisted one becomes an urgent `delist_manually` task
-   with a link to the listing; an automation listing is delisted by the runner once that mode
-   exists. A listing that cannot be live needs no delist: one that is ended or sold (without a
+   with a link to the listing; an automation listing is delisted by the runner, or by the
+   seller's iPhone when its marketplace runs there ([phone-execution.md](phone-execution.md)). A listing that cannot be live needs no delist: one that is ended or sold (without a
    pending listing id a relist may have left), or a draft that was never sent anywhere, in
    both cases with nothing in flight. The listing that sold is never touched.
 6. **Push.** One time-sensitive notification: "Levi's trucker jacket sold on eBay. Listora is
-   delisting it on Depop. Delist it on Mercari and Poshmark now." A run with nothing to delist
-   is completed at once, the item is `sold`, and nothing is pushed.
+   delisting it on Depop. Delist it on Mercari and Poshmark now." Delists that run on the phone
+   add "Tap to delist it on Depop from your iPhone.": tapping opens the app, which runs them, and
+   the notification also asks iOS to wake the app at once, which iOS may not do. A delist is
+   claimed only once the phone's read-back confirms it. A run with nothing to delist is
+   completed at once, the item is `sold`, and nothing is pushed.
 
 Each step is idempotent (the run is unique per sale and item, and each delist's idempotency
 key is `auto_delist:<run>:<listing>`), so recording a sale again changes nothing. The audit
@@ -91,7 +94,8 @@ completed, oldest first and with `skip locked`:
   becomes `sold` once no other run of the item is still open;
 - **10 minutes** after the sale (the run's start), anything not delisted or confirmed (pending,
   checking, failed, or waiting for the seller) re-alerts the seller once: "It sold on eBay 10
-  minutes ago. Delist it on Mercari now.";
+  minutes ago. Delist it on Mercari now.", or for a delist still waiting on the phone, "Open
+  Listora on your iPhone to delist it on Depop.";
 - **30 minutes** after it, the alert escalates once ("Double-sale risk: ...") and the run's
   `escalated` flag turns on: the app shows a banner on the home screen until the run completes.
 
@@ -144,7 +148,6 @@ runs that are not completed (the SLA job) and on each item's runs (the item page
 - iOS: the "Sold" banner and the delist results screen on the item detail land with the item
   screens (T-19), from `Item.delistRun`, `Item.doubleSale`, and `Sale.delistRuns`.
 - Listing actions (T-19) must refuse to publish or relist a sold item, under the item lock.
-- APNs delivery and device registration ([push.md](push.md)).
 - Items with a quantity above one: today every sale delists the item everywhere.
 - A delist waits behind an older operation that is verifying (its read-backs follow the backoff
   schedule) or a publish that may have reached the marketplace; the SLA alerts cover the wait.

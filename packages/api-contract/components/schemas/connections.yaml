@@ -23,8 +23,8 @@ CapabilityMode:
 KnownCapabilityMode:
   type: string
   description: |
-    `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
-    seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+    `api`: through the marketplace's API. `automation`: by Listora's browser runner or the
+    seller's iPhone, in the seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
     `none`: not offered.
   enum: [api, automation, assisted, bulk_file, none]
 MarkSoldMode:
@@ -200,6 +200,8 @@ Connection:
       description: When Listora last checked the connection, whatever it found.
     lastIssue:
       $ref: '#/ConnectionIssue'
+    execution:
+      $ref: './phone.yaml#/ConnectionExecution'
 ConnectionList:
   type: object
   required: [data]

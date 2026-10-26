@@ -15,6 +15,7 @@ func connection(
     actions: [String] = [],
     displayName: String? = nil,
     lastOkAt: String? = nil,
+    execution: [String: Any]? = nil,
 ) throws -> Components.Schemas.Connection {
     var object: [String: Any] = [
         "marketplace": marketplace,
@@ -33,6 +34,9 @@ func connection(
     }
     if let lastOkAt {
         object["lastOkAt"] = lastOkAt
+    }
+    if let execution {
+        object["execution"] = execution
     }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
@@ -137,6 +141,8 @@ final class FakeConnectionsService: ConnectionsService, @unchecked Sendable {
     private var _start: Result<Components.Schemas.ConnectionAuthorization, APIFailure>
     private var _check: Result<Components.Schemas.Connection, APIFailure>
     private var _results: [String: Components.Schemas.ConnectionAuthorization]
+    private var _move: Result<Components.Schemas.Connection, APIFailure>
+    private(set) var moves: [String] = []
     private(set) var startedKeys: [String] = []
     private(set) var checkKeys: [String] = []
     private(set) var readIDs: [String] = []
@@ -148,7 +154,9 @@ final class FakeConnectionsService: ConnectionsService, @unchecked Sendable {
         start: Result<Components.Schemas.ConnectionAuthorization, APIFailure> = .failure(.networkUnavailable),
         check: Result<Components.Schemas.Connection, APIFailure> = .failure(.networkUnavailable),
         results: [String: Components.Schemas.ConnectionAuthorization] = [:],
+        move: Result<Components.Schemas.Connection, APIFailure> = .failure(.networkUnavailable),
     ) {
+        _move = move
         _lists = lists
         _banners = banners
         _start = start
@@ -177,6 +185,17 @@ final class FakeConnectionsService: ConnectionsService, @unchecked Sendable {
         let result = lock.withLock {
             checkKeys.append(idempotencyKey)
             return _check
+        }
+        return try result.get()
+    }
+
+    func setExecution(
+        marketplace: Components.Schemas.KnownMarketplace,
+        location: Components.Schemas.KnownExecutionLocation,
+    ) async throws(APIFailure) -> Components.Schemas.Connection {
+        let result = lock.withLock {
+            moves.append("\(marketplace.rawValue):\(location.rawValue)")
+            return _move
         }
         return try result.get()
     }

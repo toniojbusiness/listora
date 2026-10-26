@@ -36,7 +36,13 @@ import {
   type AnalysisJobPayload,
   type AnalysisJobQueue,
 } from '@listora/analysis';
-import { loadAutomationSettings } from '@listora/automation';
+import { DEFAULT_RETRY_POLICY } from '@listora/operations';
+import {
+  loadAutomationSettings,
+  phoneWorkAdapters,
+  type AutomationSettings,
+  type PhoneWorkDependencies,
+} from '@listora/automation';
 import { LocalTokenVault, SessionVault } from '@listora/connections';
 import {
   startBatchItemAnalysis,
@@ -272,10 +278,36 @@ export function offlineDependencies(): Pick<
 /** The session vault under a random key, and the marketplaces' real profiles. */
 function testMarketplaceSessions(
   logger: Logger,
+  settings: AutomationSettings,
 ): MarketplaceSessionsDependencies & { vault: SessionVault } {
   return {
     vault: new SessionVault({ vault: new LocalTokenVault(randomBytes(32)), logger }),
-    profiles: loadAutomationSettings({}).profiles,
+    profiles: settings.profiles,
+  };
+}
+
+/** Phone runs over the marketplaces' real profiles and adapters, as the API serves them. */
+function testPhoneWork(
+  db: Db,
+  logger: Logger,
+  settings: AutomationSettings,
+  vault: SessionVault,
+): PhoneWorkDependencies {
+  return {
+    db,
+    adapters: phoneWorkAdapters(
+      settings,
+      { fakeMarketplaceUrl: undefined, ebay: undefined, depop: undefined },
+      logger,
+    ),
+    profiles: settings.profiles,
+    vault,
+    policy: DEFAULT_RETRY_POLICY,
+    saleChecks: settings.saleChecks,
+    logger,
+    stepTimeoutMs: settings.stepTimeoutMs,
+    callTimeoutMs: settings.callTimeoutMs,
+    blockedRecheckMs: 60_000,
   };
 }
 
@@ -339,6 +371,8 @@ export interface TestApiOptions {
   marketplaceSessions?: MarketplaceSessionsDependencies;
   /** Email sale detection's settings (default: no mail is read). */
   saleEmails?: SaleEmailsDependencies;
+  /** `AUTOMATION_*` keys for the marketplaces' profiles (`AUTOMATION_POSHMARK_RUNS_ON`). */
+  automationEnv?: Readonly<Record<string, string>>;
 }
 
 export interface TestApi {
@@ -453,7 +487,8 @@ export async function createTestApi(
     jobs: () => accountDeletionJobs(db),
     runAll: () => runAccountDeletionJobs(deletionDeps),
   };
-  const marketplaceSessions = testMarketplaceSessions(logger);
+  const automation = loadAutomationSettings({ ...options.automationEnv });
+  const marketplaceSessions = testMarketplaceSessions(logger, automation);
   const app = buildApp({
     logger,
     db,
@@ -466,6 +501,7 @@ export async function createTestApi(
     ai,
     analysisJobs,
     marketplaceSessions: options.marketplaceSessions ?? marketplaceSessions,
+    phone: testPhoneWork(db, logger, automation, marketplaceSessions.vault),
     batchJobs,
     now: () => new Date(clock.now),
     pingDatabase: () => Promise.resolve(),

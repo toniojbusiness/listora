@@ -156,6 +156,8 @@ describe('describeConnection of an automation connection', () => {
     credential_version: 1,
     last_checked_at: null,
     check_requested_at: null,
+    runs_on: 'cloud',
+    phone_device_id: null,
     created_at: LINKED_AT,
     updated_at: LINKED_AT,
   };

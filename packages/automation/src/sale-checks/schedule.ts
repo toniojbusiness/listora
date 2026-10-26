@@ -66,6 +66,14 @@ export async function enqueueSaleCheck(
   executor: DbExecutor,
   check: ScheduledCheck,
 ): Promise<boolean> {
+  const connection = await executor
+    .selectFrom('marketplace_connection')
+    .select('runs_on')
+    .where('account_id', '=', check.accountId)
+    .where('id', '=', check.connectionId)
+    .executeTakeFirst();
+  // The connection's automated steps run on the phone, so its sales are checked there too.
+  if (connection?.runs_on === 'phone') return queueSaleCheckForPhone(executor, check);
   const key = saleCheckJobKey(check.connectionId);
   const { rows } = await sql<{ id: string }>`
     select id from graphile_worker.jobs where key = ${key} limit 1
@@ -85,6 +93,38 @@ export async function enqueueSaleCheck(
     )
   `.execute(executor);
   return true;
+}
+
+/** Phone work runs lowest first, as jobs do (delists after a sale are -10). */
+const PHONE_SALE_CHECK_PRIORITY = -5;
+
+/**
+ * Hands the connection's sale check to the phone (docs/features/phone-execution.md), unless it
+ * waits there already; returns whether it added it.
+ */
+export async function queueSaleCheckForPhone(
+  executor: DbExecutor,
+  check: ScheduledCheck,
+): Promise<boolean> {
+  const added = await executor
+    .insertInto('phone_work')
+    .values({
+      account_id: check.accountId,
+      connection_id: check.connectionId,
+      marketplace: check.marketplace,
+      purpose: 'sale_check',
+      // Ahead of routine changes: a sale it finds starts delists.
+      priority: PHONE_SALE_CHECK_PRIORITY,
+    })
+    .onConflict((conflict) =>
+      conflict
+        .columns(['account_id', 'connection_id'])
+        .where('purpose', '=', 'sale_check')
+        .doNothing(),
+    )
+    .returning('id')
+    .executeTakeFirst();
+  return added !== undefined;
 }
 
 /**

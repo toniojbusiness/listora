@@ -270,8 +270,8 @@ extension MarketplaceLink {
         make("mercari", "Mercari", "https://www.mercari.com/login/", "mercari.com", state)
     }
 
-    static func depop(_ state: State) -> MarketplaceLink {
-        make("depop", "Depop", "https://www.depop.com/login/", "depop.com", state)
+    static func depop(_ state: State, runsOn: RunsOn? = nil) -> MarketplaceLink {
+        make("depop", "Depop", "https://www.depop.com/login/", "depop.com", state, runsOn: runsOn)
     }
 
     private static func make(
@@ -280,6 +280,7 @@ extension MarketplaceLink {
         _ url: String,
         _ domain: String,
         _ state: State,
+        runsOn: RunsOn? = nil,
     ) -> MarketplaceLink {
         let (label, tone): (String, StatusLabel.Tone) = switch state {
         case .notLinked: ("Not linked", .neutral)
@@ -299,6 +300,7 @@ extension MarketplaceLink {
             // swiftlint:disable:next force_unwrapping
             loginURL: URL(string: url)!,
             cookieDomains: [domain],
+            runsOn: runsOn,
         )
     }
 }
@@ -308,6 +310,7 @@ actor FakeSessionService: MarketplaceSessionService {
     struct SentLink: Equatable {
         let marketplace: String
         let cookies: [CapturedCookie]
+        let installationID: String?
         let key: String
     }
 
@@ -372,9 +375,15 @@ actor FakeSessionService: MarketplaceSessionService {
     func link(
         _ marketplace: String,
         cookies: [CapturedCookie],
+        installationID: String?,
         idempotencyKey: String,
     ) async throws(APIFailure) -> MarketplaceLink {
-        sentLinks.append(SentLink(marketplace: marketplace, cookies: cookies, key: idempotencyKey))
+        sentLinks.append(SentLink(
+            marketplace: marketplace,
+            cookies: cookies,
+            installationID: installationID,
+            key: idempotencyKey,
+        ))
         if !linkFailures.isEmpty {
             throw linkFailures.removeFirst()
         }

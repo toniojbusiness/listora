@@ -115,15 +115,20 @@ thing.
   connection is shown as its linked session's check says (`describeAutomationSession`,
   session-status.ts), the same description Link accounts renders
   ([marketplace-linking.md](marketplace-linking.md)), so the two screens never disagree: Checking...,
-  Linked (only after the browser runner's check passed; `lastOkAt` is that check, or a later run
-  whose refreshed cookies the marketplace sent), Not confirmed (the check failed or did not finish
+  Linked (only after the session check passed, on the runner or the phone; `lastOkAt` is that
+  check, or a later run whose refreshed cookies the marketplace sent), Not confirmed (the check failed or did not finish
   within 15 minutes; attention `not_confirmed`, action `check`), or Sign in again (the marketplace
-  rejected the session, shown and notified like `reauth_required`). Retry check on an automation
+  rejected the session, shown and notified like `reauth_required`). A connection that runs on the
+  phone carries its `execution` (where it runs and what waits there) and says Checking on your
+  iPhone... while its check waits for the phone, or Link on your iPhone while no phone holds its
+  session; it asks to sign in again only when the phone's own check found the session signed out
+  ([phone-execution.md](phone-execution.md#where-a-marketplace-runs)). Retry check on an automation
   connection checks the stored session again (`requestSessionRecheck`) instead of queueing the
   API health check. Without a linked session, Poshmark, Mercari, Depop, and eBay (without its API
   keys) show Not linked.
 - **In the app** (`MarketplacesFeature`): one card per marketplace with its mode, status, detail,
-  last successful check, and actions (Connect, Reconnect, Retry check; the main one filled); a
+  last successful check, where it runs (with Run on this iPhone or Run in the cloud), and actions
+  (Connect, Reconnect, Retry check; the main one filled); a
   Sale emails card; and `ConnectionAttentionBanner`, which Inventory shows above the list while
   anything needs attention and which opens Marketplaces in Settings. The Settings gear in the
   Today and Sales headers gets a dot.
@@ -134,7 +139,8 @@ thing.
   tokens, or the browser session of an `automation` connection, with its `credential_version`;
   [automation.md](automation.md#data)), expiries, scopes, status, when the grant was issued
   (or the session linked), `last_ok_at`, `last_checked_at`, `check_requested_at` (a pending
-  Retry check), and the latest problem's code, message, and time; `orders_polled_through`, the
+  Retry check), and the latest problem's code, message, and time; `runs_on` and
+  `phone_device_id`, where its automated steps run ([phone-execution.md](phone-execution.md#data)); `orders_polled_through`, the
   eBay order poll's mark ([ebay-notifications.md](ebay-notifications.md)); a revoked connection
   holds no tokens; at most one per account and marketplace, which
   connecting keeps under the account's row lock) and `connection_authorization` (one connect

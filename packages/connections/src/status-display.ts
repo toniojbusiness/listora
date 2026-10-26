@@ -53,6 +53,8 @@ export interface DescribeConnectionInput {
    * never checked. Ignored for other modes.
    */
   sessionCheck?: SessionCheckState | null;
+  /** Where an automation connection runs, when on the phone (`phoneSessionState`). */
+  phone?: { linked: boolean; checkWaiting: boolean };
   now: Date;
 }
 
@@ -228,6 +230,7 @@ function describeAutomationConnection(
     },
     check,
     now: input.now,
+    ...(input.phone === undefined ? {} : { phone: input.phone }),
   });
   // Only a session the marketplace accepted has a last good check: its passed check, or a later
   // run whose refreshed cookies the marketplace sent.

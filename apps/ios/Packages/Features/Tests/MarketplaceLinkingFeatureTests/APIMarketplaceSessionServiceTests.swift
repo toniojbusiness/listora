@@ -71,10 +71,12 @@ struct APIMarketplaceSessionServiceTests {
     }
 
     @Test
-    func `sends the cookies with the Idempotency-Key, and nothing else`() async throws {
+    func `sends the cookies and this phone's installation with the Idempotency-Key, and nothing else`() async throws {
         let server = CannedServer(status: 201, body: """
         {"marketplace":"poshmark","status":"checking","statusDisplay":{"tone":"checking","label":"Checking..."},
-         "login":{"url":"https://poshmark.com/login","cookieDomains":["poshmark.com"]}}
+         "login":{"url":"https://poshmark.com/login","cookieDomains":["poshmark.com"]},
+         "execution":{"location":"phone","label":"Runs on your iPhone",
+           "deviceInstallationId":"0199a1f0-0000-7000-8000-0000000000d1","deviceName":"Sam's iPhone","waiting":1}}
         """)
         let linked = try await service(server).link(
             "poshmark",
@@ -88,16 +90,25 @@ struct APIMarketplaceSessionServiceTests {
                 secure: true,
                 sameSite: .lax,
             )],
+            installationID: "0199a1f0-0000-7000-8000-0000000000d1",
             idempotencyKey: "key-1",
         )
 
         #expect(linked.state == .checking)
+        #expect(linked.runsOn == RunsOn(
+            label: "Runs on your iPhone",
+            phone: true,
+            installationID: "0199a1f0-0000-7000-8000-0000000000d1",
+            deviceName: "Sam's iPhone",
+            waiting: 1,
+        ))
         let request = try #require(server.requests.first)
         #expect(request.method == "POST")
         #expect(request.path == "/v1/marketplace-sessions/poshmark")
         #expect(request.header("Idempotency-Key") == "key-1")
         let body = try #require(JSONSerialization.jsonObject(with: request.body) as? [String: Any])
-        #expect(Set(body.keys) == ["cookies"])
+        #expect(Set(body.keys) == ["cookies", "installationId"])
+        #expect(body["installationId"] as? String == "0199a1f0-0000-7000-8000-0000000000d1")
         let cookies = try #require(body["cookies"] as? [[String: Any]])
         #expect(cookies.count == 1)
         #expect(cookies[0]["value"] as? String == "session-token")
@@ -132,7 +143,7 @@ struct APIMarketplaceSessionServiceTests {
         """)
         let sessions = try service(server)
         do {
-            _ = try await sessions.link("poshmark", cookies: [], idempotencyKey: "k")
+            _ = try await sessions.link("poshmark", cookies: [], installationID: nil, idempotencyKey: "k")
             Issue.record("expected the link to fail")
         } catch {
             #expect(error.statusCode == 422)

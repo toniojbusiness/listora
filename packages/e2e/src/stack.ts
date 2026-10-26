@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createMigratedDatabase } from '@listora/db/testing';
+import { FakeDepopSite } from '@listora/automation';
 import { FakeEbay } from '@listora/marketplaces';
 import { startNodeProcess, type StartedProcess } from '@listora/testing';
 
@@ -35,6 +36,8 @@ export interface LocalStack {
   readonly accessToken: string;
   /** The stack's control endpoint for UI tests (eBay faults, ready items; control.ts). */
   readonly controlUrl: string;
+  /** The fake Depop site the phone runtime acts on in the simulator. */
+  readonly fakeDepopUrl: string;
   /** Stops both processes, writes their logs, and drops the database and the stored files. */
   stop(): Promise<void>;
 }
@@ -74,6 +77,10 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       consentRedirect: { acceptUrl: `${apiUrl}/v1/connections/ebay/callback` },
     });
     closers.push(() => fakeEbay.close());
+    // Depop runs on the phone (docs/features/phone-execution.md): the app's phone runtime acts
+    // on this fake Depop site in the simulator, through the stack's API.
+    const fakeDepop = await FakeDepopSite.start();
+    closers.push(() => fakeDepop.close());
     const shared = {
       PATH: process.env['PATH'],
       DATABASE_URL: database.scratch.url,
@@ -89,6 +96,9 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
       AI_FAKE_FIXTURES_DIR: options.fakeAiFixturesDir,
       EBAY_ENV: 'fake',
       EBAY_FAKE_URL: fakeEbay.url,
+      FAKE_DEPOP_SITE_URL: fakeDepop.url,
+      // The phone's runs are recorded by the API, under the worker's retry delays.
+      OPERATION_RETRY_DELAY_SCALE: '0.1',
       TOKEN_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
     };
 
@@ -108,7 +118,6 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
     const worker = startNodeProcess(WORKER_ENTRY, {
       ...shared,
       AI_AUTO_ESCALATE: 'off',
-      OPERATION_RETRY_DELAY_SCALE: '0.1',
     });
     processes.push({ name: 'worker', process: worker });
     await worker.waitForLog((line) => line['msg'] === 'worker ready', startTimeoutMs);
@@ -118,10 +127,18 @@ export async function startLocalStack(options: LocalStackOptions): Promise<Local
     const control = await startStackControl({
       api: { apiUrl, accessToken },
       fakeEbay,
+      fakeDepop,
       db: database.db,
     });
     closers.push(() => control.close());
-    return { apiUrl, email: E2E_EMAIL, accessToken, controlUrl: control.url, stop };
+    return {
+      apiUrl,
+      email: E2E_EMAIL,
+      accessToken,
+      controlUrl: control.url,
+      fakeDepopUrl: fakeDepop.url,
+      stop,
+    };
   } catch (error) {
     await stop();
     throw error;
@@ -177,13 +194,14 @@ async function writeLogs(
 
 /** The stack's settings as environment variables, also with xcodebuild's `TEST_RUNNER_` prefix. */
 export function stackEnvironment(
-  stack: Pick<LocalStack, 'apiUrl' | 'accessToken' | 'email' | 'controlUrl'>,
+  stack: Pick<LocalStack, 'apiUrl' | 'accessToken' | 'email' | 'controlUrl' | 'fakeDepopUrl'>,
 ): Record<string, string> {
   const settings = {
     LISTORA_E2E_API_BASE_URL: stack.apiUrl,
     LISTORA_E2E_ACCESS_TOKEN: stack.accessToken,
     LISTORA_E2E_EMAIL: stack.email,
     LISTORA_E2E_CONTROL_URL: stack.controlUrl,
+    LISTORA_E2E_FAKE_DEPOP_URL: stack.fakeDepopUrl,
   };
   // xcodebuild passes TEST_RUNNER_<name> to the test runner as <name>.
   const forwarded = Object.fromEntries(

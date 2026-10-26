@@ -1,4 +1,5 @@
 import APIClient
+import Core
 import DesignSystem
 import Foundation
 import ListoraAPI
@@ -40,6 +41,10 @@ public final class MarketplacesModel {
     private let maxPolls: Int
     private let sleep: @Sendable (Duration) async throws -> Void
     private let isSignedIn: @MainActor () -> Bool
+    /// Runs the work waiting for this phone (a check of a marketplace that runs here).
+    public weak var phoneWork: (any PhoneWorkTrigger)?
+    /// The row whose automated steps are moving between the cloud and this phone.
+    public private(set) var moving: String?
 
     /// `pollInterval` and `maxPolls`: how often and how long a requested check is read again. An
     /// API connection's check takes seconds; the browser runner's check of a linked sign-in can
@@ -108,6 +113,9 @@ public final class MarketplacesModel {
         }
         requestingCheck = nil
         replace(checking)
+        if checking.execution?.onPhone == true {
+            phoneWork?.runPhoneWork(.userAction)
+        }
         for _ in 0 ..< maxPolls {
             do {
                 try await sleep(pollInterval)
@@ -122,6 +130,30 @@ public final class MarketplacesModel {
                     : nil
                 return
             }
+        }
+    }
+
+    /// Moves the row's automated steps to Listora's cloud, or back to this phone
+    /// (docs/features/phone-execution.md); work waiting for the phone moves with them.
+    public func move(_ row: MarketplaceRow, toPhone: Bool) async {
+        guard moving == nil, let marketplace = row.marketplace else { return }
+        moving = row.id
+        defer { moving = nil }
+        do {
+            let moved = try await service.setExecution(
+                marketplace: marketplace,
+                location: toPhone ? .phone : .cloud,
+            )
+            replace(MarketplaceRow(connection: moved))
+            notice = ConnectionNotice(
+                tone: .success,
+                message: toPhone ? "\(row.name) runs on this iPhone now." : "\(row.name) runs in Listora's cloud now.",
+            )
+            if toPhone {
+                phoneWork?.runPhoneWork(.userAction)
+            }
+        } catch {
+            notice = ConnectionNotice(tone: .failure, message: error.message)
         }
     }
 

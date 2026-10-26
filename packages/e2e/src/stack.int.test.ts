@@ -145,16 +145,19 @@ describe('local e2e stack (real Postgres)', () => {
         accessToken: 'token',
         email: 'a@b.c',
         controlUrl: 'http://127.0.0.1:6',
+        fakeDepopUrl: 'http://127.0.0.1:7',
       }),
     ).toEqual({
       LISTORA_E2E_API_BASE_URL: 'http://127.0.0.1:5',
       LISTORA_E2E_ACCESS_TOKEN: 'token',
       LISTORA_E2E_EMAIL: 'a@b.c',
       LISTORA_E2E_CONTROL_URL: 'http://127.0.0.1:6',
+      LISTORA_E2E_FAKE_DEPOP_URL: 'http://127.0.0.1:7',
       TEST_RUNNER_LISTORA_E2E_API_BASE_URL: 'http://127.0.0.1:5',
       TEST_RUNNER_LISTORA_E2E_ACCESS_TOKEN: 'token',
       TEST_RUNNER_LISTORA_E2E_EMAIL: 'a@b.c',
       TEST_RUNNER_LISTORA_E2E_CONTROL_URL: 'http://127.0.0.1:6',
+      TEST_RUNNER_LISTORA_E2E_FAKE_DEPOP_URL: 'http://127.0.0.1:7',
     });
   });
 });

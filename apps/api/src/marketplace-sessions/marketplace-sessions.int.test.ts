@@ -7,6 +7,18 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createTestApi, fieldsOf, type TestApi } from '../test-support.ts';
 
+/**
+ * These suites cover sessions checked by the cloud browser runner, so every marketplace runs in
+ * the cloud here; the phone's checks are in phone/phone.int.test.ts.
+ */
+const IN_THE_CLOUD = {
+  automationEnv: {
+    AUTOMATION_POSHMARK_RUNS_ON: 'cloud',
+    AUTOMATION_MERCARI_RUNS_ON: 'cloud',
+    AUTOMATION_DEPOP_RUNS_ON: 'cloud',
+  },
+};
+
 const OWNER = 'linking.owner@example.com';
 const OTHER = 'linking.other@example.com';
 const EBAY_SELLER = 'linking.ebay@example.com';
@@ -35,7 +47,7 @@ describe('marketplace sessions (real Postgres)', () => {
   let otherToken: string;
 
   beforeAll(async () => {
-    api = await createTestApi('sessions');
+    api = await createTestApi('sessions', IN_THE_CLOUD);
     token = await api.signIn(OWNER);
     otherToken = await api.signIn(OTHER);
   });
@@ -362,7 +374,7 @@ describe('a linked session on both screens (real Postgres)', () => {
   let accountId: string;
 
   beforeAll(async () => {
-    api = await createTestApi('sessions_screens');
+    api = await createTestApi('sessions_screens', IN_THE_CLOUD);
     token = await api.signIn(SELLER);
     accountId = (await api.tenantOf(SELLER)).accountId;
   });

@@ -163,9 +163,9 @@ extension Components {
             }
         }
         /// `api`: Listora acts through the marketplace's official API and verifies by read-back.
-        /// `automation`: Listora's browser runner acts in the seller's own marketplace session
-        /// (where the marketplace permits it and has no API) and verifies by read-back through that
-        /// session. `assisted`: Listora prepares the work and the user does the final step in the
+        /// `automation`: Listora's browser runner, or the iPhone app (`execution`), acts in the
+        /// seller's own marketplace session (where the marketplace permits it and has no API) and
+        /// verifies by read-back through that session. `assisted`: Listora prepares the work and the user does the final step in the
         /// marketplace app, then confirms.
         ///
         ///
@@ -522,7 +522,7 @@ extension Components {
         /// 402; `forbidden` 403; `not_found` 404; `version_conflict`, `invalid_state_transition`,
         /// `already_exists`, `idempotency_key_in_progress`, `upload_incomplete`,
         /// `upload_expired`, `marketplace_not_connected`, `marketplace_reauth_required`,
-        /// `marketplace_action_unavailable` 409; `payload_too_large` 413; `validation_failed`,
+        /// `marketplace_action_unavailable`, `app_update_required` 409; `payload_too_large` 413; `validation_failed`,
         /// `idempotency_key_reused` 422; `rate_limited`, `ai_budget_exceeded` 429;
         /// `internal_error` 500; `service_unavailable` 503. `marketplace_authorization_denied`
         /// and `marketplace_authorization_failed` appear only inside a failed
@@ -545,6 +545,7 @@ extension Components {
             case marketplaceNotConnected = "marketplace_not_connected"
             case marketplaceReauthRequired = "marketplace_reauth_required"
             case marketplaceActionUnavailable = "marketplace_action_unavailable"
+            case appUpdateRequired = "app_update_required"
             case payloadTooLarge = "payload_too_large"
             case validationFailed = "validation_failed"
             case idempotencyKeyReused = "idempotency_key_reused"
@@ -4915,8 +4916,8 @@ extension Components {
                 ])
             }
         }
-        /// `api`: through the marketplace's API. `automation`: by Listora's browser runner in the
-        /// seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
+        /// `api`: through the marketplace's API. `automation`: by Listora's browser runner or the
+        /// seller's iPhone, in the seller's session. `assisted`: by the user. `bulk_file`: by a file the seller uploads.
         /// `none`: not offered.
         ///
         ///
@@ -5437,6 +5438,8 @@ extension Components {
             public var lastCheckedAt: Components.Schemas.Timestamp?
             /// - Remark: Generated from `#/components/schemas/Connection/lastIssue`.
             public var lastIssue: Components.Schemas.ConnectionIssue?
+            /// - Remark: Generated from `#/components/schemas/Connection/execution`.
+            public var execution: Components.Schemas.ConnectionExecution?
             /// Creates a new `Connection`.
             ///
             /// - Parameters:
@@ -5452,6 +5455,7 @@ extension Components {
             ///   - lastOkAt: When the marketplace last accepted Listora's access (the last successful check).
             ///   - lastCheckedAt: When Listora last checked the connection, whatever it found.
             ///   - lastIssue:
+            ///   - execution:
             public init(
                 marketplace: Components.Schemas.Marketplace,
                 mode: Components.Schemas.IntegrationMode,
@@ -5464,7 +5468,8 @@ extension Components {
                 grantExpiresAt: Components.Schemas.Timestamp? = nil,
                 lastOkAt: Components.Schemas.Timestamp? = nil,
                 lastCheckedAt: Components.Schemas.Timestamp? = nil,
-                lastIssue: Components.Schemas.ConnectionIssue? = nil
+                lastIssue: Components.Schemas.ConnectionIssue? = nil,
+                execution: Components.Schemas.ConnectionExecution? = nil
             ) {
                 self.marketplace = marketplace
                 self.mode = mode
@@ -5478,6 +5483,7 @@ extension Components {
                 self.lastOkAt = lastOkAt
                 self.lastCheckedAt = lastCheckedAt
                 self.lastIssue = lastIssue
+                self.execution = execution
             }
             public enum CodingKeys: String, CodingKey {
                 case marketplace
@@ -5492,6 +5498,7 @@ extension Components {
                 case lastOkAt
                 case lastCheckedAt
                 case lastIssue
+                case execution
             }
         }
         /// - Remark: Generated from `#/components/schemas/ConnectionList`.
@@ -5896,7 +5903,8 @@ extension Components {
             }
         }
         /// `not_linked`: no session. `checking`: a session was just linked (or checked again) and
-        /// the browser runner is checking it, for at most 15 minutes. `linked`: the check passed,
+        /// Listora is checking it where the marketplace runs (the browser runner, for at most 15
+        /// minutes, or the seller's iPhone, the next time Listora runs there). `linked`: the check passed,
         /// and Listora automates the marketplace in that session. `needs_relink`: the marketplace
         /// rejected the session, or showed a check automation must not pass; the user signs in
         /// again. `check_failed`: Listora could not confirm the session works: its check failed or
@@ -5947,7 +5955,8 @@ extension Components {
             }
         }
         /// A marketplace linked by signing in (`connect: session`). It is shown as linked only
-        /// after the browser runner confirmed the marketplace accepts the session.
+        /// after the session check (on the browser runner or the seller's iPhone) confirmed the
+        /// marketplace accepts the session.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/MarketplaceSession`.
@@ -5976,6 +5985,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/MarketplaceSession/issue`.
             public var issue: Components.Schemas.ConnectionIssue?
+            /// Where its automated steps run; present once it is linked.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSession/execution`.
+            public var execution: Components.Schemas.ConnectionExecution?
             /// Creates a new `MarketplaceSession`.
             ///
             /// - Parameters:
@@ -5987,6 +6000,7 @@ extension Components {
             ///   - linkedAt: When the current session was linked.
             ///   - checkedAt: When the current session's check finished.
             ///   - issue: Why the session needs relinking, or why its check failed.
+            ///   - execution: Where its automated steps run; present once it is linked.
             public init(
                 marketplace: Components.Schemas.Marketplace,
                 status: Components.Schemas.MarketplaceSessionStatus,
@@ -5995,7 +6009,8 @@ extension Components {
                 displayName: Swift.String? = nil,
                 linkedAt: Components.Schemas.Timestamp? = nil,
                 checkedAt: Components.Schemas.Timestamp? = nil,
-                issue: Components.Schemas.ConnectionIssue? = nil
+                issue: Components.Schemas.ConnectionIssue? = nil,
+                execution: Components.Schemas.ConnectionExecution? = nil
             ) {
                 self.marketplace = marketplace
                 self.status = status
@@ -6005,6 +6020,7 @@ extension Components {
                 self.linkedAt = linkedAt
                 self.checkedAt = checkedAt
                 self.issue = issue
+                self.execution = execution
             }
             public enum CodingKeys: String, CodingKey {
                 case marketplace
@@ -6015,6 +6031,7 @@ extension Components {
                 case linkedAt
                 case checkedAt
                 case issue
+                case execution
             }
         }
         /// - Remark: Generated from `#/components/schemas/MarketplaceSessionList`.
@@ -6164,21 +6181,31 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLink/displayName`.
             public var displayName: Swift.String?
+            /// The registered device that linked it (`registerDevice`), which then runs the
+            /// marketplace's automated steps when they run on the phone.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplaceSessionLink/installationId`.
+            public var installationId: Components.Schemas.Id?
             /// Creates a new `MarketplaceSessionLink`.
             ///
             /// - Parameters:
             ///   - cookies: The marketplace's cookies after the user signed in, and no other site's.
             ///   - displayName: The seller's name on the marketplace, when the app knows it.
+            ///   - installationId: The registered device that linked it (`registerDevice`), which then runs the
             public init(
                 cookies: [Components.Schemas.SessionCookie],
-                displayName: Swift.String? = nil
+                displayName: Swift.String? = nil,
+                installationId: Components.Schemas.Id? = nil
             ) {
                 self.cookies = cookies
                 self.displayName = displayName
+                self.installationId = installationId
             }
             public enum CodingKeys: String, CodingKey {
                 case cookies
                 case displayName
+                case installationId
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -6190,9 +6217,567 @@ extension Components {
                     Swift.String.self,
                     forKey: .displayName
                 )
+                self.installationId = try container.decodeIfPresent(
+                    Components.Schemas.Id.self,
+                    forKey: .installationId
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "cookies",
-                    "displayName"
+                    "displayName",
+                    "installationId"
+                ])
+            }
+        }
+        /// A `KnownExecutionLocation`, or a location added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ExecutionLocation`.
+        public struct ExecutionLocation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ExecutionLocation/value1`.
+            public var value1: Components.Schemas.KnownExecutionLocation?
+            /// - Remark: Generated from `#/components/schemas/ExecutionLocation/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ExecutionLocation`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownExecutionLocation? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Where a connection's automated steps run: `cloud`, Listora's browser runner; `phone`, the
+        /// iPhone that linked the marketplace, in the seller's own session on their own network.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownExecutionLocation`.
+        @frozen public enum KnownExecutionLocation: String, Codable, Hashable, Sendable, CaseIterable {
+            case cloud = "cloud"
+            case phone = "phone"
+        }
+        /// Where the connection's automated steps run, and what waits for the phone. Present for a
+        /// marketplace that is automated in a linked session.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ConnectionExecution`.
+        public struct ConnectionExecution: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/location`.
+            public var location: Components.Schemas.ExecutionLocation
+            /// What to show: `Runs on your iPhone` or `Runs in Listora's cloud`, or why the phone
+            /// can't run it yet (`Link it on your iPhone to run it there`).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/label`.
+            public var label: Swift.String
+            /// The phone that runs it, when it runs on one (compare with your own).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/deviceInstallationId`.
+            public var deviceInstallationId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/deviceName`.
+            public var deviceName: Swift.String?
+            /// Changes and checks waiting for that phone to run them.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/waiting`.
+            public var waiting: Swift.Int32?
+            /// Since when the oldest of them waits.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecution/waitingSince`.
+            public var waitingSince: Components.Schemas.Timestamp?
+            /// Creates a new `ConnectionExecution`.
+            ///
+            /// - Parameters:
+            ///   - location:
+            ///   - label: What to show: `Runs on your iPhone` or `Runs in Listora's cloud`, or why the phone
+            ///   - deviceInstallationId: The phone that runs it, when it runs on one (compare with your own).
+            ///   - deviceName:
+            ///   - waiting: Changes and checks waiting for that phone to run them.
+            ///   - waitingSince: Since when the oldest of them waits.
+            public init(
+                location: Components.Schemas.ExecutionLocation,
+                label: Swift.String,
+                deviceInstallationId: Components.Schemas.Id? = nil,
+                deviceName: Swift.String? = nil,
+                waiting: Swift.Int32? = nil,
+                waitingSince: Components.Schemas.Timestamp? = nil
+            ) {
+                self.location = location
+                self.label = label
+                self.deviceInstallationId = deviceInstallationId
+                self.deviceName = deviceName
+                self.waiting = waiting
+                self.waitingSince = waitingSince
+            }
+            public enum CodingKeys: String, CodingKey {
+                case location
+                case label
+                case deviceInstallationId
+                case deviceName
+                case waiting
+                case waitingSince
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ConnectionExecutionChange`.
+        public struct ConnectionExecutionChange: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectionExecutionChange/location`.
+            public var location: Components.Schemas.KnownExecutionLocation
+            /// Creates a new `ConnectionExecutionChange`.
+            ///
+            /// - Parameters:
+            ///   - location:
+            public init(location: Components.Schemas.KnownExecutionLocation) {
+                self.location = location
+            }
+            public enum CodingKeys: String, CodingKey {
+                case location
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.location = try container.decode(
+                    Components.Schemas.KnownExecutionLocation.self,
+                    forKey: .location
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "location"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/DevicePlatform`.
+        @frozen public enum DevicePlatform: String, Codable, Hashable, Sendable, CaseIterable {
+            case ios = "ios"
+        }
+        /// The APNs environment the device token belongs to.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PushEnvironment`.
+        @frozen public enum PushEnvironment: String, Codable, Hashable, Sendable, CaseIterable {
+            case sandbox = "sandbox"
+            case production = "production"
+        }
+        /// - Remark: Generated from `#/components/schemas/DeviceRegistration`.
+        public struct DeviceRegistration: Codable, Hashable, Sendable {
+            /// The device's name, as the seller sees it ("Tonio's iPhone").
+            ///
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/platform`.
+            public var platform: Components.Schemas.DevicePlatform
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/appVersion`.
+            public var appVersion: Swift.String?
+            /// The version of phone calls the app's runtime speaks.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/runtimeVersion`.
+            public var runtimeVersion: Swift.Int32?
+            /// The APNs device token, hex; absent when the app has none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/pushToken`.
+            public var pushToken: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/DeviceRegistration/pushEnvironment`.
+            public var pushEnvironment: Components.Schemas.PushEnvironment?
+            /// Creates a new `DeviceRegistration`.
+            ///
+            /// - Parameters:
+            ///   - name: The device's name, as the seller sees it ("Tonio's iPhone").
+            ///   - platform:
+            ///   - appVersion:
+            ///   - runtimeVersion: The version of phone calls the app's runtime speaks.
+            ///   - pushToken: The APNs device token, hex; absent when the app has none.
+            ///   - pushEnvironment:
+            public init(
+                name: Swift.String,
+                platform: Components.Schemas.DevicePlatform,
+                appVersion: Swift.String? = nil,
+                runtimeVersion: Swift.Int32? = nil,
+                pushToken: Swift.String? = nil,
+                pushEnvironment: Components.Schemas.PushEnvironment? = nil
+            ) {
+                self.name = name
+                self.platform = platform
+                self.appVersion = appVersion
+                self.runtimeVersion = runtimeVersion
+                self.pushToken = pushToken
+                self.pushEnvironment = pushEnvironment
+            }
+            public enum CodingKeys: String, CodingKey {
+                case name
+                case platform
+                case appVersion
+                case runtimeVersion
+                case pushToken
+                case pushEnvironment
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.platform = try container.decode(
+                    Components.Schemas.DevicePlatform.self,
+                    forKey: .platform
+                )
+                self.appVersion = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .appVersion
+                )
+                self.runtimeVersion = try container.decodeIfPresent(
+                    Swift.Int32.self,
+                    forKey: .runtimeVersion
+                )
+                self.pushToken = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .pushToken
+                )
+                self.pushEnvironment = try container.decodeIfPresent(
+                    Components.Schemas.PushEnvironment.self,
+                    forKey: .pushEnvironment
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "name",
+                    "platform",
+                    "appVersion",
+                    "runtimeVersion",
+                    "pushToken",
+                    "pushEnvironment"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/Device`.
+        public struct Device: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Device/installationId`.
+            public var installationId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/Device/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Device/platform`.
+            public var platform: Components.Schemas.DevicePlatform
+            /// Whether Listora can send this device push notifications.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Device/pushEnabled`.
+            public var pushEnabled: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/Device/lastSeenAt`.
+            public var lastSeenAt: Components.Schemas.Timestamp
+            /// Creates a new `Device`.
+            ///
+            /// - Parameters:
+            ///   - installationId:
+            ///   - name:
+            ///   - platform:
+            ///   - pushEnabled: Whether Listora can send this device push notifications.
+            ///   - lastSeenAt:
+            public init(
+                installationId: Components.Schemas.Id,
+                name: Swift.String,
+                platform: Components.Schemas.DevicePlatform,
+                pushEnabled: Swift.Bool,
+                lastSeenAt: Components.Schemas.Timestamp
+            ) {
+                self.installationId = installationId
+                self.name = name
+                self.platform = platform
+                self.pushEnabled = pushEnabled
+                self.lastSeenAt = lastSeenAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case installationId
+                case name
+                case platform
+                case pushEnabled
+                case lastSeenAt
+            }
+        }
+        /// A `KnownPhoneWorkPurpose`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PhoneWorkPurpose`.
+        public struct PhoneWorkPurpose: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneWorkPurpose/value1`.
+            public var value1: Components.Schemas.KnownPhoneWorkPurpose?
+            /// - Remark: Generated from `#/components/schemas/PhoneWorkPurpose/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `PhoneWorkPurpose`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownPhoneWorkPurpose? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
+        /// or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
+        /// a look at the seller's sold orders.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownPhoneWorkPurpose`.
+        @frozen public enum KnownPhoneWorkPurpose: String, Codable, Hashable, Sendable, CaseIterable {
+            case operation = "operation"
+            case sessionCheck = "session_check"
+            case saleCheck = "sale_check"
+        }
+        /// - Remark: Generated from `#/components/schemas/PhoneRunClaim`.
+        public struct PhoneRunClaim: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneRunClaim/installationId`.
+            public var installationId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/PhoneRunClaim/runtimeVersion`.
+            public var runtimeVersion: Swift.Int32
+            /// Creates a new `PhoneRunClaim`.
+            ///
+            /// - Parameters:
+            ///   - installationId:
+            ///   - runtimeVersion:
+            public init(
+                installationId: Components.Schemas.Id,
+                runtimeVersion: Swift.Int32
+            ) {
+                self.installationId = installationId
+                self.runtimeVersion = runtimeVersion
+            }
+            public enum CodingKeys: String, CodingKey {
+                case installationId
+                case runtimeVersion
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.installationId = try container.decode(
+                    Components.Schemas.Id.self,
+                    forKey: .installationId
+                )
+                self.runtimeVersion = try container.decode(
+                    Swift.Int32.self,
+                    forKey: .runtimeVersion
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "installationId",
+                    "runtimeVersion"
+                ])
+            }
+        }
+        /// One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,
+        /// and its result comes back as `answerPhoneCall`'s `answer`. Its shape is the runtime's
+        /// (`PhoneCallInput` in packages/automation/src/phone/runtime.ts), versioned by
+        /// `runtimeVersion`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PhoneCall`.
+        public struct PhoneCall: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneCall/index`.
+            public var index: Swift.Int32
+            /// - Remark: Generated from `#/components/schemas/PhoneCall/input`.
+            public struct InputPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+                /// Creates a new `InputPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/PhoneCall/input`.
+            public var input: Components.Schemas.PhoneCall.InputPayload
+            /// Creates a new `PhoneCall`.
+            ///
+            /// - Parameters:
+            ///   - index:
+            ///   - input:
+            public init(
+                index: Swift.Int32,
+                input: Components.Schemas.PhoneCall.InputPayload
+            ) {
+                self.index = index
+                self.input = input
+            }
+            public enum CodingKeys: String, CodingKey {
+                case index
+                case input
+            }
+        }
+        /// The phone's run of one piece of work. While it has a `call`, the phone runs it and
+        /// answers; without one, the run is over and the phone claims the next.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PhoneRun`.
+        public struct PhoneRun: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneRun/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/PhoneRun/purpose`.
+            public var purpose: Components.Schemas.PhoneWorkPurpose
+            /// - Remark: Generated from `#/components/schemas/PhoneRun/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/PhoneRun/operationId`.
+            public var operationId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/PhoneRun/call`.
+            public var call: Components.Schemas.PhoneCall?
+            /// Creates a new `PhoneRun`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - purpose:
+            ///   - marketplace:
+            ///   - operationId:
+            ///   - call:
+            public init(
+                id: Components.Schemas.Id,
+                purpose: Components.Schemas.PhoneWorkPurpose,
+                marketplace: Components.Schemas.Marketplace,
+                operationId: Components.Schemas.Id? = nil,
+                call: Components.Schemas.PhoneCall? = nil
+            ) {
+                self.id = id
+                self.purpose = purpose
+                self.marketplace = marketplace
+                self.operationId = operationId
+                self.call = call
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case purpose
+                case marketplace
+                case operationId
+                case call
+            }
+        }
+        /// The run to continue, absent when there is nothing (more) to run.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PhoneRunResult`.
+        public struct PhoneRunResult: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneRunResult/run`.
+            public var run: Components.Schemas.PhoneRun?
+            /// Creates a new `PhoneRunResult`.
+            ///
+            /// - Parameters:
+            ///   - run:
+            public init(run: Components.Schemas.PhoneRun? = nil) {
+                self.run = run
+            }
+            public enum CodingKeys: String, CodingKey {
+                case run
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhoneCallAnswer`.
+        public struct PhoneCallAnswer: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhoneCallAnswer/installationId`.
+            public var installationId: Components.Schemas.Id
+            /// What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneCallAnswer/answer`.
+            public struct AnswerPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+                /// Creates a new `AnswerPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneCallAnswer/answer`.
+            public var answer: Components.Schemas.PhoneCallAnswer.AnswerPayload
+            /// Creates a new `PhoneCallAnswer`.
+            ///
+            /// - Parameters:
+            ///   - installationId:
+            ///   - answer: What `listoraPhone.run` returned (`PhoneCallOutput`), unchanged.
+            public init(
+                installationId: Components.Schemas.Id,
+                answer: Components.Schemas.PhoneCallAnswer.AnswerPayload
+            ) {
+                self.installationId = installationId
+                self.answer = answer
+            }
+            public enum CodingKeys: String, CodingKey {
+                case installationId
+                case answer
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.installationId = try container.decode(
+                    Components.Schemas.Id.self,
+                    forKey: .installationId
+                )
+                self.answer = try container.decode(
+                    Components.Schemas.PhoneCallAnswer.AnswerPayload.self,
+                    forKey: .answer
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "installationId",
+                    "answer"
                 ])
             }
         }

@@ -86,7 +86,8 @@ describe('session checks (real Postgres, headless Chromium)', () => {
     linkAutomationSession(
       database.db,
       { vault, profile },
-      { accountId, marketplace: 'poshmark', cookies: [cookie] },
+      // The browser runner's check; phone/work.int.test.ts runs it on the phone.
+      { accountId, marketplace: 'poshmark', cookies: [cookie], runsOn: 'cloud' },
     );
 
   const checkRow = (connectionId: string) =>

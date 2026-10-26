@@ -102,6 +102,10 @@ Packages/
     MarketplaceLinkingFeature  Settings > Link accounts: sign in on a marketplace's own page
                       in a web view and hand Listora its session
                       (docs/features/marketplace-linking.md)
+    PhoneExecutionFeature  The marketplace work Listora hands this phone: the runner, the
+                      phone runtime in off-screen web views (Resources/phone-runtime.js, built
+                      by `npm run phone:bundle`), handing a check to the seller, and the
+                      background tasks (docs/features/phone-execution.md)
 ```
 
 Dependency rules:

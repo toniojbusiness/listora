@@ -10,7 +10,7 @@
 import { sql } from 'kysely';
 
 import { SESSION_CHECK_DEADLINE_MS } from '@listora/connections';
-import { inTransaction, type DbExecutor, type Marketplace } from '@listora/db';
+import { inTransaction, jsonb, type DbExecutor, type Marketplace } from '@listora/db';
 
 /** The browser runner's task that checks one newly linked session (job.ts). */
 export const SESSION_CHECK_TASK = 'automation_session_check';
@@ -69,8 +69,85 @@ export async function requestSessionCheck(
     )
     .returning('check_id')
     .executeTakeFirstOrThrow();
-  await addSessionCheckJob(executor, { ...target, checkId }, null);
+  const connection = await executor
+    .selectFrom('marketplace_connection')
+    .select('runs_on')
+    .where('account_id', '=', target.accountId)
+    .where('id', '=', target.connectionId)
+    .executeTakeFirst();
+  if (connection?.runs_on === 'phone') {
+    // The connection's automated steps run on the phone, so its session is checked there.
+    await removeSessionCheckJob(executor, target.connectionId);
+    await queueSessionCheckForPhone(executor, { ...target, checkId });
+  } else {
+    await removePhoneSessionCheck(executor, target);
+    await addSessionCheckJob(executor, { ...target, checkId }, null);
+  }
   return { checkId };
+}
+
+/** Phone work runs lowest first, as jobs do (delists after a sale are -10). */
+const PHONE_SESSION_CHECK_PRIORITY = -20;
+
+/**
+ * Hands the connection's pending check to the phone (docs/features/phone-execution.md): its
+ * `phone_work` row, due after `delayMs` (a retry), replacing one for an older link.
+ */
+export async function queueSessionCheckForPhone(
+  executor: DbExecutor,
+  check: SessionCheckTarget & { checkId: string },
+  delayMs = 0,
+): Promise<void> {
+  const dueAt = sql<Date>`now() + make_interval(secs => ${delayMs / 1000})`;
+  await executor
+    .insertInto('phone_work')
+    .values({
+      account_id: check.accountId,
+      connection_id: check.connectionId,
+      marketplace: check.marketplace,
+      purpose: 'session_check',
+      check_id: check.checkId,
+      // Before anything else on the phone: the seller who just linked waits for it.
+      priority: PHONE_SESSION_CHECK_PRIORITY,
+      due_at: dueAt,
+    })
+    .onConflict((conflict) =>
+      conflict
+        .columns(['account_id', 'connection_id'])
+        .where('purpose', '=', 'session_check')
+        .doUpdateSet({
+          check_id: check.checkId,
+          due_at: dueAt,
+          waiting_since: sql<Date>`case when phone_work.check_id = ${check.checkId}
+            then phone_work.waiting_since else now() end`,
+          notified_at: null,
+          claimed_at: null,
+          lease_expires_at: null,
+          step: null,
+          transcript: jsonb([]),
+          pending_call: null,
+        }),
+    )
+    .execute();
+}
+
+/** Removes the connection's session check from the phone (its checks run in the cloud now). */
+export async function removePhoneSessionCheck(
+  executor: DbExecutor,
+  target: { accountId: string; connectionId: string },
+): Promise<void> {
+  await executor
+    .deleteFrom('phone_work')
+    .where('account_id', '=', target.accountId)
+    .where('connection_id', '=', target.connectionId)
+    .where('purpose', '=', 'session_check')
+    .execute();
+}
+
+async function removeSessionCheckJob(executor: DbExecutor, connectionId: string): Promise<void> {
+  await sql`select graphile_worker.remove_job(${sessionCheckJobKey(connectionId)})`.execute(
+    executor,
+  );
 }
 
 /**

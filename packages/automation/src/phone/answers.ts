@@ -1,0 +1,184 @@
+/**
+ * What the phone answers for a call, checked before the server uses it
+ * (docs/features/phone-execution.md). The app is the seller's own, but its answer crosses the
+ * network, so it is held to the shape a runner's answer has: a script result whose value is what
+ * that script returns, bounded strings, and no screenshot (only the runner keeps those, in its
+ * own storage). An answer that is not what the call returns counts as a script failure of the
+ * phone, and a write's as one that may have changed the listing, so a read-back decides.
+ */
+import { z } from 'zod';
+
+import { CHALLENGE_KINDS } from '@listora/db';
+import { REMOTE_LISTING_STATUSES } from '@listora/marketplaces';
+
+import type { ScriptCall } from '../adapter/script-call.ts';
+import { isWriteCall } from '../adapter/script-call.ts';
+import type { SessionRun } from '../adapter/sessions.ts';
+import type { ScriptErrorCode, ScriptResult } from '../runner/types.ts';
+
+const SCRIPT_ERROR_CODES = [
+  'rate_limited',
+  'server_error',
+  'unreachable',
+  'element_missing',
+  'aborted',
+  'browser_unavailable',
+  'script_error',
+  'stopped_for_check',
+] as const satisfies readonly ScriptErrorCode[];
+
+const short = z.string().min(1).max(100);
+const message = z
+  .string()
+  .max(2_000)
+  .transform((text) => text.slice(0, 200));
+
+const failure = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('challenge'), challenge: z.enum(CHALLENGE_KINDS), step: short }),
+  z.object({ kind: z.literal('timeout'), step: short }),
+  z.object({
+    kind: z.literal('error'),
+    step: short,
+    code: z.enum(SCRIPT_ERROR_CODES),
+    message,
+    retryAfterMs: z.number().int().min(0).max(86_400_000).nullable(),
+  }),
+]);
+
+const listingState = z.discriminatedUnion('found', [
+  z.object({ found: z.literal(false), authoritative: z.boolean() }),
+  z.object({
+    found: z.literal(true),
+    externalListingId: z.string().min(1).max(200),
+    externalUrl: z.string().max(2_000).nullable(),
+    status: z.enum(REMOTE_LISTING_STATUSES),
+    title: z.string().max(5_000).nullable(),
+    description: z.string().max(50_000).nullable(),
+    priceCents: z.number().int().min(0).nullable(),
+    currency: z.literal('USD').nullable(),
+    revision: z.number().int().min(0).nullable(),
+  }),
+]);
+
+const writeResult = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('applied'),
+    externalListingId: z.string().min(1).max(200).optional(),
+    revision: z.number().int().min(0).optional(),
+  }),
+  z.object({
+    type: z.literal('rejected'),
+    code: short,
+    message: z.string().min(1).max(1_000),
+    fixHint: z.string().min(1).max(1_000).optional(),
+  }),
+]);
+
+const orders = z
+  .array(
+    z.object({
+      externalOrderId: z.string().min(1).max(200),
+      soldAt: z.iso.datetime({ offset: true }).transform((time) => new Date(time)),
+      items: z
+        .array(
+          z.object({
+            externalListingId: z.string().min(1).max(200).nullable(),
+            title: z.string().max(5_000).nullable(),
+            priceCents: z.number().int().min(0),
+            currency: z.literal('USD'),
+          }),
+        )
+        .max(100),
+    }),
+  )
+  .max(1_000);
+
+/** What each script's value is. */
+function valueSchema(call: ScriptCall): z.ZodType {
+  switch (call.script) {
+    case 'create':
+    case 'revise':
+    case 'price':
+    case 'end':
+    case 'relist':
+    case 'markSold':
+      return writeResult;
+    case 'read':
+      return listingState;
+    case 'health':
+      // A health script returns nothing, which JSON leaves out.
+      return z
+        .undefined()
+        .or(z.null())
+        .transform(() => undefined);
+    case 'orders':
+      return orders;
+    case 'listings':
+      return z.object({ listings: z.array(listingState).max(5_000), complete: z.boolean() });
+  }
+}
+
+/**
+ * The phone's answer for `call`, as the session run a runner would have returned. `answer` is
+ * the JSON the app sent, or the transcript's stored copy of it.
+ */
+export function readPhoneAnswer(call: ScriptCall, answer: unknown): SessionRun<unknown> {
+  const run = z
+    .discriminatedUnion('type', [
+      z.object({ type: z.literal('no_session') }),
+      z.object({
+        type: z.literal('ran'),
+        result: z.object({
+          ok: z.boolean(),
+          value: z.unknown().optional(),
+          failure: failure.optional(),
+          mutated: z.boolean(),
+          steps: z.array(short).max(100),
+        }),
+      }),
+    ])
+    .safeParse(answer);
+  if (!run.success) return unreadable(call);
+  if (run.data.type === 'no_session') return { type: 'no_session' };
+  const { result } = run.data;
+  if (result.ok) {
+    const value = valueSchema(call).safeParse(result.value);
+    if (!value.success) return unreadable(call);
+    const ok: ScriptResult<unknown> = {
+      ok: true,
+      value: value.data,
+      mutated: result.mutated,
+      steps: result.steps,
+    };
+    return { type: 'ran', result: ok };
+  }
+  if (result.failure === undefined) return unreadable(call);
+  const stopped: ScriptResult<unknown> = {
+    ok: false,
+    mutated: result.mutated,
+    steps: result.steps,
+    // The phone keeps no screenshots; only the runner names its own.
+    failure: { ...result.failure, screenshotKey: null },
+  };
+  return { type: 'ran', result: stopped };
+}
+
+/** An answer the server can't read: the phone's failure, and maybe a change (for a write). */
+function unreadable(call: ScriptCall): SessionRun<unknown> {
+  return {
+    type: 'ran',
+    result: {
+      ok: false,
+      mutated: isWriteCall(call),
+      steps: [],
+      failure: {
+        kind: 'error',
+        step: 'phone',
+        code: 'script_error',
+        message: 'the phone sent an answer Listora could not read',
+        retryAfterMs: null,
+        screenshotKey: null,
+      },
+    },
+  };
+}

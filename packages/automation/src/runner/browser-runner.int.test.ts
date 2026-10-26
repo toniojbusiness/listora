@@ -97,7 +97,7 @@ describe('PlaywrightBrowserRunner (headless Chromium, fake site)', () => {
           await page.type('#price', '45.00');
           await page.fill('#sku', 'SKU-FORM-1');
           await page.upload('#photos', [
-            { name: 'front.jpg', mimeType: 'image/jpeg', buffer: Buffer.from([0xff, 0xd8]) },
+            { name: 'front.jpg', mimeType: 'image/jpeg', bytes: Buffer.from([0xff, 0xd8]) },
           ]);
         });
         return step('publish', { mutates: true }, async (page) => {

@@ -48,6 +48,23 @@ public struct MarketplaceRow: Identifiable, Equatable, Sendable {
     public let lastOkAt: Date?
     /// What the user can do now, the main action first.
     public let actions: [Action]
+    /// Where its automated steps run (docs/features/phone-execution.md); nil when they don't.
+    public let execution: Execution?
+
+    /// Where a connection's automated steps run, in the server's words.
+    public struct Execution: Equatable, Sendable {
+        public let label: String
+        public let onPhone: Bool
+        public let deviceName: String?
+        /// Changes and checks waiting for that phone.
+        public let waiting: Int
+
+        /// "Runs on Sam's iPhone · 2 waiting".
+        public var text: String {
+            let place = onPhone ? deviceName.map { "Runs on \($0)" } ?? label : label
+            return waiting > 0 ? "\(place) · \(waiting) waiting" : place
+        }
+    }
 
     public init(connection: Components.Schemas.Connection) {
         let marketplace = connection.marketplace.value1
@@ -60,6 +77,14 @@ public struct MarketplaceRow: Identifiable, Equatable, Sendable {
         mode = Self.mode(of: connection.mode)
         lastOkAt = connection.lastOkAt
         actions = Self.actions(of: connection, known: marketplace != nil)
+        execution = connection.execution.map { execution in
+            Execution(
+                label: execution.label,
+                onPhone: execution.location.value1 == .phone,
+                deviceName: execution.deviceName,
+                waiting: Int(execution.waiting ?? 0),
+            )
+        }
     }
 
     /// True when Listora works through the marketplace's API.
