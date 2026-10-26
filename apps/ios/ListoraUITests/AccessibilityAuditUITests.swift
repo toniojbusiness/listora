@@ -54,18 +54,11 @@ final class AccessibilityAuditUITests: XCTestCase {
         }
     }
 
-    func testMainScreensPassTheAudit() throws {
-        let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
-        let server = try StubAPIServer()
-        try server.start()
-        self.server = server
-        app.launchEnvironment = [
-            "LISTORA_FIXTURE_PHOTOS": fixtures.path(percentEncoded: false),
-            "LISTORA_RESET_LOCAL_DATA": "1",
-            "LISTORA_DEV_API_BASE_URL": server.baseURL,
-        ]
-        app.launch()
-        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+    /// The tab screens and Settings. The Add Item screens are a test of their own, so each stays
+    /// well inside the 5-minute allowance on CI, where an audit takes up to 45 seconds and the
+    /// first launch on the fresh simulator about a minute.
+    func testTabScreensPassTheAudit() throws {
+        try launch()
         XCTAssertTrue(app.descendants(matching: .any)["today.signedOut"].waitForExistence(timeout: 5))
         try audit("Today")
 
@@ -76,6 +69,18 @@ final class AccessibilityAuditUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Sign in to see your sales"].waitForExistence(timeout: 5))
         try audit("Sales")
 
+        app.tabBars.buttons["Tasks"].tap()
+        try audit("Tasks")
+
+        app.tabBars.buttons["Today"].tap()
+        app.buttons["settings.open"].tap()
+        XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
+        try audit("Settings")
+    }
+
+    /// Add Item, a draft of imported photos, and one photo.
+    func testAddItemScreensPassTheAudit() throws {
+        try launch()
         app.tabBars.buttons["Add"].tap()
         XCTAssertTrue(app.buttons["addItem.importPhotos"].waitForExistence(timeout: 5))
         try audit("Add Item")
@@ -88,13 +93,21 @@ final class AccessibilityAuditUITests: XCTestCase {
         XCTAssertTrue(app.buttons["photo.done"].waitForExistence(timeout: 5))
         try audit("Photo")
         app.buttons["photo.done"].tap()
+        // Back on the draft once the photo sheet has closed.
+        XCTAssertTrue(app.buttons["photo.tile.2"].waitForExistence(timeout: 5))
+    }
 
-        app.tabBars.buttons["Tasks"].tap()
-        try audit("Tasks")
-
-        app.tabBars.buttons["Today"].tap()
-        app.buttons["settings.open"].tap()
-        XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
-        try audit("Settings")
+    private func launch() throws {
+        let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
+        let server = try StubAPIServer()
+        try server.start()
+        self.server = server
+        app.launchEnvironment = [
+            "LISTORA_FIXTURE_PHOTOS": fixtures.path(percentEncoded: false),
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_API_BASE_URL": server.baseURL,
+        ]
+        app.launch()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
     }
 }
