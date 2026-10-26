@@ -440,7 +440,13 @@ export async function createTestApi(
   }));
   const cognito = new FakeCognitoUserAdmin();
   const marketplaceAccess = new FakeMarketplaceAccess();
-  const deletionDeps: AccountDeletionDependencies = { db, cognito, marketplaceAccess, logger };
+  const deletionDeps: AccountDeletionDependencies = {
+    db,
+    cognito,
+    marketplaceAccess,
+    storage,
+    logger,
+  };
   const accountDeletions: TestAccountDeletions = {
     cognito,
     marketplaceAccess,

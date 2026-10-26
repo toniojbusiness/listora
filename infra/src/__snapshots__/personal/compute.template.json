@@ -783,7 +783,7 @@
             "Rollback": true
           },
           "MaximumPercent": 200,
-          "MinimumHealthyPercent": 100
+          "MinimumHealthyPercent": 0
         },
         "EnableECSManagedTags": false,
         "LaunchType": "FARGATE",

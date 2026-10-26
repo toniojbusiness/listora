@@ -27,6 +27,10 @@ public final class LinkAccountsModel {
         case failed(APIFailure)
         /// Listora could not be asked to check again; Check again asks again.
         case checkFailed(APIFailure)
+        /// Asking Listora to unlink the marketplace.
+        case unlinking
+        /// The unlink did not go through; the marketplace is still linked. Retry asks again.
+        case unlinkFailed(APIFailure)
     }
 
     public private(set) var links: [MarketplaceLink] = []
@@ -36,6 +40,8 @@ public final class LinkAccountsModel {
     public var signingIn: MarketplaceLink?
     /// The sale emails section; nil where the screen shows none.
     public let saleEmails: SaleEmailsModel?
+    /// The marketplace the user asked to unlink, waiting for them to confirm.
+    public var confirmingUnlink: MarketplaceLink?
 
     private let service: any MarketplaceSessionService
     private let makeIdempotencyKey: @Sendable () -> String
@@ -89,9 +95,61 @@ public final class LinkAccountsModel {
 
     /// Opens the marketplace's sign-in page.
     public func startLinking(_ link: MarketplaceLink) {
-        guard link.canLink, progress[link.marketplace] != .sending,
-              progress[link.marketplace] != .requestingCheck else { return }
+        guard link.canLink, !isBusy(link.marketplace) else { return }
         signingIn = link
+    }
+
+    /// Asks the user to confirm unlinking: it deletes what Listora holds for the marketplace.
+    public func requestUnlink(_ link: MarketplaceLink) {
+        guard link.canUnlink, !isBusy(link.marketplace) else { return }
+        confirmingUnlink = link
+    }
+
+    public func cancelUnlink() {
+        confirmingUnlink = nil
+    }
+
+    /// The user confirmed unlinking `link`: unlinks it, then shows the server's state of it. It
+    /// shows as not linked only once the server says so. The link comes from the confirmation
+    /// itself, since dismissing the confirmation clears `confirmingUnlink` before its button acts.
+    public func confirmUnlink(_ link: MarketplaceLink) async {
+        confirmingUnlink = nil
+        guard link.canUnlink, !isBusy(link.marketplace) else { return }
+        await unlink(link.marketplace)
+    }
+
+    /// Asks again after an unlink that did not go through.
+    public func retryUnlink(_ marketplace: String) async {
+        guard case let .unlinkFailed(error) = progress[marketplace], error.retryable else { return }
+        await unlink(marketplace)
+    }
+
+    private func unlink(_ marketplace: String) async {
+        progress[marketplace] = .unlinking
+        unsent[marketplace] = nil
+        do {
+            try await service.unlink(marketplace)
+        } catch {
+            progress[marketplace] = .unlinkFailed(error)
+            return
+        }
+        progress[marketplace] = nil
+        do {
+            try await replace(service.get(marketplace))
+        } catch {
+            // The server confirmed the unlink but its fresh state could not be read: show what
+            // it confirmed, so the row never keeps saying Linked.
+            if let link = links.first(where: { $0.marketplace == marketplace }) {
+                replace(link.unlinked())
+            }
+        }
+    }
+
+    private func isBusy(_ marketplace: String) -> Bool {
+        switch progress[marketplace] {
+        case .sending, .requestingCheck, .unlinking: true
+        case .failed, .checkFailed, .unlinkFailed, nil: false
+        }
     }
 
     public func cancelSignIn() {
@@ -121,8 +179,7 @@ public final class LinkAccountsModel {
     /// Check again: asks Listora to check the session it already holds, then follows that check.
     /// The user does not sign in again.
     public func checkAgain(_ link: MarketplaceLink) async {
-        guard link.canCheckAgain, progress[link.marketplace] != .requestingCheck,
-              progress[link.marketplace] != .sending else { return }
+        guard link.canCheckAgain, !isBusy(link.marketplace) else { return }
         progress[link.marketplace] = .requestingCheck
         do {
             try await service.requestCheck(link.marketplace, idempotencyKey: makeIdempotencyKey())

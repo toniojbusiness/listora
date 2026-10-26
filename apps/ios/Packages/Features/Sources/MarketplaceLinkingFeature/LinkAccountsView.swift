@@ -3,8 +3,9 @@ import DesignSystem
 import SwiftUI
 
 /// Link accounts: Poshmark, Mercari, Depop, and eBay (until its API is connected), each with the
-/// server's status and a one-tap Link or Relink that opens the marketplace's own sign-in page;
-/// then the sale emails section (the forwarding address that catches their sold emails).
+/// server's status, a one-tap Link or Relink that opens the marketplace's own sign-in page, and
+/// Unlink (after a confirmation), which deletes what Listora holds for that marketplace; then the
+/// sale emails section (the forwarding address that catches their sold emails).
 public struct LinkAccountsView: View {
     @Bindable private var model: LinkAccountsModel
 
@@ -30,6 +31,17 @@ public struct LinkAccountsView: View {
                             onLink: { model.startLinking(link) },
                             onCheckAgain: { Task { await model.checkAgain(link) } },
                             onRetry: { Task { await model.retry(link.marketplace) } },
+                            onUnlink: { model.requestUnlink(link) },
+                            onRetryUnlink: { Task { await model.retryUnlink(link.marketplace) } },
+                            confirmingUnlink: Binding(
+                                get: { model.confirmingUnlink == link },
+                                set: {
+                                    if !$0 {
+                                        model.cancelUnlink()
+                                    }
+                                },
+                            ),
+                            onConfirmUnlink: { Task { await model.confirmUnlink(link) } },
                         )
                     }
                 } footer: {
@@ -87,9 +99,14 @@ private struct LinkAccountRow: View {
     let onLink: () -> Void
     let onCheckAgain: () -> Void
     let onRetry: () -> Void
+    let onUnlink: () -> Void
+    let onRetryUnlink: () -> Void
+    /// The confirmation, attached to this row's Unlink button so it opens next to it.
+    @Binding var confirmingUnlink: Bool
+    let onConfirmUnlink: () -> Void
 
     private var busy: Bool {
-        progress == .sending || progress == .requestingCheck
+        progress == .sending || progress == .requestingCheck || progress == .unlinking
     }
 
     var body: some View {
@@ -145,6 +162,23 @@ private struct LinkAccountRow: View {
                     .font(Typography.caption)
                     .foregroundStyle(Palette.danger)
                     .accessibilityIdentifier("linkAccounts.checkError.\(link.marketplace)")
+            case .unlinking:
+                Label("Unlinking \(link.name)...", systemImage: "minus.circle")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityIdentifier("linkAccounts.unlinking.\(link.marketplace)")
+            case let .unlinkFailed(error):
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(error.message)
+                        .font(Typography.caption)
+                        .foregroundStyle(Palette.danger)
+                        .accessibilityIdentifier("linkAccounts.unlinkError.\(link.marketplace)")
+                    if error.retryable {
+                        Button("Try again", action: onRetryUnlink)
+                            .font(Typography.caption)
+                            .accessibilityIdentifier("linkAccounts.retryUnlink.\(link.marketplace)")
+                    }
+                }
             case let .failed(error):
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(error.message)
@@ -159,6 +193,29 @@ private struct LinkAccountRow: View {
                 }
             case nil:
                 EmptyView()
+            }
+            if link.canUnlink, !busy {
+                Button("Unlink", role: .destructive, action: onUnlink)
+                    .buttonStyle(.listora(.destructiveText, size: .compact))
+                    // A text-only button: line its text up with the row's, not its padding.
+                    .padding(.leading, -Spacing.sm)
+                    .accessibilityIdentifier("linkAccounts.unlink.\(link.marketplace)")
+                    .confirmationDialog(
+                        "Unlink \(link.name)?",
+                        isPresented: $confirmingUnlink,
+                        titleVisibility: .visible,
+                    ) {
+                        Button("Unlink \(link.name)", role: .destructive, action: onConfirmUnlink)
+                            .accessibilityIdentifier("linkAccounts.confirmUnlink")
+                        Button("Cancel", role: .cancel) { confirmingUnlink = false }
+                    } message: {
+                        Text(
+                            "Listora deletes its \(link.name) sign-in and what it read from \(link.name), "
+                                + "and asks \(link.name) to end its access. Your items, listings, and sales stay. "
+                                + "Listings stay on \(link.name), but Listora can't update them until you link "
+                                + "it again.",
+                        )
+                    }
             }
         }
         .padding(.vertical, Spacing.xxs)

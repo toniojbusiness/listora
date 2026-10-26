@@ -1030,8 +1030,12 @@ export interface paths {
         post?: never;
         /**
          * Disconnect a marketplace account
-         * @description Revokes and deletes the stored tokens. Existing listings stay on the marketplace but
-         *     Listora can no longer change or verify them until the account is connected again.
+         * @description Unlinks the marketplace: deletes the stored tokens or session and the marketplace data
+         *     that came through the connection (the marketplace's user id and name, listing read-backs,
+         *     marketplace events, automation runs and their screenshots), and asks the marketplace to
+         *     revoke Listora's access. Items, listings, and sales stay. Existing listings stay on the
+         *     marketplace but Listora can no longer change or verify them until the account is
+         *     connected again. `404` when no account of the marketplace is linked.
          */
         delete: operations["disconnectConnection"];
         options?: never;

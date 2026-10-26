@@ -79,14 +79,14 @@ The iOS conventions are in [features/ios.md](features/ios.md).
 apps/
   api/          Fastify HTTP API (@listora/api)
   worker/       Background worker: operation engine, plus one module per feature's jobs in
-                src/features/ (account deletion, AI spend check, item analysis, batch items'
-                analysis start, photo processing, trust metrics, the daily connection health
-                check, the delist SLA, push delivery, sale fees, the morning summary, sale email
-                ingest); and the
+                src/features/ (account deletion, connection deletion, data retention, AI spend
+                check, item analysis, batch items' analysis start, photo processing, trust
+                metrics, the daily connection health check, the delist SLA, push delivery, sale
+                fees, the morning summary, sale email ingest); and the
                 on-demand browser runner (src/runner/main.ts)
                 (@listora/worker)
   admin/        Operator CLI (`npm run admin`): AI cost reports, spend check, AI kill switch
-                and account blocks (@listora/admin)
+                and account blocks, marketplace data purges (@listora/admin)
   ios/          iPhone app: XcodeGen project.yml, app and Share Extension targets, Packages/
                 (Core, DesignSystem, APIClient, Features); not an npm workspace
 packages/
@@ -101,9 +101,10 @@ packages/
   pricing/      Pricing v1: versioned fee tables, cost floor, AI-estimate tiers, research
                 links, sold-data label guard; pure, no I/O (@listora/pricing)
   api-contract/ OpenAPI v1 contract + generated TS and Swift code (@listora/api-contract)
-  db/           SQL migrations, migration runner, Kysely types, SKU allocator (@listora/db)
-  storage/      Object storage: local-disk driver with signed upload URLs, S3 driver
-                (@listora/storage)
+  db/           SQL migrations, migration runner, Kysely types, SKU allocator, deletion
+                completion records (@listora/db)
+  storage/      Object storage: local-disk driver with signed upload URLs, S3 driver, checked
+                purges (@listora/storage)
   photos/       Image pipeline: verification, metadata stripping, derivatives, sha256 and pHash,
                 the photo processing job, an item's photo-set hash (@listora/photos)
   marketplaces/ Marketplace adapter framework: interface, capabilities, registry, listing content,
@@ -112,7 +113,8 @@ packages/
                 fault injection (@listora/marketplaces)
   connections/  Marketplace account connections: OAuth connect, the token vault (local key or KMS)
                 for OAuth tokens and browser sessions, the session vault, use-time credentials
-                with single-flight refresh, health checks, revocation (@listora/connections)
+                with single-flight refresh, health checks, revocation, unlinking and its
+                deletion job (@listora/connections)
   automation/   Browser automation (decision D1): the Playwright runner, its safety rules, the
                 automation adapter base, sale-check scheduling, the runner launcher, the
                 fake marketplace site, and the Poshmark, Mercari, Depop, and eBay adapters with
@@ -135,6 +137,8 @@ packages/
                 Cognito user administration, marketplace grant revocation (@listora/accounts)
   observability/ Trust metrics: metric catalog, CloudWatch EMF output, the worker's metrics job
                 (@listora/observability)
+  retention/    Data retention: how long logs and raw payloads are kept, the daily job that
+                deletes what expired (@listora/retention)
   shared/       Types and utilities used by every backend workspace (@listora/shared)
   testing/      Test-only helpers: test DB URL, scratch databases, process harness (@listora/testing)
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
@@ -148,7 +152,8 @@ scripts/
   container-smoke.sh  Builds the application image and runs it as AWS does (CI)
   ios-release.sh  iOS release archive and TestFlight upload (make ios-archive, ios-testflight)
 Dockerfile      Images: `app` runs the API and the worker; `runner` adds headless Chromium
-docs/           This overview, the roadmap, and one doc per feature in docs/features/
+docs/           This overview, the roadmap, one doc per feature in docs/features/, and the
+                privacy policy and terms drafts in docs/legal/
 Makefile        iOS commands (make ios-test, ios-lint, ...)
 ```
 
@@ -288,8 +293,11 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
 
 - **Tenancy.** Every table has a non-null `account_id`, except `account` itself, `app_user`
   (a person's identity is global, and `membership` links it to accounts), the deleted
-  identity tables `deleted_identity`, `account_deletion`, and `account_deletion_grant`, and the
-  platform tables `ai_kill_switch` and `ai_control_audit`, which belong to no single tenant. Child
+  identity tables `deleted_identity`, `account_deletion`, `account_deletion_grant`, and
+  `account_deletion_object`, the deletion tables `connection_deletion`,
+  `connection_deletion_object`, and `deletion_record` ([privacy.md](features/privacy.md#data)),
+  and the platform tables `ai_kill_switch` and `ai_control_audit`, which belong to no single
+  tenant. Child
   rows reference parents through composite `(account_id, <parent>_id)` foreign keys, so the
   database rejects a row that points at another tenant's data. Deleting an account deletes
   all of its data.
@@ -303,8 +311,10 @@ PostgreSQL, one schema, defined by the SQL migrations in `packages/db/migrations
 - **History is kept.** A trigger rejects updates and deletes on the append-only tables, and
   deletes on `marketplace_operation`. The only changes it lets through are foreign-key actions
   caused by deleting a parent row (for example deleting the account), never direct statements
-  or other triggers. So an operation and its `operation_event` history go away only with the
-  account.
+  or other triggers, and the retention job's deletes of expired rows, which name the one table
+  they delete from in the transaction setting `listora.retention_delete`
+  ([privacy.md](features/privacy.md#retention)). So an operation goes away only with the
+  account, and its `operation_event` history with the account or 180 days after it settled.
 - **Invariants in the schema.** An operation can be `succeeded` only with `success_evidence`
   (`read_back` or `user_confirmation`), and `failed` only with a user-readable error. A create,
   revise, or relist has listing `content`, and no other kind does. Assisted connections can
@@ -436,6 +446,8 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/voice.md](features/voice.md)                             | Spoken corrections on the review, common values, and "Next to check"          |
 | [features/security.md](features/security.md)                       | The security review: findings, severities, fixes, and follow-ups              |
 | [features/performance.md](features/performance.md)                 | Latency, idle cost, AI cost per item, and the API benchmark at 2,000 items    |
+| [features/privacy.md](features/privacy.md)                         | Deletions with completion records, unlinking, retention, photo metadata       |
+| [features/threat-model.md](features/threat-model.md)               | Assets, trust boundaries, the main threats, and where each is mitigated       |
 | [features/bugs.md](features/bugs.md)                               | The bug bash: each bug found, how to see it, its fix and test, the follow-ups |
 
 ### Former section numbers

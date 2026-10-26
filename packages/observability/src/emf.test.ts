@@ -136,6 +136,7 @@ describe('formatEmf', () => {
       AiDailyCostUsd: 'None',
       MarketplaceConnections: 'Count',
       ConnectionsNeedingRelink: 'Count',
+      OverdueDeletions: 'Count',
     });
   });
 });

@@ -46,6 +46,11 @@ final class StubAPIServer: @unchecked Sendable {
         queue.sync { todayState = state }
     }
 
+    /// Poshmark reads as linked (its check passed) from the next request on.
+    func linkPoshmark() {
+        queue.sync { poshmarkChecks = 2 }
+    }
+
     private(set) var port: UInt16 = 0
 
     var baseURL: String {
@@ -160,7 +165,7 @@ final class StubAPIServer: @unchecked Sendable {
             // Saved as sent.
             return Self.http(status: "200 OK", body: request.body)
         default:
-            return respondToLinkAccounts(method: request.method, path: path, body: request.body)
+            return respondToLinkAccounts(method: request.method, path: path)
                 ?? respondToSaleEmails(method: request.method, path: path, body: request.body)
                 ?? respondToDevSignIn(request, path: path)
                 ?? Self.http(
@@ -223,45 +228,27 @@ final class StubAPIServer: @unchecked Sendable {
     "externalUrl":"https://poshmark.com/listing/Lululemon-Align-Pant-25-64f1a2b3c4d5e6f7a8b9c0d1",
     "availableActions":[],"createdAt":"2026-10-24T12:00:00Z","updatedAt":"2026-10-24T12:00:00Z"}
     """
-
-    /// The Marketplaces screen before eBay is connected: the health summary, nothing needing
-    /// attention (`packages/connections/src/health-summary.ts`).
-    private static let connectionHealth = #"{"needsAttention":false,"attention":[],"#
-        + #""connections":\#(connections),"saleForwarding":{"status":"needs_domain","statusDisplay":"#
-        + #"{"tone":"neutral","label":"Set up when you add a domain","detail":"Forwarding your "#
-        + #"marketplaces' sale emails to Listora lets it spot sales sooner. It needs Listora's email "#
-        + #"domain, which isn't set up yet."}}}"#
-
-    /// Every marketplace's connection before eBay is connected, as a JSON array, in the words the
-    /// server uses (`packages/connections/src/status-display.ts`).
-    private static let connections: String = {
-        func capabilities(_ mode: String, connect: String) -> String {
-            let verify = mode == "api" ? "api" : "user_confirm"
-            return #"{"connect":"\#(connect)","create":"\#(mode)","updatePrice":"\#(mode)","#
-                + #""updateDetails":"\#(mode)","delist":"\#(mode)","relist":"\#(mode)","markSold":"\#(mode)","#
-                + #""verifyRead":"\#(verify)","importListings":"none","saleDetection":["manual"],"#
-                + #""imageTransport":"url_fetch"}"#
-        }
-        func assisted(_ id: String, _ name: String) -> String {
-            #"{"marketplace":"\#(id)","mode":"assisted","status":"not_connected","#
-                + #""statusDisplay":{"tone":"neutral","label":"Not linked","detail":"Listora works with "#
-                + #"\#(name) in assisted mode: it prepares each listing and change, and you finish it in the "#
-                + #"\#(name) app, then confirm it."},"#
-                + #""capabilities":\#(capabilities("assisted", connect: "none")),"availableActions":[]}"#
-        }
-        let ebay = #"{"marketplace":"ebay","mode":"api","status":"not_connected","#
-            + #""statusDisplay":{"tone":"neutral","label":"Not connected","detail":"Connect your eBay "#
-            + #"account so Listora can list, update, and end your items there, and confirm every change "#
-            + #"with eBay."},"capabilities":\#(capabilities("api", connect: "oauth")),"#
-            + #""availableActions":["connect"]}"#
-        let all = [ebay, assisted("depop", "Depop"), assisted("poshmark", "Poshmark"), assisted("mercari", "Mercari")]
-        return "[\(all.joined(separator: ","))]"
-    }()
 }
 
 /// Link accounts: a fake marketplace's sign-in page and the marketplace-sessions endpoints.
 extension StubAPIServer {
-    private func respondToLinkAccounts(method: String, path: String, body _: String) -> Data? {
+    /// The actions on a connection: unlinking Poshmark and checking Depop's sign-in again.
+    private func respondToConnectionActions(method: String, path: String) -> Data? {
+        switch (method, path) {
+        case ("DELETE", "/v1/connections/poshmark"):
+            // Unlinked: the session is gone, and Poshmark is back to assisted.
+            poshmarkChecks = nil
+            return Self.http(status: "200 OK", body: Self.assistedConnection("poshmark", "Poshmark"))
+        case ("POST", "/v1/connections/depop/checks"):
+            // Retry check of the sign-in the server holds: the connection, checking.
+            depopRechecks = 0
+            return Self.http(status: "202 Accepted", body: Self.depopConnectionChecking)
+        default:
+            return nil
+        }
+    }
+
+    private func respondToLinkAccounts(method: String, path: String) -> Data? {
         switch (method, path) {
         case ("GET", Self.loginPath):
             return Self.http(status: "200 OK", contentType: "text/html; charset=utf-8", body: Self.loginPage)
@@ -287,15 +274,11 @@ extension StubAPIServer {
         case ("GET", "/v1/marketplace-sessions/poshmark"):
             poshmarkChecks = poshmarkChecks.map { $0 + 1 }
             return Self.http(status: "200 OK", body: poshmarkSession())
-        case ("POST", "/v1/connections/depop/checks"):
-            // Retry check of the sign-in the server holds: the connection, checking.
-            depopRechecks = 0
-            return Self.http(status: "202 Accepted", body: Self.depopConnectionChecking)
         case ("GET", "/v1/marketplace-sessions/depop"):
             depopRechecks = depopRechecks.map { $0 + 1 }
             return Self.http(status: "200 OK", body: depopSession())
         default:
-            return nil
+            return respondToConnectionActions(method: method, path: path)
         }
     }
 
@@ -372,13 +355,6 @@ extension StubAPIServer {
                 + #""label":"Linked"},\#(login)}"#
         }
     }
-
-    private static let depopConnectionChecking = #"{"marketplace":"depop","mode":"automation","#
-        + #""status":"connected","statusDisplay":{"tone":"checking","label":"Checking..."},"#
-        + #""capabilities":{"connect":"none","create":"automation","updatePrice":"automation","#
-        + #""updateDetails":"automation","delist":"automation","relist":"automation","#
-        + #""markSold":"automation","verifyRead":"automation","importListings":"none","#
-        + #""saleDetection":["poll"],"imageTransport":"upload"},"availableActions":[]}"#
 
     private static let ebaySession = """
     {"marketplace":"ebay","status":"not_linked","statusDisplay":{"tone":"neutral","label":"Not linked"},

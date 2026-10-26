@@ -419,6 +419,59 @@ describe('trust metrics (real Postgres)', () => {
         ConnectionsNeedingRelink: [0],
       });
     });
+
+    it('counts account and connection deletions unfinished past their 8-day deadline', async () => {
+      const overdue = () =>
+        collectCurrentState(db, TICK).then((groups) => find(groups, 'OverdueDeletions')[0]);
+      expect((await overdue())?.values).toEqual({ OverdueDeletions: [0] });
+      const daysBefore = (days: number) => new Date(TICK.getTime() - days * 86_400_000);
+      const account = await db
+        .insertInto('account_deletion')
+        .values({
+          auth_provider: 'dev',
+          auth_subject_sha256: Buffer.alloc(32, 7),
+          requested_at: daysBefore(9),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const connections = await db
+        .insertInto('connection_deletion')
+        .values([
+          {
+            connection_id: crypto.randomUUID(),
+            marketplace: 'ebay',
+            reason: 'unlinked',
+            revocation: 'none',
+            requested_at: daysBefore(8.5),
+          },
+          {
+            connection_id: crypto.randomUUID(),
+            marketplace: 'ebay',
+            reason: 'unlinked',
+            revocation: 'none',
+            requested_at: daysBefore(7),
+          },
+        ])
+        .returning('id')
+        .execute();
+      try {
+        expect(await overdue()).toEqual({
+          timestamp: TICK,
+          dimensions: {},
+          values: { OverdueDeletions: [2] },
+        });
+      } finally {
+        await db.deleteFrom('account_deletion').where('id', '=', account.id).execute();
+        await db
+          .deleteFrom('connection_deletion')
+          .where(
+            'id',
+            'in',
+            connections.map((row) => row.id),
+          )
+          .execute();
+      }
+    });
   });
 
   describe('the job', () => {
@@ -465,6 +518,7 @@ describe('trust metrics (real Postgres)', () => {
           'AiDailyCostUsd',
           'MarketplaceConnections',
           'ConnectionsNeedingRelink',
+          'OverdueDeletions',
         ]),
       );
       for (const line of lines) {

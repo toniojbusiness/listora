@@ -3,13 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Listora operator CLI: AI cost reports, spend alerts, and the AI kill switch and account blocks.",
+  "description": "Listora operator CLI: AI cost reports, spend alerts, the AI kill switch and account blocks, and marketplace data purges.",
   "scripts": {
     "admin": "node --env-file-if-exists=../../.env src/cli.ts"
   },
   "dependencies": {
     "@listora/ai": "*",
+    "@listora/connections": "*",
     "@listora/db": "*",
+    "@listora/marketplaces": "*",
     "@listora/shared": "*"
   },
   "devDependencies": {

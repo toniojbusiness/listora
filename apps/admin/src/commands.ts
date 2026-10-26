@@ -9,7 +9,9 @@ import {
   type AiControlChange,
   type AiSpendAlert,
 } from '@listora/ai';
+import { purgeMarketplaceConnections } from '@listora/connections';
 import type { AiControlAction, Db } from '@listora/db';
+import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { assertNever, type Logger } from '@listora/shared';
 
 import { USAGE, type Command } from './args.ts';
@@ -293,6 +295,35 @@ export async function runCommand(command: Command, context: CommandContext): Pro
             block.reason,
           ]),
         ),
+      );
+      return;
+    }
+
+    case 'marketplace-purge': {
+      const target = { marketplace: command.marketplace, mode: command.mode };
+      const { connections } = await purgeMarketplaceConnections(db, target, {
+        dryRun: !command.confirm,
+      });
+      const what = `${MARKETPLACE_NAMES[command.marketplace]} ${command.mode} connection`;
+      const plural = connections === 1 ? '' : 's';
+      if (!command.confirm) {
+        print(
+          `${String(connections)} ${what}${plural} would be deleted. Run again with --confirm to delete them.`,
+        );
+        return;
+      }
+      context.logger.warn(
+        {
+          event: 'marketplace_purge',
+          ...target,
+          connections,
+          actor: command.change.actor,
+          reason: command.change.reason,
+        },
+        'marketplace connections purged',
+      );
+      print(
+        `Deleted the data of ${String(connections)} ${what}${plural}. The worker revokes their grants and records each deletion.`,
       );
       return;
     }

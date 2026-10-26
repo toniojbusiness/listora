@@ -36,7 +36,7 @@ export interface RecordedRequest {
   headers: Record<string, string>;
 }
 
-/** The S3 subset the driver uses: PutObject, HeadObject, GetObject, DeleteObject. */
+/** The S3 subset the driver uses: PutObject, HeadObject, GetObject, DeleteObject, ListObjectsV2. */
 export class FakeS3 {
   readonly objects = new Map<string, StoredObject>();
   readonly requests: RecordedRequest[] = [];
@@ -97,6 +97,7 @@ export class FakeS3 {
         });
       }
       case 'GET': {
+        if (key === '' && request.query?.['list-type'] === '2') return this.#list(bucket, request);
         const stored = this.objects.get(objectId);
         if (!stored) return response(404, {}, errorXml('NoSuchKey', 'The key does not exist'));
         return response(
@@ -114,6 +115,25 @@ export class FakeS3 {
       default:
         return response(405, {}, errorXml('MethodNotAllowed', request.method));
     }
+  }
+
+  /** ListObjectsV2: the bucket's keys under `prefix`, in key order, up to `max-keys`. */
+  #list(bucket: string, request: FakeRequest) {
+    const prefix = String(request.query?.['prefix'] ?? '');
+    const maxKeys = Number(request.query?.['max-keys'] ?? 1000);
+    const keys = [...this.objects.keys()]
+      .filter((id) => id.startsWith(`${bucket}/${prefix}`))
+      .map((id) => id.slice(bucket.length + 1))
+      .sort()
+      .slice(0, maxKeys);
+    const contents = keys.map((key) => `<Contents><Key>${key}</Key></Contents>`).join('');
+    return response(
+      200,
+      { 'content-type': 'application/xml' },
+      `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><Name>${bucket}</Name>` +
+        `<Prefix>${prefix}</Prefix><KeyCount>${String(keys.length)}</KeyCount>` +
+        `<MaxKeys>${String(maxKeys)}</MaxKeys><IsTruncated>false</IsTruncated>${contents}</ListBucketResult>`,
+    );
   }
 }
 

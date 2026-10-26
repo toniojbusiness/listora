@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { createMigratedDatabase, type MigratedDatabase } from '@listora/db/testing';
 import { createLogger } from '@listora/shared';
+import { LocalDiskStorage, type ObjectStorage } from '@listora/storage';
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -18,17 +22,27 @@ import { accountDeletionJobs, FakeCognitoUserAdmin, FakeMarketplaceAccess } from
 const POLICY: AccountDeletionPolicy = {
   delaysMs: [60_000, 300_000],
   revocationWindowMs: 7 * 86_400_000,
+  completionDeadlineMs: 8 * 86_400_000,
 };
 
 describe('account deletion job (real Postgres)', () => {
   let database: MigratedDatabase;
+  let storageDir: string;
+  let storage: LocalDiskStorage;
 
   beforeAll(async () => {
     database = await createMigratedDatabase('accounts', { jobQueue: true });
+    storageDir = await mkdtemp(join(tmpdir(), 'listora-accounts-'));
+    storage = new LocalDiskStorage({
+      rootDir: storageDir,
+      baseUrl: 'http://127.0.0.1:3000',
+      signingSecret: 'accounts-test-signing-secret-0123456789',
+    });
   });
 
   afterAll(async () => {
     await database.close();
+    await rm(storageDir, { recursive: true, force: true });
   });
 
   interface Harness extends AccountDeletionDependencies {
@@ -43,6 +57,7 @@ describe('account deletion job (real Postgres)', () => {
       db: database.db,
       cognito: new FakeCognitoUserAdmin(),
       marketplaceAccess: new FakeMarketplaceAccess(),
+      storage,
       logger: createLogger({
         service: 'accounts-test',
         level: 'info',
@@ -64,11 +79,34 @@ describe('account deletion job (real Postgres)', () => {
   async function start(
     identity: AccountDeletionRequest['identity'],
     grants: AccountDeletionRequest['grants'] = [],
+    more: Partial<AccountDeletionRequest> = {},
   ): Promise<string> {
     const { deletionId } = await database.db
       .transaction()
-      .execute((trx) => startAccountDeletion(trx, { identity, grants }));
+      .execute((trx) =>
+        startAccountDeletion(trx, { identity, grants, userId: randomUUID(), ...more }),
+      );
     return deletionId;
+  }
+
+  function record(deletionId: string) {
+    return database.db
+      .selectFrom('deletion_record')
+      .selectAll()
+      .where('id', '=', deletionId)
+      .executeTakeFirst();
+  }
+
+  async function storeObjects(keys: readonly string[]): Promise<void> {
+    for (const key of keys) {
+      await storage.put(key, new Uint8Array([1, 2, 3]), { contentType: 'image/jpeg' });
+    }
+  }
+
+  async function stored(keys: readonly string[]): Promise<string[]> {
+    const found: string[] = [];
+    for (const key of keys) if (await storage.head(key)) found.push(key);
+    return found;
   }
 
   function tombstone(deletionId: string) {
@@ -101,7 +139,7 @@ describe('account deletion job (real Postgres)', () => {
     const identity = cognitoIdentity();
     await expect(
       database.db.transaction().execute(async (trx) => {
-        await startAccountDeletion(trx, { identity, grants: [] });
+        await startAccountDeletion(trx, { identity, grants: [], userId: randomUUID() });
         throw new Error('the deletion failed');
       }),
     ).rejects.toThrow('the deletion failed');
@@ -271,7 +309,7 @@ describe('account deletion job (real Postgres)', () => {
     });
 
     it('gives up when the window ends: tokens deleted, the seller told to revoke', async () => {
-      const policy = { delaysMs: [86_400_000], revocationWindowMs: 3_600_000 };
+      const policy = { ...POLICY, delaysMs: [86_400_000], revocationWindowMs: 3_600_000 };
       const deps = harness({ policy });
       const unconfirmed = grant('depop');
       deps.marketplaceAccess.answer(unconfirmed.connectionId, false);
@@ -320,6 +358,105 @@ describe('account deletion job (real Postgres)', () => {
         confirmed.connectionId,
         confirmed.connectionId,
       ]);
+    });
+  });
+
+  describe('stored objects and the completion record', () => {
+    it('deletes every object of the account, checks them gone, and records the deletion', async () => {
+      const deps = harness();
+      const accountId = randomUUID();
+      const named = [`public/${randomUUID()}/listing.jpg`, `uploads/${accountId}/upload-1`];
+      // An object no row named, under the account's prefix: found by listing it.
+      const orphan = `photos/${accountId}/photo-1/token/ai.jpg`;
+      const other = [`photos/${randomUUID()}/photo-2/token/ai.jpg`, `public/${randomUUID()}/x.jpg`];
+      await storeObjects([...named, orphan, ...other]);
+      const deletionId = await start(cognitoIdentity(), [], {
+        accountId,
+        objectKeys: named,
+        objectPrefixes: [`photos/${accountId}/`, `uploads/${accountId}/`],
+      });
+
+      expect(await completeAccountDeletion(deps, deletionId)).toBe('completed');
+      expect(await stored([...named, orphan])).toEqual([]);
+      expect(await stored(other)).toEqual(other);
+      expect(await tombstone(deletionId)).toBeUndefined();
+      const completed = await record(deletionId);
+      expect(completed).toMatchObject({
+        kind: 'account',
+        reason: 'user_request',
+        marketplace: null,
+        summary: {
+          accountDeleted: true,
+          identityProvider: 'cognito',
+          revoked: [],
+          revokeManually: [],
+          verified: { rows: 0, objects: 0 },
+          attempts: 1,
+        },
+      });
+      expect(completed?.completed_at.getTime()).toBeGreaterThanOrEqual(
+        completed?.requested_at.getTime() ?? Infinity,
+      );
+      // The record names nothing about the person or the account.
+      expect(JSON.stringify(completed)).not.toContain(accountId);
+    });
+
+    it('keeps the deletion open while storage fails, and is overdue past the deadline', async () => {
+      const failing: ObjectStorage = {
+        driver: 'local',
+        createUploadTarget: (request) => storage.createUploadTarget(request),
+        head: (key) => storage.head(key),
+        get: (key) => storage.get(key),
+        put: (key, body, options) => storage.put(key, body, options),
+        list: (prefix, limit) => storage.list(prefix, limit),
+        publicUrl: (key) => storage.publicUrl(key),
+        delete: () => Promise.reject(new Error('SlowDown')),
+      };
+      const later = Date.now() + 9 * 86_400_000;
+      const deps = harness({ storage: failing, now: () => later });
+      const key = `public/${randomUUID()}/listing.jpg`;
+      await storeObjects([key]);
+      const deletionId = await start(cognitoIdentity(), [], { objectKeys: [key] });
+
+      expect(await completeAccountDeletion(deps, deletionId)).toBe('retrying');
+      expect(await stored([key])).toEqual([key]);
+      expect(await tombstone(deletionId)).toMatchObject({ objects_deleted_at: null });
+      expect(await record(deletionId)).toBeUndefined();
+      expect(deps.logs).toContainEqual(
+        expect.objectContaining({
+          level: 50,
+          event: 'account_deletion_overdue',
+          identityDeleted: true,
+          objectsDeleted: false,
+        }),
+      );
+
+      expect(await completeAccountDeletion(harness(), deletionId)).toBe('completed');
+      expect(await stored([key])).toEqual([]);
+      expect(await record(deletionId)).toBeDefined();
+    });
+
+    it('never records a deletion complete while rows of the account remain', async () => {
+      const deps = harness();
+      const account = await database.db
+        .insertInto('account')
+        .values({ name: 'Left behind', sku_prefix: 'LB' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      const deletionId = await start(cognitoIdentity(), [], { accountId: account.id });
+
+      expect(await completeAccountDeletion(deps, deletionId)).toBe('retrying');
+      expect(deps.logs).toContainEqual(
+        expect.objectContaining({
+          level: 50,
+          remainingRows: { 'account.id': 1, 'sku_sequence.account_id': 1 },
+          msg: 'rows of a deleted account remain; not completing',
+        }),
+      );
+      expect(await record(deletionId)).toBeUndefined();
+
+      await database.db.deleteFrom('account').where('id', '=', account.id).execute();
+      expect(await completeAccountDeletion(deps, deletionId)).toBe('completed');
     });
   });
 
