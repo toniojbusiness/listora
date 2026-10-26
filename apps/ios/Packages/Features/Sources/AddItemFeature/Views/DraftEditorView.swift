@@ -16,6 +16,9 @@ struct DraftEditorView: View {
 
     @State private var draft: Draft?
     @State private var selection: PhotoSelection?
+    /// The photo the detail sheet last showed, kept on screen for the moment a cleanup's new photo
+    /// takes to reach the observed draft.
+    @State private var shownPhoto: DraftPhotoRecord?
     @State private var isCapturing = false
     @State private var isConfirmingDelete = false
     @State private var unloadedPhotos: PickedPhotos<PhotosPickerItem>?
@@ -110,22 +113,15 @@ struct DraftEditorView: View {
         } message: {
             Text("Its photos are removed from this iPhone and from Listora.")
         }
-        .sheet(item: $selection) { selection in
-            Group {
-                // The observed draft can lag a moment behind a cleanup's new photo; the store has it.
-                if let photo = draft?.photos.first(where: { $0.id == selection.photoID })
-                    ?? (try? model.store.photo(id: selection.photoID))
-                {
-                    PhotoDetailView(photo: photo, model: model) { newID in
-                        self.selection?.photoID = newID
-                    }
-                } else {
-                    // The photo was removed or replaced (cropped) while open.
-                    Color.clear.onAppear { self.selection = nil }
-                }
-            }
-            .navigationTransition(.zoom(sourceID: selection.id, in: photoTransition))
-        }
+        .sheet(
+            item: $selection,
+            onDismiss: { shownPhoto = nil },
+            content: { selection in
+                // Zooms back into the tile of the photo now open: after a cleanup, the new one's.
+                photoDetail(for: selection)
+                    .navigationTransition(.zoom(sourceID: selection.photoID, in: photoTransition))
+            },
+        )
         .fullScreenCover(isPresented: $isCapturing) {
             CameraCaptureView(
                 camera: environment.makeCamera(),
@@ -280,6 +276,33 @@ extension DraftEditorView {
             }
         }
         .motion(Motion.gentle, value: draft.photos.map(\.id))
+    }
+}
+
+extension DraftEditorView {
+    /// The open photo's detail. A photo that is gone (removed, or cropped into a new one) closes
+    /// the sheet; one that a background cleanup is replacing stays on screen meanwhile.
+    @ViewBuilder
+    private func photoDetail(for selection: PhotoSelection) -> some View {
+        let current = draft?.photos.first(where: { $0.id == selection.photoID })
+            ?? (try? model.store.photo(id: selection.photoID))
+        if let photo = current ?? shownPhoto {
+            PhotoDetailView(photo: photo, model: model) { newID in
+                self.selection?.photoID = newID
+            }
+            .task(id: current) {
+                guard current == nil else {
+                    shownPhoto = current
+                    return
+                }
+                // A replacement lands within a moment; a photo still missing after it is gone.
+                try? await Task.sleep(for: .milliseconds(800))
+                guard !Task.isCancelled else { return }
+                self.selection = nil
+            }
+        } else {
+            Color.clear.onAppear { self.selection = nil }
+        }
     }
 }
 

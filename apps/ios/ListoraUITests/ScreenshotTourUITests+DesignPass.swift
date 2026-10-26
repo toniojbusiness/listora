@@ -11,7 +11,7 @@ extension ScreenshotTourUITests {
             "LISTORA_FIXTURE_PHOTOS": haul.path(percentEncoded: false),
         ]
         app.launch()
-        XCTAssertTrue(app.descendants(matching: .any)["gettingStarted"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["gettingStarted.skip"].waitForExistence(timeout: 10))
         try shot("40-welcome-link")
         app.buttons["gettingStarted.continue"].tap()
         try shot("41-welcome-add")

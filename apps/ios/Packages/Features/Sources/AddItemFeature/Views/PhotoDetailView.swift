@@ -128,8 +128,6 @@ struct PhotoDetailView: View {
                     .fixedSize()
                     .accessibilityIdentifier("photo.undoCleanup")
                 }
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("photo.cleaned")
             }
             if let cleanupFailure {
                 Banner(

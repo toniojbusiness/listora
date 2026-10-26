@@ -66,7 +66,6 @@ struct GettingStartedView: View {
         }
         .background(Palette.background)
         .sensoryFeedback(.selection, trigger: page)
-        .accessibilityIdentifier("gettingStarted")
     }
 
     private var actions: some View {

@@ -20,7 +20,7 @@ final class DesignPassUITests: XCTestCase {
     func testGettingStartedWalksThroughThreeStepsOnceAndOpensAdd() {
         app.launchEnvironment = ["LISTORA_RESET_LOCAL_DATA": "1", "LISTORA_SHOW_GETTING_STARTED": "1"]
         app.launch()
-        let guide = app.descendants(matching: .any)["gettingStarted"]
+        let guide = app.buttons["gettingStarted.skip"]
         XCTAssertTrue(guide.waitForExistence(timeout: 10))
         for step in 1 ... 2 {
             XCTAssertTrue(app.descendants(matching: .any)["gettingStarted.step.\(step)"].waitForExistence(timeout: 5))
@@ -43,7 +43,7 @@ final class DesignPassUITests: XCTestCase {
     func testGettingStartedCanBeSkippedOrOpenLinkAccounts() {
         app.launchEnvironment = ["LISTORA_RESET_LOCAL_DATA": "1", "LISTORA_SHOW_GETTING_STARTED": "1"]
         app.launch()
-        let guide = app.descendants(matching: .any)["gettingStarted"]
+        let guide = app.buttons["gettingStarted.skip"]
         XCTAssertTrue(guide.waitForExistence(timeout: 10))
         app.buttons["gettingStarted.linkAccounts"].tap()
         XCTAssertTrue(waitForAbsence(of: guide))
@@ -52,7 +52,7 @@ final class DesignPassUITests: XCTestCase {
         app.terminate()
         app.launch()
         XCTAssertTrue(guide.waitForExistence(timeout: 10))
-        app.buttons["gettingStarted.skip"].tap()
+        guide.tap()
         XCTAssertTrue(waitForAbsence(of: guide))
         XCTAssertTrue(app.tabBars.buttons["Today"].isSelected)
     }
@@ -82,7 +82,11 @@ final class DesignPassUITests: XCTestCase {
         XCTAssertTrue(clean.waitForExistence(timeout: 5))
         clean.tap()
         let undo = app.buttons["photo.undoCleanup"]
-        XCTAssertTrue(undo.waitForExistence(timeout: 30), "the cleanup did not finish")
+        let failure = app.descendants(matching: .any)["photo.cleanupFailure"]
+        XCTAssertTrue(
+            undo.waitForExistence(timeout: 30),
+            "the cleanup did not finish: \(failure.exists ? failure.label : "")\n\(app.debugDescription)",
+        )
         // The sheet stays on the photo, now the cleaned one.
         XCTAssertTrue(app.descendants(matching: .any)["photo.image"].label.contains("background cleaned up"))
         XCTAssertFalse(app.descendants(matching: .any)["photo.cleanupFailure"].exists)
