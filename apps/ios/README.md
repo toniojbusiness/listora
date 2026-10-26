@@ -301,6 +301,19 @@ variables, and the tests pass them to the app with the Dev-only launch variables
 `ReviewFlowUITests` takes a fixture item from a draft through review and price to a saved item
 with a SKU, then reads it back from the API. The stack's logs are in `.build/ios/e2e-logs`.
 
+Rules for UI tests that hold up on CI's slower, freshly erased simulator:
+
+- An `async` test checks its steps with `try require(...)` (`ListoraUITests/Require.swift`), not
+  `XCTAssert`: `continueAfterFailure = false` does not stop an `async` test, so one failed step
+  otherwise runs every later wait out to its timeout, up to the 5-minute allowance.
+- A system permission alert is tapped until it has closed. A tap while it is still animating in
+  is dropped on CI. A test that meets one resets that permission first (for example
+  `app.resetAuthorizationStatus(for: .photos)`), so a local run takes the same path as CI's
+  erased simulator.
+- Nothing animates forever with `repeatForever`. XCUITest waits up to a minute for the app to
+  be idle before each tap. A looping effect is drawn from a `TimelineView` (the skeleton
+  shimmer).
+
 To run those UI tests from Xcode, start the stack with
 `npm run e2e:stack -- --fake-ai-fixtures apps/ios/ListoraUITests/FakeAI`, which prints the
 `LISTORA_E2E_*` values, and set them in the test action's environment. Without them the tests

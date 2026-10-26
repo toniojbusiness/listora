@@ -97,36 +97,51 @@ extension SkeletonList where Placeholder == AnyView {
     }
 }
 
+/// The shimmer is drawn from the clock (`TimelineView`) rather than with a `repeatForever`
+/// animation: such an animation never completes, and it kept running after its view was gone (a
+/// closed photo sheet), so UI tests waiting for the app to be idle waited out their full minute.
+/// A timeline draws only while its view is on screen.
 struct ShimmerModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase: CGFloat = -1
+
+    /// One sweep of the highlight, left to right.
+    static let sweep: TimeInterval = 1.3
+    /// One fade of the Reduce Motion pulse, from full to dimmed or back.
+    static let pulse: TimeInterval = 1.2
 
     func body(content: Content) -> some View {
-        content
-            .overlay {
-                if !reduceMotion {
-                    GeometryReader { geometry in
-                        LinearGradient(
-                            colors: [.clear, Palette.surface.color.opacity(0.55), .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing,
-                        )
-                        .frame(width: geometry.size.width * 0.6)
-                        .offset(x: phase * geometry.size.width * 1.6)
+        TimelineView(.animation) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            content
+                .overlay {
+                    if !reduceMotion {
+                        GeometryReader { geometry in
+                            LinearGradient(
+                                colors: [.clear, Palette.surface.color.opacity(0.55), .clear],
+                                startPoint: .leading,
+                                endPoint: .trailing,
+                            )
+                            .frame(width: geometry.size.width * 0.6)
+                            .offset(x: Self.sweepPhase(at: time) * geometry.size.width * 1.6)
+                        }
+                        .mask(content)
                     }
-                    .mask(content)
                 }
-            }
-            .opacity(reduceMotion ? (phase > 0 ? 0.6 : 1) : 1)
-            .onAppear {
-                withAnimation(
-                    reduceMotion
-                        ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true)
-                        : .linear(duration: 1.3).repeatForever(autoreverses: false),
-                ) {
-                    phase = 1
-                }
-            }
+                .opacity(reduceMotion ? Self.pulseOpacity(at: time) : 1)
+        }
+    }
+
+    /// Where the highlight is, from -1 (off the leading edge) to 1, restarting every sweep.
+    static func sweepPhase(at time: TimeInterval) -> CGFloat {
+        -1 + 2 * CGFloat(time.truncatingRemainder(dividingBy: sweep) / sweep)
+    }
+
+    /// The Reduce Motion pulse: 1 to 0.6 and back, eased in and out.
+    static func pulseOpacity(at time: TimeInterval) -> Double {
+        let position = time.truncatingRemainder(dividingBy: 2 * pulse) / pulse
+        let fade = position <= 1 ? position : 2 - position
+        let eased = fade * fade * (3 - 2 * fade)
+        return 1 - 0.4 * eased
     }
 }
 

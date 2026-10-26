@@ -54,35 +54,29 @@ final class AccessibilityAuditUITests: XCTestCase {
         }
     }
 
-    func testMainScreensPassTheAudit() throws {
-        let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
-        let server = try StubAPIServer()
-        try server.start()
-        self.server = server
-        app.launchEnvironment = [
-            "LISTORA_FIXTURE_PHOTOS": fixtures.path(percentEncoded: false),
-            "LISTORA_RESET_LOCAL_DATA": "1",
-            "LISTORA_DEV_API_BASE_URL": server.baseURL,
-        ]
-        app.launch()
-        // Signed out, the app opens on the welcome screen; the stub's dev sign-in signs in.
+    // The screens are split across three tests, so each stays well inside the 5-minute
+    // allowance on CI, where an audit takes up to 45 seconds and the first launch on the fresh
+    // simulator about a minute.
+
+    /// The welcome, code, and getting started screens.
+    func testSignInScreensPassTheAudit() throws {
+        try launch()
         let email = app.textFields["signIn.email"]
         XCTAssertTrue(email.waitForExistence(timeout: 10))
         try audit("Welcome")
-        email.tap()
-        email.typeText("seller@listora.test")
-        app.buttons["signIn.continue"].tap()
-        let code = app.textFields["signIn.code"]
-        XCTAssertTrue(code.waitForExistence(timeout: 10))
+        let code = enterEmail(email)
         try audit("Code")
-        code.typeText(StubAPIServer.devSignInCode)
-        app.buttons["signIn.signIn"].tap()
+        signIn(code: code)
         let skipGuide = app.buttons["gettingStarted.skip"]
         XCTAssertTrue(skipGuide.waitForExistence(timeout: 10))
         try audit("Getting started")
         skipGuide.tap()
-
         XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+    }
+
+    /// The tab screens and Settings.
+    func testTabScreensPassTheAudit() throws {
+        try launchSignedIn()
         XCTAssertTrue(app.staticTexts["today.count"].waitForExistence(timeout: 10))
         try audit("Today")
 
@@ -93,6 +87,18 @@ final class AccessibilityAuditUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Sales"].waitForExistence(timeout: 5))
         try audit("Sales")
 
+        app.tabBars.buttons["Tasks"].tap()
+        try audit("Tasks")
+
+        app.tabBars.buttons["Today"].tap()
+        app.buttons["settings.open"].tap()
+        XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
+        try audit("Settings")
+    }
+
+    /// Add Item, a draft of imported photos, and one photo.
+    func testAddItemScreensPassTheAudit() throws {
+        try launchSignedIn()
         app.tabBars.buttons["Add"].tap()
         XCTAssertTrue(app.buttons["addItem.importPhotos"].waitForExistence(timeout: 5))
         try audit("Add Item")
@@ -105,13 +111,47 @@ final class AccessibilityAuditUITests: XCTestCase {
         XCTAssertTrue(app.buttons["photo.done"].waitForExistence(timeout: 5))
         try audit("Photo")
         app.buttons["photo.done"].tap()
+        // Back on the draft once the photo sheet has closed.
+        XCTAssertTrue(app.buttons["photo.tile.2"].waitForExistence(timeout: 5))
+    }
 
-        app.tabBars.buttons["Tasks"].tap()
-        try audit("Tasks")
+    /// Signed out against the stub, which opens on the welcome screen.
+    private func launch() throws {
+        let fixtures = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "Fixtures", withExtension: nil))
+        let server = try StubAPIServer()
+        try server.start()
+        self.server = server
+        app.launchEnvironment = [
+            "LISTORA_FIXTURE_PHOTOS": fixtures.path(percentEncoded: false),
+            "LISTORA_RESET_LOCAL_DATA": "1",
+            "LISTORA_DEV_API_BASE_URL": server.baseURL,
+        ]
+        app.launch()
+    }
 
-        app.tabBars.buttons["Today"].tap()
-        app.buttons["settings.open"].tap()
-        XCTAssertTrue(app.buttons["settings.marketplaces"].waitForExistence(timeout: 5))
-        try audit("Settings")
+    /// Signed in through the stub's dev sign-in, past the getting started guide.
+    private func launchSignedIn() throws {
+        try launch()
+        let email = app.textFields["signIn.email"]
+        XCTAssertTrue(email.waitForExistence(timeout: 10))
+        signIn(code: enterEmail(email))
+        let skipGuide = app.buttons["gettingStarted.skip"]
+        XCTAssertTrue(skipGuide.waitForExistence(timeout: 10))
+        skipGuide.tap()
+        XCTAssertTrue(app.tabBars.firstMatch.waitForExistence(timeout: 10))
+    }
+
+    private func enterEmail(_ email: XCUIElement) -> XCUIElement {
+        email.tap()
+        email.typeText("seller@listora.test")
+        app.buttons["signIn.continue"].tap()
+        let code = app.textFields["signIn.code"]
+        XCTAssertTrue(code.waitForExistence(timeout: 10))
+        return code
+    }
+
+    private func signIn(code: XCUIElement) {
+        code.typeText(StubAPIServer.devSignInCode)
+        app.buttons["signIn.signIn"].tap()
     }
 }
