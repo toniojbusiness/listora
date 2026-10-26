@@ -93,6 +93,11 @@ public final class InventoryEnvironment {
         ItemDetailView(environment: self, itemID: itemID)
     }
 
+    /// Forgets the seller's inventory layout, back to the photo grid (`LISTORA_RESET_LOCAL_DATA`).
+    public static func resetLocalData(defaults: UserDefaults) {
+        defaults.removeObject(forKey: InventoryLayout.storageKey)
+    }
+
     /// Shows the drafts the next time the inventory appears.
     public func showDrafts() {
         requestedStatus = .draft

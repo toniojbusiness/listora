@@ -92,7 +92,7 @@ struct VisionSubjectMasker: SubjectMasker {
 /// photos of an item laid on a plain surface, like the test fixtures.
 struct EdgeColorSubjectMasker: SubjectMasker {
     /// The mask is worked out on a copy this many pixels on its long edge, then scaled up.
-    static let workingEdge = 256
+    static let workingEdge = 640
     /// Colors are compared in steps of this many levels per channel (of 256).
     static let colorStep = 16
 
@@ -133,7 +133,7 @@ struct EdgeColorSubjectMasker: SubjectMasker {
                 y: CGFloat(image.height) / CGFloat(height),
             ))
             .clampedToExtent()
-            .applyingGaussianBlur(sigma: 1.5 / scale)
+            .applyingGaussianBlur(sigma: 0.7 / scale)
             .cropped(to: extent)
     }
 

@@ -80,6 +80,7 @@ final class DesignPassUITests: XCTestCase {
 
         let clean = app.buttons["photo.cleanBackground"]
         XCTAssertTrue(clean.waitForExistence(timeout: 5))
+        clean.swipeUpIfHidden(in: app)
         clean.tap()
         let undo = app.buttons["photo.undoCleanup"]
         let failure = app.descendants(matching: .any)["photo.cleanupFailure"]
@@ -91,6 +92,7 @@ final class DesignPassUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["photo.image"].label.contains("background cleaned up"))
         XCTAssertFalse(app.descendants(matching: .any)["photo.cleanupFailure"].exists)
 
+        undo.swipeUpIfHidden(in: app)
         undo.tap()
         XCTAssertTrue(clean.waitForExistence(timeout: 30), "the undo did not finish")
         XCTAssertFalse(app.descendants(matching: .any)["photo.image"].label.contains("background cleaned up"))

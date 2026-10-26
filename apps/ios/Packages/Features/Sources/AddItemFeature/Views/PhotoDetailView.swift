@@ -34,7 +34,9 @@ struct PhotoDetailView: View {
                                 ? "\(photo.role.title) photo" : "\(photo.role.title) photo, background cleaned up",
                         )
                         .accessibilityIdentifier("photo.image")
-                    if photo.role != .tag {
+                    // A tag photo is not cleaned up (its background helps nothing), but one cleaned
+                    // before it became the tag can still be undone.
+                    if photo.role != .tag || photo.originalFileName != nil {
                         backgroundCleanup
                     }
                     if photo.looksBlurry {
@@ -96,8 +98,7 @@ struct PhotoDetailView: View {
         }
     }
 
-    /// One tap puts the item on a plain backdrop; once cleaned, Undo puts the photo back. Tag
-    /// photos keep their background, which helps nothing there.
+    /// One tap puts the item on a plain backdrop; once cleaned, Undo puts the photo back.
     private var backgroundCleanup: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             if photo.originalFileName == nil {

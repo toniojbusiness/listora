@@ -29,8 +29,11 @@ extension ScreenshotTourUITests {
         let clean = app.buttons["photo.cleanBackground"]
         XCTAssertTrue(clean.waitForExistence(timeout: 5))
         try shot("43-photo-before-cleanup")
+        // At the largest text sizes the button is below the photo's fold.
+        clean.swipeUpIfHidden(in: app)
         clean.tap()
         XCTAssertTrue(app.buttons["photo.undoCleanup"].waitForExistence(timeout: 30))
+        app.scrollViews.firstMatch.swipeDown()
         try shot("44-photo-cleaned")
         app.terminate()
     }

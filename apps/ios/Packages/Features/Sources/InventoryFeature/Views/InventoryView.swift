@@ -37,7 +37,10 @@ public struct InventoryView<Header: View>: View {
                 .navigationTitle("Inventory")
                 .searchable(text: $model.query.search, prompt: "SKU, title, or brand")
                 .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) { layoutButton }
+                    // Only with items to lay out.
+                    if !model.items.isEmpty {
+                        ToolbarItem(placement: .topBarTrailing) { layoutButton }
+                    }
                     ToolbarItem(placement: .topBarTrailing) { InventoryFilterMenu(model: model) }
                 }
                 .navigationDestination(for: ItemRoute.self) { route in

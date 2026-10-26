@@ -191,6 +191,7 @@ public struct AppDependencies {
         ReviewEnvironment.resetLocalData(defaults: defaults)
         AddItemEnvironment.resetLocalData(defaults: defaults)
         GettingStartedModel.resetLocalData(defaults: defaults)
+        InventoryEnvironment.resetLocalData(defaults: defaults)
         accessGrantStorage.save(nil)
     }
 

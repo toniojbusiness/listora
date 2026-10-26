@@ -44,7 +44,9 @@ struct CelebrationModifier<Trigger: Equatable>: ViewModifier {
 /// and fade. Their paths come from a fixed seed, so every burst looks the same.
 struct ConfettiBurst: View {
     let start: Date
-    static let duration: TimeInterval = 1.6
+    static let duration: TimeInterval = 1.8
+    /// Points per second squared: pieces rise a little, then rain down across the screen.
+    static let gravity = 900.0
     private static let pieces: [Piece] = Piece.make(count: 36)
     private static let colors: [ColorToken] = [
         Palette.brand, Palette.success, Palette.warning, Palette.info, Palette.brandSoft,
@@ -54,12 +56,12 @@ struct ConfettiBurst: View {
         TimelineView(.animation) { timeline in
             let elapsed = timeline.date.timeIntervalSince(start)
             Canvas { context, size in
-                let origin = CGPoint(x: size.width / 2, y: size.height * 0.18)
+                let origin = CGPoint(x: size.width / 2, y: size.height * 0.2)
                 let progress = min(max(elapsed / Self.duration, 0), 1)
                 for piece in Self.pieces {
                     let time = elapsed
                     let x = origin.x + piece.velocity.dx * time
-                    let y = origin.y + piece.velocity.dy * time + 0.5 * 900 * time * time
+                    let y = origin.y + piece.velocity.dy * time + 0.5 * Self.gravity * time * time
                     var layer = context
                     layer.opacity = 1 - progress * progress
                     layer.translateBy(x: x, y: y)
@@ -96,8 +98,8 @@ struct ConfettiBurst: View {
                 return Double(seed >> 33) / Double(1 << 31)
             }
             return (0 ..< count).map { index in
-                let angle = -Double.pi / 2 + (next() - 0.5) * Double.pi * 0.9
-                let speed = 380 + next() * 320
+                let angle = -Double.pi / 2 + (next() - 0.5) * Double.pi * 0.85
+                let speed = 260 + next() * 260
                 let isRound = index.isMultiple(of: 3)
                 let side = 6 + next() * 4
                 return Piece(
