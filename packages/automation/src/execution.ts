@@ -3,16 +3,47 @@
  * browser runner, or the seller's own iPhone. The marketplaces that refuse the cloud runner
  * (Depop blocks its address, Mercari shows it a bot check, Poshmark serves its pages without
  * their data) run on the phone by default (each profile's `runsOn`); eBay stays in the cloud.
- * Each connection keeps its own location, so any one can move back to the cloud, and its
- * waiting work moves with it.
+ * Each connection keeps its own location, and its waiting work moves with it. A marketplace
+ * whose profile does not allow the cloud (`cloudAllowed`) can't move there until configured
+ * back (`cloudAccess`).
  */
 import { sql } from 'kysely';
 
-import { inTransaction, type DbExecutor, type ExecutionLocation } from '@listora/db';
+import type { CloudAccess } from '@listora/connections';
+import {
+  inTransaction,
+  type DbExecutor,
+  type ExecutionLocation,
+  type Marketplace,
+} from '@listora/db';
+import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import { releasePhoneOperations } from '@listora/operations';
+
+import {
+  isAutomatedMarketplace,
+  type AutomatedMarketplace,
+  type AutomationProfile,
+} from './profiles.ts';
 
 import { enqueueSaleCheck } from './sale-checks/schedule.ts';
 import { addSessionCheckJob, queueSessionCheckForPhone } from './session-checks/schedule.ts';
+
+/**
+ * Whether the marketplace's automated steps may run in Listora's cloud, by its profile, and the
+ * line the app shows when they may not. A marketplace without automation has nothing to move.
+ */
+export function cloudAccess(
+  profiles: Readonly<Record<AutomatedMarketplace, AutomationProfile>>,
+  marketplace: Marketplace,
+): CloudAccess {
+  if (!isAutomatedMarketplace(marketplace) || profiles[marketplace].cloudAllowed) {
+    return { allowed: true };
+  }
+  return {
+    allowed: false,
+    reason: `${MARKETPLACE_NAMES[marketplace]} blocks cloud servers, so Listora runs it from your phone`,
+  };
+}
 
 /**
  * Moves the connection's automated steps to `location`. Work waiting for the phone that the

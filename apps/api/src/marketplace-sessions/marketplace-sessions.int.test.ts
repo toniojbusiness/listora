@@ -13,8 +13,11 @@ import { createTestApi, fieldsOf, type TestApi } from '../test-support.ts';
  */
 const IN_THE_CLOUD = {
   automationEnv: {
+    AUTOMATION_POSHMARK_CLOUD_ALLOWED: 'true',
     AUTOMATION_POSHMARK_RUNS_ON: 'cloud',
+    AUTOMATION_MERCARI_CLOUD_ALLOWED: 'true',
     AUTOMATION_MERCARI_RUNS_ON: 'cloud',
+    AUTOMATION_DEPOP_CLOUD_ALLOWED: 'true',
     AUTOMATION_DEPOP_RUNS_ON: 'cloud',
   },
 };

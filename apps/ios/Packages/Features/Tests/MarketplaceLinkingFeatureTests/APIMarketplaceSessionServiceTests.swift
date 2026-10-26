@@ -79,7 +79,8 @@ struct APIMarketplaceSessionServiceTests {
         {"marketplace":"poshmark","status":"checking","statusDisplay":{"tone":"checking","label":"Checking..."},
          "login":{"url":"https://poshmark.com/login","cookieDomains":["poshmark.com"]},
          "execution":{"location":"phone","label":"Runs on your iPhone",
-           "deviceInstallationId":"0199a1f0-0000-7000-8000-0000000000d1","deviceName":"Sam's iPhone","waiting":1}}
+           "deviceInstallationId":"0199a1f0-0000-7000-8000-0000000000d1","deviceName":"Sam's iPhone","waiting":1,
+           "cloudAllowed":false}}
         """)
         let linked = try await service(server).link(
             "poshmark",

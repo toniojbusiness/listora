@@ -135,11 +135,16 @@ export function loadAutomationSettings(env: NodeJS.ProcessEnv = process.env): Au
         LIMITS_CEILING.runsPerDay,
       );
       const runsOn = location(issues, env, `${prefix}_RUNS_ON`, base.runsOn);
+      const cloudAllowed = flag(issues, env, `${prefix}_CLOUD_ALLOWED`, base.cloudAllowed);
+      if (runsOn === 'cloud' && !cloudAllowed) {
+        issues.push(`${prefix}_RUNS_ON can be cloud only when ${prefix}_CLOUD_ALLOWED is true`);
+      }
       const profile: AutomationProfile = {
         ...base,
         pacing: { ...base.pacing, actionDelayMs, sessionGapMs },
         limits: { runsPerHour, runsPerDay },
         runsOn,
+        cloudAllowed,
       };
       // In development, a marketplace's stand-in replaces its real site, never the reverse.
       const ownFake = {
@@ -263,5 +268,14 @@ function location(
   if (raw === '') return fallback;
   if (raw === 'cloud' || raw === 'phone') return raw;
   issues.push(`${key} must be cloud or phone`);
+  return fallback;
+}
+
+/** `true` or `false` (unset: `fallback`). */
+function flag(issues: string[], env: NodeJS.ProcessEnv, key: string, fallback: boolean): boolean {
+  const raw = env[key]?.trim() ?? '';
+  if (raw === '') return fallback;
+  if (raw === 'true' || raw === 'false') return raw === 'true';
+  issues.push(`${key} must be true or false`);
   return fallback;
 }

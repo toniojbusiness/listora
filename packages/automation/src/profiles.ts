@@ -75,6 +75,13 @@ export interface AutomationProfile {
    * own location afterwards.
    */
   readonly runsOn: ExecutionLocation;
+  /**
+   * Whether its automated steps may run in Listora's cloud at all: false for the marketplaces
+   * that refuse the cloud runner, so the app does not offer the cloud and the API refuses a
+   * move there. `AUTOMATION_<MARKETPLACE>_CLOUD_ALLOWED` changes it, so a marketplace can go
+   * back to the cloud without an app update.
+   */
+  readonly cloudAllowed: boolean;
 }
 
 /** The pace of a careful person: a second or two between actions, a run every few seconds. */
@@ -118,6 +125,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     privateSelectors: [],
     // Poshmark serves the cloud runner its pages without their data.
     runsOn: 'phone',
+    cloudAllowed: false,
   },
   mercari: {
     marketplace: 'mercari',
@@ -131,6 +139,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     privateSelectors: MERCARI_PRIVATE_SELECTORS,
     // Mercari shows the cloud runner a bot check.
     runsOn: 'phone',
+    cloudAllowed: false,
   },
   depop: {
     marketplace: 'depop',
@@ -144,6 +153,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     privateSelectors: DEPOP_PRIVATE_SELECTORS,
     // Depop blocks the cloud runner's address.
     runsOn: 'phone',
+    cloudAllowed: false,
   },
   ebay: {
     marketplace: 'ebay',
@@ -158,6 +168,7 @@ const PROFILES: Readonly<Record<AutomatedMarketplace, AutomationProfile>> = {
     challenges: EBAY_CHALLENGE_SIGNS,
     privateSelectors: EBAY_PRIVATE_SELECTORS,
     runsOn: 'cloud',
+    cloudAllowed: true,
   },
 };
 

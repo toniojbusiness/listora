@@ -190,27 +190,10 @@ struct MarketplacesModelTests {
         #expect(try MarketplacesModel.authorizationID(in: #require(URL(string: "listora://connections/ebay"))) == nil)
     }
 
-    private func depop(onPhone: Bool, waiting: Int = 0) throws -> Components.Schemas.Connection {
-        try connection(
-            marketplace: "depop",
-            mode: "assisted",
-            status: "connected",
-            tone: "success",
-            label: "Linked",
-            connect: "none",
-            execution: onPhone
-                ? [
-                    "location": "phone", "label": "Runs on your iPhone", "deviceName": "Sam's iPhone",
-                    "waiting": waiting,
-                ]
-                : ["location": "cloud", "label": "Runs in Listora's cloud"],
-        )
-    }
-
     @Test
     func `shows where each marketplace runs and what waits for the phone`() async throws {
-        let service = try FakeConnectionsService(lists: [.success([depop(onPhone: true, waiting: 2)])])
-        let model = MarketplacesModel(service: service)
+        let service = try FakeConnectionsService(lists: [.success([depopConnection(onPhone: true, waiting: 2)])])
+        let model = MarketplacesModel(service: service, installationID: UUID().uuidString)
         await model.load()
         let row = try #require(model.rows.first)
         #expect(row.execution?.onPhone == true)
@@ -221,11 +204,11 @@ struct MarketplacesModelTests {
     @Test
     func `moves a marketplace to the cloud, and back to this iPhone, which takes its work at once`() async throws {
         let toCloud = try FakeConnectionsService(
-            lists: [.success([depop(onPhone: true)])],
-            move: .success(depop(onPhone: false)),
+            lists: [.success([depopConnection(onPhone: true)])],
+            move: .success(depopConnection(onPhone: false)),
         )
         let trigger = FakeTrigger()
-        let model = MarketplacesModel(service: toCloud)
+        let model = MarketplacesModel(service: toCloud, installationID: depopPhone)
         model.phoneWork = trigger
         await model.load()
         try await model.move(#require(model.rows.first), toPhone: false)
@@ -236,10 +219,10 @@ struct MarketplacesModelTests {
         #expect(model.moving == nil)
 
         let toPhone = try FakeConnectionsService(
-            lists: [.success([depop(onPhone: false)])],
-            move: .success(depop(onPhone: true, waiting: 1)),
+            lists: [.success([depopConnection(onPhone: false)])],
+            move: .success(depopConnection(onPhone: true, waiting: 1)),
         )
-        let back = MarketplacesModel(service: toPhone)
+        let back = MarketplacesModel(service: toPhone, installationID: depopPhone)
         back.phoneWork = trigger
         await back.load()
         try await back.move(#require(back.rows.first), toPhone: true)
@@ -257,8 +240,11 @@ struct MarketplacesModelTests {
             message: "Link Depop on this iPhone to run it here.",
             retryable: false,
         )
-        let service = try FakeConnectionsService(lists: [.success([depop(onPhone: false)])], move: .failure(refused))
-        let model = MarketplacesModel(service: service)
+        let service = try FakeConnectionsService(
+            lists: [.success([depopConnection(onPhone: false)])],
+            move: .failure(refused),
+        )
+        let model = MarketplacesModel(service: service, installationID: depopPhone)
         await model.load()
         try await model.move(#require(model.rows.first), toPhone: true)
         #expect(model.rows.first?.execution?.onPhone == false)
