@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// How far an element floats above the screen. Cards sit `low`; bars pinned over scrolling content
-/// sit `medium`; toasts sit `high`. In dark mode shadows are faint, and hairline borders on the
-/// lighter surfaces carry the separation.
+/// sit `medium`; toasts sit `high`. In light mode the shadow alone lifts a card (cards have no border); in dark mode
+/// shadows are faint, and hairline borders on the lighter surfaces carry the separation.
 public enum Elevation: Sendable {
     case none
     case low
@@ -12,7 +12,7 @@ public enum Elevation: Sendable {
     var radius: CGFloat {
         switch self {
         case .none: 0
-        case .low: 8
+        case .low: 14
         case .medium: 16
         case .high: 24
         }
@@ -21,7 +21,7 @@ public enum Elevation: Sendable {
     var y: CGFloat {
         switch self {
         case .none: 0
-        case .low: 2
+        case .low: 4
         case .medium: 6
         case .high: 10
         }
@@ -30,7 +30,7 @@ public enum Elevation: Sendable {
     func opacity(for colorScheme: ColorScheme) -> Double {
         switch self {
         case .none: 0
-        case .low: colorScheme == .dark ? 0.35 : 0.06
+        case .low: colorScheme == .dark ? 0.35 : 0.07
         case .medium: colorScheme == .dark ? 0.45 : 0.10
         case .high: colorScheme == .dark ? 0.55 : 0.16
         }

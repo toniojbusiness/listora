@@ -206,7 +206,7 @@ private struct HistoryView: View {
             .padding(.top, Spacing.xs)
         } label: {
             Text("History (\(operations.count))")
-                .font(Typography.subheadline.weight(.semibold))
+                .font(Typography.emphasis)
                 .foregroundStyle(Palette.textSecondary)
         }
         .tint(Palette.textSecondary.color)
@@ -260,7 +260,7 @@ private struct OperationRow: View {
                 ForEach(events, id: \.id) { event in
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                         Text(Formatting.timestamp(event.occurredAt))
-                            .font(Typography.caption.monospacedDigit())
+                            .font(Typography.metadata)
                             .foregroundStyle(Palette.textSecondary)
                         Text(event.message ?? "")
                             .font(Typography.footnote)

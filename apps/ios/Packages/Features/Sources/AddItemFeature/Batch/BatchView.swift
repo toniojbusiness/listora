@@ -29,7 +29,7 @@ struct BatchView: View {
                     action: .init("Done") { onDeleted() },
                 )
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                SkeletonList(count: 4, label: "Loading the batch")
             }
         }
         .background(Palette.background)
@@ -90,7 +90,7 @@ struct BatchView: View {
                                 rowView(row, index: index)
                             }
                         }
-                        .cardStyle(.outlined, padding: 0)
+                        .cardStyle(.flat, padding: 0)
                     }
                 }
             }

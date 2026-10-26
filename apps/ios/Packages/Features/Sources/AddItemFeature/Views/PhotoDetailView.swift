@@ -2,14 +2,20 @@ import Core
 import DesignSystem
 import SwiftUI
 
-/// One photo of a draft, large: set what it shows, see what Listora read on a tag, crop it, make it
-/// the cover, or remove it.
+/// One photo of a draft, large: set what it shows, see what Listora read on a tag, clean up its
+/// background (and undo that), crop it, make it the cover, or remove it. A cleanup replaces the
+/// photo with a new one; `onReplaced` gets the new photo's id so the screen stays on it.
 struct PhotoDetailView: View {
     let photo: DraftPhotoRecord
     let model: AddItemModel
+    let onReplaced: (String) -> Void
 
     @State private var isCropping = false
     @State private var isConfirmingDelete = false
+    @State private var isCleaning = false
+    @State private var cleanupFailure: String?
+    /// Changes each time a cleanup or its undo finishes, for the haptic.
+    @State private var cleanupCount = 0
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -20,7 +26,17 @@ struct PhotoDetailView: View {
                         .aspectRatio(CGFloat(photo.width) / CGFloat(max(photo.height, 1)), contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: Radius.large, style: .continuous))
                         .frame(maxWidth: .infinity, maxHeight: 320)
-                        .accessibilityLabel("\(photo.role.title) photo")
+                        // A cleaned-up photo fades in over the one it replaces.
+                        .id(photo.fileName)
+                        .transition(.opacity)
+                        .accessibilityLabel(
+                            photo.originalFileName == nil
+                                ? "\(photo.role.title) photo" : "\(photo.role.title) photo, background cleaned up",
+                        )
+                        .accessibilityIdentifier("photo.image")
+                    if photo.role != .tag {
+                        backgroundCleanup
+                    }
                     if photo.looksBlurry {
                         Banner(
                             "This photo looks blurry",
@@ -37,7 +53,10 @@ struct PhotoDetailView: View {
                 }
                 .padding(Spacing.md)
                 .motion(value: photo.role)
+                .motion(value: photo.fileName)
+                .motion(value: cleanupFailure)
             }
+            .sensoryFeedback(.success, trigger: cleanupCount)
             .background(Palette.background)
             .navigationTitle(photo.position == 0 ? "Cover photo" : "Photo \(photo.position + 1)")
             .navigationBarTitleDisplayMode(.inline)
@@ -74,6 +93,69 @@ struct PhotoDetailView: View {
             } message: {
                 Text("It's removed from this draft, on this iPhone and in Listora.")
             }
+        }
+    }
+
+    /// One tap puts the item on a plain backdrop; once cleaned, Undo puts the photo back. Tag
+    /// photos keep their background, which helps nothing there.
+    private var backgroundCleanup: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            if photo.originalFileName == nil {
+                Button {
+                    Task { await run { await model.cleanBackground(photo) } }
+                } label: {
+                    Label("Clean background", systemImage: "wand.and.sparkles")
+                }
+                .buttonStyle(.listoraSecondary)
+                .loading(isCleaning)
+                .accessibilityIdentifier("photo.cleanBackground")
+                Text("Puts the item on a plain, light backdrop, on this iPhone. You can undo it.")
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.textSecondary)
+            } else {
+                HStack(alignment: .center, spacing: Spacing.sm) {
+                    Label("Background cleaned up", systemImage: "wand.and.sparkles")
+                        .font(Typography.emphasis)
+                        .foregroundStyle(Palette.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        Task { await run { await model.undoBackgroundCleanup(photo) } }
+                    } label: {
+                        Label("Undo", systemImage: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(.listora(.secondary, size: .compact))
+                    .loading(isCleaning)
+                    .fixedSize()
+                    .accessibilityIdentifier("photo.undoCleanup")
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("photo.cleaned")
+            }
+            if let cleanupFailure {
+                Banner(
+                    "Background not cleaned up",
+                    message: cleanupFailure,
+                    tone: .failed,
+                    onDismiss: { self.cleanupFailure = nil },
+                    identifier: "photo.cleanupFailure",
+                )
+                .transition(.rise)
+            }
+        }
+    }
+
+    private func run(_ edit: () async -> Result<String, PhotoEditFailure>) async {
+        guard !isCleaning else { return }
+        isCleaning = true
+        cleanupFailure = nil
+        let result = await edit()
+        isCleaning = false
+        switch result {
+        case let .success(newID):
+            cleanupCount += 1
+            onReplaced(newID)
+        case let .failure(failure):
+            cleanupFailure = failure.message
         }
     }
 
@@ -120,7 +202,7 @@ struct PhotoDetailView: View {
                         .foregroundStyle(Palette.textSecondary)
                 }
             }
-            .cardStyle(.outlined)
+            .cardStyle(.flat)
         }
     }
 
@@ -188,7 +270,7 @@ struct TagReadingCard: View {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 content
             }
-            .cardStyle(.outlined)
+            .cardStyle(.flat)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("tagReading.card")
         }
@@ -231,7 +313,7 @@ struct TagReadingCard: View {
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         ForEach(Array(lines.prefix(Self.shownLines).enumerated()), id: \.offset) { _, line in
                             Text(line.text)
-                                .font(Typography.callout.monospaced())
+                                .font(Typography.code)
                                 .foregroundStyle(Palette.textPrimary)
                                 .textSelection(.enabled)
                         }

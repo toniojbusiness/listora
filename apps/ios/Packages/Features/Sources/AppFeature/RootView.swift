@@ -19,6 +19,8 @@ public struct RootView: View {
     @State private var selection: AppTab
     @State private var settingsPath: [SettingsDestination] = []
     @State private var showsSettings = false
+    /// What to open once the first-run guide has closed (a sheet cannot open while it closes).
+    @State private var afterGettingStarted: [SettingsDestination]?
     @Environment(\.scenePhase) private var scenePhase
 
     public init(dependencies: AppDependencies, initialTab: AppTab = .today) {
@@ -36,7 +38,23 @@ public struct RootView: View {
             }
         }
         .tint(Palette.brand.color)
+        .environment(\.signIn, SignInAction { openSettings() })
         .sheet(isPresented: $showsSettings) { settings }
+        .fullScreenCover(
+            isPresented: Bindable(dependencies.gettingStarted).isPresented,
+            onDismiss: {
+                if let path = afterGettingStarted {
+                    afterGettingStarted = nil
+                    openSettings(at: path)
+                }
+            },
+            content: { gettingStarted },
+        )
+        .task {
+            for await grant in dependencies.accessTokens.changes() {
+                dependencies.gettingStarted.signedInChanged(grant != nil)
+            }
+        }
         .solidBarEdges()
         .background { WindowTapCounter { [meter = dependencies.interactionMeter] in meter.recordTap() } }
         .onChange(of: scenePhase, initial: true) { _, phase in
@@ -79,6 +97,7 @@ public struct RootView: View {
                         selection = .inventory
                     }
                 },
+                onAddItem: { selection = .addItem },
                 settings: { settingsButton },
             )
         case .inventory:
@@ -87,13 +106,16 @@ public struct RootView: View {
                 onAddItem: { selection = .addItem },
                 header: {
                     ConnectionAttentionBanner(model: dependencies.marketplaces) {
-                        settingsPath = [.marketplaces]
-                        showsSettings = true
+                        openSettings(at: [.marketplaces])
                     }
                 },
             )
         case .sales:
-            SalesView(environment: dependencies.sales) { settingsButton }
+            SalesView(
+                environment: dependencies.sales,
+                onOpenInventory: { selection = .inventory },
+                settings: { settingsButton },
+            )
         case .addItem:
             AddItemView(environment: dependencies.addItem)
         case .tasks:
@@ -105,9 +127,29 @@ public struct RootView: View {
 extension RootView {
     private var settingsButton: some View {
         SettingsButton(needsAttention: dependencies.marketplaces.attention != nil) {
-            settingsPath = []
-            showsSettings = true
+            openSettings()
         }
+    }
+
+    private func openSettings(at path: [SettingsDestination] = []) {
+        settingsPath = path
+        showsSettings = true
+    }
+
+    /// The first-run guide; each of its ways out ends it for good.
+    private var gettingStarted: some View {
+        let guide = dependencies.gettingStarted
+        return GettingStartedView(
+            onLinkAccounts: {
+                afterGettingStarted = [.linkAccounts]
+                guide.finish()
+            },
+            onAddItem: {
+                guide.finish()
+                selection = .addItem
+            },
+            onSkip: { guide.finish() },
+        )
     }
 
     private var settings: some View {

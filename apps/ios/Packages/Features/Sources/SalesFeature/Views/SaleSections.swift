@@ -80,7 +80,7 @@ struct RelistSection: View {
         return HStack(alignment: .center, spacing: Spacing.sm) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(Typography.subheadline.weight(.semibold))
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.textPrimary)
                 StatusBadge(option.statusDisplay.label, tone: StatusTone(option.statusDisplay.tone))
             }
@@ -114,7 +114,7 @@ struct DelistSection: View {
                     ForEach(run.results, id: \.listingId) { result in
                         HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                             Text(result.marketplace.name)
-                                .font(Typography.subheadline.weight(.semibold))
+                                .font(Typography.emphasis)
                                 .foregroundStyle(Palette.textPrimary)
                             Spacer(minLength: Spacing.sm)
                             StatusBadge(result.statusDisplay.label, tone: StatusTone(result.statusDisplay.tone))
@@ -190,7 +190,7 @@ struct MoneySection: View {
                         .foregroundStyle(profit.amountCents < 0 ? Palette.danger : Palette.success)
                     if let roi = sale.roiBasisPoints {
                         Text("\(SaleFormatting.roi(basisPoints: roi)) ROI")
-                            .font(Typography.footnote.weight(.semibold))
+                            .font(Typography.smallEmphasis)
                             .foregroundStyle(Palette.textSecondary)
                     }
                 }
@@ -217,20 +217,20 @@ struct ItemsSection: View {
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.title ?? "Untitled item")
-                                .font(Typography.subheadline.weight(.semibold))
+                                .font(Typography.emphasis)
                                 .foregroundStyle(Palette.textPrimary)
                             Text(item.sku)
-                                .font(Typography.footnote.monospacedDigit())
+                                .font(Typography.metadata)
                                 .foregroundStyle(Palette.textSecondary)
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(SaleFormatting.money(item.salePrice))
-                                .font(Typography.subheadline.monospacedDigit())
+                                .font(Typography.emphasis)
                                 .foregroundStyle(Palette.textPrimary)
                             if let profit = item.profit {
                                 Text("Profit \(SaleFormatting.money(profit))")
-                                    .font(Typography.footnote.monospacedDigit())
+                                    .font(Typography.metadata)
                                     .foregroundStyle(Palette.textSecondary)
                             }
                         }
@@ -267,7 +267,7 @@ struct MoneyRow: View {
                 Text(negative && money.amountCents != 0
                     ? "-\(SaleFormatting.money(money))"
                     : SaleFormatting.money(money))
-                    .font(Typography.subheadline.weight(.semibold).monospacedDigit())
+                    .font(Typography.emphasis)
                     .foregroundStyle(Palette.textPrimary)
                 if let note {
                     Text(note)

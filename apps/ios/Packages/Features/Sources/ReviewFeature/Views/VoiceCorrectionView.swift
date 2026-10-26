@@ -35,7 +35,7 @@ struct VoiceTray: View {
             }
             actions
         }
-        .cardStyle(.outlined, padding: Spacing.sm)
+        .cardStyle(.flat, padding: Spacing.sm)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("voice.tray")
     }
@@ -183,7 +183,7 @@ struct VoiceProposalChip: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .font(Typography.subheadline.weight(.semibold))
+            .font(Typography.emphasis)
             .foregroundStyle(proposal.isApplied ? Palette.onBrand : Palette.textPrimary)
             .padding(.leading, Spacing.sm)
             .padding(.trailing, Spacing.xxs)
@@ -237,7 +237,7 @@ struct TalkButton: View {
     var body: some View {
         let listening = voice.isListening
         Label(listening ? "Listening" : "Hold to talk", systemImage: listening ? "waveform" : "mic.fill")
-            .font(Typography.subheadline.weight(.semibold))
+            .font(Typography.emphasis)
             .foregroundStyle(listening ? Palette.onBrand : Palette.brand)
             .padding(.horizontal, Spacing.sm)
             .frame(minHeight: Layout.compactButtonHeight)

@@ -21,7 +21,7 @@ public struct ListoraTextField<Field: View>: View {
         let shape = RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(label)
-                .font(Typography.subheadline.weight(.semibold))
+                .font(Typography.emphasis)
                 .foregroundStyle(Palette.textPrimary)
                 .accessibilityHidden(true)
             field

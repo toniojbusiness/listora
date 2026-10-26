@@ -54,7 +54,7 @@ struct SavedItemView: View {
                     .foregroundStyle(Palette.textSecondary)
                     .accessibilityHidden(true)
                 Text(saved.sku)
-                    .font(Typography.largeTitle.monospacedDigit())
+                    .font(Typography.priceLarge)
                     .foregroundStyle(Palette.textPrimary)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
@@ -89,7 +89,7 @@ struct SavedItemView: View {
             "\(seconds) s of your time, \(taps)",
             systemImage: summary.meetsGoal ? "bolt.fill" : "timer",
         )
-        .font(Typography.subheadline.weight(.semibold))
+        .font(Typography.emphasis)
         .foregroundStyle(summary.meetsGoal ? Palette.brand : Palette.textSecondary)
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs)

@@ -37,9 +37,7 @@ struct SummarySettingsView: View {
     private var content: some View {
         switch model.phase {
         case .loading:
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityLabel("Loading the morning summary")
+            SkeletonList(count: 2, label: "Loading the morning summary")
         case let .failed(message):
             EmptyStateView(
                 systemImage: "bell.slash",
@@ -62,7 +60,7 @@ struct SummarySettingsView: View {
                             .disabled(!model.isEnabled)
                             .accessibilityIdentifier("summarySettings.time")
                     }
-                    .cardStyle(.outlined)
+                    .cardStyle(.flat)
                     Text(
                         "One notification a day with what needs you, like items to ship and delists. "
                             + "Nothing is sent on a day you're all caught up.",

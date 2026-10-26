@@ -50,6 +50,8 @@ public struct AppDependencies {
     public let marketplaces: MarketplacesModel
     /// Link accounts: sign in on Poshmark, Mercari, Depop, and eBay for Listora to automate them.
     public let linkAccounts: LinkAccountsModel
+    /// The first-run guide, shown once after the first sign-in.
+    public let gettingStarted: GettingStartedModel
 
     public init(
         configuration: AppConfiguration,
@@ -73,10 +75,7 @@ public struct AppDependencies {
             Self.resetLocalData([dataDirectory, listingCopyDirectory], interactionStorage, defaults, accessGrantStorage)
         }
         let cognito = Self.cognitoClient(configuration)
-        let accessTokens = AccessTokenStore(storage: accessGrantStorage, refresher: cognito)
-        if let grant = launchOptions.accessGrant, configuration.environment == .dev {
-            accessTokens.signIn(grant)
-        }
+        let accessTokens = Self.makeAccessTokens(accessGrantStorage, cognito, configuration, launchOptions)
         self.accessTokens = accessTokens
         apiClient = APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens)
         tagReader = VisionTagReader()
@@ -104,12 +103,28 @@ public struct AppDependencies {
             fixturePhotosDirectory: launchOptions.fixturePhotosDirectory,
             fakeCameraDirectory: launchOptions.fakeCameraDirectory,
         )
-        let connections = APIConnectionsService(client: apiClient.client)
-        let marketplaces = MarketplacesModel(service: connections, isSignedIn: { accessTokens.grant != nil })
-        self.marketplaces = marketplaces
+        marketplaces = MarketplacesModel(
+            service: APIConnectionsService(client: apiClient.client),
+            isSignedIn: { accessTokens.grant != nil },
+        )
         linkAccounts = Self.makeLinkAccounts(apiClient)
         today = Self.makeToday(apiClient, accessTokens, inventory, sales, marketplaces)
         (signIn, accountDeletion) = Self.makeAccount(configuration, cognito, apiClient, accessTokens)
+        gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
+    }
+
+    /// The session, signed in with the launch's session in Dev UI tests (`LISTORA_DEV_ACCESS_TOKEN`).
+    private static func makeAccessTokens(
+        _ storage: any AccessGrantStorage,
+        _ cognito: CognitoSignInClient?,
+        _ configuration: AppConfiguration,
+        _ launchOptions: DebugLaunchOptions,
+    ) -> AccessTokenStore {
+        let accessTokens = AccessTokenStore(storage: storage, refresher: cognito)
+        if let grant = launchOptions.accessGrant, configuration.environment == .dev {
+            accessTokens.signIn(grant)
+        }
+        return accessTokens
     }
 
     /// Link accounts: the marketplaces linked by signing in, and the sale email forwarding.
@@ -175,6 +190,7 @@ public struct AppDependencies {
         interactionStorage.reset()
         ReviewEnvironment.resetLocalData(defaults: defaults)
         AddItemEnvironment.resetLocalData(defaults: defaults)
+        GettingStartedModel.resetLocalData(defaults: defaults)
         accessGrantStorage.save(nil)
     }
 
@@ -263,6 +279,9 @@ public struct DebugLaunchOptions: Equatable, Sendable {
     /// `LISTORA_VOICE_PERMISSION=denied|restricted`: asking for voice permission ends this way
     /// (with ``voiceTranscript``; granted otherwise).
     public var voicePermission: SpeechAuthorization = .authorized
+    /// `LISTORA_SHOW_GETTING_STARTED=1`: show the first-run guide at launch, as after a first
+    /// sign-in (the screenshot tour).
+    public var showsGettingStarted = false
 
     public static let none = DebugLaunchOptions()
 
@@ -274,6 +293,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         accessGrant: AccessGrant? = nil,
         voiceTranscript: String? = nil,
         voicePermission: SpeechAuthorization = .authorized,
+        showsGettingStarted: Bool = false,
     ) {
         self.resetLocalData = resetLocalData
         self.fixturePhotosDirectory = fixturePhotosDirectory
@@ -282,6 +302,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
         self.accessGrant = accessGrant
         self.voiceTranscript = voiceTranscript
         self.voicePermission = voicePermission
+        self.showsGettingStarted = showsGettingStarted
     }
 
     /// The options in this process's environment (debug builds), otherwise ``none``.
@@ -315,6 +336,7 @@ public struct DebugLaunchOptions: Equatable, Sendable {
             },
             voiceTranscript: environment["LISTORA_VOICE_TRANSCRIPT"],
             voicePermission: voicePermission(environment["LISTORA_VOICE_PERMISSION"]),
+            showsGettingStarted: environment["LISTORA_SHOW_GETTING_STARTED"] == "1",
         )
     }
 

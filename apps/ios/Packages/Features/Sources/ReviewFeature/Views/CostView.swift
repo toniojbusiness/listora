@@ -70,7 +70,7 @@ struct CostView: View {
                 in: ...Date(),
                 displayedComponents: .date,
             )
-            .font(Typography.subheadline.weight(.semibold))
+            .font(Typography.emphasis)
             .foregroundStyle(Palette.textPrimary)
             .tint(Palette.brand.color)
             .frame(minHeight: Layout.minimumTapTarget)

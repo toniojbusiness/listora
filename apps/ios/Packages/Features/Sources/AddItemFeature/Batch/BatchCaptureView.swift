@@ -152,7 +152,7 @@ struct BatchCaptureView: View {
     private var blurNotice: some View {
         HStack(spacing: Spacing.sm) {
             Label("That shot looks blurry", systemImage: "drop.triangle.fill")
-                .font(Typography.subheadline.weight(.semibold))
+                .font(Typography.emphasis)
                 .foregroundStyle(Palette.warning)
             Spacer(minLength: Spacing.xs)
             Button("Retake") {
@@ -188,7 +188,7 @@ struct BatchCaptureView: View {
             Button(action: nextItem) {
                 VStack(spacing: 2) {
                     Image(systemName: "arrow.right.circle.fill").font(Typography.title3)
-                    Text("Next item").font(Typography.caption.weight(.semibold)).fixedSize()
+                    Text("Next item").font(Typography.label).fixedSize()
                 }
                 .frame(minWidth: 64, minHeight: 64)
                 .contentShape(Rectangle())

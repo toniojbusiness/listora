@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// A screen with nothing to show yet: an icon tile, a title, a friendly message, optional numbered
-/// steps that explain what happens next, and up to two actions, so a screen is never a dead end.
+/// A screen with nothing to show yet: a friendly illustration, a title, a short message, optional
+/// numbered steps that explain what happens next, and one clear action, so a screen is never a
+/// dead end.
 public struct EmptyStateView: View {
     public struct Action {
         let title: String
@@ -21,7 +22,6 @@ public struct EmptyStateView: View {
     private let message: String
     private let steps: [String]
     private let action: Action?
-    private let secondaryAction: Action?
 
     public init(
         systemImage: String,
@@ -30,7 +30,6 @@ public struct EmptyStateView: View {
         message: String,
         steps: [String] = [],
         action: Action? = nil,
-        secondaryAction: Action? = nil,
     ) {
         self.systemImage = systemImage
         self.tone = tone
@@ -38,7 +37,6 @@ public struct EmptyStateView: View {
         self.message = message
         self.steps = steps
         self.action = action
-        self.secondaryAction = secondaryAction
     }
 
     public var body: some View {
@@ -55,7 +53,7 @@ public struct EmptyStateView: View {
 
     private var content: some View {
         VStack(spacing: Spacing.lg) {
-            IconTile(systemImage: systemImage, tone: tone, size: .hero)
+            SpotIllustration(systemImage: systemImage, tone: tone)
             VStack(spacing: Spacing.xs) {
                 Text(title)
                     .font(Typography.title)
@@ -70,31 +68,25 @@ public struct EmptyStateView: View {
             if !steps.isEmpty {
                 stepList
             }
-            if action != nil || secondaryAction != nil {
-                VStack(spacing: Spacing.sm) {
-                    if let action {
-                        button(action).buttonStyle(.listoraPrimary)
-                    }
-                    if let secondaryAction {
-                        button(secondaryAction).buttonStyle(.listoraSecondary)
-                    }
-                }
-                .padding(.top, Spacing.xs)
+            if let action {
+                button(action)
+                    .buttonStyle(.listoraPrimary)
+                    .padding(.top, Spacing.xs)
             }
         }
-        .padding(.horizontal, Spacing.lg)
-        .padding(.vertical, Spacing.xl)
+        .padding(.horizontal, Spacing.xl)
+        .padding(.vertical, Spacing.xxl)
         .frame(maxWidth: 440)
     }
 
     private var stepList: some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: Spacing.md) {
             ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                     Text("\(index + 1)")
                         .font(Typography.label)
                         .foregroundStyle(Palette.brand)
-                        .frame(minWidth: 24, minHeight: 24)
+                        .frame(minWidth: 28, minHeight: 28)
                         .background(Palette.brandSoft, in: Circle())
                         .accessibilityHidden(true)
                     Text(step)
@@ -107,7 +99,7 @@ public struct EmptyStateView: View {
                 .accessibilityLabel("Step \(index + 1): \(step)")
             }
         }
-        .cardStyle(.outlined)
+        .padding(.horizontal, Spacing.xs)
     }
 
     private func button(_ action: Action) -> some View {
@@ -118,6 +110,33 @@ public struct EmptyStateView: View {
                 Text(action.title)
             }
         }
+    }
+}
+
+/// Opens the app's sign-in, so a signed-out screen's empty state can offer it as its action. The
+/// app's root sets it (``SwiftUI/EnvironmentValues/signIn``); screens without it offer no sign-in.
+public struct SignInAction: Sendable {
+    private let handler: @MainActor () -> Void
+
+    public init(_ handler: @escaping @MainActor () -> Void) {
+        self.handler = handler
+    }
+
+    @MainActor
+    public func callAsFunction() {
+        handler()
+    }
+}
+
+extension EnvironmentValues {
+    /// How a signed-out screen opens sign-in; nil where the app offers none.
+    @Entry public var signIn: SignInAction?
+}
+
+extension EmptyStateView.Action {
+    /// "Sign in", for a signed-out screen; nil when the app offers no sign-in there.
+    public static func signIn(_ action: SignInAction?) -> Self? {
+        action.map { action in Self("Sign in", systemImage: "person.crop.circle") { action() } }
     }
 }
 

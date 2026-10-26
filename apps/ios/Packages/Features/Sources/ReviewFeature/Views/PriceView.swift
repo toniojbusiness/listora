@@ -118,7 +118,7 @@ struct PriceView: View {
                 Text("Add what you paid to see the lowest price that covers it on each marketplace.")
                     .font(Typography.callout)
                     .foregroundStyle(Palette.textSecondary)
-                    .cardStyle(.outlined)
+                    .cardStyle(.flat)
                     .accessibilityIdentifier("price.noFloors")
             } else {
                 SectionHeader(
@@ -134,7 +134,7 @@ struct PriceView: View {
                         FloorRow(floor: floor, chosenCents: model.chosenCents)
                     }
                 }
-                .cardStyle(.outlined, padding: 0)
+                .cardStyle(.flat, padding: 0)
             }
         }
     }
@@ -185,7 +185,7 @@ struct PriceView: View {
                     .accessibilityElement(children: .combine)
                 }
             }
-            .cardStyle(.outlined)
+            .cardStyle(.flat)
         }
     }
 
@@ -202,7 +202,7 @@ struct PriceView: View {
                         Link(destination: link.url) {
                             ListRow(link.label, systemImage: "safari") {
                                 Image(systemName: "arrow.up.right")
-                                    .font(Typography.footnote.weight(.semibold))
+                                    .font(Typography.smallEmphasis)
                                     .foregroundStyle(Palette.textSecondary)
                                     .accessibilityHidden(true)
                             }
@@ -212,7 +212,7 @@ struct PriceView: View {
                         .accessibilityIdentifier("price.research.\(index)")
                     }
                 }
-                .cardStyle(.outlined, padding: 0)
+                .cardStyle(.flat, padding: 0)
             }
         }
     }
@@ -227,7 +227,7 @@ struct PriceView: View {
            ? presentation.shortWarning(for: cents) : presentation.warning(for: cents)
         {
             Label(warning, systemImage: "exclamationmark.triangle.fill")
-                .font(Typography.footnote.weight(.semibold))
+                .font(Typography.smallEmphasis)
                 .foregroundStyle(Palette.warning)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                 .frame(maxWidth: .infinity, alignment: .leading)

@@ -20,7 +20,7 @@ struct MoneySummaryView: View {
                             .foregroundStyle(Palette.textSecondary)
                     }
                     Label(money.comparison.text, systemImage: money.comparison.systemImage)
-                        .font(Typography.subheadline.weight(.semibold))
+                        .font(Typography.emphasis)
                         .foregroundStyle(money.comparison.tone.color)
                 }
                 .accessibilityElement(children: .combine)

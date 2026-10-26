@@ -148,7 +148,7 @@ struct AnalysisProgressView: View {
             .frame(width: 24, height: 24)
             .accessibilityHidden(true)
             Text(text)
-                .font(state == .running ? Typography.body.weight(.semibold) : Typography.body)
+                .font(state == .running ? Typography.headline : Typography.body)
                 .foregroundStyle(state == .waiting ? Palette.textSecondary : Palette.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
