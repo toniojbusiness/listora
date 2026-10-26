@@ -3,25 +3,25 @@ import Testing
 @testable import Core
 
 /// The marketplace sessions this phone keeps: each marketplace's own cookies, for one Listora
-/// account only.
+/// account only. The Keychain store needs an app's entitlements, which a package test has none
+/// of; the phone UI tests (PhoneExecutionUITests) run with it.
 struct MarketplaceSessionStoreTests {
+    /// As WebKit reports a cookie: an expiry within the 400 days it allows, in whole seconds, and
+    /// its own spelling of SameSite.
     private let depop = [StoredCookie(
         name: "access_token",
         value: "session-token",
         domain: ".depop.com",
         path: "/",
-        expires: Date(timeIntervalSince1970: 1_900_000_000),
+        expires: Date(timeIntervalSince1970: (Date().timeIntervalSince1970 + 86400).rounded(.down)),
         secure: true,
         httpOnly: true,
-        sameSite: "Lax",
+        sameSite: HTTPCookieStringPolicy.sameSiteLax.rawValue,
     )]
 
-    @Test(arguments: [false, true])
-    func `keeps each marketplace's session for the account signed in, and removes it for another`(keychain: Bool) {
-        let store: any MarketplaceSessionStore = keychain
-            ? KeychainMarketplaceSessionStore(service: "com.listora.tests.sessions.\(UUID().uuidString)")
-            : InMemoryMarketplaceSessionStore()
-        defer { store.removeAll() }
+    @Test
+    func `keeps each marketplace's session for the account signed in, and removes it for another`() {
+        let store = InMemoryMarketplaceSessionStore()
         store.keep(onlyFor: "seller@listora.test")
         store.save(depop, for: "depop")
         #expect(store.cookies(for: "depop") == depop)
