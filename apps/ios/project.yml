@@ -199,8 +199,10 @@ targets:
         excludes:
           - Fixtures
           - BatchFixtures
-          # The fake AI answers of the local stack `make ios-test` starts; read by the stack.
+          # The fake AI answers of the local stacks `make ios-test` and `make e2e-full` start;
+          # read by the stack.
           - FakeAI
+          - FullStack/FakeAI
       # Photos the UI tests import through the app's debug fixture import, kept as one folder.
       - path: ListoraUITests/Fixtures
         type: folder

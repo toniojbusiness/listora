@@ -41,6 +41,20 @@ describe('describeListingStatus', () => {
       { tone: 'success', label: 'Delisted (confirmed by eBay)' },
     ],
     [
+      'a listing marked sold after a sale elsewhere',
+      {
+        marketplace: 'depop',
+        listingStatus: 'sold',
+        operation: operation({ kind: 'mark_sold' }),
+      },
+      { tone: 'success', label: 'Marked sold (confirmed by Depop)' },
+    ],
+    [
+      'a listing that sold there',
+      { marketplace: 'ebay', listingStatus: 'sold', operation: operation({ kind: 'create' }) },
+      { tone: 'success', label: 'Sold (confirmed by eBay)' },
+    ],
+    [
       'a delist waiting to retry',
       {
         marketplace: 'depop',
@@ -70,6 +84,43 @@ describe('describeListingStatus', () => {
         }),
       },
       { tone: 'failed', label: 'Delist failed - Retry', detail: 'eBay refused the change.' },
+    ],
+    [
+      'a delist the marketplace refused, which can still be retried',
+      {
+        marketplace: 'poshmark',
+        listingStatus: 'active',
+        operation: operation({
+          status: 'failed',
+          errorCode: 'validation_failed',
+          errorMessage: "Poshmark: This listing can't be changed right now.",
+          successEvidence: null,
+        }),
+      },
+      {
+        tone: 'failed',
+        label: 'Delist failed - Retry',
+        detail: "Poshmark: This listing can't be changed right now.",
+      },
+    ],
+    [
+      'a listing whose content was refused, which only a fix gets past',
+      {
+        marketplace: 'ebay',
+        listingStatus: 'draft',
+        operation: operation({
+          kind: 'create',
+          status: 'failed',
+          errorCode: 'validation_failed',
+          errorMessage: 'eBay titles can be at most 80 characters. Fix it, then try again.',
+          successEvidence: null,
+        }),
+      },
+      {
+        tone: 'failed',
+        label: 'Publish failed',
+        detail: 'eBay titles can be at most 80 characters. Fix it, then try again.',
+      },
     ],
     [
       'an unknown outcome being checked',

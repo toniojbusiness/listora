@@ -16,10 +16,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   automationProfile,
+  browserRunnerAlive,
   FakeAutomationSite,
   linkAutomationSession,
   requestSaleCheck,
-  RUNNER_SESSION_PREFIX,
   standInProfile,
 } from '@listora/automation';
 import { createInventoryItem } from '@listora/db';
@@ -86,13 +86,8 @@ describe('browser runner process (real Postgres, headless Chromium)', () => {
     return worker;
   }
 
-  async function runnerAlive(): Promise<boolean> {
-    const { rows } = await sql<{ alive: boolean }>`
-      select exists (select 1 from pg_stat_activity
-        where application_name like ${`${RUNNER_SESSION_PREFIX}%`}) as alive
-    `.execute(database.db);
-    return rows[0]?.alive === true;
-  }
+  // Only this test's database: a parallel test's runner (the e2e stack's) shares the cluster.
+  const runnerAlive = (): Promise<boolean> => browserRunnerAlive(database.db);
 
   async function linkedListing() {
     accountId = await insertAccount(database.db, 'RUN');

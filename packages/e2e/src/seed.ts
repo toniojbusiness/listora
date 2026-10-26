@@ -6,7 +6,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 
-import type { Db } from '@listora/db';
+import type { Db, Marketplace } from '@listora/db';
 import type { FakeEbay } from '@listora/marketplaces';
 import sharp from 'sharp';
 
@@ -167,45 +167,66 @@ export async function createReadyItem(
 }
 
 export interface SeededListedItem extends SeededItem {
-  /** The item's eBay listing, confirmed active by the fake eBay. */
+  /** The item's first listing (its eBay listing unless eBay was not asked for). */
   listingId: string;
+  /** Each marketplace's listing, confirmed active there. */
+  listings: Partial<Record<Marketplace, string>>;
 }
 
 /**
- * A ready item (`createReadyItem`) published on eBay through the API and the worker, as the
- * listing flow publishes it; waits until the fake eBay confirmed it active.
+ * A ready item (`createReadyItem`) published on each marketplace through the API and the
+ * worker, as the listing flow publishes it; unless `wait` is false, waits until every
+ * marketplace confirmed it active (by read-back). A marketplace that runs on the phone confirms
+ * only once the app has run its publish.
  */
 export async function createListedItem(
   api: StackApi,
   details: Record<string, unknown> = {},
-  timeoutMs = 30_000,
+  marketplaces: readonly Marketplace[] = ['ebay'],
+  options: { wait?: boolean; timeoutMs?: number } = {},
 ): Promise<SeededListedItem> {
-  const item = await createReadyItem(api, details, timeoutMs);
+  const timeoutMs = options.timeoutMs ?? 240_000;
+  const item = await createReadyItem(api, details);
   const merged = { ...READY_ITEM_DETAILS, ...details };
-  const listing = await call<{ id: string }>(api, 'POST', `/v1/items/${item.id}/listings`, {
-    marketplace: 'ebay',
-    variant: {
-      title: merged.title,
-      description: merged.description,
-      price: merged.listPrice,
-    },
-  });
-  await call(api, 'POST', `/v1/listings/${listing.id}/publish`);
+  const listed = await Promise.all(
+    marketplaces.map(async (marketplace) => {
+      const listing = await call<{ id: string }>(api, 'POST', `/v1/items/${item.id}/listings`, {
+        marketplace,
+        variant: {
+          title: merged.title,
+          description: merged.description,
+          price: merged.listPrice,
+        },
+      });
+      await call(api, 'POST', `/v1/listings/${listing.id}/publish`);
+      return [marketplace, listing.id] as const;
+    }),
+  );
   const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const current = await call<{ latestOperation?: { status: string } }>(
-      api,
-      'GET',
-      `/v1/listings/${listing.id}`,
-    );
-    const status = current.latestOperation?.status;
-    if (status === 'succeeded') return { ...item, listingId: listing.id };
-    if (status === 'failed' || status === 'needs_user_action') {
-      throw new Error(`publishing the seeded item ended ${status}`);
+  for (const [marketplace, listingId] of options.wait === false ? [] : listed) {
+    for (;;) {
+      const current = await call<{ latestOperation?: { status: string; error?: unknown } }>(
+        api,
+        'GET',
+        `/v1/listings/${listingId}`,
+      );
+      const status = current.latestOperation?.status;
+      if (status === 'succeeded') break;
+      if (status === 'failed' || status === 'needs_user_action') {
+        throw new Error(
+          `publishing the seeded item on ${marketplace} ended ${status}: ${JSON.stringify(current.latestOperation)}`,
+        );
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`the seeded item was not published on ${marketplace} in time`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
-    if (Date.now() > deadline) throw new Error('the seeded item was not published in time');
-    await new Promise((resolve) => setTimeout(resolve, 100));
   }
+  const listings = Object.fromEntries(listed) as Partial<Record<Marketplace, string>>;
+  const first = listed[0];
+  if (first === undefined) throw new Error('no marketplace to list on');
+  return { ...item, listingId: first[1], listings };
 }
 
 /**
@@ -228,7 +249,7 @@ export async function createQueuedDepopListing(
     },
   });
   await call(api, 'POST', `/v1/listings/${listing.id}/publish`);
-  return { ...item, listingId: listing.id };
+  return { ...item, listingId: listing.id, listings: { depop: listing.id } };
 }
 
 /** An 800 x 600 JPEG of one color. */

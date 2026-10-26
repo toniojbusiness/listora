@@ -70,6 +70,13 @@ export {
 export type { LauncherDependencies, RunnerLauncher, RunnerLaunchConfig } from './launcher.ts';
 export { cloudAccess, setExecutionLocation } from './execution.ts';
 export { linkAutomationSession } from './link.ts';
+export { FakeMercariSite } from './mercari/fake/fake-mercari.ts';
+export type {
+  FakeMercariAction,
+  FakeMercariFault,
+  FakeMercariFaultRule,
+  FakeMercariOptions,
+} from './mercari/fake/fake-mercari.ts';
 export type { LinkAutomationInput } from './link.ts';
 export {
   AUTOMATED_MARKETPLACES,

@@ -41,7 +41,7 @@ E2E_STACK := node --env-file-if-exists=.env packages/e2e/src/cli.ts \
 require = @command -v $(1) >/dev/null 2>&1 || { echo "error: $(1) not found. Install it with: brew install $(2)" >&2; exit 1; }
 
 .PHONY: ios-generate ios-build ios-test ios-e2e-ready ios-check-ats ios-screenshots ios-lint ios-format ios-open ios-clean \
-	ios-simulator \
+	ios-simulator e2e-full \
 	ios-tag-fixtures ios-batch-fixtures ios-app-icon ios-archive ios-testflight ios-install-device
 
 ## Generate Listora.xcodeproj from apps/ios/project.yml.
@@ -91,6 +91,27 @@ ios-test: ios-generate ios-simulator ios-check-ats ios-e2e-ready
 	@status=0; \
 	$(E2E_STACK) -- $(XCODEBUILD) test -parallel-testing-enabled NO $(IOS_TEST_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/Test.xcresult || status=$$?; \
 	scripts/ios-test-summary.sh $(IOS_BUILD_DIR)/Test.xcresult '$(IOS_TEST_SUMMARY_FILE)'; \
+	exit $$status
+
+## The full-stack end-to-end suite (docs/features/e2e.md): FullStackUITests on the simulator,
+## against the full local stack (`--marketplaces all`): the API, the worker, and the browser
+## runner, with the fake eBay, the fake Depop API, the fake Poshmark, Mercari, and Depop sites,
+## and the fake AI. Nightly and on demand in CI (.github/workflows/e2e-full.yml), not per pull
+## request. Results: .build/ios/E2EFull.xcresult; the stack's logs: .build/ios/e2e-full-logs.
+## Each test may take 10 minutes; a failing one is retried as in ios-test.
+E2E_FULL_STACK := node --env-file-if-exists=.env packages/e2e/src/cli.ts --marketplaces all \
+	--fake-ai-fixtures $(IOS_DIR)/ListoraUITests/FullStack/FakeAI \
+	--log-dir $(IOS_BUILD_DIR)/e2e-full-logs
+E2E_FULL_LIMITS := -test-timeouts-enabled YES -default-test-execution-time-allowance 600 \
+	-maximum-test-execution-time-allowance 900 -retry-tests-on-failure -test-iterations 3
+
+e2e-full: ios-generate ios-simulator ios-check-ats ios-e2e-ready
+	scripts/dev-browser.sh
+	rm -rf $(IOS_BUILD_DIR)/E2EFull.xcresult $(IOS_BUILD_DIR)/e2e-full-logs
+	@status=0; \
+	$(E2E_FULL_STACK) -- $(XCODEBUILD) test -only-testing:ListoraUITests/FullStackUITests \
+		-parallel-testing-enabled NO $(E2E_FULL_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/E2EFull.xcresult || status=$$?; \
+	scripts/ios-test-summary.sh $(IOS_BUILD_DIR)/E2EFull.xcresult '$(IOS_TEST_SUMMARY_FILE)'; \
 	exit $$status
 
 ## Check that the local stack can start: backend dependencies installed, Postgres cluster running.

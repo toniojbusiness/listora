@@ -64,9 +64,20 @@ export interface ListingStatusInput {
  */
 export const REFUSED_CONTENT_ERROR = 'validation_failed';
 
-/** Whether a failed operation can be retried as it is (every failure but refused content). */
-export function isRetryableFailure(errorCode: string | null | undefined): boolean {
-  return errorCode !== REFUSED_CONTENT_ERROR;
+/** The operations that carry listing content (the schema's invariant), which a refusal is about. */
+const CONTENT_KINDS: readonly OperationKind[] = ['create', 'revise', 'relist'];
+
+/**
+ * Whether a failed operation can be retried as it is: every failure but refused content. A
+ * marketplace's own refusal shares the code, and only content can be fixed, so a refused delist,
+ * price change, or check stays retryable: the marketplace may take it next time, and nothing
+ * else can take the listing down.
+ */
+export function isRetryableFailure(
+  errorCode: string | null | undefined,
+  kind: OperationKind,
+): boolean {
+  return !(errorCode === REFUSED_CONTENT_ERROR && CONTENT_KINDS.includes(kind));
 }
 
 /** "Publishing...", while a step runs or waits. */
@@ -139,8 +150,13 @@ export function describeListingStatus(input: ListingStatusInput): StatusDisplay 
   }
   const name = MARKETPLACE_NAMES[input.marketplace];
   if (operation.status === 'succeeded') {
+    // A listing Listora marked sold after a sale elsewhere did not sell there: "Marked sold".
+    const state =
+      operation.kind === 'mark_sold' && input.listingStatus === 'sold'
+        ? RESULT.mark_sold
+        : confirmedState(input.listingStatus);
     return describeSuccess(
-      confirmedState(input.listingStatus),
+      state,
       operation.successEvidence,
       operation.kind,
       name,
@@ -220,7 +236,7 @@ function describeUnsettled(
     case 'needs_user_action':
       return { tone: 'action_needed', label: `Action needed - ${USER_STEP[kind]} on ${name}` };
     case 'failed':
-      return isRetryableFailure(operation.errorCode)
+      return isRetryableFailure(operation.errorCode, kind)
         ? { tone: 'failed', label: `${FAILED[kind]} failed - Retry`, ...detail }
         : { tone: 'failed', label: `${FAILED[kind]} failed`, ...detail };
     case 'succeeded':

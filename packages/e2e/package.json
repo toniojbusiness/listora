@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Local stack for end-to-end tests: the real API and worker with fake drivers on a scratch database, and a signed-in test user.",
+  "description": "Local stack for end-to-end tests: the real API and worker with fake drivers and fake marketplaces on a scratch database, and signed-in test users.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -14,8 +14,10 @@
     "@listora/ai": "*",
     "@listora/analysis": "*",
     "@listora/automation": "*",
+    "@listora/connections": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",
+    "@listora/shared": "*",
     "@listora/testing": "*",
     "sharp": "^0.35.5"
   }

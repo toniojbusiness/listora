@@ -120,6 +120,9 @@ photos, and hands checks to the seller. Every rule stays in the runtime.
   whenever the server says (`PhoneRunner.follow`). So work queued or due meanwhile (a check tried
   again 30 seconds after a failed attempt, a sale check, a delist after a sale) starts within
   seconds without a push, which iOS may drop and a build signed with a personal team never gets.
+  A run started during that wait (linking, a change in the app) ends it, and the next look follows
+  what that run's last claim said: an app opened before any marketplace ran on it is told 5
+  minutes, and once the seller links one, 10 seconds.
 - **After a change in the app**: linking a marketplace, Check again, publishing, changing a
   price, ending, relisting, retrying, recording a sale, and choosing what to relist.
 - **A push.** A sale whose delists run on the phone sends a visible, time-sensitive notification

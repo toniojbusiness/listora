@@ -4,7 +4,7 @@ import type {
   OperationEvent,
   Verification,
 } from '@listora/api-contract';
-import type { JsonObject, Marketplace, OperationStatus } from '@listora/db';
+import type { JsonObject, Marketplace, OperationKind, OperationStatus } from '@listora/db';
 import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import {
   DEFAULT_RETRY_POLICY,
@@ -33,6 +33,7 @@ export interface OperationListing {
  */
 function operationError(
   status: OperationStatus,
+  kind: OperationKind,
   code: string | null,
   message: string | null,
 ): OperationError | undefined {
@@ -40,7 +41,7 @@ function operationError(
   return {
     code,
     message: message ?? 'Something went wrong.',
-    retryable: status === 'failed' && isRetryableFailure(code),
+    retryable: status === 'failed' && isRetryableFailure(code, kind),
   };
 }
 
@@ -60,7 +61,7 @@ export function operationView(
   /** Its step waits for the seller's iPhone, or the phone runs it now (phone-execution.md). */
   phoneWait?: PhoneWait | null,
 ): Operation {
-  const error = operationError(op.status, op.error_code, op.error_message);
+  const error = operationError(op.status, op.kind, op.error_code, op.error_message);
   const verification = operationVerification(op);
   const settled = (SETTLED_STATUSES as readonly string[]).includes(op.status);
   return {
@@ -144,9 +145,17 @@ function eventMessage(event: EventRow, marketplace: Marketplace): string {
 }
 
 /** The contract's `OperationEvent`; its detail is already redacted for storage. */
-export function eventView(event: EventRow, marketplace: Marketplace): OperationEvent {
-  const message = eventMessage(event, marketplace).slice(0, 1000);
-  const error = operationError(event.to_status, event.error_code, detailError(event.detail));
+export function eventView(
+  event: EventRow,
+  operation: { marketplace: Marketplace; kind: OperationKind },
+): OperationEvent {
+  const message = eventMessage(event, operation.marketplace).slice(0, 1000);
+  const error = operationError(
+    event.to_status,
+    operation.kind,
+    event.error_code,
+    detailError(event.detail),
+  );
   return {
     id: event.id,
     operationId: event.operation_id,

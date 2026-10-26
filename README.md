@@ -108,11 +108,12 @@ has the steps.
 The iOS app has its own `make` targets, run from the repository root. The full list is in
 [apps/ios/README.md](apps/ios/README.md#commands).
 
-| Command         | What it does                                                                          |
-| --------------- | ------------------------------------------------------------------------------------- |
-| `make ios-test` | Run every iOS test on the simulator, the backend UI tests against `npm run e2e:stack` |
-| `make ios-lint` | SwiftLint (strict) and the SwiftFormat check                                          |
-| `make ios-open` | Generate the Xcode project and open it in Xcode                                       |
+| Command         | What it does                                                                            |
+| --------------- | --------------------------------------------------------------------------------------- |
+| `make ios-test` | Run every iOS test on the simulator, the backend UI tests against `npm run e2e:stack`   |
+| `make e2e-full` | The full-stack end-to-end suite on fakes ([docs/features/e2e.md](docs/features/e2e.md)) |
+| `make ios-lint` | SwiftLint (strict) and the SwiftFormat check                                            |
+| `make ios-open` | Generate the Xcode project and open it in Xcode                                         |
 
 The cluster listens only on `127.0.0.1`, on port `LISTORA_PG_PORT` (default 55432). Each
 worktree has its own cluster. Give each worktree a different port in its `.env` if more than
@@ -145,7 +146,7 @@ packages/shared/        Shared types and utilities (@listora/shared)
 packages/testing/       Test-only helpers (@listora/testing)
 packages/tag-parse/     Deterministic tag-text parsers (@listora/tag-parse)
 packages/eval/          Synthetic tag corpus and eval harness CLI (@listora/eval)
-packages/e2e/           Local end-to-end stack for the iOS UI tests: API and worker with fakes (@listora/e2e)
+packages/e2e/           Local end-to-end stack for the iOS UI tests: API, worker, and runner with fakes (@listora/e2e)
 infra/                  AWS CDK stacks and deploy setup (@listora/infra; see infra/README.md)
 scripts/                dev-db.sh (local PostgreSQL 18 cluster), dev-browser.sh (headless Chromium),
                         container-smoke.sh (image smoke test), ios-release.sh (iOS archive and
@@ -227,6 +228,10 @@ Which jobs do real work, by change:
 A new push to a pull request cancels the run it supersedes. Runs on `main` are never
 cancelled, so every merged commit gets a full result. Every job has a `timeout-minutes`
 limit.
+
+The full-stack end-to-end suite is separate: `.github/workflows/e2e-full.yml` runs
+`make e2e-full` on a macOS runner nightly and when started by hand, never on a pull request
+([docs/features/e2e.md](docs/features/e2e.md)).
 
 Deploys are separate: `.github/workflows/deploy.yml` runs only when started by hand for `staging`,
 `prod`, or `personal` (one reseller's own low-cost setup, priced in

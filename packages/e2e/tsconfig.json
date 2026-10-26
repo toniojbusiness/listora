@@ -10,8 +10,10 @@
     { "path": "../ai" },
     { "path": "../analysis" },
     { "path": "../automation" },
+    { "path": "../connections" },
     { "path": "../db" },
     { "path": "../marketplaces" },
+    { "path": "../shared" },
     { "path": "../testing" }
   ]
 }

@@ -28,6 +28,11 @@ public final class PhoneRunner: PhoneWorkTrigger {
     public private(set) var lastRunAt: Date?
     /// How long until the next look while the app is open, as Listora said after its last claim.
     private var nextLook: Duration?
+    /// The open app's wait until its next look (`follow`), and whether a run started meanwhile
+    /// ended it early: that run's last claim says when to look next, which can be much sooner
+    /// (Listora answers 5 minutes while no marketplace runs here, 10 seconds once one is linked).
+    private var followWait: Task<Void, any Error>?
+    private var wokeEarly = false
 
     private let service: any PhoneWorkService
     private let runtime: any PhoneRuntime
@@ -81,13 +86,33 @@ public final class PhoneRunner: PhoneWorkTrigger {
     /// iOS may drop and a build signed with a personal team never gets. Returns once the calling
     /// task is canceled (the app left the foreground).
     public func follow() async {
+        var woken = false
         while !Task.isCancelled {
-            await runUntilDone(.opened)
-            do {
-                try await sleep(nextLook ?? Self.fallbackLook)
-            } catch {
-                return
+            if woken {
+                // A run started meanwhile (linking, a change in the app, a push): wait for it,
+                // then look again when its last claim said.
+                await task?.value
+            } else {
+                await runUntilDone(.opened)
             }
+            let wait = Task { [sleep, nextLook] in try await sleep(nextLook ?? Self.fallbackLook) }
+            followWait = wait
+            do {
+                try await withTaskCancellationHandler {
+                    try await wait.value
+                } onCancel: {
+                    wait.cancel()
+                }
+                woken = false
+            } catch {
+                guard wokeEarly, !Task.isCancelled else {
+                    followWait = nil
+                    return
+                }
+                woken = true
+            }
+            wokeEarly = false
+            followWait = nil
         }
     }
 
@@ -108,6 +133,10 @@ public final class PhoneRunner: PhoneWorkTrigger {
     }
 
     private func start() {
+        if let followWait {
+            wokeEarly = true
+            followWait.cancel()
+        }
         if task != nil {
             again = true
             return

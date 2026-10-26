@@ -144,7 +144,8 @@ packages/
   tag-parse/    Tag-text parsers: RN/CA, UPC/EAN, size, fiber, origin, style (@listora/tag-parse)
   eval/         Synthetic tag corpus (corpus/) and the eval harness CLI (@listora/eval)
   e2e/          Local end-to-end stack: the API and worker with fakes on a scratch database and
-                a signed-in user, which the iOS UI tests run against (@listora/e2e)
+                a signed-in user, which the iOS UI tests run against; with every marketplace, also
+                the fake Depop, the fake sites, and the browser runner (@listora/e2e)
 infra/          AWS CDK v2 app: one environment per synth, stacks per lifecycle (@listora/infra)
 scripts/
   dev-db.sh     Local PostgreSQL 18 cluster in .local/pg
@@ -403,6 +404,10 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
   `npm run contract:check` lints the spec, fails when the committed generated code is stale, and
   tests the Swift package. Its conventions (error model, idempotency keys, pagination, Money) are in
   [packages/api-contract/README.md](../packages/api-contract/README.md).
+- **Full-stack end-to-end suite.** `make e2e-full` runs `FullStackUITests` against the stack with
+  every marketplace on its fake and the browser runner: the one suite that crosses every feature
+  end to end. It runs nightly and on demand, not per pull request
+  ([features/e2e.md](features/e2e.md)).
 - CI runs the same fresh-clone path as local development; see the CI section of the
   [README](../README.md#ci). A Linux job builds the application image and smoke-tests it
   (`scripts/container-smoke.sh`) when an image input changed. A macOS job runs
@@ -454,6 +459,7 @@ columns read as numbers (throwing above `Number.MAX_SAFE_INTEGER`) and `date` co
 | [features/privacy.md](features/privacy.md)                         | Deletions with completion records, unlinking, retention, photo metadata       |
 | [features/threat-model.md](features/threat-model.md)               | Assets, trust boundaries, the main threats, and where each is mitigated       |
 | [features/bugs.md](features/bugs.md)                               | The bug bash: each bug found, how to see it, its fix and test, the follow-ups |
+| [features/e2e.md](features/e2e.md)                                 | The full-stack end-to-end suite, the full local stack, nightly CI             |
 
 ### Former section numbers
 

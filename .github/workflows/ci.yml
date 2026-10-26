@@ -157,8 +157,9 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && !github.event.pull_request.draft }}
     runs-on: ${{ needs.changes.outputs.ios == 'true' && 'macos-26' || 'ubuntu-24.04' }}
-    # Room for a cold build plus up to two retries of a failing test (make ios-test).
-    timeout-minutes: 60
+    # Room for a cold build plus up to two retries of a failing test (make ios-test): a passing
+    # run alone took 55 to 57 minutes on main (October 2026), so 60 cut off runs mid-test.
+    timeout-minutes: 90
     env:
       IOS_AFFECTED: ${{ needs.changes.outputs.ios }}
       # Pinned to the Xcode used for local development (README prerequisites).
