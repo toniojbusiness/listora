@@ -78,10 +78,10 @@ looks the same on every screen. The table with each style's use is in `Typograph
   lighter surfaces and a faint hairline carry the separation.
 - `Motion`: `standard`, `snappy`, and `gentle` springs that settle without bouncing. The
   `motion(_:value:)` modifier and `Motion.perform` turn them into a short fade when Reduce Motion
-  is on. A screen's loading, empty, and loaded states cross-fade; an inventory item zooms open
-  from its photo and a tapped draft photo zooms into its detail sheet
-  (`matchedTransitionSource`); the photo grid animates reordering; banners rise in; the
-  empty-state art settles in.
+  is on. A screen's loading, empty, and loaded states cross-fade; a tapped draft photo zooms into
+  its detail sheet (`matchedTransitionSource`); the photo grid animates reordering; banners rise
+  in; the empty-state art settles in. An inventory item opens with a standard push, not a zoom:
+  a zoom closes the screen on the same pull-down that refreshes it.
 - `Haptics`: tap (shutter, a listing sent, a price change sent), selection (chips, the
   inventory layout, the welcome pages), success (draft saved, item saved, account connected, a
   background cleaned up, an item sold), warning (blurry shot), failure (a change the server

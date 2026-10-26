@@ -5,7 +5,7 @@ import SwiftUI
 /// The seller's items and their status on every marketplace, with search and filters, as a grid
 /// of large photos or as a list (``InventoryLayout``). The items are read from the server each
 /// time the screen appears and on pull to refresh, so a newly saved item shows up right away.
-/// An item opens with a zoom from its photo. `header` sits above the list, below the search
+/// `header` sits above the list, below the search
 /// field: the app's banners (a marketplace connection that needs attention) come from the caller
 /// (AppFeature), since a feature never imports another.
 public struct InventoryView<Header: View>: View {
@@ -15,7 +15,6 @@ public struct InventoryView<Header: View>: View {
     @State private var model: InventoryListModel
     @State private var path: [ItemRoute] = []
     @AppStorage(InventoryLayout.storageKey) private var layout = InventoryLayout.standard
-    @Namespace private var itemTransition
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     public init(
@@ -44,8 +43,9 @@ public struct InventoryView<Header: View>: View {
                     ToolbarItem(placement: .topBarTrailing) { InventoryFilterMenu(model: model) }
                 }
                 .navigationDestination(for: ItemRoute.self) { route in
+                    // A standard push: a zoom transition would close the item on the pull-down
+                    // that refreshes it.
                     ItemDetailView(environment: environment, itemID: route.itemID)
-                        .navigationTransition(.zoom(sourceID: route.itemID, in: itemTransition))
                 }
                 // Runs each time the list appears (a tab switch, back from an item) and when the
                 // query changes; typing waits a moment so each keystroke is not a request.
@@ -201,14 +201,13 @@ public struct InventoryView<Header: View>: View {
         .refreshable { await model.load() }
     }
 
-    /// An item's cell or row, opening the item with a zoom from it, and loading the next page when
-    /// the last one appears.
+    /// An item's cell or row, opening the item, and loading the next page when the last one
+    /// appears.
     private func link(to item: ItemSummary, @ViewBuilder label: () -> some View) -> some View {
         NavigationLink(value: ItemRoute(itemID: item.id)) {
             label()
         }
         .buttonStyle(.plain)
-        .matchedTransitionSource(id: item.id, in: itemTransition)
         .accessibilityIdentifier("inventory.row.\(item.sku)")
         .task {
             if item.id == model.items.last?.id {
