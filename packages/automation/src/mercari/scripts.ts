@@ -15,6 +15,7 @@ import {
   type AutomationScripts,
   type WriteResult,
 } from '../adapter/script-call.ts';
+import { listingSku } from '../adapter/sku-line.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
 import type { StepRunner } from '../runner/types.ts';
 import { openAccount, salesTabPath } from './pages/account-page.ts';
@@ -29,7 +30,7 @@ import {
   type Submitted,
 } from './pages/listing-form.ts';
 import { readListingsPage } from './pages/listings-page.ts';
-import { listingSku, type MercariListingPayload } from './payload.ts';
+import type { MercariListingPayload } from './payload.ts';
 import { type MercariListingTab } from './site.ts';
 
 /**
@@ -68,6 +69,13 @@ export function createMercariScripts(
     code: 'listing_sold',
     message: 'This listing sold on Mercari, so it cannot be changed.',
     fixHint: 'List the item again as a new Mercari listing.',
+  });
+
+  const imeiRequired = (): WriteResult => ({
+    type: 'rejected',
+    code: 'imei_required',
+    message: "Mercari asks for the phone's IMEI in this category, which Listora doesn't have.",
+    fixHint: 'List this item in Mercari, where you can enter the IMEI.',
   });
 
   /** The listing the newest active listings hold under this SKU, if any. */
@@ -158,9 +166,10 @@ export function createMercariScripts(
           'Open Mercari, start a listing, tap Verify, and finish its steps. Then list again.',
       };
     }
-    await step('fill in the listing', { mutates: false, timeScale: 3 }, (page) =>
+    const filled = await step('fill in the listing', { mutates: false, timeScale: 3 }, (page) =>
       fillListing(page, payload, sku, files),
     );
+    if (filled === 'imei_required') return imeiRequired();
     const result = await step('list', { mutates: true, timeScale: 3 }, async (page) =>
       submitted(await submitListing(page, 'list')),
     );
@@ -185,9 +194,10 @@ export function createMercariScripts(
       if (payload === null) throw new Error('a revise has a payload');
       const opened = await editor(op, step);
       if (!('id' in opened)) return opened;
-      await step('fill in the changes', { mutates: false }, (page) =>
+      const filled = await step('fill in the changes', { mutates: false }, (page) =>
         fillListing(page, payload, listingSku(op.listing), null),
       );
+      if (filled === 'imei_required') return imeiRequired();
       return step('save', { mutates: true }, async (page) =>
         submitted(await submitListing(page, 'save')),
       );

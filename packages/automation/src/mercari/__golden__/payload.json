@@ -23,8 +23,16 @@
     "Men",
     "Coats & jackets"
   ],
-  "size": "M",
+  "categoryId": 33,
+  "size": "M (38-40)",
   "sized": true,
+  "sizeExamples": [
+    "XS (30-32)",
+    "S (34-36)",
+    "M (38-40)",
+    "L (42-44)"
+  ],
+  "imei": false,
   "brand": "Levi's",
   "condition": {
     "id": 2,
@@ -32,9 +40,9 @@
   },
   "shipping": {
     "payer": "buyer",
-    "method": "prepaid_label",
-    "weight": "3 lb"
+    "method": "prepaid_label"
   },
+  "categoryOptions": [],
   "source": {
     "itemCategory": "clothing/outerwear/denim_jackets",
     "condition": "pre_owned_excellent"
