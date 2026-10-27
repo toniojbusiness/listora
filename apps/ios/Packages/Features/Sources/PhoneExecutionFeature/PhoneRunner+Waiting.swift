@@ -10,8 +10,12 @@ extension PhoneRunner {
     /// Listora answers the moment work reaches this phone (a delist after a sale starts within a
     /// second of the engine handing it over), at most `longestWait` later; at most one look a
     /// second. A server without the wait, or one that can't be reached, gets the last claim's own
-    /// wait instead.
+    /// wait instead, and so does a phone Listora doesn't know yet (signed out, or not registered).
     func waitForWork() async throws {
+        guard isSignedIn(), registered != nil else {
+            try await sleep(nextLook ?? Self.fallbackLook)
+            return
+        }
         let started = ContinuousClock.now
         do {
             _ = try await service.waitForWork(installationID: installationID(), upTo: Self.longestWait)

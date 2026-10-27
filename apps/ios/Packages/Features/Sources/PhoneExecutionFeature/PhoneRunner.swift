@@ -61,7 +61,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     let service: any PhoneWorkService
     private let runtime: any PhoneRuntime
     let installationID: @Sendable () -> String
-    private let isSignedIn: @MainActor () -> Bool
+    let isSignedIn: @MainActor () -> Bool
     private let isAppOpen: @MainActor () -> Bool
     private let device: @MainActor () -> DeviceRegistration
     let sleep: @Sendable (Duration) async throws -> Void
@@ -69,7 +69,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     let timings: StepTimings
     private var pushToken: (token: String, environment: String)?
     /// The registration the server has, so a run registers only when something changed.
-    private var registered: DeviceRegistration?
+    var registered: DeviceRegistration?
     /// The run each marketplace runs now.
     private var lanes: [String: Lane] = [:]
     /// The claims under way, for every marketplace with no run.

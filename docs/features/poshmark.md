@@ -232,6 +232,14 @@ Listora's own test listings:
   jeans, shorts, and skirt forms were checked against the catalog's size sets only (sizes
   `23` to `34` and `00` to `12` for jeans, Plus `14W` to `32W`, Petite `23P` and `0P`, letters for
   pants, shorts, and skirts).
+- **End, relist, and price from the edit form alone** (Mac, the captain's session, 2026-10-27,
+  the same listing, main's scripts and then these, one after the other; the Mac was under heavy
+  load from other work, so the steps they share varied by up to twice their time): Change price
+  38.7 s then 29.0 s, End 37.5 s then 27.9 s (and 52.0 s once while the load peaked), Relist
+  35.5 s then 46.9 s at that peak; each confirmed in 3 to 5 s. The steps left out took 5.3 to
+  6.7 s (reading the listing's page first) and 5.6 to 6.0 s (reading it again after Update)
+  each time. A new listing went under Poshmark's review at once (`for_review`), so it was
+  checked as its seller has it; it was deleted after.
 - **Not yet:** a revise of the other details, and a sale check.
 
 Who is logged in comes from Poshmark's own store, as its app reads it: `auth.isUserLoggedIn`,
