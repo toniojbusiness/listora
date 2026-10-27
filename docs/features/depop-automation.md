@@ -37,23 +37,24 @@ switch needs no data migration ([depop.md](depop.md), "SKUs are listing ids").
 
 ## What it does
 
-| Operation  | How                                                                                                                    | Confirmed by                                         |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Create     | Fills the sell form (`/products/create/`), then clicks Post. Only that click can change anything.                      | The product page: status, text, price                |
-| Revise     | Fills the edit form (`/products/edit/<slug>/`) with every detail except photos, then clicks Save                       | The same                                             |
-| Price      | Fills only the price on the edit form, then clicks Save                                                                | The same                                             |
-| End        | **Delete** on the edit page, confirmed in the browser's dialog                                                         | The product page shows the product deleted (`ended`) |
-| Relist     | Posts a **new listing** from the listing's content, under a new slug. A listing still on sale is left as it is.        | The new product's page shows it for sale (`active`)  |
-| Mark sold  | Not automated: after a sale elsewhere, the auto-delist ends the Depop listing                                          |                                                      |
-| Read       | The product's page (`/products/<slug>/`)                                                                               |                                                      |
-| Sale check | The seller's sold items (`/sellinghub/sold-items/`), newest first, up to 5 pages                                       |                                                      |
-| Listings   | The seller's listings for sale (`/sellinghub/selling/`), up to 25 pages (`listListings`, for imports and drift checks) |                                                      |
-| Health     | The selling hub (`/sellinghub/`)                                                                                       |                                                      |
+| Operation  | How                                                                                                                    | Confirmed by                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Create     | Fills the sell form (`/products/create/`), then clicks Post. Only that click can change anything.                      | The product page: status, text, price               |
+| Revise     | Fills the edit form (`/products/edit/<slug>/`) with every detail except photos, then clicks Save                       | The same                                            |
+| Price      | Fills only the price on the edit form, then clicks Save                                                                | The same                                            |
+| End        | **Delete listing** on the seller's own product page, confirmed in Depop's dialog                                       | The product page answers 410 Gone                   |
+| Relist     | Posts a **new listing** from the listing's content, under a new slug. A listing still on sale is left as it is.        | The new product's page shows it for sale (`active`) |
+| Mark sold  | Not automated: after a sale elsewhere, the auto-delist ends the Depop listing                                          |                                                     |
+| Read       | The product's page (`/products/<slug>/`)                                                                               |                                                     |
+| Sale check | The seller's sold items (`/sellinghub/sold-items/`): its no-sales note reads as none; sales fail visibly (not mapped)  |                                                     |
+| Listings   | The seller's listings for sale (`/sellinghub/selling/`), up to 25 pages (`listListings`, for imports and drift checks) |                                                     |
+| Health     | The selling hub (`/sellinghub/`)                                                                                       |                                                     |
 
 - **Ending is a deletion.** Depop has no way to take a listing off sale and put it back later,
   so Listora ends a Depop listing by deleting it, and a relist is a new product, as with Depop's
-  API. Depop keeps a deleted product readable with the status `DELETED`, which reads as `ended`,
-  so the read-back confirms the end. A listing that is already sold or deleted is not touched.
+  API. A deleted product's page answers 410 Gone, a definitive absence, so the read-back confirms
+  the end (and clears the listing's id, so a later relist posts a new listing). A listing that
+  is already sold or deleted is not touched.
 - A sold or deleted listing cannot be edited. Listora refuses those steps and tells the user to
   relist the item as a new listing.
 - `listListings` reports each listing exactly as its product page would, with its revision.
@@ -62,20 +63,24 @@ switch needs no data migration ([depop.md](depop.md), "SKUs are listing ids").
 - A sale check reports each sold item as one order. Its id is the product slug: Listora lists one
   of each item, so a Depop listing sells once.
 
-**Reads.** Depop's pages embed their data as JSON in `script#__NEXT_DATA__`
-(`props.pageProps`). The scripts read that rather than the visible text: it holds exact values
-(a decimal price, a status code, a change time), and its keys change far less often than the
-markup. Product statuses map like the API adapter's: `ONSALE` is `active`, `SOLD` and
-`MARKED_AS_SOLD` are `sold`, `DELETED` and `BANNED` are `ended`.
+**Reads.** Depop's pages are App Router pages (`pages/flight-data.ts`): the server streams its
+React Server Components payload into inline `self.__next_f.push` scripts, whose rows hold the
+data the page's queries started with. The product read finds the product's own record (its
+`slug`, `status`, and whole `description`, sometimes as a JSON string inside a row) and the price
+in the page's schema.org data (`script[data-testid="meta__jsonLd"]`). The seller's own product
+page opens as `/products/<slug>/manage/`, and on the phone it once came without the record, a
+minute after posting: the schema.org data then speaks for it (its whole description, and the
+offer's availability: `InStock` is `active`, `SoldOut` and `OutOfStock` are `sold`). Product
+statuses map like the API adapter's: `ONSALE` is `active`, `SOLD` and `MARKED_AS_SOLD` are `sold`,
+`DELETED` and `BANNED` are `ended`.
 
-**Freshness.** The product's last change time (`dateUpdated`) is the listing's revision, in
-milliseconds. It has whole seconds; every Listora change is its own browser session, at least two
-seconds after the last (`PACING_FLOOR.sessionGapMs`), so each one gets a newer revision. A stale
-page shows an older time, and the engine ignores it ([operations.md](operations.md)).
+**Freshness.** The pages no longer say when a product last changed, so reads carry no revision,
+and the adapter confirms a change by reading it twice (`readFreshness: 'none'`,
+[operations.md](operations.md)).
 
-**Absence.** Never definitive. A product page without a product (a 404) could be a listing not
-visible yet, as Depop says of its API ("A newly created listing can take a short time to become
-retrievable"), so it never counts as gone.
+**Absence.** A 410 Gone is definitive (Depop answers it for a deleted product). A 404 never
+counts: it could be a listing not visible yet, as Depop says of its API ("A newly created
+listing can take a short time to become retrievable").
 
 ## Finding a listing again
 
@@ -176,11 +181,13 @@ module's selectors or data keys.
 ## Local development and tests
 
 The tests never send traffic to Depop. They run in a real headless Chromium against the fake
-Depop site (`fake/fake-depop-site.ts`). The fake copies the adapter's model of Depop: the same
-paths, form elements, and embedded page data, the sell form's level-by-level category picker,
-size lists, brand search, and validation, the edit page's Delete with the browser's confirmation
-dialog, and the selling hub's listings and sold items with pagination. It can also inject each
-failure:
+Depop site (`fake/fake-depop-site.ts`, its pages in `fake/fake-depop-pages.ts`). The fake copies
+Depop's pages as the seller's session showed them (2026-10-26 and 27): the header's user menu
+whose "Your profile" opens the shop without loading a page, the shop's product links drawn late,
+the product page's streamed rows and schema.org price with Delete listing and its dialog, the
+sell and edit form's comboboxes (category groups with headers, sizes, brand with its clear
+button, condition), the Done page after Post, a 410 for a deleted product, and the sold items
+page (its no-sales note, or receipt links). It can also inject each failure:
 
 - a bot-check page ("Please verify you are a human", a 403)
 - a CAPTCHA widget on a page
@@ -206,41 +213,24 @@ Depop. With neither set, the adapter runs against depop.com. The fake Depop of t
 
 ## Live verification
 
-Listora reads Depop's logged-in pages only through a seller's own session. So the paths, selectors,
-and data keys in `site.ts` and `pages/` are Listora's model of Depop's US site, and they were not
-checked against the live site while building this. The first linked session should confirm them,
-ideally with the product owner watching. Check each of these in order:
+Mapped and verified on the seller's own session (2026-10-26 and 27), from the iPhone and on the
+Mac with Listora's own phone runtime and scripts in a background tab, on Listora's own test
+listings:
 
-1. The selling hub's path and its marker element.
-2. On the sell form:
-   - the photo input
-   - the description field
-   - the category levels and their names in `categories.ts`
-   - the size lists
-   - the brand search and its suggestions
-   - the condition values
-   - the price field and its format
-   - the seller's shipping choice
-   - the Post button
-   - the validation message
-3. On the product page: its path and slug format, and the embedded data (`props.pageProps.product`:
-   `slug`, `status`, `description`, `price`, `dateUpdated`), including what a deleted product
-   shows its seller.
-4. On the edit page: its path, the Save and Delete buttons, and the delete confirmation.
-5. On the selling and sold items pages: their paths, pagination, and embedded data.
-6. The limits in `DEPOP_LIMITS`.
+- **List** (phone): the sell form, the Done page after Post (`/products/create/<...>/`, which
+  doesn't always name the product, so the same run finds it by its SKU through the seller's shop:
+  the header's user menu, "Your profile", the shop's newest product links). Posted in about a
+  minute (filling 45 seconds) and confirmed by read-back. Depop draws the size picker a moment
+  after the category is picked; the form waits for it.
+- **Read** (phone and Mac): an active product, its owner's `manage` page, and a deleted one (410).
+- **End** (phone): Delete listing on the product page and its dialog; the read-back sees the 410.
+- **Relist** (phone): a relist of a deleted listing posts a new one.
+- **Not yet:** a price change and a revise (the edit page's form, which also draws after load),
+  and a sale check with a sale (the account has none: its sold items page shows only the
+  no-sales note). The listings for import (`selling-page.ts`) still read `__NEXT_DATA__`, which
+  Depop's pages no longer embed, so imports fail visibly on Depop until they are mapped.
 
-When the live site differs, the step stops before it sends anything and the user does it, so
-this check can never cause a false success. The run logs what the page has instead
+When the live site differs, the step stops before it sends anything and the user does it, so a
+change can never cause a false success. The run logs what the page has instead
 ([automation.md](automation.md#how-it-works), "When a page changes"). Fixing a mismatch means
 changing one page module.
-
-Seen on a real session (2026-10-26, from that evidence):
-
-- Item 1 is confirmed. The selling hub ("Selling Hub - Depop") is drawn by Depop's scripts, with
-  the signed-in user's avatar in the header's user menu (`userNavItem-wrapper`, `avatar`), and has
-  no `sellingHub` mark. The health check waits for the avatar.
-- Depop's pages no longer embed `script#__NEXT_DATA__`. They load their data from Depop's own API
-  (`webapi.depop.com/.../api/v1/...`, including `users/me` calls), so the reads that use the
-  embedded data (the product, selling, and sold items pages) need a new source. That is the next
-  fix, from more of that evidence.

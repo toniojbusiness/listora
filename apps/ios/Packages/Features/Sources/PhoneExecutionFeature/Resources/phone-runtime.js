@@ -6389,8 +6389,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*   retrievable").
 	*/
 	const PRODUCT_PAGE = { 
-	/** The page's schema.org data: the product, with its offer's price. */
-structuredData: "script[data-testid=\"meta__jsonLd\"]" };
+	/**
+	* The page's schema.org data: the product, with its offer's price. A page may carry more than
+	* one block (the phone was once given another before the product's), so the product's own is
+	* the one that offers this slug.
+	*/
+structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application/ld+json\"]" };
 	const PAGE$10 = "product page";
 	/** The product as the page's first query loaded it. */
 	const productRecordSchema = object({
@@ -6476,16 +6480,24 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	}
 	/** The page's schema.org data for this product: its price in cents, availability, and text. */
 	async function structuredOffer(page, slug) {
-		const text = await page.text(PRODUCT_PAGE.structuredData);
-		if (text === null) throw changed$2(PAGE$10, "has no product data (structured data)");
-		let data;
-		try {
-			data = JSON.parse(text);
-		} catch {
-			throw changed$2(PAGE$10, "has structured data Listora can't parse");
+		const blocks = (await page.texts(PRODUCT_PAGE.structuredData)).flatMap((text) => {
+			try {
+				return [JSON.parse(text)];
+			} catch {
+				return [];
+			}
+		});
+		if (blocks.length === 0) throw changed$2(PAGE$10, "has no product data (structured data)");
+		const own = blocks.find((block) => {
+			const read = structuredDataSchema.safeParse(block);
+			return read.success && read.data.offers.url.includes(`/products/${slug}/`);
+		});
+		if (own === void 0) {
+			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$2(PAGE$10, "offers a different product");
+			expectShape$1(structuredDataSchema, blocks[0], PAGE$10);
+			throw changed$2(PAGE$10, "has none of the product data Listora reads");
 		}
-		const { offers, description } = expectShape$1(structuredDataSchema, data, PAGE$10);
-		if (!offers.url.includes(`/products/${slug}/`)) throw changed$2(PAGE$10, "offers a different product");
+		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$10);
 		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$10, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
 		if (match?.[1] === void 0) throw changed$2(PAGE$10, "shows a price Listora can't read");
