@@ -102,11 +102,10 @@ extension BulkActionModel {
         nothing: String,
         _ request: (Listing) -> ListingRequest,
     ) async -> [BulkOutcome] {
-        let listings = item.listings.filter { listing in
-            listing.availableActions.contains { $0.action.value1 == action && $0.mode.value1 != nil }
-        }
-        guard !listings.isEmpty else { return [outcome(item, nil, .skipped, nothing)] }
-        var results: [BulkOutcome] = []
+        let listings = item.listings.filter { $0.allows(action) }
+        let busy = busyOutcomes(of: item)
+        guard !listings.isEmpty else { return busy.isEmpty ? [outcome(item, nil, .skipped, nothing)] : busy }
+        var results = busy
         for listing in listings {
             let name = Formatting.marketplaceName(listing.marketplace.id)
             let sent = request(listing)
@@ -130,10 +129,8 @@ extension BulkActionModel {
     /// Each live listing's price, then the item's list price, by the same rule; never below the
     /// item's floor on a marketplace, which the seller can still choose on the item screen.
     func changePrice(of item: Item, by adjustment: PriceAdjustment) async -> [BulkOutcome] {
-        var results: [BulkOutcome] = []
-        let live = item.listings.filter { listing in
-            listing.availableActions.contains { $0.action.value1 == .changePrice && $0.mode.value1 != nil }
-        }
+        var results = busyOutcomes(of: item)
+        let live = item.listings.filter { $0.allows(.changePrice) }
         let floors = live.isEmpty ? [] : await (try? service.floors(itemID: item.id)) ?? []
         for listing in live {
             let id = listing.marketplace.id
@@ -212,6 +209,18 @@ extension BulkActionModel {
         }
     }
 
+    /// A listing whose last change is still running takes no other until it is done (one change
+    /// at a time), which the seller is told rather than left guessing.
+    private func busyOutcomes(of item: Item) -> [BulkOutcome] {
+        item.listings.filter(\.isWorking).map { listing in
+            let name = Formatting.marketplaceName(listing.marketplace.id)
+            return outcome(
+                item, listing.marketplace.id, .skipped,
+                "Still working on the last change on \(name). Try again once it's done.",
+            )
+        }
+    }
+
     /// One call with its own Idempotency-Key, sent again with that key while the answer is lost.
     func send<T: Sendable>(
         _ call: @escaping @Sendable (String) async throws(APIFailure) -> T,
@@ -259,5 +268,20 @@ extension BulkActionModel {
             result: result,
             message: message,
         )
+    }
+}
+
+extension Listing {
+    /// The server allows `action` on the listing now.
+    func allows(_ action: Components.Schemas.KnownListingAction) -> Bool {
+        availableActions.contains { $0.action.value1 == action && $0.mode.value1 != nil }
+    }
+
+    /// Its newest change is still running or waiting.
+    var isWorking: Bool {
+        switch latestOperation?.status.value1 {
+        case .queued, .running, .retrying, .verifying: true
+        default: false
+        }
     }
 }

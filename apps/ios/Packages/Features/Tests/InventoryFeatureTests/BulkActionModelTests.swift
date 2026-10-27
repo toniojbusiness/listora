@@ -138,6 +138,24 @@ struct BulkActionModelTests {
     }
 
     @Test
+    func `says a listing still busy with its last change takes the next one later`() async {
+        let service = FakeInventoryService()
+        var busy = listing(.ebay, id: "l1", actions: [])
+        busy.latestOperation = Fixtures.operation(
+            kind: .price,
+            status: .verifying,
+            label: "Checking...",
+            tone: .checking,
+        )
+        let model = model(service, [item("a", sku: "AJ-1", listings: [busy])])
+        await model.run(.end(.notAvailable))
+        #expect(results(model) == [
+            "AJ-1 ebay skipped: Still working on the last change on eBay. Try again once it's done.",
+        ])
+        #expect(service.requests.isEmpty)
+    }
+
+    @Test
     func `changes each live price and the list price by the same rule, never below a floor`() async {
         let service = FakeInventoryService()
         let floor = Schemas.MarketplaceFloor(
