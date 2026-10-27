@@ -12,7 +12,7 @@ import {
 
 import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
-import type { PageDriver, StepRunner } from '../runner/types.ts';
+import type { StepRunner } from '../runner/types.ts';
 import { openAccount, salesTabPath } from './pages/account-page.ts';
 import { changed, type MercariSite } from './pages/common.ts';
 import { activate, deactivate, openEditor } from './pages/edit-page.ts';
@@ -62,11 +62,18 @@ export function createMercariScripts(
   });
 
   /** The listing the newest active listings hold under this SKU, if any. */
-  async function findBySku(step: StepRunner, sku: string): Promise<ItemRead | null> {
+  async function findBySku(
+    step: StepRunner,
+    sku: string,
+    title?: string,
+  ): Promise<ItemRead | null> {
     const recent = await step('look at the newest listings', { mutates: false }, (page) =>
       readListingsPage(page, site, 'active', 1),
     );
-    for (const row of recent.rows.slice(0, SKU_LOOKUP_DEPTH)) {
+    // Rows with the listing's title first: the seller's other listings needn't be opened.
+    const titled = title === undefined ? [] : recent.rows.filter((row) => row.title === title);
+    const candidates = titled.length > 0 ? titled : recent.rows.slice(0, SKU_LOOKUP_DEPTH);
+    for (const row of candidates) {
       const read = await step('look for the SKU', { mutates: false }, (page) =>
         readItem(page, site, row.id),
       );
@@ -75,19 +82,17 @@ export function createMercariScripts(
     return null;
   }
 
-  /** After a submit: Mercari's refusal, or the listing it opened, with its revision. */
-  async function submitted(page: PageDriver, outcome: Submitted): Promise<WriteResult> {
+  /**
+   * After a submit: Mercari's refusal, or the listing it opened. The listing is read back by the
+   * operation's check, not here: the submit already happened.
+   */
+  function submitted(outcome: Submitted): WriteResult {
     if (outcome.type === 'refused') {
       return { type: 'rejected', code: 'validation_failed', message: outcome.message };
     }
-    const shown = await readShownItem(page, site);
-    return {
-      type: 'applied',
-      externalListingId: outcome.itemId,
-      ...(shown.state.found && shown.state.revision !== null
-        ? { revision: shown.state.revision }
-        : {}),
-    };
+    return outcome.itemId === null
+      ? { type: 'applied' }
+      : { type: 'applied', externalListingId: outcome.itemId };
   }
 
   /** Opens the editor of a listed, unsold listing; a result instead when it can't be edited. */
@@ -117,7 +122,7 @@ export function createMercariScripts(
       const sku = listingSku(op.listing);
       if (op.attempt > 1) {
         // An earlier attempt may have gone through; Mercari would take a second copy.
-        const earlier = await findBySku(step, sku);
+        const earlier = await findBySku(step, sku, payload.title);
         if (earlier?.state.found === true) {
           return {
             type: 'applied',
@@ -146,9 +151,21 @@ export function createMercariScripts(
       await step('fill in the listing', { mutates: false, timeoutMs: 90_000 }, (page) =>
         fillListing(page, payload, sku, files),
       );
-      return step('list', { mutates: true }, async (page) =>
-        submitted(page, await submitListing(page, 'list')),
+      const result = await step('list', { mutates: true, timeoutMs: 90_000 }, async (page) =>
+        submitted(await submitListing(page, 'list')),
       );
+      if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
+      // Mercari's page after List may not name the listing: it is found by its SKU in the same
+      // run. Not finding it yet leaves it to the operation's check.
+      try {
+        const found = await findBySku(step, sku, payload.title);
+        if (found?.state.found === true) {
+          return { ...result, externalListingId: found.state.externalListingId };
+        }
+      } catch {
+        // The check reads it back later.
+      }
+      return result;
     },
     revise: async (op, step) => {
       const payload = op.payload;
@@ -159,7 +176,7 @@ export function createMercariScripts(
         fillListing(page, payload, listingSku(op.listing), null),
       );
       return step('save', { mutates: true }, async (page) =>
-        submitted(page, await submitListing(page, 'save')),
+        submitted(await submitListing(page, 'save')),
       );
     },
     price: async (op, step) => {
@@ -178,7 +195,7 @@ export function createMercariScripts(
       if (!('id' in opened)) return opened;
       await step('fill in the price', { mutates: false }, (page) => fillPrice(page, priceCents));
       return step('save', { mutates: true }, async (page) =>
-        submitted(page, await submitListing(page, 'save')),
+        submitted(await submitListing(page, 'save')),
       );
     },
     end: async (op, step) => {

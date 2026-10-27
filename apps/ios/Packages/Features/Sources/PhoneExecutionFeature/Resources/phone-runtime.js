@@ -1111,6 +1111,7 @@
 		return new RegExp(`^${dateSource}T(?:${timeRegex})$`);
 	}
 	const anyString = /^[\s\S]{0,}$/;
+	const integer = /^-?\d+$/;
 	const number$1 = /^-?\d+(?:\.\d+)?$/;
 	const boolean$1 = /^(?:true|false)$/i;
 	const lowercase = /^[^A-Z]*$/;
@@ -2562,6 +2563,138 @@
 		else break;
 		return final;
 	}
+	const $ZodRecord = /*@__PURE__*/ $constructor("$ZodRecord", (inst, def) => {
+		$ZodType.init(inst, def);
+		const memo = globalConfig.memoizer;
+		memo?.attach(inst);
+		inst._zod.parse = (payload, ctx) => {
+			const input = payload.value;
+			if (!isPlainObject(input)) {
+				payload.issues.push({
+					expected: "record",
+					code: "invalid_type",
+					input,
+					inst
+				});
+				return payload;
+			}
+			const proms = [];
+			const values = def.keyType._zod.values;
+			if (values && !def.partial) {
+				payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+				const recordKeys = /* @__PURE__ */ new Set();
+				for (const key of values) if (typeof key === "string" || typeof key === "number" || typeof key === "symbol") {
+					recordKeys.add(typeof key === "number" ? key.toString() : key);
+					if (key === "__proto__") continue;
+					const keyResult = def.keyType._zod.run({
+						value: key,
+						issues: []
+					}, ctx);
+					if (keyResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+					if (keyResult.issues.length) {
+						payload.issues.push({
+							code: "invalid_key",
+							origin: "record",
+							issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+							input: key,
+							path: [key],
+							inst
+						});
+						continue;
+					}
+					const outKey = keyResult.value;
+					if (outKey === "__proto__") continue;
+					const result = def.valueType._zod.run({
+						value: input[key],
+						issues: []
+					}, ctx);
+					if (result instanceof Promise) proms.push(result.then((result) => {
+						if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+						payload.value[outKey] = result.value;
+					}));
+					else {
+						if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+						payload.value[outKey] = result.value;
+					}
+				}
+				let unrecognized;
+				for (const key in input) if (!recordKeys.has(key)) {
+					if (def.mode === "loose") {
+						if (key === "__proto__") continue;
+						payload.value[key] = input[key];
+					} else {
+						unrecognized = unrecognized ?? [];
+						unrecognized.push(key);
+					}
+				}
+				if (unrecognized && unrecognized.length > 0) payload.issues.push({
+					code: "unrecognized_keys",
+					input,
+					inst,
+					keys: unrecognized,
+					continue: true
+				});
+			} else {
+				payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+				let unrecognized;
+				for (const key of Reflect.ownKeys(input)) {
+					if (key === "__proto__") continue;
+					if (!Object.prototype.propertyIsEnumerable.call(input, key)) continue;
+					let keyResult = def.keyType._zod.run({
+						value: key,
+						issues: []
+					}, ctx);
+					if (keyResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+					if (typeof key === "string" && number$1.test(key) && keyResult.issues.length) {
+						const retryResult = def.keyType._zod.run({
+							value: Number(key),
+							issues: []
+						}, ctx);
+						if (retryResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+						if (retryResult.issues.length === 0) keyResult = retryResult;
+					}
+					if (keyResult.issues.length) {
+						if (def.mode === "loose") payload.value[key] = input[key];
+						else if (values) {
+							unrecognized = unrecognized ?? [];
+							unrecognized.push(key);
+						} else payload.issues.push({
+							code: "invalid_key",
+							origin: "record",
+							issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+							input: key,
+							path: [key],
+							inst
+						});
+						continue;
+					}
+					const outKey = keyResult.value;
+					if (outKey === "__proto__") continue;
+					const result = def.valueType._zod.run({
+						value: input[key],
+						issues: []
+					}, ctx);
+					if (result instanceof Promise) proms.push(result.then((result) => {
+						if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+						payload.value[outKey] = result.value;
+					}));
+					else {
+						if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+						payload.value[outKey] = result.value;
+					}
+				}
+				if (unrecognized && unrecognized.length > 0) payload.issues.push({
+					code: "unrecognized_keys",
+					input,
+					inst,
+					keys: unrecognized,
+					continue: true
+				});
+			}
+			if (proms.length) return Promise.all(proms).then(() => payload);
+			return payload;
+		};
+	});
 	const $ZodEnum = /*@__PURE__*/ $constructor("$ZodEnum", (inst, def) => {
 		$ZodType.init(inst, def);
 		const values = getEnumValues(def.entries);
@@ -4458,6 +4591,107 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		if (typeof minimum === "number") json.minItems = minimum;
 		if (typeof maximum === "number") json.maxItems = maximum;
 	};
+	/** JSON object keys are always strings, so a numeric record key schema is re-expressed over the
+	* numeric-string form the record parser matches. Deferred to `finalize`, after the flatten: a key
+	* behind a wrapper only carries its own `type` before then, and a union key only has its branches.
+	*
+	* A numeric bound cannot apply to a property name, so `minimum` and its siblings are dropped rather
+	* than carried over: keeping them beside `type: "string"` reproduces the match-nothing schema this
+	* exists to fix. A key that carries one therefore emits wider than the record parses — `z.record(z.number().min(5), V)`
+	* accepts `"3"` — which is the deliberate trade, since throwing on it would reject an ordinary schema
+	* outright. */
+	function stringifyKeyNames(bySchema, json, visited) {
+		if (json.$ref) {
+			if (visited.has(json)) return json;
+			visited.add(json);
+			const def = bySchema.get(json)?.def;
+			if (!def) return json;
+			const inlined = stringifyKeyNames(bySchema, def, visited);
+			return inlined === def ? json : inlined;
+		}
+		for (const keyword of ["anyOf", "oneOf"]) {
+			const branches = json[keyword];
+			if (!Array.isArray(branches)) continue;
+			const mapped = branches.map((branch) => stringifyKeyNames(bySchema, branch, visited));
+			if (mapped.some((branch, i) => branch !== branches[i])) json = {
+				...json,
+				[keyword]: mapped
+			};
+		}
+		const types = Array.isArray(json.type) ? json.type : [json.type];
+		const numericType = !types.includes("string") && types.some((t) => t === "number" || t === "integer");
+		const values = json.enum ?? (json.const !== void 0 ? [json.const] : void 0);
+		if (!numericType && !values?.some((v) => typeof v === "number")) return json;
+		const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json;
+		if (rest.enum) rest.enum = rest.enum.map((v) => typeof v === "number" ? String(v) : v);
+		else if (typeof rest.const === "number") rest.const = String(rest.const);
+		if (!numericType) return rest;
+		rest.type = "string";
+		if (!values) rest.pattern = (types.includes("number") ? number$1 : integer).source;
+		return rest;
+	}
+	/** Every record of one conversion, so the carriers are found in a single pass rather than once per record. */
+	const pendingRecords = /* @__PURE__ */ new WeakMap();
+	function rewriteKeyNames(ctx) {
+		const bySchema = /* @__PURE__ */ new Map();
+		for (const entry of ctx.seen.values()) if (entry.def && !bySchema.has(entry.schema)) bySchema.set(entry.schema, entry);
+		const rewrites = /* @__PURE__ */ new Map();
+		for (const record of pendingRecords.get(ctx) ?? []) {
+			const seen = ctx.seen.get(record);
+			const names = (seen?.def ?? seen?.schema)?.propertyNames;
+			if (!names || names === true || rewrites.has(names)) continue;
+			const rewritten = stringifyKeyNames(bySchema, names, /* @__PURE__ */ new Set());
+			if (rewritten !== names) rewrites.set(names, rewritten);
+		}
+		if (!rewrites.size) return;
+		for (const entry of ctx.seen.values()) for (const carrier of [entry.schema, entry.def]) {
+			const rewritten = carrier && rewrites.get(carrier.propertyNames);
+			if (rewritten) carrier.propertyNames = rewritten;
+		}
+	}
+	const recordProcessor = (schema, ctx, _json, params) => {
+		const json = _json;
+		const def = schema._zod.def;
+		json.type = "object";
+		const keyType = def.keyType;
+		const patterns = aggregateChecks(keyType).patterns;
+		if (def.mode === "loose" && patterns && patterns.size > 0) {
+			const valueSchema = processSchema(def.valueType, ctx, {
+				...params,
+				path: [
+					...params.path,
+					"patternProperties",
+					"*"
+				]
+			});
+			json.patternProperties = {};
+			for (const pattern of patterns) assignProp(json.patternProperties, exactPattern(pattern).source, valueSchema);
+		} else {
+			if (ctx.target === "draft-07" || ctx.target === "draft-2020-12") {
+				json.propertyNames = processSchema(def.keyType, ctx, {
+					...params,
+					path: [...params.path, "propertyNames"]
+				});
+				let pending = pendingRecords.get(ctx);
+				if (!pending) {
+					pending = [];
+					pendingRecords.set(ctx, pending);
+					ctx.deferred.push(() => rewriteKeyNames(ctx));
+				}
+				pending.push(schema);
+			}
+			json.additionalProperties = processSchema(def.valueType, ctx, {
+				...params,
+				path: [...params.path, "additionalProperties"]
+			});
+		}
+		const keyValues = keyType._zod.values;
+		const omittableOnInput = ctx.io === "input" && inputOptin(def.valueType) !== void 0;
+		if (keyValues && !def.partial && !omittableOnInput) {
+			const validKeyValues = [...keyValues].filter((v) => typeof v === "string" || typeof v === "number");
+			if (validKeyValues.length > 0) json.required = validKeyValues.map(String);
+		}
+	};
 	const nullableProcessor = (schema, ctx, json, params) => {
 		const def = schema._zod.def;
 		const inner = processSchema(def.innerType, ctx, params);
@@ -5267,6 +5501,28 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			...normalizeParams(params)
 		});
 	}
+	const ZodRecord = /*@__PURE__*/ $constructor("ZodRecord", (inst, def) => {
+		_ensureDefaultMemoizer();
+		$ZodRecord.init(inst, def);
+		ZodType.init(inst, def);
+		inst._zod.processJSONSchema = (ctx, json, params) => recordProcessor(inst, ctx, json, params);
+		inst.keyType = def.keyType;
+		inst.valueType = def.valueType;
+	});
+	function record(keyType, valueType, params) {
+		if (!valueType || !valueType._zod) return new ZodRecord({
+			type: "record",
+			keyType: string(),
+			valueType: keyType,
+			...normalizeParams(valueType)
+		});
+		return new ZodRecord({
+			type: "record",
+			keyType,
+			valueType,
+			...normalizeParams(params)
+		});
+	}
 	const ZodEnum = /*@__PURE__*/ $constructor("ZodEnum", (inst, def) => {
 		$ZodEnum.init(inst, def);
 		ZodType.init(inst, def);
@@ -5688,8 +5944,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	/** Depop's Done page after a post: under the sell page's path, with one more segment. */
 	const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
 	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
-	const ANSWER_MS = 45e3;
-	const LOOK_EVERY_MS$2 = 500;
+	const ANSWER_MS$1 = 45e3;
+	const LOOK_EVERY_MS$3 = 500;
 	/**
 	* One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps
 	* its options while closed and shows them through a style variable (`--display: block`), so
@@ -5720,11 +5976,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		if (photos !== null) {
 			await awaitElement$1(page, LISTING_FORM$2.photos, FORM$2, "photo input");
 			await page.upload(LISTING_FORM$2.photos, photos);
-			await appears$1(page, LISTING_FORM$2.itemInfoAdded, ITEM_INFO_MS);
+			await appears$2(page, LISTING_FORM$2.itemInfoAdded, ITEM_INFO_MS);
 		}
 		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
 		if (payload.category === null) throw new Error("a listing without a category passed validation");
-		await pickCategory(page, payload.category);
+		await pickCategory$1(page, payload.category);
 		if (payload.size !== null) await pickSize$1(page, payload.size);
 		await pickBrand$1(page, payload.brand);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
@@ -5764,7 +6020,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		await expectElement$2(page, selector, FORM$2, `${button === "post" ? "Post" : "Save"} button`);
 		if (button === "post" && await page.exists(LISTING_FORM$2.postAnother)) await page.check(LISTING_FORM$2.postAnother, false);
 		await page.click(selector);
-		const end = Date.now() + ANSWER_MS;
+		const end = Date.now() + ANSWER_MS$1;
 		for (;;) {
 			const path = new URL(page.url()).pathname;
 			const slug = slugFromPath(path);
@@ -5789,7 +6045,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				message: "Depop didn't take the listing: it marked a field as needing a fix."
 			};
 			if (Date.now() >= end) throw changed$2(FORM$2, "showed no product and no message after the submit");
-			await lookAgain(page, LOOK_EVERY_MS$2);
+			await lookAgain(page, LOOK_EVERY_MS$3);
 		}
 	}
 	/** Depop's messages on the form (its alerts with text). */
@@ -5803,7 +6059,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* category's product types as options ("T-shirts"). The product type is searched for, then
 	* picked in its group; a group the list doesn't have stops the step before anything is sent.
 	*/
-	async function pickCategory(page, path) {
+	async function pickCategory$1(page, path) {
 		const [department, category, type] = path;
 		if (department === void 0 || category === void 0 || type === void 0) throw new Error("a category path has a department, a category, and a product type");
 		const box = combo("group");
@@ -5827,7 +6083,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		Kidswear: "Kids"
 	};
 	/** Whether `selector` is on the page within `ms` (a part Depop's scripts draw). */
-	async function appears$1(page, selector, ms) {
+	async function appears$2(page, selector, ms) {
 		const end = Date.now() + ms;
 		for (;;) {
 			if (await page.exists(selector)) return true;
@@ -6043,7 +6299,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* and banned products are `ended`, as the Depop API adapter reads them: Depop keeps them, and a
 	* listing Listora ended stays readable as ended.
 	*/
-	const STATUSES$1 = {
+	const STATUSES$2 = {
 		ONSALE: "active",
 		SOLD: "sold",
 		MARKED_AS_SOLD: "sold",
@@ -6055,7 +6311,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* line and hashtags, and a revision.
 	*/
 	function productRead(record, site, page) {
-		const status = STATUSES$1[record.status];
+		const status = STATUSES$2[record.status];
 		if (status === void 0) throw new PageChangedError(`Depop's ${page} shows a product status Listora doesn't know`);
 		const { description, sku } = listingCopy(record.description);
 		return {
@@ -6137,7 +6393,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	* `ended`, as the Depop API adapter reads them: Depop keeps them, and a listing Listora ended
 	* stays readable as ended.
 	*/
-	const STATUSES = {
+	const STATUSES$1 = {
 		STATUS_ONSALE: "active",
 		STATUS_SOLD: "sold",
 		STATUS_MARKED_AS_SOLD: "sold",
@@ -6164,7 +6420,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		const records = findRecords(await flightRows(page), (record) => record["slug"] === slug && "status" in record && "description" in record);
 		if (records.length === 0) throw changed$2(PAGE$10, "has none of the product data Listora reads");
 		const product = expectShape$1(productRecordSchema, records[0], PAGE$10);
-		const status = STATUSES[product.status];
+		const status = STATUSES$1[product.status];
 		if (status === void 0) throw changed$2(PAGE$10, "shows a product status Listora does not know");
 		const priceCents = await offerPrice(page, slug);
 		const { description, sku } = listingCopy(product.description);
@@ -6237,16 +6493,16 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	/** Depop's own top-level pages, which a single-name path may also be. */
 	const SITE_PATHS = new Set("about app blog brand brands category checkout cookies discover download explore help legal likes login messages news privacy products safety search sell sellinghub settings shop signup sitemap terms".split(" "));
 	/** How long the menu and the shop's product list get to appear, and how often they are looked at. */
-	const APPEAR_MS = 15e3;
+	const APPEAR_MS$1 = 15e3;
 	/** How long the user menu gets to open before its button is clicked again. */
 	const MENU_RETRY_MS = 3e3;
-	const LOOK_EVERY_MS$1 = 500;
+	const LOOK_EVERY_MS$2 = 500;
 	/** The signed-in seller's username, from the profile link in the header's user menu. */
 	async function findSeller(page, site) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
 		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
 		await page.click(SHOP_PAGE.userMenu);
-		const end = Date.now() + APPEAR_MS;
+		const end = Date.now() + APPEAR_MS$1;
 		let reopenAt = Date.now() + MENU_RETRY_MS;
 		for (;;) {
 			const shown = usernameOf(new URL(page.url()).pathname);
@@ -6266,18 +6522,18 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				await page.click(SHOP_PAGE.userMenu);
 				reopenAt = Date.now() + MENU_RETRY_MS;
 			}
-			await lookAgain(page, LOOK_EVERY_MS$1);
+			await lookAgain(page, LOOK_EVERY_MS$2);
 		}
 	}
 	/** Opens the menu's "Your profile" and reads the username from the address it opens. */
 	async function openedProfile(page) {
 		await page.click(SHOP_PAGE.profile);
-		const end = Date.now() + APPEAR_MS;
+		const end = Date.now() + APPEAR_MS$1;
 		for (;;) {
 			const shown = usernameOf(new URL(page.url()).pathname);
 			if (shown !== null) return shown;
 			if (Date.now() >= end) throw changed$2("user menu", "profile item opened no seller's shop");
-			await lookAgain(page, LOOK_EVERY_MS$1);
+			await lookAgain(page, LOOK_EVERY_MS$2);
 		}
 	}
 	/**
@@ -6288,8 +6544,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	async function newestProducts(page, site, username, limit) {
 		await page.goto(absolute$2(site, `/${encodeURIComponent(username)}/`));
 		if (page.status() === 404) throw changed$2("shop page", "is not there for the signed-in seller");
-		const end = Date.now() + APPEAR_MS;
-		while (!await page.exists(SHOP_PAGE.productLinks) && Date.now() < end) await lookAgain(page, LOOK_EVERY_MS$1);
+		const end = Date.now() + APPEAR_MS$1;
+		while (!await page.exists(SHOP_PAGE.productLinks) && Date.now() < end) await lookAgain(page, LOOK_EVERY_MS$2);
 		const slugs = [];
 		for (const href of await page.attributes(SHOP_PAGE.productLinks, "href")) {
 			const slug = href === null ? null : slugOf(href, site);
@@ -7530,6 +7786,20 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	}
 
 // src/mercari/pages/item-page.ts
+/**
+	* A listing's page (`/us/item/<id>/`), as its seller sees it: the read-back every automated
+	* Mercari step is verified by.
+	*
+	* - Status: a sold badge is `sold` (sold and waiting to ship, or done), the inactive notice
+	*   `ended` (the seller deactivated it), otherwise `active`.
+	* - Freshness: the item's last change (`updated`, in the page's data), in milliseconds, is the
+	*   listing's revision. Mercari updates it on every change, and automated changes are seconds
+	*   apart (human pacing), so it grows with every change.
+	* - Absence: only Mercari's own "deleted" notice for the id is a definitive absence. A plain
+	*   "not found" page could be a listing not visible yet, so it is not.
+	* - The description's last line is Listora's SKU line (payload.ts); the read reports the
+	*   description without it, and the SKU separately.
+	*/
 	const ITEM_PAGE = {
 		root: "[data-testid=\"ItemDetail\"]",
 		name: "[data-testid=\"ItemName\"]",
@@ -7539,7 +7809,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		sold: "[data-testid=\"ItemSoldBadge\"]",
 		inactive: "[data-testid=\"ItemInactiveNotice\"]",
 		deleted: "[data-testid=\"ItemDeletedNotice\"]",
-		notFound: "[data-testid=\"NotFound\"]"
+		notFound: "[data-testid=\"NotFound\"]",
+		data: "script#__NEXT_DATA__"
 	};
 	function itemUrl(site, id) {
 		return absolute(site, MERCARI_PATHS.item(id));
@@ -7563,62 +7834,111 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		};
 		return readShownItem(page, site);
 	}
-	/** Reads the listing page the browser shows now (after a form sent it there). */
+	/** Mercari's item statuses, as its pages' data names them. */
+	const STATUSES = {
+		on_sale: "active",
+		trading: "sold",
+		sold_out: "sold",
+		inactive: "ended",
+		cancelled: "ended",
+		suspended: "ended"
+	};
+	const itemRecordSchema = object({
+		name: string(),
+		/** In cents (`800` is $8.00). */
+		price: number().int().nonnegative(),
+		description: string(),
+		status: string(),
+		/** The last change, in seconds. */
+		updated: number().int().positive()
+	});
+	/**
+	* Reads the listing page the browser shows now. Read on real item pages (2026-10-27): the page
+	* is a Next.js page whose data (`__NEXT_DATA__`) holds the item as
+	* `props.pageProps.serverState["ItemDetail:<id>"]`, with its name, price in cents, description,
+	* status (`on_sale`, ...), and last change in seconds (the revision).
+	*/
 	async function readShownItem(page, site) {
 		const id = itemIdFromPath(new URL(page.url()).pathname);
 		if (id === null) throw changed("listing page", "is not at a listing address");
-		await expectElement(page, ITEM_PAGE.root, "listing page", "listing details");
-		const updated = await page.attribute(ITEM_PAGE.updated, "datetime");
-		const revision = updated === null ? NaN : Date.parse(updated);
-		if (!Number.isSafeInteger(revision) || revision < 0) throw changed("listing page", "shows no last-updated time");
-		const shownPrice = await page.text(ITEM_PAGE.price);
-		const priceCents = parsePrice(shownPrice);
-		if (priceCents === null) throw changed("listing page", "shows no price Listora can read");
-		const shownDescription = await page.text(ITEM_PAGE.description);
-		const { description, sku } = splitSkuLine(shownDescription ?? "");
-		const status = await page.exists(ITEM_PAGE.sold) ? "sold" : await page.exists(ITEM_PAGE.inactive) ? "ended" : "active";
+		const text = await page.text(ITEM_PAGE.data);
+		if (text === null) throw changed("listing page", "embeds none of the data Listora reads");
+		let data;
+		try {
+			data = JSON.parse(text);
+		} catch {
+			throw changed("listing page", "embeds data Listora can't parse");
+		}
+		const parsed = object({ props: object({ pageProps: object({ serverState: record(string(), unknown()) }) }) }).safeParse(data);
+		if (!parsed.success) throw changed("listing page", "has none of the listing data Listora reads");
+		const raw = parsed.data.props.pageProps.serverState[`ItemDetail:${id}`];
+		if (raw === void 0 || raw === null) return {
+			state: {
+				found: false,
+				authoritative: false
+			},
+			sku: null
+		};
+		const record$1 = itemRecordSchema.safeParse(raw);
+		if (!record$1.success) throw changed("listing page", "shows the listing without what Listora reads");
+		const status = STATUSES[record$1.data.status];
+		if (status === void 0) throw changed("listing page", "shows a status Listora does not know");
+		const { description, sku } = splitSkuLine(record$1.data.description);
 		return {
 			state: {
 				found: true,
 				externalListingId: id,
 				externalUrl: itemUrl(site, id),
 				status,
-				title: await page.text(ITEM_PAGE.name),
-				description: shownDescription === null ? null : description,
-				priceCents,
+				title: record$1.data.name,
+				description,
+				priceCents: record$1.data.price,
 				currency: "USD",
-				revision
+				revision: record$1.data.updated * 1e3
 			},
 			sku
 		};
 	}
 
-// src/mercari/shipping.ts
-/** The form's label for a weight class. */
-	function weightLabel(weight) {
-		return `Up to ${weight}`;
-	}
-
 // src/mercari/pages/listing-form.ts
+/**
+	* Read on the captain's verified session (2026-10-27): the sell page is drawn by Mercari's
+	* scripts with no form element; its parts are named by test ids. The category is a dialog of
+	* rows level by level ("Men", "Tops", "T-shirts"); brand and size are searchable lists of
+	* options; condition is a radio per Mercari condition id (1 New ... 5 Poor). Shipping starts on
+	* "Ship on your own": Listora picks Mercari's prepaid label, keeps the label Mercari recommends
+	* for the category, and answers "Offer buyers free shipping?" with No (the buyer pays).
+	*/
 	const LISTING_FORM = {
-		form: "form[data-testid=\"ListingForm\"]",
-		photos: "input[type=\"file\"][data-testid=\"PhotoInput\"]",
-		title: "[data-testid=\"Title\"]",
-		description: "[data-testid=\"Description\"]",
-		category: (level) => `select[data-testid="CategoryL${String(level)}"]`,
+		/** The form is there once its title field is. */
+		form: "input[data-testid=\"Title\"]",
+		photos: "input[type=\"file\"][data-testid=\"SellPhotoInput\"]",
+		/** A one-time tip about listing templates, over the form on a seller's first visits. */
+		templatesTip: "button[data-testid=\"ListingTemplatesEducationGotIt\"]",
+		title: "input[data-testid=\"Title\"]",
+		description: "textarea[data-testid=\"Description\"]",
+		category: "button[data-testid=\"SellCategoryFieldButton\"]",
+		categoryDialog: "[data-testid=\"DialogWrapper\"]",
+		categoryRow: (name) => `[data-testid="DialogWrapper"] button[data-testid="CategoryRow"]:text-is("${quote$1(name)}")`,
 		brand: "input[data-testid=\"Brand\"]",
-		brandSuggestions: "[data-testid=\"BrandSuggestions\"]",
-		brandSuggestion: "[data-testid=\"BrandSuggestion\"]",
-		condition: (id) => `input[name="condition"][value="${String(id)}"]`,
-		size: "select[data-testid=\"Size\"]",
-		shippingPayer: "select[data-testid=\"ShippingPayer\"]",
-		shippingWeight: "select[data-testid=\"ShippingWeight\"]",
+		brandOption: "[data-testid=\"Brand-option\"]",
+		condition: (id) => `input[type="radio"][value="${String(id)}"]`,
+		size: "input[data-testid=\"Size\"]",
+		sizeOption: "[data-testid=\"Size-option\"]",
+		prepaidLabel: "button[data-testid=\"MercariShipping\"]",
+		prepaidLabelChosen: "input#MERCARI[type=\"radio\"]",
+		shippingClass: "input[data-testid=\"SelectShipping\"]",
+		freeShipping: "[data-testid=\"ShippingPayerOption\"]",
+		freeShippingNo: "li[data-testid=\"FreeShippingNoButton\"]",
 		price: "input[data-testid=\"Price\"]",
 		list: "button[data-testid=\"ListButton\"]",
 		save: "button[data-testid=\"SaveButton\"]",
 		error: "[data-testid=\"FormError\"]"
 	};
 	const FORM = "listing form";
+	/** How long a part Mercari's scripts draw gets to appear, and how often it is looked at. */
+	const APPEAR_MS = 8e3;
+	const LOOK_EVERY_MS$1 = 500;
 	/**
 	* Mercari's dialog on the sell page for a seller it wants verified first (read 2026-10-26:
 	* `VerificationExceptionDialog`, listing the verifications it requires, with a Verify button).
@@ -7640,70 +7960,126 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	*/
 	async function fillListing(page, payload, sku, photos) {
 		await expectElement(page, LISTING_FORM.form, FORM, FORM);
-		if (photos !== null) await page.upload(LISTING_FORM.photos, photos);
+		if (await page.exists(LISTING_FORM.templatesTip)) await page.click(LISTING_FORM.templatesTip);
+		if (photos !== null) {
+			await expectElement(page, LISTING_FORM.photos, FORM, "photo input");
+			await page.upload(LISTING_FORM.photos, photos);
+		}
+		await expectElement(page, LISTING_FORM.title, FORM, "title field");
 		await page.fill(LISTING_FORM.title, payload.title);
+		await expectElement(page, LISTING_FORM.description, FORM, "description field");
 		await page.fill(LISTING_FORM.description, withSkuLine(payload.description, sku));
 		if (payload.category === null) throw new Error("a listing without a category passed validation");
-		for (const [level, name] of payload.category.entries()) await pickOption(page, LISTING_FORM.category(level), name, `category level ${String(level + 1)}`);
+		await pickCategory(page, payload.category);
 		await pickBrand(page, payload.brand);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
 		await expectElement(page, LISTING_FORM.condition(payload.condition.id), FORM, `condition "${payload.condition.label}"`);
-		await page.check(LISTING_FORM.condition(payload.condition.id), true);
+		await page.click(LISTING_FORM.condition(payload.condition.id));
 		if (payload.size !== null) await pickSize(page, payload.size);
-		await pickOption(page, LISTING_FORM.shippingPayer, "Buyer", "shipping payer");
-		await pickOption(page, LISTING_FORM.shippingWeight, weightLabel(payload.shipping.weight), "package weight");
-		await page.fill(LISTING_FORM.price, priceField(payload.price.amountCents));
+		await chooseShipping(page);
+		await fillPrice(page, payload.price.amountCents);
 	}
 	/** Fills only the price (a price change on the edit page). */
 	async function fillPrice(page, cents) {
 		await expectElement(page, LISTING_FORM.price, FORM, "price field");
 		await page.fill(LISTING_FORM.price, priceField(cents));
 	}
-	/** Submits the form with its List (sell) or Save (edit) button. */
-	async function submitListing(page, button) {
-		const selector = LISTING_FORM[button];
-		await expectElement(page, selector, FORM, `${button === "list" ? "List" : "Save"} button`);
-		await page.click(selector);
-		await page.waitFor(`${LISTING_FORM.error}, ${ITEM_PAGE.root}`);
-		const message = await page.text(LISTING_FORM.error);
-		if (message !== null) return {
-			type: "refused",
-			message
-		};
-		const itemId = itemIdFromPath(new URL(page.url()).pathname);
-		if (itemId === null) throw changed(FORM, "opened a page that is not a listing");
-		return {
-			type: "listed",
-			itemId
-		};
+	/** The category, a row per level in Mercari's category dialog; it closes on the last one. */
+	async function pickCategory(page, path) {
+		await expectElement(page, LISTING_FORM.category, FORM, "category picker");
+		await page.click(LISTING_FORM.category);
+		for (const [level, name] of path.entries()) {
+			const row = LISTING_FORM.categoryRow(name);
+			if (!await appears$1(page, row)) throw changed(FORM, `offers no category level ${String(level + 1)} "${name}"`);
+			await page.click(row);
+		}
+		if ((await page.text(LISTING_FORM.category))?.replace(/\s+/g, " ").trim() !== path.join(" > ")) throw changed(FORM, "shows a different category than picked");
 	}
-	/** Picks the option labeled `label` (the options may appear only after an earlier pick). */
-	async function pickOption(page, select, label, what) {
-		await expectElement(page, select, FORM, what);
-		await page.waitFor(`${select} option:not([value=""])`, "attached");
-		if (!(await page.texts(`${select} option`)).includes(label)) throw changed(FORM, `offers no ${what} "${label}"`);
-		await page.select(select, label);
+	/** Searches Mercari's brand list and picks the exact brand; without one, the step stops. */
+	async function pickBrand(page, brand) {
+		await expectElement(page, LISTING_FORM.brand, FORM, "brand search");
+		if (brand === null) return;
+		await page.type(LISTING_FORM.brand, brand);
+		const exact = `${LISTING_FORM.brandOption}:text-is("${quote$1(brand)}")`;
+		if (await appears$1(page, exact)) {
+			await page.click(exact);
+			return;
+		}
+		const match = (await page.texts(LISTING_FORM.brandOption)).find((option) => option.toLowerCase() === brand.toLowerCase());
+		if (match === void 0) throw changed(FORM, `lists no brand "${brand}"`);
+		await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}")`);
 	}
 	async function pickSize(page, size) {
 		await expectElement(page, LISTING_FORM.size, FORM, "size list");
-		await page.waitFor(`${LISTING_FORM.size} option:not([value=""])`, "attached");
-		const label = (await page.texts(`${LISTING_FORM.size} option`)).find((option) => sizeOptionMatches(option, size));
+		await page.click(LISTING_FORM.size);
+		if (!await appears$1(page, LISTING_FORM.sizeOption)) throw changed(FORM, "shows no sizes");
+		const label = (await page.texts(LISTING_FORM.sizeOption)).find((option) => sizeOptionMatches(option, size));
 		if (label === void 0) throw changed(FORM, `offers no size "${size}" for this category`);
-		await page.select(LISTING_FORM.size, label);
+		await page.click(`${LISTING_FORM.sizeOption}:text-is("${quote$1(label)}") >> nth=0`);
 	}
-	/** Searches Mercari's brand list and picks the exact brand, or leaves the brand empty. */
-	async function pickBrand(page, brand) {
-		await expectElement(page, LISTING_FORM.brand, FORM, "brand search");
-		await page.fill(LISTING_FORM.brand, "");
-		if (brand === null) return;
-		await page.type(LISTING_FORM.brand, brand);
-		await page.waitFor(LISTING_FORM.brandSuggestions);
-		const index = (await page.texts(LISTING_FORM.brandSuggestion)).findIndex((suggestion) => suggestion.toLowerCase() === brand.toLowerCase());
-		if (index === -1) {
-			await page.fill(LISTING_FORM.brand, "");
-			return;
+	/**
+	* Mercari's prepaid label, with the label Mercari recommends for the category, and no free
+	* shipping (the buyer pays).
+	*/
+	async function chooseShipping(page) {
+		await expectElement(page, LISTING_FORM.prepaidLabel, FORM, "prepaid label shipping");
+		await page.click(LISTING_FORM.prepaidLabel);
+		if (!await appears$1(page, LISTING_FORM.freeShipping)) throw changed(FORM, "asks nothing about free shipping for the prepaid label");
+		const label = await page.attribute(LISTING_FORM.shippingClass, "value");
+		if (label === null || label.trim() === "") throw changed(FORM, "recommends no shipping label");
+		await page.click(LISTING_FORM.freeShipping);
+		if (!await appears$1(page, LISTING_FORM.freeShippingNo)) throw changed(FORM, "offers no way to turn free shipping off");
+		await page.click(LISTING_FORM.freeShippingNo);
+	}
+	/** Whether `selector` is on the page within a moment (Mercari's scripts draw it). */
+	async function appears$1(page, selector) {
+		const end = Date.now() + APPEAR_MS;
+		for (;;) {
+			if (await page.exists(selector)) return true;
+			if (Date.now() >= end) return false;
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$1));
 		}
-		await page.click(`${LISTING_FORM.brandSuggestion} >> nth=${String(index)}`);
+	}
+	function quote$1(text) {
+		return text.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"");
+	}
+	/** How long Mercari gets to answer a submit (its photos upload first). */
+	const ANSWER_MS = 45e3;
+	/**
+	* Submits the form with its List (sell) or Save (edit) button, and waits for Mercari's answer:
+	* the listing's page, or the form again with Mercari's message or a field marked as needing a
+	* fix. Anything else leaves the outcome unknown, so the operation's check reads it back.
+	*/
+	async function submitListing(page, button) {
+		const selector = LISTING_FORM[button];
+		await expectElement(page, selector, FORM, `${button === "list" ? "List" : "Save"} button`);
+		const start = new URL(page.url()).pathname;
+		await page.click(selector);
+		const end = Date.now() + ANSWER_MS;
+		for (;;) {
+			const path = new URL(page.url()).pathname;
+			const itemId = itemIdFromPath(path);
+			if (itemId !== null) return {
+				type: "listed",
+				itemId
+			};
+			const messages = (await page.texts(LISTING_FORM.error)).filter((text) => text !== "");
+			if (messages.length > 0) return {
+				type: "refused",
+				message: messages.join(" ")
+			};
+			if (await page.count("[aria-invalid=\"true\"]") > 0) return {
+				type: "refused",
+				message: "Mercari didn't take the listing: it marked a field as needing a fix."
+			};
+			if (path !== start && !path.startsWith(MERCARI_PATHS.sell)) return {
+				type: "listed",
+				itemId: null
+			};
+			if (Date.now() >= end) throw changed(FORM, "showed no listing and no message after the submit");
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$1));
+			await page.waitFor("body", "attached");
+		}
 	}
 
 // src/mercari/pages/edit-page.ts
@@ -7736,17 +8112,25 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 	}
 
 // src/mercari/pages/listings-page.ts
+/**
+	* Read on the captain's verified session (2026-10-27, its active tab): the tab is a table
+	* (`[data-testid="Listings"]`) of `tr[data-testid="ListingRow"]` rows, each with its listing's
+	* link (`a[data-testid="ItemLink"]`, the title as its text) and price (`ItemPrice`, its amount
+	* in an input). The sold tabs' rows and an empty tab keep Listora's earlier model.
+	*/
 	const LISTINGS_PAGE = {
 		/** What an empty tab shows instead of its rows. */
 		empty: "[data-testid=\"ZeroListings\"]",
-		list: "[data-testid=\"ListingList\"]",
-		row: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"]",
-		link: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"] a[data-testid=\"ListingLink\"]",
-		name: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"] [data-testid=\"ListingName\"]",
-		price: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"] [data-testid=\"ListingPrice\"]",
-		soldAt: "[data-testid=\"ListingList\"] [data-testid=\"ListingRow\"] time[data-testid=\"SoldAt\"]",
+		list: "[data-testid=\"Listings\"], [data-testid=\"ListingList\"]",
+		row: "[data-testid=\"ListingRow\"]",
+		link: "[data-testid=\"ListingRow\"] a[data-testid=\"ItemLink\"], [data-testid=\"ListingRow\"] a[data-testid=\"ListingLink\"]",
+		name: "[data-testid=\"ListingRow\"] a[data-testid=\"ItemLink\"], [data-testid=\"ListingRow\"] [data-testid=\"ListingName\"]",
+		price: "[data-testid=\"ListingRow\"] [data-testid=\"ItemPrice\"], [data-testid=\"ListingRow\"] [data-testid=\"ListingPrice\"]",
+		soldAt: "[data-testid=\"ListingRow\"] time[data-testid=\"SoldAt\"]",
 		next: "a[data-testid=\"NextPage\"]"
 	};
+	/** How long a tab's rows get to draw; a tab without any by then reads as empty. */
+	const ROWS_MS = 8e3;
 	/** Opens one page of a tab and reads its rows. */
 	async function readListingsPage(page, site, tab, pageNumber, path) {
 		const url = path === void 0 ? absolute(site, MERCARI_PATHS.listings(tab, pageNumber)) : absolute(site, pageNumber > 1 ? `${path}?page=${String(pageNumber)}` : path);
@@ -7757,6 +8141,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 			rows: [],
 			hasNext: false
 		};
+		const end = Date.now() + ROWS_MS;
+		while (!await page.exists(LISTINGS_PAGE.row) && Date.now() < end) {
+			await new Promise((resolve) => setTimeout(resolve, 500));
+			await page.waitFor("body", "attached");
+		}
 		const sold = tab === "in_progress" || tab === "sold";
 		const [links, titles, prices, soldAts] = await Promise.all([
 			page.attributes(LISTINGS_PAGE.link, "href"),
@@ -7806,26 +8195,29 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 			fixHint: "List the item again as a new Mercari listing."
 		});
 		/** The listing the newest active listings hold under this SKU, if any. */
-		async function findBySku(step, sku) {
+		async function findBySku(step, sku, title) {
 			const recent = await step("look at the newest listings", { mutates: false }, (page) => readListingsPage(page, site, "active", 1));
-			for (const row of recent.rows.slice(0, 8)) {
+			const titled = title === void 0 ? [] : recent.rows.filter((row) => row.title === title);
+			const candidates = titled.length > 0 ? titled : recent.rows.slice(0, 8);
+			for (const row of candidates) {
 				const read = await step("look for the SKU", { mutates: false }, (page) => readItem(page, site, row.id));
 				if (read.state.found && read.sku === sku) return read;
 			}
 			return null;
 		}
-		/** After a submit: Mercari's refusal, or the listing it opened, with its revision. */
-		async function submitted(page, outcome) {
+		/**
+		* After a submit: Mercari's refusal, or the listing it opened. The listing is read back by the
+		* operation's check, not here: the submit already happened.
+		*/
+		function submitted(outcome) {
 			if (outcome.type === "refused") return {
 				type: "rejected",
 				code: "validation_failed",
 				message: outcome.message
 			};
-			const shown = await readShownItem(page, site);
-			return {
+			return outcome.itemId === null ? { type: "applied" } : {
 				type: "applied",
-				externalListingId: outcome.itemId,
-				...shown.state.found && shown.state.revision !== null ? { revision: shown.state.revision } : {}
+				externalListingId: outcome.itemId
 			};
 		}
 		/** Opens the editor of a listed, unsold listing; a result instead when it can't be edited. */
@@ -7844,7 +8236,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				if (payload === null) throw new Error("a create has a payload");
 				const sku = listingSku(op.listing);
 				if (op.attempt > 1) {
-					const earlier = await findBySku(step, sku);
+					const earlier = await findBySku(step, sku, payload.title);
 					if (earlier?.state.found === true) return {
 						type: "applied",
 						externalListingId: earlier.state.externalListingId,
@@ -7865,7 +8257,19 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 					mutates: false,
 					timeoutMs: 9e4
 				}, (page) => fillListing(page, payload, sku, files));
-				return step("list", { mutates: true }, async (page) => submitted(page, await submitListing(page, "list")));
+				const result = await step("list", {
+					mutates: true,
+					timeoutMs: 9e4
+				}, async (page) => submitted(await submitListing(page, "list")));
+				if (result.type !== "applied" || result.externalListingId !== void 0) return result;
+				try {
+					const found = await findBySku(step, sku, payload.title);
+					if (found?.state.found === true) return {
+						...result,
+						externalListingId: found.state.externalListingId
+					};
+				} catch {}
+				return result;
 			},
 			revise: async (op, step) => {
 				const payload = op.payload;
@@ -7873,7 +8277,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				const opened = await editor(op, step);
 				if (!("id" in opened)) return opened;
 				await step("fill in the changes", { mutates: false }, (page) => fillListing(page, payload, listingSku(op.listing), null));
-				return step("save", { mutates: true }, async (page) => submitted(page, await submitListing(page, "save")));
+				return step("save", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
 			},
 			price: async (op, step) => {
 				const priceCents = op.desired.priceCents;
@@ -7890,7 +8294,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 				const opened = await editor(op, step);
 				if (!("id" in opened)) return opened;
 				await step("fill in the price", { mutates: false }, (page) => fillPrice(page, priceCents));
-				return step("save", { mutates: true }, async (page) => submitted(page, await submitListing(page, "save")));
+				return step("save", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
 			},
 			end: async (op, step) => {
 				const id = op.listing.externalListingId;

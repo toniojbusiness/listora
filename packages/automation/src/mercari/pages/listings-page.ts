@@ -12,17 +12,27 @@ import type { PageDriver } from '../../runner/types.ts';
 import { itemIdFromPath, MERCARI_PATHS, type MercariListingTab } from '../site.ts';
 import { absolute, awaitElement, changed, parsePrice, type MercariSite } from './common.ts';
 
+/**
+ * Read on the captain's verified session (2026-10-27, its active tab): the tab is a table
+ * (`[data-testid="Listings"]`) of `tr[data-testid="ListingRow"]` rows, each with its listing's
+ * link (`a[data-testid="ItemLink"]`, the title as its text) and price (`ItemPrice`, its amount
+ * in an input). The sold tabs' rows and an empty tab keep Listora's earlier model.
+ */
 export const LISTINGS_PAGE = {
   /** What an empty tab shows instead of its rows. */
   empty: '[data-testid="ZeroListings"]',
-  list: '[data-testid="ListingList"]',
-  row: '[data-testid="ListingList"] [data-testid="ListingRow"]',
-  link: '[data-testid="ListingList"] [data-testid="ListingRow"] a[data-testid="ListingLink"]',
-  name: '[data-testid="ListingList"] [data-testid="ListingRow"] [data-testid="ListingName"]',
-  price: '[data-testid="ListingList"] [data-testid="ListingRow"] [data-testid="ListingPrice"]',
-  soldAt: '[data-testid="ListingList"] [data-testid="ListingRow"] time[data-testid="SoldAt"]',
+  list: '[data-testid="Listings"], [data-testid="ListingList"]',
+  row: '[data-testid="ListingRow"]',
+  link: '[data-testid="ListingRow"] a[data-testid="ItemLink"], [data-testid="ListingRow"] a[data-testid="ListingLink"]',
+  name: '[data-testid="ListingRow"] a[data-testid="ItemLink"], [data-testid="ListingRow"] [data-testid="ListingName"]',
+  price:
+    '[data-testid="ListingRow"] [data-testid="ItemPrice"], [data-testid="ListingRow"] [data-testid="ListingPrice"]',
+  soldAt: '[data-testid="ListingRow"] time[data-testid="SoldAt"]',
   next: 'a[data-testid="NextPage"]',
 } as const;
+
+/** How long a tab's rows get to draw; a tab without any by then reads as empty. */
+const ROWS_MS = 8_000;
 
 export interface ListingRow {
   id: string;
@@ -54,6 +64,12 @@ export async function readListingsPage(
   const name = `${tab.replace('_', ' ')} listings page`;
   await awaitElement(page, `${LISTINGS_PAGE.empty}, ${LISTINGS_PAGE.list}`, name, 'listing list');
   if (await page.exists(LISTINGS_PAGE.empty)) return { rows: [], hasNext: false };
+  // The table comes before its rows: they draw once Mercari's own query answers.
+  const end = Date.now() + ROWS_MS;
+  while (!(await page.exists(LISTINGS_PAGE.row)) && Date.now() < end) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await page.waitFor('body', 'attached');
+  }
   const sold = tab === 'in_progress' || tab === 'sold';
   const [links, titles, prices, soldAts] = await Promise.all([
     page.attributes(LISTINGS_PAGE.link, 'href'),
