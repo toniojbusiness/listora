@@ -234,10 +234,11 @@ The full-stack end-to-end suite is separate: `.github/workflows/e2e-full.yml` ru
 `make e2e-full` on a macOS runner nightly and when started by hand, never on a pull request
 ([docs/features/e2e.md](docs/features/e2e.md)).
 
-Deploys are separate: `.github/workflows/deploy.yml` runs only when started by hand for `staging`,
-`prod`, or `personal` (one reseller's own low-cost setup, priced in
-[docs/features/costs.md](docs/features/costs.md)), inside the protected GitHub environment of that
-name, and reaches AWS through OIDC with no stored keys. Setup and the first deploy are described in
+Deploys are separate: `.github/workflows/deploy.yml` runs only when started by hand for `staging`
+or `prod`, and `.github/workflows/deploy-personal.yml` deploys `personal` (one reseller's own
+low-cost setup, priced in [docs/features/costs.md](docs/features/costs.md)) after every CI run that
+passes on `main`, and by hand. Each runs inside the protected GitHub environment of that name and
+reaches AWS through OIDC with no stored keys. Setup and the first deploy are described in
 [infra/README.md](infra/README.md).
 
 TestFlight uploads are separate too: `.github/workflows/testflight.yml` runs only when started

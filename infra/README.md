@@ -191,25 +191,30 @@ Account ids and domains are never committed, except the personal account that
 context (`-c key=value`) or else an environment variable (all documented in `.env.example`),
 and fails fast, naming the missing or invalid key without printing its value.
 
-| Context key         | Environment variable         | Required | Meaning                                                          |
-| ------------------- | ---------------------------- | -------- | ---------------------------------------------------------------- |
-| `env`               | `LISTORA_ENV`                | yes      | `staging`, `prod`, or `personal`                                 |
-| `account`           | `LISTORA_AWS_ACCOUNT_ID`     | yes      | The environment's 12-digit AWS account id                        |
-| `region`            | `LISTORA_AWS_REGION`         | no       | Default `us-east-1`; SES must receive email there                |
-| `domain`            | `LISTORA_DOMAIN`             | yes      | For example `staging.listora.app`; optional for personal         |
-| `hostedZoneId`      | `LISTORA_HOSTED_ZONE_ID`     | yes      | Route 53 public hosted zone for `domain`; set with `domain`      |
-| `imageTag`          | `LISTORA_IMAGE_TAG`          | yes      | Image tag to run (the commit SHA); `latest` is refused           |
-| `alarmEmail`        | `LISTORA_ALARM_EMAIL`        | no       | Receives alert emails; defaults to the owner where there is one  |
-| `ownerEmail`        | `LISTORA_OWNER_EMAIL`        | personal | The only person who can sign in (owner pool); refused elsewhere  |
-| `githubRepository`  | `LISTORA_GITHUB_REPOSITORY`  | no       | Repository allowed to deploy; default `toniojbusiness/listora`   |
-| `availabilityZones` | `LISTORA_AVAILABILITY_ZONES` | no       | Two zones of the region, comma-separated; default: the first two |
+| Context key          | Environment variable           | Required | Meaning                                                          |
+| -------------------- | ------------------------------ | -------- | ---------------------------------------------------------------- |
+| `env`                | `LISTORA_ENV`                  | yes      | `staging`, `prod`, or `personal`                                 |
+| `account`            | `LISTORA_AWS_ACCOUNT_ID`       | yes      | The environment's 12-digit AWS account id                        |
+| `region`             | `LISTORA_AWS_REGION`           | no       | Default `us-east-1`; SES must receive email there                |
+| `domain`             | `LISTORA_DOMAIN`               | yes      | For example `staging.listora.app`; optional for personal         |
+| `hostedZoneId`       | `LISTORA_HOSTED_ZONE_ID`       | yes      | Route 53 public hosted zone for `domain`; set with `domain`      |
+| `imageTag`           | `LISTORA_IMAGE_TAG`            | yes      | Image tag to run (the commit SHA); `latest` is refused           |
+| `alarmEmail`         | `LISTORA_ALARM_EMAIL`          | no       | Receives alert emails; defaults to the owner where there is one  |
+| `ownerEmail`         | `LISTORA_OWNER_EMAIL`          | personal | The only person who can sign in (owner pool); refused elsewhere  |
+| `githubRepository`   | `LISTORA_GITHUB_REPOSITORY`    | no       | Repository allowed to deploy; default `toniojbusiness/listora`   |
+| `githubOwnerId`      | `LISTORA_GITHUB_OWNER_ID`      | no       | Its owner's numeric id; default the default repository's         |
+| `githubRepositoryId` | `LISTORA_GITHUB_REPOSITORY_ID` | no       | Its numeric id; default the default repository's                 |
+| `githubOidcProvider` | `LISTORA_GITHUB_OIDC_PROVIDER` | no       | `create` (default) or `existing`: the account's GitHub provider  |
+| `availabilityZones`  | `LISTORA_AVAILABILITY_ZONES`   | no       | Two zones of the region, comma-separated; default: the first two |
 
 ## Deploying the personal environment
 
-The personal environment deploys from a Mac with one command, `scripts/deploy-personal.sh`,
-instead of the Deploy workflow: no GitHub environment, OIDC role, or `deploy-access` stack is
-involved. It deploys only to the captain's account `976033325938` (pinned in the script; any
-other account is refused) and runs the same steps in the same order as the workflow.
+The personal environment deploys with one script, `scripts/deploy-personal.sh`, which deploys
+only to the captain's account `976033325938` (pinned in the script; any other account is
+refused). GitHub runs it after every CI run that passes on `main`
+([Deploying from GitHub](#deploying-from-github)); from a Mac it is the first deploy, the
+fallback, and the way to change what only an administrator may (the bootstrap, the Anthropic
+key). Both run the same steps in the same order as the Deploy workflow.
 
 **Before the first run:** sign in to the account's AWS CLI profile (for example
 `aws sso login --profile prequal-main`; one sign-in covers the whole deploy, since `cdk` gets
@@ -281,7 +286,11 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
    commit it last deployed), it moves the service back to the stack's task definition.
 10. **Waits for health** (`/health/ready` with the database ok, 10 minutes at most), runs the
     **smoke test**, and prints the API URL and the app client id to put in the iPhone app's
-    Prod configuration.
+    Prod configuration. A release that fails either is **rolled back**: before the services
+    move, the script records the task definition each one runs, and it moves each back to that
+    one (a rollout like any other, so the API stays up), checks health again, and fails the
+    deploy, saying whether the previous release is healthy. The first deploy has nothing to go
+    back to.
 
 **Smoke test** (`src/deploy/smoke.ts`, also runnable on its own): `/health/live` and
 `/health/ready`, a `401` for a request without a token, a sign-in with the configured driver,
@@ -361,11 +370,95 @@ deploy never takes the API down. The deploy times are in
 
 The services then run revisions that CloudFormation did not make; the stacks still describe the
 commit of the last full deploy. The next full deploy brings them back in line: it replaces the
-revisions with its own, also when its commit is the one CloudFormation already has. The Deploy
-workflow does not do that check, so after a code-only deploy, deploy personal with the script.
+revisions with its own, also when its commit is the one CloudFormation already has. The deploy
+from GitHub runs the same script, so it does that too.
+
+### Deploying from GitHub
+
+The **Deploy personal** workflow (`.github/workflows/deploy-personal.yml`) deploys personal from
+GitHub, so no deploy depends on a Mac's AWS sign-in or Docker. It runs after every CI run that
+passes for a push to `main` (and by hand from the Actions tab, on `main`), deploys the commit CI
+tested unless `main` has moved past it (the newer commit's run deploys that), and runs one
+deploy at a time without ever cancelling one that started. Its one deploy step is
+`scripts/deploy-personal.sh --ci`: the full deploy, with the same checks, health check, smoke
+test, and rollback, using the AWS credentials of the role the job assumes through OIDC (no AWS
+keys exist in GitHub). With `--ci` the script:
+
+- checks Listora's bootstrap and execution policy and refuses when either is not the committed
+  one, without changing them (the role cannot): update them with the deploy from a Mac;
+- needs the owner's address already verified by SES, so the first deploy (which waits for the
+  verification link to be clicked) is the one from a Mac;
+- keeps the Anthropic key stored in `listora/personal/anthropic-api-key` (the role can neither
+  read nor write it): store a new key with the deploy from a Mac;
+- masks the owner's address in the log, which is public in a public repository.
+
+**The deploy role** `listora-personal-github-deploy` (the `listora-personal-deploy-access`
+stack, `src/stacks/deploy-access-stack.ts`) trusts only a GitHub OIDC token whose subject is
+this repository, named by its immutable owner and repository ids (GitHub's immutable subject
+form, `repo:toniojbusiness@266634719/listora@1431894048:environment:personal`), in the
+`personal` GitHub environment, and whose ref is `refs/heads/main`. It may assume Listora's own
+bootstrap roles (`cdk-listora-*`, never the default `CDKToolkit`'s or another app's), push and
+pull the `listora/app` and `listora/runner` images, read the `listora-personal-*` stacks,
+`CDKToolkit-listora`, and the execution policy, run the migration task, and read and roll the
+services of the `listora-personal` cluster. What a deploy can change through the bootstrap is
+bounded by the restricted execution policy ([Trust boundary](#trust-boundary)), which excludes
+the deploy role itself.
+
+**One-time setup**, after the workflow is on `main`, with administrator credentials (the
+`prequal-main` profile in the examples):
+
+1. **Deploy the role.** The account already has a GitHub OIDC provider (it belongs to another
+   app, which keeps it): `githubOidcProvider=existing` trusts it as it is. The restricted
+   bootstrap cannot deploy this stack, by design, so it deploys with plain CloudFormation:
+
+   ```sh
+   cd infra
+   npx cdk synth listora-personal-deploy-access --quiet --output cdk.out/deploy-access \
+     -c env=personal -c account=976033325938 -c imageTag="$(git rev-parse HEAD)" \
+     -c ownerEmail=<owner> -c githubOidcProvider=existing
+   aws cloudformation deploy --profile prequal-main --region us-east-1 \
+     --stack-name listora-personal-deploy-access \
+     --template-file cdk.out/deploy-access/listora-personal-deploy-access.template.json \
+     --capabilities CAPABILITY_NAMED_IAM --tags project=listora environment=personal
+   aws cloudformation update-termination-protection --profile prequal-main --region us-east-1 \
+     --enable-termination-protection --stack-name listora-personal-deploy-access
+   ```
+
+   Run it again only when `deploy-access-stack.ts` changes.
+
+2. **Create the `personal` GitHub environment**, which allows deployments from `main` only, and
+   its settings. They must be the ones the deploy from a Mac uses (the `LISTORA_*` variables),
+   or the two deploys synthesize different infrastructure:
+
+   ```sh
+   gh api -X PUT repos/toniojbusiness/listora/environments/personal --input - <<'JSON'
+   {"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
+   JSON
+   gh api -X POST repos/toniojbusiness/listora/environments/personal/deployment-branch-policies \
+     -f name=main -f type=branch
+   gh variable set AWS_ACCOUNT_ID --env personal --body 976033325938
+   gh variable set AWS_REGION --env personal --body us-east-1
+   gh secret set OWNER_EMAIL --env personal --body <owner, lowercase>
+   ```
+
+   Only when the deploy from a Mac sets them: the variables `AVAILABILITY_ZONES`,
+   `ALARM_EMAIL`, and `DOMAIN` with `HOSTED_ZONE_ID`. `OWNER_EMAIL` is a secret only so that
+   GitHub masks it in the public log. Required reviewers are optional: with them, every deploy
+   waits for an approval.
+
+3. **Check it**: run the workflow by hand (`gh workflow run deploy-personal.yml --ref main`)
+   and watch it end with `deploy-personal: deployed <commit>`.
+
+Do not deploy from a Mac while the workflow runs (or the other way round): the second deploy
+finds a stack busy and stops, changing nothing.
 
 ### Rollback
 
+- **A release that fails its health check or smoke test** is rolled back by the script itself
+  (step 10 above): the services run the previous release again, and the deploy fails. The stacks
+  still describe the failed commit, and the next deploy replaces what the services run, so fix
+  the cause and deploy again (push the fix, or check out the last good commit and run the
+  script).
 - **A failed deploy step.** The script stops at the first failure. CloudFormation rolls the
   failing stack back to its last good state by itself, and a failed migration stops the deploy
   before any new task starts, so the previous release keeps serving. Fix the cause and run the
@@ -437,16 +530,14 @@ arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protecti
    ([Deploying the personal environment](#deploying-the-personal-environment)).
 3. **Deploy access.** From `infra/`, with the settings exported (or as `-c` flags):
    `npx cdk deploy listora-staging-deploy-access`. If the account already has the GitHub OIDC
-   provider, remove it first or import it; an account can have only one per URL.
+   provider (an account can have only one per URL), set `githubOidcProvider=existing` to trust
+   it as it is. For personal, see [Deploying from GitHub](#deploying-from-github).
 4. **GitHub environment.** In the repository settings create the environment `staging` (and
-   later `prod`, or `personal` for a personal deployment) with protection rules: required
-   reviewers, and deployment branches limited to `main`. Add the environment variables
-   `AWS_ACCOUNT_ID`, `AWS_REGION`, `DOMAIN`,
-   `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL` and `AVAILABILITY_ZONES` (personal without a
-   domain leaves out `DOMAIN` and `HOSTED_ZONE_ID`; personal also needs `OWNER_EMAIL`, the one
-   person its user pool lets sign in). No secrets are needed. Deploy personal the first time
-   with `scripts/deploy-personal.sh`, which waits for the owner to click SES's verification
-   link before it deploys the user pool; the workflow's user pool step does not wait.
+   later `prod`) with protection rules: required reviewers, and deployment branches limited to
+   `main`. Add the environment variables `AWS_ACCOUNT_ID`, `AWS_REGION`, `DOMAIN`,
+   `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL` and `AVAILABILITY_ZONES`. No secrets are
+   needed. Personal deploys with its own workflow and settings
+   ([Deploying from GitHub](#deploying-from-github)), and the first time from a Mac.
 5. **Deploy.** Run the **Deploy** workflow (Actions tab) on `main` with `staging`. It tests
    and synthesizes offline, assumes the deploy role through OIDC, deploys the registry, builds
    and pushes the application and runner images tagged with the commit, deploys the state
@@ -483,8 +574,9 @@ The deploy role can assume the CDK bootstrap roles, and the bootstrap's CloudFor
 execution role can do whatever the bootstrap's execution policy allows (`AdministratorAccess`
 unless the bootstrap restricted it). What actually bounds a deploy:
 
-- the GitHub environment's protection rules (required reviewers, `main` only), which decide
-  who can run a job that assumes the role, and
+- the deploy role's trust policy (this repository by its immutable ids, the GitHub environment,
+  and the `main` ref) and the GitHub environment's protection rules (required reviewers, `main`
+  only), which decide who can run a job that assumes the role, and
 - the bootstrap's CloudFormation execution policy, which decides what that job can change.
 
 **The restricted execution policy** (`src/deploy/execution-policy.ts`, managed policy

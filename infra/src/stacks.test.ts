@@ -1616,7 +1616,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
   describe('deploy access', () => {
     const t = template(shape, 'deployAccess');
 
-    it('trusts only GitHub OIDC tokens for this repository and GitHub environment', () => {
+    it('trusts only GitHub OIDC tokens of this repository, on main, in the GitHub environment', () => {
       t.hasResourceProperties('AWS::IAM::OIDCProvider', {
         Url: 'https://token.actions.githubusercontent.com',
         ClientIdList: ['sts.amazonaws.com'],
@@ -1631,7 +1631,9 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
               Condition: {
                 StringEquals: {
                   'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-                  'token.actions.githubusercontent.com:sub': `repo:${target.githubRepository}:environment:${environment}`,
+                  // The repository's immutable subject: owner and repository by name and id.
+                  'token.actions.githubusercontent.com:sub': `repo:toniojbusiness@266634719/listora@1431894048:environment:${environment}`,
+                  'token.actions.githubusercontent.com:ref': 'refs/heads/main',
                 },
               },
             }),
@@ -1640,22 +1642,33 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       });
     });
 
-    it('can only use the CDK bootstrap roles, push the image, and run the migration task', () => {
+    it('can only use the CDK bootstrap roles, push the images, check the bootstrap, run the migration task, and roll the services', () => {
       const actions = statements(t).flatMap((statement) => asList(statement['Action']));
       expect(actions.sort()).toEqual(
         [
           'cloudformation:DescribeStacks',
+          'cloudformation:DescribeStacks',
+          'cloudformation:ListStackResources',
+          'ec2:DescribeAvailabilityZones',
           'ecr:BatchCheckLayerAvailability',
           'ecr:BatchGetImage',
           'ecr:CompleteLayerUpload',
           'ecr:DescribeImages',
           'ecr:GetAuthorizationToken',
+          'ecr:GetDownloadUrlForLayer',
           'ecr:InitiateLayerUpload',
           'ecr:PutImage',
           'ecr:UploadLayerPart',
+          'ecs:DescribeServices',
+          'ecs:DescribeTaskDefinition',
           'ecs:DescribeTasks',
           'ecs:RunTask',
+          'ecs:UpdateService',
+          'iam:GetPolicy',
+          'iam:GetPolicyVersion',
           'iam:PassRole',
+          'iam:PassRole',
+          'ses:GetEmailIdentity',
           'sts:AssumeRole',
         ].sort(),
       );
@@ -1687,6 +1700,24 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       expect(passRole).toContain('"iam:PassedToService":"ecs-tasks.amazonaws.com"');
       expect(bySid('ReadStackOutputs')).toContain(`:stack/listora-${environment}-*/*`);
     });
+
+    it('reads, never changes, the bootstrap, and rolls only the services of its own cluster', () => {
+      const bySid = (sid: string) =>
+        JSON.stringify(statements(t).find((statement) => statement['Sid'] === sid));
+      expect(bySid('CheckRestrictedBootstrap')).toContain(`:stack/CDKToolkit-listora/*`);
+      expect(bySid('CheckExecutionPolicy')).toContain(
+        `:iam::${target.account}:policy/listora-${environment}-cdk-execution"`,
+      );
+      expect(bySid('PassServiceRoles')).toContain(
+        `:iam::${target.account}:role/listora-${environment}-compute-*"`,
+      );
+      expect(bySid('PassServiceRoles')).toContain(
+        '"iam:PassedToService":"ecs-tasks.amazonaws.com"',
+      );
+      expect(bySid('RollServices')).toContain(
+        `:ecs:${target.region}:${target.account}:service/listora-${environment}/*`,
+      );
+    });
   });
 });
 
@@ -1703,5 +1734,43 @@ describe('the owner email identity', () => {
 
   it('is left alone when it already exists outside the stack', () => {
     expect(identities({ ownerEmailIdentity: 'existing' })).toEqual([]);
+  });
+});
+
+describe('the GitHub OIDC provider', () => {
+  const deployAccess = (overrides: Record<string, unknown>) =>
+    Template.fromStack(synthesize('personal', overrides).stacks.deployAccess);
+
+  it('is trusted as it is when the account already has one (another app may own it)', () => {
+    const t = deployAccess({ githubOidcProvider: 'existing' });
+    t.resourceCountIs('AWS::IAM::OIDCProvider', 0);
+    const trust = JSON.stringify(
+      resources(t, 'AWS::IAM::Role')[0]?.Properties?.['AssumeRolePolicyDocument'],
+    );
+    expect(trust).toContain(
+      `:iam::${String(PLACEHOLDER_CONTEXT.personal['account'])}:oidc-provider/token.actions.githubusercontent.com`,
+    );
+  });
+
+  it("is named with another repository's own ids", () => {
+    const t = deployAccess({
+      githubRepository: 'acme/shop',
+      githubOwnerId: '42',
+      githubRepositoryId: '4242',
+    });
+    t.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
+          Match.objectLike({
+            Condition: {
+              StringEquals: Match.objectLike({
+                'token.actions.githubusercontent.com:sub':
+                  'repo:acme@42/shop@4242:environment:personal',
+              }),
+            },
+          }),
+        ],
+      },
+    });
   });
 });

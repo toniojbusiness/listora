@@ -9,10 +9,8 @@ import { pathToFileURL } from 'node:url';
 import { ENVIRONMENT_NAMES, type EnvironmentName } from '../config.ts';
 import { deployRoleName } from '../stacks/deploy-access-stack.ts';
 
-/** The managed policy's name in the account. */
-export function executionPolicyName(environment: EnvironmentName): string {
-  return `listora-${environment}-cdk-execution`;
-}
+/** The managed policy's name in the account (the deploy role may read it). */
+export { executionPolicyName } from '../stacks/deploy-access-stack.ts';
 
 /**
  * The IAM service prefix behind each CloudFormation resource namespace the stacks use
