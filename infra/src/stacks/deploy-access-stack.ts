@@ -40,19 +40,34 @@ export function executionPolicyName(environment: string): string {
 }
 
 /**
+ * The permissions boundary every role of the environment's stacks carries, which the execution
+ * policy requires of every role it creates or changes (deploy/execution-policy.ts).
+ */
+export function roleBoundaryName(environment: string): string {
+  return `listora-${environment}-role-boundary`;
+}
+
+/**
+ * The bootstrap roles a deploy uses: the deploy role (which runs CloudFormation with the
+ * restricted execution role) and the asset publishing roles. Never the lookup role, which can
+ * read the whole account: synthesis is offline.
+ */
+export const DEPLOY_BOOTSTRAP_ROLES = ['deploy', 'file-publishing', 'image-publishing'] as const;
+
+/**
  * The role GitHub Actions assumes through OIDC to deploy one environment; no long-lived AWS
  * keys exist anywhere. Only a workflow job of this repository (named by its immutable ids)
  * running on `main` in the GitHub environment of the same name (which carries the protection
  * rules: deployments from `main` only) can assume it.
  *
- * The role itself can assume Listora's CDK bootstrap roles of this account and region (which
- * perform the CloudFormation deployment), push to and pull from the application and runner
+ * The role itself can assume Listora's CDK bootstrap deploy and asset publishing roles of this
+ * account and region (which perform the CloudFormation deployment), push to and pull from the application and runner
  * image repositories, read this environment's stacks and Listora's bootstrap stack and
  * execution policy (to check them, never to change them), run and watch the schema migration
  * task, and read and roll the services of this environment's cluster (to put a release that
  * fails its health check back on the task definitions it replaced). Through the bootstrap roles
- * it can deploy what the bootstrap's restricted CloudFormation execution policy allows, which
- * excludes this stack: the trust boundary is the GitHub environment's protection rules plus
+ * it can deploy only this environment's stacks (Listora's bootstrap template), and only what the
+ * bootstrap's restricted CloudFormation execution policy allows, which excludes this stack: the trust boundary is the GitHub environment's protection rules plus
  * that policy (infra/README.md). An administrator deploys this stack once per account, before
  * the first workflow run.
  */
@@ -96,9 +111,10 @@ export class DeployAccessStack extends ListoraStack {
       new iam.PolicyStatement({
         sid: 'UseCdkBootstrapRoles',
         actions: ['sts:AssumeRole'],
-        resources: [
-          `arn:${this.partition}:iam::${this.account}:role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-*-${this.account}-${this.region}`,
-        ],
+        resources: DEPLOY_BOOTSTRAP_ROLES.map(
+          (role) =>
+            `arn:${this.partition}:iam::${this.account}:role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-${role}-role-${this.account}-${this.region}`,
+        ),
       }),
     );
     this.deployRole.addToPolicy(
@@ -141,9 +157,9 @@ export class DeployAccessStack extends ListoraStack {
         resources: [stackArn(`listora-${target.environment}-*`)],
       }),
     );
-    // scripts/deploy-personal.sh checks, before it changes anything, that the bootstrap runs
-    // CloudFormation with the restricted policy and that the policy is the committed document.
-    // Only an administrator changes either.
+    // scripts/deploy-personal.sh checks, before it changes anything, that the bootstrap is
+    // Listora's template running CloudFormation with the restricted policy, and that the policy
+    // and the role boundary are the committed documents. Only an administrator changes them.
     this.deployRole.addToPolicy(
       new iam.PolicyStatement({
         sid: 'CheckRestrictedBootstrap',
@@ -155,9 +171,9 @@ export class DeployAccessStack extends ListoraStack {
       new iam.PolicyStatement({
         sid: 'CheckExecutionPolicy',
         actions: ['iam:GetPolicy', 'iam:GetPolicyVersion'],
-        resources: [
-          `arn:${this.partition}:iam::${this.account}:policy/${executionPolicyName(target.environment)}`,
-        ],
+        resources: [executionPolicyName, roleBoundaryName].map(
+          (name) => `arn:${this.partition}:iam::${this.account}:policy/${name(target.environment)}`,
+        ),
       }),
     );
     this.deployRole.addToPolicy(

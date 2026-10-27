@@ -73,6 +73,7 @@ public struct RootView: View {
                 settingsPath = []
                 selection = .today
                 dependencies.settings.profile.signedOut()
+                dependencies.settings.invites.signedOut()
             }
         }
         // The avatar in the headers shows the seller's own initials or photo.
@@ -82,6 +83,12 @@ public struct RootView: View {
             }
         }
         .task { await dependencies.signIn.follow() }
+        // An invite link (`listora://invite/<code>`) opens the sign-up with its code.
+        .onOpenURL { url in
+            if let code = InviteLink.code(in: url) {
+                dependencies.signIn.openInvite(code: code)
+            }
+        }
         // List it now, after saving an item: the item in Inventory, with List everywhere open.
         .onAppear {
             dependencies.addItem.onListItem = { itemID in
@@ -224,9 +231,11 @@ extension RootView {
                 SettingsAccount(email: email) { dependencies.signIn.signOut() }
             },
             accountDeletion: dependencies.settings.accountDeletion,
+            invites: dependencies.settings.invites,
             screens: SettingsScreens(
                 linkAccounts: { AnyView(LinkAccountsView(model: dependencies.linkAccounts)) },
                 marketplaces: { AnyView(MarketplacesView(model: dependencies.marketplaces)) },
+                imports: { dependencies.importsScreen() },
                 notifications: {
                     AnyView(NotificationSettingsView(
                         today: dependencies.today,

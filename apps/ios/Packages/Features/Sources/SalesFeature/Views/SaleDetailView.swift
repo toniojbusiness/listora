@@ -1,3 +1,4 @@
+import Core
 import DesignSystem
 import ListoraAPI
 import SwiftUI
@@ -10,9 +11,11 @@ struct SaleDetailView: View {
     @State private var model: SaleDetailModel
     @State private var confirming: Components.Schemas.KnownSaleAction?
     @State private var shipping = false
+    private let phoneProgress: (any PhoneWorkProgressSource)?
 
     init(environment: SalesEnvironment, saleID: String) {
         _model = State(initialValue: environment.makeDetailModel(saleID: saleID))
+        phoneProgress = environment.phoneProgress
     }
 
     var body: some View {
@@ -84,7 +87,7 @@ struct SaleDetailView: View {
                     RelistSection(sale: sale, model: model)
                 }
                 if !sale.delistRuns.isEmpty {
-                    DelistSection(sale: sale)
+                    DelistSection(sale: sale, phoneProgress: phoneProgress?.progress ?? [])
                 }
                 MoneySection(sale: sale)
                 if sale.items.count > 1 {

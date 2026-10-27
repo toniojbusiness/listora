@@ -9,7 +9,7 @@
 import { z } from 'zod';
 
 import { CHALLENGE_KINDS } from '@listora/db';
-import { REMOTE_LISTING_STATUSES } from '@listora/marketplaces';
+import { ITEM_CONDITIONS, REMOTE_LISTING_STATUSES } from '@listora/marketplaces';
 
 import type { ScriptCall } from '../adapter/script-call.ts';
 import { isWriteCall } from '../adapter/script-call.ts';
@@ -46,20 +46,35 @@ const failure = z.discriminatedUnion('kind', [
   }),
 ]);
 
+const foundListing = z.object({
+  found: z.literal(true),
+  externalListingId: z.string().min(1).max(200),
+  externalUrl: z.string().max(2_000).nullable(),
+  status: z.enum(REMOTE_LISTING_STATUSES),
+  title: z.string().max(5_000).nullable(),
+  description: z.string().max(50_000).nullable(),
+  priceCents: z.number().int().min(0).nullable(),
+  currency: z.literal('USD').nullable(),
+  revision: z.number().int().min(0).nullable(),
+});
+
 const listingState = z.discriminatedUnion('found', [
   z.object({ found: z.literal(false), authoritative: z.boolean() }),
-  z.object({
-    found: z.literal(true),
-    externalListingId: z.string().min(1).max(200),
-    externalUrl: z.string().max(2_000).nullable(),
-    status: z.enum(REMOTE_LISTING_STATUSES),
-    title: z.string().max(5_000).nullable(),
-    description: z.string().max(50_000).nullable(),
-    priceCents: z.number().int().min(0).nullable(),
-    currency: z.literal('USD').nullable(),
-    revision: z.number().int().min(0).nullable(),
-  }),
+  foundListing,
 ]);
+
+/** A listing as an import reads it: its state and what the item takes from it. */
+const listedListing = foundListing.extend({
+  details: z.object({
+    photoUrls: z.array(z.url({ protocol: /^https?$/ }).max(2_000)).max(30),
+    brand: z.string().max(200).nullable(),
+    size: z.string().max(100).nullable(),
+    condition: z.enum(ITEM_CONDITIONS).nullable(),
+    categoryRef: z.string().max(500).nullable(),
+    categoryPath: z.array(z.string().min(1).max(200)).max(8),
+    sku: z.string().min(1).max(64).nullable(),
+  }),
+});
 
 const writeResult = z.discriminatedUnion('type', [
   z.object({
@@ -130,7 +145,10 @@ function valueSchema(call: ScriptCall): z.ZodType {
     case 'orders':
       return orders;
     case 'listings':
-      return z.object({ listings: z.array(listingState).max(5_000), complete: z.boolean() });
+      return z.object({
+        listings: z.array(listedListing).max(200),
+        next: z.string().min(1).max(500).nullable(),
+      });
     case 'labels':
       return labels;
   }

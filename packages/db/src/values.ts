@@ -245,7 +245,13 @@ export const DELETION_RECORD_KINDS = ['account', 'connection', 'ebay_user'] as c
 export type DeletionRecordKind = (typeof DELETION_RECORD_KINDS)[number];
 
 /** What a browser automation run was for (`automation_run.purpose`). */
-export const AUTOMATION_RUN_PURPOSES = ['operation', 'sale_check', 'health', 'label_read'] as const;
+export const AUTOMATION_RUN_PURPOSES = [
+  'operation',
+  'sale_check',
+  'health',
+  'import',
+  'label_read',
+] as const;
 export type AutomationRunPurpose = (typeof AUTOMATION_RUN_PURPOSES)[number];
 
 /** Where an automation connection's automated steps run (docs/features/phone-execution.md). */
@@ -261,9 +267,30 @@ export const PHONE_WORK_PURPOSES = [
   'session_check',
   'sale_check',
   'sale_history',
+  'listing_import',
   'label_read',
 ] as const;
 export type PhoneWorkPurpose = (typeof PHONE_WORK_PURPOSES)[number];
+
+/** `listing_import.status` (docs/features/imports.md). */
+export const LISTING_IMPORT_STATUSES = ['reading', 'importing', 'finished'] as const;
+export type ListingImportStatus = (typeof LISTING_IMPORT_STATUSES)[number];
+
+/** `listing_import_entry.outcome`: how one listing an import read settled. */
+export const LISTING_IMPORT_OUTCOMES = [
+  'pending',
+  'imported',
+  'merged',
+  'already_listed',
+  'needs_you',
+  'skipped',
+  'failed',
+] as const;
+export type ListingImportOutcome = (typeof LISTING_IMPORT_OUTCOMES)[number];
+
+/** `listing_import_entry.match`: how a merged listing found its item. */
+export const LISTING_IMPORT_MATCHES = ['sku', 'title_photos', 'seller'] as const;
+export type ListingImportMatch = (typeof LISTING_IMPORT_MATCHES)[number];
 
 export const DEVICE_PLATFORMS = ['ios'] as const;
 export type DevicePlatform = (typeof DEVICE_PLATFORMS)[number];

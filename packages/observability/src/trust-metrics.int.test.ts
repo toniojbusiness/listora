@@ -278,6 +278,53 @@ describe('trust metrics (real Postgres)', () => {
       expect(find(groups, 'DelistLatency', { Marketplace: 'poshmark' })).toEqual([
         expect.objectContaining({ values: { DelistLatency: [2.5 * MINUTE] } }),
       ]);
+      // Delisted everywhere: only the Poshmark sale, whose every delist succeeded.
+      expect(find(groups, 'DelistEverywhereLatency')).toEqual([
+        {
+          timestamp: window.from,
+          dimensions: {},
+          values: { DelistEverywhereLatency: [2.5 * MINUTE] },
+        },
+      ]);
+    });
+
+    it('publishes the time to delisted everywhere once the last delist of a sale settles', async () => {
+      const first = await listing('depop');
+      const run = await sale(first, at(-3 * MINUTE));
+      await operation({
+        marketplace: 'depop',
+        kind: 'end',
+        status: 'succeeded',
+        listingId: first,
+        delistRunId: run,
+        settledAt: at(-2.5 * MINUTE),
+      });
+      await operation({
+        marketplace: 'mercari',
+        kind: 'end',
+        status: 'succeeded',
+        listingId: await listing('mercari'),
+        delistRunId: run,
+        settledAt: IN_WINDOW,
+      });
+      // A sale whose last delist settled before the window was counted then.
+      const earlier = await listing('poshmark');
+      await operation({
+        marketplace: 'poshmark',
+        kind: 'end',
+        status: 'succeeded',
+        listingId: earlier,
+        delistRunId: await sale(earlier, at(-30 * MINUTE)),
+        settledAt: at(-20 * MINUTE),
+      });
+
+      expect(find(await collectSettledOperations(db, window), 'DelistEverywhereLatency')).toEqual([
+        {
+          timestamp: window.from,
+          dimensions: {},
+          values: { DelistEverywhereLatency: [1.5 * MINUTE] },
+        },
+      ]);
     });
   });
 

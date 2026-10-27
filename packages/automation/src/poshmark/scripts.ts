@@ -35,6 +35,7 @@ import {
   privateSku,
   setAvailability,
   setPrice,
+  shownAvailability,
   submit,
   type Availability,
 } from './pages/listing-form.ts';
@@ -46,6 +47,7 @@ import {
   type ListingPage,
 } from './pages/listing-page.ts';
 import { readSale, readSales, type PoshmarkSale } from './pages/sales-page.ts';
+import { listingDetails } from './pages/listing-details.ts';
 import { cents, remoteListing, revision, type ListingRecord } from './pages/state.ts';
 import { type PoshmarkListingPayload } from './payload.ts';
 import type { PoshmarkSite } from './site.ts';
@@ -68,8 +70,6 @@ const SETTLE_WAIT_MS = 30_000;
 const NEW_LOOKS = 3;
 const NEW_WAIT_MS = 5_000;
 
-/** Closet pages read for a full closet listing (48 listings each). */
-const CLOSET_PAGES = 50;
 /** Sold-item pages read per sale check (48 each, the newest sales among them). */
 const SOLD_PAGES = 5;
 /** Order pages one label read opens at most, for labels the sales list does not show. */
@@ -226,7 +226,11 @@ export function createPoshmarkScripts(
     );
   }
 
-  /** Saves the open form; Poshmark's validation messages are a rejection in its own words. */
+  /**
+   * Saves the open form; Poshmark's validation messages are a rejection in its own words. An
+   * update lands on the listing's page and is applied as it is: the operation's read-back reads
+   * the listing next, so reading it here too would only load the same page twice.
+   */
   async function save(step: StepRunner, button: 'list' | 'update'): Promise<WriteResult> {
     // Next uploads the photos and creates the listing before the share step's List shows.
     const result = await step(
@@ -236,6 +240,10 @@ export function createPoshmarkScripts(
     );
     if (result.type === 'refused') {
       return { type: 'rejected', code: 'validation_failed', message: result.message };
+    }
+    if (button === 'update') {
+      const id = listingIdFromPath(result.path);
+      return id === null ? { type: 'applied' } : { type: 'applied', externalListingId: id };
     }
     return applied(step, result.path);
   }
@@ -292,7 +300,14 @@ export function createPoshmarkScripts(
     );
   }
 
-  /** Sets the listing's availability (ending or relisting it), unless it already has it. */
+  /**
+   * Sets the listing's availability (ending or relisting it), unless it already has it. The
+   * edit form shows the availability, so a listing it shows in the other one is changed there at
+   * once, with no read of the listing's page first (that took a page load, and up to two minutes
+   * of looks right after an earlier change, when Poshmark's page shows no listing). The
+   * listing's page decides everything else: a listing without a form (one Poshmark removed, or
+   * sold), one already as asked, and one Poshmark hides.
+   */
   async function changeAvailability(
     op: OperationRequest<PoshmarkListingPayload>,
     step: StepRunner,
@@ -300,6 +315,19 @@ export function createPoshmarkScripts(
   ): Promise<WriteResult> {
     const id = op.listing.externalListingId;
     if (id === null) return notListed();
+    const onForm = await step('open the edit form', { mutates: false }, async (page) =>
+      (await openForm(page, site.editListing(id))) ? shownAvailability(page) : null,
+    );
+    if (onForm !== null && onForm !== availability) {
+      await step('set the availability', { mutates: false }, (page) =>
+        setAvailability(page, availability),
+      );
+      return save(step, 'update');
+    }
+    // Not for sale already: nothing to end. The read-back decides.
+    if (onForm === 'not_for_sale' && availability === 'not_for_sale') {
+      return { type: 'applied', externalListingId: id };
+    }
     const page = await settledListing(step, id);
     if (page.type === 'hidden') return hiddenListing();
     // A listing Poshmark is reviewing after a change is there to end or relist all the same.
@@ -497,20 +525,23 @@ export function createPoshmarkScripts(
       }
       return labels;
     },
-    listings: async (step) => {
+    listings: async (cursor, step) => {
+      // One closet page of the listings for sale (48), newest first: the cursor is its
+      // `max_id`.
       const username = await seller(step);
-      const { listings, complete } = await closet(
-        step,
-        username,
-        { availability: 'all', newestFirst: true },
-        { maxPages: CLOSET_PAGES },
+      const shown = await step('read your listings for sale', { mutates: false }, (page) =>
+        readClosetPage(page, site, username, {
+          availability: 'available',
+          newestFirst: true,
+          ...(cursor === null ? {} : { maxId: cursor }),
+        }),
       );
-      return {
-        listings: listings
-          .filter((listing) => listing.status === 'published')
-          .map((listing) => remoteListing(listing, site, 'closet page')),
-        complete,
-      };
+      const listings = shown.listings.flatMap((record) => {
+        if (record.status !== 'published') return [];
+        const listing = remoteListing(record, site, 'closet page');
+        return listing.status === 'active' ? [{ ...listing, details: listingDetails(record) }] : [];
+      });
+      return { listings, next: shown.next };
     },
   };
 }

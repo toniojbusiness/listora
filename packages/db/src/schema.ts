@@ -47,6 +47,9 @@ import type {
   ItemStatus,
   LabelCarrier,
   LabelReadStatus,
+  ListingImportMatch,
+  ListingImportOutcome,
+  ListingImportStatus,
   ListingStatus,
   Marketplace,
   MembershipRole,
@@ -114,6 +117,11 @@ export interface AccountTable {
   sku_prefix: string;
   /** The business the seller sells as, from Settings; null until they enter one. */
   business_name: Nullable<string>;
+  /**
+   * When the account was created from an invite (docs/features/invites.md); null for an account
+   * created directly, and only those may invite.
+   */
+  invited_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -124,6 +132,29 @@ export interface AppUserTable {
   auth_subject: string;
   email: Nullable<string>;
   display_name: Nullable<string>;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** An invite of the account (docs/features/invites.md): only its code's SHA-256 is kept. */
+export interface AccountInviteTable {
+  id: Id;
+  account_id: string;
+  code_sha256: Buffer;
+  /** The code's last four characters, to tell invites apart. */
+  code_hint: string;
+  label: Nullable<string>;
+  /** Null: the invite never expires. Only an unredeemed invite expires. */
+  expires_at: NullableTimestamp;
+  /** The invitee's email, lowercase, once they redeemed it. */
+  claimed_email: Nullable<string>;
+  claimed_at: NullableTimestamp;
+  email_changes: Generated<number>;
+  invitee_user_id: Nullable<string>;
+  /** The invitee's own account, from their first sign-in. */
+  invitee_account_id: Nullable<string>;
+  accepted_at: NullableTimestamp;
+  revoked_at: NullableTimestamp;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
 }
@@ -955,6 +986,59 @@ export interface PhoneWorkTable {
   pending_call: NullableJsonb<JsonObject>;
   created_at: CreatedAt;
   updated_at: UpdatedAt;
+  /** The import a `listing_import` reads the next page of. */
+  import_id: Nullable<string>;
+}
+
+// Imports -------------------------------------------------------------------------------------
+
+/** One import of the seller's listings on a marketplace (docs/features/imports.md). */
+export interface ListingImportTable {
+  id: Id;
+  account_id: string;
+  connection_id: string;
+  marketplace: Marketplace;
+  status: Generated<ListingImportStatus>;
+  host: AutomationRunHost;
+  /** The next page to read; null for the first page. */
+  cursor: Nullable<string>;
+  pages_read: Generated<number>;
+  listings_read: Generated<number>;
+  imported: Generated<number>;
+  merged: Generated<number>;
+  already_listed: Generated<number>;
+  needs_you: Generated<number>;
+  failed: Generated<number>;
+  /** Why reading stopped before the last page; user-readable. */
+  error_code: Nullable<string>;
+  error_message: Nullable<string>;
+  read_at: NullableTimestamp;
+  finished_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** One listing an import read, and how it settled. */
+export interface ListingImportEntryTable {
+  id: Id;
+  account_id: string;
+  import_id: string;
+  marketplace: Marketplace;
+  external_listing_id: string;
+  /** The listing as read (`ListedListing`). */
+  listing: Jsonb<JsonObject>;
+  outcome: Generated<ListingImportOutcome>;
+  match: Nullable<ListingImportMatch>;
+  item_id: Nullable<string>;
+  listing_id: Nullable<string>;
+  /** For `needs_you`: `[{ itemId, reason }]`, best first. */
+  candidates: DefaultedJsonb<JsonArray>;
+  error_message: Nullable<string>;
+  /** The seller said it is an item of its own: imported without matching it again. */
+  new_item: Generated<boolean>;
+  settled_at: NullableTimestamp;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
 }
 
 // Today ---------------------------------------------------------------------------------------
@@ -1077,6 +1161,7 @@ export interface Database {
   account: AccountTable;
   app_user: AppUserTable;
   membership: MembershipTable;
+  account_invite: AccountInviteTable;
   sku_sequence: SkuSequenceTable;
   storage_location: StorageLocationTable;
   inventory_item: InventoryItemTable;
@@ -1123,6 +1208,8 @@ export interface Database {
   session_check: SessionCheckTable;
   app_device: AppDeviceTable;
   phone_work: PhoneWorkTable;
+  listing_import: ListingImportTable;
+  listing_import_entry: ListingImportEntryTable;
   today_summary_setting: TodaySummarySettingTable;
   sale_email_inbox: SaleEmailInboxTable;
   item_batch: ItemBatchTable;

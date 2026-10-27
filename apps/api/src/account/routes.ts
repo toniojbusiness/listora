@@ -3,11 +3,13 @@ import type { ObjectStorage } from '@listora/storage';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 
 import { contractRoute, type RouteDependencies } from '../contract/routes.ts';
+import type { InvitesDependencies } from '../invites/routes.ts';
 import { deletePhotoObjects } from '../photos/stored-objects.ts';
-import { deleteUserData } from './repository.ts';
+import { deleteUserData, invitedEmailOf } from './repository.ts';
 
 export interface AccountRouteDependencies extends RouteDependencies {
   storage: ObjectStorage;
+  invites: InvitesDependencies;
 }
 
 /** The signed-in person's account: `deleteAccount`. */
@@ -19,18 +21,27 @@ export function registerAccountRoutes(app: FastifyInstance, deps: AccountRouteDe
    *    marketplace grants still to revoke) and its `account_deletion` job. A failure rolls all
    *    of it back, so nothing is deleted and a retry with the same token starts over.
    * 2. After the commit, delete the account's stored photo, upload, and automation screenshot
-   *    objects. A failure is logged, not returned: the rows are gone, so leftover objects are
-   *    unreferenced.
+   *    objects, and for an invited person their address at the sign-in provider (the SES
+   *    identity that let the codes reach them). A failure is logged, not returned: the rows are
+   *    gone, so leftover objects are unreferenced.
    * The worker's job then deletes the person at the identity provider and revokes the
    * marketplace grants, retrying until done (`@listora/accounts`).
    */
   contractRoute(app, deps, 'deleteAccount', async ({ tenant, identity, db, request }) => {
-    const { deletedAt, connections, photos, uploadKeys, screenshotKeys } = await inTransaction(
-      db,
-      (trx) => deleteUserData(trx, tenant, identity),
-    );
+    const { deleted, invitedEmail } = await inTransaction(db, async (trx) => {
+      // Read first: deleting the account deletes the invite it was created from.
+      const email = await invitedEmailOf(trx, tenant);
+      return { deleted: await deleteUserData(trx, tenant, identity), invitedEmail: email };
+    });
+    const { deletedAt, connections, photos, uploadKeys, screenshotKeys } = deleted;
     await deletePhotoObjects(deps.storage, photos, request.log);
     await deleteStoredObjects(deps.storage, [...uploadKeys, ...screenshotKeys], request.log);
+    if (invitedEmail !== undefined) {
+      // The worker's job deletes the user too, checking it is still this identity.
+      await deps.invites.directory.forget(invitedEmail).catch((error: unknown) => {
+        request.log.warn({ err: error }, 'could not remove a deleted invitee at the provider');
+      });
+    }
     request.log.info(
       {
         accountId: tenant.accountId,

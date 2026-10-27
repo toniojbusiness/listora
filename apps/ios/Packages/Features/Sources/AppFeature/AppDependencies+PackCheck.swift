@@ -24,23 +24,6 @@ extension AppDependencies {
             defaults: defaults,
         )
     }
-
-    /// The Sales tab, "Mark as sold", and each sale's screen, with Pack check's way in.
-    static func makeSales(
-        _ apiClient: APIClient,
-        _ accessTokens: AccessTokenStore,
-        _ showSignIn: @escaping @MainActor () -> Void,
-        _ phone: PhoneExecutionEnvironment,
-        _ packCheck: PackCheckEnvironment,
-    ) -> SalesEnvironment {
-        SalesEnvironment(
-            apiClient: apiClient,
-            accessTokens: accessTokens,
-            onSignIn: showSignIn,
-            phoneWork: phone.runner,
-            packOrders: packCheck.ordersEntry,
-        )
-    }
 }
 
 @MainActor

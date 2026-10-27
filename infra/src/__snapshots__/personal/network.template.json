@@ -411,7 +411,8 @@
               ]
             }
           }
-        ]
+        ],
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E": {

@@ -4,8 +4,8 @@
  * iPhone app for a seller whose Depop runs on their phone (docs/features/phone-execution.md).
  */
 import {
+  type ListedListing,
   type OperationRequest,
-  type RemoteListing,
   type RemoteListingState,
   type RemoteOrder,
 } from '@listora/marketplaces';
@@ -29,7 +29,8 @@ import {
   submitListing,
   type Submitted,
 } from './pages/listing-form.ts';
-import { onDepop, readOwnListings, type ApiProduct } from './pages/api.ts';
+import { onDepop, readOwnListings, readOwnProduct, type ApiProduct } from './pages/api.ts';
+import { listingDetails } from './pages/listing-details.ts';
 import { readProduct, type ProductPageRead } from './pages/product-page.ts';
 import {
   MAX_RECEIPT_PAGES,
@@ -45,8 +46,6 @@ import { type DepopAutomationPayload } from './payload.ts';
  * listing whose slug Listora never learned is one it just posted, so it is among the newest.
  */
 export const SKU_LOOKUP_PAGES = 1;
-/** Pages of the seller's listings for sale (24 each) one read goes through at most. */
-export const MAX_LISTING_PAGES = 25;
 /** Pages of sold items one sale check goes through at most (newest first). */
 export const MAX_SOLD_PAGES = 5;
 
@@ -185,7 +184,8 @@ export function createDepopScripts(
       if (payload === null) throw new Error('a revise has a payload');
       const opened = await editor(op, step);
       if (!('slug' in opened)) return opened;
-      await step('fill in the changes', { mutates: false }, async (page) => {
+      // The same whole form a create fills in, so the same time.
+      await step('fill in the changes', { mutates: false, timeScale: 4 }, async (page) => {
         await fillListing(page, payload, listingSku(op.listing), null);
         await expectSubmit(page, 'save');
       });
@@ -302,19 +302,28 @@ export function createDepopScripts(
       }
       return orders.map((order) => orderLabel(order, receipts));
     },
-    listings: async (step) => {
-      const listings: RemoteListing[] = [];
-      let cursor: string | null = null;
-      for (let number = 1; number <= MAX_LISTING_PAGES; number += 1) {
-        const shown = await step('read the listings for sale', { mutates: false }, async (page) => {
-          await onDepop(page, site);
-          return readOwnListings(page, site, 'selling', cursor);
+    listings: async (cursor, step) => {
+      // One page of the listings for sale (24), newest first, then each one's own edit data
+      // for its photos and details, one read at a time.
+      const shown = await step('read your listings for sale', { mutates: false }, async (page) => {
+        await onDepop(page, site);
+        return readOwnListings(page, site, 'selling', cursor);
+      });
+      const listings: ListedListing[] = [];
+      for (const product of shown.products) {
+        if (product.state.status !== 'active') continue;
+        const slug = product.state.externalListingId;
+        const own = await step('read a listing', { mutates: false }, (page) =>
+          readOwnProduct(page, site, slug),
+        );
+        // Deleted since the list was read: nothing to import.
+        if (own?.state.status !== 'active') continue;
+        listings.push({
+          ...own.state,
+          details: listingDetails(own.record, product.record, own.sku ?? product.sku),
         });
-        listings.push(...shown.products.map((product) => product.state));
-        if (shown.next === null) return { listings, complete: true };
-        cursor = shown.next;
       }
-      return { listings, complete: false };
+      return { listings, next: shown.next };
     },
   };
 }

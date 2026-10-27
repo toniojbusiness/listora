@@ -91,6 +91,12 @@ TaskId:
   required: true
   schema:
     $ref: './schemas/common.yaml#/Id'
+InviteId:
+  name: inviteId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
 MarketplacePath:
   name: marketplace
   in: path
@@ -118,3 +124,15 @@ CallIndex:
   schema:
     type: string
     pattern: '^(0|[1-9][0-9]{0,3})$'
+ImportId:
+  name: importId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
+QuestionId:
+  name: questionId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'

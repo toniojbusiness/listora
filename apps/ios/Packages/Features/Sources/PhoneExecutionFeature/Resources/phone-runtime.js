@@ -79,7 +79,7 @@
 			case "listings": {
 				const listings = scripts.listings;
 				if (listings === void 0) throw new Error("these scripts list no listings");
-				return listings(step);
+				return listings(call.cursor, step);
 			}
 			case "labels": {
 				const labels = scripts.labels;
@@ -6504,6 +6504,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const price = expectShape$1(priceSchema, product.pricing[key], API$1).price_breakdown.price.amount;
 		const { description, sku } = listingCopy(product.description);
 		return {
+			record: answer.body,
 			state: {
 				found: true,
 				externalListingId: product.slug,
@@ -6537,7 +6538,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				const read = productRead(expectShape$1(productRecordSchema$1, entry, API$1), site, API$1);
 				return {
 					state: read.listing,
-					sku: read.sku
+					sku: read.sku,
+					record: entry
 				};
 			}),
 			next: feed.meta.end ? null : feed.meta.cursor
@@ -6548,6 +6550,102 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
 		if (match?.[1] === void 0) throw changed$2(API$1, "shows a price Listora can't read");
 		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
+	}
+
+// src/depop/pages/listing-details.ts
+/**
+	* Depop's conditions in Listora's terms, never claiming more than the listing does: Depop's
+	* "Brand new" says nothing about tags.
+	*/
+	const CONDITIONS$2 = {
+		brand_new: "new_without_tags",
+		used_like_new: "pre_owned_excellent",
+		used_excellent: "pre_owned_excellent",
+		used_good: "pre_owned_good",
+		used_fair: "pre_owned_fair"
+	};
+	/** The details of a listing from its edit data and its record in the list of listings. */
+	function listingDetails$2(edit, listed, sku) {
+		const categoryPath = strings(edit["categories"] ?? edit["category"]).slice(0, 3);
+		const condition = text$2(edit["condition"]);
+		return {
+			photoUrls: photoUrls$2(edit["pictures"] ?? edit["pictures_data"] ?? listed["pictures"] ?? listed["preview"]),
+			brand: named$1(edit["brand"]) ?? text$2(edit["brand_name"]) ?? text$2(edit["brandName"]),
+			size: strings(listed["sizes"])[0] ?? named$1(edit["size"]) ?? strings(edit["sizes"]).at(0) ?? variantSize(edit["variants"]) ?? null,
+			condition: condition === null ? null : CONDITIONS$2[condition] ?? null,
+			categoryRef: categoryPath.length > 0 ? categoryPath.join(" > ") : null,
+			categoryPath,
+			sku
+		};
+	}
+	/** Each picture's widest https image, in order. */
+	function photoUrls$2(pictures) {
+		if (!Array.isArray(pictures)) return [];
+		const urls = pictures.flatMap((picture) => {
+			const best = widest(picture);
+			return best === null ? [] : [best];
+		});
+		return [...new Set(urls)].slice(0, 16);
+	}
+	/** The widest https image URL anywhere in one picture's data (the first, when none says). */
+	function widest(picture) {
+		const found = [];
+		const visit = (value, depth) => {
+			if (depth > 4) return;
+			if (typeof value === "string") {
+				if (isImageUrl$1(value)) found.push({
+					url: value,
+					width: 0
+				});
+				return;
+			}
+			if (Array.isArray(value)) {
+				for (const entry of value) visit(entry, depth + 1);
+				return;
+			}
+			if (value === null || typeof value !== "object") return;
+			const record = value;
+			const url = record["url"];
+			if (typeof url === "string" && isImageUrl$1(url)) found.push({
+				url,
+				width: typeof record["width"] === "number" ? record["width"] : 0
+			});
+			for (const [key, entry] of Object.entries(record)) if (key !== "url") visit(entry, depth + 1);
+		};
+		visit(picture, 0);
+		let best = null;
+		for (const candidate of found) if (best === null || candidate.width > best.width) best = candidate;
+		return best?.url ?? null;
+	}
+	function isImageUrl$1(value) {
+		return /^https?:\/\/[^/\s]+\/\S+$/.test(value) && !/\.(mp4|mov|m3u8)(\?|$)/i.test(value);
+	}
+	/** A name as Depop gives it: a string, or an object with its `name`. */
+	function named$1(value) {
+		if (typeof value === "string") return text$2(value);
+		if (value !== null && typeof value === "object") {
+			const record = value;
+			return text$2(record["name"]) ?? text$2(record["label"]) ?? text$2(record["display"]);
+		}
+		return null;
+	}
+	function strings(value) {
+		if (typeof value === "string") return text$2(value) === null ? [] : [value.trim()];
+		if (!Array.isArray(value)) return [];
+		return value.flatMap((entry) => {
+			const name = named$1(entry);
+			return name === null ? [] : [name];
+		});
+	}
+	/** The first variant's size (`{ size: "M" }` or `{ size: { name: "M" } }`). */
+	function variantSize(variants) {
+		const first = Array.isArray(variants) ? variants[0] : variants !== null && typeof variants === "object" ? Object.values(variants)[0] : void 0;
+		if (first === null || typeof first !== "object") return null;
+		const record = first;
+		return named$1(record["size"]) ?? text$2(record["size_name"]) ?? null;
+	}
+	function text$2(value) {
+		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
 	}
 
 // src/depop/pages/flight-data.ts
@@ -6913,8 +7011,6 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* listing whose slug Listora never learned is one it just posted, so it is among the newest.
 	*/
 	const SKU_LOOKUP_PAGES = 1;
-	/** Pages of the seller's listings for sale (24 each) one read goes through at most. */
-	const MAX_LISTING_PAGES$2 = 25;
 	/** Pages of sold items one sale check goes through at most (newest first). */
 	const MAX_SOLD_PAGES$2 = 5;
 	function createDepopScripts(options) {
@@ -7027,7 +7123,10 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				if (payload === null) throw new Error("a revise has a payload");
 				const opened = await editor(op, step);
 				if (!("slug" in opened)) return opened;
-				await step("fill in the changes", { mutates: false }, async (page) => {
+				await step("fill in the changes", {
+					mutates: false,
+					timeScale: 4
+				}, async (page) => {
 					await fillListing$2(page, payload, listingSku(op.listing), null);
 					await expectSubmit(page, "save");
 				});
@@ -7131,24 +7230,25 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				}
 				return orders.map((order) => orderLabel(order, receipts));
 			},
-			listings: async (step) => {
+			listings: async (cursor, step) => {
+				const shown = await step("read your listings for sale", { mutates: false }, async (page) => {
+					await onDepop(page, site);
+					return readOwnListings(page, site, "selling", cursor);
+				});
 				const listings = [];
-				let cursor = null;
-				for (let number = 1; number <= 25; number += 1) {
-					const shown = await step("read the listings for sale", { mutates: false }, async (page) => {
-						await onDepop(page, site);
-						return readOwnListings(page, site, "selling", cursor);
+				for (const product of shown.products) {
+					if (product.state.status !== "active") continue;
+					const slug = product.state.externalListingId;
+					const own = await step("read a listing", { mutates: false }, (page) => readOwnProduct(page, site, slug));
+					if (own?.state.status !== "active") continue;
+					listings.push({
+						...own.state,
+						details: listingDetails$2(own.record, product.record, own.sku ?? product.sku)
 					});
-					listings.push(...shown.products.map((product) => product.state));
-					if (shown.next === null) return {
-						listings,
-						complete: true
-					};
-					cursor = shown.next;
 				}
 				return {
 					listings,
-					complete: false
+					next: shown.next
 				};
 			}
 		};
@@ -7594,8 +7694,6 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	* number Listora never learned is one it just listed, so it is among the newest.
 	*/
 	const SKU_LOOKUP_DEPTH$1 = 8;
-	/** Pages of active listings one read goes through at most (newest first). */
-	const MAX_LISTING_PAGES$1 = 25;
 	/** Pages of sold listings one sale check goes through at most (newest first). */
 	const MAX_SOLD_PAGES$1 = 5;
 	function createEbayScripts(options) {
@@ -7771,12 +7869,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				}
 				return [...orders.values()];
 			},
-			listings: async (step) => {
-				const listings = [];
-				let offset = 0;
-				for (let number = 1; number <= 25; number += 1) {
-					const shown = await step("read the active listings", { mutates: false }, (page) => readActiveListingsPage(page, site, offset));
-					listings.push(...shown.rows.map((row) => ({
+			listings: async (cursor, step) => {
+				const offset = cursor === null ? 0 : Number(cursor);
+				if (!Number.isSafeInteger(offset) || offset < 0) throw new Error(`an eBay listings cursor is an offset, not ${String(cursor)}`);
+				const shown = await step("read the active listings", { mutates: false }, (page) => readActiveListingsPage(page, site, offset));
+				return {
+					listings: shown.rows.map((row) => ({
 						found: true,
 						externalListingId: row.itemId,
 						externalUrl: itemUrl$1(site, row.itemId),
@@ -7785,17 +7883,18 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 						description: null,
 						priceCents: row.priceCents,
 						currency: row.priceCents === null ? null : "USD",
-						revision: null
-					})));
-					if (!shown.hasMore) return {
-						listings,
-						complete: true
-					};
-					offset += shown.rows.length;
-				}
-				return {
-					listings,
-					complete: false
+						revision: null,
+						details: {
+							photoUrls: [],
+							brand: null,
+							size: null,
+							condition: null,
+							categoryRef: null,
+							categoryPath: [],
+							sku: null
+						}
+					})),
+					next: shown.hasMore ? String(offset + shown.rows.length) : null
 				};
 			}
 		};
@@ -8490,15 +8589,31 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** How long the edit page may take to draw its form, or to answer the toggle. */
 	const DRAW_MS = 25e3;
 	const LOOK_EVERY_MS$1 = 500;
-	/** Opens the editor; `not_editable` when Mercari showed something else (a sold listing). */
+	/**
+	* Opens the editor; `not_editable` when Mercari showed something else (a sold listing's page) or
+	* answered with an error (a listing it removed).
+	*/
 	async function openEditor(page, site, id) {
 		await page.goto(absolute(site, MERCARI_PATHS.edit(id)));
+		const status = page.status();
+		if (status !== null && status >= 400) return "not_editable";
 		const end = Date.now() + DRAW_MS;
 		for (;;) {
 			if (await page.exists(LISTING_FORM.form)) return "editing";
 			if (!onEditPage(page) || Date.now() >= end) return "not_editable";
 			await lookAgain(page, LOOK_EVERY_MS$1);
 		}
+	}
+	/**
+	* Whether the listing the editor shows is active (its toggle says Deactivate) or inactive (it
+	* says Activate): an end or relist reads this on the edit page it acts on, with no read of the
+	* listing's own page first. A toggle that says something else is a page Listora doesn't know.
+	*/
+	async function editorShows(page) {
+		const shown = (await page.text(EDIT_PAGE.toggle))?.trim();
+		if (shown === "Deactivate") return "active";
+		if (shown === "Activate") return "inactive";
+		throw changed(PAGE$5, `has no Activate or Deactivate button (${EDIT_PAGE.toggle})`);
 	}
 	/** Deactivates the listing the editor shows, and waits for Mercari to take it. */
 	async function deactivate(page) {
@@ -8657,8 +8772,103 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				revision: record$1.data.updated * 1e3
 			},
 			sku,
-			soldAt: record$1.data.lastSoldAt ? /* @__PURE__ */ new Date(record$1.data.lastSoldAt * 1e3) : null
+			soldAt: record$1.data.lastSoldAt ? /* @__PURE__ */ new Date(record$1.data.lastSoldAt * 1e3) : null,
+			record: raw,
+			records: parsed.data.props.pageProps.serverState
 		};
+	}
+
+// src/mercari/pages/listing-details.ts
+/**
+	* Mercari's conditions in Listora's terms (conditions.ts has their ids), never claiming more
+	* than the listing does: Like new is not new.
+	*/
+	const CONDITIONS$1 = {
+		1: "new_with_tags",
+		2: "pre_owned_excellent",
+		3: "pre_owned_good",
+		4: "pre_owned_fair",
+		5: "pre_owned_fair"
+	};
+	function listingDetails$1(shown, records, sku) {
+		const record = resolved(shown, records, 0);
+		const categoryPath = categoryNames(record);
+		const condition = conditionId(record);
+		return {
+			photoUrls: photoUrls$1(record["photos"] ?? record["photoUrls"]),
+			brand: named(record["brand"]) ?? text$1(record["brandName"]),
+			size: named(record["itemSize"]) ?? named(record["size"]),
+			condition: condition === null ? null : CONDITIONS$1[condition] ?? null,
+			categoryRef: categoryPath.length >= 2 ? categoryPath.join(" > ") : null,
+			categoryPath,
+			sku
+		};
+	}
+	function photoUrls$1(photos) {
+		if (!Array.isArray(photos)) return [];
+		const urls = photos.flatMap((photo) => {
+			if (typeof photo === "string") return isImageUrl(photo) ? [photo] : [];
+			if (photo === null || typeof photo !== "object") return [];
+			const record = photo;
+			const url = [
+				record["imageUrl"],
+				record["url"],
+				record["large"],
+				record["thumbnail"]
+			].find((value) => typeof value === "string" && isImageUrl(value));
+			return url === void 0 ? [] : [url];
+		});
+		return [...new Set(urls)].slice(0, 16);
+	}
+	function categoryNames(record) {
+		const hierarchy = record["itemCategoryHierarchy"] ?? record["categoryHierarchy"];
+		if (Array.isArray(hierarchy)) return hierarchy.flatMap((level) => {
+			const name = named(level);
+			return name === null ? [] : [name];
+		});
+		const title = text$1(record["categoryTitle"]);
+		return title === null ? [] : title.split(">").map((name) => name.trim()).filter((name) => name !== "");
+	}
+	/** Mercari's condition names, for a condition record that gives its name but not its id. */
+	const CONDITION_NAMES = {
+		new: 1,
+		"like new": 2,
+		good: 3,
+		fair: 4,
+		poor: 5
+	};
+	function conditionId(record) {
+		const condition = record["itemCondition"];
+		if (condition !== null && typeof condition === "object") {
+			const { id, name } = condition;
+			const number = typeof id === "number" ? id : typeof id === "string" ? Number(id) : NaN;
+			if (Number.isInteger(number) && CONDITIONS$1[number] !== void 0) return number;
+			if (typeof name === "string") return CONDITION_NAMES[name.trim().toLowerCase()] ?? null;
+		}
+		return typeof record["conditionId"] === "number" ? record["conditionId"] : null;
+	}
+	/** The record with its references to the page's other records replaced by those records. */
+	function resolved(value, records, depth) {
+		if (depth > 4 || value === null || typeof value !== "object") return value;
+		if (Array.isArray(value)) return value.map((entry) => resolved(entry, records, depth + 1));
+		const record = value;
+		const ref = record["__ref"];
+		if (typeof ref === "string") return resolved(records[ref] ?? null, records, depth + 1);
+		return Object.fromEntries(Object.entries(record).map(([key, entry]) => [key, resolved(entry, records, depth + 1)]));
+	}
+	function isImageUrl(value) {
+		return /^https?:\/\/[^/\s]+\/\S+$/.test(value);
+	}
+	function named(value) {
+		if (typeof value === "string") return text$1(value);
+		if (value !== null && typeof value === "object") {
+			const record = value;
+			return text$1(record["name"]) ?? text$1(record["displayName"]);
+		}
+		return null;
+	}
+	function text$1(value) {
+		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
 	}
 
 // src/mercari/pages/listings-page.ts
@@ -8794,8 +9004,6 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* never learned is one it just posted, so it is among the newest.
 	*/
 	const SKU_LOOKUP_DEPTH = 8;
-	/** Pages of a listings tab one read goes through at most (newest first). */
-	const MAX_LISTING_PAGES = 25;
 	/** Pages of a sold tab one sale check goes through at most (newest first). */
 	const MAX_SOLD_PAGES = 5;
 	/**
@@ -8860,6 +9068,17 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (shown.state.status === "sold") return sold();
 			throw changed("edit page", "shows no listing form for a listing that has not sold");
 		}
+		/**
+		* The edit page an end or relist acts on, and whether it shows the listing active or inactive,
+		* so the change takes one page load before it acts (reading the listing's own page first took
+		* another). Mercari shows no editor for a sold or removed listing; its own page then says what
+		* became of it.
+		*/
+		async function onEditor(step, id) {
+			const shown = await step("open the editor", { mutates: false }, async (page) => await openEditor(page, site, id) === "editing" ? editorShows(page) : null);
+			if (shown !== null) return shown;
+			return step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
+		}
 		/** Posts a new listing from the payload (List, or a relist of a listing Mercari removed). */
 		async function createListing(op, step) {
 			const payload = op.payload;
@@ -8908,7 +9127,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				if (payload === null) throw new Error("a revise has a payload");
 				const opened = await editor(op, step);
 				if (!("id" in opened)) return opened;
-				if (await step("fill in the changes", { mutates: false }, (page) => fillListing(page, payload, listingSku(op.listing), null)) === "imei_required") return imeiRequired();
+				if (await step("fill in the changes", {
+					mutates: false,
+					timeScale: 3
+				}, (page) => fillListing(page, payload, listingSku(op.listing), null)) === "imei_required") return imeiRequired();
 				return step("save", { mutates: true }, async (page) => submitted(await submitListing(page, "save")));
 			},
 			price: async (op, step) => {
@@ -8931,35 +9153,38 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			end: async (op, step) => {
 				const id = op.listing.externalListingId;
 				if (id === null) return notListed();
-				const shown = await step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
-				if (!shown.state.found) return notListed();
-				if (shown.state.status !== "active") return { type: "applied" };
-				const opened = await editor(op, step);
-				if (!("id" in opened)) return opened;
-				return step("deactivate", { mutates: true }, async (page) => {
+				const shown = await onEditor(step, id);
+				if (shown === "active") return step("deactivate", { mutates: true }, async (page) => {
 					await deactivate(page);
 					return { type: "applied" };
 				});
+				if (shown === "inactive") return { type: "applied" };
+				if (!shown.state.found) return notListed();
+				if (shown.state.status !== "active") return { type: "applied" };
+				throw changed("edit page", "shows no listing form for an active listing");
 			},
 			relist: async (op, step) => {
 				const id = op.listing.externalListingId;
 				if (id === null) return notListed();
-				const shown = await step("open the listing", { mutates: false }, (page) => readItem(page, site, id));
-				if (!shown.state.found) return shown.state.authoritative ? createListing(op, step) : notListed();
-				if (shown.state.status === "active") return {
-					type: "applied",
-					externalListingId: id
-				};
-				if (shown.state.status === "sold") return sold();
-				const opened = await editor(op, step);
-				if (!("id" in opened)) return opened;
-				return step("activate", { mutates: true }, async (page) => {
+				const shown = await onEditor(step, id);
+				if (shown === "inactive") return step("activate", { mutates: true }, async (page) => {
 					await activate(page);
 					return {
 						type: "applied",
 						externalListingId: id
 					};
 				});
+				if (shown === "active") return {
+					type: "applied",
+					externalListingId: id
+				};
+				if (!shown.state.found) return shown.state.authoritative ? createListing(op, step) : notListed();
+				if (shown.state.status === "sold") return sold();
+				if (shown.state.status === "active") return {
+					type: "applied",
+					externalListingId: id
+				};
+				throw changed("edit page", "shows no listing form for a listing that has not sold");
 			},
 			read: async (ref, step) => {
 				const id = ref.externalListingId;
@@ -9024,31 +9249,22 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				}
 				return labels;
 			},
-			listings: async (step) => {
+			listings: async (cursor, step) => {
+				const number = cursor === null ? 1 : Number(cursor);
+				if (!Number.isSafeInteger(number) || number < 1) throw new Error(`a Mercari listings cursor is a page number, not ${String(cursor)}`);
+				const shown = await step("read your listings for sale", { mutates: false }, (page) => readListingsPage(page, site, "active", number));
 				const listings = [];
-				let complete = true;
-				for (const [tab, status] of [["active", "active"], ["inactive", "ended"]]) for (let number = 1;; number += 1) {
-					const shown = await step(`read the ${tab} listings`, { mutates: false }, (page) => readListingsPage(page, site, tab, number));
-					for (const row of shown.rows) listings.push({
-						found: true,
-						externalListingId: row.id,
-						externalUrl: itemUrl(site, row.id),
-						status,
-						title: row.title,
-						description: null,
-						priceCents: row.priceCents,
-						currency: row.priceCents === null ? null : "USD",
-						revision: null
+				for (const row of shown.rows) {
+					const read = await step("read a listing", { mutates: false }, (page) => readItem(page, site, row.id));
+					if (!read.state.found || read.state.status !== "active") continue;
+					listings.push({
+						...read.state,
+						details: listingDetails$1(read.record ?? {}, read.records ?? {}, read.sku)
 					});
-					if (!shown.hasNext) break;
-					if (number === 25) {
-						complete = false;
-						break;
-					}
 				}
 				return {
 					listings,
-					complete
+					next: shown.hasNext ? String(number + 1) : null
 				};
 			}
 		};
@@ -9103,8 +9319,17 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			/** `available`, `not_for_sale`, `sold_out`, or `reserved` (a buyer is checking out). */
 			status: string(),
 			status_changed_at: string().optional()
-		}),
-		creator_username: string().optional()
+		}).loose(),
+		creator_username: string().optional(),
+		cover_shot: unknown().optional(),
+		pictures: unknown().optional(),
+		brand: unknown().optional(),
+		size: unknown().optional(),
+		condition: unknown().optional(),
+		department: unknown().optional(),
+		category_v2: unknown().optional(),
+		category_features: unknown().optional(),
+		catalog: unknown().optional()
 	});
 	/**
 	* Who is logged in, on every page, as Poshmark's own app reads it (its store getters, read in its
@@ -9341,11 +9566,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	};
 	/**
 	* Opens a form and waits until it is there; `false` for a listing Poshmark has no form for (a
-	* 404). A form that never comes is a page Listora no longer understands (`PageChangedError`).
+	* 404, or a page it sent the seller to instead, as for a listing that can't be edited). A form
+	* that never comes is a page Listora no longer understands (`PageChangedError`).
 	*/
 	async function openForm(page, url) {
 		await page.goto(url);
 		if (page.status() === 404) return false;
+		const asked = new URL(url).pathname.replace(/\/$/, "");
+		if (!new URL(page.url()).pathname.startsWith(asked)) return false;
 		try {
 			await page.waitFor(FORM_SELECTORS.form, "attached");
 		} catch {
@@ -9524,6 +9752,16 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (Date.now() >= end) return false;
 			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
 		}
+	}
+	/**
+	* The availability the edit form shows the listing in, or `null` when its picker shows neither
+	* (Listora then reads the listing's own page instead).
+	*/
+	async function shownAvailability(page) {
+		await expectField(page, FORM_SELECTORS.availabilitySelector, "availability picker");
+		const shown = (await page.text(FORM_SELECTORS.availabilitySelector))?.replace(/\s+/g, " ").trim();
+		const found = Object.entries(AVAILABILITY_LABELS).find(([, label]) => label === shown);
+		return found === void 0 ? null : found[0];
 	}
 	async function setAvailability(page, availability) {
 		await expectField(page, FORM_SELECTORS.availabilitySelector, "availability picker");
@@ -9776,6 +10014,96 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		};
 	}
 
+// src/poshmark/pages/listing-details.ts
+/**
+	* What an import takes from a Poshmark listing record (docs/features/imports.md), as closet,
+	* listing, and browse pages embed it (read on a public category page, 2026-10-27):
+	*
+	* - photos: `cover_shot` and then `pictures`, each with its `url_large` (else `url`), on
+	*   Poshmark's image CDN;
+	* - `brand` and `size` as the listing shows them (the size also as the first of
+	*   `inventory.size_quantities[].size_obj.display`);
+	* - `condition`, Poshmark's code (`nwt`, `uln`, `ug`, `uf`, or `ret` for a boutique listing);
+	* - `department`, `category_v2`, and the first of `category_features` (the subcategory), each
+	*   as `{ display }` (also in `catalog`, as `department_obj`, `category_obj`, and
+	*   `category_feature_objs`), which name the listing's place in the catalog exactly as a
+	*   listing's `categoryRef` does (`Women/Dresses/Long Sleeve`).
+	*
+	* Every detail is optional: a record without one imports without it, and the seller adds it on
+	* the item. Only a photo URL that is not an https address is refused, since the server fetches it.
+	*/
+	const picture = object({
+		url: string().optional(),
+		url_large: string().optional()
+	});
+	const display = object({ display: string().min(1) });
+	const catalogSchema = object({
+		department_obj: display.optional(),
+		category_obj: display.optional(),
+		category_feature_objs: array(display).optional()
+	});
+	/** The same place, as the record's own top-level keys name it. */
+	const topCatalogSchema = object({
+		department: display.optional(),
+		category_v2: display.optional(),
+		category_features: array(display).optional()
+	});
+	const sizeQuantitiesSchema = object({ size_quantities: array(object({ size_obj: display.optional() })).optional() });
+	/**
+	* Poshmark's conditions in Listora's terms, never claiming more than the listing does: "Like
+	* New" is not new, and a boutique (retail) listing is new with tags.
+	*/
+	const CONDITIONS = {
+		nwt: "new_with_tags",
+		ret: "new_with_tags",
+		uln: "pre_owned_excellent",
+		ug: "pre_owned_good",
+		uf: "pre_owned_fair"
+	};
+	function listingDetails(record) {
+		const top = topCatalogSchema.safeParse(record);
+		const catalog = catalogSchema.safeParse(record.catalog);
+		const path = top.success && top.data.department !== void 0 ? [
+			top.data.department.display,
+			top.data.category_v2?.display,
+			top.data.category_features?.[0]?.display
+		] : catalog.success ? [
+			catalog.data.department_obj?.display,
+			catalog.data.category_obj?.display,
+			catalog.data.category_feature_objs?.[0]?.display
+		] : [];
+		const categoryPath = [];
+		for (const name of path) {
+			if (name === void 0) break;
+			categoryPath.push(name.trim());
+		}
+		return {
+			photoUrls: photoUrls(record),
+			brand: text(record.brand),
+			size: text(record.size) ?? inventorySize(record.inventory),
+			condition: typeof record.condition === "string" ? CONDITIONS[record.condition] ?? null : null,
+			categoryRef: categoryPath.length >= 2 ? categoryPath.join("/") : null,
+			categoryPath,
+			sku: splitSkuLine(record.description).sku
+		};
+	}
+	function photoUrls(record) {
+		const pictures = array(picture).safeParse(record.pictures);
+		const cover = picture.safeParse(record.cover_shot);
+		const urls = [...cover.success ? [cover.data] : [], ...pictures.success ? pictures.data : []].flatMap((shown) => {
+			const url = shown.url_large ?? shown.url;
+			return url !== void 0 && /^https?:\/\//.test(url) ? [url] : [];
+		});
+		return [...new Set(urls)].slice(0, 16);
+	}
+	function inventorySize(inventory) {
+		const parsed = sizeQuantitiesSchema.safeParse(inventory);
+		return parsed.success ? text(parsed.data.size_quantities?.[0]?.size_obj?.display) : null;
+	}
+	function text(value) {
+		return typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, 200) : null;
+	}
+
 // src/poshmark/scripts.ts
 /** How far Listora looks for a listing it may have posted already (see `findBySku`). */
 	const SKU_LOOKUP = {
@@ -9792,8 +10120,6 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** How often, and how far apart, a new listing's own page is read right after List. */
 	const NEW_LOOKS = 3;
 	const NEW_WAIT_MS = 5e3;
-	/** Closet pages read for a full closet listing (48 listings each). */
-	const CLOSET_PAGES = 50;
 	/** Sold-item pages read per sale check (48 each, the newest sales among them). */
 	const SOLD_PAGES = 5;
 	/** Order pages one label read opens at most, for labels the sales list does not show. */
@@ -9914,7 +10240,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				timeScale: 2
 			}, (page) => chooseColors(page, payload.colors));
 		}
-		/** Saves the open form; Poshmark's validation messages are a rejection in its own words. */
+		/**
+		* Saves the open form; Poshmark's validation messages are a rejection in its own words. An
+		* update lands on the listing's page and is applied as it is: the operation's read-back reads
+		* the listing next, so reading it here too would only load the same page twice.
+		*/
 		async function save(step, button) {
 			const result = await step(button === "list" ? "list" : "update", {
 				mutates: true,
@@ -9925,6 +10255,13 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				code: "validation_failed",
 				message: result.message
 			};
+			if (button === "update") {
+				const id = listingIdFromPath(result.path);
+				return id === null ? { type: "applied" } : {
+					type: "applied",
+					externalListingId: id
+				};
+			}
 			return applied(step, result.path);
 		}
 		/**
@@ -9964,10 +10301,26 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		async function openEditor(step, id) {
 			return step("open the edit form", { mutates: false }, (page) => openForm(page, site.editListing(id)));
 		}
-		/** Sets the listing's availability (ending or relisting it), unless it already has it. */
+		/**
+		* Sets the listing's availability (ending or relisting it), unless it already has it. The
+		* edit form shows the availability, so a listing it shows in the other one is changed there at
+		* once, with no read of the listing's page first (that took a page load, and up to two minutes
+		* of looks right after an earlier change, when Poshmark's page shows no listing). The
+		* listing's page decides everything else: a listing without a form (one Poshmark removed, or
+		* sold), one already as asked, and one Poshmark hides.
+		*/
 		async function changeAvailability(op, step, availability) {
 			const id = op.listing.externalListingId;
 			if (id === null) return notListed();
+			const onForm = await step("open the edit form", { mutates: false }, async (page) => await openForm(page, site.editListing(id)) ? shownAvailability(page) : null);
+			if (onForm !== null && onForm !== availability) {
+				await step("set the availability", { mutates: false }, (page) => setAvailability(page, availability));
+				return save(step, "update");
+			}
+			if (onForm === "not_for_sale" && availability === "not_for_sale") return {
+				type: "applied",
+				externalListingId: id
+			};
 			const page = await settledListing(step, id);
 			if (page.type === "hidden") return hiddenListing();
 			const shown = sellersListing(page, site);
@@ -10135,14 +10488,23 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				}
 				return labels;
 			},
-			listings: async (step) => {
-				const { listings, complete } = await closet(step, await seller(step), {
-					availability: "all",
-					newestFirst: true
-				}, { maxPages: CLOSET_PAGES });
+			listings: async (cursor, step) => {
+				const username = await seller(step);
+				const shown = await step("read your listings for sale", { mutates: false }, (page) => readClosetPage(page, site, username, {
+					availability: "available",
+					newestFirst: true,
+					...cursor === null ? {} : { maxId: cursor }
+				}));
 				return {
-					listings: listings.filter((listing) => listing.status === "published").map((listing) => remoteListing(listing, site, "closet page")),
-					complete
+					listings: shown.listings.flatMap((record) => {
+						if (record.status !== "published") return [];
+						const listing = remoteListing(record, site, "closet page");
+						return listing.status === "active" ? [{
+							...listing,
+							details: listingDetails(record)
+						}] : [];
+					}),
+					next: shown.next
 				};
 			}
 		};
@@ -11958,7 +12320,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	/** Runs one call; a failure of the runtime itself is reported as one, never thrown. */
 	async function run(input) {
 		try {
-			if (input.runtimeVersion !== 1) throw new Error(`this app runs calls of version ${String(1)}`);
+			if (input.runtimeVersion !== 2) throw new Error(`this app runs calls of version ${String(2)}`);
 			return await runPhoneCall(input, webkitHost());
 		} catch (thrown) {
 			return {
@@ -11980,7 +12342,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		}
 	}
 	globalThis["listoraPhone"] = {
-		runtimeVersion: 1,
+		runtimeVersion: 2,
 		run
 	};
 

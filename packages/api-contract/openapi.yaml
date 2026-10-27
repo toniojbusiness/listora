@@ -57,6 +57,8 @@ tags:
     description: The profit dashboard over the seller's sales and inventory.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
+  - name: invites
+    description: Invites to sign up for Listora, each to a person's own, separate account.
   - name: sale-emails
     description: The forwarding address that catches Poshmark, Mercari, and Depop sale emails.
   - name: usage
@@ -73,6 +75,8 @@ tags:
     description: The seller's devices, and the marketplace work their iPhone runs (docs/features/phone-execution.md).
   - name: activity
     description: The activity timeline of items and marketplace actions, and how each sale was found (docs/features/activity.md).
+  - name: imports
+    description: Importing the seller's existing listings from a linked marketplace, and the questions it asks (docs/features/imports.md).
 
 paths:
   /health/live:
@@ -209,6 +213,14 @@ paths:
     $ref: './paths/tasks.yaml#/~1v1~1tasks~1{taskId}~1complete'
   /v1/tasks/{taskId}/dismiss:
     $ref: './paths/tasks.yaml#/~1v1~1tasks~1{taskId}~1dismiss'
+  /v1/invites:
+    $ref: './paths/invites.yaml#/~1v1~1invites'
+  /v1/invites/{inviteId}/revoke:
+    $ref: './paths/invites.yaml#/~1v1~1invites~1{inviteId}~1revoke'
+  /v1/invites/{inviteId}/restore:
+    $ref: './paths/invites.yaml#/~1v1~1invites~1{inviteId}~1restore'
+  /v1/invite-redemptions:
+    $ref: './paths/invites.yaml#/~1v1~1invite-redemptions'
   /v1/sale-emails:
     $ref: './paths/sale-emails.yaml#/~1v1~1sale-emails'
   /v1/sale-emails/settings:
@@ -233,6 +245,8 @@ paths:
     $ref: './paths/phone.yaml#/~1v1~1devices~1{installationId}'
   /v1/phone-runs:
     $ref: './paths/phone.yaml#/~1v1~1phone-runs'
+  /v1/phone-runs/wait:
+    $ref: './paths/phone.yaml#/~1v1~1phone-runs~1wait'
   /v1/phone-runtime:
     $ref: './paths/phone.yaml#/~1v1~1phone-runtime'
   /v1/phone-runs/{runId}/calls/{index}:
@@ -243,6 +257,14 @@ paths:
     $ref: './paths/activity.yaml#/~1v1~1operations~1{operationId}~1activity'
   /v1/sales/{saleId}/explanation:
     $ref: './paths/activity.yaml#/~1v1~1sales~1{saleId}~1explanation'
+  /v1/imports:
+    $ref: './paths/imports.yaml#/~1v1~1imports'
+  /v1/imports/{importId}:
+    $ref: './paths/imports.yaml#/~1v1~1imports~1{importId}'
+  /v1/imports/{importId}/questions:
+    $ref: './paths/imports.yaml#/~1v1~1imports~1{importId}~1questions'
+  /v1/imports/{importId}/questions/{questionId}/answer:
+    $ref: './paths/imports.yaml#/~1v1~1imports~1{importId}~1questions~1{questionId}~1answer'
 
 components:
   securitySchemes:
@@ -282,6 +304,8 @@ components:
       $ref: './components/parameters.yaml#/SaleId'
     TaskId:
       $ref: './components/parameters.yaml#/TaskId'
+    InviteId:
+      $ref: './components/parameters.yaml#/InviteId'
     MarketplacePath:
       $ref: './components/parameters.yaml#/MarketplacePath'
     InstallationId:
@@ -290,6 +314,10 @@ components:
       $ref: './components/parameters.yaml#/RunId'
     CallIndex:
       $ref: './components/parameters.yaml#/CallIndex'
+    ImportId:
+      $ref: './components/parameters.yaml#/ImportId'
+    QuestionId:
+      $ref: './components/parameters.yaml#/QuestionId'
 
   responses:
     DefaultError:
@@ -738,6 +766,8 @@ components:
       $ref: './components/schemas/phone.yaml#/KnownPhoneWorkPurpose'
     PhoneRunClaim:
       $ref: './components/schemas/phone.yaml#/PhoneRunClaim'
+    PhoneWorkWaitResult:
+      $ref: './components/schemas/phone.yaml#/PhoneWorkWaitResult'
     PhoneCall:
       $ref: './components/schemas/phone.yaml#/PhoneCall'
     PhoneRun:
@@ -859,6 +889,31 @@ components:
       $ref: './components/schemas/tasks.yaml#/SaleCorrection'
     UserTaskPage:
       $ref: './components/schemas/tasks.yaml#/UserTaskPage'
+    # ---------------------------------------------------------------- invites
+    InviteStatus:
+      $ref: './components/schemas/invites.yaml#/InviteStatus'
+    KnownInviteStatus:
+      $ref: './components/schemas/invites.yaml#/KnownInviteStatus'
+    InviteAction:
+      $ref: './components/schemas/invites.yaml#/InviteAction'
+    KnownInviteAction:
+      $ref: './components/schemas/invites.yaml#/KnownInviteAction'
+    Invite:
+      $ref: './components/schemas/invites.yaml#/Invite'
+    InviteList:
+      $ref: './components/schemas/invites.yaml#/InviteList'
+    InviteCreate:
+      $ref: './components/schemas/invites.yaml#/InviteCreate'
+    CreatedInvite:
+      $ref: './components/schemas/invites.yaml#/CreatedInvite'
+    InviteRedeem:
+      $ref: './components/schemas/invites.yaml#/InviteRedeem'
+    InviteRedemptionStatus:
+      $ref: './components/schemas/invites.yaml#/InviteRedemptionStatus'
+    KnownInviteRedemptionStatus:
+      $ref: './components/schemas/invites.yaml#/KnownInviteRedemptionStatus'
+    InviteRedemption:
+      $ref: './components/schemas/invites.yaml#/InviteRedemption'
     # ---------------------------------------------------------------- sale emails
     SaleEmailStatus:
       $ref: './components/schemas/sale-emails.yaml#/SaleEmailStatus'
@@ -1005,3 +1060,32 @@ components:
       $ref: './components/schemas/activity.yaml#/KnownSaleCheckHealth'
     ConnectionSaleChecks:
       $ref: './components/schemas/activity.yaml#/ConnectionSaleChecks'
+    # ---------------------------------------------------------------- imports
+    ListingImportStatus:
+      $ref: './components/schemas/imports.yaml#/ListingImportStatus'
+    KnownListingImportStatus:
+      $ref: './components/schemas/imports.yaml#/KnownListingImportStatus'
+    ListingImportCounts:
+      $ref: './components/schemas/imports.yaml#/ListingImportCounts'
+    ListingImport:
+      $ref: './components/schemas/imports.yaml#/ListingImport'
+    ListingImportMarketplace:
+      $ref: './components/schemas/imports.yaml#/ListingImportMarketplace'
+    ListingImports:
+      $ref: './components/schemas/imports.yaml#/ListingImports'
+    ListingImportStart:
+      $ref: './components/schemas/imports.yaml#/ListingImportStart'
+    ImportMatchReason:
+      $ref: './components/schemas/imports.yaml#/ImportMatchReason'
+    KnownImportMatchReason:
+      $ref: './components/schemas/imports.yaml#/KnownImportMatchReason'
+    ListingImportCandidate:
+      $ref: './components/schemas/imports.yaml#/ListingImportCandidate'
+    ListingImportQuestion:
+      $ref: './components/schemas/imports.yaml#/ListingImportQuestion'
+    ListingImportQuestions:
+      $ref: './components/schemas/imports.yaml#/ListingImportQuestions'
+    ImportAnswerKind:
+      $ref: './components/schemas/imports.yaml#/ImportAnswerKind'
+    ListingImportAnswer:
+      $ref: './components/schemas/imports.yaml#/ListingImportAnswer'

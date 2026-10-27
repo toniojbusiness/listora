@@ -135,7 +135,7 @@ scanned-label fixtures are in `@listora/pack-check/testing`.
 
 ## Data
 
-Migration `20261027211500_pack_check`:
+Migration `20261027234658_pack_check`:
 
 - `pack_check_setting`: one per account, `enabled` (false by default).
 - `sale_label`: one per sale: `tracking_number` (canonical), `carrier`, `source` (`marketplace` or

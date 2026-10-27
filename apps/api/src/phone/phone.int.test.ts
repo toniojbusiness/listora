@@ -178,6 +178,59 @@ describe('the phone API (real Postgres)', () => {
     expect(malformed.status).toBe(422);
   });
 
+  it('answers the open app the moment work is handed to its phone, and only waits otherwise', async () => {
+    const seller = await api.signIn('phone-waiting@example.com');
+    const phone = randomUUID();
+    await api.call('registerDevice', {
+      token: seller,
+      params: { installationId: phone },
+      body: { name: 'Waiting iPhone', platform: 'ios', runtimeVersion: PHONE_RUNTIME_VERSION },
+    });
+    const wait = (waitSeconds: number) =>
+      api.call('waitForPhoneWork', {
+        token: seller,
+        query: { installationId: phone, waitSeconds: String(waitSeconds) },
+      });
+
+    // Nothing for this phone: the wait runs out.
+    let started = Date.now();
+    expect((await wait(1)).body).toEqual({ ready: false });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(900);
+
+    // Linking Mercari on it hands its sign-in check to the phone: the wait ends at once.
+    started = Date.now();
+    const waiting = wait(15);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const linked = await api.call('linkMarketplaceSession', {
+      token: seller,
+      params: { marketplace: 'mercari' },
+      body: { cookies: [{ ...depopCookie, domain: '.mercari.com' }], installationId: phone },
+    });
+    expect(linked.status).toBe(201);
+    expect((await waiting).body).toEqual({ ready: true });
+    expect(Date.now() - started).toBeLessThan(5_000);
+    // Work that waits for it now answers at once, and the claim gets it.
+    expect((await wait(15)).body).toEqual({ ready: true });
+    expect(
+      (
+        await api.call('claimPhoneRun', {
+          token: seller,
+          body: { installationId: phone, runtimeVersion: PHONE_RUNTIME_VERSION, appOpen: true },
+        })
+      ).body.run,
+    ).toMatchObject({ purpose: 'session_check', marketplace: 'mercari' });
+
+    expect(
+      (
+        await api.call('waitForPhoneWork', {
+          token: seller,
+          query: { installationId: randomUUID(), waitSeconds: '1' },
+        })
+      ).status,
+    ).toBe(404);
+    expect((await wait(21)).status).toBe(422);
+  });
+
   it('asks to link on the phone a marketplace no phone holds a session for', async () => {
     const seller = await api.signIn('phone-unlinked@example.com');
     const linked = await api.call('linkMarketplaceSession', {

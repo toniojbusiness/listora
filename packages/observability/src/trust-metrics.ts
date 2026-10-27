@@ -51,8 +51,9 @@ function isDelist(kind: OperationKind): boolean {
 /**
  * Operations that succeeded or failed in the window, timestamped at its start:
  * `VerifiedSuccess` and `OperationFailed` per marketplace and kind (`VerifiedSuccess` per
- * marketplace too), `DelistFailed` when any delist settled, and `DelistLatency` per marketplace
- * for delists after a sale.
+ * marketplace too), `DelistFailed` when any delist settled, `DelistLatency` per marketplace
+ * for delists after a sale, and `DelistEverywhereLatency` for each sale whose last delist
+ * settled then.
  */
 export async function collectSettledOperations(
   db: Db,
@@ -82,6 +83,7 @@ export async function collectSettledOperations(
       'op.kind as kind',
       'listing.marketplace as marketplace',
       'sale.created_at as saleRecordedAt',
+      'run.id as runId',
     ])
     .where('event.to_status', 'in', ['succeeded', 'failed'])
     .where('event.created_at', '>=', window.from)
@@ -92,6 +94,7 @@ export async function collectSettledOperations(
 
   const outcomes = new Map<string, { marketplace: string; kind: string; verified: number[] }>();
   const latencies = new Map<string, number[]>();
+  const runsSettled = new Set<string>();
   let delists = 0;
   let delistFailures = 0;
   for (const row of rows) {
@@ -107,6 +110,7 @@ export async function collectSettledOperations(
     if (!isDelist(row.kind)) continue;
     delists += 1;
     if (!succeeded) delistFailures += 1;
+    if (succeeded && row.runId !== null) runsSettled.add(row.runId);
     if (succeeded && row.saleRecordedAt !== null) {
       const latency = Math.max(0, row.settledAt.getTime() - row.saleRecordedAt.getTime());
       const values = latencies.get(row.marketplace) ?? [];
@@ -139,7 +143,45 @@ export async function collectSettledOperations(
       values: { DelistLatency: values },
     });
   }
+  const everywhere = await delistedEverywhereLatencies(db, window, [...runsSettled]);
+  if (everywhere.length > 0) {
+    groups.push({ timestamp, dimensions: {}, values: { DelistEverywhereLatency: everywhere } });
+  }
   return groups;
+}
+
+/**
+ * From the sale being recorded to its item's last other listing delisted and confirmed, for
+ * each of `runIds` whose last delist settled in the window and whose every delist succeeded.
+ */
+async function delistedEverywhereLatencies(
+  db: Db,
+  window: MetricsWindow,
+  runIds: readonly string[],
+): Promise<number[]> {
+  if (runIds.length === 0) return [];
+  const { rows } = await sql<{ saleRecordedAt: Date; lastSettledAt: Date | null; done: boolean }>`
+    select sale.created_at as "saleRecordedAt",
+      bool_and(op.status = 'succeeded') as done,
+      max((
+        select max(event.created_at) from operation_event as event
+        where event.account_id = op.account_id and event.operation_id = op.id
+          and event.to_status = 'succeeded'
+      )) as "lastSettledAt"
+    from marketplace_operation as op
+    join delist_run as run on run.account_id = op.account_id and run.id = op.delist_run_id
+    join sale on sale.account_id = run.account_id and sale.id = run.sale_id
+    where op.delist_run_id = any(${[...runIds]}::uuid[])
+    group by run.id, sale.created_at
+  `.execute(db);
+  return rows.flatMap((row) =>
+    row.done &&
+    row.lastSettledAt !== null &&
+    row.lastSettledAt >= window.from &&
+    row.lastSettledAt < window.to
+      ? [Math.max(0, row.lastSettledAt.getTime() - row.saleRecordedAt.getTime())]
+      : [],
+  );
 }
 
 /**

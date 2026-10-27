@@ -375,7 +375,10 @@ describe('ENVIRONMENT_SETTINGS', () => {
   });
 
   it('signs in to personal only with its owner pool; staging and prod keep dev until they get a pool', () => {
-    expect(ENVIRONMENT_SETTINGS.personal.signIn).toEqual({ via: 'owner-pool' });
+    expect(ENVIRONMENT_SETTINGS.personal.signIn).toEqual({
+      via: 'owner-pool',
+      inviteEmailVerification: 'none',
+    });
     expect(ENVIRONMENT_SETTINGS.staging.signIn).toEqual({ via: 'dev' });
     expect(ENVIRONMENT_SETTINGS.prod.signIn).toEqual({ via: 'dev' });
   });

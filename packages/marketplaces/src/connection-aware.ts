@@ -27,7 +27,7 @@ import type {
   OrderFeesResult,
   Outcome,
   RemoteListingState,
-  RemoteListings,
+  ListingsPage,
   RemoteOrder,
   RemoteOrderLabel,
   ValidationIssue,
@@ -152,14 +152,14 @@ export class ConnectionAwareAdapter implements MarketplaceAdapter {
   }
 
   /** The serving adapter's listings; throws when it can't read them (an assisted one never can). */
-  listListings(ctx: AdapterContext): Promise<RemoteListings> {
+  listListings(cursor: string | null, ctx: AdapterContext): Promise<ListingsPage> {
     const adapter = this.adapterFor(ctx.connection);
     if (adapter.listListings === undefined) {
       return Promise.reject(
         new Error(`the ${adapter.id} adapter for this connection reads no listings`),
       );
     }
-    return adapter.listListings(ctx);
+    return adapter.listListings(cursor, ctx);
   }
 
   /** The serving adapter's order labels; throws when it can't read them (an assisted one never can). */

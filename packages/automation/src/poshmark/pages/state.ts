@@ -55,12 +55,27 @@ export const listingRecordSchema = z.object({
   created_at: z.string(),
   updated_at: z.string(),
   price_amount: money,
-  inventory: z.object({
-    /** `available`, `not_for_sale`, `sold_out`, or `reserved` (a buyer is checking out). */
-    status: z.string(),
-    status_changed_at: z.string().optional(),
-  }),
+  inventory: z
+    .object({
+      /** `available`, `not_for_sale`, `sold_out`, or `reserved` (a buyer is checking out). */
+      status: z.string(),
+      status_changed_at: z.string().optional(),
+    })
+    // Its sizes too (`size_quantities`), which an import reads (listing-details.ts).
+    .loose(),
   creator_username: z.string().optional(),
+  // What an import takes into an item (listing-details.ts), as listing, closet, and browse pages
+  // embed it (read on a public category page, 2026-10-27): the cover photo and the others, the
+  // brand, size, and condition code, and the department, category, and its features.
+  cover_shot: z.unknown().optional(),
+  pictures: z.unknown().optional(),
+  brand: z.unknown().optional(),
+  size: z.unknown().optional(),
+  condition: z.unknown().optional(),
+  department: z.unknown().optional(),
+  category_v2: z.unknown().optional(),
+  category_features: z.unknown().optional(),
+  catalog: z.unknown().optional(),
 });
 export type ListingRecord = z.infer<typeof listingRecordSchema>;
 

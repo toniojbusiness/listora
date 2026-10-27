@@ -98,7 +98,7 @@ describe('ConnectionAwareAdapter', () => {
 
   it('reads the seller listings through the serving adapter, and refuses where it reads none', async () => {
     const ctx = { signal: new AbortController().signal, connection: automated };
-    await expect(depop.listListings(ctx)).rejects.toThrow('reads no listings');
+    await expect(depop.listListings(null, ctx)).rejects.toThrow('reads no listings');
   });
 
   it('refuses adapters for two different marketplaces', () => {

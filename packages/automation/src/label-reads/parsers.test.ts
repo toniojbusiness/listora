@@ -18,10 +18,12 @@ describe('label reads: the pages read by field names only', () => {
       trackingNumber: '9400111899223197428490',
       buyerFirstName: 'Sarah',
     });
-    expect(orderLabel({ externalOrderId: '412', externalListingIds: [] }, [receipt])).toMatchObject({
-      found: true,
-      trackingNumber: '9400111899223197428490',
-    });
+    expect(orderLabel({ externalOrderId: '412', externalListingIds: [] }, [receipt])).toMatchObject(
+      {
+        found: true,
+        trackingNumber: '9400111899223197428490',
+      },
+    );
     expect(
       orderLabel({ externalOrderId: 'shop-black-tee-1', externalListingIds: [] }, [receipt]),
     ).toMatchObject({ found: true });

@@ -57,6 +57,8 @@ tags:
     description: The profit dashboard over the seller's sales and inventory.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
+  - name: invites
+    description: Invites to sign up for Listora, each to a person's own, separate account.
   - name: sale-emails
     description: The forwarding address that catches Poshmark, Mercari, and Depop sale emails.
   - name: usage
@@ -73,6 +75,8 @@ tags:
     description: The seller's devices, and the marketplace work their iPhone runs (docs/features/phone-execution.md).
   - name: activity
     description: The activity timeline of items and marketplace actions, and how each sale was found (docs/features/activity.md).
+  - name: imports
+    description: Importing the seller's existing listings from a linked marketplace, and the questions it asks (docs/features/imports.md).
 paths:
   /health/live:
     get:
@@ -2375,6 +2379,159 @@ paths:
           $ref: '#/components/responses/Conflict'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/invites:
+    get:
+      tags:
+        - invites
+      operationId: listInvites
+      summary: List the account's invites and the people who joined through them
+      description: |
+        Every invite the account made, newest first (at most 100), with each one's state and the
+        invitee's email once they redeemed it. `canInvite` says whether this account may invite:
+        only an account created directly may (an invited person's account may not), and for one
+        that may not, `data` is empty.
+      responses:
+        '200':
+          description: The account's invites.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteList'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+        - invites
+      operationId: createInvite
+      summary: Create an invite
+      description: |
+        A new invite with a one-time code. The answer is the only time the code is shown: the
+        server keeps only its hash. `403 forbidden` when this account may not invite
+        (`canInvite`), and `409 invalid_state_transition` when it already has 20 invites nobody has
+        used yet.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteCreate'
+      responses:
+        '201':
+          description: The invite and its code.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedInvite'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/invites/{inviteId}/revoke:
+    parameters:
+      - $ref: '#/components/parameters/InviteId'
+    post:
+      tags:
+        - invites
+      operationId: revokeInvite
+      summary: Revoke an invite, or the access of the person who joined through it
+      description: |
+        An invite nobody redeemed can no longer be. Once someone redeemed it, they can no longer
+        sign in: their sessions end and the API refuses them at once. Their account and its data
+        are kept, so `restoreInvite` gives the access back. Revoking a revoked invite changes
+        nothing. A `503` (the sign-in provider did not answer) revoked nothing; retry it.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The revoked invite.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/invites/{inviteId}/restore:
+    parameters:
+      - $ref: '#/components/parameters/InviteId'
+    post:
+      tags:
+        - invites
+      operationId: restoreInvite
+      summary: Give a revoked person their access back
+      description: |
+        Only for a revoked invite that someone had redeemed (`restore` is in `availableActions`):
+        they can sign in again, to their own account as they left it. `409
+        invalid_state_transition` otherwise; an invite revoked before anyone redeemed it is
+        replaced by a new one instead.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The restored invite.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invite'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/invite-redemptions:
+    post:
+      tags:
+        - invites
+      operationId: redeemInvite
+      summary: Redeem an invite code with the invitee's email (no sign-in yet)
+      description: |
+        The first step of signing up: the invitee, not signed in yet, enters the code they were
+        sent and their own email. No bearer token: the code is the credential. It binds the invite
+        to the email and lets that email sign in; the app then signs in with the emailed one-time
+        code as usual, and the first signed-in request creates the invitee's own, empty account.
+
+        Redeeming is safe to repeat: the same code and email give the same answer (so the
+        `Idempotency-Key` is not stored), and until the invitee has signed in, the same code with
+        another email moves the invite to that address (a typo), a few times at most. While
+        `status` is `email_verification_sent`, the sign-in codes cannot reach the address yet: the
+        invitee opens the verification link emailed to them, then redeems again.
+
+        `404 not_found` for a code that names no invite, `409 invalid_state_transition` for an
+        invite that expired, was revoked, or was already used by someone who signed in, and `409
+        already_exists` for an email that already has a Listora account. Wrong codes are limited
+        (`429 rate_limited`).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteRedeem'
+      responses:
+        '200':
+          description: The invite is the email's; the invitee signs in next.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InviteRedemption'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/sale-emails:
     get:
       tags:
@@ -2781,6 +2938,48 @@ paths:
           $ref: '#/components/responses/Conflict'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/phone-runs/wait:
+    get:
+      tags:
+        - phone
+      operationId: waitForPhoneWork
+      summary: Wait for this phone's next work
+      description: |
+        While the app is open and has claimed everything it can, it waits here instead of
+        looking again on a timer: the answer comes as soon as work for this phone may be
+        claimable (the engine handed a change to the phone, a check came due, a run's claim
+        ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
+        usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+        trigger in the app, the app leaving) leaves nothing behind.
+      parameters:
+        - name: installationId
+          in: query
+          required: true
+          description: The app installation's id, which it keeps in its Keychain.
+          schema:
+            $ref: '#/components/schemas/Id'
+        - name: waitSeconds
+          in: query
+          required: true
+          description: The longest the answer may take.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 20
+      responses:
+        '200':
+          description: Whether work may be ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhoneWorkWaitResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
   /v1/phone-runtime:
     get:
       tags:
@@ -2921,6 +3120,138 @@ paths:
           $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/DefaultError'
+  /v1/imports:
+    get:
+      tags:
+        - imports
+      operationId: listListingImports
+      summary: List the marketplaces Listora imports listings from, each with its latest import
+      description: |
+        One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
+        import can start now (the marketplace is linked, none is under way) or why not, and its
+        newest import with its progress and summary.
+      responses:
+        '200':
+          description: The marketplaces and their newest imports.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingImports'
+        default:
+          $ref: '#/components/responses/DefaultError'
+    post:
+      tags:
+        - imports
+      operationId: startListingImport
+      summary: Import the seller's listings for sale on a marketplace
+      description: |
+        Starts reading the seller's listings for sale on a linked marketplace, a page at a time
+        where the marketplace runs (the seller's iPhone, or Listora's cloud browser), read-only:
+        nothing on the marketplace changes. Each listing becomes an item already listed there, is
+        added to the item it is the same as, or becomes a question for the seller.
+        `marketplace_not_connected` when the marketplace is not linked, `already_exists` while an
+        import of it is under way, `marketplace_action_unavailable` for a marketplace Listora
+        doesn't import from.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingImportStart'
+      responses:
+        '202':
+          description: The import started.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingImport'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/imports/{importId}:
+    parameters:
+      - $ref: '#/components/parameters/ImportId'
+    get:
+      tags:
+        - imports
+      operationId: getListingImport
+      summary: Get an import's progress and summary
+      responses:
+        '200':
+          description: The import.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingImport'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/imports/{importId}/questions:
+    parameters:
+      - $ref: '#/components/parameters/ImportId'
+    get:
+      tags:
+        - imports
+      operationId: listListingImportQuestions
+      summary: List the import's questions for the seller
+      description: |
+        The listings the import was not sure about: each may be an item Listora already has, and
+        the seller says which, or that it is an item of its own, or to leave it out. At most 200,
+        oldest first.
+      responses:
+        '200':
+          description: The open questions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingImportQuestions'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/imports/{importId}/questions/{questionId}/answer:
+    parameters:
+      - $ref: '#/components/parameters/ImportId'
+      - $ref: '#/components/parameters/QuestionId'
+    post:
+      tags:
+        - imports
+      operationId: answerListingImportQuestion
+      summary: Answer one of the import's questions
+      description: |
+        `same_item`: the listing is that item (one of the question's candidates), and becomes its
+        listing on the marketplace. `new_item`: it is an item of its own, imported with its photos.
+        `skip`: it is not imported. `invalid_state_transition` for a question already answered,
+        `marketplace_action_unavailable` when the item already has a listing there.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingImportAnswer'
+      responses:
+        '200':
+          description: The import, with the answer counted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingImport'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        default:
+          $ref: '#/components/responses/DefaultError'
 components:
   securitySchemes:
     bearerAuth:
@@ -3025,6 +3356,12 @@ components:
       required: true
       schema:
         $ref: '#/components/schemas/Id'
+    InviteId:
+      name: inviteId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
     MarketplacePath:
       name: marketplace
       in: path
@@ -3052,6 +3389,18 @@ components:
       schema:
         type: string
         pattern: ^(0|[1-9][0-9]{0,3})$
+    ImportId:
+      name: importId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
+    QuestionId:
+      name: questionId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Id'
   responses:
     DefaultError:
       description: Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
@@ -3251,12 +3600,15 @@ components:
           maxLength: 64
     KnownProvenance:
       type: string
-      description: Where a field value came from.
+      description: |
+        Where a field value came from: `marketplace` is a listing Listora imported from the
+        seller's marketplace account.
       enum:
         - ai
         - ocr
         - barcode
         - user
+        - marketplace
     ErrorResponse:
       type: object
       description: The body of every error response.
@@ -6388,13 +6740,15 @@ components:
         `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
         or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
         a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
-        history, which changes nothing. `label_read`: a read-only read of the shipping labels of
+        history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
+        listings for sale, for an import. `label_read`: a read-only read of the shipping labels of
         orders that still need a package, for Pack check.
       enum:
         - operation
         - session_check
         - sale_check
         - sale_history
+        - listing_import
         - label_read
     PhoneRunClaim:
       type: object
@@ -6424,6 +6778,16 @@ components:
             (each once its last step is a few seconds behind, as Try now runs it), except a wait the
             marketplace or Listora's pacing asked for, and a claim that finds nothing says to look
             again within seconds.
+    PhoneWorkWaitResult:
+      type: object
+      required:
+        - ready
+      properties:
+        ready:
+          type: boolean
+          description: |
+            `true` when work for this phone may be claimable now (claim it), `false` when the wait
+            ran out with none (wait again, or claim as usual).
     PhoneCall:
       type: object
       description: |
@@ -7645,6 +8009,194 @@ components:
         nextCursor:
           type: string
           description: Present when there are more results.
+    InviteStatus:
+      description: |
+        A `KnownInviteStatus`, or a status added after this client was built. Clients show
+        `statusDisplay` as given.
+      anyOf:
+        - $ref: '#/components/schemas/KnownInviteStatus'
+        - type: string
+          maxLength: 64
+    KnownInviteStatus:
+      type: string
+      description: |
+        - `open`: nobody has redeemed it yet.
+        - `expired`: nobody redeemed it before `expiresAt`.
+        - `redeemed`: the invitee entered the code and their `email`, and has not signed in yet.
+        - `active`: the invitee signed in; their own account exists.
+        - `revoked`: revoked by the account (`revokedAt`); with an `email`, that person can no
+          longer sign in.
+      enum:
+        - open
+        - expired
+        - redeemed
+        - active
+        - revoked
+    InviteAction:
+      description: A `KnownInviteAction`, or an action added after this client was built (hide it).
+      anyOf:
+        - $ref: '#/components/schemas/KnownInviteAction'
+        - type: string
+          maxLength: 64
+    KnownInviteAction:
+      type: string
+      description: |
+        - `revoke`: `revokeInvite`.
+        - `restore`: `restoreInvite`.
+      enum:
+        - revoke
+        - restore
+    Invite:
+      type: object
+      description: |
+        One invite of the account, and the person who joined through it. The code itself is never
+        shown again after `createInvite`; `codeHint` (its last four characters) tells invites apart.
+      required:
+        - id
+        - codeHint
+        - status
+        - statusDisplay
+        - availableActions
+        - createdAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        label:
+          type: string
+          maxLength: 100
+          description: Who it is for, as the inviter wrote it, for example "Maria".
+        codeHint:
+          type: string
+          pattern: ^[0-9A-Z]{4}$
+          description: The code's last four characters.
+        status:
+          $ref: '#/components/schemas/InviteStatus'
+        statusDisplay:
+          $ref: '#/components/schemas/StatusDisplay'
+        email:
+          type: string
+          maxLength: 320
+          description: The invitee's email, once they redeemed it.
+        expiresAt:
+          $ref: '#/components/schemas/Timestamp'
+        redeemedAt:
+          $ref: '#/components/schemas/Timestamp'
+        joinedAt:
+          $ref: '#/components/schemas/Timestamp'
+        revokedAt:
+          $ref: '#/components/schemas/Timestamp'
+        availableActions:
+          type: array
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/InviteAction'
+        createdAt:
+          $ref: '#/components/schemas/Timestamp'
+    InviteList:
+      type: object
+      required:
+        - canInvite
+        - data
+      properties:
+        canInvite:
+          type: boolean
+          description: Whether this account may create invites.
+        data:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/Invite'
+    InviteCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Who it is for, to tell invites apart.
+        expiresInDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 90
+          description: Days until an unredeemed invite stops working; absent means it never expires.
+    CreatedInvite:
+      type: object
+      required:
+        - invite
+        - code
+        - link
+        - message
+      properties:
+        invite:
+          $ref: '#/components/schemas/Invite'
+        code:
+          type: string
+          maxLength: 32
+          description: |
+            The one-time code, for example `K7QD-3M9P-XW2T-H8RA`, shown only in this answer.
+            Anyone with it can redeem the invite until it is used, so share it with that person only.
+        link:
+          type: string
+          format: uri
+          maxLength: 256
+          description: Opens the app's sign-up with the code filled in (`listora://invite/<code>`).
+        message:
+          type: string
+          maxLength: 1000
+          description: A message to share with the invitee, with the code and how to use it.
+    InviteRedeem:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - email
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The code as typed; case, spaces, and dashes do not matter.
+        email:
+          type: string
+          format: email
+          maxLength: 320
+          description: The invitee's own email, which they sign in with.
+    InviteRedemptionStatus:
+      description: |
+        A `KnownInviteRedemptionStatus`, or one added after this client was built (show `message`
+        and let the person redeem again).
+      anyOf:
+        - $ref: '#/components/schemas/KnownInviteRedemptionStatus'
+        - type: string
+          maxLength: 64
+    KnownInviteRedemptionStatus:
+      type: string
+      description: |
+        - `ready`: sign in with `email` now; the one-time code is emailed there.
+        - `email_verification_sent`: the sign-in codes cannot reach `email` yet. A verification
+          email from Amazon Web Services was sent there: open its link, then redeem again.
+      enum:
+        - ready
+        - email_verification_sent
+    InviteRedemption:
+      type: object
+      required:
+        - email
+        - status
+        - message
+      properties:
+        email:
+          type: string
+          maxLength: 320
+          description: The email the invite now belongs to, lowercase; sign in with it.
+        status:
+          $ref: '#/components/schemas/InviteRedemptionStatus'
+        message:
+          type: string
+          maxLength: 500
+          description: What to do next, in words to show as is.
     SaleEmailStatus:
       description: |
         A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show
@@ -8824,3 +9376,236 @@ components:
           $ref: '#/components/schemas/Timestamp'
         lastError:
           $ref: '#/components/schemas/ActivityError'
+    ListingImportStatus:
+      description: A `KnownListingImportStatus`, or a status added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownListingImportStatus'
+        - type: string
+          maxLength: 64
+    KnownListingImportStatus:
+      type: string
+      description: |
+        `reading`: pages of the seller's listings are still being read. `importing`: reading is
+        over and listings are still being turned into items. `finished`: every listing is settled
+        (some may wait for the seller's answer).
+      enum:
+        - reading
+        - importing
+        - finished
+    ListingImportCounts:
+      type: object
+      required:
+        - read
+        - imported
+        - merged
+        - alreadyListed
+        - needsYou
+        - failed
+      properties:
+        read:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Listings for sale the import read.
+        imported:
+          type: integer
+          format: int32
+          minimum: 0
+          description: New items, each already listed on the marketplace.
+        merged:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Listings added to an item Listora already had.
+        alreadyListed:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Listings Listora already had.
+        needsYou:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Questions waiting for the seller.
+        failed:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Listings that could not be imported (importing again tries them again).
+    ListingImport:
+      type: object
+      required:
+        - id
+        - marketplace
+        - status
+        - runsOn
+        - counts
+        - progress
+        - startedAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        status:
+          $ref: '#/components/schemas/ListingImportStatus'
+        runsOn:
+          $ref: '#/components/schemas/ExecutionLocation'
+        counts:
+          $ref: '#/components/schemas/ListingImportCounts'
+        progress:
+          type: string
+          maxLength: 200
+          description: Where it is, in the seller's words ("Reading your Depop listings on your iPhone... 48 so far").
+        summary:
+          type: string
+          maxLength: 300
+          description: What it did once reading is over ("Imported 42 from Depop, 3 need you").
+        stoppedReason:
+          type: string
+          maxLength: 500
+          description: Why reading stopped before the last page; the listings read before it still import.
+        startedAt:
+          $ref: '#/components/schemas/Timestamp'
+        finishedAt:
+          $ref: '#/components/schemas/Timestamp'
+    ListingImportMarketplace:
+      type: object
+      required:
+        - marketplace
+        - canStart
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        canStart:
+          type: boolean
+          description: Whether an import can start now.
+        unavailableReason:
+          type: string
+          maxLength: 300
+          description: Why not, in the seller's words, when it can't.
+        latest:
+          $ref: '#/components/schemas/ListingImport'
+    ListingImports:
+      type: object
+      required:
+        - marketplaces
+      properties:
+        marketplaces:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/ListingImportMarketplace'
+    ListingImportStart:
+      type: object
+      additionalProperties: false
+      required:
+        - marketplace
+      properties:
+        marketplace:
+          $ref: '#/components/schemas/KnownMarketplace'
+    ImportMatchReason:
+      description: A `KnownImportMatchReason`, or a reason added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownImportMatchReason'
+        - type: string
+          maxLength: 64
+    KnownImportMatchReason:
+      type: string
+      description: |
+        Why the listing may be this item: `sku` (its SKU line names it), `photo_and_title`, `photo`
+        (a photo alike), or `title` (the title alike).
+      enum:
+        - sku
+        - photo_and_title
+        - photo
+        - title
+    ListingImportCandidate:
+      type: object
+      required:
+        - itemId
+        - sku
+        - reason
+        - why
+      properties:
+        itemId:
+          $ref: '#/components/schemas/Id'
+        sku:
+          type: string
+          maxLength: 64
+        title:
+          type: string
+          maxLength: 500
+        coverPhotoUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+        reason:
+          $ref: '#/components/schemas/ImportMatchReason'
+        why:
+          type: string
+          maxLength: 200
+          description: The reason in the seller's words ("A photo looks the same").
+    ListingImportQuestion:
+      type: object
+      required:
+        - id
+        - marketplace
+        - externalListingId
+        - candidates
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        externalListingId:
+          type: string
+          maxLength: 200
+        externalUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+        title:
+          type: string
+          maxLength: 500
+          description: The listing's title (on Depop, the first line of its text).
+        price:
+          $ref: '#/components/schemas/Money'
+        photoUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: The listing's cover photo, on the marketplace's own image CDN.
+        candidates:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/ListingImportCandidate'
+    ListingImportQuestions:
+      type: object
+      required:
+        - questions
+      properties:
+        questions:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ListingImportQuestion'
+    ImportAnswerKind:
+      type: string
+      enum:
+        - same_item
+        - new_item
+        - skip
+    ListingImportAnswer:
+      type: object
+      additionalProperties: false
+      required:
+        - answer
+      properties:
+        answer:
+          $ref: '#/components/schemas/ImportAnswerKind'
+        itemId:
+          $ref: '#/components/schemas/Id'
+          description: For `same_item`, the candidate it is.

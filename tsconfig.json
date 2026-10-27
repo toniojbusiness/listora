@@ -27,6 +27,7 @@
     { "path": "packages/tag-parse" },
     { "path": "packages/analysis" },
     { "path": "packages/batches" },
+    { "path": "packages/imports" },
     { "path": "packages/retention" },
     { "path": "packages/eval" },
     { "path": "packages/e2e" },

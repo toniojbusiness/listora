@@ -47,6 +47,8 @@ extension Components {
         public typealias SaleId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/TaskId`.
         public typealias TaskId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/InviteId`.
+        public typealias InviteId = Components.Schemas.Id
         /// - Remark: Generated from `#/components/parameters/MarketplacePath`.
         public typealias MarketplacePath = Components.Schemas.KnownMarketplace
         /// The app installation's id, which it keeps in its Keychain.
@@ -59,5 +61,9 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/parameters/CallIndex`.
         public typealias CallIndex = Swift.String
+        /// - Remark: Generated from `#/components/parameters/ImportId`.
+        public typealias ImportId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/QuestionId`.
+        public typealias QuestionId = Components.Schemas.Id
     }
 }

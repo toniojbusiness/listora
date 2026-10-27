@@ -73,6 +73,8 @@ export interface ApiProduct {
   state: Extract<RemoteListingState, { found: true }>;
   /** The SKU Listora's line in the text names, when it has one. */
   sku: string | null;
+  /** The record as the list gave it, for what an import reads besides (listing-details.ts). */
+  record: Readonly<Record<string, unknown>>;
 }
 
 /** Opens a Depop page first when the tab has none, so the read goes from Depop's own page. */
@@ -107,6 +109,7 @@ export async function readOwnProduct(
   const price = expectShape(priceSchema, product.pricing[key], API).price_breakdown.price.amount;
   const { description, sku } = listingCopy(product.description);
   return {
+    record: answer.body as Record<string, unknown>,
     state: {
       found: true,
       externalListingId: product.slug,
@@ -147,7 +150,7 @@ export async function readOwnListings(
   const feed = expectShape(feedSchema, answer.body, API);
   const products = feed.products.map((entry) => {
     const read = productRead(expectShape(productRecordSchema, entry, API), site, API);
-    return { state: read.listing, sku: read.sku };
+    return { state: read.listing, sku: read.sku, record: entry as Record<string, unknown> };
   });
   return { products, next: feed.meta.end ? null : feed.meta.cursor };
 }

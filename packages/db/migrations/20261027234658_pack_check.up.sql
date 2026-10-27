@@ -80,10 +80,12 @@ create trigger sale_pack_set_updated_at
 -- for the phone like a sale check: one per connection.
 alter table phone_work drop constraint phone_work_purpose_check;
 alter table phone_work add constraint phone_work_purpose_check
-  check (purpose in ('operation', 'session_check', 'sale_check', 'sale_history', 'label_read'));
+  check (
+    purpose in ('operation', 'session_check', 'sale_check', 'sale_history', 'listing_import', 'label_read')
+  );
 create unique index phone_work_label_read on phone_work (account_id, connection_id)
   where purpose = 'label_read';
 
 alter table automation_run drop constraint automation_run_purpose_check;
 alter table automation_run add constraint automation_run_purpose_check
-  check (purpose in ('operation', 'sale_check', 'health', 'label_read'));
+  check (purpose in ('operation', 'sale_check', 'health', 'import', 'label_read'));

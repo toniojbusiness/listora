@@ -124,6 +124,23 @@ public struct AppDependencies {
         gettingStarted = GettingStartedModel(defaults: defaults, showsNow: launchOptions.showsGettingStarted)
     }
 
+    /// Sales: the feed, each sale, and its delists, which run at once on this phone and show the
+    /// phone's progress.
+    private static func makeSales(
+        _ apiClient: APIClient,
+        _ accessTokens: AccessTokenStore,
+        _ showSignIn: @escaping @MainActor () -> Void,
+        _ phone: PhoneExecutionEnvironment,
+        _ packCheck: PackCheckEnvironment,
+    ) -> SalesEnvironment {
+        let sales = SalesEnvironment(
+            apiClient: apiClient, accessTokens: accessTokens, onSignIn: showSignIn, phoneWork: phone.runner,
+            packOrders: packCheck.ordersEntry,
+        )
+        sales.phoneProgress = phone.runner
+        return sales
+    }
+
     /// Marketplaces: each connection's health, and where its automated steps run.
     private static func makeMarketplaces(
         _ apiClient: APIClient,
@@ -183,7 +200,14 @@ public struct AppDependencies {
         if let grant = launchOptions.accessGrant, configuration.environment == .dev {
             accessTokens.signIn(grant)
         }
-        return (accessTokens, SignInModel(method: signInMethod(configuration, cognito), tokens: accessTokens))
+        // Redeeming an invite needs no session, so the client sends no token before sign-in.
+        let invites = APIInviteRedeemer(
+            client: APIClient(baseURL: configuration.apiBaseURL, accessTokens: accessTokens).client,
+        )
+        return (
+            accessTokens,
+            SignInModel(method: signInMethod(configuration, cognito), tokens: accessTokens, inviteRedeemer: invites),
+        )
     }
 
     /// The Cognito client of a build with a user pool app client. The Share Extension builds the

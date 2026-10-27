@@ -19,7 +19,7 @@ import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import type * as sqs from 'aws-cdk-lib/aws-sqs';
 import type { Construct } from 'constructs';
 
-import type { DnsTarget, ServiceName, ServiceSize } from '../config.ts';
+import type { DnsTarget, ServiceName, ServiceSize, SignIn } from '../config.ts';
 import {
   API_PORT,
   containerEnvironment,
@@ -54,6 +54,16 @@ export interface ComputeStackProps extends ListoraStackProps {
     readonly pool: cognito.IUserPool;
     readonly appClient: cognito.IUserPoolClient;
   };
+}
+
+function sesVerifiesInvitees(signIn: SignIn): boolean {
+  return signIn.via === 'owner-pool' && signIn.inviteEmailVerification === 'ses';
+}
+
+/** A user pool's owner, whom the deploy config always names (the auth stack needs it too). */
+function requiredOwnerEmail(ownerEmail: string | undefined): string {
+  if (ownerEmail === undefined) throw new Error('an environment with a user pool needs its owner');
+  return ownerEmail;
 }
 
 /** Label under the environment's domain that serves the API. */
@@ -160,6 +170,7 @@ export class ComputeStack extends ListoraStack {
         props.userPool && {
           userPoolId: props.userPool.pool.userPoolId,
           clientIds: [props.userPool.appClient.userPoolClientId],
+          ownerEmail: requiredOwnerEmail(target.ownerEmail),
         },
       ),
       runner: {
@@ -204,6 +215,36 @@ export class ComputeStack extends ListoraStack {
     // since its two containers share it.
     const grant = (role: iam.IRole, containers: readonly ServiceName[]): void => {
       props.photoBucket.grantReadWrite(role);
+      if (containers.includes('api')) {
+        // Invites (docs/features/invites.md): the API creates the users of people who redeem
+        // an invite, removes one whose email they corrected, and signs out and disables (or
+        // enables again) one whose invite is revoked (or restored).
+        props.userPool?.pool.grant(
+          role,
+          'cognito-idp:AdminCreateUser',
+          'cognito-idp:AdminDeleteUser',
+          'cognito-idp:AdminDisableUser',
+          'cognito-idp:AdminEnableUser',
+          'cognito-idp:AdminUserGlobalSignOut',
+        );
+        // In SES's sandbox, each invitee's address becomes a verified email identity, so the
+        // pool's codes reach it: email addresses only (`*@*`), never a domain.
+        if (props.userPool && sesVerifiesInvitees(settings.signIn)) {
+          role.addToPrincipalPolicy(
+            new iam.PolicyStatement({
+              sid: 'VerifyInviteeAddresses',
+              actions: [
+                'ses:CreateEmailIdentity',
+                'ses:GetEmailIdentity',
+                'ses:DeleteEmailIdentity',
+              ],
+              resources: [
+                this.formatArn({ service: 'ses', resource: 'identity', resourceName: '*@*' }),
+              ],
+            }),
+          );
+        }
+      }
       if (containers.includes('worker')) {
         props.userPool?.pool.grant(role, 'cognito-idp:AdminGetUser', 'cognito-idp:AdminDeleteUser');
         // Raw sale emails: read each one, and delete it once processed.

@@ -15,9 +15,10 @@ export const AUTH_OUTPUTS = {
 
 /**
  * The owner pool (`signIn.via === 'owner-pool'`, docs/features/auth.md): a Cognito user pool
- * whose only user is the deploy target's `ownerEmail`, who signs in with a one-time code
- * emailed to them. Nobody can sign up (self sign-up is off and the app client offers no
- * hosted UI), so the pool's users are exactly the ones this stack creates.
+ * whose users sign in with a one-time code emailed to them. Nobody can sign up on their own
+ * (self sign-up is off and the app client offers no hosted UI), so its users are the deploy
+ * target's `ownerEmail`, whom this stack creates, and the people the owner invites, whom the API
+ * creates when they redeem an invite (docs/features/invites.md).
  *
  * - Email one-time codes need the Essentials feature plan and SES (`DEVELOPER`) sending. The
  *   email stack holds the owner's address as an SES identity; without a domain the codes come

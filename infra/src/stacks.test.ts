@@ -723,7 +723,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
               signIn: signInResources(
                 settings.signIn,
                 settings.signIn.via === 'owner-pool'
-                  ? { userPoolId: '', clientIds: [''] }
+                  ? { userPoolId: '', clientIds: [''], ownerEmail: '' }
                   : undefined,
               ),
             }),
@@ -797,13 +797,44 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         expect(api['COGNITO_USER_POOL_ID']).toContain('UserPool');
         expect(api['COGNITO_CLIENT_IDS']).toContain('IPhoneApp');
         expect(worker['COGNITO_USER_POOL_ID']).toBe(api['COGNITO_USER_POOL_ID']);
-        // Only the worker deletes users, and only these two calls on this pool.
-        expect(cognitoGrant).toHaveLength(1);
-        expect(cognitoGrant[0]).toMatchObject({
-          Effect: 'Allow',
-          Action: ['cognito-idp:AdminDeleteUser', 'cognito-idp:AdminGetUser'],
-        });
-        expect(JSON.stringify(cognitoGrant[0]?.['Resource'])).toContain('UserPool');
+        // Invite-only sign-up, with the deploy's owner (docs/features/invites.md).
+        expect(api['SIGN_UP']).toBe('"invite"');
+        expect(api['SIGN_UP_OWNER_EMAIL']).toBe(JSON.stringify(target.ownerEmail));
+        expect(api['INVITE_EMAIL_VERIFICATION']).toBe(
+          JSON.stringify(settings.signIn.inviteEmailVerification),
+        );
+        // The API manages invitees' users and the worker deletes deleted accounts' users, on
+        // this pool only. A combined task's one role holds both.
+        const separate = settings.services.layout === 'separate';
+        expect(cognitoGrant).toHaveLength(separate ? 2 : 1);
+        expect(new Set(cognitoGrant.flatMap((grant) => asList(grant['Action'])))).toEqual(
+          new Set([
+            'cognito-idp:AdminCreateUser',
+            'cognito-idp:AdminDeleteUser',
+            'cognito-idp:AdminDisableUser',
+            'cognito-idp:AdminEnableUser',
+            'cognito-idp:AdminGetUser',
+            'cognito-idp:AdminUserGlobalSignOut',
+          ]),
+        );
+        for (const grant of cognitoGrant) {
+          expect(grant['Effect']).toBe('Allow');
+          expect(JSON.stringify(grant['Resource'])).toContain('UserPool');
+        }
+        // Invitees' addresses as SES identities, and nothing else at SES.
+        const sesGrant = statements(t).filter((statement) =>
+          asList(statement['Action']).some((action) => String(action).startsWith('ses:')),
+        );
+        if (settings.signIn.inviteEmailVerification === 'ses') {
+          expect(sesGrant).toHaveLength(1);
+          expect(sesGrant[0]).toMatchObject({
+            Effect: 'Allow',
+            Action: ['ses:CreateEmailIdentity', 'ses:DeleteEmailIdentity', 'ses:GetEmailIdentity'],
+          });
+          expect(JSON.stringify(sesGrant[0]?.['Resource'])).toContain(':identity/*@*');
+        } else {
+          expect(sesGrant).toEqual([]);
+        }
       } else {
         expect(api['AUTH_DRIVER']).toBe('"dev"');
         expect(api).not.toHaveProperty('COGNITO_USER_POOL_ID');
@@ -1675,8 +1706,14 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       t.resourceCountIs('AWS::IAM::ManagedPolicy', 0);
       const role = resources(t, 'AWS::IAM::Role')[0];
       expect(role?.Properties?.['ManagedPolicyArns']).toBeUndefined();
-      expect(JSON.stringify(statements(t))).toContain(
-        `role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-*-${target.account}-${target.region}`,
+      // The deploy and asset publishing roles, never the lookup role (which reads the whole
+      // account) or a wildcard.
+      const bootstrapRoles = statements(t).find((s) => s['Sid'] === 'UseCdkBootstrapRoles');
+      expect(asList(bootstrapRoles?.['Resource'])).toEqual(
+        ['deploy', 'file-publishing', 'image-publishing'].map(
+          (role) =>
+            `arn:aws:iam::${target.account}:role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-${role}-role-${target.account}-${target.region}`,
+        ),
       );
     });
 
@@ -1705,9 +1742,11 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       const bySid = (sid: string) =>
         JSON.stringify(statements(t).find((statement) => statement['Sid'] === sid));
       expect(bySid('CheckRestrictedBootstrap')).toContain(`:stack/CDKToolkit-listora/*`);
-      expect(bySid('CheckExecutionPolicy')).toContain(
-        `:iam::${target.account}:policy/listora-${environment}-cdk-execution"`,
-      );
+      for (const policy of ['cdk-execution', 'role-boundary']) {
+        expect(bySid('CheckExecutionPolicy')).toContain(
+          `:iam::${target.account}:policy/listora-${environment}-${policy}"`,
+        );
+      }
       expect(bySid('PassServiceRoles')).toContain(
         `:iam::${target.account}:role/listora-${environment}-compute-*"`,
       );

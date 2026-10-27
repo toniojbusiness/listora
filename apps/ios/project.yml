@@ -95,6 +95,12 @@ targets:
         ListoraCognitoClientID: $(COGNITO_CLIENT_ID)
         ListoraSupportEmail: $(SUPPORT_EMAIL)
         ITSAppUsesNonExemptEncryption: false
+        # Invite links (`listora://invite/<code>`, docs/features/invites.md) open the sign-up with
+        # the code filled in.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.listora.invite
+            CFBundleURLSchemes:
+              - listora
         # Pack check reads shipping labels' and item stickers' barcodes, and takes the optional
         # package photo (docs/features/pack-check.md).
         NSCameraUsageDescription: Listora uses the camera to photograph the items you sell, and to scan shipping labels and item stickers when you pack an order.

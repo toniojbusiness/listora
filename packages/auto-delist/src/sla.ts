@@ -76,6 +76,7 @@ export async function runDelistSla(deps: DelistSlaDependencies): Promise<DelistS
       for (const [accountId, runIds] of byAccount) {
         for (const run of await loadDelistRuns(trx, accountId, { runIds })) {
           const outcome = await checkRun(trx, run, stored.get(run.id), now());
+          if (outcome.completed) logCompleted(deps.logger, run);
           summary.checked += 1;
           if (outcome.completed) summary.completed += 1;
           if (outcome.realerted) summary.realerted += 1;
@@ -141,6 +142,31 @@ async function checkRun(
       .execute();
   }
   return outcome;
+}
+
+/**
+ * The operator's record of how fast a sale was delisted everywhere: from the sale being
+ * recorded to each listing's delist confirmed, and to the last (`delistedInMs`, the time the
+ * target of under a minute is about; docs/features/auto-delist.md).
+ */
+function logCompleted(logger: Pick<Logger, 'info'>, run: DelistRunView): void {
+  if (run.completedAt === null || run.results.length === 0) return;
+  const started = run.startedAt.getTime();
+  logger.info(
+    {
+      event: 'delist_run_completed',
+      delistRunId: run.id,
+      saleId: run.saleId,
+      soldOn: run.soldOn,
+      delistedInMs: run.completedAt.getTime() - started,
+      results: run.results.map((result) => ({
+        marketplace: result.marketplace,
+        state: result.state,
+        doneInMs: result.updatedAt.getTime() - started,
+      })),
+    },
+    'delist run completed',
+  );
 }
 
 async function alert(

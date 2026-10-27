@@ -35,6 +35,7 @@ import { FakeDepopSite } from '../depop/fake/fake-depop-site.ts';
 import { setExecutionLocation } from '../execution.ts';
 import { linkAutomationSession } from '../link.ts';
 import { loadChromium } from '../runner/playwright.ts';
+import { LISTING_IMPORT_APPLY_TASK, queueImportPage } from '../imports/schedule.ts';
 import { queueLabelReads } from '../label-reads/queue.ts';
 import { enqueueSaleCheck, requestSaleHistoryRead } from '../sale-checks/schedule.ts';
 import { loadAutomationSettings, type AutomationSettings } from '../settings.ts';
@@ -50,7 +51,9 @@ import {
   PHONE_IDLE_CLAIM_SECONDS,
   PHONE_UNUSED_CLAIM_SECONDS,
   type PhoneWorkDependencies,
+  waitForPhoneWork,
 } from './work.ts';
+import { listenForPhoneWork } from './signals.ts';
 
 const FAST_POLICY = { delaysMs: [10, 20, 30, 40, 50, 60], jitter: 0, random: () => 0.5 };
 
@@ -116,11 +119,12 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     };
   });
 
+  // Closing Chromium and the scratch database can take a while on a busy machine.
   afterAll(async () => {
     await browser.close();
     await site.close();
     await database.close();
-  });
+  }, 60_000);
 
   beforeEach(async () => {
     site.clearFaults();
@@ -394,6 +398,73 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     });
     expect(site.product(listing.external_listing_id ?? '')?.status).toBe('DELETED');
     expect(await work()).toEqual([]);
+  });
+
+  it('wakes the waiting app the moment the engine hands it a delist, and looks every few seconds without signals', async () => {
+    await runPhone();
+    const listingId = await newListing();
+    const create = await enqueue(listingId, 'create');
+    await step(create);
+    await runPhoneAndConfirm(create);
+    const device = { accountId, deviceId };
+    let started: number;
+
+    const listening = listenForPhoneWork({
+      connectionString: database.scratch.url,
+      logger: silentLogger,
+    });
+    try {
+      const deadline = Date.now() + 5_000;
+      while (!listening.signals.listening && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      const deps = { signals: listening.signals };
+      // Nothing for the phone: the wait runs out.
+      expect(await waitForPhoneWork(deps, db, device, { maxMs: 300 })).toBe(false);
+
+      started = Date.now();
+      const waiting = waitForPhoneWork(deps, db, device, { maxMs: 15_000 });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const end = await enqueue(listingId, 'end');
+      await step(end);
+      expect(await waiting).toBe(true);
+      expect(Date.now() - started).toBeLessThan(2_000);
+
+      // A claim renewing its lease wakes nobody; the claim's end does.
+      const run = await claimPhoneRun(phone, db, {
+        accountId,
+        deviceId,
+        runtimeVersion: PHONE_RUNTIME_VERSION,
+      });
+      expect(run).toMatchObject({ operationId: end.id });
+      const subscription = listening.signals.subscribe(accountId);
+      await db
+        .updateTable('phone_work')
+        .set({ lease_expires_at: sql<Date>`now() + interval '10 minutes'` })
+        .where('account_id', '=', accountId)
+        .execute();
+      expect(await subscription.wait(300)).toBe('timeout');
+      subscription.cancel();
+      started = Date.now();
+      const released = waitForPhoneWork(deps, db, device, { maxMs: 15_000 });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      // The app stopped (it names no runs): the claim ends, and the work is claimable again.
+      await claimPhoneRun(phone, db, {
+        accountId,
+        deviceId,
+        runtimeVersion: PHONE_RUNTIME_VERSION,
+        running: [crypto.randomUUID()],
+      });
+      expect(await released).toBe(true);
+      expect(Date.now() - started).toBeLessThan(2_000);
+    } finally {
+      await listening.close();
+    }
+
+    // Without signals the wait still looks every PHONE_IDLE_CLAIM_SECONDS: due work ends it.
+    started = Date.now();
+    expect(await waitForPhoneWork({}, db, device, { maxMs: 15_000 })).toBe(true);
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 
   it('stops at a check nobody can complete now, keeps the session, and retries', async () => {
@@ -806,6 +877,116 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     expect((await jobOf(backoff))?.run_at.getTime()).toBeLessThanOrEqual(Date.now());
     await step(backoff);
     expect((await claim(true))?.operationId).toBe(backoff.id);
+  });
+
+  /** An import of the seller's Depop listings, its first page waiting for the phone. */
+  async function startImport(): Promise<string> {
+    const { id } = await db
+      .insertInto('listing_import')
+      .values({
+        account_id: accountId,
+        connection_id: connectionId,
+        marketplace: 'depop',
+        host: 'phone',
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await queueImportPage(db, { accountId, importId: id, connectionId, marketplace: 'depop' });
+    return id;
+  }
+
+  it("reads an import's pages on the phone one session each, read-only, with each listing's details", async () => {
+    // The linked session's own check runs first.
+    await runPhone();
+    for (const number of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) {
+      site.seed({
+        seller,
+        description: `Listing ${String(number)}.`,
+        priceCents: 1000 + number,
+        photos: [`photo-${String(number)}.jpg`],
+      });
+    }
+    const importId = await startImport();
+    const before = site.requests.length;
+    expect(await runPhone()).toBe(2);
+    const read = await db
+      .selectFrom('listing_import')
+      .selectAll()
+      .where('id', '=', importId)
+      .executeTakeFirstOrThrow();
+    // The scarf the seller had and the eleven new ones, over two pages of ten.
+    expect(read).toMatchObject({
+      status: 'importing',
+      pages_read: 2,
+      listings_read: 12,
+      error_code: null,
+    });
+    const entries = await db
+      .selectFrom('listing_import_entry')
+      .select(['external_listing_id', 'listing'])
+      .where('import_id', '=', importId)
+      .execute();
+    expect(entries).toHaveLength(12);
+    const first = entries.find((entry) => entry.external_listing_id.includes('listing-1-'));
+    expect(first?.listing).toMatchObject({
+      status: 'active',
+      description: 'Listing 1.',
+      priceCents: 1001,
+      details: { photoUrls: [`${site.url}/media/photo-1.jpg`], size: 'M' },
+    });
+    // Nothing on Depop changed, and the worker is asked to settle what was read.
+    expect(site.requests.slice(before).filter((request) => request.method !== 'GET')).toEqual([]);
+    const runs = await db
+      .selectFrom('automation_run')
+      .select(['purpose', 'host', 'outcome'])
+      .where('account_id', '=', accountId)
+      .where('purpose', '=', 'import')
+      .execute();
+    expect(runs).toEqual([
+      { purpose: 'import', host: 'phone', outcome: 'succeeded' },
+      { purpose: 'import', host: 'phone', outcome: 'succeeded' },
+    ]);
+    const { rows } = await sql<{ task_identifier: string }>`
+      select task_identifier from graphile_worker.jobs where key = ${`listing-import-apply:${importId}`}
+    `.execute(db);
+    expect(rows.map((row) => row.task_identifier)).toEqual([LISTING_IMPORT_APPLY_TASK]);
+  });
+
+  it('stops reading at a check the seller is not there to complete, or a sign-in they declined, with the reason', async () => {
+    await runPhone();
+    const importOf = (id: string) =>
+      db.selectFrom('listing_import').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+    const checked = await startImport();
+    site.inject({ action: 'listings', fault: { type: 'bot_check' } });
+    await runPhone();
+    expect(await importOf(checked)).toMatchObject({
+      status: 'importing',
+      listings_read: 0,
+      error_code: 'stopped_for_check',
+      error_message:
+        "Depop wants you to complete a check in Listora on your iPhone. Import again once it's done to read the rest.",
+    });
+    // Signed out, and the seller won't sign in again now: the connection waits for a relink.
+    await db
+      .updateTable('listing_import')
+      .set({ status: 'finished', finished_at: new Date() })
+      .where('id', '=', checked)
+      .execute();
+    const signedOut = await startImport();
+    site.inject({ action: 'health', fault: { type: 'session_expired' } });
+    await runPhone(['declined']);
+    // The sign-in the seller declined discarded the session, so the import has none to go on.
+    expect(await importOf(signedOut)).toMatchObject({
+      status: 'importing',
+      error_code: 'no_session',
+      error_message: 'Link Depop again in Listora to finish the import.',
+    });
+    const connection = await db
+      .selectFrom('marketplace_connection')
+      .select('status')
+      .where('id', '=', connectionId)
+      .executeTakeFirstOrThrow();
+    expect(connection.status).toBe('reauth_required');
   });
 
   it("reads a sale's shipping label on the phone for Pack check, read-only, and records it", async () => {

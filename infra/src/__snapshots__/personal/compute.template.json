@@ -45,7 +45,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "apptaskTaskRoleDefaultPolicyFAF2B7B8": {
@@ -94,8 +95,12 @@
             },
             {
               "Action": [
+                "cognito-idp:AdminCreateUser",
                 "cognito-idp:AdminDeleteUser",
-                "cognito-idp:AdminGetUser"
+                "cognito-idp:AdminDisableUser",
+                "cognito-idp:AdminEnableUser",
+                "cognito-idp:AdminGetUser",
+                "cognito-idp:AdminUserGlobalSignOut"
               ],
               "Effect": "Allow",
               "Resource": {
@@ -243,6 +248,18 @@
                     "OutputName": "PublishOutputRefUserPoolIPhoneApp88BB6ABF22F930E1"
                   }
                 }
+              },
+              {
+                "Name": "SIGN_UP",
+                "Value": "invite"
+              },
+              {
+                "Name": "SIGN_UP_OWNER_EMAIL",
+                "Value": "owner@example.com"
+              },
+              {
+                "Name": "INVITE_EMAIL_VERIFICATION",
+                "Value": "none"
               },
               {
                 "Name": "DATABASE_URL",
@@ -694,7 +711,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "apptaskExecutionRoleDefaultPolicyE842FDE0": {
@@ -928,7 +946,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "runnertaskTaskRoleDefaultPolicy43ED643D": {
@@ -1245,7 +1264,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "runnertaskExecutionRoleDefaultPolicyEBAA887F": {

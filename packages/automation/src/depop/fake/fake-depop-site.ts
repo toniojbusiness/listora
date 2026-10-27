@@ -32,6 +32,7 @@
  *                                      them; a receipt's own fields are Listora's assumption until a
  *                                      real sale shows them (depop/pages/receipts.ts)
  *   GET  /photos/<name>.jpg            a photo, standing in for Listora's image CDN (no session)
+ *   GET  /media/<name>.jpg             a listing's photo on Depop's own image CDN (no session)
  *
  * Every page except the login pages and photos needs the session cookie; without a valid one it
  * redirects to the login page. Depop usernames are letters, numbers, periods, and underscores,
@@ -58,6 +59,7 @@ import {
   type Reply,
   type SubmittedForm,
 } from '../../fake-site/http.ts';
+import { FAKE_MEDIA_PATH, fakeMediaName, fakeMediaPhoto } from '../../fake-photos/fake-photos.ts';
 import { DEPOP_CONDITION_LABELS } from '../conditions.ts';
 import { DEPOP_SLUG } from '../site.ts';
 import {
@@ -495,6 +497,15 @@ export class FakeDepopSite {
       response.end(PHOTO_BYTES);
       return;
     }
+    const media = FAKE_MEDIA_PATH.exec(url.pathname)?.[1];
+    if (media !== undefined) {
+      record.status = 200;
+      void fakeMediaPhoto(media).then((photo) => {
+        response.writeHead(200, { 'content-type': 'image/jpeg' });
+        response.end(photo);
+      });
+      return;
+    }
 
     const route = matchRoute(method, url.pathname);
     record.action = route?.action ?? null;
@@ -687,7 +698,7 @@ export class FakeDepopSite {
             fault?.type === 'stale_read' && stored.previous !== null
               ? stored.previous
               : stored.current;
-          return json(200, editListingData(shown, stored.id));
+          return json(200, editListingData(shown, stored.id, this.url));
         }
         if (stored === undefined) return notFound();
         if (stored.gone) return { status: 410, body: gonePage() };
@@ -734,10 +745,7 @@ export class FakeDepopSite {
               stored.current.status === 'SOLD' &&
               stored.purchaseId !== null,
           )
-          .sort(
-            (a, b) =>
-              (b.current.soldAt?.getTime() ?? 0) - (a.current.soldAt?.getTime() ?? 0),
-          )
+          .sort((a, b) => (b.current.soldAt?.getTime() ?? 0) - (a.current.soldAt?.getTime() ?? 0))
           .map((stored) => ({
             id: stored.purchaseId,
             sold_time: (stored.current.soldAt ?? stored.current.updatedAt).toISOString(),
@@ -1019,8 +1027,16 @@ function shopProductData(product: FakeDepopProduct, id: number): Record<string, 
   };
 }
 
-/** The seller's own product as the edit page loads it from the API (pages/api.ts). */
-function editListingData(product: FakeDepopProduct, id: number): Record<string, unknown> {
+/**
+ * The seller's own product as the edit page loads it from the API (pages/api.ts), with its
+ * photos as Listora's import reads them (pages/listing-details.ts): each picture's sizes, the
+ * images served from the fake's own image CDN (`/media/`, fake-photos.ts).
+ */
+function editListingData(
+  product: FakeDepopProduct,
+  id: number,
+  origin: string,
+): Record<string, unknown> {
   const amount = priceAmount(product.priceCents);
   return {
     id,
@@ -1042,6 +1058,20 @@ function editListingData(product: FakeDepopProduct, id: number): Record<string, 
     condition: product.condition,
     colour: product.colours.map((colour) => colour.toLowerCase()),
     brand: product.brand,
+    pictures: product.photos.map((name, index) => [
+      {
+        id: index * 2,
+        width: 320,
+        height: 320,
+        url: `${origin}/media/${fakeMediaName(name)}-s.jpg`,
+      },
+      {
+        id: index * 2 + 1,
+        width: 1280,
+        height: 1280,
+        url: `${origin}/media/${fakeMediaName(name)}.jpg`,
+      },
+    ]),
   };
 }
 

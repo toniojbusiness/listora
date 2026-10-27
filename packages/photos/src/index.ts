@@ -23,6 +23,6 @@ export type {
   PhotoProcessingDependencies,
   PhotoProcessingOutcome,
 } from './job.ts';
-export { hammingDistance, perceptualHash } from './phash.ts';
+export { hammingDistance, perceptualHash, PHASH_SAMPLE_SIZE } from './phash.ts';
 export { itemPhotoSet } from './photo-set.ts';
 export type { ItemPhotoSet } from './photo-set.ts';

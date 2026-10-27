@@ -160,9 +160,33 @@ describe('the delist SLA', () => {
       'Done (you confirmed)',
     ]);
 
-    expect(await sla()).toMatchObject({ completed: 1 });
+    const logged: Record<string, unknown>[] = [];
+    const recording = createLogger({
+      service: 'auto-delist-test',
+      level: 'info',
+      destination: {
+        write: (line: string) => logged.push(JSON.parse(line) as Record<string, unknown>),
+      },
+    });
+    expect(await runDelistSla({ db: harness.db, logger: recording })).toMatchObject({
+      completed: 1,
+    });
     expect(await stored(runId)).toMatchObject({ status: 'completed' });
-    expect((await stored(runId)).completed_at).toBeInstanceOf(Date);
+    const completedAt = (await stored(runId)).completed_at;
+    expect(completedAt).toBeInstanceOf(Date);
+    // How long the sale took to be delisted everywhere, from its record to the last confirmation.
+    const record = logged.find((entry) => entry['event'] === 'delist_run_completed');
+    expect(record).toMatchObject({
+      delistRunId: runId,
+      soldOn: 'ebay',
+      results: [
+        expect.objectContaining({ marketplace: 'mercari', state: 'user_confirmed' }),
+        expect.objectContaining({ marketplace: 'poshmark', state: 'user_confirmed' }),
+      ],
+    });
+    // The sale was 45 minutes ago, and the seller confirmed both just now.
+    expect(record?.['delistedInMs']).toBeGreaterThanOrEqual(45 * 60_000);
+    expect(record?.['delistedInMs']).toBeLessThan(46 * 60_000);
     const { status } = await harness.db
       .selectFrom('inventory_item')
       .select('status')

@@ -359,7 +359,9 @@ extension Components {
                 ])
             }
         }
-        /// Where a field value came from.
+        /// Where a field value came from: `marketplace` is a listing Listora imported from the
+        /// seller's marketplace account.
+        ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownProvenance`.
         @frozen public enum KnownProvenance: String, Codable, Hashable, Sendable, CaseIterable {
@@ -367,6 +369,7 @@ extension Components {
             case ocr = "ocr"
             case barcode = "barcode"
             case user = "user"
+            case marketplace = "marketplace"
         }
         /// The body of every error response.
         ///
@@ -7149,7 +7152,8 @@ extension Components {
         /// `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
         /// or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
         /// a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
-        /// history, which changes nothing. `label_read`: a read-only read of the shipping labels of
+        /// history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
+        /// listings for sale, for an import. `label_read`: a read-only read of the shipping labels of
         /// orders that still need a package, for Pack check.
         ///
         ///
@@ -7159,6 +7163,7 @@ extension Components {
             case sessionCheck = "session_check"
             case saleCheck = "sale_check"
             case saleHistory = "sale_history"
+            case listingImport = "listing_import"
             case labelRead = "label_read"
         }
         /// - Remark: Generated from `#/components/schemas/PhoneRunClaim`.
@@ -7229,6 +7234,25 @@ extension Components {
                     "running",
                     "appOpen"
                 ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PhoneWorkWaitResult`.
+        public struct PhoneWorkWaitResult: Codable, Hashable, Sendable {
+            /// `true` when work for this phone may be claimable now (claim it), `false` when the wait
+            /// ran out with none (wait again, or claim as usual).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneWorkWaitResult/ready`.
+            public var ready: Swift.Bool
+            /// Creates a new `PhoneWorkWaitResult`.
+            ///
+            /// - Parameters:
+            ///   - ready: `true` when work for this phone may be claimable now (claim it), `false` when the wait
+            public init(ready: Swift.Bool) {
+                self.ready = ready
+            }
+            public enum CodingKeys: String, CodingKey {
+                case ready
             }
         }
         /// One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,
@@ -9866,6 +9890,470 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case data
                 case nextCursor
+            }
+        }
+        /// A `KnownInviteStatus`, or a status added after this client was built. Clients show
+        /// `statusDisplay` as given.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/InviteStatus`.
+        public struct InviteStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InviteStatus/value1`.
+            public var value1: Components.Schemas.KnownInviteStatus?
+            /// - Remark: Generated from `#/components/schemas/InviteStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `InviteStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownInviteStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - `open`: nobody has redeemed it yet.
+        /// - `expired`: nobody redeemed it before `expiresAt`.
+        /// - `redeemed`: the invitee entered the code and their `email`, and has not signed in yet.
+        /// - `active`: the invitee signed in; their own account exists.
+        /// - `revoked`: revoked by the account (`revokedAt`); with an `email`, that person can no
+        ///   longer sign in.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownInviteStatus`.
+        @frozen public enum KnownInviteStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case open = "open"
+            case expired = "expired"
+            case redeemed = "redeemed"
+            case active = "active"
+            case revoked = "revoked"
+        }
+        /// A `KnownInviteAction`, or an action added after this client was built (hide it).
+        ///
+        /// - Remark: Generated from `#/components/schemas/InviteAction`.
+        public struct InviteAction: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InviteAction/value1`.
+            public var value1: Components.Schemas.KnownInviteAction?
+            /// - Remark: Generated from `#/components/schemas/InviteAction/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `InviteAction`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownInviteAction? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - `revoke`: `revokeInvite`.
+        /// - `restore`: `restoreInvite`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownInviteAction`.
+        @frozen public enum KnownInviteAction: String, Codable, Hashable, Sendable, CaseIterable {
+            case revoke = "revoke"
+            case restore = "restore"
+        }
+        /// One invite of the account, and the person who joined through it. The code itself is never
+        /// shown again after `createInvite`; `codeHint` (its last four characters) tells invites apart.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/Invite`.
+        public struct Invite: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Invite/id`.
+            public var id: Components.Schemas.Id
+            /// Who it is for, as the inviter wrote it, for example "Maria".
+            ///
+            /// - Remark: Generated from `#/components/schemas/Invite/label`.
+            public var label: Swift.String?
+            /// The code's last four characters.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Invite/codeHint`.
+            public var codeHint: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Invite/status`.
+            public var status: Components.Schemas.InviteStatus
+            /// - Remark: Generated from `#/components/schemas/Invite/statusDisplay`.
+            public var statusDisplay: Components.Schemas.StatusDisplay
+            /// The invitee's email, once they redeemed it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Invite/email`.
+            public var email: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Invite/expiresAt`.
+            public var expiresAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Invite/redeemedAt`.
+            public var redeemedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Invite/joinedAt`.
+            public var joinedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Invite/revokedAt`.
+            public var revokedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/Invite/availableActions`.
+            public var availableActions: [Components.Schemas.InviteAction]
+            /// - Remark: Generated from `#/components/schemas/Invite/createdAt`.
+            public var createdAt: Components.Schemas.Timestamp
+            /// Creates a new `Invite`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - label: Who it is for, as the inviter wrote it, for example "Maria".
+            ///   - codeHint: The code's last four characters.
+            ///   - status:
+            ///   - statusDisplay:
+            ///   - email: The invitee's email, once they redeemed it.
+            ///   - expiresAt:
+            ///   - redeemedAt:
+            ///   - joinedAt:
+            ///   - revokedAt:
+            ///   - availableActions:
+            ///   - createdAt:
+            public init(
+                id: Components.Schemas.Id,
+                label: Swift.String? = nil,
+                codeHint: Swift.String,
+                status: Components.Schemas.InviteStatus,
+                statusDisplay: Components.Schemas.StatusDisplay,
+                email: Swift.String? = nil,
+                expiresAt: Components.Schemas.Timestamp? = nil,
+                redeemedAt: Components.Schemas.Timestamp? = nil,
+                joinedAt: Components.Schemas.Timestamp? = nil,
+                revokedAt: Components.Schemas.Timestamp? = nil,
+                availableActions: [Components.Schemas.InviteAction],
+                createdAt: Components.Schemas.Timestamp
+            ) {
+                self.id = id
+                self.label = label
+                self.codeHint = codeHint
+                self.status = status
+                self.statusDisplay = statusDisplay
+                self.email = email
+                self.expiresAt = expiresAt
+                self.redeemedAt = redeemedAt
+                self.joinedAt = joinedAt
+                self.revokedAt = revokedAt
+                self.availableActions = availableActions
+                self.createdAt = createdAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case label
+                case codeHint
+                case status
+                case statusDisplay
+                case email
+                case expiresAt
+                case redeemedAt
+                case joinedAt
+                case revokedAt
+                case availableActions
+                case createdAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/InviteList`.
+        public struct InviteList: Codable, Hashable, Sendable {
+            /// Whether this account may create invites.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteList/canInvite`.
+            public var canInvite: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/InviteList/data`.
+            public var data: [Components.Schemas.Invite]
+            /// Creates a new `InviteList`.
+            ///
+            /// - Parameters:
+            ///   - canInvite: Whether this account may create invites.
+            ///   - data:
+            public init(
+                canInvite: Swift.Bool,
+                data: [Components.Schemas.Invite]
+            ) {
+                self.canInvite = canInvite
+                self.data = data
+            }
+            public enum CodingKeys: String, CodingKey {
+                case canInvite
+                case data
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/InviteCreate`.
+        public struct InviteCreate: Codable, Hashable, Sendable {
+            /// Who it is for, to tell invites apart.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteCreate/label`.
+            public var label: Swift.String?
+            /// Days until an unredeemed invite stops working; absent means it never expires.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteCreate/expiresInDays`.
+            public var expiresInDays: Swift.Int32?
+            /// Creates a new `InviteCreate`.
+            ///
+            /// - Parameters:
+            ///   - label: Who it is for, to tell invites apart.
+            ///   - expiresInDays: Days until an unredeemed invite stops working; absent means it never expires.
+            public init(
+                label: Swift.String? = nil,
+                expiresInDays: Swift.Int32? = nil
+            ) {
+                self.label = label
+                self.expiresInDays = expiresInDays
+            }
+            public enum CodingKeys: String, CodingKey {
+                case label
+                case expiresInDays
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.label = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .label
+                )
+                self.expiresInDays = try container.decodeIfPresent(
+                    Swift.Int32.self,
+                    forKey: .expiresInDays
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "label",
+                    "expiresInDays"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CreatedInvite`.
+        public struct CreatedInvite: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CreatedInvite/invite`.
+            public var invite: Components.Schemas.Invite
+            /// The one-time code, for example `K7QD-3M9P-XW2T-H8RA`, shown only in this answer.
+            /// Anyone with it can redeem the invite until it is used, so share it with that person only.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreatedInvite/code`.
+            public var code: Swift.String
+            /// Opens the app's sign-up with the code filled in (`listora://invite/<code>`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreatedInvite/link`.
+            public var link: Swift.String
+            /// A message to share with the invitee, with the code and how to use it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreatedInvite/message`.
+            public var message: Swift.String
+            /// Creates a new `CreatedInvite`.
+            ///
+            /// - Parameters:
+            ///   - invite:
+            ///   - code: The one-time code, for example `K7QD-3M9P-XW2T-H8RA`, shown only in this answer.
+            ///   - link: Opens the app's sign-up with the code filled in (`listora://invite/<code>`).
+            ///   - message: A message to share with the invitee, with the code and how to use it.
+            public init(
+                invite: Components.Schemas.Invite,
+                code: Swift.String,
+                link: Swift.String,
+                message: Swift.String
+            ) {
+                self.invite = invite
+                self.code = code
+                self.link = link
+                self.message = message
+            }
+            public enum CodingKeys: String, CodingKey {
+                case invite
+                case code
+                case link
+                case message
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/InviteRedeem`.
+        public struct InviteRedeem: Codable, Hashable, Sendable {
+            /// The code as typed; case, spaces, and dashes do not matter.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteRedeem/code`.
+            public var code: Swift.String
+            /// The invitee's own email, which they sign in with.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteRedeem/email`.
+            public var email: Swift.String
+            /// Creates a new `InviteRedeem`.
+            ///
+            /// - Parameters:
+            ///   - code: The code as typed; case, spaces, and dashes do not matter.
+            ///   - email: The invitee's own email, which they sign in with.
+            public init(
+                code: Swift.String,
+                email: Swift.String
+            ) {
+                self.code = code
+                self.email = email
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case email
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.code = try container.decode(
+                    Swift.String.self,
+                    forKey: .code
+                )
+                self.email = try container.decode(
+                    Swift.String.self,
+                    forKey: .email
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "code",
+                    "email"
+                ])
+            }
+        }
+        /// A `KnownInviteRedemptionStatus`, or one added after this client was built (show `message`
+        /// and let the person redeem again).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/InviteRedemptionStatus`.
+        public struct InviteRedemptionStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/InviteRedemptionStatus/value1`.
+            public var value1: Components.Schemas.KnownInviteRedemptionStatus?
+            /// - Remark: Generated from `#/components/schemas/InviteRedemptionStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `InviteRedemptionStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownInviteRedemptionStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// - `ready`: sign in with `email` now; the one-time code is emailed there.
+        /// - `email_verification_sent`: the sign-in codes cannot reach `email` yet. A verification
+        ///   email from Amazon Web Services was sent there: open its link, then redeem again.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownInviteRedemptionStatus`.
+        @frozen public enum KnownInviteRedemptionStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case ready = "ready"
+            case emailVerificationSent = "email_verification_sent"
+        }
+        /// - Remark: Generated from `#/components/schemas/InviteRedemption`.
+        public struct InviteRedemption: Codable, Hashable, Sendable {
+            /// The email the invite now belongs to, lowercase; sign in with it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteRedemption/email`.
+            public var email: Swift.String
+            /// - Remark: Generated from `#/components/schemas/InviteRedemption/status`.
+            public var status: Components.Schemas.InviteRedemptionStatus
+            /// What to do next, in words to show as is.
+            ///
+            /// - Remark: Generated from `#/components/schemas/InviteRedemption/message`.
+            public var message: Swift.String
+            /// Creates a new `InviteRedemption`.
+            ///
+            /// - Parameters:
+            ///   - email: The email the invite now belongs to, lowercase; sign in with it.
+            ///   - status:
+            ///   - message: What to do next, in words to show as is.
+            public init(
+                email: Swift.String,
+                status: Components.Schemas.InviteRedemptionStatus,
+                message: Swift.String
+            ) {
+                self.email = email
+                self.status = status
+                self.message = message
+            }
+            public enum CodingKeys: String, CodingKey {
+                case email
+                case status
+                case message
             }
         }
         /// A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show
@@ -12698,6 +13186,514 @@ extension Components {
                 case lastSucceededAt
                 case nextCheckAt
                 case lastError
+            }
+        }
+        /// A `KnownListingImportStatus`, or a status added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ListingImportStatus`.
+        public struct ListingImportStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportStatus/value1`.
+            public var value1: Components.Schemas.KnownListingImportStatus?
+            /// - Remark: Generated from `#/components/schemas/ListingImportStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ListingImportStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownListingImportStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `reading`: pages of the seller's listings are still being read. `importing`: reading is
+        /// over and listings are still being turned into items. `finished`: every listing is settled
+        /// (some may wait for the seller's answer).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownListingImportStatus`.
+        @frozen public enum KnownListingImportStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case reading = "reading"
+            case importing = "importing"
+            case finished = "finished"
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportCounts`.
+        public struct ListingImportCounts: Codable, Hashable, Sendable {
+            /// Listings for sale the import read.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/read`.
+            public var read: Swift.Int32
+            /// New items, each already listed on the marketplace.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/imported`.
+            public var imported: Swift.Int32
+            /// Listings added to an item Listora already had.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/merged`.
+            public var merged: Swift.Int32
+            /// Listings Listora already had.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/alreadyListed`.
+            public var alreadyListed: Swift.Int32
+            /// Questions waiting for the seller.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/needsYou`.
+            public var needsYou: Swift.Int32
+            /// Listings that could not be imported (importing again tries them again).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCounts/failed`.
+            public var failed: Swift.Int32
+            /// Creates a new `ListingImportCounts`.
+            ///
+            /// - Parameters:
+            ///   - read: Listings for sale the import read.
+            ///   - imported: New items, each already listed on the marketplace.
+            ///   - merged: Listings added to an item Listora already had.
+            ///   - alreadyListed: Listings Listora already had.
+            ///   - needsYou: Questions waiting for the seller.
+            ///   - failed: Listings that could not be imported (importing again tries them again).
+            public init(
+                read: Swift.Int32,
+                imported: Swift.Int32,
+                merged: Swift.Int32,
+                alreadyListed: Swift.Int32,
+                needsYou: Swift.Int32,
+                failed: Swift.Int32
+            ) {
+                self.read = read
+                self.imported = imported
+                self.merged = merged
+                self.alreadyListed = alreadyListed
+                self.needsYou = needsYou
+                self.failed = failed
+            }
+            public enum CodingKeys: String, CodingKey {
+                case read
+                case imported
+                case merged
+                case alreadyListed
+                case needsYou
+                case failed
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImport`.
+        public struct ListingImport: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImport/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ListingImport/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/ListingImport/status`.
+            public var status: Components.Schemas.ListingImportStatus
+            /// - Remark: Generated from `#/components/schemas/ListingImport/runsOn`.
+            public var runsOn: Components.Schemas.ExecutionLocation
+            /// - Remark: Generated from `#/components/schemas/ListingImport/counts`.
+            public var counts: Components.Schemas.ListingImportCounts
+            /// Where it is, in the seller's words ("Reading your Depop listings on your iPhone... 48 so far").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImport/progress`.
+            public var progress: Swift.String
+            /// What it did once reading is over ("Imported 42 from Depop, 3 need you").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImport/summary`.
+            public var summary: Swift.String?
+            /// Why reading stopped before the last page; the listings read before it still import.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImport/stoppedReason`.
+            public var stoppedReason: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImport/startedAt`.
+            public var startedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/ListingImport/finishedAt`.
+            public var finishedAt: Components.Schemas.Timestamp?
+            /// Creates a new `ListingImport`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - marketplace:
+            ///   - status:
+            ///   - runsOn:
+            ///   - counts:
+            ///   - progress: Where it is, in the seller's words ("Reading your Depop listings on your iPhone... 48 so far").
+            ///   - summary: What it did once reading is over ("Imported 42 from Depop, 3 need you").
+            ///   - stoppedReason: Why reading stopped before the last page; the listings read before it still import.
+            ///   - startedAt:
+            ///   - finishedAt:
+            public init(
+                id: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                status: Components.Schemas.ListingImportStatus,
+                runsOn: Components.Schemas.ExecutionLocation,
+                counts: Components.Schemas.ListingImportCounts,
+                progress: Swift.String,
+                summary: Swift.String? = nil,
+                stoppedReason: Swift.String? = nil,
+                startedAt: Components.Schemas.Timestamp,
+                finishedAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.id = id
+                self.marketplace = marketplace
+                self.status = status
+                self.runsOn = runsOn
+                self.counts = counts
+                self.progress = progress
+                self.summary = summary
+                self.stoppedReason = stoppedReason
+                self.startedAt = startedAt
+                self.finishedAt = finishedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case marketplace
+                case status
+                case runsOn
+                case counts
+                case progress
+                case summary
+                case stoppedReason
+                case startedAt
+                case finishedAt
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportMarketplace`.
+        public struct ListingImportMarketplace: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportMarketplace/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// Whether an import can start now.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportMarketplace/canStart`.
+            public var canStart: Swift.Bool
+            /// Why not, in the seller's words, when it can't.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportMarketplace/unavailableReason`.
+            public var unavailableReason: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImportMarketplace/latest`.
+            public var latest: Components.Schemas.ListingImport?
+            /// Creates a new `ListingImportMarketplace`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - canStart: Whether an import can start now.
+            ///   - unavailableReason: Why not, in the seller's words, when it can't.
+            ///   - latest:
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                canStart: Swift.Bool,
+                unavailableReason: Swift.String? = nil,
+                latest: Components.Schemas.ListingImport? = nil
+            ) {
+                self.marketplace = marketplace
+                self.canStart = canStart
+                self.unavailableReason = unavailableReason
+                self.latest = latest
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case canStart
+                case unavailableReason
+                case latest
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImports`.
+        public struct ListingImports: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImports/marketplaces`.
+            public var marketplaces: [Components.Schemas.ListingImportMarketplace]
+            /// Creates a new `ListingImports`.
+            ///
+            /// - Parameters:
+            ///   - marketplaces:
+            public init(marketplaces: [Components.Schemas.ListingImportMarketplace]) {
+                self.marketplaces = marketplaces
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplaces
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportStart`.
+        public struct ListingImportStart: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportStart/marketplace`.
+            public var marketplace: Components.Schemas.KnownMarketplace
+            /// Creates a new `ListingImportStart`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            public init(marketplace: Components.Schemas.KnownMarketplace) {
+                self.marketplace = marketplace
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.marketplace = try container.decode(
+                    Components.Schemas.KnownMarketplace.self,
+                    forKey: .marketplace
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "marketplace"
+                ])
+            }
+        }
+        /// A `KnownImportMatchReason`, or a reason added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ImportMatchReason`.
+        public struct ImportMatchReason: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ImportMatchReason/value1`.
+            public var value1: Components.Schemas.KnownImportMatchReason?
+            /// - Remark: Generated from `#/components/schemas/ImportMatchReason/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ImportMatchReason`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownImportMatchReason? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Why the listing may be this item: `sku` (its SKU line names it), `photo_and_title`, `photo`
+        /// (a photo alike), or `title` (the title alike).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownImportMatchReason`.
+        @frozen public enum KnownImportMatchReason: String, Codable, Hashable, Sendable, CaseIterable {
+            case sku = "sku"
+            case photoAndTitle = "photo_and_title"
+            case photo = "photo"
+            case title = "title"
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportCandidate`.
+        public struct ListingImportCandidate: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/sku`.
+            public var sku: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/title`.
+            public var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/coverPhotoUrl`.
+            public var coverPhotoUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/reason`.
+            public var reason: Components.Schemas.ImportMatchReason
+            /// The reason in the seller's words ("A photo looks the same").
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportCandidate/why`.
+            public var why: Swift.String
+            /// Creates a new `ListingImportCandidate`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - sku:
+            ///   - title:
+            ///   - coverPhotoUrl:
+            ///   - reason:
+            ///   - why: The reason in the seller's words ("A photo looks the same").
+            public init(
+                itemId: Components.Schemas.Id,
+                sku: Swift.String,
+                title: Swift.String? = nil,
+                coverPhotoUrl: Swift.String? = nil,
+                reason: Components.Schemas.ImportMatchReason,
+                why: Swift.String
+            ) {
+                self.itemId = itemId
+                self.sku = sku
+                self.title = title
+                self.coverPhotoUrl = coverPhotoUrl
+                self.reason = reason
+                self.why = why
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case sku
+                case title
+                case coverPhotoUrl
+                case reason
+                case why
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportQuestion`.
+        public struct ListingImportQuestion: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/externalListingId`.
+            public var externalListingId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/externalUrl`.
+            public var externalUrl: Swift.String?
+            /// The listing's title (on Depop, the first line of its text).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/title`.
+            public var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/price`.
+            public var price: Components.Schemas.Money?
+            /// The listing's cover photo, on the marketplace's own image CDN.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/photoUrl`.
+            public var photoUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestion/candidates`.
+            public var candidates: [Components.Schemas.ListingImportCandidate]
+            /// Creates a new `ListingImportQuestion`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - marketplace:
+            ///   - externalListingId:
+            ///   - externalUrl:
+            ///   - title: The listing's title (on Depop, the first line of its text).
+            ///   - price:
+            ///   - photoUrl: The listing's cover photo, on the marketplace's own image CDN.
+            ///   - candidates:
+            public init(
+                id: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                externalListingId: Swift.String,
+                externalUrl: Swift.String? = nil,
+                title: Swift.String? = nil,
+                price: Components.Schemas.Money? = nil,
+                photoUrl: Swift.String? = nil,
+                candidates: [Components.Schemas.ListingImportCandidate]
+            ) {
+                self.id = id
+                self.marketplace = marketplace
+                self.externalListingId = externalListingId
+                self.externalUrl = externalUrl
+                self.title = title
+                self.price = price
+                self.photoUrl = photoUrl
+                self.candidates = candidates
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case marketplace
+                case externalListingId
+                case externalUrl
+                case title
+                case price
+                case photoUrl
+                case candidates
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportQuestions`.
+        public struct ListingImportQuestions: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportQuestions/questions`.
+            public var questions: [Components.Schemas.ListingImportQuestion]
+            /// Creates a new `ListingImportQuestions`.
+            ///
+            /// - Parameters:
+            ///   - questions:
+            public init(questions: [Components.Schemas.ListingImportQuestion]) {
+                self.questions = questions
+            }
+            public enum CodingKeys: String, CodingKey {
+                case questions
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ImportAnswerKind`.
+        @frozen public enum ImportAnswerKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case sameItem = "same_item"
+            case newItem = "new_item"
+            case skip = "skip"
+        }
+        /// - Remark: Generated from `#/components/schemas/ListingImportAnswer`.
+        public struct ListingImportAnswer: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ListingImportAnswer/answer`.
+            public var answer: Components.Schemas.ImportAnswerKind
+            /// For `same_item`, the candidate it is.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ListingImportAnswer/itemId`.
+            public var itemId: Components.Schemas.Id?
+            /// Creates a new `ListingImportAnswer`.
+            ///
+            /// - Parameters:
+            ///   - answer:
+            ///   - itemId: For `same_item`, the candidate it is.
+            public init(
+                answer: Components.Schemas.ImportAnswerKind,
+                itemId: Components.Schemas.Id? = nil
+            ) {
+                self.answer = answer
+                self.itemId = itemId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case answer
+                case itemId
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.answer = try container.decode(
+                    Components.Schemas.ImportAnswerKind.self,
+                    forKey: .answer
+                )
+                self.itemId = try container.decodeIfPresent(
+                    Components.Schemas.Id.self,
+                    forKey: .itemId
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "answer",
+                    "itemId"
+                ])
             }
         }
     }

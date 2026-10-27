@@ -33,8 +33,8 @@ import {
   type MarketplaceCapabilities,
   type OperationRequest,
   type Outcome,
+  type ListingsPage,
   type RemoteListingState,
-  type RemoteListings,
   type RemoteOrder,
   type RemoteOrderLabel,
   type ValidationIssue,
@@ -288,20 +288,20 @@ export class AutomationAdapter<
     return this.#readValue(run, 'read your shipping labels');
   }
 
-  async listListings(ctx: AdapterContext): Promise<RemoteListings> {
+  async listListings(cursor: string | null, ctx: AdapterContext): Promise<ListingsPage> {
     if (this.#options.scripts.listings === undefined) {
       throw new Error(`Listora doesn't list ${this.#name} listings`);
     }
     const connection = this.#connection(ctx);
-    const run = await this.#use<RemoteListings>(
+    const run = await this.#use<ListingsPage>(
       connection,
-      'operation',
+      'import',
       null,
       'list listings',
-      { script: 'listings' },
+      { script: 'listings', cursor },
       ctx.signal,
     );
-    return this.#readValue(run, 'list your listings');
+    return this.#readValue(run, 'read your listings');
   }
 
   #writeOutcome(op: OperationRequest<P>, run: SessionRun<WriteResult>): Promise<Outcome> | Outcome {

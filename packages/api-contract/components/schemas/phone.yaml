@@ -124,9 +124,10 @@ KnownPhoneWorkPurpose:
     `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
     or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
     a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
-    history, which changes nothing. `label_read`: a read-only read of the shipping labels of
+    history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
+    listings for sale, for an import. `label_read`: a read-only read of the shipping labels of
     orders that still need a package, for Pack check.
-  enum: [operation, session_check, sale_check, sale_history, label_read]
+  enum: [operation, session_check, sale_check, sale_history, listing_import, label_read]
 PhoneRunClaim:
   type: object
   additionalProperties: false
@@ -153,6 +154,15 @@ PhoneRunClaim:
         (each once its last step is a few seconds behind, as Try now runs it), except a wait the
         marketplace or Listora's pacing asked for, and a claim that finds nothing says to look
         again within seconds.
+PhoneWorkWaitResult:
+  type: object
+  required: [ready]
+  properties:
+    ready:
+      type: boolean
+      description: |
+        `true` when work for this phone may be claimable now (claim it), `false` when the wait
+        ran out with none (wait again, or claim as usual).
 PhoneCall:
   type: object
   description: |

@@ -167,13 +167,18 @@ describe('operations', () => {
     expect(doc.components.parameters['IdempotencyKey']?.required).toBe(true);
   });
 
-  it('require bearer auth on /v1 except the browser OAuth callback', () => {
+  it('require bearer auth on /v1 except the browser OAuth callback and invite redemption', () => {
     expect(doc.security).toEqual([{ bearerAuth: [] }]);
     const unauthenticated = operations
       .filter(({ op }) => op.security?.length === 0)
       .map(({ op }) => op.operationId)
       .sort();
-    expect(unauthenticated).toEqual(['getLiveness', 'getReadiness', 'handleConnectionCallback']);
+    expect(unauthenticated).toEqual([
+      'getLiveness',
+      'getReadiness',
+      'handleConnectionCallback',
+      'redeemInvite',
+    ]);
   });
 
   it('use cursor pagination for every page response', () => {
@@ -469,7 +474,7 @@ describe('vocabulary', () => {
     ['KnownSaleStatus', ['detected', 'confirmed', 'shipped', 'canceled', 'returned']],
     ['KnownRelistDecision', ['pending', 'relisted', 'declined']],
     ['KnownSaleDetectionSource', ['webhook', 'poll', 'email', 'manual']],
-    ['KnownProvenance', ['ai', 'ocr', 'barcode', 'user']],
+    ['KnownProvenance', ['ai', 'ocr', 'barcode', 'user', 'marketplace']],
     ['PhotoRole', ['front', 'back', 'tag', 'flaw', 'detail']],
     ['KnownFeeType', ['marketplace', 'payment', 'shipping_label', 'promotion', 'tax', 'other']],
   ])('%s matches the data model', (name, expected) => {

@@ -36,6 +36,8 @@ public final class SalesEnvironment {
     let onSignIn: @MainActor () -> Void
     /// Pack check's to-ship list, while Pack check is on.
     let packOrders: PackOrdersEntry?
+    /// The work this iPhone runs now, which a sale's delists show while the phone works on them.
+    public weak var phoneProgress: (any PhoneWorkProgressSource)?
 
     /// `phoneWork` runs at once the marketplace changes a sale queued for this phone.
     public convenience init(
