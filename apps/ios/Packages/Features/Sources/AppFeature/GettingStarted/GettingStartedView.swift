@@ -43,6 +43,9 @@ struct GettingStartedView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
+                Wordmark(size: 28)
+                    .padding(.leading, Spacing.sm)
+                    .accessibilityIdentifier("gettingStarted.wordmark")
                 Spacer()
                 Button("Skip", action: onSkip)
                     .buttonStyle(.listora(.tertiary, size: .compact))

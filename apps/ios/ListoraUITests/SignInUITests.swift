@@ -44,7 +44,7 @@ final class SignInUITests: XCTestCase {
     func testSignedOutLaunchSignsInWithACodeAndSignsOutBackToWelcome() throws {
         // The welcome screen is the root: the name, the value statement, and no tabs.
         XCTAssertTrue(welcome.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["Listora"].exists)
+        XCTAssertEqual(app.descendants(matching: .any)["signIn.wordmark"].label, "Listora")
         XCTAssertTrue(app.staticTexts["signIn.valueStatement"].exists)
         XCTAssertFalse(app.tabBars.firstMatch.exists, "the tabs show only once signed in")
         XCTAssertFalse(app.buttons["signIn.continue"].isEnabled, "Continue needs an email")

@@ -38,6 +38,16 @@ struct AppConfigurationIntegrationTests {
         let assets = try #require(Bundle.main.url(forResource: "Assets", withExtension: "car"))
         #expect(FileManager.default.fileExists(atPath: assets.path))
     }
+
+    @Test
+    func `the Share Extension has the same AppIcon icon`() throws {
+        let plugIns = try #require(Bundle.main.builtInPlugInsURL)
+        let extensionBundle = try #require(Bundle(url: plugIns.appending(path: "ShareExtension.appex")))
+        let icons = try #require(extensionBundle.object(forInfoDictionaryKey: "CFBundleIcons") as? [String: Any])
+        let primary = try #require(icons["CFBundlePrimaryIcon"] as? [String: Any])
+        #expect(primary["CFBundleIconName"] as? String == "AppIcon")
+        #expect(extensionBundle.url(forResource: "Assets", withExtension: "car") != nil)
+    }
 }
 
 /// Runs inside the app, which has the Keychain entitlement the package tests lack.

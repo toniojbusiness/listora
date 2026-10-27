@@ -58,8 +58,9 @@ private struct ListoraButtonBody: View {
             .opacity(isLoading ? 0 : 1)
             .overlay {
                 if isLoading {
-                    ProgressView()
-                        .tint(foreground.color)
+                    // The button's value already says "In progress".
+                    BrandSpinner(color: foreground)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, size == .large ? Spacing.md : Spacing.sm)

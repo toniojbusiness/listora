@@ -280,7 +280,7 @@ struct TagReadingCard: View {
         switch photo.tagReadState {
         case .pending, .notNeeded:
             HStack(spacing: Spacing.xs) {
-                ProgressView().controlSize(.small)
+                BrandSpinner().controlSize(.small)
                 Text("Reading the tag on this iPhone...")
                     .font(Typography.subheadline)
                     .foregroundStyle(Palette.textSecondary)
