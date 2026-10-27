@@ -9563,6 +9563,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			marketplace: "poshmark",
 			origins: ["https://poshmark.com", "https://www.poshmark.com"],
 			cookieDomains: ["poshmark.com"],
+			apiOrigins: [],
 			loginUrl: "https://poshmark.com/login",
 			emailsSignInLinks: false,
 			pacing: DEFAULT_PACING,
@@ -9581,6 +9582,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			marketplace: "mercari",
 			origins: ["https://www.mercari.com", "https://mercari.com"],
 			cookieDomains: ["mercari.com"],
+			apiOrigins: [],
 			loginUrl: "https://www.mercari.com/login/",
 			emailsSignInLinks: false,
 			pacing: DEFAULT_PACING,
@@ -9594,6 +9596,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			marketplace: "depop",
 			origins: ["https://www.depop.com", "https://depop.com"],
 			cookieDomains: ["depop.com"],
+			apiOrigins: [],
 			loginUrl: "https://www.depop.com/login/",
 			emailsSignInLinks: true,
 			pacing: DEFAULT_PACING,
@@ -9611,6 +9614,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				"https://signin.ebay.com"
 			],
 			cookieDomains: ["ebay.com"],
+			apiOrigins: [],
 			loginUrl: "https://signin.ebay.com/signin/",
 			emailsSignInLinks: false,
 			pacing: DEFAULT_PACING,
@@ -10349,6 +10353,12 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				sign: "earlier"
 			});
 		}
+		/** Stops the run at a problem the page's own API answered with (`PageDriver.apiGet`). */
+		stopFor(problem) {
+			this.#stoppedBy = problem;
+			if (problem.type === "challenge") this.#challenge = problem.kind;
+			throw new PageProblemError(problem);
+		}
 		/** Inspects the page; throws when it shows something the run must stop at. */
 		async inspect() {
 			this.ensureGoing();
@@ -10380,6 +10390,44 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			return new StepError("script_error", sanitizeMessage(message, this.#typed));
 		}
 	};
+	/** The most of an API answer's body a read takes (Depop's largest are about 2 MB). */
+	const API_BODY_LIMIT = 4e6;
+	/**
+	* The page script of `PageDriver.apiGet`: a GET from the page, with the site's cookie as the
+	* bearer token when one is named, returning only the status, `Retry-After`, and the body's text.
+	* Source text, so each host evaluates the same script in its own page.
+	*/
+	function apiGetScript(url, bearerCookie) {
+		return `(async () => {
+    const name = ${JSON.stringify(bearerCookie)};
+    const headers = { accept: 'application/json' };
+    if (name !== null) {
+      const pair = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(name + '='));
+      if (pair !== undefined) headers.authorization = 'Bearer ' + decodeURIComponent(pair.slice(name.length + 1));
+    }
+    const response = await fetch(${JSON.stringify(url)}, { headers, cache: 'no-store', credentials: 'omit' });
+    const text = await response.text();
+    return { status: response.status, retryAfter: response.headers.get('retry-after'), text: text.length > ${String(API_BODY_LIMIT)} ? null : text };
+  })()`;
+	}
+	function apiAnswer(answer) {
+		const read = answer;
+		if (read === null || typeof read !== "object" || typeof read.status !== "number") throw new StepError("script_error", "the marketplace's API sent no answer");
+		const retryAfter = Number(read.retryAfter);
+		return {
+			status: read.status,
+			text: typeof read.text === "string" ? read.text : null,
+			retryAfterSeconds: read.retryAfter !== null && Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter : null
+		};
+	}
+	function jsonOrNull(text) {
+		if (text === null) return null;
+		try {
+			return JSON.parse(text);
+		} catch {
+			return null;
+		}
+	}
 	/**
 	* What `inspect` reads in the page: one evaluation, bounded, returning plain data. It is source
 	* text, so each host evaluates the same script in its own page.
@@ -10508,6 +10556,33 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		}
 		pageData(name) {
 			return this.#query((backend) => backend.pageData(name));
+		}
+		async apiGet(url, options = {}) {
+			const target = URL.canParse(url) ? new URL(url) : null;
+			if (target === null || !this.#session.profile.apiOrigins.includes(target.origin)) throw new StepError("script_error", "the script asked for an API outside the marketplace's");
+			this.#active();
+			await this.#session.pacing.wait("action", this.#signal);
+			const answer = await this.#query((backend) => backend.read(apiGetScript(target.href, options.bearerCookie ?? null)));
+			this.#active();
+			const { status, text, retryAfterSeconds } = apiAnswer(answer);
+			const body = jsonOrNull(text);
+			if (status === 429) this.#session.stopFor({
+				type: "rate_limited",
+				retryAfterMs: retryAfterSeconds === null ? null : retryAfterSeconds * 1e3
+			});
+			if (status >= 500) this.#session.stopFor({
+				type: "server_error",
+				status
+			});
+			if (status === 403 && body === null) this.#session.stopFor({
+				type: "challenge",
+				kind: "bot_check",
+				sign: "api"
+			});
+			return {
+				status,
+				body
+			};
 		}
 		/** A paced action, inspected afterwards. */
 		async #act(action) {
@@ -11139,13 +11214,15 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	}
 	/**
 	* The marketplace's built-in profile (its challenge signs and private elements) with what the
-	* server configured: the site's origins and cookie domains, and the pacing, which the server
-	* never sets below `PACING_FLOOR` (settings.ts refuses it at startup).
+	* server configured: the site's origins, API origins, and cookie domains, and the pacing, which
+	* the server never sets below `PACING_FLOOR` (settings.ts refuses it at startup).
 	*/
 	function phoneProfile(input) {
+		const builtIn = automationProfile(input.scriptSet.marketplace);
 		return {
-			...automationProfile(input.scriptSet.marketplace),
+			...builtIn,
 			origins: input.origins,
+			apiOrigins: input.apiOrigins ?? builtIn.apiOrigins,
 			cookieDomains: input.cookieDomains,
 			pacing: input.pacing
 		};
