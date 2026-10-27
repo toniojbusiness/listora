@@ -41,6 +41,12 @@ export interface ItemRead {
   sku: string | null;
   /** When it last sold (`lastSoldAt`), for a listing that sold. */
   soldAt: Date | null;
+  /**
+   * The listing's record in the page's data, and the page's other records its references
+   * (`{ "__ref": "ItemDetailItemSize:4" }`) name, for what an import reads (listing-details.ts).
+   */
+  record?: Readonly<Record<string, unknown>>;
+  records?: Readonly<Record<string, unknown>>;
 }
 
 export function itemUrl(site: MercariSite, id: string): string {
@@ -137,5 +143,7 @@ export async function readShownItem(page: PageDriver, site: MercariSite): Promis
     },
     sku,
     soldAt: record.data.lastSoldAt ? new Date(record.data.lastSoldAt * 1000) : null,
+    record: raw as Record<string, unknown>,
+    records: parsed.data.props.pageProps.serverState,
   };
 }

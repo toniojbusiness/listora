@@ -12,13 +12,16 @@ import {
   createAutomationAdapters,
   HttpPhotoSource,
   isAutomatedMarketplace,
+  isListingImportJobPayload,
   isSaleCheckJobPayload,
   isSessionCheckJobPayload,
+  LISTING_IMPORT_READ_TASK,
   loadChromium,
   openRunnerPresence,
   PlaywrightBrowserRunner,
   RunnerSessions,
   runnerWorkPending,
+  runImportPage,
   runSaleCheck,
   runSessionCheck,
   SALE_CHECK_TASK,
@@ -121,6 +124,16 @@ async function run(): Promise<void> {
             return;
           }
           await runSessionCheck({ db, automation, logger }, payload, signal);
+        },
+        [LISTING_IMPORT_READ_TASK]: async (payload, signal) => {
+          if (!isListingImportJobPayload(payload)) {
+            logger.error(
+              { task: LISTING_IMPORT_READ_TASK },
+              'job with an invalid payload; dropping it',
+            );
+            return;
+          }
+          await runImportPage({ db, adapters: adapters.lookup, logger }, payload, signal);
         },
       },
       onFatalError: fatal,

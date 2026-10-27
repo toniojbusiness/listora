@@ -469,7 +469,7 @@ describe('vocabulary', () => {
     ['KnownSaleStatus', ['detected', 'confirmed', 'shipped', 'canceled', 'returned']],
     ['KnownRelistDecision', ['pending', 'relisted', 'declined']],
     ['KnownSaleDetectionSource', ['webhook', 'poll', 'email', 'manual']],
-    ['KnownProvenance', ['ai', 'ocr', 'barcode', 'user']],
+    ['KnownProvenance', ['ai', 'ocr', 'barcode', 'user', 'marketplace']],
     ['PhotoRole', ['front', 'back', 'tag', 'flaw', 'detail']],
     ['KnownFeeType', ['marketplace', 'payment', 'shipping_label', 'promotion', 'tax', 'other']],
   ])('%s matches the data model', (name, expected) => {

@@ -52,6 +52,7 @@ import {
   subcategoriesOf,
   type PoshmarkDepartment,
 } from '../catalog.ts';
+import { FAKE_MEDIA_PATH, fakeMediaName, fakeMediaPhoto } from '../../fake-photos/fake-photos.ts';
 import { MAX_POSHMARK_COLORS } from '../colors.ts';
 import { POSHMARK_CONDITIONS, type PoshmarkConditionCode } from '../conditions.ts';
 import { POSHMARK_LIMITS } from '../payload.ts';
@@ -384,6 +385,15 @@ export class FakePoshmark {
       send({ status: 200, body: page('Elsewhere', '<p>Not Poshmark.</p>', null) });
       return;
     }
+    const media = FAKE_MEDIA_PATH.exec(url.pathname)?.[1];
+    if (media !== undefined) {
+      record.status = 200;
+      void fakeMediaPhoto(media).then((photo) => {
+        response.writeHead(200, { 'content-type': 'image/jpeg' });
+        response.end(photo);
+      });
+      return;
+    }
 
     const route = matchRoute(method, url.pathname);
     record.action = route?.action ?? null;
@@ -567,7 +577,7 @@ export class FakePoshmark {
         return {
           status: 200,
           body: page(`${shown.title} | Poshmark`, listingBody(shown), seller, {
-            $_listing_details: { listingDetails: listingRecord(shown) },
+            $_listing_details: { listingDetails: listingRecord(shown, this.url) },
           }),
         };
       }
@@ -611,7 +621,7 @@ export class FakePoshmark {
           $_closet: {
             closetUserInfo: { data: { username } },
             listingsPostData: {
-              data: shown.map(listingRecord),
+              data: shown.map((listing) => listingRecord(listing, this.url)),
               more: {
                 total: all.length,
                 is_next_max_id_present: hasMore,
@@ -1333,8 +1343,16 @@ const EDITOR_SCRIPT = `(() => {
 
 // Pages ---------------------------------------------------------------------------------------
 
-/** A listing as Poshmark's pages embed it. */
-function listingRecord(listing: FakePoshmarkListing): Record<string, unknown> {
+/**
+ * A listing as Poshmark's pages embed it, with its photos on the fake's own image CDN
+ * (`/media/`, fake-photos.ts) as `cover_shot` and `pictures`.
+ */
+function listingRecord(listing: FakePoshmarkListing, origin: string): Record<string, unknown> {
+  const photo = (index: number) => {
+    const url = `${origin}/media/${fakeMediaName(`${listing.id}-${String(index)}`)}.jpg`;
+    return { id: `${listing.id}-${String(index)}`, url, url_small: url, url_large: url };
+  };
+  const [cover, ...rest] = listing.photoSizes.map((_size, index) => photo(index));
   const money = (cents: number) => ({
     val: (cents / 100).toFixed(1),
     currency_code: 'USD',
@@ -1361,7 +1379,9 @@ function listingRecord(listing: FakePoshmarkListing): Record<string, unknown> {
     category_v2: { display: listing.category },
     category_features: listing.subcategory === null ? [] : [{ display: listing.subcategory }],
     creator_username: listing.seller,
-    picture_url: null,
+    picture_url: cover?.url ?? null,
+    cover_shot: cover ?? null,
+    pictures: rest,
   };
 }
 
