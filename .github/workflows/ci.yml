@@ -194,15 +194,6 @@ jobs:
       IOS_COMPILATION_CACHE: ${{ github.workspace }}/.build/ios/CompilationCache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # One clean boot of the test simulator, started now so it boots during the build (about
-      # two minutes): every other simulator is shut down and the test one erased first. The
-      # tests start only once it has finished booting (the wait before them).
-      - name: Start booting a clean iPhone 17 simulator
-        run: |
-          xcodebuild -version
-          xcrun simctl shutdown all
-          xcrun simctl erase 'iPhone 17'
-          xcrun simctl boot 'iPhone 17'
       - name: Install XcodeGen, SwiftLint, and SwiftFormat
         run: brew install xcodegen swiftlint swiftformat
       # SwiftPM checkouts for the app's package graph, and the compilation cache (Makefile,
@@ -232,6 +223,15 @@ jobs:
           if (( ${size_kb:-0} > 4 * 1024 * 1024 )); then rm -rf "$IOS_COMPILATION_CACHE"; echo 'Starting it over.'; fi
       - run: make ios-lint
       - run: make ios-check-ats
+      # One clean boot of the test simulator, started just before the build so it boots during
+      # it (about two minutes; started before the installs, it slowed Homebrew down by as much): every other simulator is shut down and the test one erased first. The
+      # tests start only once it has finished booting (the wait before them).
+      - name: Start booting a clean iPhone 17 simulator
+        run: |
+          xcodebuild -version
+          xcrun simctl shutdown all
+          xcrun simctl erase 'iPhone 17'
+          xcrun simctl boot 'iPhone 17'
       - id: build
         run: make ios-build-for-testing
       - name: Wait until the simulator has booted
@@ -291,12 +291,6 @@ jobs:
       IOS_UI_SHARDS: '3'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Start booting a clean iPhone 17 simulator
-        run: |
-          xcodebuild -version
-          xcrun simctl shutdown all
-          xcrun simctl erase 'iPhone 17'
-          xcrun simctl boot 'iPhone 17'
       - name: Install XcodeGen and PostgreSQL 18
         run: brew install xcodegen postgresql@18
       # The UI tests that go through the backend run against the local stack (packages/e2e):
@@ -319,6 +313,13 @@ jobs:
           path: .build/ios/CompilationCache
           key: ios-compilation-${{ runner.os }}-xcode-26.3-${{ github.sha }}
           restore-keys: ios-compilation-${{ runner.os }}-xcode-26.3-
+      # As in ios-unit: it boots during the build.
+      - name: Start booting a clean iPhone 17 simulator
+        run: |
+          xcodebuild -version
+          xcrun simctl shutdown all
+          xcrun simctl erase 'iPhone 17'
+          xcrun simctl boot 'iPhone 17'
       - run: make ios-build-for-testing
       - name: Wait until the simulator has booted
         run: xcrun simctl bootstatus 'iPhone 17' -b > /dev/null

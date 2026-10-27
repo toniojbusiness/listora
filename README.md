@@ -204,7 +204,7 @@ for itself (`make ios-build-for-testing`) from the Xcode compilation cache
 file timestamps that a fresh checkout resets, it is keyed by file contents. Pushes to `main`
 save it and the app's SwiftPM checkouts; pull requests only restore them, which keeps the
 repository's cache space for the caches every run uses. The cache starts over once it passes
-4 GB. Each job starts booting the erased iPhone 17 simulator before the build and waits until
+4 GB. Each job starts booting the erased iPhone 17 simulator right before the build and waits until
 it has finished booting before the tests. Every run, passed or failed, uploads each job's test
 results (`Unit.xcresult`, or `UI.xcresult` with the UI tests' screenshots and the stack's API
 and worker logs) and the failing-test summary, and puts the summary in the job summary, so a
