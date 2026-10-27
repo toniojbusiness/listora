@@ -19,7 +19,8 @@ public struct ItemReviewRequest: Hashable, Sendable {
 /// How the seller left the review flow.
 public enum ItemReviewOutcome: Equatable, Sendable {
     /// The item is saved as an inventory item ready to list; its draft on this iPhone is done.
-    case saved(sku: String)
+    /// `listNow`: the seller chose List it now, so the item opens with List everywhere.
+    case saved(sku: String, listNow: Bool = false)
     /// The photos have to change before the item can be reviewed.
     case editPhotos
     /// The seller left the review without saving; the item stays a draft.

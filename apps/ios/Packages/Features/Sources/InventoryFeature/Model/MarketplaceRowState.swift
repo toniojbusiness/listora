@@ -65,8 +65,15 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
     let statusLabel: String
     let statusDetail: String?
     let tone: Tone
-    /// "Through eBay's API" or "Assisted": how Listora works with this marketplace.
+    /// "Listora does it for you through eBay" or "You finish each step in the Poshmark app": how
+    /// Listora works with this marketplace.
     let modeLabel: String
+    /// The listing on the marketplace's own site, to open or share.
+    let externalURL: URL?
+    /// "Last change: Price changed (confirmed by eBay), Oct 24, 3:05 PM" once a change after the
+    /// first publish has settled, or "Since Oct 24, 3:05 PM" for a failure or a step waiting for
+    /// the seller, whose status already names it (while a change runs, the status says it all).
+    let lastChange: String?
     /// The listing's own price ("$39.00"), which can differ from the item's list price.
     let priceLabel: String?
     /// When the waiting operation tries again ("Waiting to retry at 9:41 PM"), while it waits.
@@ -78,9 +85,23 @@ struct MarketplaceRowState: Identifiable, Equatable, Sendable {
         name = Formatting.marketplaceName(marketplace.rawValue)
         self.listing = listing
         modeLabel = switch (listing?.mode ?? connection?.mode)?.value1 {
-        case .api: "Through \(name)'s API"
-        case .automation: "Automated in your \(name) session"
-        case .assisted, nil: "Assisted - you finish each step in the \(name) app"
+        case .api: "Listora does it for you through \(name)"
+        case .automation: "Listora does it for you in your linked \(name) account"
+        case .assisted, nil: "You finish each step in the \(name) app"
+        }
+        externalURL = listing?.externalUrl.flatMap { URL(string: $0) }
+        lastChange = listing?.latestOperation.flatMap { operation in
+            let when = Formatting.timestamp(operation.completedAt ?? operation.updatedAt)
+            switch operation.status.value1 {
+            case .succeeded:
+                // The status already says the listing went live.
+                return operation.kind.value1 == .create ? nil
+                    : "Last change: \(operation.statusDisplay.label), \(when)"
+            case .failed, .needsUserAction:
+                return "Since \(when)"
+            default:
+                return nil
+            }
         }
         priceLabel = listing?.variant.map { Formatting.money($0.price) }
         let waiting = Self.waitingAttempt(of: listing, now: now)

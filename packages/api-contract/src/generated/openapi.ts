@@ -5142,6 +5142,11 @@ export interface operations {
                 marketplace?: components["schemas"]["KnownMarketplace"];
                 /** @description Only items of this brand (exact, ignoring case). */
                 brand?: string;
+                /**
+                 * @description `true`: only items that need the seller, those with a listing whose newest change
+                 *     (not counting canceled ones) failed or waits for the seller to finish a step.
+                 */
+                attention?: boolean;
                 /** @description Opaque cursor from a previous page's `nextCursor`. Omit for the first page. */
                 cursor?: components["parameters"]["Cursor"];
                 /** @description Page size. */

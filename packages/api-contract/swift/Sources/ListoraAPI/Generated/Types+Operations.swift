@@ -873,6 +873,12 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/brand`.
                 public var brand: Swift.String?
+                /// `true`: only items that need the seller, those with a listing whose newest change
+                /// (not counting canceled ones) failed or waits for the seller to finish a step.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/items/GET/query/attention`.
+                public var attention: Swift.Bool?
                 /// Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///
                 /// - Remark: Generated from `#/paths/v1/items/GET/query/cursor`.
@@ -888,6 +894,7 @@ public enum Operations {
                 ///   - q: Free-text search over SKU, title, brand, and keywords.
                 ///   - marketplace: Only items with a listing on this marketplace that is not ended or sold (a draft
                 ///   - brand: Only items of this brand (exact, ignoring case).
+                ///   - attention: `true`: only items that need the seller, those with a listing whose newest change
                 ///   - cursor: Opaque cursor from a previous page's `nextCursor`. Omit for the first page.
                 ///   - limit: Page size.
                 public init(
@@ -895,6 +902,7 @@ public enum Operations {
                     q: Swift.String? = nil,
                     marketplace: Components.Schemas.KnownMarketplace? = nil,
                     brand: Swift.String? = nil,
+                    attention: Swift.Bool? = nil,
                     cursor: Components.Parameters.Cursor? = nil,
                     limit: Components.Parameters.Limit? = nil
                 ) {
@@ -902,6 +910,7 @@ public enum Operations {
                     self.q = q
                     self.marketplace = marketplace
                     self.brand = brand
+                    self.attention = attention
                     self.cursor = cursor
                     self.limit = limit
                 }

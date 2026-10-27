@@ -594,6 +594,13 @@ public struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "attention",
+                    value: input.query.attention
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "cursor",
                     value: input.query.cursor
                 )

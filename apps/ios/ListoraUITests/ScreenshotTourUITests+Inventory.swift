@@ -42,6 +42,11 @@ extension ScreenshotTourUITests {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         try shot("34-inventory-statuses", settle: 3)
+        // The delist eBay refused puts the item in Needs you.
+        app.buttons["inventory.filter.needsYou"].tap()
+        try shot("65-inventory-needs-you", settle: 2)
+        app.buttons["inventory.filter.all"].tap()
+        try bulkTour(skus: [item.sku, second.sku])
 
         // Nothing has sold and no task is open on the stack.
         tab("Sales")
@@ -77,6 +82,29 @@ extension ScreenshotTourUITests {
         XCTAssertTrue(waitForLabel(of: status, "Delist failed - Retry", timeout: 60), status.label)
         try shot("33-item-delist-failed")
         try await stack.clearEbayFaults()
+    }
+
+    /// Select mode over both items, and the sheets of List all, Change price, and End all
+    /// (each closed without sending anything).
+    private func bulkTour(skus: [String]) throws {
+        app.buttons["inventory.select"].tap()
+        for sku in skus {
+            app.buttons["inventory.row.\(sku)"].tap()
+        }
+        try shot("61-inventory-select")
+        for (kind, name) in [("list", "62-bulk-list"), ("changePrice", "63-bulk-price"), ("end", "64-bulk-end")] {
+            app.buttons["inventory.bulk.\(kind)"].tap()
+            XCTAssertTrue(app.buttons["bulk.start"].waitForExistence(timeout: 10))
+            try shot(name, settle: 1)
+            app.buttons["bulk.close"].tap()
+            XCTAssertTrue(app.buttons["inventory.select"].waitForExistence(timeout: 10))
+            if kind != "end" {
+                app.buttons["inventory.select"].tap()
+                for sku in skus {
+                    app.buttons["inventory.row.\(sku)"].tap()
+                }
+            }
+        }
     }
 
     /// The other item sells: "Mark as sold", then its sale screen, celebrating.

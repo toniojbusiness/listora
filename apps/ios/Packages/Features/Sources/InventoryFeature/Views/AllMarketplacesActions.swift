@@ -1,15 +1,21 @@
 import DesignSystem
 import SwiftUI
 
-/// Relist all and End all: the same change on every marketplace where it applies, once two or
-/// more can take it. Each listing then shows how its own change goes.
+/// List everywhere, Relist all, and End all: the same change on every marketplace where it
+/// applies, once two or more can take it. Each listing then shows how its own change goes.
 struct AllMarketplacesActions: View {
     let rows: [MarketplaceRowState]
     let isBusy: Bool
     let isEnabled: Bool
     let relistAll: (([MarketplaceRowState]) -> Void)?
     let endAll: ((EndReason, [MarketplaceRowState]) -> Void)?
+    var listEverywhere: (() -> Void)?
     @State private var isConfirmingEnd = false
+
+    /// The marketplaces the item is not on yet and can be listed on from here.
+    static func listableCount(_ rows: [MarketplaceRowState]) -> Int {
+        rows.count(where: { $0.actions.contains(.list) })
+    }
 
     private var relistable: [MarketplaceRowState] {
         rows.filter { $0.actions.contains(.relist) }
@@ -24,6 +30,13 @@ struct AllMarketplacesActions: View {
         let endable = endable
         let showsRelist = relistAll != nil && relistable.count >= 2
         let showsEnd = endAll != nil && endable.count >= 2
+        let listable = Self.listableCount(rows)
+        if let listEverywhere, listable >= 2 {
+            Button("List everywhere (\(listable))", systemImage: "tag.fill", action: listEverywhere)
+                .buttonStyle(.listoraPrimary)
+                .disabled(!isEnabled)
+                .accessibilityIdentifier("marketplaces.listEverywhere")
+        }
         if showsRelist || showsEnd {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: Spacing.xs) { buttons(showsRelist, relistable, showsEnd, endable) }

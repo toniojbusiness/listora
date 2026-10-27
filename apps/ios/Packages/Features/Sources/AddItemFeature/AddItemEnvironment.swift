@@ -28,6 +28,10 @@ public final class AddItemEnvironment {
     /// when the system wakes it for upload events (see ``handleBackgroundSessionEvents()``).
     public static let backgroundSessionIdentifier = "com.listora.app.photo-uploads"
 
+    /// Opens a saved item to list it everywhere (the app's Inventory, set by the root view);
+    /// without it, List it now only closes the review.
+    public var onListItem: (@MainActor (_ itemID: String) -> Void)?
+
     enum State {
         case ready(DraftStore, PhotoUploader)
         /// The draft database could not be opened; the tab explains instead of crashing the app.

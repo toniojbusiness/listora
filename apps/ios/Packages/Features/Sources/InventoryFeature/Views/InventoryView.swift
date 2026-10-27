@@ -14,6 +14,7 @@ public struct InventoryView<Header: View>: View {
     private let header: Header
     @State private var model: InventoryListModel
     @State private var path: [ItemRoute] = []
+    @State private var bulk: BulkSheet?
     @AppStorage(InventoryLayout.storageKey) private var layout = InventoryLayout.standard
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -31,28 +32,66 @@ public struct InventoryView<Header: View>: View {
     public var body: some View {
         NavigationStack(path: $path) {
             content
-                .safeAreaInset(edge: .top, spacing: 0) { header }
-                .background(Palette.background)
-                .navigationTitle("Inventory")
-                .searchable(text: $model.query.search, prompt: "SKU, title, or brand")
-                .toolbar {
-                    // Only with items to lay out.
-                    if !model.items.isEmpty {
-                        ToolbarItem(placement: .topBarTrailing) { layoutButton }
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    VStack(spacing: 0) {
+                        if model.phase != .signedOut {
+                            QuickFilters(model: model, attention: environment.attention)
+                        }
+                        header
                     }
-                    ToolbarItem(placement: .topBarTrailing) { InventoryFilterMenu(model: model) }
                 }
+                .background(Palette.background)
+                .navigationTitle(model.isSelecting ? selectionTitle : "Inventory")
+                .navigationBarTitleDisplayMode(model.isSelecting ? .inline : .large)
+                // Always shown: the quick filters under it would otherwise collapse it out of sight.
+                .searchable(
+                    text: $model.query.search,
+                    placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "SKU, title, or brand",
+                )
+                .toolbar { toolbar }
+                // While choosing items the selection bar takes the tab bar's place.
+                .toolbar(model.isSelecting ? .hidden : .automatic, for: .tabBar)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if model.isSelecting {
+                        SelectionBar(chosen: model.selection.count) { kind in
+                            bulk = BulkSheet(
+                                kind: kind,
+                                model: environment.makeBulkAction(items: model.selectedItems),
+                            )
+                        }
+                        .transition(.move(edge: .bottom))
+                    }
+                }
+                .sheet(item: $bulk, onDismiss: {
+                    model.stopSelecting()
+                    Task {
+                        await model.load()
+                        await environment.attention.refresh()
+                    }
+                }, content: { sheet in
+                    BulkActionSheet(model: sheet.model, kind: sheet.kind) { bulk = nil }
+                })
                 .navigationDestination(for: ItemRoute.self) { route in
                     // A standard push: a zoom transition would close the item on the pull-down
                     // that refreshes it.
-                    ItemDetailView(environment: environment, itemID: route.itemID)
+                    ItemDetailView(
+                        environment: environment,
+                        itemID: route.itemID,
+                        listsEverywhere: route.listsEverywhere,
+                    )
                 }
                 // Runs each time the list appears (a tab switch, back from an item) and when the
                 // query changes; typing waits a moment so each keystroke is not a request.
                 .onAppear {
-                    if let status = environment.takeRequestedStatus() {
+                    if let itemID = environment.takeRequestedItem() {
+                        model.stopSelecting()
+                        path = [ItemRoute(itemID: itemID, listsEverywhere: true)]
+                    }
+                    if let filter = environment.takeRequestedFilter() {
                         path = []
-                        model.query.status = status
+                        model.stopSelecting()
+                        model.query.filter = filter
                     }
                 }
                 .task(id: model.query) {
@@ -61,6 +100,7 @@ public struct InventoryView<Header: View>: View {
                         guard !Task.isCancelled else { return }
                     }
                     await model.load()
+                    await environment.attention.refresh()
                 }
         }
     }
@@ -143,7 +183,16 @@ public struct InventoryView<Header: View>: View {
 
     @ViewBuilder
     private var empty: some View {
-        if model.isFiltered {
+        if model.query == InventoryQuery(filter: .needsYou) {
+            EmptyStateView(
+                systemImage: "checkmark.circle",
+                tone: .success,
+                title: "Nothing needs you",
+                message: "Every listing is going fine. An item shows up here when a change fails or waits for you.",
+                action: .init("Show all items", systemImage: "square.grid.2x2") { model.clearFilters() },
+            )
+            .accessibilityIdentifier("inventory.nothingNeedsYou")
+        } else if model.isFiltered {
             EmptyStateView(
                 systemImage: "line.3.horizontal.decrease.circle",
                 title: "No matching items",
@@ -170,14 +219,18 @@ public struct InventoryView<Header: View>: View {
     private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                if model.isFiltered {
+                if model.hasMenuFilters {
                     ActiveFilters(model: model)
                 }
                 switch layout {
                 case .grid:
                     LazyVGrid(columns: gridColumns, alignment: .leading, spacing: Spacing.lg) {
                         ForEach(model.items, id: \.id) { item in
-                            link(to: item) { InventoryGridCell(item: item) }
+                            link(to: item) { InventoryGridCell(
+                                item: item,
+                                isSelecting: model.isSelecting,
+                                isSelected: model.selection.contains(item.id),
+                            ) }
                         }
                         if model.isLoadingMore {
                             SkeletonPhotoTile()
@@ -186,7 +239,11 @@ public struct InventoryView<Header: View>: View {
                 case .list:
                     LazyVStack(alignment: .leading, spacing: Spacing.sm) {
                         ForEach(model.items, id: \.id) { item in
-                            link(to: item) { InventoryRow(item: item) }
+                            link(to: item) { InventoryRow(
+                                item: item,
+                                isSelecting: model.isSelecting,
+                                isSelected: model.selection.contains(item.id),
+                            ) }
                         }
                         if model.isLoadingMore {
                             SkeletonRow().cardStyle(.flat)
@@ -200,12 +257,54 @@ public struct InventoryView<Header: View>: View {
         }
         .refreshable { await model.load() }
     }
+}
 
-    /// An item's cell or row, opening the item, and loading the next page when the last one
-    /// appears.
+/// Select mode: the toolbar while choosing, and what a tap on an item does.
+extension InventoryView {
+    private var selectionTitle: String {
+        model.selection.isEmpty ? "Select items" : "\(model.selection.count) selected"
+    }
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        if model.isSelecting {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(model.allSelected ? "Deselect all" : "Select all") { model.toggleAll() }
+                    .accessibilityIdentifier("inventory.selectAll")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") { Motion.perform { model.stopSelecting() } }
+                    .accessibilityIdentifier("inventory.selectDone")
+            }
+        } else {
+            // Only with items to lay out, or to choose from.
+            if !model.items.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Select") { Motion.perform { model.startSelecting() } }
+                        .accessibilityIdentifier("inventory.select")
+                }
+                ToolbarItem(placement: .topBarTrailing) { layoutButton }
+            }
+            ToolbarItem(placement: .topBarTrailing) { InventoryFilterMenu(model: model) }
+        }
+    }
+
+    /// An item's cell or row, opening the item (or, while selecting, choosing it), and loading the
+    /// next page when the last one appears. A long press starts selecting with the item.
     private func link(to item: ItemSummary, @ViewBuilder label: () -> some View) -> some View {
-        NavigationLink(value: ItemRoute(itemID: item.id)) {
-            label()
+        Group {
+            if model.isSelecting {
+                Button { model.toggle(item.id) } label: { label() }
+                    .accessibilityAddTraits(model.selection.contains(item.id) ? .isSelected : [])
+                    .sensoryFeedback(.selection, trigger: model.selection.contains(item.id))
+            } else {
+                NavigationLink(value: ItemRoute(itemID: item.id)) { label() }
+                    .contextMenu {
+                        Button("Select", systemImage: "checkmark.circle") {
+                            Motion.perform { model.startSelecting(with: item.id) }
+                        }
+                    }
+            }
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("inventory.row.\(item.sku)")
@@ -220,106 +319,8 @@ public struct InventoryView<Header: View>: View {
 /// An item in the navigation path.
 struct ItemRoute: Hashable {
     let itemID: String
-}
-
-/// The filters in effect as chips, with a way to clear them.
-private struct ActiveFilters: View {
-    let model: InventoryListModel
-
-    var body: some View {
-        HStack(alignment: .center, spacing: Spacing.xs) {
-            FlowLayout(spacing: Spacing.xs, lineSpacing: Spacing.xs) {
-                ForEach(chips, id: \.self) { chip in
-                    Chip(chip, prominent: true)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Button("Clear") { model.clearFilters() }
-                .buttonStyle(.listora(.tertiary, size: .compact))
-                .fixedSize()
-                .accessibilityIdentifier("inventory.clearFilters")
-        }
-        .accessibilityElement(children: .contain)
-    }
-
-    private var chips: [String] {
-        var chips: [String] = []
-        if !model.query.search.isEmpty {
-            chips.append("\"\(model.query.search)\"")
-        }
-        if let status = model.query.status {
-            chips.append(status.label)
-        }
-        if let marketplace = model.query.marketplace {
-            chips.append("On \(Formatting.marketplaceName(marketplace.rawValue))")
-        }
-        if let brand = model.query.brand {
-            chips.append(brand)
-        }
-        return chips
-    }
-}
-
-/// Status, marketplace, and brand filters.
-struct InventoryFilterMenu: View {
-    @Bindable var model: InventoryListModel
-
-    var body: some View {
-        Menu {
-            Picker("Status", selection: $model.query.status) {
-                Text("Any status").tag(Components.Schemas.KnownItemStatus?.none)
-                ForEach(Components.Schemas.KnownItemStatus.allCases, id: \.self) { status in
-                    Text(status.label).tag(Optional(status))
-                }
-            }
-            Picker("Marketplace", selection: $model.query.marketplace) {
-                Text("Any marketplace").tag(KnownMarketplace?.none)
-                ForEach(KnownMarketplace.allCases, id: \.self) { marketplace in
-                    Text("On \(Formatting.marketplaceName(marketplace.rawValue))").tag(Optional(marketplace))
-                }
-            }
-            if !model.brands.isEmpty || model.query.brand != nil {
-                Picker("Brand", selection: $model.query.brand) {
-                    Text("Any brand").tag(String?.none)
-                    ForEach(model.brands, id: \.self) { brand in
-                        Text(brand).tag(Optional(brand))
-                    }
-                }
-            }
-        } label: {
-            Label(
-                "Filter",
-                systemImage: model.isFiltered && model.query.search.isEmpty
-                    ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
-            )
-        }
-        .accessibilityIdentifier("inventory.filter")
-    }
-}
-
-extension StatusTone {
-    /// The design system's tone for a server tone; an unknown tone looks neutral.
-    init(_ tone: Components.Schemas.StatusTone) {
-        switch tone.value1 {
-        case .success: self = .success
-        case .inProgress: self = .inProgress
-        case .checking: self = .checking
-        case .failed: self = .failed
-        case .actionNeeded: self = .actionNeeded
-        case .neutral, nil: self = .neutral
-        }
-    }
-
-    init(_ tone: MarketplaceRowState.Tone) {
-        switch tone {
-        case .success: self = .success
-        case .inProgress: self = .inProgress
-        case .checking: self = .checking
-        case .failed: self = .failed
-        case .actionNeeded: self = .actionNeeded
-        case .neutral: self = .neutral
-        }
-    }
+    /// Opens List everywhere once the item has loaded (List it now, after saving it).
+    var listsEverywhere = false
 }
 
 extension InventoryView where Header == EmptyView {

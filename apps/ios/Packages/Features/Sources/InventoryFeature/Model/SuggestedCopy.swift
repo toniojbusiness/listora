@@ -1,0 +1,41 @@
+import Core
+import ListoraAPI
+
+/// A marketplace's version of the listing before the seller touches it, as the List flow fills
+/// its review and List all sends it: the marketplace's draft copy, else the seller's own copy from
+/// the review if they edited it, else the analysis's copy for that marketplace, else the item's
+/// title and description; the price is the draft's, else the item's list price.
+struct SuggestedCopy: Equatable, Sendable {
+    var title: String
+    var description: String
+    var priceCents: Int?
+
+    @MainActor
+    static func load(
+        for marketplace: String,
+        item: Item,
+        service: any InventoryService,
+        listingCopy: ListingCopyStore,
+    ) async -> SuggestedCopy {
+        if let variant = item.listings.first(where: {
+            $0.marketplace.id == marketplace && $0.status.value1 == .draft
+        })?.variant {
+            return SuggestedCopy(
+                title: variant.title,
+                description: variant.description,
+                priceCents: Int(variant.price.amountCents),
+            )
+        }
+        let edited = listingCopy.edits(itemID: item.id)[marketplace]
+        var suggested: Components.Schemas.VariantSuggestion?
+        if edited == nil, let analysisID = item.details.acceptedAnalysisId {
+            suggested = try? await service.analysisVariants(analysisID: analysisID)
+                .first { $0.marketplace.id == marketplace }
+        }
+        return SuggestedCopy(
+            title: edited?.title ?? suggested?.title ?? item.details.title ?? "",
+            description: edited?.description ?? suggested?.description ?? item.details.description ?? "",
+            priceCents: item.details.listPrice.map { Int($0.amountCents) },
+        )
+    }
+}

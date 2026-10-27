@@ -19,6 +19,8 @@ struct MarketplacesSection: View {
     var relistAll: (([MarketplaceRowState]) -> Void)?
     /// Ends every row's listing that can be ended, at once, once the seller said why.
     var endAll: ((EndReason, [MarketplaceRowState]) -> Void)?
+    /// Lists the item on every marketplace it can go on, at once (the bulk List sheet).
+    var listEverywhere: (() -> Void)?
     let loadEvents: (String) async -> Void
 
     var body: some View {
@@ -33,10 +35,13 @@ struct MarketplacesSection: View {
                 isEnabled: busyMarketplace == nil,
                 relistAll: relistAll,
                 endAll: endAll,
+                listEverywhere: listEverywhere,
             )
             ForEach(rows) { row in
                 MarketplaceCard(
                     row: row,
+                    // With List everywhere at the top, each card's List is a smaller button.
+                    listIsSecondary: listEverywhere != nil && AllMarketplacesActions.listableCount(rows) >= 2,
                     history: row.listing.flatMap { histories[$0.id] } ?? [],
                     events: events,
                     isBusy: busyMarketplace == row.id,
@@ -56,6 +61,7 @@ struct MarketplacesSection: View {
 
 private struct MarketplaceCard: View {
     let row: MarketplaceRowState
+    let listIsSecondary: Bool
     let history: [Operation]
     let events: [String: [OperationEvent]]
     let isBusy: Bool
@@ -122,8 +128,25 @@ private struct MarketplaceCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("marketplace.\(row.id).detail")
             }
+            if let lastChange = row.lastChange {
+                Text(lastChange)
+                    .font(Typography.footnote)
+                    .foregroundStyle(Palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("marketplace.\(row.id).lastChange")
+            }
             if !row.actions.isEmpty {
-                ActionButtons(row: row, isBusy: isBusy, isEnabled: isEnabled, perform: perform, end: end)
+                ActionButtons(
+                    row: row,
+                    listIsSecondary: listIsSecondary,
+                    isBusy: isBusy,
+                    isEnabled: isEnabled,
+                    perform: perform,
+                    end: end,
+                )
+            }
+            if let url = row.externalURL {
+                ListingLinks(url: url, row: row)
             }
             if !history.isEmpty {
                 HistoryView(marketplace: row.id, operations: history, events: events, loadEvents: loadEvents)
@@ -138,6 +161,7 @@ private struct MarketplaceCard: View {
 /// are compact buttons beside each other, or stacked when they do not fit.
 private struct ActionButtons: View {
     let row: MarketplaceRowState
+    let listIsSecondary: Bool
     let isBusy: Bool
     let isEnabled: Bool
     let perform: (MarketplaceRowState.Action) -> Void
@@ -147,9 +171,15 @@ private struct ActionButtons: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             if let primary = row.actions.first {
-                button(primary)
-                    .buttonStyle(.listoraPrimary)
-                    .loading(isBusy)
+                if primary == .list, listIsSecondary {
+                    button(primary)
+                        .buttonStyle(.listora(.secondary, size: .compact))
+                        .loading(isBusy)
+                } else {
+                    button(primary)
+                        .buttonStyle(.listoraPrimary)
+                        .loading(isBusy)
+                }
             }
             let others = Array(row.actions.dropFirst())
             if !others.isEmpty {
@@ -197,6 +227,27 @@ private struct ActionButtons: View {
             Button(action.title, systemImage: action.systemImage) { perform(action) }
                 .disabled(!isEnabled)
                 .accessibilityIdentifier("marketplace.\(row.id).action.\(action.identifier)")
+        }
+    }
+}
+
+/// "View on eBay" and Share, for a listing with its marketplace link.
+private struct ListingLinks: View {
+    let url: URL
+    let row: MarketplaceRowState
+
+    var body: some View {
+        HStack(spacing: Spacing.xs) {
+            Link(destination: url) {
+                Label("View on \(row.name)", systemImage: "arrow.up.right.square")
+            }
+            .buttonStyle(.listora(.tertiary, size: .compact))
+            .accessibilityIdentifier("marketplace.\(row.id).view")
+            ShareLink(item: url) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            .buttonStyle(.listora(.tertiary, size: .compact))
+            .accessibilityIdentifier("marketplace.\(row.id).share")
         }
     }
 }
