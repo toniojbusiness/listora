@@ -116,7 +116,8 @@ These are checked by `src/contract-rules.test.ts` where a test can check them.
 
 - **Paths.** Resources live under `/v1`. Health probes (`/health/live`, `/health/ready`) are
   not versioned and need no auth. Everything else requires a bearer token, except the OAuth
-  browser callback, which is bound to its single-use `state`.
+  browser callback, which is bound to its single-use `state`, and invite redemption
+  (`redeemInvite`), whose invite code is its credential.
 - **Never false success.** Listings, operations, connections, and delist results carry a
   server-rendered `statusDisplay` (`tone` plus `label`, for example
   `Active (confirmed by eBay)` or `Delist failed - Retry`). A `verification` is present only

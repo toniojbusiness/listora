@@ -45,6 +45,23 @@ public struct PhoneWorkProgress: Equatable, Sendable {
         guard let expectedEnd else { return nil }
         return max(1, Int(expectedEnd.timeIntervalSince(now).rounded(.up)))
     }
+
+    /// "Step 4 of 9", or "Step 4" before the work ran to the end once on this phone.
+    public var stepText: String? {
+        guard stepNumber > 0 else { return nil }
+        guard let stepCount else { return "Step \(stepNumber)" }
+        return "Step \(stepNumber) of \(max(stepCount, stepNumber))"
+    }
+
+    /// "Working on your iPhone, about 40 seconds left. Keep Listora open until it's done."
+    public func timeLeftText(at now: Date) -> String {
+        let keepOpen = "Keep Listora open until it's done."
+        guard let seconds = secondsLeft(at: now) else { return "Working on your iPhone. \(keepOpen)" }
+        let left = seconds < 60
+            ? "about \(seconds) second\(seconds == 1 ? "" : "s") left"
+            : "about \(Int((Double(seconds) / 60).rounded(.up))) min left"
+        return "Working on your iPhone, \(left). \(keepOpen)"
+    }
 }
 
 /// What the screens read to show the work running on this phone (the phone runner).

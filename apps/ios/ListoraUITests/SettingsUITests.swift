@@ -86,6 +86,7 @@ final class SettingsUITests: XCTestCase {
             "settings.marketplaces",
             "settings.notifications",
             "settings.saleEmails",
+            "settings.people",
             "settings.help",
             "settings.privacy",
             "settings.terms",

@@ -15,7 +15,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AuthDriver, Identity } from '../auth/driver.ts';
 import { ApiError, validationFailed } from '../errors.ts';
 import { runIdempotent } from '../idempotency.ts';
-import { authenticate, type Tenant } from '../tenancy.ts';
+import { authenticate, type SignUpPolicy, type Tenant } from '../tenancy.ts';
 import { operationSpec } from './contract.ts';
 
 export type OperationId = keyof operations;
@@ -71,6 +71,8 @@ export type ContractHandler<K extends OperationId> = (
 export interface RouteDependencies {
   db: Db;
   auth: AuthDriver;
+  /** Who gets an account on their first sign-in. */
+  signUp: SignUpPolicy;
 }
 
 const IDEMPOTENCY_KEY = 'idempotency-key';
@@ -94,7 +96,7 @@ export function contractRoute<K extends OperationId>(
     url: spec.url,
     // Before the body is parsed, so an unauthenticated client cannot make the server read it.
     onRequest: async (request) => {
-      const { identity, tenant } = await authenticate(request, deps.auth, deps.db);
+      const { identity, tenant } = await authenticate(request, deps.auth, deps.db, deps.signUp);
       request.identity = identity;
       request.tenant = tenant;
     },

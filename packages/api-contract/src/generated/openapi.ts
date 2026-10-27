@@ -1690,6 +1690,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the account's invites and the people who joined through them
+         * @description Every invite the account made, newest first (at most 100), with each one's state and the
+         *     invitee's email once they redeemed it. `canInvite` says whether this account may invite:
+         *     only an account created directly may (an invited person's account may not), and for one
+         *     that may not, `data` is empty.
+         */
+        get: operations["listInvites"];
+        put?: never;
+        /**
+         * Create an invite
+         * @description A new invite with a one-time code. The answer is the only time the code is shown: the
+         *     server keeps only its hash. `403 forbidden` when this account may not invite
+         *     (`canInvite`), and `409 invalid_state_transition` when it already has 20 invites nobody has
+         *     used yet.
+         */
+        post: operations["createInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{inviteId}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inviteId: components["parameters"]["InviteId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke an invite, or the access of the person who joined through it
+         * @description An invite nobody redeemed can no longer be. Once someone redeemed it, they can no longer
+         *     sign in: their sessions end and the API refuses them at once. Their account and its data
+         *     are kept, so `restoreInvite` gives the access back. Revoking a revoked invite changes
+         *     nothing. A `503` (the sign-in provider did not answer) revoked nothing; retry it.
+         */
+        post: operations["revokeInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invites/{inviteId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inviteId: components["parameters"]["InviteId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give a revoked person their access back
+         * @description Only for a revoked invite that someone had redeemed (`restore` is in `availableActions`):
+         *     they can sign in again, to their own account as they left it. `409
+         *     invalid_state_transition` otherwise; an invite revoked before anyone redeemed it is
+         *     replaced by a new one instead.
+         */
+        post: operations["restoreInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/invite-redemptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem an invite code with the invitee's email (no sign-in yet)
+         * @description The first step of signing up: the invitee, not signed in yet, enters the code they were
+         *     sent and their own email. No bearer token: the code is the credential. It binds the invite
+         *     to the email and lets that email sign in; the app then signs in with the emailed one-time
+         *     code as usual, and the first signed-in request creates the invitee's own, empty account.
+         *
+         *     Redeeming is safe to repeat: the same code and email give the same answer (so the
+         *     `Idempotency-Key` is not stored), and until the invitee has signed in, the same code with
+         *     another email moves the invite to that address (a typo), a few times at most. While
+         *     `status` is `email_verification_sent`, the sign-in codes cannot reach the address yet: the
+         *     invitee opens the verification link emailed to them, then redeems again.
+         *
+         *     `404 not_found` for a code that names no invite, `409 invalid_state_transition` for an
+         *     invite that expired, was revoked, or was already used by someone who signed in, and `409
+         *     already_exists` for an email that already has a Listora account. Wrong codes are limited
+         *     (`429 rate_limited`).
+         */
+        post: operations["redeemInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sale-emails": {
         parameters: {
             query?: never;
@@ -1826,6 +1940,31 @@ export interface paths {
          *     speaks another version of calls than the server's.
          */
         post: operations["claimPhoneRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/phone-runs/wait": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Wait for this phone's next work
+         * @description While the app is open and has claimed everything it can, it waits here instead of
+         *     looking again on a timer: the answer comes as soon as work for this phone may be
+         *     claimable (the engine handed a change to the phone, a check came due, a run's claim
+         *     ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
+         *     usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+         *     trigger in the app, the app leaving) leaves nothing behind.
+         */
+        get: operations["waitForPhoneWork"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3704,6 +3843,13 @@ export interface components {
              */
             appOpen?: boolean;
         };
+        PhoneWorkWaitResult: {
+            /**
+             * @description `true` when work for this phone may be claimable now (claim it), `false` when the wait
+             *     ran out with none (wait again, or claim as usual).
+             */
+            ready: boolean;
+        };
         /**
          * @description One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,
          *     and its result comes back as `answerPhoneCall`'s `answer`. Its shape is the runtime's
@@ -4377,6 +4523,107 @@ export interface components {
             nextCursor?: string;
         };
         /**
+         * @description A `KnownInviteStatus`, or a status added after this client was built. Clients show
+         *     `statusDisplay` as given.
+         */
+        InviteStatus: components["schemas"]["KnownInviteStatus"];
+        /**
+         * @description - `open`: nobody has redeemed it yet.
+         *     - `expired`: nobody redeemed it before `expiresAt`.
+         *     - `redeemed`: the invitee entered the code and their `email`, and has not signed in yet.
+         *     - `active`: the invitee signed in; their own account exists.
+         *     - `revoked`: revoked by the account (`revokedAt`); with an `email`, that person can no
+         *       longer sign in.
+         * @enum {string}
+         */
+        KnownInviteStatus: "open" | "expired" | "redeemed" | "active" | "revoked";
+        /** @description A `KnownInviteAction`, or an action added after this client was built (hide it). */
+        InviteAction: components["schemas"]["KnownInviteAction"];
+        /**
+         * @description - `revoke`: `revokeInvite`.
+         *     - `restore`: `restoreInvite`.
+         * @enum {string}
+         */
+        KnownInviteAction: "revoke" | "restore";
+        /**
+         * @description One invite of the account, and the person who joined through it. The code itself is never
+         *     shown again after `createInvite`; `codeHint` (its last four characters) tells invites apart.
+         */
+        Invite: {
+            id: components["schemas"]["Id"];
+            /** @description Who it is for, as the inviter wrote it, for example "Maria". */
+            label?: string;
+            /** @description The code's last four characters. */
+            codeHint: string;
+            status: components["schemas"]["InviteStatus"];
+            statusDisplay: components["schemas"]["StatusDisplay"];
+            /** @description The invitee's email, once they redeemed it. */
+            email?: string;
+            expiresAt?: components["schemas"]["Timestamp"];
+            redeemedAt?: components["schemas"]["Timestamp"];
+            joinedAt?: components["schemas"]["Timestamp"];
+            revokedAt?: components["schemas"]["Timestamp"];
+            availableActions: components["schemas"]["InviteAction"][];
+            createdAt: components["schemas"]["Timestamp"];
+        };
+        InviteList: {
+            /** @description Whether this account may create invites. */
+            canInvite: boolean;
+            data: components["schemas"]["Invite"][];
+        };
+        InviteCreate: {
+            /** @description Who it is for, to tell invites apart. */
+            label?: string;
+            /**
+             * Format: int32
+             * @description Days until an unredeemed invite stops working; absent means it never expires.
+             */
+            expiresInDays?: number;
+        };
+        CreatedInvite: {
+            invite: components["schemas"]["Invite"];
+            /**
+             * @description The one-time code, for example `K7QD-3M9P-XW2T-H8RA`, shown only in this answer.
+             *     Anyone with it can redeem the invite until it is used, so share it with that person only.
+             */
+            code: string;
+            /**
+             * Format: uri
+             * @description Opens the app's sign-up with the code filled in (`listora://invite/<code>`).
+             */
+            link: string;
+            /** @description A message to share with the invitee, with the code and how to use it. */
+            message: string;
+        };
+        InviteRedeem: {
+            /** @description The code as typed; case, spaces, and dashes do not matter. */
+            code: string;
+            /**
+             * Format: email
+             * @description The invitee's own email, which they sign in with.
+             */
+            email: string;
+        };
+        /**
+         * @description A `KnownInviteRedemptionStatus`, or one added after this client was built (show `message`
+         *     and let the person redeem again).
+         */
+        InviteRedemptionStatus: components["schemas"]["KnownInviteRedemptionStatus"];
+        /**
+         * @description - `ready`: sign in with `email` now; the one-time code is emailed there.
+         *     - `email_verification_sent`: the sign-in codes cannot reach `email` yet. A verification
+         *       email from Amazon Web Services was sent there: open its link, then redeem again.
+         * @enum {string}
+         */
+        KnownInviteRedemptionStatus: "ready" | "email_verification_sent";
+        InviteRedemption: {
+            /** @description The email the invite now belongs to, lowercase; sign in with it. */
+            email: string;
+            status: components["schemas"]["InviteRedemptionStatus"];
+            /** @description What to do next, in words to show as is. */
+            message: string;
+        };
+        /**
          * @description A `KnownSaleEmailStatus`, or a status added after this client was built. Clients show
          *     `statusDisplay` as given.
          */
@@ -5039,6 +5286,7 @@ export interface components {
         AuthorizationId: components["schemas"]["Id"];
         SaleId: components["schemas"]["Id"];
         TaskId: components["schemas"]["Id"];
+        InviteId: components["schemas"]["Id"];
         MarketplacePath: components["schemas"]["KnownMarketplace"];
         /** @description The app installation's id, which it keeps in its Keychain. */
         InstallationId: components["schemas"]["Id"];
@@ -5256,6 +5504,7 @@ export type Device = components['schemas']['Device'];
 export type PhoneWorkPurpose = components['schemas']['PhoneWorkPurpose'];
 export type KnownPhoneWorkPurpose = components['schemas']['KnownPhoneWorkPurpose'];
 export type PhoneRunClaim = components['schemas']['PhoneRunClaim'];
+export type PhoneWorkWaitResult = components['schemas']['PhoneWorkWaitResult'];
 export type PhoneCall = components['schemas']['PhoneCall'];
 export type PhoneRun = components['schemas']['PhoneRun'];
 export type PhoneRunResult = components['schemas']['PhoneRunResult'];
@@ -5315,6 +5564,18 @@ export type UserTaskSaleEmail = components['schemas']['UserTaskSaleEmail'];
 export type UserTaskCompletion = components['schemas']['UserTaskCompletion'];
 export type SaleCorrection = components['schemas']['SaleCorrection'];
 export type UserTaskPage = components['schemas']['UserTaskPage'];
+export type InviteStatus = components['schemas']['InviteStatus'];
+export type KnownInviteStatus = components['schemas']['KnownInviteStatus'];
+export type InviteAction = components['schemas']['InviteAction'];
+export type KnownInviteAction = components['schemas']['KnownInviteAction'];
+export type Invite = components['schemas']['Invite'];
+export type InviteList = components['schemas']['InviteList'];
+export type InviteCreate = components['schemas']['InviteCreate'];
+export type CreatedInvite = components['schemas']['CreatedInvite'];
+export type InviteRedeem = components['schemas']['InviteRedeem'];
+export type InviteRedemptionStatus = components['schemas']['InviteRedemptionStatus'];
+export type KnownInviteRedemptionStatus = components['schemas']['KnownInviteRedemptionStatus'];
+export type InviteRedemption = components['schemas']['InviteRedemption'];
 export type SaleEmailStatus = components['schemas']['SaleEmailStatus'];
 export type KnownSaleEmailStatus = components['schemas']['KnownSaleEmailStatus'];
 export type SaleEmailConfirmation = components['schemas']['SaleEmailConfirmation'];
@@ -5403,6 +5664,7 @@ export type ParameterOperationId = components['parameters']['OperationId'];
 export type ParameterAuthorizationId = components['parameters']['AuthorizationId'];
 export type ParameterSaleId = components['parameters']['SaleId'];
 export type ParameterTaskId = components['parameters']['TaskId'];
+export type ParameterInviteId = components['parameters']['InviteId'];
 export type ParameterMarketplacePath = components['parameters']['MarketplacePath'];
 export type ParameterInstallationId = components['parameters']['InstallationId'];
 export type ParameterRunId = components['parameters']['RunId'];
@@ -7806,6 +8068,176 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    listInvites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's invites. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteList"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    createInvite: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCreate"];
+            };
+        };
+        responses: {
+            /** @description The invite and its code. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedInvite"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    revokeInvite: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                inviteId: components["parameters"]["InviteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The revoked invite. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invite"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    restoreInvite: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                inviteId: components["parameters"]["InviteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The restored invite. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invite"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    redeemInvite: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteRedeem"];
+            };
+        };
+        responses: {
+            /** @description The invite is the email's; the invitee signs in next. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteRedemption"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     getSaleEmails: {
         parameters: {
             query?: never;
@@ -7985,6 +8417,34 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    waitForPhoneWork: {
+        parameters: {
+            query: {
+                /** @description The app installation's id, which it keeps in its Keychain. */
+                installationId: components["schemas"]["Id"];
+                /** @description The longest the answer may take. */
+                waitSeconds: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whether work may be ready. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneWorkWaitResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -8351,6 +8811,9 @@ export const knownUserTaskKindValues: ReadonlyArray<FlattenedDeepRequired<compon
 export const userTaskStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskStatus"]> = ["open", "completed", "dismissed"];
 export const userTaskUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["UserTaskUrgency"]> = ["normal", "urgent"];
 export const knownUserTaskSaleEmailReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownUserTaskSaleEmailReason"]> = ["ask_before_delist", "ambiguous_match", "unknown_format"];
+export const knownInviteStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownInviteStatus"]> = ["open", "expired", "redeemed", "active", "revoked"];
+export const knownInviteActionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownInviteAction"]> = ["revoke", "restore"];
+export const knownInviteRedemptionStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownInviteRedemptionStatus"]> = ["ready", "email_verification_sent"];
 export const knownSaleEmailStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleEmailStatus"]> = ["unavailable", "not_set_up", "confirming", "working"];
 export const knownTodayCardKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayCardKind"]> = ["delist", "ship", "reconnect", "sale_checks", "review_drafts", "stale_listing"];
 export const knownTodayUrgencyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownTodayUrgency"]> = ["urgent", "high", "normal"];

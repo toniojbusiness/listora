@@ -28,6 +28,8 @@ profile API in `apps/api/src/profile/`.
   a banner with the way to iOS Settings. Sale emails shows the forwarding address and its setup,
   or the server's words that this Listora receives no email yet; its row shows the server's
   forwarding status.
+- **People** (only for the account that set this Listora up): Invite people, the owner's invites
+  and who joined through them ([invites.md](invites.md)); its row says how many people joined.
 - **Support**: Help and contact (common questions, and an email to `SUPPORT_EMAIL` when the build
   names one, otherwise that contact isn't set up yet), the privacy policy, and the terms of
   service. The app bundles `docs/legal/*.md` (project.yml) and `LegalDocument` reads them, so the

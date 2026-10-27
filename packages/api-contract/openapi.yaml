@@ -57,6 +57,8 @@ tags:
     description: The profit dashboard over the seller's sales and inventory.
   - name: tasks
     description: Assisted-mode tasks the user completes in a marketplace app.
+  - name: invites
+    description: Invites to sign up for Listora, each to a person's own, separate account.
   - name: sale-emails
     description: The forwarding address that catches Poshmark, Mercari, and Depop sale emails.
   - name: usage
@@ -209,6 +211,14 @@ paths:
     $ref: './paths/tasks.yaml#/~1v1~1tasks~1{taskId}~1complete'
   /v1/tasks/{taskId}/dismiss:
     $ref: './paths/tasks.yaml#/~1v1~1tasks~1{taskId}~1dismiss'
+  /v1/invites:
+    $ref: './paths/invites.yaml#/~1v1~1invites'
+  /v1/invites/{inviteId}/revoke:
+    $ref: './paths/invites.yaml#/~1v1~1invites~1{inviteId}~1revoke'
+  /v1/invites/{inviteId}/restore:
+    $ref: './paths/invites.yaml#/~1v1~1invites~1{inviteId}~1restore'
+  /v1/invite-redemptions:
+    $ref: './paths/invites.yaml#/~1v1~1invite-redemptions'
   /v1/sale-emails:
     $ref: './paths/sale-emails.yaml#/~1v1~1sale-emails'
   /v1/sale-emails/settings:
@@ -221,6 +231,8 @@ paths:
     $ref: './paths/phone.yaml#/~1v1~1devices~1{installationId}'
   /v1/phone-runs:
     $ref: './paths/phone.yaml#/~1v1~1phone-runs'
+  /v1/phone-runs/wait:
+    $ref: './paths/phone.yaml#/~1v1~1phone-runs~1wait'
   /v1/phone-runtime:
     $ref: './paths/phone.yaml#/~1v1~1phone-runtime'
   /v1/phone-runs/{runId}/calls/{index}:
@@ -278,6 +290,8 @@ components:
       $ref: './components/parameters.yaml#/SaleId'
     TaskId:
       $ref: './components/parameters.yaml#/TaskId'
+    InviteId:
+      $ref: './components/parameters.yaml#/InviteId'
     MarketplacePath:
       $ref: './components/parameters.yaml#/MarketplacePath'
     InstallationId:
@@ -738,6 +752,8 @@ components:
       $ref: './components/schemas/phone.yaml#/KnownPhoneWorkPurpose'
     PhoneRunClaim:
       $ref: './components/schemas/phone.yaml#/PhoneRunClaim'
+    PhoneWorkWaitResult:
+      $ref: './components/schemas/phone.yaml#/PhoneWorkWaitResult'
     PhoneCall:
       $ref: './components/schemas/phone.yaml#/PhoneCall'
     PhoneRun:
@@ -859,6 +875,31 @@ components:
       $ref: './components/schemas/tasks.yaml#/SaleCorrection'
     UserTaskPage:
       $ref: './components/schemas/tasks.yaml#/UserTaskPage'
+    # ---------------------------------------------------------------- invites
+    InviteStatus:
+      $ref: './components/schemas/invites.yaml#/InviteStatus'
+    KnownInviteStatus:
+      $ref: './components/schemas/invites.yaml#/KnownInviteStatus'
+    InviteAction:
+      $ref: './components/schemas/invites.yaml#/InviteAction'
+    KnownInviteAction:
+      $ref: './components/schemas/invites.yaml#/KnownInviteAction'
+    Invite:
+      $ref: './components/schemas/invites.yaml#/Invite'
+    InviteList:
+      $ref: './components/schemas/invites.yaml#/InviteList'
+    InviteCreate:
+      $ref: './components/schemas/invites.yaml#/InviteCreate'
+    CreatedInvite:
+      $ref: './components/schemas/invites.yaml#/CreatedInvite'
+    InviteRedeem:
+      $ref: './components/schemas/invites.yaml#/InviteRedeem'
+    InviteRedemptionStatus:
+      $ref: './components/schemas/invites.yaml#/InviteRedemptionStatus'
+    KnownInviteRedemptionStatus:
+      $ref: './components/schemas/invites.yaml#/KnownInviteRedemptionStatus'
+    InviteRedemption:
+      $ref: './components/schemas/invites.yaml#/InviteRedemption'
     # ---------------------------------------------------------------- sale emails
     SaleEmailStatus:
       $ref: './components/schemas/sale-emails.yaml#/SaleEmailStatus'

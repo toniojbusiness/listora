@@ -153,6 +153,15 @@ PhoneRunClaim:
         (each once its last step is a few seconds behind, as Try now runs it), except a wait the
         marketplace or Listora's pacing asked for, and a claim that finds nothing says to look
         again within seconds.
+PhoneWorkWaitResult:
+  type: object
+  required: [ready]
+  properties:
+    ready:
+      type: boolean
+      description: |
+        `true` when work for this phone may be claimable now (claim it), `false` when the wait
+        ran out with none (wait again, or claim as usual).
 PhoneCall:
   type: object
   description: |

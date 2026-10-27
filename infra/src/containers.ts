@@ -1,6 +1,12 @@
 import { assertNever } from '@listora/shared';
 
-import { APP_SECRETS, SERVICE_NAMES, type ServiceName, type SignIn } from './config.ts';
+import {
+  APP_SECRETS,
+  SERVICE_NAMES,
+  type InviteEmailVerification,
+  type ServiceName,
+  type SignIn,
+} from './config.ts';
 
 /** The port the API container listens on behind the load balancer. */
 export const API_PORT = 3000;
@@ -34,18 +40,27 @@ export interface PhotoStorage {
   readonly publicBaseUrl: string;
 }
 
-/** The Cognito user pool the API verifies tokens of, and the app clients it accepts. */
+/**
+ * The Cognito user pool the API verifies tokens of, the app clients it accepts, and its owner,
+ * who signs up without an invite.
+ */
 export interface UserPoolResources {
   readonly userPoolId: string;
   readonly clientIds: readonly string[];
+  readonly ownerEmail: string;
 }
 
 /**
  * How the API verifies sign-ins (`AUTH_DRIVER`, docs/features/auth.md): with the environment's
- * user pool, or, only in an environment that has none yet, with the dev driver.
+ * user pool and invite-only sign-up (docs/features/invites.md), or, only in an environment that
+ * has none yet, with the dev driver.
  */
 export type SignInResources =
-  { readonly driver: 'dev' } | ({ readonly driver: 'cognito' } & UserPoolResources);
+  | { readonly driver: 'dev' }
+  | ({
+      readonly driver: 'cognito';
+      readonly inviteEmailVerification: InviteEmailVerification;
+    } & UserPoolResources);
 
 /**
  * The sign-in an environment's containers get: an owner pool environment runs the `cognito`
@@ -60,7 +75,11 @@ export function signInResources(
     case 'owner-pool':
       if (userPool === undefined) throw new Error('an owner-pool environment needs its user pool');
       if (userPool.clientIds.length === 0) throw new Error('the user pool needs an app client');
-      return { driver: 'cognito', ...userPool };
+      return {
+        driver: 'cognito',
+        ...userPool,
+        inviteEmailVerification: signIn.inviteEmailVerification,
+      };
     case 'dev':
       if (userPool !== undefined) throw new Error('a dev sign-in environment has no user pool');
       return { driver: 'dev' };
@@ -200,6 +219,10 @@ function apiAuth(signIn: SignInResources): Record<string, string> {
         AUTH_DRIVER: 'cognito',
         COGNITO_USER_POOL_ID: signIn.userPoolId,
         COGNITO_CLIENT_IDS: signIn.clientIds.join(','),
+        // The pool's users are the owner and the people they invite; nobody else gets an account.
+        SIGN_UP: 'invite',
+        SIGN_UP_OWNER_EMAIL: signIn.ownerEmail,
+        INVITE_EMAIL_VERIFICATION: signIn.inviteEmailVerification,
       };
     default:
       return assertNever(signIn);

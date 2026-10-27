@@ -215,8 +215,14 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     // Under review, buyers can't buy it: not live yet, but not gone either.
     expect(await adapter.readListing(ref, ctx())).toEqual({ found: false, authoritative: false });
     // Its seller can still end it, and an ended listing reads as ended, reviewed or not.
+    // The edit form shows it for sale, so End changes it there: no read of its page first, and
+    // none after Update (the operation's read-back reads it).
     const end = await adapter.execute(request('end', ref, {}, { status: 'ended' }), ctx());
-    expect(end).toMatchObject({ type: 'confirmed' });
+    expect(end).toMatchObject({
+      type: 'confirmed',
+      externalListingId: ref.externalListingId,
+      excerpt: { steps: ['open the edit form', 'set the availability', 'update'] },
+    });
     expect(site.listing(ref.externalListingId)).toMatchObject({
       inventory: 'not_for_sale',
       priceCents: 5000,
@@ -299,10 +305,15 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
     expect(site.listing(ref.externalListingId)?.inventory).toBe('not_for_sale');
     expect(ended.revision ?? 0).toBeGreaterThan(revised.revision ?? 0);
 
+    // Ending it again changes nothing: the edit form shows it not for sale already.
+    expect(
+      await adapter.execute(request('end', ref, {}, { status: 'ended' }), ctx()),
+    ).toMatchObject({ type: 'confirmed', excerpt: { steps: ['open the edit form'] } });
     expect(
       await adapter.execute(request('relist', ref, {}, { status: 'active' }), ctx()),
     ).toMatchObject({
       type: 'confirmed',
+      excerpt: { steps: ['open the edit form', 'set the availability', 'update'] },
     });
     expect(await read()).toMatchObject({ status: 'active', title: 'Levi Trucker Jacket Size M' });
   });

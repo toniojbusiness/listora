@@ -18,6 +18,8 @@ export {
 } from './job-queue.ts';
 export type { BackgroundJob, JobQueueMigrationOptions } from './job-queue.ts';
 export { jsonb } from './json.ts';
+export { listenForNotifications } from './notifications.ts';
+export type { NotificationListener, NotificationListenerOptions } from './notifications.ts';
 export type { JsonArray, JsonObject, JsonPrimitive, JsonValue } from './json.ts';
 export {
   MIGRATIONS_DIR,

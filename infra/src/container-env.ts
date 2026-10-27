@@ -36,7 +36,11 @@ const SMOKE_RESOURCES: ServiceResources = {
     signIn,
     signIn.via === 'dev'
       ? undefined
-      : { userPoolId: 'us-east-1_SmokeTest0', clientIds: ['smoketestclient0000000000'] },
+      : {
+          userPoolId: 'us-east-1_SmokeTest0',
+          clientIds: ['smoketestclient0000000000'],
+          ownerEmail: 'owner@smoke.invalid',
+        },
   ),
   runner: { cluster: 'listora-smoke', service: 'runner', region: 'us-east-1' },
   tokenKeyArn: 'alias/listora-smoke-tokens',

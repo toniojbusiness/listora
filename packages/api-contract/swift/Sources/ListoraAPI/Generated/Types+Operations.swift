@@ -15495,6 +15495,1027 @@ public enum Operations {
             }
         }
     }
+    /// List the account's invites and the people who joined through them
+    ///
+    /// Every invite the account made, newest first (at most 100), with each one's state and the
+    /// invitee's email once they redeemed it. `canInvite` says whether this account may invite:
+    /// only an account created directly may (an invited person's account may not), and for one
+    /// that may not, `data` is empty.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/invites`.
+    /// - Remark: Generated from `#/paths//v1/invites/get(listInvites)`.
+    public enum ListInvites {
+        public static let id: Swift.String = "listInvites"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/invites/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListInvites.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListInvites.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListInvites.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.ListInvites.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/invites/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/invites/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.InviteList)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.InviteList {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListInvites.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListInvites.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The account's invites.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/get(listInvites)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListInvites.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListInvites.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/get(listInvites)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Create an invite
+    ///
+    /// A new invite with a one-time code. The answer is the only time the code is shown: the
+    /// server keeps only its hash. `403 forbidden` when this account may not invite
+    /// (`canInvite`), and `409 invalid_state_transition` when it already has 20 invites nobody has
+    /// used yet.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invites`.
+    /// - Remark: Generated from `#/paths//v1/invites/post(createInvite)`.
+    public enum CreateInvite {
+        public static let id: Swift.String = "createInvite"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/invites/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/invites/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateInvite.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateInvite.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.CreateInvite.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/invites/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/invites/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.InviteCreate)
+            }
+            public var body: Operations.CreateInvite.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.CreateInvite.Input.Headers,
+                body: Operations.CreateInvite.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/invites/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/invites/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.CreatedInvite)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CreatedInvite {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CreateInvite.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CreateInvite.Output.Created.Body) {
+                    self.body = body
+                }
+            }
+            /// The invite and its code.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/post(createInvite)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.CreateInvite.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.CreateInvite.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request conflicts with the current state, for example `version_conflict`,
+            /// `invalid_state_transition`, `already_exists`, or a marketplace that is not connected.
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/post(createInvite)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/post(createInvite)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/post(createInvite)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Revoke an invite, or the access of the person who joined through it
+    ///
+    /// An invite nobody redeemed can no longer be. Once someone redeemed it, they can no longer
+    /// sign in: their sessions end and the API refuses them at once. Their account and its data
+    /// are kept, so `restoreInvite` gives the access back. Revoking a revoked invite changes
+    /// nothing. A `503` (the sign-in provider did not answer) revoked nothing; retry it.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invites/{inviteId}/revoke`.
+    /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/revoke/post(revokeInvite)`.
+    public enum RevokeInvite {
+        public static let id: Swift.String = "revokeInvite"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/revoke/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/revoke/POST/path/inviteId`.
+                public var inviteId: Components.Parameters.InviteId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - inviteId:
+                public init(inviteId: Components.Parameters.InviteId) {
+                    self.inviteId = inviteId
+                }
+            }
+            public var path: Operations.RevokeInvite.Input.Path
+            /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/revoke/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/revoke/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RevokeInvite.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RevokeInvite.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.RevokeInvite.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.RevokeInvite.Input.Path,
+                headers: Operations.RevokeInvite.Input.Headers
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/revoke/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/revoke/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Invite)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Invite {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.RevokeInvite.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.RevokeInvite.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The revoked invite.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/revoke/post(revokeInvite)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.RevokeInvite.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.RevokeInvite.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/revoke/post(revokeInvite)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/revoke/post(revokeInvite)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Give a revoked person their access back
+    ///
+    /// Only for a revoked invite that someone had redeemed (`restore` is in `availableActions`):
+    /// they can sign in again, to their own account as they left it. `409
+    /// invalid_state_transition` otherwise; an invite revoked before anyone redeemed it is
+    /// replaced by a new one instead.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invites/{inviteId}/restore`.
+    /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/restore/post(restoreInvite)`.
+    public enum RestoreInvite {
+        public static let id: Swift.String = "restoreInvite"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/restore/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/restore/POST/path/inviteId`.
+                public var inviteId: Components.Parameters.InviteId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - inviteId:
+                public init(inviteId: Components.Parameters.InviteId) {
+                    self.inviteId = inviteId
+                }
+            }
+            public var path: Operations.RestoreInvite.Input.Path
+            /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/restore/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/restore/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RestoreInvite.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RestoreInvite.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.RestoreInvite.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.RestoreInvite.Input.Path,
+                headers: Operations.RestoreInvite.Input.Headers
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/restore/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/invites/{inviteId}/restore/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Invite)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Invite {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.RestoreInvite.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.RestoreInvite.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The restored invite.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/restore/post(restoreInvite)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.RestoreInvite.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.RestoreInvite.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/restore/post(restoreInvite)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request conflicts with the current state, for example `version_conflict`,
+            /// `invalid_state_transition`, `already_exists`, or a marketplace that is not connected.
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/restore/post(restoreInvite)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invites/{inviteId}/restore/post(restoreInvite)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Redeem an invite code with the invitee's email (no sign-in yet)
+    ///
+    /// The first step of signing up: the invitee, not signed in yet, enters the code they were
+    /// sent and their own email. No bearer token: the code is the credential. It binds the invite
+    /// to the email and lets that email sign in; the app then signs in with the emailed one-time
+    /// code as usual, and the first signed-in request creates the invitee's own, empty account.
+    ///
+    /// Redeeming is safe to repeat: the same code and email give the same answer (so the
+    /// `Idempotency-Key` is not stored), and until the invitee has signed in, the same code with
+    /// another email moves the invite to that address (a typo), a few times at most. While
+    /// `status` is `email_verification_sent`, the sign-in codes cannot reach the address yet: the
+    /// invitee opens the verification link emailed to them, then redeems again.
+    ///
+    /// `404 not_found` for a code that names no invite, `409 invalid_state_transition` for an
+    /// invite that expired, was revoked, or was already used by someone who signed in, and `409
+    /// already_exists` for an email that already has a Listora account. Wrong codes are limited
+    /// (`429 rate_limited`).
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/invite-redemptions`.
+    /// - Remark: Generated from `#/paths//v1/invite-redemptions/post(redeemInvite)`.
+    public enum RedeemInvite {
+        public static let id: Swift.String = "redeemInvite"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/invite-redemptions/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                /// every retry of that action. The server stores the first successful response for at
+                /// least 24 hours: a retry with the same key and body gets that response again without
+                /// repeating the action; the same key with a different body gets
+                /// `422 idempotency_key_reused`; a retry while the first request is still running gets
+                /// `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                /// stored, so retrying it with the same key runs it again.
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/v1/invite-redemptions/POST/header/Idempotency-Key`.
+                public var idempotencyKey: Components.Parameters.IdempotencyKey
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RedeemInvite.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                ///   - accept:
+                public init(
+                    idempotencyKey: Components.Parameters.IdempotencyKey,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RedeemInvite.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.RedeemInvite.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/invite-redemptions/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/invite-redemptions/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.InviteRedeem)
+            }
+            public var body: Operations.RedeemInvite.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.RedeemInvite.Input.Headers,
+                body: Operations.RedeemInvite.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/invite-redemptions/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/invite-redemptions/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.InviteRedemption)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.InviteRedemption {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.RedeemInvite.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.RedeemInvite.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The invite is the email's; the invitee signs in next.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invite-redemptions/post(redeemInvite)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.RedeemInvite.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.RedeemInvite.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/invite-redemptions/post(redeemInvite)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request conflicts with the current state, for example `version_conflict`,
+            /// `invalid_state_transition`, `already_exists`, or a marketplace that is not connected.
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//v1/invite-redemptions/post(redeemInvite)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Components.Responses.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Components.Responses.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/invite-redemptions/post(redeemInvite)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Too many requests or the daily AI budget is reached; see `retryAfterSeconds`.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invite-redemptions/post(redeemInvite)/responses/429`.
+            ///
+            /// HTTP response code: `429 tooManyRequests`.
+            case tooManyRequests(Components.Responses.RateLimited)
+            /// The associated value of the enum case if `self` is `.tooManyRequests`.
+            ///
+            /// - Throws: An error if `self` is not `.tooManyRequests`.
+            /// - SeeAlso: `.tooManyRequests`.
+            public var tooManyRequests: Components.Responses.RateLimited {
+                get throws {
+                    switch self {
+                    case let .tooManyRequests(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "tooManyRequests",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/invite-redemptions/post(redeemInvite)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// Get the sale email forwarding address and its status
     ///
     /// The account's forwarding address (created on first use), the setup steps, the provider's
@@ -16580,6 +17601,218 @@ public enum Operations {
             /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
             ///
             /// - Remark: Generated from `#/paths//v1/phone-runs/post(claimPhoneRun)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses.DefaultError {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Wait for this phone's next work
+    ///
+    /// While the app is open and has claimed everything it can, it waits here instead of
+    /// looking again on a timer: the answer comes as soon as work for this phone may be
+    /// claimable (the engine handed a change to the phone, a check came due, a run's claim
+    /// ended), with `ready`, or once `waitSeconds` passed with none. The app then claims as
+    /// usual. It only reads: nothing is claimed or changed here, so a wait the app gives up on (a
+    /// trigger in the app, the app leaving) leaves nothing behind.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/phone-runs/wait`.
+    /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)`.
+    public enum WaitForPhoneWork {
+        public static let id: Swift.String = "waitForPhoneWork"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// The app installation's id, which it keeps in its Keychain.
+                ///
+                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/query/installationId`.
+                public var installationId: Components.Schemas.Id
+                /// The longest the answer may take.
+                ///
+                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/query/waitSeconds`.
+                public var waitSeconds: Swift.Int32
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - installationId: The app installation's id, which it keeps in its Keychain.
+                ///   - waitSeconds: The longest the answer may take.
+                public init(
+                    installationId: Components.Schemas.Id,
+                    waitSeconds: Swift.Int32
+                ) {
+                    self.installationId = installationId
+                    self.waitSeconds = waitSeconds
+                }
+            }
+            public var query: Operations.WaitForPhoneWork.Input.Query
+            /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.WaitForPhoneWork.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.WaitForPhoneWork.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.WaitForPhoneWork.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.WaitForPhoneWork.Input.Query,
+                headers: Operations.WaitForPhoneWork.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/phone-runs/wait/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PhoneWorkWaitResult)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.PhoneWorkWaitResult {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.WaitForPhoneWork.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.WaitForPhoneWork.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Whether work may be ready.
+            ///
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.WaitForPhoneWork.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.WaitForPhoneWork.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The resource does not exist in this account (`not_found`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The body is well-formed but invalid (`validation_failed`, with `fieldErrors`).
+            ///
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Components.Responses.ValidationFailed)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Components.Responses.ValidationFailed {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Any error. See `KnownErrorCode` for the codes and their HTTP statuses.
+            ///
+            /// - Remark: Generated from `#/paths//v1/phone-runs/wait/get(waitForPhoneWork)/responses/default`.
             ///
             /// HTTP response code: `default`.
             case `default`(statusCode: Swift.Int, Components.Responses.DefaultError)

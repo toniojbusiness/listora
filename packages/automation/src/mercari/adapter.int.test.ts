@@ -296,14 +296,24 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     );
   });
 
-  it('deactivates to end and activates the same listing to relist', async () => {
+  it('deactivates to end and activates the same listing to relist, from the edit page alone', async () => {
     const { ref } = await create();
-    expect(await adapter.execute(request('end', ref), ctx())).toMatchObject({ type: 'confirmed' });
+    // The edit page says whether the listing is active: the listing's own page isn't opened.
+    expect(await adapter.execute(request('end', ref), ctx())).toMatchObject({
+      type: 'confirmed',
+      excerpt: { steps: ['open the editor', 'deactivate'] },
+    });
     expect(site.item(ref.externalListingId)?.status).toBe('inactive');
     expect(await adapter.readListing(ref, ctx())).toMatchObject({ status: 'ended' });
+    // Ending it again changes nothing: the edit page shows it inactive already.
+    expect(await adapter.execute(request('end', ref), ctx())).toMatchObject({
+      type: 'confirmed',
+      excerpt: { steps: ['open the editor'] },
+    });
     expect(await adapter.execute(request('relist', ref), ctx())).toMatchObject({
       type: 'confirmed',
       externalListingId: ref.externalListingId,
+      excerpt: { steps: ['open the editor', 'activate'] },
     });
     expect(site.item(ref.externalListingId)?.status).toBe('on_sale');
     expect(site.items().filter((item) => item.id === ref.externalListingId)).toHaveLength(1);
@@ -331,6 +341,12 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
       });
     }
     expect(site.item(ref.externalListingId)?.priceCents).toBe(4500);
+    // Ending it deactivates nothing: Mercari shows no editor for it, and its page says it sold.
+    expect(await adapter.execute(request('end', ref), ctx())).toMatchObject({
+      type: 'confirmed',
+      excerpt: { steps: ['open the editor', 'open the listing'] },
+    });
+    expect(site.item(ref.externalListingId)?.status).not.toBe('inactive');
   });
 
   describe('stops at every check and gives the step to the user', () => {

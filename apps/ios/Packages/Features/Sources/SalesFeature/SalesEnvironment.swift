@@ -14,6 +14,8 @@ public final class SalesEnvironment {
     let isSignedIn: @MainActor () -> Bool
     /// Opens the sign-in, for a signed-out screen's Sign in button.
     let onSignIn: @MainActor () -> Void
+    /// The work this iPhone runs now, which a sale's delists show while the phone works on them.
+    public weak var phoneProgress: (any PhoneWorkProgressSource)?
 
     /// `phoneWork` runs at once the marketplace changes a sale queued for this phone.
     public convenience init(

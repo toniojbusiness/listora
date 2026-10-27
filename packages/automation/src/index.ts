@@ -127,10 +127,14 @@ export {
   nextPhoneClaimSeconds,
   PHONE_IDLE_CLAIM_SECONDS,
   PHONE_UNUSED_CLAIM_SECONDS,
+  PHONE_WAIT_MAX_SECONDS,
   PhoneCallConflictError,
   PhoneRunGoneError,
   PhoneRuntimeMismatchError,
+  waitForPhoneWork,
 } from './phone/work.ts';
+export { listenForPhoneWork, PHONE_WORK_CHANNEL, PhoneWorkSignals } from './phone/signals.ts';
+export type { PhoneWorkSubscription, PhoneWorkWake } from './phone/signals.ts';
 export type { PhoneRunState, PhoneWorkDependencies } from './phone/work.ts';
 export { createPoshmarkAutomationAdapter } from './poshmark/adapter.ts';
 export type { PoshmarkAdapterOptions } from './poshmark/adapter.ts';

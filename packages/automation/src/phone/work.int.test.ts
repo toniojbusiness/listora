@@ -50,7 +50,9 @@ import {
   PHONE_IDLE_CLAIM_SECONDS,
   PHONE_UNUSED_CLAIM_SECONDS,
   type PhoneWorkDependencies,
+  waitForPhoneWork,
 } from './work.ts';
+import { listenForPhoneWork } from './signals.ts';
 
 const FAST_POLICY = { delaysMs: [10, 20, 30, 40, 50, 60], jitter: 0, random: () => 0.5 };
 
@@ -395,6 +397,73 @@ describe('phone runs (real Postgres, the phone runtime in headless Chromium)', (
     });
     expect(site.product(listing.external_listing_id ?? '')?.status).toBe('DELETED');
     expect(await work()).toEqual([]);
+  });
+
+  it('wakes the waiting app the moment the engine hands it a delist, and looks every few seconds without signals', async () => {
+    await runPhone();
+    const listingId = await newListing();
+    const create = await enqueue(listingId, 'create');
+    await step(create);
+    await runPhoneAndConfirm(create);
+    const device = { accountId, deviceId };
+    let started: number;
+
+    const listening = listenForPhoneWork({
+      connectionString: database.scratch.url,
+      logger: silentLogger,
+    });
+    try {
+      const deadline = Date.now() + 5_000;
+      while (!listening.signals.listening && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      const deps = { signals: listening.signals };
+      // Nothing for the phone: the wait runs out.
+      expect(await waitForPhoneWork(deps, db, device, { maxMs: 300 })).toBe(false);
+
+      started = Date.now();
+      const waiting = waitForPhoneWork(deps, db, device, { maxMs: 15_000 });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const end = await enqueue(listingId, 'end');
+      await step(end);
+      expect(await waiting).toBe(true);
+      expect(Date.now() - started).toBeLessThan(2_000);
+
+      // A claim renewing its lease wakes nobody; the claim's end does.
+      const run = await claimPhoneRun(phone, db, {
+        accountId,
+        deviceId,
+        runtimeVersion: PHONE_RUNTIME_VERSION,
+      });
+      expect(run).toMatchObject({ operationId: end.id });
+      const subscription = listening.signals.subscribe(accountId);
+      await db
+        .updateTable('phone_work')
+        .set({ lease_expires_at: sql<Date>`now() + interval '10 minutes'` })
+        .where('account_id', '=', accountId)
+        .execute();
+      expect(await subscription.wait(300)).toBe('timeout');
+      subscription.cancel();
+      started = Date.now();
+      const released = waitForPhoneWork(deps, db, device, { maxMs: 15_000 });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      // The app stopped (it names no runs): the claim ends, and the work is claimable again.
+      await claimPhoneRun(phone, db, {
+        accountId,
+        deviceId,
+        runtimeVersion: PHONE_RUNTIME_VERSION,
+        running: [crypto.randomUUID()],
+      });
+      expect(await released).toBe(true);
+      expect(Date.now() - started).toBeLessThan(2_000);
+    } finally {
+      await listening.close();
+    }
+
+    // Without signals the wait still looks every PHONE_IDLE_CLAIM_SECONDS: due work ends it.
+    started = Date.now();
+    expect(await waitForPhoneWork({}, db, device, { maxMs: 15_000 })).toBe(true);
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 
   it('stops at a check nobody can complete now, keeps the session, and retries', async () => {

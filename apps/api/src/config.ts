@@ -21,9 +21,21 @@ import {
 import { assertNever, LOG_LEVELS, type LogLevel } from '@listora/shared';
 import { loadStorageConfig, StorageConfigError, type StorageConfig } from '@listora/storage';
 
+import type { SignUpPolicy } from './tenancy.ts';
+
 /** Auth drivers this build can run (`AUTH_DRIVER`). */
 export const AUTH_DRIVERS = ['dev', 'cognito'] as const;
 export type AuthDriverName = (typeof AUTH_DRIVERS)[number];
+
+/** Who gets an account at their first sign-in (`SIGN_UP`, docs/features/invites.md). */
+export const SIGN_UP_MODES = ['open', 'invite'] as const;
+/**
+ * How redeeming an invite makes sure the sign-in codes reach the invitee
+ * (`INVITE_EMAIL_VERIFICATION`): `none` when the provider can send anywhere, `ses` while the
+ * account's SES is in its sandbox (each invitee's address becomes a verified SES identity).
+ */
+export const INVITE_EMAIL_VERIFICATIONS = ['none', 'ses'] as const;
+export type InviteEmailVerification = (typeof INVITE_EMAIL_VERIFICATIONS)[number];
 
 /** Shortest accepted AUTH_DEV_SECRET: 32 characters, about 256 bits when random. */
 export const MIN_DEV_SECRET_LENGTH = 32;
@@ -55,6 +67,10 @@ export interface ApiConfig {
   databaseConnectTimeoutMs: number;
   logLevel: LogLevel;
   auth: AuthConfig;
+  /** SIGN_UP and SIGN_UP_OWNER_EMAIL: who gets an account at their first sign-in. */
+  signUp: SignUpPolicy;
+  /** INVITE_EMAIL_VERIFICATION; `ses` only with the cognito driver. */
+  inviteEmailVerification: InviteEmailVerification;
   /** STORAGE_* keys, read by @listora/storage. */
   storage: StorageConfig;
   /** AI_* keys, read by @listora/ai: the guards analysis requests are checked against. */
@@ -131,6 +147,18 @@ const envSchema = z.object({
       error: 'COGNITO_CLIENT_IDS must be a comma-separated list of app client ids',
     })
     .optional(),
+  SIGN_UP: z
+    .enum(SIGN_UP_MODES, { error: `SIGN_UP must be one of ${SIGN_UP_MODES.join(', ')}` })
+    .default('open'),
+  SIGN_UP_OWNER_EMAIL: z
+    .email({ error: 'SIGN_UP_OWNER_EMAIL must be an email address' })
+    .transform((value) => value.toLowerCase())
+    .optional(),
+  INVITE_EMAIL_VERIFICATION: z
+    .enum(INVITE_EMAIL_VERIFICATIONS, {
+      error: `INVITE_EMAIL_VERIFICATION must be one of ${INVITE_EMAIL_VERIFICATIONS.join(', ')}`,
+    })
+    .default('none'),
   DATABASE_URL: z
     .string({ error: 'DATABASE_URL is required' })
     .min(1, { error: 'DATABASE_URL is required', abort: true })
@@ -228,6 +256,15 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
   const values = parsed.data;
   const auth = authConfig(values);
   if (Array.isArray(auth)) throw new ConfigError(auth);
+  const signUpIssues = [
+    ...(values.SIGN_UP_OWNER_EMAIL !== undefined && values.SIGN_UP !== 'invite'
+      ? ['SIGN_UP_OWNER_EMAIL is only for SIGN_UP=invite']
+      : []),
+    ...(values.INVITE_EMAIL_VERIFICATION === 'ses' && auth.driver !== 'cognito'
+      ? ['INVITE_EMAIL_VERIFICATION=ses needs AUTH_DRIVER=cognito']
+      : []),
+  ];
+  if (signUpIssues.length > 0) throw new ConfigError(signUpIssues);
   return {
     host: values.API_HOST,
     port: values.API_PORT,
@@ -235,6 +272,11 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     databaseConnectTimeoutMs: values.DATABASE_CONNECT_TIMEOUT_MS,
     logLevel: values.LOG_LEVEL,
     auth,
+    signUp:
+      values.SIGN_UP === 'invite'
+        ? { mode: 'invite', ownerEmail: values.SIGN_UP_OWNER_EMAIL }
+        : { mode: 'open' },
+    inviteEmailVerification: values.INVITE_EMAIL_VERIFICATION,
     storage,
     ai,
     marketplaces,

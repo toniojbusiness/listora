@@ -12,6 +12,7 @@ import type { AccountDeletionDependencies, AccountDeletionOutcome } from '@listo
 import {
   accountDeletionJobs,
   FakeCognitoUserAdmin,
+  FakeInviteeDirectory,
   FakeMarketplaceAccess,
   runAccountDeletionJobs,
   type AccountDeletionJob,
@@ -39,9 +40,11 @@ import {
 import { DEFAULT_RETRY_POLICY } from '@listora/operations';
 import {
   loadAutomationSettings,
+  listenForPhoneWork,
   phoneWorkAdapters,
   type AutomationSettings,
   type PhoneWorkDependencies,
+  type PhoneWorkSignals,
 } from '@listora/automation';
 import { LocalTokenVault, SessionVault } from '@listora/connections';
 import {
@@ -80,7 +83,7 @@ import { operationSpec, responseContractErrors } from './contract/contract.ts';
 import type { ContractReply, OperationId } from './contract/routes.ts';
 import type { MarketplaceSessionsDependencies } from './marketplace-sessions/routes.ts';
 import type { SaleEmailsDependencies } from './sale-emails/routes.ts';
-import { resolveTenant, type Tenant } from './tenancy.ts';
+import { resolveTenant, type SignUpPolicy, type Tenant } from './tenancy.ts';
 import type { EbayWebhookDependencies } from './webhooks/ebay.ts';
 
 export const TEST_AUTH_SECRET = 'test-secret-that-is-at-least-32-characters-long';
@@ -255,12 +258,16 @@ export class TestUploads {
   }
 }
 
-/** Storage, AI, and job queues for unit tests that build the app but never use them. */
+/**
+ * Storage, AI, and job queues for unit tests that build the app but never use them, and open
+ * sign-up.
+ */
 export function offlineDependencies(): Pick<
   AppDependencies,
-  'storage' | 'photoJobs' | 'ai' | 'analysisJobs'
+  'signUp' | 'storage' | 'photoJobs' | 'ai' | 'analysisJobs'
 > {
   return {
+    signUp: { mode: 'open' },
     ai: testAiClient({
       usageStore: { record: unused, spentTodayMicros: unused, monthlyUsage: unused },
       fixtures: {},
@@ -292,9 +299,11 @@ function testPhoneWork(
   logger: Logger,
   settings: AutomationSettings,
   vault: SessionVault,
+  signals: PhoneWorkSignals,
 ): PhoneWorkDependencies {
   return {
     db,
+    signals,
     adapters: phoneWorkAdapters(
       settings,
       { fakeMarketplaceUrl: undefined, ebay: undefined, depop: undefined },
@@ -373,6 +382,8 @@ export interface TestApiOptions {
   saleEmails?: SaleEmailsDependencies;
   /** `AUTOMATION_*` keys for the marketplaces' profiles (`AUTOMATION_POSHMARK_RUNS_ON`). */
   automationEnv?: Readonly<Record<string, string>>;
+  /** Who gets an account at their first sign-in (default: anyone, as in development). */
+  signUp?: SignUpPolicy;
 }
 
 export interface TestApi {
@@ -398,6 +409,8 @@ export interface TestApi {
   ai: AiClient;
   /** The session vault `linkMarketplaceSession` stores sessions in (a random local key). */
   vault: SessionVault;
+  /** The sign-in provider's invitee users, in memory. */
+  invitees: FakeInviteeDirectory;
   /** The clock for dev sign-in and upload sessions, in milliseconds; move it to expire them. */
   clock: { now: number };
   /** Every line the API logged (requests included), parsed, oldest first. */
@@ -429,6 +442,11 @@ export async function createTestApi(
     throw error;
   }
 
+  // The app's waits for phone work hear it as the API does (phone/signals.ts).
+  const phoneSignals = listenForPhoneWork({
+    connectionString: scratch.url,
+    logger: createLogger({ service: 'api-test', level: 'silent' }),
+  });
   const logLines: Record<string, unknown>[] = [];
   const logger = createLogger({
     service: 'api-test',
@@ -488,11 +506,15 @@ export async function createTestApi(
     runAll: () => runAccountDeletionJobs(deletionDeps),
   };
   const automation = loadAutomationSettings({ ...options.automationEnv });
+  const signUp = options.signUp ?? { mode: 'open' };
+  const invitees = new FakeInviteeDirectory();
   const marketplaceSessions = testMarketplaceSessions(logger, automation);
   const app = buildApp({
     logger,
     db,
     auth: options.auth ?? devAuth,
+    signUp,
+    invites: { directory: invitees },
     ...(options.connections === undefined ? {} : { connections: options.connections }),
     ...(options.ebayWebhook === undefined ? {} : { ebayWebhook: options.ebayWebhook }),
     ...(options.saleEmails === undefined ? {} : { saleEmails: options.saleEmails }),
@@ -501,7 +523,7 @@ export async function createTestApi(
     ai,
     analysisJobs,
     marketplaceSessions: options.marketplaceSessions ?? marketplaceSessions,
-    phone: testPhoneWork(db, logger, automation, marketplaceSessions.vault),
+    phone: testPhoneWork(db, logger, automation, marketplaceSessions.vault, phoneSignals.signals),
     batchJobs,
     now: () => new Date(clock.now),
     pingDatabase: () => Promise.resolve(),
@@ -583,7 +605,7 @@ export async function createTestApi(
     const token = tokens.get(email) ?? (await signIn(email));
     const identity = await devAuth.verifyAccessToken(token);
     if (!identity) throw new Error(`token for ${email} no longer verifies`);
-    return resolveTenant(db, identity);
+    return resolveTenant(db, identity, signUp);
   };
 
   return {
@@ -601,6 +623,7 @@ export async function createTestApi(
     aiControls,
     ai,
     vault: marketplaceSessions.vault,
+    invitees,
     clock,
     logLines,
     signIn,
@@ -608,6 +631,7 @@ export async function createTestApi(
     call,
     close: async () => {
       await app.close();
+      await phoneSignals.close();
       await db.destroy();
       await scratch.drop();
       await rm(storageDir, { recursive: true, force: true });

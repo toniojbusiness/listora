@@ -12,8 +12,10 @@ import {
   PhoneCallConflictError,
   PhoneRunGoneError,
   PHONE_RUNTIME_VERSION,
+  PHONE_WAIT_MAX_SECONDS,
   PhoneRuntimeMismatchError,
   readPhoneBundle,
+  waitForPhoneWork,
   type PhoneRunState,
   type PhoneWorkDependencies,
 } from '@listora/automation';
@@ -58,6 +60,33 @@ export function registerPhoneRoutes(app: FastifyInstance, deps: PhoneRouteDepend
       return { status: 200, body: { nextClaimInSeconds } };
     } catch (error) {
       throw apiError(error);
+    }
+  });
+
+  contractRoute(app, deps, 'waitForPhoneWork', async ({ tenant, db, query, request }) => {
+    const phone = available(deps);
+    const device = await findDevice(db, tenant, query.installationId);
+    if (device === undefined) throw notFound('Device');
+    // The wait ends when the app gives up on it (its connection closes).
+    const gone = new AbortController();
+    const abort = (): void => {
+      gone.abort();
+    };
+    const socket = request.raw.socket;
+    socket.once('close', abort);
+    try {
+      const ready = await waitForPhoneWork(
+        phone,
+        db,
+        { accountId: tenant.accountId, deviceId: device.id },
+        {
+          maxMs: Math.min(query.waitSeconds, PHONE_WAIT_MAX_SECONDS) * 1000,
+          signal: gone.signal,
+        },
+      );
+      return { status: 200, body: { ready } };
+    } finally {
+      socket.off('close', abort);
     }
   });
 

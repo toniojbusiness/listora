@@ -18,6 +18,8 @@ describe('loadApiConfig', () => {
       databaseConnectTimeoutMs: 5_000,
       logLevel: 'info',
       auth: { driver: 'dev', devSecret: undefined },
+      signUp: { mode: 'open' },
+      inviteEmailVerification: 'none',
       storage: {
         driver: 'local',
         rootDir: DEFAULT_LOCAL_STORAGE_DIR,
@@ -35,6 +37,45 @@ describe('loadApiConfig', () => {
       emailIngest: loadEmailIngestConfig({}),
       operationRetryDelayScale: 1,
     });
+  });
+
+  it('reads who may sign up, and how invitees are reached', () => {
+    const cognito = {
+      ...REQUIRED,
+      AUTH_DRIVER: 'cognito',
+      COGNITO_USER_POOL_ID: 'us-east-1_AbC123xyZ',
+      COGNITO_CLIENT_IDS: 'client1',
+    };
+    expect(
+      loadApiConfig({
+        ...cognito,
+        SIGN_UP: 'invite',
+        SIGN_UP_OWNER_EMAIL: 'Owner@Example.com',
+        INVITE_EMAIL_VERIFICATION: 'ses',
+      }),
+    ).toMatchObject({
+      signUp: { mode: 'invite', ownerEmail: 'owner@example.com' },
+      inviteEmailVerification: 'ses',
+    });
+    expect(loadApiConfig({ ...REQUIRED, SIGN_UP: 'invite' }).signUp).toEqual({
+      mode: 'invite',
+      ownerEmail: undefined,
+    });
+    for (const [env, problem] of [
+      [{ SIGN_UP: 'closed' }, 'SIGN_UP must be one of open, invite'],
+      [{ SIGN_UP: 'invite', SIGN_UP_OWNER_EMAIL: 'nobody' }, 'SIGN_UP_OWNER_EMAIL must be'],
+      [
+        { SIGN_UP_OWNER_EMAIL: 'owner@example.com' },
+        'SIGN_UP_OWNER_EMAIL is only for SIGN_UP=invite',
+      ],
+      [
+        { INVITE_EMAIL_VERIFICATION: 'ses' },
+        'INVITE_EMAIL_VERIFICATION=ses needs AUTH_DRIVER=cognito',
+      ],
+      [{ INVITE_EMAIL_VERIFICATION: 'smtp' }, 'INVITE_EMAIL_VERIFICATION must be one of none, ses'],
+    ] as const) {
+      expect(() => loadApiConfig({ ...REQUIRED, ...env }), problem).toThrow(problem);
+    }
   });
 
   it('reads the automation settings, refusing a fake site on a real marketplace', () => {

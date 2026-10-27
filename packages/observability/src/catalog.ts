@@ -52,6 +52,14 @@ export const TRUST_METRICS = {
       'From the sale being recorded to the verified delist of another listing of the item, ' +
       'one sample per auto-delist operation that succeeded (p50, p95).',
   },
+  DelistEverywhereLatency: {
+    unit: 'Milliseconds',
+    dimensionSets: [[]],
+    description:
+      'From the sale being recorded to the last other listing of the item delisted and ' +
+      'confirmed, one sample per sale whose every delist succeeded (p50, p95; target under a ' +
+      'minute, docs/features/auto-delist.md).',
+  },
   StuckOperations: {
     unit: 'Count',
     dimensionSets: [['Status']],

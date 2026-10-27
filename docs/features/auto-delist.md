@@ -85,6 +85,34 @@ when one failed, waits for the seller, or was canceled, and otherwise `in_progre
 names the most urgent part: `Delist failed on Depop - Retry`, `Action needed - delist on
 Poshmark and Mercari`, `Delisting on Depop...`, or `Delisted everywhere`.
 
+## Speed
+
+The target: every other listing of the item delisted and confirmed **under a minute** after
+Listora sees the sale (the delist run starts in the transaction that records it). How it gets
+there:
+
+- **Delists first, side by side.** Each delist is urgent: on the worker's own pool, ahead of
+  routine changes on the seller's iPhone (`priority`), and each marketplace in a lane of its own
+  on the phone, so Depop, Mercari, and Poshmark delist at once while eBay ends through its API.
+- **No backoff to wait out.** A delist behind an older change on its listing (one still being
+  read back, say) runs that change's read-back at once and looks again every 30 seconds, never
+  waiting out a backoff of minutes ([operations.md](operations.md)).
+- **The open app starts at once.** The app waits for its next work, and the server answers that
+  wait the moment the engine hands a delist to the phone, so the delist starts within a second
+  with no push ([phone-execution.md](phone-execution.md#when-the-phone-runs)). A closed app gets
+  the time-sensitive push and runs the delists when the seller taps it.
+- **Fewer page loads.** Mercari's and Poshmark's End act on the edit page alone, and Poshmark's
+  doesn't read the listing again before the read-back does ([mercari.md](mercari.md),
+  [poshmark.md](poshmark.md)).
+
+**Measured** three ways: the trust metric `DelistEverywhereLatency` (from the recorded sale to
+the last delist confirmed, one sample per sale, [observability.md](observability.md)), the SLA
+job's log line `delist run completed` (`delistedInMs`, and each listing's `doneInMs`), and in the
+app: the sale screen's "Other marketplaces" card and the item's Sold section count up from the
+sale ("Sold 23 s ago · 1 of 3 delisted"), then say how long it took ("Delisted everywhere in
+41 s"), and the sale screen shows each delist the iPhone works on, step by step ("Deactivating",
+"Step 2 of 2", about how long it has left).
+
 ## SLA re-alerts
 
 The worker's `auto_delist_sla` job runs every minute (`sla.ts`). For every run that is not
@@ -149,7 +177,8 @@ runs that are not completed (the SLA job) and on each item's runs (the item page
   screens (T-19), from `Item.delistRun`, `Item.doubleSale`, and `Sale.delistRuns`.
 - Listing actions (T-19) must refuse to publish or relist a sold item, under the item lock.
 - Items with a quantity above one: today every sale delists the item everywhere.
-- A delist waits behind an older operation that is verifying (its read-backs follow the backoff
-  schedule) or a publish that may have reached the marketplace; the SLA alerts cover the wait.
+- A delist waits behind an older operation that is running or a publish that may have reached
+  the marketplace (an older one being read back is read back at once); the SLA alerts cover the
+  wait.
 - A `mark_sold` chosen while a Depop connection used the API fails if the connection is
   assisted by the time it runs; the seller then delists by hand.

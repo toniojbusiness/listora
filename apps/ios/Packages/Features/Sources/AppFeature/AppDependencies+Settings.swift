@@ -18,6 +18,8 @@ public struct SettingsModels {
     public let accountDeletion: AccountDeletionModel
     /// Settings > Import your listings: the listings a seller already has, brought in as items.
     public let imports: ImportsModel
+    /// Settings > People: the owner's invites.
+    public let invites: InvitesModel
 
     /// `profileDirectory` keeps the profile photo; `LISTORA_RESET_LOCAL_DATA` empties it first.
     init(
@@ -38,6 +40,7 @@ public struct SettingsModels {
         )
         self.profile = profile
         saleEmails = SaleEmailsModel(service: APISaleEmailsService(api: apiClient))
+        invites = InvitesModel(service: APIInvitesService(client: apiClient.client))
         accountDeletion = Self.accountDeletion(apiClient, accessTokens, signIn, phone.sessions, profile)
         imports = AppDependencies.makeImports(apiClient, phone)
     }

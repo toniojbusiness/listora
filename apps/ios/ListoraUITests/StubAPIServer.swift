@@ -34,6 +34,10 @@ final class StubAPIServer: @unchecked Sendable {
     var askBeforeDelist = false
     /// The names `GET /v1/account/profile` answers, as the last `PUT` saved them.
     var profileNames: [String: String] = [:]
+    /// Invites: the unverified invitee redeemed once, the owner created an invite, revoked Maria.
+    var inviteeVerified = false
+    var newInviteCreated = false
+    var joinedRevoked = false
 
     /// What `GET /v1/today` answers.
     enum TodayState: Sendable {
@@ -170,6 +174,7 @@ final class StubAPIServer: @unchecked Sendable {
             return respondToLinkAccounts(method: request.method, path: path)
                 ?? respondToSaleEmails(method: request.method, path: path, body: request.body)
                 ?? respondToProfile(method: request.method, path: path, body: request.body)
+                ?? respondToInvites(method: request.method, path: path, body: request.body)
                 ?? respondToDevSignIn(request, path: path)
                 ?? Self.http(
                     status: "404 Not Found",

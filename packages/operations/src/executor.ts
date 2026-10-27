@@ -97,6 +97,7 @@ import { createdBefore } from './ordering.ts';
 import { syncItemListedStatus } from './item-status.ts';
 import {
   DEFAULT_PHONE_QUEUE,
+  PACED_ERROR_CODES,
   PHONE_UNAVAILABLE_ERROR,
   phoneWorkOf,
   queueOperationForPhone,
@@ -108,6 +109,7 @@ import { dismissOpenTasks } from './commands.ts';
 import { UNFINISHED_STATUSES } from './state-machine.ts';
 import { REFUSED_CONTENT_ERROR } from './status-display.ts';
 import {
+  attemptNow,
   operationPriority,
   transitionOperation,
   type OperationError,
@@ -666,12 +668,21 @@ async function claimStep(
     }
     if (await hasOlderUnfinishedOperation(trx, op)) {
       await removePhoneWork(trx, op);
+      // A delist after a sale doesn't wait out an older change's backoff: that change's check
+      // runs now, and the delist looks again soon (it also runs as soon as that change settles).
+      const urgent = op.origin === 'auto_delist';
+      if (urgent) await hurryOlderChecks(trx, op, log);
       await scheduleOperationJob(trx, {
         accountId: op.account_id,
         operationId: op.id,
         listingId: op.listing_id,
         priority: operationPriority(op),
-        runAt: new Date(Date.now() + deps.blockedRecheckMs),
+        runAt: new Date(
+          Date.now() +
+            (urgent
+              ? Math.min(deps.blockedRecheckMs, URGENT_BLOCKED_RECHECK_MS)
+              : deps.blockedRecheckMs),
+        ),
       });
       log.debug('operation waits for an older operation on its listing');
       return null;
@@ -891,6 +902,56 @@ async function hasOlderUnfinishedOperation(trx: DbTransaction, op: OperationRow)
     .limit(1)
     .executeTakeFirst();
   return older !== undefined;
+}
+
+/**
+ * How soon a delist after a sale that waits behind an older operation on its listing looks
+ * again (any other operation waits `blockedRecheckMs`), each time running that operation's
+ * check at once (`hurryOlderChecks`).
+ */
+export const URGENT_BLOCKED_RECHECK_MS = 30_000;
+
+/**
+ * Runs the checks of the older operations on a delist's listing now, when they wait out a
+ * backoff before reading the listing back: a delist after a sale waits for them (they may have
+ * put a listing on the marketplace that the delist must end), so their read-backs go first.
+ * Only reads are hurried, never a send, and never a wait the marketplace or Listora's pacing
+ * asked for. Each is recorded in its history as a try-now for the delist.
+ */
+async function hurryOlderChecks(
+  trx: DbTransaction,
+  delist: OperationRow,
+  log: Logger,
+): Promise<void> {
+  const waiting = await trx
+    .selectFrom('marketplace_operation')
+    .selectAll()
+    .where('account_id', '=', delist.account_id)
+    .where('listing_id', '=', delist.listing_id)
+    .where('status', '=', 'verifying')
+    .where('next_attempt_at', '>', sql<Date>`now()`)
+    .where((eb) =>
+      eb.or([eb('error_code', 'is', null), eb('error_code', 'not in', PACED_ERROR_CODES)]),
+    )
+    .where(createdBefore(delist))
+    .orderBy('created_at')
+    .orderBy('id')
+    .forUpdate()
+    .skipLocked()
+    .execute();
+  for (const older of waiting) {
+    await attemptNow(trx, older, {
+      action: 'try_now',
+      reason: 'delist_waiting',
+      delist: delist.id,
+    });
+  }
+  if (waiting.length > 0) {
+    log.info(
+      { hurried: waiting.map((older) => older.id) },
+      'a delist hurried the checks it waits for',
+    );
+  }
 }
 
 /**

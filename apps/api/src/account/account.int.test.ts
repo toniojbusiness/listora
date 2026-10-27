@@ -404,7 +404,7 @@ describe('deleteAccount (real Postgres)', () => {
     let provisioned: Promise<Tenant> | undefined;
     try {
       await lockIdentity(deletion, identity);
-      provisioned = resolveTenant(api.db, identity);
+      provisioned = resolveTenant(api.db, identity, { mode: 'open' });
       provisioned.catch(() => undefined);
       await new Promise((resolve) => setTimeout(resolve, 200));
       expect(await userCount(api.db, email)).toBe(0);

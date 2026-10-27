@@ -91,6 +91,12 @@ TaskId:
   required: true
   schema:
     $ref: './schemas/common.yaml#/Id'
+InviteId:
+  name: inviteId
+  in: path
+  required: true
+  schema:
+    $ref: './schemas/common.yaml#/Id'
 MarketplacePath:
   name: marketplace
   in: path

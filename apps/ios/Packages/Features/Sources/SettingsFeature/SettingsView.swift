@@ -65,6 +65,8 @@ public struct SettingsView: View {
     private let profile: ProfileModel?
     private let account: SettingsAccount?
     private let accountDeletion: AccountDeletionModel?
+    /// Settings > People: invites; shown only to the account that may invite.
+    let invites: InvitesModel?
     private let screens: SettingsScreens
     /// The marketplaces' health, on the Linked marketplaces row.
     private let marketplacesSummary: SettingsSummary?
@@ -80,6 +82,7 @@ public struct SettingsView: View {
         profile: ProfileModel? = nil,
         account: SettingsAccount? = nil,
         accountDeletion: AccountDeletionModel? = nil,
+        invites: InvitesModel? = nil,
         screens: SettingsScreens = SettingsScreens(),
         marketplacesSummary: SettingsSummary? = nil,
         saleEmailsSummary: SettingsSummary? = nil,
@@ -91,6 +94,7 @@ public struct SettingsView: View {
         self.profile = profile
         self.account = account
         self.accountDeletion = accountDeletion
+        self.invites = invites
         self.screens = screens
         self.marketplacesSummary = marketplacesSummary
         self.saleEmailsSummary = saleEmailsSummary
@@ -105,6 +109,7 @@ public struct SettingsView: View {
                 profileSection
                 marketplacesSection
                 sellingSection
+                peopleSection
                 supportSection
                 accountSection
                 versionFooter
@@ -126,6 +131,11 @@ public struct SettingsView: View {
             .onAppear { accountDeletion?.refresh() }
             .onChange(of: account?.email) { accountDeletion?.refresh() }
             .task(id: account?.email) { await profile?.load() }
+            .task(id: account?.email) {
+                if account != nil {
+                    await invites?.load()
+                }
+            }
         }
     }
 
@@ -329,6 +339,10 @@ extension SettingsView {
             }
         case .linkAccounts, .marketplaces, .imports, .notifications, .saleEmails:
             screens.screen(for: destination)
+        case .people:
+            if let invites {
+                InvitesView(model: invites)
+            }
         case .help:
             HelpView(supportEmail: content.supportEmail, version: content.fullVersion)
         case let .legal(kind):

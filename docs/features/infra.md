@@ -54,8 +54,9 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
   rolled back: every service returns to the task definition it ran before the deploy (with the
   old tasks serving until the restored ones are healthy), and the deploy fails, so a failed
   release is never reported as deployed. Personal signs in only with its owner pool, the auth stack
-  (a Cognito user pool whose one user is `LISTORA_OWNER_EMAIL`; [auth.md](auth.md)): the
-  script refuses the dev driver, and on the first deploy waits for the owner to click SES's
+  (a Cognito user pool whose users are `LISTORA_OWNER_EMAIL` and the people the owner invites;
+  [auth.md](auth.md), [invites.md](invites.md)): the script refuses the dev driver and any
+  sign-up but by invite, and on the first deploy waits for the owner to click SES's
   verification link before it deploys the pool. The steps, rollback, teardown (the database's deletion protection), and how to
   point the iPhone app at the printed URL are in infra/README.md, Deploying the personal
   environment.

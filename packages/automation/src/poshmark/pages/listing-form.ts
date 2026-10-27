@@ -145,11 +145,14 @@ const AVAILABILITY_CODES = {
 
 /**
  * Opens a form and waits until it is there; `false` for a listing Poshmark has no form for (a
- * 404). A form that never comes is a page Listora no longer understands (`PageChangedError`).
+ * 404, or a page it sent the seller to instead, as for a listing that can't be edited). A form
+ * that never comes is a page Listora no longer understands (`PageChangedError`).
  */
 export async function openForm(page: PageDriver, url: string): Promise<boolean> {
   await page.goto(url);
   if (page.status() === 404) return false;
+  const asked = new URL(url).pathname.replace(/\/$/, '');
+  if (!new URL(page.url()).pathname.startsWith(asked)) return false;
   try {
     await page.waitFor(FORM_SELECTORS.form, 'attached');
   } catch {
@@ -401,6 +404,17 @@ async function disappears(page: PageDriver, selector: string): Promise<boolean> 
     if (Date.now() >= end) return false;
     await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
   }
+}
+
+/**
+ * The availability the edit form shows the listing in, or `null` when its picker shows neither
+ * (Listora then reads the listing's own page instead).
+ */
+export async function shownAvailability(page: PageDriver): Promise<Availability | null> {
+  await expectField(page, FORM_SELECTORS.availabilitySelector, 'availability picker');
+  const shown = (await page.text(FORM_SELECTORS.availabilitySelector))?.replace(/\s+/g, ' ').trim();
+  const found = Object.entries(AVAILABILITY_LABELS).find(([, label]) => label === shown);
+  return found === undefined ? null : (found[0] as Availability);
 }
 
 export async function setAvailability(page: PageDriver, availability: Availability): Promise<void> {
