@@ -1706,8 +1706,14 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       t.resourceCountIs('AWS::IAM::ManagedPolicy', 0);
       const role = resources(t, 'AWS::IAM::Role')[0];
       expect(role?.Properties?.['ManagedPolicyArns']).toBeUndefined();
-      expect(JSON.stringify(statements(t))).toContain(
-        `role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-*-${target.account}-${target.region}`,
+      // The deploy and asset publishing roles, never the lookup role (which reads the whole
+      // account) or a wildcard.
+      const bootstrapRoles = statements(t).find((s) => s['Sid'] === 'UseCdkBootstrapRoles');
+      expect(asList(bootstrapRoles?.['Resource'])).toEqual(
+        ['deploy', 'file-publishing', 'image-publishing'].map(
+          (role) =>
+            `arn:aws:iam::${target.account}:role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-${role}-role-${target.account}-${target.region}`,
+        ),
       );
     });
 
@@ -1736,9 +1742,11 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       const bySid = (sid: string) =>
         JSON.stringify(statements(t).find((statement) => statement['Sid'] === sid));
       expect(bySid('CheckRestrictedBootstrap')).toContain(`:stack/CDKToolkit-listora/*`);
-      expect(bySid('CheckExecutionPolicy')).toContain(
-        `:iam::${target.account}:policy/listora-${environment}-cdk-execution"`,
-      );
+      for (const policy of ['cdk-execution', 'role-boundary']) {
+        expect(bySid('CheckExecutionPolicy')).toContain(
+          `:iam::${target.account}:policy/listora-${environment}-${policy}"`,
+        );
+      }
       expect(bySid('PassServiceRoles')).toContain(
         `:iam::${target.account}:role/listora-${environment}-compute-*"`,
       );

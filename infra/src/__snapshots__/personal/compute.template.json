@@ -45,7 +45,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "apptaskTaskRoleDefaultPolicyFAF2B7B8": {
@@ -710,7 +711,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "apptaskExecutionRoleDefaultPolicyE842FDE0": {
@@ -944,7 +946,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "runnertaskTaskRoleDefaultPolicy43ED643D": {
@@ -1261,7 +1264,8 @@
             }
           ],
           "Version": "2012-10-17"
-        }
+        },
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary"
       }
     },
     "runnertaskExecutionRoleDefaultPolicyEBAA887F": {
