@@ -184,6 +184,15 @@ export interface OperationRequest<P extends ListingPayload = ListingPayload> {
   idempotencyKey: string;
   /** 1 for the first attempt. */
   attempt: number;
+  /**
+   * Whether an earlier attempt of the operation may have reached the marketplace, as the engine
+   * reads the operation's history: an attempt whose recorded result shows it changed nothing
+   * (refused, or stopped before any step that changes the listing) did not. A create or relist
+   * that may have posted before looks for that listing first, so it never posts a second copy;
+   * one that knows nothing was posted goes straight to posting. Absent (a caller that does not
+   * know), every attempt after the first may have.
+   */
+  mayHaveApplied?: boolean;
   desired: DesiredListingState;
   listing: ListingRef;
   /**

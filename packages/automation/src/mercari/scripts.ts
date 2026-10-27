@@ -10,7 +10,11 @@ import {
   type RemoteOrder,
 } from '@listora/marketplaces';
 
-import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
+import {
+  mayHaveAppliedBefore,
+  type AutomationScripts,
+  type WriteResult,
+} from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
 import type { StepRunner } from '../runner/types.ts';
 import { openAccount, salesTabPath } from './pages/account-page.ts';
@@ -128,7 +132,7 @@ export function createMercariScripts(
     const payload = op.payload;
     if (payload === null) throw new Error('a create has a payload');
     const sku = listingSku(op.listing);
-    if (op.attempt > 1) {
+    if (mayHaveAppliedBefore(op)) {
       // An earlier attempt may have gone through; Mercari would take a second copy.
       const earlier = await findBySku(step, sku, payload.title);
       if (earlier?.state.found === true) {

@@ -11,7 +11,11 @@ import {
   type RemoteOrder,
 } from '@listora/marketplaces';
 
-import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
+import {
+  mayHaveAppliedBefore,
+  type AutomationScripts,
+  type WriteResult,
+} from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
 import { listingSku } from '../adapter/sku-line.ts';
 import type { PageDriver, StepRunner } from '../runner/types.ts';
@@ -111,7 +115,7 @@ export function createEbayScripts(
     op: OperationRequest<EbayAutomationPayload>,
     step: StepRunner,
   ): Promise<WriteResult | null> {
-    if (op.attempt <= 1) return null;
+    if (!mayHaveAppliedBefore(op)) return null;
     // An earlier attempt may have gone through; eBay would take a second copy.
     const found = await findBySku(step, listingSku(op.listing));
     return found?.status === 'active'

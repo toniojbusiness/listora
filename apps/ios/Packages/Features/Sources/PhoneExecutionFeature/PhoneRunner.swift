@@ -4,21 +4,23 @@ import Foundation
 import Observation
 
 /// Runs the marketplace work Listora's server hands this phone (docs/features/phone-execution.md):
-/// it claims the next work waiting for this device, runs each script call in the phone runtime,
-/// and answers, until nothing waits. The server decides everything from the answers; the phone
+/// it claims the work waiting for this device, runs each script call in the phone runtime, and
+/// answers, until nothing waits. The server decides everything from the answers; the phone
 /// never reports anything as done itself.
 ///
-/// It runs while the app is open (at once, then again whenever Listora says to look next), after
-/// the seller links a marketplace or changes a listing, when a push notification arrives or is
-/// tapped, on background app refresh, and overnight while the phone charges. One run at a time: a
-/// trigger during a run makes it look again once it ends.
+/// Marketplaces run side by side, each in a lane of its own (its own web views in the runtime):
+/// the runner claims for every marketplace with no run under way, naming the runs it still runs,
+/// so the server hands out one run per marketplace, delists after a sale first. It runs while the
+/// app is open (at once, again whenever Listora says, and as a marketplace's run ends), after the
+/// seller links a marketplace or changes a listing, on a push, on background app refresh, and
+/// overnight while the phone charges. A trigger during a claim makes it look again after.
 @MainActor
 @Observable
 public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     public enum Activity: Equatable, Sendable {
         case idle
-        /// Running work on a marketplace (`purpose`: a listing change, a sign-in check, a sale check).
-        case running(marketplace: String, purpose: String)
+        /// Running work on these marketplaces, side by side, in order.
+        case running(marketplaces: [String])
     }
 
     public private(set) var activity: Activity = .idle {
@@ -30,18 +32,29 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
         }
     }
 
-    /// Where the work running now is (its step, and about how long it has left); `nil` while
-    /// nothing runs.
-    public private(set) var progress: PhoneWorkProgress?
-    /// Why the last run stopped before the work was done (the app needs an update, Listora
-    /// couldn't be reached); `nil` once a run gets through.
-    public private(set) var problem: String?
+    /// Where the work running now is, one per marketplace (its step, and about how long it has
+    /// left), in marketplace order; empty while nothing runs.
+    public var progress: [PhoneWorkProgress] {
+        progressByMarketplace.keys.sorted().compactMap { progressByMarketplace[$0] }
+    }
+
+    var progressByMarketplace: [String: PhoneWorkProgress] = [:]
+    /// Why the work stopped before it was done (the app needs an update, Listora couldn't be
+    /// reached, a call couldn't run here); `nil` once claims and runs get through again.
+    public var problem: String? {
+        claimProblem ?? runProblem
+    }
+
+    /// Why the last claim didn't get through; `nil` once one does.
+    private var claimProblem: String?
+    /// Why a marketplace's run last stopped early; `nil` once a run gets through.
+    private var runProblem: String?
     public private(set) var lastRunAt: Date?
     /// How long until the next look while the app is open, as Listora said after its last claim.
     private var nextLook: Duration?
-    /// The open app's wait until its next look (`follow`), and whether a run started meanwhile
-    /// ended it early: that run's last claim says when to look next, which can be much sooner
-    /// (Listora answers 5 minutes while no marketplace runs here, 10 seconds once one is linked).
+    /// The open app's wait until its next look (`follow`), and whether a trigger meanwhile ended
+    /// it early: the claim it started says when to look next, which can be much sooner (Listora
+    /// answers 5 minutes while no marketplace runs here, seconds once one is linked).
     private var followWait: Task<Void, any Error>?
     private var wokeEarly = false
 
@@ -49,28 +62,39 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     private let runtime: any PhoneRuntime
     private let installationID: @Sendable () -> String
     private let isSignedIn: @MainActor () -> Bool
+    private let isAppOpen: @MainActor () -> Bool
     private let device: @MainActor () -> DeviceRegistration
     private let sleep: @Sendable (Duration) async throws -> Void
     private let keepAwake: @MainActor (Bool) -> Void
-    private let timings: StepTimings
-    /// The run whose steps `progress` follows.
-    private var running: (marketplace: String, operationID: String?)?
+    let timings: StepTimings
     private var pushToken: (token: String, environment: String)?
     /// The registration the server has, so a run registers only when something changed.
     private var registered: DeviceRegistration?
-    private var task: Task<Void, Never>?
+    /// The run each marketplace runs now.
+    private var lanes: [String: Lane] = [:]
+    /// The claims under way, for every marketplace with no run.
+    private var claiming: Task<Void, Never>?
     private var again = false
-    /// Work one run claims at most, so a run always ends.
+    /// Runs started since the phone was last idle: at most `maxRuns`, so a stretch of work ends.
+    private var started = 0
     private let maxRuns: Int
+    private var claimsDone: [CheckedContinuation<Void, Never>] = []
+    private var idle: [CheckedContinuation<Void, Never>] = []
     /// The wait between looks while the app is open when Listora said nothing (it couldn't be
     /// reached).
     static let fallbackLook: Duration = .seconds(30)
+
+    private struct Lane {
+        let run: PhoneRun
+        let task: Task<Void, Never>
+    }
 
     public convenience init(
         service: any PhoneWorkService,
         runtime: any PhoneRuntime,
         installationID: @escaping @Sendable () -> String = Installation.id,
         isSignedIn: @escaping @MainActor () -> Bool,
+        isAppOpen: @escaping @MainActor () -> Bool = { false },
         device: @escaping @MainActor () -> DeviceRegistration,
         maxRuns: Int = 50,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
@@ -81,6 +105,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
             runtime: runtime,
             installationID: installationID,
             isSignedIn: isSignedIn,
+            isAppOpen: isAppOpen,
             device: device,
             maxRuns: maxRuns,
             sleep: sleep,
@@ -94,6 +119,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
         runtime: any PhoneRuntime,
         installationID: @escaping @Sendable () -> String = Installation.id,
         isSignedIn: @escaping @MainActor () -> Bool,
+        isAppOpen: @escaping @MainActor () -> Bool = { false },
         device: @escaping @MainActor () -> DeviceRegistration,
         maxRuns: Int = 50,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
@@ -104,6 +130,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
         self.runtime = runtime
         self.installationID = installationID
         self.isSignedIn = isSignedIn
+        self.isAppOpen = isAppOpen
         self.device = device
         self.maxRuns = maxRuns
         self.sleep = sleep
@@ -117,27 +144,29 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
         start()
     }
 
-    /// Runs the waiting work and returns when it is done (a background task, a push).
+    /// Runs the waiting work and returns when it is all done, on every marketplace (a background
+    /// task, a push).
     public func runUntilDone(_ reason: PhoneWorkReason) async {
         runPhoneWork(reason)
-        await task?.value
+        await whenIdle()
     }
 
-    /// While the app is open: runs the waiting work now, then again whenever Listora says to
-    /// look next, sooner when work for this phone is due then (a check tried again after a
-    /// failed attempt). So work queued or due meanwhile starts within seconds with no push, which
-    /// iOS may drop and a build signed with a personal team never gets. Returns once the calling
-    /// task is canceled (the app left the foreground).
+    /// While the app is open: runs the waiting work now, then looks again whenever Listora says
+    /// (sooner when work is due then) and as a marketplace's run ends, so work queued or due
+    /// meanwhile starts within seconds with no push (iOS may drop one, and a personal team's build
+    /// gets none), even while another marketplace works. The runtime keeps a web view per
+    /// marketplace ready meanwhile. Returns once the calling task is canceled (the app left).
     public func follow() async {
+        runtime.keepWarm(true)
+        defer { runtime.keepWarm(false) }
         var woken = false
         while !Task.isCancelled {
-            if woken {
-                // A run started meanwhile (linking, a change in the app, a push): wait for it,
-                // then look again when its last claim said.
-                await task?.value
-            } else {
-                await runUntilDone(.opened)
+            if !woken {
+                start()
             }
+            // A trigger meanwhile (linking, a change in the app, a push) started the claims
+            // already: wait for them, then look again when their last claim said.
+            await whenClaimed()
             let wait = Task { [sleep, nextLook] in try await sleep(nextLook ?? Self.fallbackLook) }
             followWait = wait
             do {
@@ -174,67 +203,128 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
         pushToken = (token, environment)
         start()
     }
+}
 
+/// The claims, each marketplace's lane, and the calls of a run.
+extension PhoneRunner {
+    /// Claims work for every marketplace with no run under way (a trigger during the claims
+    /// makes them look again once they end).
     private func start() {
         if let followWait {
             wokeEarly = true
             followWait.cancel()
         }
-        if task != nil {
+        if claiming != nil {
             again = true
             return
         }
-        task = Task { @MainActor in
+        claiming = Task { @MainActor in
             repeat {
                 again = false
-                await runOnce()
+                await claimAll()
             } while again
-            task = nil
+            claiming = nil
+            let waiting = claimsDone
+            claimsDone = []
+            waiting.forEach { $0.resume() }
+            finishIfIdle()
         }
     }
 
-    private func runOnce() async {
+    /// Claims until nothing (more) waits for a free marketplace, starting each claimed run in
+    /// its marketplace's lane at once.
+    private func claimAll() async {
         // Only a claim that found nothing says when to look next.
         nextLook = nil
         guard isSignedIn() else { return }
-        // The scripts the server runs its answers through, when they changed since the last run.
-        await runtime.refresh()
+        // The scripts the server runs its answers through, when they changed since the last run;
+        // only while no marketplace runs, since a new runtime replaces their web views.
+        if lanes.isEmpty {
+            await runtime.refresh()
+        }
         let id = installationID()
         let version: Int
         do {
             version = try await runtime.runtimeVersion()
         } catch {
-            problem = "Listora couldn't start its marketplace runner on this iPhone."
+            claimProblem = "Listora couldn't start its marketplace runner on this iPhone."
             return
         }
         do {
             try await register(id, version)
         } catch {
-            problem = error.message
+            claimProblem = error.message
             return
         }
-        defer {
-            activity = .idle
-            progress = nil
-            running = nil
-            lastRunAt = Date()
-        }
-        for _ in 0 ..< maxRuns {
+        while started < maxRuns {
             let claimed: PhoneClaim
             do {
-                claimed = try await service.claim(installationID: id, runtimeVersion: version)
+                claimed = try await service.claim(
+                    installationID: id,
+                    runtimeVersion: version,
+                    running: lanes.values.map(\.run.id).sorted(),
+                    appOpen: isAppOpen(),
+                )
             } catch {
-                problem = error.message
+                claimProblem = error.message
                 return
             }
             guard let run = claimed.run else {
-                problem = nil
+                claimProblem = nil
                 nextLook = claimed.nextClaimIn
                 return
             }
-            guard await runCalls(of: run, installationID: id) else { return }
-            NotificationCenter.default.post(name: .phoneWorkFinished, object: nil)
+            started += 1
+            startLane(run, installationID: id)
         }
+    }
+
+    /// Runs the claimed run in its marketplace's lane; once it ends, the marketplace is free and
+    /// the runner claims again. The server hands out one run per marketplace at a time; should it
+    /// hand out another, that one waits for the first.
+    private func startLane(_ run: PhoneRun, installationID id: String) {
+        let before = lanes[run.marketplace]?.task
+        let task = Task { @MainActor in
+            await before?.value
+            let finished = await runCalls(of: run, installationID: id)
+            if lanes[run.marketplace]?.run.id == run.id {
+                lanes[run.marketplace] = nil
+                progressByMarketplace[run.marketplace] = nil
+            }
+            updateActivity()
+            if finished {
+                NotificationCenter.default.post(name: .phoneWorkFinished, object: nil)
+                start()
+            }
+            finishIfIdle()
+        }
+        lanes[run.marketplace] = Lane(run: run, task: task)
+        updateActivity()
+    }
+
+    private func updateActivity() {
+        activity = lanes.isEmpty ? .idle : .running(marketplaces: lanes.keys.sorted())
+    }
+
+    /// Returns once the claims under way (if any) ended.
+    private func whenClaimed() async {
+        guard claiming != nil else { return }
+        await withCheckedContinuation { claimsDone.append($0) }
+    }
+
+    /// Returns once nothing runs or claims.
+    private func whenIdle() async {
+        guard claiming != nil || !lanes.isEmpty else { return }
+        await withCheckedContinuation { idle.append($0) }
+    }
+
+    private func finishIfIdle() {
+        guard claiming == nil, lanes.isEmpty else { return }
+        started = 0
+        lastRunAt = Date()
+        let waiting = idle
+        idle = []
+        waiting.forEach { $0.resume() }
     }
 
     /// Runs each call of the run and answers it, until the run is over; `false` when a call
@@ -242,20 +332,19 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     private func runCalls(of claimed: PhoneRun, installationID id: String) async -> Bool {
         var run = claimed
         while let call = run.call {
-            activity = .running(marketplace: run.marketplace, purpose: run.purpose)
-            follow(run)
-            timings.begin()
+            track(run)
+            timings.begin(run.marketplace)
             let answer: Data
             do {
                 answer = try await runtime.run(call.input, marketplace: run.marketplace)
             } catch {
-                timings.finish(completed: false)
+                timings.finish(run.marketplace, completed: false)
                 // The call never ran: the server recovers the work when this phone next asks for
                 // work, or once its claim lapses.
-                problem = "Listora couldn't run this on your iPhone."
+                runProblem = "Listora couldn't run this on your iPhone."
                 return false
             }
-            timings.finish(completed: Self.ranToTheEnd(answer))
+            timings.finish(run.marketplace, completed: Self.ranToTheEnd(answer))
             guard let next = await send(answer, for: call, of: run, installationID: id) else { break }
             run = next
         }
@@ -272,12 +361,14 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
     ) async -> PhoneRun? {
         for attempt in 1 ... 3 {
             do {
-                return try await service.answer(
+                let next = try await service.answer(
                     runID: run.id,
                     index: call.index,
                     answer: answer,
                     installationID: installationID,
                 )
+                runProblem = nil
+                return next
             } catch {
                 let unreachable = error.statusCode == nil || (error.statusCode ?? 0) >= 500
                 guard unreachable, attempt < 3 else {
@@ -285,7 +376,7 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
                         // The run is over (404) or moved on (409): claim the next.
                         return nil
                     }
-                    problem = error.message
+                    runProblem = error.message
                     return nil
                 }
                 try? await sleep(.seconds(attempt * 2))
@@ -304,34 +395,5 @@ public final class PhoneRunner: PhoneWorkTrigger, PhoneWorkProgressSource {
         guard current != registered else { return }
         try await service.register(installationID: id, current)
         registered = current
-    }
-}
-
-/// The progress of the work running now (`progress`), from the steps the runtime reports.
-extension PhoneRunner {
-    /// The run whose calls start now: its progress starts over unless it is the same work.
-    private func follow(_ run: PhoneRun) {
-        running = (run.marketplace, run.operationID)
-        guard progress?.operationID != run.operationID || progress?.marketplace != run.marketplace else { return }
-        progress = PhoneWorkProgress(
-            marketplace: run.marketplace,
-            operationID: run.operationID,
-            step: nil,
-            stepNumber: 0,
-            stepCount: nil,
-            expectedEnd: nil,
-        )
-    }
-
-    /// The runtime started a step of the call running now.
-    func stepStarted(_ step: PhoneStep) {
-        guard let running else { return }
-        progress = timings.started(step, marketplace: running.marketplace, operationID: running.operationID)
-    }
-
-    /// Whether the runtime's answer says the script ran all its steps (`result.ok`).
-    static func ranToTheEnd(_ answer: Data) -> Bool {
-        let output = try? JSONSerialization.jsonObject(with: answer) as? [String: Any]
-        return (output?["result"] as? [String: Any])?["ok"] as? Bool ?? false
     }
 }

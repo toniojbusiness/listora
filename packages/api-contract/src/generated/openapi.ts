@@ -1760,7 +1760,9 @@ export interface paths {
         /**
          * Claim the next work waiting for this phone
          * @description Claims the next due work waiting for the device (delists after a sale first) and
-         *     returns its first script call; no `run` when nothing waits. The claim holds for a few
+         *     returns its first script call; no `run` when nothing waits. A marketplace with a run
+         *     under way gets no second one, so a phone that runs marketplaces side by side claims
+         *     once per free marketplace, naming the runs it still runs. The claim holds for a few
          *     minutes from each call and answer; a phone that stops answering lets it lapse, and the
          *     work is recovered on the server. `409 app_update_required` when the app's runtime
          *     speaks another version of calls than the server's.
@@ -3425,6 +3427,18 @@ export interface components {
             installationId: components["schemas"]["Id"];
             /** Format: int32 */
             runtimeVersion: number;
+            /**
+             * @description The runs the app is still running, one per marketplace it runs side by side. Every
+             *     other run the device holds stopped, and is recovered. Absent or empty: it runs none.
+             */
+            running?: components["schemas"]["Id"][];
+            /**
+             * @description The seller has the app open. Changes of this phone's that wait out a backoff run now
+             *     (each once its last step is a few seconds behind, as Try now runs it), except a wait the
+             *     marketplace or Listora's pacing asked for, and a claim that finds nothing says to look
+             *     again within seconds.
+             */
+            appOpen?: boolean;
         };
         /**
          * @description One script call for the phone runtime: its `input` goes to `listoraPhone.run` unchanged,

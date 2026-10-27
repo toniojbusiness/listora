@@ -16,7 +16,11 @@ final class MarketplacePage: NSObject {
     let webView: WKWebView
     /// The seller is completing a check in this page (`ChallengeHandOff`).
     var handingOff = false
-    private let origins: Set<String>
+    /// The marketplace's own origins, the only ones the main frame may load; empty (nothing
+    /// loads) for a page made ahead of its first call, which sets them.
+    var origins: Set<String>
+    /// The page holds a session: the phone's cookies were restored into it.
+    private(set) var hasSession = false
     private let logger: Logger
     private var status: Int?
     private var retryAfterSeconds: Int?
@@ -49,6 +53,7 @@ final class MarketplacePage: NSObject {
                 await store.setCookie(cookie)
             }
         }
+        hasSession = true
     }
 
     func cookies() async -> [StoredCookie] {
@@ -60,6 +65,14 @@ final class MarketplacePage: NSObject {
         if !handingOff {
             webView.removeFromSuperview()
         }
+    }
+
+    /// Between calls, while the page stays ready for the next: a blank page, so nothing of the
+    /// marketplace's runs in the background; the session, the WebKit process, and its cache stay.
+    func rest() {
+        guard !handingOff else { return }
+        webView.stopLoading()
+        webView.loadHTMLString("", baseURL: nil)
     }
 
     /// Loads `url` in the main frame and waits for its document.

@@ -54,8 +54,10 @@ Listora change is its own browser session, at least two seconds after the last
 (`PACING_FLOOR.sessionGapMs`), so each one gets a newer revision. An absence is never
 authoritative: a missing listing reads as "not found yet", never as "gone".
 
-**Finding a listing by its SKU.** A create whose answer was lost may have gone through, so
-every create first looks for its listing, and a read without the listing id does the same.
+**Finding a listing by its SKU.** A create whose answer was lost may have gone through, so a
+create after an attempt that may have posted (`mayHaveApplied`, [operations.md](operations.md))
+first looks for its listing, and a read without the listing id does the same. A first attempt,
+or one after attempts that recorded they posted nothing, goes straight to the form.
 Poshmark cannot search by SKU, so Listora writes its SKU into the seller's private SKU field
 (only the seller sees it), searches the closet for the title (newest first, up to 3 pages), and
 opens the edit form of up to 12 listings with that exact title to compare their SKU. Without a

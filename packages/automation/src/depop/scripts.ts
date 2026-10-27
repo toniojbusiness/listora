@@ -10,7 +10,11 @@ import {
   type RemoteOrder,
 } from '@listora/marketplaces';
 
-import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
+import {
+  mayHaveAppliedBefore,
+  type AutomationScripts,
+  type WriteResult,
+} from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
 import { listingSku } from '../adapter/sku-line.ts';
 import type { StepRunner } from '../runner/types.ts';
@@ -105,7 +109,10 @@ export function createDepopScripts(
       : { type: 'applied', externalListingId: outcome.slug };
   }
 
-  /** Posts a new listing (a create, or a relist); a later attempt first looks for it. */
+  /**
+   * Posts a new listing (a create, or a relist); an attempt after one that may have posted first
+   * looks for it.
+   */
   async function post(
     op: OperationRequest<DepopAutomationPayload>,
     step: StepRunner,
@@ -113,7 +120,7 @@ export function createDepopScripts(
     const payload = op.payload;
     if (payload === null) throw new Error(`a ${op.kind} has a payload`);
     const sku = listingSku(op.listing);
-    if (op.attempt > 1) {
+    if (mayHaveAppliedBefore(op)) {
       // An earlier attempt may have gone through; Depop would take a second copy.
       const earlier = await findBySku(step, sku);
       if (earlier?.state.found === true) {

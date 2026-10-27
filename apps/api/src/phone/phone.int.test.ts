@@ -156,6 +156,26 @@ describe('the phone API (real Postgres)', () => {
     expect((await claim(PHONE_RUNTIME_VERSION, otherPhone)).body).toEqual({
       nextClaimInSeconds: PHONE_UNUSED_CLAIM_SECONDS,
     });
+    // An open app that names the runs it still runs, side by side, claims the same way.
+    const open = await api.call('claimPhoneRun', {
+      token,
+      body: {
+        installationId: otherPhone,
+        runtimeVersion: PHONE_RUNTIME_VERSION,
+        running: [randomUUID()],
+        appOpen: true,
+      },
+    });
+    expect(open.body).toEqual({ nextClaimInSeconds: PHONE_UNUSED_CLAIM_SECONDS });
+    const malformed = await api.call('claimPhoneRun', {
+      token,
+      body: {
+        installationId: otherPhone,
+        runtimeVersion: PHONE_RUNTIME_VERSION,
+        running: ['not-a-run'],
+      },
+    });
+    expect(malformed.status).toBe(422);
   });
 
   it('asks to link on the phone a marketplace no phone holds a session for', async () => {

@@ -18,11 +18,15 @@ public protocol PhoneRuntime: AnyObject {
     func refresh() async
     /// Tells `handler` each step a call starts, as the runtime reports it.
     func observeSteps(_ handler: @escaping @MainActor (PhoneStep) -> Void)
+    /// While the app is open (`true`), keeps a signed-in web view per marketplace ready between
+    /// calls, so the next call starts at once; `false` lets them go once their calls end.
+    func keepWarm(_ warm: Bool)
 }
 
 extension PhoneRuntime {
     public func refresh() async {}
     public func observeSteps(_: @escaping @MainActor (PhoneStep) -> Void) {}
+    public func keepWarm(_: Bool) {}
 }
 
 /// The runtime as the server hands it out (`getPhoneRuntime`): its digest, and its script when
@@ -51,12 +55,18 @@ public enum PhoneRuntimeError: Error, Equatable {
     case invalidAnswer
 }
 
-/// The phone runtime in the app's own web views. A hidden controller page runs the bundle; it
-/// reaches the marketplace page, an off-screen web view holding the seller's session (the
-/// cookies this phone keeps), through the `listora` message handler, whose every message is
-/// answered. The app only relays: it loads pages, evaluates the runtime's page functions, reads
-/// the page's own data, reports the main frame's navigations, answers dialogs, fetches listing
-/// photos, and hands a check to the seller. Every rule stays in the runtime.
+/// The phone runtime in the app's own web views. Each marketplace runs in a lane of its own, so
+/// marketplaces run side by side: a hidden controller page that runs the bundle, and the
+/// marketplace page, an off-screen web view holding the seller's session (the cookies this phone
+/// keeps), which the controller reaches through the `listora` message handler, whose every
+/// message is answered. The app only relays: it loads pages, evaluates the runtime's page
+/// functions, reads the page's own data, reports the main frame's navigations, answers dialogs,
+/// fetches listing photos, and hands a check to the seller. Every rule stays in the runtime.
+///
+/// While the app is open (`keepWarm`), each marketplace's page stays between calls (on a blank
+/// page, still signed in, its WebKit process and cache warm), so the next call starts at once; a
+/// session that changed meanwhile (a new link, another account) gets a new page. Each listing
+/// photo is fetched once and handed to every marketplace that posts it.
 ///
 /// The marketplace page asks for desktop pages at a desktop size, as Safari's "Request Desktop
 /// Website" does, so the marketplaces serve the same pages the browser runner's scripts read.
@@ -67,14 +77,16 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
     private weak var handOff: (any ChallengeHandOff)?
     private let notifier: CheckNeededNotifier
     private let logger = Logger(subsystem: "com.listora.app", category: "phone-runtime")
-    private var controller: WKWebView?
-    private var controllerLoad: ControllerLoad?
-    private var loaded: Task<Int, any Error>?
-    private var page: MarketplacePage?
+    /// Each marketplace's controller page and marketplace page.
+    private var lanes: [String: RuntimeLane] = [:]
     /// The server's runtime, once it handed one out; the app's own copy runs until then.
     private var served: (digest: String, source: String)?
     private let fetchRuntime: @Sendable (_ have: String?) async -> RemoteRuntime?
     private var stepStarted: (@MainActor (PhoneStep) -> Void)?
+    private var warm = false
+    private let photos = PhotoCache()
+    /// The marketplaces whose runs the phone may get, for keeping their web views ready.
+    private static let marketplaces = ["poshmark", "mercari", "depop", "ebay"]
 
     public init(
         sessions: any MarketplaceSessionStore,
@@ -86,10 +98,43 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         self.handOff = handOff
         self.notifier = notifier
         self.fetchRuntime = fetchRuntime
+        super.init()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(memoryWarning),
+            name: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+        )
     }
 
     public func observeSteps(_ handler: @escaping @MainActor (PhoneStep) -> Void) {
         stepStarted = handler
+    }
+
+    public func keepWarm(_ warm: Bool) {
+        self.warm = warm
+        guard warm else {
+            // The app left the foreground: pages not in a call go now, the rest when it ends.
+            for lane in lanes.values where !lane.calling {
+                lane.closePage()
+            }
+            photos.removeAll()
+            return
+        }
+        // The marketplaces this phone holds a session for get their runtime and web view now,
+        // before their first call.
+        for marketplace in Self.marketplaces where !sessions.cookies(for: marketplace).isEmpty {
+            let lane = lane(for: marketplace)
+            Task { _ = try? await lane.load(source: self.source()) }
+            lane.preparePage(logger: logger)
+        }
+    }
+
+    @objc private func memoryWarning() {
+        for lane in lanes.values where !lane.calling {
+            lane.closePage()
+        }
+        photos.removeAll()
     }
 
     public func refresh() async {
@@ -97,28 +142,32 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
               let source = remote.source
         else { return }
         served = (remote.digest, source)
-        // The next run loads it into a new controller page.
-        controller = nil
-        controllerLoad = nil
-        loaded = nil
+        // The next call of each marketplace loads it into a new controller page.
+        for lane in lanes.values {
+            lane.dropController()
+        }
     }
 
     public func runtimeVersion() async throws -> Int {
-        try await load()
+        // Any marketplace's controller answers it: they all run the same bundle.
+        try await (lanes.values.first ?? lane(for: Self.marketplaces[0])).load(source: source())
     }
 
     public func run(_ input: Data, marketplace: String) async throws -> Data {
-        _ = try await load()
-        guard let controller else { throw PhoneRuntimeError.bundleNotLoaded("no controller page") }
+        let lane = lane(for: marketplace)
+        _ = try await lane.load(source: source())
+        guard let controller = lane.controller else { throw PhoneRuntimeError.bundleNotLoaded("no controller page") }
         let object = try JSONSerialization.jsonObject(with: input)
         let domains = ((object as? [String: Any])?["cookieDomains"] as? [String]) ?? []
         let origins = ((object as? [String: Any])?["origins"] as? [String]) ?? []
-        let page = MarketplacePage(origins: origins, logger: logger)
-        await page.restore(sessions.cookies(for: marketplace).filter { $0.belongs(to: domains) })
-        self.page = page
+        let stored = sessions.cookies(for: marketplace).filter { $0.belongs(to: domains) }
+        let page = await lane.page(origins: origins, session: stored, logger: logger)
+        lane.calling = true
         defer {
-            self.page = nil
-            page.close()
+            lane.calling = false
+            if !warm {
+                lane.closePage()
+            }
         }
         let result = try await controller.callAsyncJavaScript(
             "return await listoraPhone.run(input);",
@@ -130,54 +179,29 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         let refreshed = await page.cookies().filter { $0.belongs(to: domains) }
         if !refreshed.isEmpty {
             sessions.save(refreshed, for: marketplace)
+            lane.session = refreshed
         }
+        page.rest()
         guard let result, JSONSerialization.isValidJSONObject(result) else {
             throw PhoneRuntimeError.invalidAnswer
         }
         return try JSONSerialization.data(withJSONObject: result)
     }
 
-    /// Loads the bundle into the controller page once; the runtime's version.
-    private func load() async throws -> Int {
-        if let loaded {
-            return try await loaded.value
+    private func lane(for marketplace: String) -> RuntimeLane {
+        if let lane = lanes[marketplace] {
+            return lane
         }
-        let served = served?.source
-        let task = Task<Int, any Error> { @MainActor in
-            guard let source = served ?? Self.bundledSource() else {
-                throw PhoneRuntimeError.bundleMissing
-            }
-            let configuration = WKWebViewConfiguration()
-            configuration.websiteDataStore = .nonPersistent()
-            let content = configuration.userContentController
-            content.addUserScript(WKUserScript(
-                source: source,
-                injectionTime: .atDocumentStart,
-                forMainFrameOnly: true,
-                in: .page,
-            ))
-            content.addScriptMessageHandler(BridgeProxy(self), contentWorld: .page, name: "listora")
-            let controller = WKWebView(frame: CGRect(x: 0, y: 0, width: 1, height: 1), configuration: configuration)
-            WebViewShelf.shared.keep(controller, size: CGSize(width: 1, height: 1))
-            self.controller = controller
-            let finished = ControllerLoad()
-            self.controllerLoad = finished
-            controller.navigationDelegate = finished
-            controller.loadHTMLString("<!doctype html><title>Listora</title>", baseURL: nil)
-            try await finished.loaded.value(timeout: .seconds(20))
-            let version = try await controller.evaluateJavaScript("listoraPhone.runtimeVersion")
-            guard let number = version as? Int else {
-                throw PhoneRuntimeError.bundleNotLoaded("the runtime has no version")
-            }
-            return number
+        let lane = RuntimeLane(marketplace: marketplace) { [weak self] message in
+            await self?.handle(message, marketplace: marketplace) ?? (nil, "closed")
         }
-        loaded = task
-        do {
-            return try await task.value
-        } catch {
-            loaded = nil
-            throw error
-        }
+        lanes[marketplace] = lane
+        return lane
+    }
+
+    /// The runtime's script: the server's when it handed one out, else the app's own.
+    private func source() -> String? {
+        served?.source ?? Self.bundledSource()
     }
 
     /// The runtime the app was built with, which runs until the server hands out its own.
@@ -186,8 +210,9 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         return try? String(contentsOf: url, encoding: .utf8)
     }
 
-    /// One message from the runtime; the reply is its answer, or the failure's message.
-    fileprivate func handle(_ message: WKScriptMessage) async -> (Any?, String?) {
+    /// One message from a marketplace's runtime; the reply is its answer, or the failure's
+    /// message.
+    fileprivate func handle(_ message: WKScriptMessage, marketplace: String) async -> (Any?, String?) {
         guard let body = message.body as? [String: Any], let method = body["method"] as? String else {
             return (nil, "the message has no method")
         }
@@ -200,11 +225,13 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
             if let call = args["call"] as? String, let index = (args["index"] as? NSNumber)?.intValue,
                let label = args["label"] as? String
             {
-                stepStarted?(PhoneStep(call: call, index: index, label: label))
+                stepStarted?(PhoneStep(marketplace: marketplace, call: call, index: index, label: label))
             }
             return (true, nil)
         }
-        guard let page else { return (nil, "closed") }
+        guard let page = lanes[marketplace]?.currentPage, lanes[marketplace]?.calling == true else {
+            return (nil, "closed")
+        }
         do {
             return try await (relay(method, args, on: page), nil)
         } catch let failure as PageFailure {
@@ -233,7 +260,7 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
         case "fetchPhoto":
             guard let url = (args["url"] as? String).flatMap(URL.init(string:))
             else { throw PageFailure("unreachable") }
-            return try await Self.fetchPhoto(url, timeout: timeout)
+            return try await photos.photo(url, timeout: timeout)
         case "handOff":
             return await handOff(
                 page,
@@ -273,42 +300,6 @@ public final class WebPhoneRuntime: NSObject, PhoneRuntime {
 
     private static func duration(_ value: Any?) -> Duration {
         .milliseconds((value as? NSNumber)?.intValue ?? 30000)
-    }
-
-    /// One of Listora's listing photos, over HTTPS (HTTP only for a local development host).
-    private static func fetchPhoto(_ url: URL, timeout: Duration) async throws -> [String: Any] {
-        let local = url.host == "127.0.0.1" || url.host == "localhost"
-        guard url.scheme == "https" || (local && url.scheme == "http") else {
-            throw PageFailure("blocked")
-        }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = Double(timeout.components.seconds) + 1
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200, !data.isEmpty else {
-            throw PageFailure("unreachable")
-        }
-        let mimeType = http.mimeType ?? "image/jpeg"
-        let name = url.lastPathComponent.hasSuffix(".jpg") ? url.lastPathComponent : "\(url.lastPathComponent).jpg"
-        return ["name": name, "mimeType": mimeType, "base64": data.base64EncodedString()]
-    }
-}
-
-/// Holds the message handler weakly: the web view keeps its handler, which must not keep the
-/// runtime.
-private final class BridgeProxy: NSObject, WKScriptMessageHandlerWithReply {
-    weak var runtime: WebPhoneRuntime?
-
-    init(_ runtime: WebPhoneRuntime) {
-        self.runtime = runtime
-    }
-
-    @MainActor
-    func userContentController(
-        _: WKUserContentController,
-        didReceive message: WKScriptMessage,
-    ) async -> (Any?, String?) {
-        guard let runtime else { return (nil, "closed") }
-        return await runtime.handle(message)
     }
 }
 

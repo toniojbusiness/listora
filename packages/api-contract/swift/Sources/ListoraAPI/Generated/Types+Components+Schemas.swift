@@ -6740,21 +6740,43 @@ extension Components {
             public var installationId: Components.Schemas.Id
             /// - Remark: Generated from `#/components/schemas/PhoneRunClaim/runtimeVersion`.
             public var runtimeVersion: Swift.Int32
+            /// The runs the app is still running, one per marketplace it runs side by side. Every
+            /// other run the device holds stopped, and is recovered. Absent or empty: it runs none.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneRunClaim/running`.
+            public var running: [Components.Schemas.Id]?
+            /// The seller has the app open. Changes of this phone's that wait out a backoff run now
+            /// (each once its last step is a few seconds behind, as Try now runs it), except a wait the
+            /// marketplace or Listora's pacing asked for, and a claim that finds nothing says to look
+            /// again within seconds.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhoneRunClaim/appOpen`.
+            public var appOpen: Swift.Bool?
             /// Creates a new `PhoneRunClaim`.
             ///
             /// - Parameters:
             ///   - installationId:
             ///   - runtimeVersion:
+            ///   - running: The runs the app is still running, one per marketplace it runs side by side. Every
+            ///   - appOpen: The seller has the app open. Changes of this phone's that wait out a backoff run now
             public init(
                 installationId: Components.Schemas.Id,
-                runtimeVersion: Swift.Int32
+                runtimeVersion: Swift.Int32,
+                running: [Components.Schemas.Id]? = nil,
+                appOpen: Swift.Bool? = nil
             ) {
                 self.installationId = installationId
                 self.runtimeVersion = runtimeVersion
+                self.running = running
+                self.appOpen = appOpen
             }
             public enum CodingKeys: String, CodingKey {
                 case installationId
                 case runtimeVersion
+                case running
+                case appOpen
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -6766,9 +6788,19 @@ extension Components {
                     Swift.Int32.self,
                     forKey: .runtimeVersion
                 )
+                self.running = try container.decodeIfPresent(
+                    [Components.Schemas.Id].self,
+                    forKey: .running
+                )
+                self.appOpen = try container.decodeIfPresent(
+                    Swift.Bool.self,
+                    forKey: .appOpen
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "installationId",
-                    "runtimeVersion"
+                    "runtimeVersion",
+                    "running",
+                    "appOpen"
                 ])
             }
         }

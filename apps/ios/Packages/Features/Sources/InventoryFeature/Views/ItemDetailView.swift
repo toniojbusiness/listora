@@ -187,7 +187,7 @@ struct ItemDetailView: View {
                     histories: model.histories,
                     events: model.events,
                     busyMarketplace: model.busyMarketplace,
-                    phoneProgress: environment.phoneProgress?.progress,
+                    phoneProgress: environment.phoneProgress?.progress ?? [],
                     perform: perform,
                     end: { reason, row in end(row, reason: reason) },
                     relistAll: { rows in performAll(rows) { .relist(listingID: $0) } },

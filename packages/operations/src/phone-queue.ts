@@ -13,7 +13,8 @@ import { sql } from 'kysely';
 import type { DbExecutor, DbTransaction, Marketplace } from '@listora/db';
 
 import { OPERATION_PRIORITY, scheduleOperationJob } from './jobs.ts';
-import type { OperationRow } from './transitions.ts';
+import { UNFINISHED_STATUSES } from './state-machine.ts';
+import { attemptNow, type OperationRow } from './transitions.ts';
 
 export interface PhoneQueueSettings {
   /** How often the worker looks at an operation waiting for the phone (default 15 minutes). */
@@ -171,4 +172,123 @@ export async function releasePhoneOperations(
     });
   }
   return released.length;
+}
+
+/**
+ * While the seller has Listora open on the phone, its waiting changes do not wait out their
+ * backoff (docs/features/phone-execution.md, "While the app is open"): one waiting to be sent
+ * again or checked again runs once this long has passed since its last step, so two read-backs
+ * of a change stay this far apart.
+ */
+export const OPEN_APP_GAP_MS = 3_000;
+
+/**
+ * Error codes of a wait that is pacing rather than backoff: the marketplace said to slow down
+ * (a 429), or Listora paces the seller's runs or another run holds the session. Those waits are
+ * kept even while the app is open.
+ */
+const PACED_ERROR_CODES = ['rate_limited', 'automation_paced', 'automation_busy'];
+
+/** The device's operations that run on it: their listing's connection runs on this phone. */
+function deviceOperations(executor: DbExecutor, device: PhoneDevice) {
+  return executor
+    .selectFrom('marketplace_operation as op')
+    .innerJoin('marketplace_listing as listing', (join) =>
+      join
+        .onRef('listing.account_id', '=', 'op.account_id')
+        .onRef('listing.id', '=', 'op.listing_id'),
+    )
+    .innerJoin('marketplace_connection as connection', (join) =>
+      join
+        .onRef('connection.account_id', '=', 'listing.account_id')
+        .onRef('connection.id', '=', 'listing.connection_id'),
+    )
+    .where('op.account_id', '=', device.accountId)
+    .where('connection.runs_on', '=', 'phone')
+    .where('connection.phone_device_id', '=', device.deviceId);
+}
+
+export interface PhoneDevice {
+  accountId: string;
+  deviceId: string;
+}
+
+/**
+ * The open app's claim: every change of the device's waiting to be sent or checked again whose
+ * last step is `OPEN_APP_GAP_MS` behind runs now, as Try now would run it (its history records
+ * it), unless its wait is pacing. Returns how many it moved.
+ */
+export async function runWaitingPhoneOperationsNow(
+  trx: DbTransaction,
+  device: PhoneDevice,
+): Promise<number> {
+  const waiting = await deviceOperations(trx, device)
+    .selectAll('op')
+    .where('op.status', 'in', ['retrying', 'verifying'])
+    .where('op.next_attempt_at', '>', sql<Date>`now()`)
+    .where(
+      'op.updated_at',
+      '<=',
+      sql<Date>`now() - make_interval(secs => ${OPEN_APP_GAP_MS / 1000})`,
+    )
+    .where((eb) =>
+      eb.or([eb('op.error_code', 'is', null), eb('op.error_code', 'not in', PACED_ERROR_CODES)]),
+    )
+    .orderBy('op.next_attempt_at')
+    .limit(20)
+    .forUpdate('op')
+    .skipLocked()
+    .execute();
+  for (const op of waiting) await attemptNow(trx, op, { action: 'try_now', reason: 'app_open' });
+  return waiting.length;
+}
+
+/**
+ * When the device's next change is due to reach it (`null` when none is): the soonest due time
+ * of its changes that the engine has not handed to the phone yet. While the app is open, a
+ * change waiting out a backoff is due once its last step is `OPEN_APP_GAP_MS` behind
+ * (`runWaitingPhoneOperationsNow`). A change that was due more than `staleMs` ago and still
+ * isn't handed over waits for its own job, not for the app's next look.
+ */
+export async function nextPhoneOperationDue(
+  executor: DbExecutor,
+  device: PhoneDevice,
+  options: { open: boolean; staleMs: number },
+): Promise<Date | null> {
+  const scheduled = sql<Date>`coalesce(op.next_attempt_at, op.updated_at)`;
+  const openDue = sql<Date>`least(${scheduled}, op.updated_at + make_interval(secs => ${OPEN_APP_GAP_MS / 1000}))`;
+  const due = options.open
+    ? sql<Date>`case when op.status in ('retrying', 'verifying') and (op.error_code is null or op.error_code not in (${sql.join(PACED_ERROR_CODES)})) then ${openDue} else ${scheduled} end`
+    : scheduled;
+  const found = await deviceOperations(executor, device)
+    .select(sql<Date | null>`min(${due})`.as('due'))
+    .where('op.status', 'in', ['queued', 'retrying', 'verifying'])
+    .where(scheduled, '>', sql<Date>`now() - make_interval(secs => ${options.staleMs / 1000})`)
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('phone_work as work')
+            .select('work.id')
+            .whereRef('work.account_id', '=', 'op.account_id')
+            .whereRef('work.operation_id', '=', 'op.id'),
+        ),
+      ),
+    )
+    // A change behind an older unfinished one on its listing waits for that one.
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom('marketplace_operation as older')
+            .select('older.id')
+            .whereRef('older.account_id', '=', 'op.account_id')
+            .whereRef('older.listing_id', '=', 'op.listing_id')
+            .where('older.status', 'in', [...UNFINISHED_STATUSES])
+            .where(sql<boolean>`(older.created_at, older.id) < (op.created_at, op.id)`),
+        ),
+      ),
+    )
+    .executeTakeFirst();
+  return found?.due ?? null;
 }

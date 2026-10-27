@@ -84,11 +84,16 @@ export interface AutomationProfile {
   readonly cloudAllowed: boolean;
 }
 
-/** The pace of a careful person: a second or two between actions, a run every few seconds. */
+/**
+ * The pace of a practiced seller: about a second between actions, a quick typist's keystrokes,
+ * and a few seconds between sessions (measured on the real sites, 2026-10-27: at the earlier
+ * 0.8 to 2.5 s per action, pacing alone was most of a listing's minute;
+ * docs/features/phone-execution.md, "Speed"). Still never faster than a person can act.
+ */
 export const DEFAULT_PACING: PacingSettings = {
-  actionDelayMs: [800, 2500],
-  keystrokeDelayMs: [60, 180],
-  sessionGapMs: [5_000, 20_000],
+  actionDelayMs: [450, 1100],
+  keystrokeDelayMs: [45, 130],
+  sessionGapMs: [2_000, 4_000],
 };
 
 /** Well inside what one busy seller does by hand. */

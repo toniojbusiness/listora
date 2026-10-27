@@ -55,8 +55,16 @@ public struct DeviceRegistration: Equatable, Sendable {
 /// The API calls of phone runs (docs/features/phone-execution.md).
 public protocol PhoneWorkService: Sendable {
     func register(installationID: String, _ device: DeviceRegistration) async throws(APIFailure)
-    /// Claims the next work waiting for this device, or says when to ask again.
-    func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneClaim
+    /// Claims the next work waiting for this device, or says when to ask again. `running`: the
+    /// runs this phone still runs (one per marketplace, side by side), so the server gives no
+    /// second run on their marketplaces and recovers any other run it holds for this device.
+    /// `appOpen`: the seller has the app open, so waiting changes run without their backoff.
+    func claim(
+        installationID: String,
+        runtimeVersion: Int,
+        running: [String],
+        appOpen: Bool,
+    ) async throws(APIFailure) -> PhoneClaim
     /// The runtime the server runs with (`have`: the digest the app already runs).
     func runtime(have: String?) async throws(APIFailure) -> RemoteRuntime
     /// Answers the run's call; the run's next call, or `nil` once it is over.
@@ -97,11 +105,22 @@ public struct APIPhoneWorkService: PhoneWorkService {
         }
     }
 
-    public func claim(installationID: String, runtimeVersion: Int) async throws(APIFailure) -> PhoneClaim {
+    public func claim(
+        installationID: String,
+        runtimeVersion: Int,
+        running: [String],
+        appOpen: Bool,
+    ) async throws(APIFailure) -> PhoneClaim {
+        let body = Components.Schemas.PhoneRunClaim(
+            installationId: installationID,
+            runtimeVersion: Int32(runtimeVersion),
+            running: running.isEmpty ? nil : running,
+            appOpen: appOpen,
+        )
         let output = try await call {
             try await api.client.claimPhoneRun(
                 headers: .init(idempotencyKey: UUID().uuidString),
-                body: .json(.init(installationId: installationID, runtimeVersion: Int32(runtimeVersion))),
+                body: .json(body),
             )
         }
         switch output {

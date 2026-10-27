@@ -44,6 +44,14 @@
 		"relist",
 		"markSold"
 	];
+	/**
+	* Whether an earlier attempt of the operation may have posted or changed the listing, so a
+	* create or relist looks for that listing before it posts (`OperationRequest.mayHaveApplied`;
+	* a request that doesn't say counts every attempt after the first).
+	*/
+	function mayHaveAppliedBefore(op) {
+		return op.mayHaveApplied ?? op.attempt > 1;
+	}
 	/** Whether the call may change anything: only a write script's may. */
 	function isWriteCall(call) {
 		return WRITE_SCRIPTS.includes(call.script);
@@ -6721,12 +6729,15 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				externalListingId: outcome.slug
 			};
 		}
-		/** Posts a new listing (a create, or a relist); a later attempt first looks for it. */
+		/**
+		* Posts a new listing (a create, or a relist); an attempt after one that may have posted first
+		* looks for it.
+		*/
 		async function post(op, step) {
 			const payload = op.payload;
 			if (payload === null) throw new Error(`a ${op.kind} has a payload`);
 			const sku = listingSku(op.listing);
-			if (op.attempt > 1) {
+			if (mayHaveAppliedBefore(op)) {
 				const earlier = await findBySku(step, sku);
 				if (earlier?.state.found === true) return {
 					...revisionOf$1(earlier),
@@ -7376,7 +7387,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		}
 		/** A listing an earlier attempt of a create or relist made, found by its SKU. */
 		async function earlier(op, step) {
-			if (op.attempt <= 1) return null;
+			if (!mayHaveAppliedBefore(op)) return null;
 			const found = await findBySku(step, listingSku(op.listing));
 			return found?.status === "active" ? {
 				...revisionOf(found),
@@ -8452,7 +8463,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const payload = op.payload;
 			if (payload === null) throw new Error("a create has a payload");
 			const sku = listingSku(op.listing);
-			if (op.attempt > 1) {
+			if (mayHaveAppliedBefore(op)) {
 				const earlier = await findBySku(step, sku, payload.title);
 				if (earlier?.state.found === true) return {
 					type: "applied",
@@ -9433,11 +9444,13 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const payload = op.payload;
 			if (payload === null) throw new Error("a create has a payload");
 			const sku = skuOf(op.listing);
-			const existing = await findBySku(step, sku, payload.title);
-			if (existing !== null) return {
-				type: "applied",
-				externalListingId: existing
-			};
+			if (mayHaveAppliedBefore(op)) {
+				const existing = await findBySku(step, sku, payload.title);
+				if (existing !== null) return {
+					type: "applied",
+					externalListingId: existing
+				};
+			}
 			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
 			const opened = await step("open the listing form", {
 				mutates: false,
@@ -9547,11 +9560,16 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	}
 
 // src/profiles.ts
-/** The pace of a careful person: a second or two between actions, a run every few seconds. */
+/**
+	* The pace of a practiced seller: about a second between actions, a quick typist's keystrokes,
+	* and a few seconds between sessions (measured on the real sites, 2026-10-27: at the earlier
+	* 0.8 to 2.5 s per action, pacing alone was most of a listing's minute;
+	* docs/features/phone-execution.md, "Speed"). Still never faster than a person can act.
+	*/
 	const DEFAULT_PACING = {
-		actionDelayMs: [800, 2500],
-		keystrokeDelayMs: [60, 180],
-		sessionGapMs: [5e3, 2e4]
+		actionDelayMs: [450, 1100],
+		keystrokeDelayMs: [45, 130],
+		sessionGapMs: [2e3, 4e3]
 	};
 	/** Well inside what one busy seller does by hand. */
 	const DEFAULT_LIMITS = {

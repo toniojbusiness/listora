@@ -97,8 +97,8 @@ SKU: AJ-000184
 ```
 
 Reads remove the line and the hashtags again, so the description Listora checks is the listing's
-own copy. A create whose answer was lost, and every later attempt of a create or relist, first
-looks for the line among the newest 8 listings for sale, and reports that listing instead of
+own copy. A create whose answer was lost, and every later attempt of a create or relist after one
+that may have posted (`mayHaveApplied`, [operations.md](operations.md)), first looks for the line among the newest 8 listings for sale, and reports that listing instead of
 posting a second one. The line counts against Depop's 1,000-character limit, so validation keeps
 71 characters free for it: the copy and hashtags can be at most 929 characters.
 

@@ -5,7 +5,11 @@
  */
 import type { ListingRef, OperationRequest, RemoteOrder } from '@listora/marketplaces';
 
-import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
+import {
+  mayHaveAppliedBefore,
+  type AutomationScripts,
+  type WriteResult,
+} from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
 import { PageChangedError } from '../runner/errors.ts';
 import type { StepRunner } from '../runner/types.ts';
@@ -319,8 +323,11 @@ export function createPoshmarkScripts(
     const payload = op.payload;
     if (payload === null) throw new Error('a create has a payload');
     const sku = skuOf(op.listing);
-    const existing = await findBySku(step, sku, payload.title);
-    if (existing !== null) return { type: 'applied', externalListingId: existing };
+    if (mayHaveAppliedBefore(op)) {
+      // An earlier attempt may have gone through; Poshmark would take a second copy.
+      const existing = await findBySku(step, sku, payload.title);
+      if (existing !== null) return { type: 'applied', externalListingId: existing };
+    }
     const files = await step('get the photos', { mutates: false }, (_page, signal) =>
       Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
     );

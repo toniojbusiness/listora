@@ -54,7 +54,8 @@ Listora checks is the listing's own text. The line is how Listora avoids posting
 - Suppose a create timed out after Mercari took it, so Listora never learned the listing's id.
   The read-back finds the listing by its SKU: it opens the newest active listings (up to 8) and
   looks for the line.
-- A create's second or later attempt looks the same way first. If it finds the listing, it
+- A create's later attempt after one that may have posted (`mayHaveApplied`) looks the same
+  way first. If it finds the listing, it
   reports that listing and lists nothing.
 
 The SKU is the listing's `external_sku`, or else its Listora listing id. Nothing sets
