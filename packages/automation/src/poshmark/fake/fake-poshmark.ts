@@ -15,9 +15,9 @@
  * details, and a new listing's Next and then List, after which Poshmark shows the seller's closet
  * (which doesn't name the new listing; its form named the listing's id from the moment it opened,
  * in its photos section's `data-et-prop-listing_id`). The edit form's data holds the listing's
- * private SKU, and
- * a deleted listing's page answers 404 (`remove`). It injects every failure the adapter must stop
- * at or recover from.
+ * private SKU, and a listing off the site answers 404 with Poshmark's record of what became of it:
+ * `archived` once its seller deleted it (`remove`), `hidden` once Poshmark hid it (`hide`). It
+ * injects every failure the adapter must stop at or recover from.
  *
  *   GET  /login                      the login page (a password field: no Listora session needs it)
  *   POST /login                      log in by hand: any username and password; sets the session cookie
@@ -163,6 +163,8 @@ export class FakePoshmark {
   readonly #listings = new Map<string, StoredListing>();
   /** The ids new listings' forms named, each the id of the listing its form lists. */
   readonly #drafts = new Set<string>();
+  /** Listings no longer on the site, with what became of each, as their 404 pages say. */
+  readonly #gone = new Map<string, 'archived' | 'hidden'>();
   readonly #sessions = new Map<string, Session>();
   readonly #faults: (FakePoshmarkFaultRule & { remaining: number })[] = [];
   readonly #timers = new Set<NodeJS.Timeout>();
@@ -275,9 +277,22 @@ export class FakePoshmark {
     this.#change(stored, { inventory: 'sold_out', inventoryChangedAt: at });
   }
 
-  /** The seller deletes the listing: its pages answer 404 from then on, as Poshmark's do. */
+  /**
+   * The seller deletes the listing: its pages answer 404 from then on, as Poshmark's do, and its
+   * page's record says it is `archived`.
+   */
   remove(id: string): void {
     if (!this.#listings.delete(id)) throw new Error(`no listing ${id}`);
+    this.#gone.set(id, 'archived');
+  }
+
+  /**
+   * Poshmark hides the listing, as it does with one it removed under its rules: its pages answer
+   * 404, and its page's record says it is `hidden`.
+   */
+  hide(id: string): void {
+    if (!this.#listings.delete(id)) throw new Error(`no listing ${id}`);
+    this.#gone.set(id, 'hidden');
   }
 
   async close(): Promise<void> {
@@ -510,6 +525,10 @@ export class FakePoshmark {
       }
       case 'listing': {
         const stored = route.id === null ? undefined : this.#listings.get(route.id);
+        const gone = route.id === null ? undefined : this.#gone.get(route.id);
+        if (stored === undefined && gone !== undefined && route.id !== null) {
+          return { status: 404, body: removedPage(route.id, gone, seller) };
+        }
         if (stored === undefined) return { status: 404, body: notFound(seller) };
         const shown =
           fault?.type === 'stale_read' && stored.previous !== null
@@ -1267,6 +1286,25 @@ function userId(seller: string): string {
 function notFound(seller: string | null): string {
   return page('Page Not Found | Poshmark', '<p>Sorry, we could not find that page.</p>', seller, {
     $_listing_details: { listingDetails: null },
+  });
+}
+
+/**
+ * A listing's page once it is off the site: Poshmark's record of what became of it, read on the
+ * captain's listings (2026-10-27).
+ */
+function removedPage(id: string, status: 'archived' | 'hidden', seller: string | null): string {
+  return page('Poshmark: Buy and sell fashion, home decor, beauty & more', '', seller, {
+    $_listing_details: {
+      listingDetails: {
+        error: {
+          errorType: 'PostRemovedError',
+          params: { post_info: { id, status } },
+          statusCode: 404,
+        },
+        meta: { api_url: `/listing/${id}` },
+      },
+    },
   });
 }
 

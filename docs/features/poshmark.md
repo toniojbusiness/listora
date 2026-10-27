@@ -119,13 +119,21 @@ Listora's own test listings:
   doesn't name the new listing, but the form named it from the moment it opened: its photos
   section carries the new listing's id in `data-et-prop-listing_id`, and a listing keeps that
   id once listed (its id dates from the form's opening, not from its List). So the same run
-  reads the new listing on its own page right away. The closet can lag minutes behind a new
+  reads the new listing on its own page right away (a page that still holds it back, `hidden`,
+  names it too). The closet can lag minutes behind a new
   listing (3 to 20 minutes on the captain's closet, 2026-10-27), so finding it by its SKU there
   (the closet searched by title, each candidate's edit form, whose data holds the SKU at
   `$_listing_editor.post.seller_private_info.sku`) is only the fallback when the form named no
   id or the page never showed it.
-- **Read** and **End** (phone): the listing page, availability Not For Sale; a deleted listing's
-  page answers 404, definitive for a well-formed id.
+- **Read** and **End** (phone): the listing page, availability Not For Sale. A listing off the
+  site answers 404, and its page holds Poshmark's record of what became of it
+  (`listingDetails.error`, a `PostRemovedError` whose `params.post_info.status` says): `archived`
+  once its seller deleted it, which is definitive, and `hidden` once Poshmark hid it, which is
+  not (Poshmark can show it again), so End and Relist say Poshmark is hiding the listing.
+- **Used underwear:** Poshmark doesn't support it (its own removal reasons name "used makeup or
+  underwear"), and it hid Listora's test listing of used boxer briefs minutes after a price
+  change (2026-10-27). Listora lists underwear on Poshmark only new with tags, and refuses it
+  otherwise before anything is sent.
 - **Relist** (phone): a listing Poshmark removed is listed again as a new listing.
 - **Change price, End, and Relist back to For Sale** (Mac, the captain's signed-in browser,
   2026-10-27): Update opens the same share step a new listing's Next does, and its List This

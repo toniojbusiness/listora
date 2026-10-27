@@ -3,12 +3,7 @@
  * describes it). They are the one definition both hosts run: the browser runner, and the
  * iPhone app for a seller whose Poshmark runs on their phone (docs/features/phone-execution.md).
  */
-import type {
-  ListingRef,
-  OperationRequest,
-  RemoteListingState,
-  RemoteOrder,
-} from '@listora/marketplaces';
+import type { ListingRef, OperationRequest, RemoteOrder } from '@listora/marketplaces';
 
 import type { AutomationScripts, WriteResult } from '../adapter/script-call.ts';
 import type { PhotoSource } from '../adapter/photos.ts';
@@ -32,7 +27,13 @@ import {
   submit,
   type Availability,
 } from './pages/listing-form.ts';
-import { openListing, readListing } from './pages/listing-page.ts';
+import {
+  openListing,
+  openListingPage,
+  readListing,
+  remoteState,
+  type ListingPage,
+} from './pages/listing-page.ts';
 import { cents, remoteListing, revision, type ListingRecord } from './pages/state.ts';
 import { type PoshmarkListingPayload } from './payload.ts';
 import type { PoshmarkSite } from './site.ts';
@@ -64,18 +65,33 @@ export interface PoshmarkScriptOptions {
   /** The site the scripts drive: Poshmark, or its stand-in in development and tests. */
   site: PoshmarkSite;
   photos: PhotoSource;
+  /**
+   * How long between looks at a listing page that shows no listing without saying it is gone
+   * (default 30 seconds, as Poshmark takes); tests shorten it.
+   */
+  settleWaitMs?: number;
 }
 
 export function createPoshmarkScripts(
   options: PoshmarkScriptOptions,
 ): AutomationScripts<PoshmarkListingPayload> {
   const { site } = options;
+  const settleWaitMs = options.settleWaitMs ?? SETTLE_WAIT_MS;
   const skuOf = (listing: ListingRef): string => listing.externalSku ?? listing.listingId;
 
   const notListed = (): WriteResult => ({
     type: 'rejected',
     code: 'not_listed',
     message: 'This listing is not on Poshmark yet.',
+  });
+  // Poshmark hides a listing it removed under its rules: nothing changes it until Poshmark
+  // shows it again.
+  const hiddenListing = (): WriteResult => ({
+    type: 'rejected',
+    code: 'hidden',
+    message:
+      'Poshmark is hiding this listing, as it does with a listing it removed under its rules.',
+    fixHint: 'Check the listing in Poshmark.',
   });
 
   /**
@@ -212,32 +228,36 @@ export function createPoshmarkScripts(
    * without saying it is gone: right after a change, Poshmark's page showed none for about two
    * minutes (read on the seller's own listing, 2026-10-27).
    */
-  async function settledListing(step: StepRunner, id: string): Promise<RemoteListingState> {
+  async function settledListing(step: StepRunner, id: string): Promise<ListingPage> {
     for (let look = 1; ; look += 1) {
       const shown = await step('open the listing', { mutates: false }, (page) =>
-        readListing(page, site, id),
+        openListingPage(page, site, id),
       );
-      if (shown.found || shown.authoritative || look === SETTLE_LOOKS) return shown;
-      await new Promise((resolve) => setTimeout(resolve, SETTLE_WAIT_MS));
+      if (shown.type === 'listing' || shown.type === 'deleted' || look === SETTLE_LOOKS) {
+        return shown;
+      }
+      await new Promise((resolve) => setTimeout(resolve, settleWaitMs));
     }
   }
 
   /**
    * A listing just listed, as its own page shows it, read again for a moment while the page
-   * shows none yet; `null` when it never does.
+   * shows none yet; `null` when it never shows the listing. A listing Poshmark hides is there
+   * all the same (its page names it), so its id is known; the operation's check reads it again.
    */
   async function newListing(step: StepRunner, id: string): Promise<WriteResult | null> {
     for (let look = 1; look <= NEW_LOOKS; look += 1) {
-      const record = await step('read the new listing', { mutates: false }, (page) =>
-        openListing(page, site, id),
+      const shown = await step('read the new listing', { mutates: false }, (page) =>
+        openListingPage(page, site, id),
       );
-      if (record !== null) {
+      if (shown.type === 'listing') {
         return {
           type: 'applied',
           externalListingId: id,
-          revision: revision(record, 'listing page'),
+          revision: revision(shown.record, 'listing page'),
         };
       }
+      if (shown.type === 'hidden') return { type: 'applied', externalListingId: id };
       if (look < NEW_LOOKS) await new Promise((resolve) => setTimeout(resolve, NEW_WAIT_MS));
     }
     return null;
@@ -258,7 +278,9 @@ export function createPoshmarkScripts(
   ): Promise<WriteResult> {
     const id = op.listing.externalListingId;
     if (id === null) return notListed();
-    const shown = await settledListing(step, id);
+    const page = await settledListing(step, id);
+    if (page.type === 'hidden') return hiddenListing();
+    const shown = remoteState(page, site);
     if (!shown.found) {
       if (!shown.authoritative) return notListed();
       // A listing Poshmark says is gone is ended already (the read-back confirms it), and

@@ -9151,29 +9151,64 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* A listing's public page (`/listing/<title>-<id>`): the read-back of every change. It reads the
 	* listing record the page embeds (`$_listing_details.listingDetails`).
 	*
-	* A deleted listing's page answers 404 (seen on a real listing deleted from the captain's closet,
-	* 2026-10-27), and that absence is authoritative: the listing is gone. Any other page without the
-	* listing (one that is no longer published) reads as "not found, maybe not yet", never as "gone"
-	* (docs/features/marketplaces.md).
+	* A listing that isn't on the site answers 404, and its page holds Poshmark's own record of what
+	* became of it instead (`listingDetails.error`, a `PostRemovedError` whose `params.post_info`
+	* names the listing and its status; read on the captain's listings, 2026-10-27): `archived` for
+	* one its seller deleted, which is definitive (the listing is gone), and `hidden` for one Poshmark
+	* hides, as it did with a listing it removed under its rules, which is not (Poshmark can show it
+	* again). Any other page without the listing (one without that record, or no longer published)
+	* reads as "not found, maybe not yet", never as "gone" (docs/features/marketplaces.md).
 	*/
 	const PAGE = "listing page";
-	const listingPageSchema = object({ $_listing_details: object({ listingDetails: listingRecordSchema.nullable().optional() }) });
+	/** Poshmark's record of a listing that isn't on the site, on its 404 page. */
+	const removedSchema = object({ error: object({
+		errorType: string(),
+		params: object({ post_info: object({
+			id: string(),
+			status: string()
+		}).optional() }).optional()
+	}) });
+	const listingPageSchema = object({ $_listing_details: object({ listingDetails: union([listingRecordSchema, removedSchema]).nullable().optional() }) });
+	/** Opens the listing's page and reads what it shows of the listing. */
+	async function openListingPage(page, site, id) {
+		if (!isListingId(id)) return { type: "none" };
+		await page.goto(site.listing(id));
+		const missing = page.status() === 404;
+		let details;
+		try {
+			details = expectShape(listingPageSchema, await readPageState(page, PAGE), PAGE).$_listing_details.listingDetails;
+		} catch (error) {
+			if (missing && error instanceof PageChangedError) return { type: "none" };
+			throw error;
+		}
+		if (details === void 0 || details === null) return { type: "none" };
+		if ("error" in details) {
+			const info = details.error.params?.post_info;
+			if (details.error.errorType !== "PostRemovedError" || info?.id !== id) return { type: "none" };
+			if (info.status === "archived") return { type: "deleted" };
+			return info.status === "hidden" ? { type: "hidden" } : { type: "none" };
+		}
+		if (details.id !== id || details.status !== "published") return { type: "none" };
+		return {
+			type: "listing",
+			record: details
+		};
+	}
 	/** Opens the listing's page and reads it; `null` when the page shows no such listing. */
 	async function openListing(page, site, id) {
-		if (!isListingId(id)) return null;
-		await page.goto(site.listing(id));
-		if (page.status() === 404) return null;
-		const record = expectShape(listingPageSchema, await readPageState(page, PAGE), PAGE).$_listing_details.listingDetails ?? null;
-		if (record?.id !== id || record.status !== "published") return null;
-		return record;
+		const shown = await openListingPage(page, site, id);
+		return shown.type === "listing" ? shown.record : null;
 	}
 	/** The listing as a read-back. */
 	async function readListing(page, site, id) {
-		const record = await openListing(page, site, id);
-		if (record !== null) return remoteListing(record, site, PAGE);
+		return remoteState(await openListingPage(page, site, id), site);
+	}
+	/** What a listing's page shows, as a read-back: only a deleted listing is definitely gone. */
+	function remoteState(shown, site) {
+		if (shown.type === "listing") return remoteListing(shown.record, site, PAGE);
 		return {
 			found: false,
-			authoritative: isListingId(id) && page.status() === 404
+			authoritative: shown.type === "deleted"
 		};
 	}
 
@@ -9199,11 +9234,18 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	const SOLD_PAGES = 5;
 	function createPoshmarkScripts(options) {
 		const { site } = options;
+		const settleWaitMs = options.settleWaitMs ?? SETTLE_WAIT_MS;
 		const skuOf = (listing) => listing.externalSku ?? listing.listingId;
 		const notListed = () => ({
 			type: "rejected",
 			code: "not_listed",
 			message: "This listing is not on Poshmark yet."
+		});
+		const hiddenListing = () => ({
+			type: "rejected",
+			code: "hidden",
+			message: "Poshmark is hiding this listing, as it does with a listing it removed under its rules.",
+			fixHint: "Check the listing in Poshmark."
 		});
 		/**
 		* The id of the seller's listing with this private SKU, or `null`. Poshmark can't search by
@@ -9322,22 +9364,27 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		*/
 		async function settledListing(step, id) {
 			for (let look = 1;; look += 1) {
-				const shown = await step("open the listing", { mutates: false }, (page) => readListing(page, site, id));
-				if (shown.found || shown.authoritative || look === SETTLE_LOOKS) return shown;
-				await new Promise((resolve) => setTimeout(resolve, SETTLE_WAIT_MS));
+				const shown = await step("open the listing", { mutates: false }, (page) => openListingPage(page, site, id));
+				if (shown.type === "listing" || shown.type === "deleted" || look === SETTLE_LOOKS) return shown;
+				await new Promise((resolve) => setTimeout(resolve, settleWaitMs));
 			}
 		}
 		/**
 		* A listing just listed, as its own page shows it, read again for a moment while the page
-		* shows none yet; `null` when it never does.
+		* shows none yet; `null` when it never shows the listing. A listing Poshmark hides is there
+		* all the same (its page names it), so its id is known; the operation's check reads it again.
 		*/
 		async function newListing(step, id) {
 			for (let look = 1; look <= NEW_LOOKS; look += 1) {
-				const record = await step("read the new listing", { mutates: false }, (page) => openListing(page, site, id));
-				if (record !== null) return {
+				const shown = await step("read the new listing", { mutates: false }, (page) => openListingPage(page, site, id));
+				if (shown.type === "listing") return {
 					type: "applied",
 					externalListingId: id,
-					revision: revision(record, "listing page")
+					revision: revision(shown.record, "listing page")
+				};
+				if (shown.type === "hidden") return {
+					type: "applied",
+					externalListingId: id
 				};
 				if (look < NEW_LOOKS) await new Promise((resolve) => setTimeout(resolve, NEW_WAIT_MS));
 			}
@@ -9351,7 +9398,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		async function changeAvailability(op, step, availability) {
 			const id = op.listing.externalListingId;
 			if (id === null) return notListed();
-			const shown = await settledListing(step, id);
+			const page = await settledListing(step, id);
+			if (page.type === "hidden") return hiddenListing();
+			const shown = remoteState(page, site);
 			if (!shown.found) {
 				if (!shown.authoritative) return notListed();
 				return availability === "not_for_sale" ? {

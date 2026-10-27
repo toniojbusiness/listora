@@ -2,15 +2,19 @@
  * A listing's public page (`/listing/<title>-<id>`): the read-back of every change. It reads the
  * listing record the page embeds (`$_listing_details.listingDetails`).
  *
- * A deleted listing's page answers 404 (seen on a real listing deleted from the captain's closet,
- * 2026-10-27), and that absence is authoritative: the listing is gone. Any other page without the
- * listing (one that is no longer published) reads as "not found, maybe not yet", never as "gone"
- * (docs/features/marketplaces.md).
+ * A listing that isn't on the site answers 404, and its page holds Poshmark's own record of what
+ * became of it instead (`listingDetails.error`, a `PostRemovedError` whose `params.post_info`
+ * names the listing and its status; read on the captain's listings, 2026-10-27): `archived` for
+ * one its seller deleted, which is definitive (the listing is gone), and `hidden` for one Poshmark
+ * hides, as it did with a listing it removed under its rules, which is not (Poshmark can show it
+ * again). Any other page without the listing (one without that record, or no longer published)
+ * reads as "not found, maybe not yet", never as "gone" (docs/features/marketplaces.md).
  */
 import { z } from 'zod';
 
 import type { RemoteListingState } from '@listora/marketplaces';
 
+import { PageChangedError } from '../../runner/errors.ts';
 import type { PageDriver } from '../../runner/types.ts';
 import { isListingId, type PoshmarkSite } from '../site.ts';
 import {
@@ -23,9 +27,60 @@ import {
 
 const PAGE = 'listing page';
 
-const listingPageSchema = z.object({
-  $_listing_details: z.object({ listingDetails: listingRecordSchema.nullable().optional() }),
+/** Poshmark's record of a listing that isn't on the site, on its 404 page. */
+const removedSchema = z.object({
+  error: z.object({
+    errorType: z.string(),
+    params: z
+      .object({ post_info: z.object({ id: z.string(), status: z.string() }).optional() })
+      .optional(),
+  }),
 });
+
+const listingPageSchema = z.object({
+  $_listing_details: z.object({
+    listingDetails: z.union([listingRecordSchema, removedSchema]).nullable().optional(),
+  }),
+});
+
+/** What a listing's page shows of it. */
+export type ListingPage =
+  | { type: 'listing'; record: ListingRecord }
+  /** Its seller deleted it: it is gone. */
+  | { type: 'deleted' }
+  /** Poshmark hides it, as it does with a listing it removed under its rules. */
+  | { type: 'hidden' }
+  /** No listing, and no word of what became of it. */
+  | { type: 'none' };
+
+/** Opens the listing's page and reads what it shows of the listing. */
+export async function openListingPage(
+  page: PageDriver,
+  site: PoshmarkSite,
+  id: string,
+): Promise<ListingPage> {
+  if (!isListingId(id)) return { type: 'none' };
+  await page.goto(site.listing(id));
+  const missing = page.status() === 404;
+  let details: z.infer<typeof listingPageSchema>['$_listing_details']['listingDetails'];
+  try {
+    const state = expectShape(listingPageSchema, await readPageState(page, PAGE), PAGE);
+    details = state.$_listing_details.listingDetails;
+  } catch (error) {
+    // A 404 page without Poshmark's record says nothing more.
+    if (missing && error instanceof PageChangedError) return { type: 'none' };
+    throw error;
+  }
+  if (details === undefined || details === null) return { type: 'none' };
+  if ('error' in details) {
+    const info = details.error.params?.post_info;
+    if (details.error.errorType !== 'PostRemovedError' || info?.id !== id) return { type: 'none' };
+    if (info.status === 'archived') return { type: 'deleted' };
+    return info.status === 'hidden' ? { type: 'hidden' } : { type: 'none' };
+  }
+  if (details.id !== id || details.status !== 'published') return { type: 'none' };
+  return { type: 'listing', record: details };
+}
 
 /** Opens the listing's page and reads it; `null` when the page shows no such listing. */
 export async function openListing(
@@ -33,13 +88,8 @@ export async function openListing(
   site: PoshmarkSite,
   id: string,
 ): Promise<ListingRecord | null> {
-  if (!isListingId(id)) return null;
-  await page.goto(site.listing(id));
-  if (page.status() === 404) return null;
-  const state = expectShape(listingPageSchema, await readPageState(page, PAGE), PAGE);
-  const record = state.$_listing_details.listingDetails ?? null;
-  if (record?.id !== id || record.status !== 'published') return null;
-  return record;
+  const shown = await openListingPage(page, site, id);
+  return shown.type === 'listing' ? shown.record : null;
 }
 
 /** The listing as a read-back. */
@@ -48,7 +98,11 @@ export async function readListing(
   site: PoshmarkSite,
   id: string,
 ): Promise<RemoteListingState> {
-  const record = await openListing(page, site, id);
-  if (record !== null) return remoteListing(record, site, PAGE);
-  return { found: false, authoritative: isListingId(id) && page.status() === 404 };
+  return remoteState(await openListingPage(page, site, id), site);
+}
+
+/** What a listing's page shows, as a read-back: only a deleted listing is definitely gone. */
+export function remoteState(shown: ListingPage, site: PoshmarkSite): RemoteListingState {
+  if (shown.type === 'listing') return remoteListing(shown.record, site, PAGE);
+  return { found: false, authoritative: shown.type === 'deleted' };
 }

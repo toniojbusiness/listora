@@ -1,8 +1,8 @@
 /**
  * Drives the fake Poshmark for the shared adapter conformance suite (test-only): each failure the
- * suite asks for becomes the page Poshmark would show. A deleted listing's page answers 404 (seen
- * on a real listing deleted from a seller's closet, 2026-10-27), which says the listing is gone
- * for good, so `remove` deletes it on the fake.
+ * suite asks for becomes the page Poshmark would show. A deleted listing's page answers 404 with
+ * Poshmark's record that it is `archived` (seen on real listings deleted from a seller's closet,
+ * 2026-10-27), which says the listing is gone for good, so `remove` deletes it on the fake.
  */
 import type { ConformanceAction, ConformanceMarketplace } from '@listora/marketplaces/conformance';
 

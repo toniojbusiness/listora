@@ -42,6 +42,8 @@ export interface PoshmarkAdapterOptions {
   sessions: AutomationSessions;
   photos: PhotoSource;
   logger: Logger;
+  /** See `PoshmarkScriptOptions.settleWaitMs`. */
+  settleWaitMs?: number;
 }
 
 export function createPoshmarkAutomationAdapter(
@@ -59,7 +61,11 @@ export function createPoshmarkAutomationAdapter(
     sessions: options.sessions,
     // Fallback tasks open the real Poshmark, where the user does the step.
     assisted: createPoshmarkAdapter(),
-    scripts: createPoshmarkScripts({ site, photos: options.photos }),
+    scripts: createPoshmarkScripts({
+      site,
+      photos: options.photos,
+      ...(options.settleWaitMs === undefined ? {} : { settleWaitMs: options.settleWaitMs }),
+    }),
     scriptSet: { name: 'poshmark', marketplace: 'poshmark', siteUrl: origin },
     readFreshness: 'revision',
     buildPayload: buildPoshmarkPayload,

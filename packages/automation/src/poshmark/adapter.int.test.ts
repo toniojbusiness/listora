@@ -62,6 +62,7 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
       sessions,
       photos: sizedPhotos,
       logger: silentLogger,
+      settleWaitMs: 50,
     });
   });
 
@@ -218,6 +219,35 @@ describe('Poshmark automation adapter (headless Chromium, fake Poshmark)', () =>
         ctx(),
       ),
     ).toMatchObject({ type: 'rejected', code: 'out_of_range' });
+  });
+
+  it('reads only a deleted listing as gone, and changes nothing on one Poshmark hides', async () => {
+    const deleted = await create();
+    site.remove(deleted.externalListingId);
+    expect(await adapter.readListing(deleted, ctx())).toEqual({
+      found: false,
+      authoritative: true,
+    });
+
+    // Poshmark hides a listing it removed under its rules: its page answers 404 as well, but
+    // the listing may be shown again, so it is not gone, and End and Relist say why they can't.
+    const hidden = await create();
+    site.hide(hidden.externalListingId);
+    expect(await adapter.readListing(hidden, ctx())).toEqual({
+      found: false,
+      authoritative: false,
+    });
+    for (const [kind, desired] of [
+      ['end', { status: 'ended' }],
+      ['relist', { status: 'active' }],
+    ] as const) {
+      expect(await adapter.execute(request(kind, hidden, {}, desired), ctx())).toMatchObject({
+        type: 'rejected',
+        code: 'hidden',
+        message:
+          'Poshmark is hiding this listing, as it does with a listing it removed under its rules.',
+      });
+    }
   });
 
   it('finds an earlier attempt by its private SKU among listings with the same title', async () => {

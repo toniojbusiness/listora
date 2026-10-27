@@ -246,6 +246,30 @@ describe('operation step executor (real Postgres)', () => {
     });
   });
 
+  it("never posts a create again when the new listing's own page doesn't show it yet", async () => {
+    // The marketplace named the new listing, but its page doesn't show it yet without saying it
+    // is gone (Poshmark's, while it holds a new listing back): sending again would post it twice.
+    const { op, payload } = await newCreate();
+    let sends = 0;
+    const adapter = stubAdapter({
+      execute: () => {
+        sends += 1;
+        return Promise.resolve({ type: 'confirmed', externalListingId: 'STUB-7' });
+      },
+      read: () => Promise.resolve({ found: false, authoritative: false }),
+    });
+
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+
+    expect(sends).toBe(1);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'verifying',
+      error_code: 'not_applied',
+    });
+  });
+
   it('never confirms a read older than the revision the send was confirmed with', async () => {
     const { op, payload } = await newCreate();
     const adapter = stubAdapter({
