@@ -22,6 +22,7 @@
     "@listora/connections": "*",
     "@listora/db": "*",
     "@listora/email-sales": "*",
+    "@listora/imports": "*",
     "@listora/marketplaces": "*",
     "@listora/operations": "*",
     "@listora/photos": "*",

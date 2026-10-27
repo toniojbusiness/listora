@@ -1955,6 +1955,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the marketplaces Listora imports listings from, each with its latest import
+         * @description One entry per marketplace Listora can import from (Depop, Poshmark, Mercari): whether an
+         *     import can start now (the marketplace is linked, none is under way) or why not, and its
+         *     newest import with its progress and summary.
+         */
+        get: operations["listListingImports"];
+        put?: never;
+        /**
+         * Import the seller's listings for sale on a marketplace
+         * @description Starts reading the seller's listings for sale on a linked marketplace, a page at a time
+         *     where the marketplace runs (the seller's iPhone, or Listora's cloud browser), read-only:
+         *     nothing on the marketplace changes. Each listing becomes an item already listed there, is
+         *     added to the item it is the same as, or becomes a question for the seller.
+         *     `marketplace_not_connected` when the marketplace is not linked, `already_exists` while an
+         *     import of it is under way, `marketplace_action_unavailable` for a marketplace Listora
+         *     doesn't import from.
+         */
+        post: operations["startListingImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/{importId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: components["parameters"]["ImportId"];
+            };
+            cookie?: never;
+        };
+        /** Get an import's progress and summary */
+        get: operations["getListingImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/{importId}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: components["parameters"]["ImportId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the import's questions for the seller
+         * @description The listings the import was not sure about: each may be an item Listora already has, and
+         *     the seller says which, or that it is an item of its own, or to leave it out. At most 200,
+         *     oldest first.
+         */
+        get: operations["listListingImportQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/imports/{importId}/questions/{questionId}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: components["parameters"]["ImportId"];
+                questionId: components["parameters"]["QuestionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer one of the import's questions
+         * @description `same_item`: the listing is that item (one of the question's candidates), and becomes its
+         *     listing on the marketplace. `new_item`: it is an item of its own, imported with its photos.
+         *     `skip`: it is not imported. `invalid_state_transition` for a question already answered,
+         *     `marketplace_action_unavailable` when the item already has a listing there.
+         */
+        post: operations["answerListingImportQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2045,10 +2146,11 @@ export interface components {
          */
         Provenance: components["schemas"]["KnownProvenance"];
         /**
-         * @description Where a field value came from.
+         * @description Where a field value came from: `marketplace` is a listing Listora imported from the
+         *     seller's marketplace account.
          * @enum {string}
          */
-        KnownProvenance: "ai" | "ocr" | "barcode" | "user";
+        KnownProvenance: "ai" | "ocr" | "barcode" | "user" | "marketplace";
         /** @description The body of every error response. */
         ErrorResponse: {
             error: components["schemas"]["ApiError"];
@@ -3580,10 +3682,11 @@ export interface components {
          * @description `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
          *     or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
          *     a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
-         *     history, which changes nothing.
+         *     history, which changes nothing. `listing_import`: a read-only read of a page of the seller's
+         *     listings for sale, for an import.
          * @enum {string}
          */
-        KnownPhoneWorkPurpose: "operation" | "session_check" | "sale_check" | "sale_history";
+        KnownPhoneWorkPurpose: "operation" | "session_check" | "sale_check" | "sale_history" | "listing_import";
         PhoneRunClaim: {
             installationId: components["schemas"]["Id"];
             /** Format: int32 */
@@ -4701,6 +4804,120 @@ export interface components {
             nextCheckAt: components["schemas"]["Timestamp"];
             lastError?: components["schemas"]["ActivityError"];
         };
+        /** @description A `KnownListingImportStatus`, or a status added after this client was built. */
+        ListingImportStatus: components["schemas"]["KnownListingImportStatus"];
+        /**
+         * @description `reading`: pages of the seller's listings are still being read. `importing`: reading is
+         *     over and listings are still being turned into items. `finished`: every listing is settled
+         *     (some may wait for the seller's answer).
+         * @enum {string}
+         */
+        KnownListingImportStatus: "reading" | "importing" | "finished";
+        ListingImportCounts: {
+            /**
+             * Format: int32
+             * @description Listings for sale the import read.
+             */
+            read: number;
+            /**
+             * Format: int32
+             * @description New items, each already listed on the marketplace.
+             */
+            imported: number;
+            /**
+             * Format: int32
+             * @description Listings added to an item Listora already had.
+             */
+            merged: number;
+            /**
+             * Format: int32
+             * @description Listings Listora already had.
+             */
+            alreadyListed: number;
+            /**
+             * Format: int32
+             * @description Questions waiting for the seller.
+             */
+            needsYou: number;
+            /**
+             * Format: int32
+             * @description Listings that could not be imported (importing again tries them again).
+             */
+            failed: number;
+        };
+        ListingImport: {
+            id: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            status: components["schemas"]["ListingImportStatus"];
+            runsOn: components["schemas"]["ExecutionLocation"];
+            counts: components["schemas"]["ListingImportCounts"];
+            /** @description Where it is, in the seller's words ("Reading your Depop listings on your iPhone... 48 so far"). */
+            progress: string;
+            /** @description What it did once reading is over ("Imported 42 from Depop, 3 need you"). */
+            summary?: string;
+            /** @description Why reading stopped before the last page; the listings read before it still import. */
+            stoppedReason?: string;
+            startedAt: components["schemas"]["Timestamp"];
+            finishedAt?: components["schemas"]["Timestamp"];
+        };
+        ListingImportMarketplace: {
+            marketplace: components["schemas"]["Marketplace"];
+            /** @description Whether an import can start now. */
+            canStart: boolean;
+            /** @description Why not, in the seller's words, when it can't. */
+            unavailableReason?: string;
+            latest?: components["schemas"]["ListingImport"];
+        };
+        ListingImports: {
+            marketplaces: components["schemas"]["ListingImportMarketplace"][];
+        };
+        ListingImportStart: {
+            marketplace: components["schemas"]["KnownMarketplace"];
+        };
+        /** @description A `KnownImportMatchReason`, or a reason added after this client was built. */
+        ImportMatchReason: components["schemas"]["KnownImportMatchReason"];
+        /**
+         * @description Why the listing may be this item: `sku` (its SKU line names it), `photo_and_title`, `photo`
+         *     (a photo alike), or `title` (the title alike).
+         * @enum {string}
+         */
+        KnownImportMatchReason: "sku" | "photo_and_title" | "photo" | "title";
+        ListingImportCandidate: {
+            itemId: components["schemas"]["Id"];
+            sku: string;
+            title?: string;
+            /** Format: uri */
+            coverPhotoUrl?: string;
+            reason: components["schemas"]["ImportMatchReason"];
+            /** @description The reason in the seller's words ("A photo looks the same"). */
+            why: string;
+        };
+        ListingImportQuestion: {
+            id: components["schemas"]["Id"];
+            marketplace: components["schemas"]["Marketplace"];
+            externalListingId: string;
+            /** Format: uri */
+            externalUrl?: string;
+            /** @description The listing's title (on Depop, the first line of its text). */
+            title?: string;
+            price?: components["schemas"]["Money"];
+            /**
+             * Format: uri
+             * @description The listing's cover photo, on the marketplace's own image CDN.
+             */
+            photoUrl?: string;
+            candidates: components["schemas"]["ListingImportCandidate"][];
+        };
+        ListingImportQuestions: {
+            questions: components["schemas"]["ListingImportQuestion"][];
+        };
+        /** @enum {string} */
+        ImportAnswerKind: "same_item" | "new_item" | "skip";
+        ListingImportAnswer: {
+            answer: components["schemas"]["ImportAnswerKind"];
+            /** @description For `same_item`, the candidate it is. */
+            itemId?: components["schemas"]["Id"];
+        };
     };
     responses: {
         /** @description Any error. See `KnownErrorCode` for the codes and their HTTP statuses. */
@@ -4828,6 +5045,8 @@ export interface components {
         RunId: components["schemas"]["Id"];
         /** @description The call's place in its run, from 0 (path parameters are text). */
         CallIndex: string;
+        ImportId: components["schemas"]["Id"];
+        QuestionId: components["schemas"]["Id"];
     };
     requestBodies: never;
     headers: never;
@@ -5147,6 +5366,20 @@ export type SaleExplanation = components['schemas']['SaleExplanation'];
 export type SaleCheckHealth = components['schemas']['SaleCheckHealth'];
 export type KnownSaleCheckHealth = components['schemas']['KnownSaleCheckHealth'];
 export type ConnectionSaleChecks = components['schemas']['ConnectionSaleChecks'];
+export type ListingImportStatus = components['schemas']['ListingImportStatus'];
+export type KnownListingImportStatus = components['schemas']['KnownListingImportStatus'];
+export type ListingImportCounts = components['schemas']['ListingImportCounts'];
+export type ListingImport = components['schemas']['ListingImport'];
+export type ListingImportMarketplace = components['schemas']['ListingImportMarketplace'];
+export type ListingImports = components['schemas']['ListingImports'];
+export type ListingImportStart = components['schemas']['ListingImportStart'];
+export type ImportMatchReason = components['schemas']['ImportMatchReason'];
+export type KnownImportMatchReason = components['schemas']['KnownImportMatchReason'];
+export type ListingImportCandidate = components['schemas']['ListingImportCandidate'];
+export type ListingImportQuestion = components['schemas']['ListingImportQuestion'];
+export type ListingImportQuestions = components['schemas']['ListingImportQuestions'];
+export type ImportAnswerKind = components['schemas']['ImportAnswerKind'];
+export type ListingImportAnswer = components['schemas']['ListingImportAnswer'];
 export type ResponseDefaultError = components['responses']['DefaultError'];
 export type ResponseBadRequest = components['responses']['BadRequest'];
 export type ResponseNotFound = components['responses']['NotFound'];
@@ -5174,6 +5407,8 @@ export type ParameterMarketplacePath = components['parameters']['MarketplacePath
 export type ParameterInstallationId = components['parameters']['InstallationId'];
 export type ParameterRunId = components['parameters']['RunId'];
 export type ParameterCallIndex = components['parameters']['CallIndex'];
+export type ParameterImportId = components['parameters']['ImportId'];
+export type ParameterQuestionId = components['parameters']['QuestionId'];
 export type $defs = Record<string, never>;
 export interface operations {
     getLiveness: {
@@ -7892,6 +8127,155 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    listListingImports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The marketplaces and their newest imports. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingImports"];
+                };
+            };
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    startListingImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListingImportStart"];
+            };
+        };
+        responses: {
+            /** @description The import started. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingImport"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getListingImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: components["parameters"]["ImportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The import. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingImport"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listListingImportQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                importId: components["parameters"]["ImportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The open questions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingImportQuestions"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    answerListingImportQuestion: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description A unique client-generated key (use a UUID v4) per logical action, reused unchanged on
+                 *     every retry of that action. The server stores the first successful response for at
+                 *     least 24 hours: a retry with the same key and body gets that response again without
+                 *     repeating the action; the same key with a different body gets
+                 *     `422 idempotency_key_reused`; a retry while the first request is still running gets
+                 *     `409 idempotency_key_in_progress`. A request that failed changed nothing and is not
+                 *     stored, so retrying it with the same key runs it again.
+                 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                importId: components["parameters"]["ImportId"];
+                questionId: components["parameters"]["QuestionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ListingImportAnswer"];
+            };
+        };
+        responses: {
+            /** @description The import, with the answer counted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListingImport"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
 }
 type FlattenedDeepRequired<T> = {
     [K in keyof T]-?: FlattenedDeepRequired<T[K] extends unknown[] | undefined | null ? Extract<T[K], unknown[]>[number] : T[K]>;
@@ -7906,7 +8290,7 @@ export const knownMarketplaceValues: ReadonlyArray<FlattenedDeepRequired<compone
 export const knownIntegrationModeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownIntegrationMode"]> = ["api", "automation", "assisted"];
 export const knownStatusToneValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownStatusTone"]> = ["success", "in_progress", "checking", "failed", "action_needed", "neutral"];
 export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["marketplace_api", "user_confirmation"];
-export const knownProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownProvenance"]> = ["ai", "ocr", "barcode", "user"];
+export const knownProvenanceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownProvenance"]> = ["ai", "ocr", "barcode", "user", "marketplace"];
 export const knownErrorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownErrorCode"]> = ["invalid_request", "unauthenticated", "quota_exceeded", "forbidden", "not_found", "version_conflict", "invalid_state_transition", "already_exists", "idempotency_key_in_progress", "upload_incomplete", "upload_expired", "marketplace_not_connected", "marketplace_reauth_required", "marketplace_action_unavailable", "app_update_required", "payload_too_large", "validation_failed", "idempotency_key_reused", "rate_limited", "ai_budget_exceeded", "internal_error", "service_unavailable", "marketplace_authorization_denied", "marketplace_authorization_failed"];
 export const healthCheckStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["HealthCheckStatus"]> = ["ok", "unavailable"];
 export const knownItemStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownItemStatus"]> = ["draft", "ready", "listed", "sold_pending_delist", "sold", "shipped", "archived"];
@@ -7953,7 +8337,7 @@ export const sessionCookieSameSiteValues: ReadonlyArray<FlattenedDeepRequired<co
 export const knownExecutionLocationValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownExecutionLocation"]> = ["cloud", "phone"];
 export const devicePlatformValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DevicePlatform"]> = ["ios"];
 export const pushEnvironmentValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PushEnvironment"]> = ["sandbox", "production"];
-export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check", "sale_history"];
+export const knownPhoneWorkPurposeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownPhoneWorkPurpose"]> = ["operation", "session_check", "sale_check", "sale_history", "listing_import"];
 export const knownSaleStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleStatus"]> = ["detected", "confirmed", "shipped", "canceled", "returned"];
 export const knownSaleDetectionSourceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDetectionSource"]> = ["webhook", "poll", "email", "manual"];
 export const delistRunStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DelistRunStatus"]> = ["in_progress", "completed", "needs_attention"];
@@ -7979,3 +8363,6 @@ export const knownSaleCheckRunKindValues: ReadonlyArray<FlattenedDeepRequired<co
 export const knownActivityHostValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownActivityHost"]> = ["runner", "phone"];
 export const knownSaleDelistStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleDelistStatus"]> = ["queued", "running", "retrying", "verifying", "succeeded", "failed", "needs_user_action", "canceled", "open", "done", "dismissed"];
 export const knownSaleCheckHealthValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownSaleCheckHealth"]> = ["healthy", "failing", "overdue"];
+export const knownListingImportStatusValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownListingImportStatus"]> = ["reading", "importing", "finished"];
+export const knownImportMatchReasonValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KnownImportMatchReason"]> = ["sku", "photo_and_title", "photo", "title"];
+export const importAnswerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ImportAnswerKind"]> = ["same_item", "new_item", "skip"];

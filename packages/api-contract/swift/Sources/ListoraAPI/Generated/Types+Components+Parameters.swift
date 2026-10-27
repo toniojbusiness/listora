@@ -59,5 +59,9 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/parameters/CallIndex`.
         public typealias CallIndex = Swift.String
+        /// - Remark: Generated from `#/components/parameters/ImportId`.
+        public typealias ImportId = Components.Schemas.Id
+        /// - Remark: Generated from `#/components/parameters/QuestionId`.
+        public typealias QuestionId = Components.Schemas.Id
     }
 }

@@ -51,6 +51,85 @@
               "Action": "sns:Publish",
               "Condition": {
                 "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "StackFailed7B206E9B",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "StackFailedEvents"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "ServiceDeploymentFailed18E0E18A",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "ServiceDeploymentFailedEvents"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::GetAtt": [
+                      "MigrationFailed9804C545",
+                      "Arn"
+                    ]
+                  }
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "MigrationFailedEvents"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": "111111111111"
+                }
+              },
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "budgets.amazonaws.com"
+              },
+              "Resource": {
+                "Ref": "Alarms04B5A0BF"
+              },
+              "Sid": "BudgetNotifications"
+            },
+            {
+              "Action": "sns:Publish",
+              "Condition": {
+                "ArnEquals": {
                   "aws:SourceArn": "arn:aws:rds:us-east-1:111111111111:es:listora-staging-database-storage"
                 }
               },
@@ -748,6 +827,241 @@
             }
           }
         ]
+      }
+    },
+    "StackFailed7B206E9B": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "A Listora stack failed to deploy or rolled back.",
+        "EventPattern": {
+          "source": [
+            "aws.cloudformation"
+          ],
+          "detail-type": [
+            "CloudFormation Stack Status Change"
+          ],
+          "detail": {
+            "stack-id": [
+              {
+                "prefix": "arn:aws:cloudformation:us-east-1:111111111111:stack/listora-staging-"
+              }
+            ],
+            "status-details": {
+              "status": [
+                "CREATE_FAILED",
+                "ROLLBACK_COMPLETE",
+                "ROLLBACK_FAILED",
+                "UPDATE_FAILED",
+                "UPDATE_ROLLBACK_COMPLETE",
+                "UPDATE_ROLLBACK_FAILED",
+                "DELETE_FAILED"
+              ]
+            }
+          }
+        },
+        "Name": "listora-staging-stack-failed",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "Alarms04B5A0BF"
+            },
+            "Id": "Target0",
+            "InputTransformer": {
+              "InputPathsMap": {
+                "detail-stack-id": "$.detail.stack-id",
+                "detail-status-details-status": "$.detail.status-details.status",
+                "detail-status-details-status-reason": "$.detail.status-details.status-reason"
+              },
+              "InputTemplate": "\"Deploy failed in listora-staging: CloudFormation stack <detail-stack-id> is <detail-status-details-status> (<detail-status-details-status-reason>).\""
+            }
+          }
+        ]
+      }
+    },
+    "ServiceDeploymentFailed18E0E18A": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "ECS rolled back a deployment of a Listora service.",
+        "EventPattern": {
+          "source": [
+            "aws.ecs"
+          ],
+          "detail-type": [
+            "ECS Deployment State Change"
+          ],
+          "resources": [
+            {
+              "prefix": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:ecs:us-east-1:111111111111:service/",
+                    {
+                      "Fn::GetStackOutput": {
+                        "StackName": "listora-staging-compute",
+                        "Region": "us-east-1",
+                        "OutputName": "PublishOutputRefClusterEB0386A7D87642F6"
+                      }
+                    },
+                    "/"
+                  ]
+                ]
+              }
+            }
+          ],
+          "detail": {
+            "eventName": [
+              "SERVICE_DEPLOYMENT_FAILED"
+            ]
+          }
+        },
+        "Name": "listora-staging-service-deployment-failed",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "Alarms04B5A0BF"
+            },
+            "Id": "Target0",
+            "InputTransformer": {
+              "InputPathsMap": {
+                "resources-0-": "$.resources[0]",
+                "detail-reason": "$.detail.reason"
+              },
+              "InputTemplate": "\"Deploy failed in listora-staging: ECS rolled back the deployment of <resources-0-> (<detail-reason>). The previous release is still serving.\""
+            }
+          }
+        ]
+      }
+    },
+    "MigrationFailed9804C545": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "A schema migration task a deploy started did not exit 0.",
+        "EventPattern": {
+          "source": [
+            "aws.ecs"
+          ],
+          "detail-type": [
+            "ECS Task State Change"
+          ],
+          "detail": {
+            "group": [
+              "family:listora-staging-migrate"
+            ],
+            "lastStatus": [
+              "STOPPED"
+            ],
+            "startedBy": [
+              {
+                "prefix": "deploy-"
+              }
+            ],
+            "containers": {
+              "exitCode": [
+                {
+                  "anything-but": [
+                    0
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "Name": "listora-staging-migration-failed",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "Alarms04B5A0BF"
+            },
+            "Id": "Target0",
+            "InputTransformer": {
+              "InputPathsMap": {
+                "detail-stoppedReason": "$.detail.stoppedReason",
+                "detail-taskArn": "$.detail.taskArn"
+              },
+              "InputTemplate": "\"Deploy failed in listora-staging: the schema migrations failed (<detail-stoppedReason>, task <detail-taskArn>); no new release started. Logs: /listora/staging/migrate.\""
+            }
+          }
+        ]
+      }
+    },
+    "MonthlyCost": {
+      "Type": "AWS::Budgets::Budget",
+      "Properties": {
+        "Budget": {
+          "BudgetLimit": {
+            "Amount": 150,
+            "Unit": "USD"
+          },
+          "BudgetName": "listora-staging-monthly-cost",
+          "BudgetType": "COST",
+          "TimeUnit": "MONTHLY"
+        },
+        "NotificationsWithSubscribers": [
+          {
+            "Notification": {
+              "ComparisonOperator": "GREATER_THAN",
+              "NotificationType": "ACTUAL",
+              "Threshold": 100,
+              "ThresholdType": "PERCENTAGE"
+            },
+            "Subscribers": [
+              {
+                "Address": {
+                  "Ref": "Alarms04B5A0BF"
+                },
+                "SubscriptionType": "SNS"
+              }
+            ]
+          },
+          {
+            "Notification": {
+              "ComparisonOperator": "GREATER_THAN",
+              "NotificationType": "FORECASTED",
+              "Threshold": 100,
+              "ThresholdType": "PERCENTAGE"
+            },
+            "Subscribers": [
+              {
+                "Address": {
+                  "Ref": "Alarms04B5A0BF"
+                },
+                "SubscriptionType": "SNS"
+              }
+            ]
+          }
+        ]
+      },
+      "DependsOn": [
+        "AlarmsPolicy5C860CFE"
+      ]
+    },
+    "workerheartbeat7D6C5CE4": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "AlarmDescription": "The worker published no trust metrics for 15 minutes: it is stopped, stuck, or cannot reach the database, so operations, sale checks, and delists are not running.",
+        "AlarmName": "listora-staging-worker-heartbeat",
+        "ComparisonOperator": "LessThanThreshold",
+        "EvaluationPeriods": 3,
+        "MetricName": "OldestUnverifiedOperationAge",
+        "Namespace": "Listora",
+        "OKActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "Period": 300,
+        "Statistic": "SampleCount",
+        "Threshold": 1,
+        "TreatMissingData": "breaching"
       }
     },
     "operationunverified5F6E7766": {

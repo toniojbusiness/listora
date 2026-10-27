@@ -4,9 +4,17 @@
 #
 # Usage: scripts/deploy-personal.sh --profile <aws profile> [--code-only] [--dry-run]
 #                                   [--anthropic-env <file>]
+#        scripts/deploy-personal.sh --ci [--dry-run]
 #
 #   --profile        AWS CLI profile of the personal account (or AWS_PROFILE). Passed to every
 #                    aws and cdk command; the script never exports credentials.
+#   --ci             Run by .github/workflows/deploy-personal.yml: the full deploy with the
+#                    ambient AWS credentials (the GitHub deploy role, assumed through OIDC), no
+#                    profile and no Anthropic key file. It checks Listora's bootstrap, its
+#                    execution policy, and the role boundary without changing them, needs the
+#                    owner's address already verified by SES (it cannot wait for a click), and
+#                    keeps the stored Anthropic key. Changing any of those is the deploy from a
+#                    Mac, with --profile.
 #   --code-only      The fast path, for a commit that changes no infrastructure: build and push
 #                    the images, run the migrations only when there are new ones, and move the
 #                    services to the new images directly, without CloudFormation. It first
@@ -26,9 +34,14 @@
 # LISTORA_AVAILABILITY_ZONES, LISTORA_ALARM_EMAIL, LISTORA_DOMAIN with LISTORA_HOSTED_ZONE_ID,
 # and LISTORA_CONTAINER_CLI (docker).
 #
+# A release that fails the health check or the smoke test is rolled back: every service moves
+# back to the task definition it ran before the deploy (old tasks serve until the new ones are
+# healthy, as in every rollout), the health check runs again, and the deploy fails.
+#
 # Steps: verify the account; check the zones and the existing stacks; synthesize offline; make
-# sure the restricted CDK bootstrap is in place (create its execution policy and bootstrap if
-# the account has none, refuse if it has another); deploy the registry; build and push the
+# sure the restricted CDK bootstrap is in place (create or update the role boundary and the
+# execution policy, and bootstrap with Listora's template when the account has none or an older
+# one of Listora's, refuse one with another execution policy); deploy the registry; build and push the
 # image; deploy the state stacks and the migration task; wait until SES has verified the
 # owner's address (the first deploy emails them a link to click); deploy the user pool; store
 # the Anthropic key; run the migrations; deploy the services and alarms; wait for health; run
@@ -51,12 +64,14 @@ readonly MIGRATIONS=packages/db/migrations
 
 dry_run=false
 code_only=false
+ci=false
 profile=${AWS_PROFILE:-}
 anthropic_env="$HOME/.config/listora/anthropic.env"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) dry_run=true ;;
     --code-only) code_only=true ;;
+    --ci) ci=true ;;
     --profile)
       profile=${2:?--profile needs a value}
       shift
@@ -81,12 +96,29 @@ readonly region=${LISTORA_AWS_REGION:-us-east-1}
 readonly container_cli=${LISTORA_CONTAINER_CLI:-docker}
 readonly policy_name="listora-$ENVIRONMENT-cdk-execution"
 readonly policy_arn="arn:aws:iam::$EXPECTED_ACCOUNT:policy/$policy_name"
+readonly boundary_name="listora-$ENVIRONMENT-role-boundary"
+readonly boundary_arn="arn:aws:iam::$EXPECTED_ACCOUNT:policy/$boundary_name"
 readonly registry="$EXPECTED_ACCOUNT.dkr.ecr.$region.amazonaws.com"
 readonly api_log_group="/listora/$ENVIRONMENT/api"
 readonly stacks=(registry network secrets data storage email auth migrate compute observability)
 owner_email=$(tr '[:upper:]' '[:lower:]' <<<"${LISTORA_OWNER_EMAIL:-}")
 readonly owner_email
-readonly code_only
+readonly code_only ci
+if [[ "$ci" == true ]]; then
+  [[ -z "$profile" ]] || { echo "deploy-personal: --ci uses the ambient credentials; drop --profile" >&2; exit 2; }
+  [[ "$code_only" == false ]] || { echo "deploy-personal: --ci runs the full deploy; drop --code-only" >&2; exit 2; }
+fi
+# Checks only, never changes: the bootstrap and its policies, which only an administrator updates.
+verify_only=false
+[[ "$code_only" == false && "$ci" == false ]] || verify_only=true
+readonly verify_only
+# How to deploy what this run refuses to change.
+if [[ "$ci" == true ]]; then
+  full_deploy="deploy from a Mac with administrator credentials: scripts/deploy-personal.sh --profile <profile>"
+else
+  full_deploy="deploy in full (without --code-only)"
+fi
+readonly full_deploy
 
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
@@ -100,11 +132,21 @@ info() { printf '    %s\n' "$*"; }
 would() { printf '    would run: %s\n' "$*"; }
 fail() {
   printf '\ndeploy-personal: FAILED: %s\n' "$*" >&2
+  # GitHub Actions shows ::error:: lines as annotations of the run.
+  [[ -z "${GITHUB_ACTIONS:-}" ]] || printf '::error::deploy-personal: %s\n' "$*" >&2
   exit 1
 }
 
-# Every AWS call names the profile and region; nothing is exported.
-aws_() { aws --profile "$profile" --region "$region" "$@"; }
+# Every AWS call names the profile and region; nothing is exported. With --ci there is no
+# profile: the ambient credentials (the deploy role's session) are used as they are.
+profile_args=()
+aws_env=(AWS_REGION="$region")
+if [[ -n "$profile" ]]; then
+  profile_args=(--profile "$profile")
+  aws_env+=(AWS_PROFILE="$profile")
+fi
+readonly profile_args aws_env
+aws_() { aws ${profile_args[@]+"${profile_args[@]}"} --region "$region" "$@"; }
 # cdk reads an SSO profile's cached access token, which lasts about an hour, and cannot renew
 # it, while the AWS CLI keeps working from its own cached role credentials. So cdk gets its
 # credentials from the CLI: a private AWS config in the work directory (removed on exit) holds
@@ -117,6 +159,11 @@ cdk_config() {
     "$cdk_profile" "$source_config" "$profile" "$region" >"$workdir/aws-config")
 }
 cdk_() {
+  if [[ "$ci" == true ]]; then
+    aws_ sts get-caller-identity >/dev/null || fail "the deploy role's session has expired"
+    (cd infra && npx cdk "$@" --no-notices --no-version-reporting)
+    return
+  fi
   aws_ sts get-caller-identity >/dev/null ||
     fail "the sign-in of profile $profile has expired; run aws sso login --profile $profile and run this again"
   [[ -e "$workdir/aws-config" ]] || cdk_config
@@ -129,7 +176,7 @@ for tool in node npx jq aws git; do
   command -v "$tool" >/dev/null || fail "$tool is not installed"
 done
 if [[ "$dry_run" == false ]]; then
-  [[ -n "$profile" ]] || fail "name the AWS profile of account $EXPECTED_ACCOUNT with --profile"
+  [[ -n "$profile" || "$ci" == true ]] || fail "name the AWS profile of account $EXPECTED_ACCOUNT with --profile"
   command -v "$container_cli" >/dev/null ||
     fail "$container_cli is not installed (or set LISTORA_CONTAINER_CLI)"
   "$container_cli" info >/dev/null 2>&1 || fail "$container_cli is not running"
@@ -141,27 +188,47 @@ if [[ -n "$dirty" ]]; then
 fi
 image_tag=$(git rev-parse HEAD)
 readonly image_tag
-info "commit $image_tag, region $region, profile ${profile:-(none)}"
+if [[ "$ci" == true ]]; then
+  info "commit $image_tag, region $region, the ambient credentials (--ci)"
+else
+  info "commit $image_tag, region $region, profile ${profile:-(none)}"
+fi
 
 [[ -n "$owner_email" ]] ||
   fail "set LISTORA_OWNER_EMAIL to the email address you sign in to the app with (the only account the deployed app accepts)"
+# The run's log is public in a public repository: GitHub masks the address (as written here,
+# lowercase) wherever it would appear.
+[[ -z "${GITHUB_ACTIONS:-}" ]] || echo "::add-mask::$owner_email"
 info "owner (the only person who can sign in): $owner_email"
 
-[[ -r "$anthropic_env" ]] || fail "no Anthropic key file at $anthropic_env"
-anthropic_key=$(sed -n 's/^ANTHROPIC_API_KEY=//p' "$anthropic_env" | tail -n 1 | sed -e 's/^["'\'']//' -e 's/["'\'']$//')
-[[ -n "$anthropic_key" ]] || fail "$anthropic_env has no ANTHROPIC_API_KEY= line"
-info "Anthropic key found in $anthropic_env (${#anthropic_key} characters, not shown)"
+anthropic_key=""
+if [[ "$ci" == true ]]; then
+  info "Anthropic key: the one stored in listora/$ENVIRONMENT/anthropic-api-key is kept (--ci)"
+else
+  [[ -r "$anthropic_env" ]] || fail "no Anthropic key file at $anthropic_env"
+  anthropic_key=$(sed -n 's/^ANTHROPIC_API_KEY=//p' "$anthropic_env" | tail -n 1 | sed -e 's/^["'\'']//' -e 's/["'\'']$//')
+  [[ -n "$anthropic_key" ]] || fail "$anthropic_env has no ANTHROPIC_API_KEY= line"
+  info "Anthropic key found in $anthropic_env (${#anthropic_key} characters, not shown)"
+fi
 
 # --- 2. Account ------------------------------------------------------------------------------
 step "Verify the AWS account is $EXPECTED_ACCOUNT"
 if [[ "$dry_run" == true ]]; then
-  would "aws sts get-caller-identity --profile ${profile:-<profile>}  (refuse unless $EXPECTED_ACCOUNT)"
+  if [[ "$ci" == true ]]; then
+    would "aws sts get-caller-identity  (refuse unless $EXPECTED_ACCOUNT)"
+  else
+    would "aws sts get-caller-identity --profile ${profile:-<profile>}  (refuse unless $EXPECTED_ACCOUNT)"
+  fi
 else
+  credentials="profile $profile"
+  [[ "$ci" == false ]] || credentials="the ambient credentials"
+  hint=" (sign in first, for example aws sso login --profile $profile)"
+  [[ "$ci" == false ]] || hint=""
   account=$(aws_ sts get-caller-identity --query Account --output text) ||
-    fail "cannot read the identity of profile $profile (sign in first, for example aws sso login --profile $profile)"
+    fail "cannot read the identity of $credentials$hint"
   [[ "$account" == "$EXPECTED_ACCOUNT" ]] ||
-    fail "profile $profile is account $account, not $EXPECTED_ACCOUNT; refusing to deploy"
-  info "profile $profile is account $account"
+    fail "$credentials is account $account, not $EXPECTED_ACCOUNT; refusing to deploy"
+  info "$credentials is account $account"
 fi
 
 # --- 3. Zones and existing stacks ------------------------------------------------------------
@@ -283,63 +350,109 @@ info "database: deletion protection on"
 
 node infra/src/deploy/execution-policy.ts "$ENVIRONMENT" "$EXPECTED_ACCOUNT" >"$workdir/policy.json"
 info "restricted CDK execution policy $policy_name: $(jq '.Statement | length' "$workdir/policy.json") statements, $(jq -c '[.Statement[0].Action[] | sub(":\\*$"; "")]' "$workdir/policy.json")"
+node infra/src/deploy/execution-policy.ts "$ENVIRONMENT" "$EXPECTED_ACCOUNT" boundary >"$workdir/boundary.json"
+# Every role a deploy creates carries the boundary, or the execution policy refuses it mid-deploy.
+for name in "${stacks[@]}"; do
+  jq -e --arg boundary ":policy/$boundary_name" \
+    '[.Resources[] | select(.Type == "AWS::IAM::Role") | .Properties.PermissionsBoundary | tostring | contains($boundary)] | all' \
+    "$(template "$name")" >/dev/null ||
+    fail "a role of listora-$ENVIRONMENT-$name would deploy without the role boundary $boundary_name"
+done
+info "role boundary $boundary_name: on every role of the stacks, no IAM"
+node infra/src/deploy/bootstrap-template.ts "$ENVIRONMENT" >"$workdir/bootstrap.yaml"
+template_hash=$(node infra/src/deploy/bootstrap-template.ts "$ENVIRONMENT" hash)
+readonly template_hash
+info "bootstrap template $template_hash: the deploy role changes only listora-$ENVIRONMENT-* stacks"
 
 # --- 5. Restricted CDK bootstrap -------------------------------------------------------------
 # Listora's own bootstrap (infra/src/bootstrap.ts; infra/cdk.json makes every cdk command use
-# it), so the account's default CDKToolkit and the apps that use it are never touched.
+# it), so the account's default CDKToolkit and the apps that use it are never touched. Its
+# template (infra/src/deploy/bootstrap-template.ts) lets the deploy role change only this
+# environment's stacks; its execution policy requires the role boundary on every role.
 readonly qualifier=listora
 readonly toolkit=CDKToolkit-listora
-step "Make sure Listora's CDK bootstrap ($toolkit) uses the restricted execution policy"
+step "Make sure Listora's CDK bootstrap ($toolkit) is its own template with the restricted execution policy"
 bootstrap_flags="--qualifier $qualifier --toolkit-stack-name $toolkit --cloudformation-execution-policies $policy_arn --termination-protection"
 # shellcheck disable=SC2206 # the flags above have no spaces inside a value
-bootstrap=(cdk_ bootstrap "aws://$EXPECTED_ACCOUNT/$region" --app "$ASSEMBLY" $bootstrap_flags)
-if [[ "$dry_run" == true && "$code_only" == true ]]; then
-  would "aws cloudformation describe-stacks --stack-name $toolkit; aws iam get-policy-version --policy-arn $policy_arn  (refuse unless both are current: --code-only changes neither)"
+bootstrap=(cdk_ bootstrap "aws://$EXPECTED_ACCOUNT/$region" --app "$ASSEMBLY" --template "$workdir/bootstrap.yaml" $bootstrap_flags)
+# The bootstrap template a deployed toolkit stack was made from (empty: the CDK default).
+deployed_template() {
+  jq -r '.Stacks[0].Outputs[]? | select(.OutputKey == "ListoraBootstrapTemplate") | .OutputValue' <<<"$1"
+}
+# Makes the managed policy $1 (ARN $2) the document in file $3, creating it with description $4.
+ensure_policy() {
+  local name=$1 arn=$2 document=$3 description=$4
+  if aws_ iam get-policy --policy-arn "$arn" --output json >"$workdir/existing-policy.json" 2>"$workdir/err"; then
+    local version versions
+    version=$(jq -r '.Policy.DefaultVersionId' "$workdir/existing-policy.json")
+    aws_ iam get-policy-version --policy-arn "$arn" --version-id "$version" \
+      --query PolicyVersion.Document --output json >"$workdir/current.json"
+    if [[ "$(jq -S . "$workdir/current.json")" == "$(jq -S . "$document")" ]]; then
+      info "$name is up to date ($version)"
+      return
+    fi
+    [[ "$verify_only" == false ]] ||
+      fail "$name differs from the committed document (infra/src/deploy/execution-policy.ts); to update it, $full_deploy"
+    versions=$(aws_ iam list-policy-versions --policy-arn "$arn" --query 'length(Versions)' --output text)
+    [[ "$versions" -lt 5 ]] ||
+      fail "$name already has 5 versions; delete an old non-default one, then run this again"
+    aws_ iam create-policy-version --policy-arn "$arn" \
+      --policy-document "file://$document" --set-as-default >/dev/null
+    info "$name updated to the committed document"
+  else
+    grep -q 'NoSuchEntity' "$workdir/err" || fail "cannot read $arn: $(cat "$workdir/err")"
+    [[ "$verify_only" == false ]] || fail "$name does not exist yet; $full_deploy"
+    aws_ iam create-policy --policy-name "$name" --description "$description" \
+      --policy-document "file://$document" --tags Key=project,Value=listora >/dev/null
+    info "created $name"
+  fi
+}
+if [[ "$dry_run" == true && "$verify_only" == true ]]; then
+  would "aws cloudformation describe-stacks --stack-name $toolkit; aws iam get-policy-version --policy-arn $policy_arn; aws iam get-policy-version --policy-arn $boundary_arn  (refuse unless all are current: $([[ "$ci" == true ]] && echo --ci || echo --code-only) changes none)"
 elif [[ "$dry_run" == true ]]; then
+  would "aws iam create-policy --policy-name $boundary_name --policy-document file://<the boundary above>  (or a new default version when it differs)"
   would "aws iam create-policy --policy-name $policy_name --policy-document file://<the policy above>  (or a new default version when it differs)"
-  would "npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile <profile> $bootstrap_flags  (only when $toolkit does not exist; refuse one with another policy)"
+  would "npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile <profile> --template <the template above> $bootstrap_flags  (when $toolkit does not exist, or with --force when it is another template; refuse one with another policy)"
 else
   # First, before changing anything: an existing bootstrap must be this restricted one.
   bootstrapped=false
+  template_current=false
   if toolkit_stack=$(aws_ cloudformation describe-stacks --stack-name "$toolkit" --output json 2>"$workdir/err"); then
     policies=$(jq -r '.Stacks[0].Parameters[]? | select(.ParameterKey == "CloudFormationExecutionPolicies") | .ParameterValue' <<<"$toolkit_stack")
     [[ "$policies" == "$policy_arn" ]] ||
-      fail "$toolkit runs CloudFormation with '${policies:-AdministratorAccess (the default)}', not $policy_arn; re-bootstrap it on purpose: npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile $profile $bootstrap_flags"
+      fail "$toolkit runs CloudFormation with '${policies:-AdministratorAccess (the default)}', not $policy_arn; re-bootstrap it on purpose: npx cdk bootstrap aws://$EXPECTED_ACCOUNT/$region --profile $profile --template <(node src/deploy/bootstrap-template.ts $ENVIRONMENT) --force $bootstrap_flags"
     bootstrapped=true
-  else
-    grep -q 'does not exist' "$workdir/err" || fail "cannot describe $toolkit: $(cat "$workdir/err")"
-    [[ "$code_only" == false ]] || fail "$toolkit does not exist yet; deploy in full (without --code-only)"
-  fi
-  if aws_ iam get-policy --policy-arn "$policy_arn" --output json >"$workdir/existing-policy.json" 2>"$workdir/err"; then
-    version=$(jq -r '.Policy.DefaultVersionId' "$workdir/existing-policy.json")
-    aws_ iam get-policy-version --policy-arn "$policy_arn" --version-id "$version" \
-      --query PolicyVersion.Document --output json >"$workdir/current.json"
-    if [[ "$(jq -S . "$workdir/current.json")" == "$(jq -S . "$workdir/policy.json")" ]]; then
-      info "$policy_name is up to date ($version)"
+    deployed_hash=$(deployed_template "$toolkit_stack")
+    if [[ "$deployed_hash" == "$template_hash" ]]; then
+      template_current=true
     else
-      [[ "$code_only" == false ]] ||
-        fail "$policy_name differs from the committed document (infra/src/deploy/execution-policy.ts); deploy in full (without --code-only) to update it"
-      versions=$(aws_ iam list-policy-versions --policy-arn "$policy_arn" --query 'length(Versions)' --output text)
-      [[ "$versions" -lt 5 ]] ||
-        fail "$policy_name already has 5 versions; delete an old non-default one, then run this again"
-      aws_ iam create-policy-version --policy-arn "$policy_arn" \
-        --policy-document "file://$workdir/policy.json" --set-as-default >/dev/null
-      info "$policy_name updated to the committed document"
+      [[ "$verify_only" == false ]] ||
+        fail "$toolkit is not Listora's current bootstrap template ($template_hash; deployed: ${deployed_hash:-the CDK default}); to update it, $full_deploy"
     fi
   else
-    grep -q 'NoSuchEntity' "$workdir/err" || fail "cannot read $policy_arn: $(cat "$workdir/err")"
-    [[ "$code_only" == false ]] || fail "$policy_name does not exist yet; deploy in full (without --code-only)"
-    aws_ iam create-policy --policy-name "$policy_name" \
-      --description "Listora $ENVIRONMENT: what CloudFormation may change in CDK deploys (infra/src/deploy/execution-policy.ts)" \
-      --policy-document "file://$workdir/policy.json" --tags Key=project,Value=listora >/dev/null
-    info "created $policy_name"
+    grep -q 'does not exist' "$workdir/err" || fail "cannot describe $toolkit: $(cat "$workdir/err")"
+    [[ "$verify_only" == false ]] || fail "$toolkit does not exist yet; $full_deploy"
   fi
+  # The boundary first: the execution policy requires it on every role it creates or changes.
+  ensure_policy "$boundary_name" "$boundary_arn" "$workdir/boundary.json" \
+    "Listora $ENVIRONMENT: the permissions boundary of every role the stacks create (infra/src/deploy/execution-policy.ts)"
+  ensure_policy "$policy_name" "$policy_arn" "$workdir/policy.json" \
+    "Listora $ENVIRONMENT: what CloudFormation may change in CDK deploys (infra/src/deploy/execution-policy.ts)"
 
-  if [[ "$bootstrapped" == true ]]; then
-    info "$toolkit uses $policy_arn"
+  if [[ "$template_current" == true ]]; then
+    info "$toolkit uses $policy_arn and Listora's bootstrap template ($template_hash)"
   else
-    "${bootstrap[@]}" || fail "cdk bootstrap failed"
-    info "bootstrapped with $policy_arn"
+    # cdk skips, with only a warning, a toolkit stack made from another template unless forced.
+    if [[ "$bootstrapped" == true ]]; then
+      "${bootstrap[@]}" --force || fail "cdk bootstrap failed"
+    else
+      "${bootstrap[@]}" || fail "cdk bootstrap failed"
+    fi
+    toolkit_stack=$(aws_ cloudformation describe-stacks --stack-name "$toolkit" --output json) ||
+      fail "cannot describe $toolkit after the bootstrap"
+    [[ "$(deployed_template "$toolkit_stack")" == "$template_hash" ]] ||
+      fail "cdk bootstrap did not make $toolkit Listora's bootstrap template ($template_hash)"
+    info "bootstrapped $toolkit with $policy_arn and Listora's bootstrap template ($template_hash)"
   fi
 fi
 
@@ -446,6 +559,56 @@ start_rollout() {
     fail "cannot update the $1 service"
 }
 
+# --- Health and rollback ------------------------------------------------------------------------
+# Polls <ApiUrl>/health/ready every 5 seconds, $1 times at most, until it answers 200 with the
+# database ok; leaves the last answer in $ready.
+ready=""
+wait_ready() {
+  ready=""
+  for _ in $(seq "$1"); do
+    if ready=$(curl --silent --fail --max-time 10 "$api_url/health/ready"); then break; fi
+    sleep 5
+  done
+  [[ "$ready" == *'"database":"ok"'* ]]
+}
+# "<service> <task definition>" lines: what each service ran just before this release moved it,
+# recorded so that a release that fails its health check can be put back. Empty before the
+# first deploy, which has nothing to go back to.
+previous_definitions=""
+record_previous() {
+  local service definition
+  previous_definitions=""
+  while read -r service definition <&3; do
+    previous_definitions+="$service $(running_task_definition "$service")"$'\n'
+  done 3<<<"$(service_task_definitions)"
+}
+# The release failed its health check or smoke test ($1): moves every service back to the task
+# definition it ran before (a rollout like any other: the release's tasks serve until the
+# previous ones are healthy), checks health again, and fails either way, so a rolled-back
+# release is never reported as deployed. The stacks keep describing this commit; the next
+# deploy replaces what the services run (infra/README.md, Rollback).
+release_failed() {
+  local reason=$1 service definition moved=()
+  [[ -n "$previous_definitions" ]] ||
+    fail "$reason; this is the first release, so there is none to roll back to"
+  info "$reason; rolling back to the task definitions the services ran before this deploy"
+  while read -r service definition <&3; do
+    [[ -n "$service" && "$(running_task_definition "$service")" != "$definition" ]] || continue
+    start_rollout "$service" "$definition"
+    moved+=("$service" "$definition")
+  done 3<<<"$previous_definitions"
+  ((${#moved[@]} > 0)) ||
+    fail "$reason; the services already ran these task definitions before this deploy, so there is nothing to roll back to"
+  for ((index = 0; index < ${#moved[@]}; index += 2)); do
+    wait_for_rollout "${moved[$index]}" "${moved[$((index + 1))]}"
+    info "${moved[$index]}: back on ${moved[$((index + 1))]##*/}"
+  done
+  if wait_ready 60; then
+    fail "$reason; rolled back: the services run the previous release again, which is healthy ($ready)"
+  fi
+  fail "$reason; rolled back, but the previous release is not healthy either: ${ready:-no answer} (logs: $api_log_group)"
+}
+
 deployed_tag=""
 if [[ "$code_only" == true ]]; then
   # --- 6. What is deployed --------------------------------------------------------------------
@@ -533,7 +696,7 @@ if [[ "$code_only" == true ]]; then
   if [[ "$dry_run" == true ]]; then
     would "git diff --quiet <the deployed commit> HEAD -- $MIGRATIONS  (skip when none changed)"
     would "aws ecs register-task-definition  (the migrate stack's task definition with this commit's image)"
-    would "AWS_PROFILE=<profile> AWS_REGION=$region scripts/run-migrations.sh $ENVIRONMENT deploy-personal-${image_tag:0:12} <that revision>"
+    would "${aws_env[*]} scripts/run-migrations.sh $ENVIRONMENT deploy-personal-${image_tag:0:12} <that revision>"
   elif [[ -n "$deployed_tag" ]] && git cat-file -e "$deployed_tag^{commit}" 2>/dev/null &&
     git diff --quiet "$deployed_tag" HEAD -- "$MIGRATIONS"; then
     info "no migration changed since ${deployed_tag:0:12}, which the services run; skipped"
@@ -549,7 +712,7 @@ if [[ "$code_only" == true ]]; then
     migrate_revision=$(register_revision "$migrate_definition") ||
       fail "cannot register a revision of $migrate_definition"
     info "migrate task: ${migrate_revision##*/}"
-    AWS_PROFILE="$profile" AWS_REGION="$region" scripts/run-migrations.sh "$ENVIRONMENT" "deploy-personal-${image_tag:0:12}" "$migrate_revision" ||
+    env "${aws_env[@]}" scripts/run-migrations.sh "$ENVIRONMENT" "deploy-personal-${image_tag:0:12}" "$migrate_revision" ||
       fail "the schema migrations failed; no new service task started (logs: /listora/$ENVIRONMENT/migrate)"
   fi
 
@@ -561,6 +724,7 @@ if [[ "$code_only" == true ]]; then
     would "aws ecs describe-services  (until each service runs only its new revision, 10 minutes at most; a rollback fails the deploy)"
   else
     definitions=$(service_task_definitions) || fail "cannot read the services of listora-$ENVIRONMENT-compute"
+    record_previous
     moved=()
     while read -r service definition <&3; do
       [[ "$definition" != unknown ]] || fail "listora-$ENVIRONMENT-compute has no task definition for the $service service"
@@ -590,7 +754,9 @@ else
   identities=("$owner_email")
   [[ -z "${LISTORA_DOMAIN:-}" ]] || identities+=("$LISTORA_DOMAIN")
   step "Wait until SES has verified ${identities[*]} (the sign-in codes are emailed through SES)"
-  if [[ "$dry_run" == true ]]; then
+  if [[ "$dry_run" == true && "$ci" == true ]]; then
+    would "aws sesv2 get-email-identity --email-identity <each of ${identities[*]}>  (refuse unless verified: --ci cannot wait for the link to be clicked)"
+  elif [[ "$dry_run" == true ]]; then
     would "aws sesv2 get-email-identity --email-identity <each of ${identities[*]}>  (until it is verified, 30 minutes at most)"
   else
     for identity in "${identities[@]}"; do
@@ -602,6 +768,10 @@ else
           verified=true
           break
         fi
+        # Nobody is there to click the link: the first deploy, which waits for it, is the one
+        # from a Mac.
+        [[ "$ci" == false ]] ||
+          fail "SES has not verified $identity; the first deploy (which waits for the owner to click SES's link) runs from a Mac: scripts/deploy-personal.sh --profile <profile>"
         if [[ "$attempt" == 1 && "$identity" == "$owner_email" ]]; then
           info "waiting for you: open the email \"Amazon Web Services - Email Address Verification Request\" sent to $owner_email and click its link"
           info "(not there? resend it: aws ses verify-email-identity --email-address $owner_email --profile $profile --region $region)"
@@ -619,7 +789,10 @@ else
 
   step "Store the Anthropic key in Secrets Manager (listora/$ENVIRONMENT/anthropic-api-key)"
   secret_changed=false
-  if [[ "$dry_run" == true ]]; then
+  if [[ "$ci" == true ]]; then
+    # The deploy role can neither read nor write the app's secrets.
+    info "kept as stored (--ci); a new key is stored by the deploy from a Mac"
+  elif [[ "$dry_run" == true ]]; then
     would "aws secretsmanager put-secret-value --secret-id listora/$ENVIRONMENT/anthropic-api-key --secret-string file://<private temp file>  (only when it differs; never printed)"
   else
     current=$(aws_ secretsmanager get-secret-value --secret-id "listora/$ENVIRONMENT/anthropic-api-key" \
@@ -641,15 +814,20 @@ else
   # The migrate stack's own task definition: after a --code-only deploy the family's newest
   # revision runs that deploy's image, which may not be this commit's.
   if [[ "$dry_run" == true ]]; then
-    would "AWS_PROFILE=<profile> AWS_REGION=$region scripts/run-migrations.sh $ENVIRONMENT deploy-personal-${image_tag:0:12} <the migrate stack's task definition>"
+    would "${aws_env[*]} scripts/run-migrations.sh $ENVIRONMENT deploy-personal-${image_tag:0:12} <the migrate stack's task definition>"
   else
     migrate_definition=$(stack_task_definition migrate) || fail "cannot read listora-$ENVIRONMENT-migrate"
-    AWS_PROFILE="$profile" AWS_REGION="$region" scripts/run-migrations.sh "$ENVIRONMENT" "deploy-personal-${image_tag:0:12}" "$migrate_definition" ||
+    env "${aws_env[@]}" scripts/run-migrations.sh "$ENVIRONMENT" "deploy-personal-${image_tag:0:12}" "$migrate_definition" ||
       fail "the schema migrations failed; no new service task started (logs: /listora/$ENVIRONMENT/migrate)"
   fi
 
   # --- 9. Services ----------------------------------------------------------------------------
   step "Deploy the services and alarms"
+  if [[ "$dry_run" == true ]]; then
+    would "aws ecs describe-services --cluster <ClusterName> --services <each service>  (the task definitions to roll back to)"
+  elif [[ "$compute_existed" == true ]]; then
+    record_previous
+  fi
   deploy_stacks compute observability
   if [[ "$dry_run" == false && "$compute_existed" == true ]]; then
     cluster=$(compute_output ClusterName)
@@ -683,15 +861,11 @@ step "Wait for the API to be healthy"
 if [[ "$dry_run" == true ]]; then
   would "aws cloudformation describe-stacks --stack-name listora-$ENVIRONMENT-compute  (the ApiUrl output)"
   would "curl <ApiUrl>/health/ready until it answers 200 with the database ok (10 minutes at most)"
+  would "on a failed health check or smoke test: aws ecs update-service --cluster <ClusterName> --service <each service> --task-definition <what it ran before>, then the health check again; the deploy fails"
 else
   api_url=$(compute_output ApiUrl)
   [[ "$api_url" == https://* ]] || fail "the compute stack has no ApiUrl output"
-  ready=""
-  for _ in $(seq 120); do
-    if ready=$(curl --silent --fail --max-time 10 "$api_url/health/ready"); then break; fi
-    sleep 5
-  done
-  [[ "$ready" == *'"database":"ok"'* ]] || fail "$api_url never reported ready: ${ready:-no answer} (logs: $api_log_group)"
+  wait_ready 120 || release_failed "$api_url never reported ready: ${ready:-no answer} (logs: $api_log_group)"
   info "$api_url/health/ready: $ready"
 fi
 
@@ -701,16 +875,20 @@ step "Smoke test (health, no access without a token, the dev sign-in off; with L
 smoke=(node infra/src/deploy/smoke.ts --api-url)
 smoke_auth=(--auth cognito)
 if [[ "$dry_run" == true ]]; then
-  would "AWS_PROFILE=<profile> AWS_REGION=$region ${smoke[*]} <ApiUrl> ${smoke_auth[*]}"
+  would "${aws_env[*]} ${smoke[*]} <ApiUrl> ${smoke_auth[*]}"
 else
-  AWS_PROFILE="$profile" AWS_REGION="$region" "${smoke[@]}" "$api_url" "${smoke_auth[@]}" ||
-    fail "the smoke test failed against $api_url (see above; rollback: infra/README.md)"
+  env "${aws_env[@]}" "${smoke[@]}" "$api_url" "${smoke_auth[@]}" ||
+    release_failed "the smoke test failed against $api_url (see above)"
 fi
 
 elapsed="$((SECONDS / 60))m $((SECONDS % 60))s"
 if [[ "$dry_run" == true ]]; then
-  printf '\ndeploy-personal: dry run ok; nothing was sent to AWS. Deploy with: scripts/deploy-personal.sh --profile <profile>%s\n' \
-    "$([[ "$code_only" == false ]] || echo ' --code-only')"
+  if [[ "$ci" == true ]]; then
+    printf '\ndeploy-personal: dry run ok; nothing was sent to AWS. Deploy with: scripts/deploy-personal.sh --ci\n'
+  else
+    printf '\ndeploy-personal: dry run ok; nothing was sent to AWS. Deploy with: scripts/deploy-personal.sh --profile <profile>%s\n' \
+      "$([[ "$code_only" == false ]] || echo ' --code-only')"
+  fi
 elif [[ "$code_only" == true ]]; then
   printf '\ndeploy-personal: deployed %s (code only) in %s\n\n  API URL: %s\n' "$image_tag" "$elapsed" "$api_url"
 else

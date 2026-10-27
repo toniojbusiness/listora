@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   APP_SECRETS,
+  DEFAULT_GITHUB_IDS,
   DEFAULT_GITHUB_REPOSITORY,
   DEFAULT_REGION,
   DeployConfigError,
@@ -24,6 +25,8 @@ const VALID = {
   hostedZoneId: 'Z0123456789ABCDEFGHIJ',
   imageTag: '3f1c2a9',
   githubRepository: 'acme/listora',
+  githubOwnerId: '42',
+  githubRepositoryId: '4242',
 };
 
 /** `VALID` with no domain and no hosted zone. */
@@ -56,6 +59,9 @@ describe('loadDeployTarget', () => {
       dns: { domain: 'staging.example.com', hostedZoneId: 'Z0123456789ABCDEFGHIJ' },
       imageTag: '3f1c2a9',
       githubRepository: 'acme/listora',
+      githubOwnerId: '42',
+      githubRepositoryId: '4242',
+      githubOidcProvider: 'create',
       alarmEmail: undefined,
       ownerEmail: undefined,
       ownerEmailIdentity: 'create',
@@ -72,12 +78,18 @@ describe('loadDeployTarget', () => {
       LISTORA_HOSTED_ZONE_ID: 'Z9',
       LISTORA_IMAGE_TAG: 'abc',
       LISTORA_GITHUB_REPOSITORY: 'acme/listora',
+      LISTORA_GITHUB_OWNER_ID: '7',
+      LISTORA_GITHUB_REPOSITORY_ID: '77',
+      LISTORA_GITHUB_OIDC_PROVIDER: 'existing',
       LISTORA_ALARM_EMAIL: 'ops@example.com',
     };
     expect(loadDeployTarget(fromRecord({}), env)).toMatchObject({
       environment: 'prod',
       account: '210987654321',
       region: 'us-west-2',
+      githubOwnerId: '7',
+      githubRepositoryId: '77',
+      githubOidcProvider: 'existing',
       alarmEmail: 'ops@example.com',
     });
     expect(loadDeployTarget(fromRecord({ account: '111122223333' }), env).account).toBe(
@@ -85,12 +97,42 @@ describe('loadDeployTarget', () => {
     );
   });
 
-  it('defaults the region and the deploying repository', () => {
-    const context = { ...VALID, region: undefined, githubRepository: undefined };
+  it('defaults the region and the deploying repository, with its ids', () => {
+    const context = {
+      ...VALID,
+      region: undefined,
+      githubRepository: undefined,
+      githubOwnerId: undefined,
+      githubRepositoryId: undefined,
+    };
     expect(loadDeployTarget(fromRecord(context), {})).toMatchObject({
       region: DEFAULT_REGION,
       githubRepository: DEFAULT_GITHUB_REPOSITORY,
+      githubOwnerId: DEFAULT_GITHUB_IDS.ownerId,
+      githubRepositoryId: DEFAULT_GITHUB_IDS.repositoryId,
+      githubOidcProvider: 'create',
     });
+  });
+
+  it("needs another repository's own ids, and the OIDC provider choice is create or existing", () => {
+    expect(issuesOf({ ...VALID, githubOwnerId: undefined, githubRepositoryId: undefined })).toEqual(
+      [
+        'githubOwnerId (context) or LISTORA_GITHUB_OWNER_ID (environment) is required for a repository other than the default',
+        'githubRepositoryId (context) or LISTORA_GITHUB_REPOSITORY_ID (environment) is required for a repository other than the default',
+      ],
+    );
+    expect(
+      issuesOf({
+        ...VALID,
+        githubOwnerId: 'acme',
+        githubRepositoryId: '0',
+        githubOidcProvider: 'adopt',
+      }),
+    ).toEqual([
+      'githubOwnerId (context) or LISTORA_GITHUB_OWNER_ID (environment) must be a numeric GitHub id',
+      'githubRepositoryId (context) or LISTORA_GITHUB_REPOSITORY_ID (environment) must be a numeric GitHub id',
+      'githubOidcProvider (context) or LISTORA_GITHUB_OIDC_PROVIDER (environment) must be create or existing',
+    ]);
   });
 
   it('treats empty values as unset', () => {
@@ -239,6 +281,16 @@ describe('loadDeployTarget', () => {
         LISTORA_OWNER_EMAIL: 'Owner@Example.com',
       }).ownerEmail,
     ).toBe('owner@example.com');
+  });
+
+  it('emails alerts to the owner unless another address is given', () => {
+    const personal = { ...NO_DOMAIN, ...PERSONAL };
+    expect(loadDeployTarget(fromRecord(personal), {}).alarmEmail).toBe('owner@example.com');
+    expect(
+      loadDeployTarget(fromRecord({ ...personal, alarmEmail: 'Ops@Example.com' }), {}).alarmEmail,
+    ).toBe('ops@example.com');
+    // Without an owner there is no one to default to.
+    expect(loadDeployTarget(fromRecord(VALID), {}).alarmEmail).toBeUndefined();
   });
 
   it('creates the owner email identity unless told it already exists, and only with an owner pool', () => {

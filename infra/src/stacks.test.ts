@@ -1153,6 +1153,13 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       return found.Properties ?? {};
     };
     const serviceNames = settings.services.layout === 'separate' ? ['api', 'worker'] : ['app'];
+    const ruleNamed = (name: string) => {
+      const found = resources(t, 'AWS::Events::Rule').find(
+        (rule) => rule.Properties?.['Name'] === `listora-${environment}-${name}`,
+      );
+      if (found === undefined) throw new Error(`no ${name} rule`);
+      return found;
+    };
 
     it('defines the baseline and trust alarms, notifying the topic on alarm and recovery', () => {
       const alarms = resources(t, 'AWS::CloudWatch::Alarm');
@@ -1169,6 +1176,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
             `${name}-cpu`,
             `${name}-memory`,
           ]),
+          'worker-heartbeat',
           'operation-unverified',
           'delist-failed',
           'ai-daily-cost',
@@ -1188,14 +1196,15 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
         ]);
         expect(alarm.Properties?.['OKActions']).toEqual(alarm.Properties?.['AlarmActions']);
       }
-      t.resourceCountIs('AWS::SNS::Subscription', 0);
+      // The alert function is the topic's only subscriber, where there is an alarm email.
+      t.resourceCountIs('AWS::SNS::Subscription', target.alarmEmail === undefined ? 0 : 1);
     });
 
     if (environment === 'personal') {
       it('has the alarm count docs/features/costs.md prices', () => {
-        // Twelve beyond the always-free ten standard alarms, at $0.10 each a month.
+        // Thirteen beyond the always-free ten standard alarms, at $0.10 each a month.
         const count = resources(t, 'AWS::CloudWatch::Alarm').length;
-        expect(count).toBe(22);
+        expect(count).toBe(23);
         const costs = readFileSync(
           new URL('../../docs/features/costs.md', import.meta.url),
           'utf8',
@@ -1361,9 +1370,8 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
 
     it('sends unplanned task stops (crash loops) to the alarm topic, not deploy stops', () => {
       const topic = { Ref: Match.stringLikeRegexp('^Alarms') };
-      t.resourceCountIs('AWS::Events::Rule', 1);
-      const [rule] = resources(t, 'AWS::Events::Rule');
-      expect(rule?.Properties).toMatchObject({
+      const rule = ruleNamed('task-stopped');
+      expect(rule.Properties).toMatchObject({
         Name: `listora-${environment}-task-stopped`,
         State: 'ENABLED',
         EventPattern: {
@@ -1384,7 +1392,7 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
           },
         },
       });
-      const targets = rule?.Properties?.['Targets'] as Record<string, unknown>[];
+      const targets = rule.Properties?.['Targets'] as Record<string, unknown>[];
       expect(targets).toHaveLength(1);
       expect(targets[0]).toMatchObject({
         Arn: { Ref: expect.stringMatching(/^Alarms/) as unknown },
@@ -1459,22 +1467,156 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       expect(threshold).toBeGreaterThan(0);
     });
 
-    it('subscribes the alarm email when one is configured', () => {
-      const { stacks: withEmail } = synthesize(environment, {
+    it('alarms when the worker stops publishing its heartbeat, whatever the cause', () => {
+      expect(alarmNamed('worker-heartbeat')).toMatchObject({
+        Namespace: METRIC_NAMESPACE,
+        MetricName: 'OldestUnverifiedOperationAge',
+        Statistic: 'SampleCount',
+        Period: 300,
+        Threshold: 1,
+        ComparisonOperator: 'LessThanThreshold',
+        EvaluationPeriods: 3,
+        // A worker that is down publishes nothing: exactly what this alarm is for.
+        TreatMissingData: 'breaching',
+      });
+      // Published every minute without dimensions, so the samples count the minutes reported.
+      expect(TRUST_METRICS.OldestUnverifiedOperationAge.dimensionSets).toContainEqual([]);
+    });
+
+    it('sends every failed deploy to the alarm topic', () => {
+      const stackFailed = ruleNamed('stack-failed').Properties ?? {};
+      expect(stackFailed['EventPattern']).toMatchObject({
+        source: ['aws.cloudformation'],
+        'detail-type': ['CloudFormation Stack Status Change'],
+        detail: {
+          'stack-id': [
+            {
+              prefix: `arn:aws:cloudformation:${target.region}:${target.account}:stack/listora-${environment}-`,
+            },
+          ],
+          'status-details': {
+            status: expect.arrayContaining([
+              'UPDATE_ROLLBACK_COMPLETE',
+              'ROLLBACK_COMPLETE',
+              'CREATE_FAILED',
+            ]) as unknown,
+          },
+        },
+      });
+      expect(ruleNamed('service-deployment-failed').Properties?.['EventPattern']).toMatchObject({
+        source: ['aws.ecs'],
+        'detail-type': ['ECS Deployment State Change'],
+        detail: { eventName: ['SERVICE_DEPLOYMENT_FAILED'] },
+      });
+      expect(ruleNamed('migration-failed').Properties?.['EventPattern']).toMatchObject({
+        source: ['aws.ecs'],
+        'detail-type': ['ECS Task State Change'],
+        detail: {
+          group: [`family:${migrateTaskNames(environment).family}`],
+          lastStatus: ['STOPPED'],
+          // Only the deploys' migration runs: an admin task that fails is not a failed deploy.
+          startedBy: [{ prefix: 'deploy-' }],
+          containers: { exitCode: [{ 'anything-but': [0] }] },
+        },
+      });
+      for (const name of ['stack-failed', 'service-deployment-failed', 'migration-failed']) {
+        const targets = ruleNamed(name).Properties?.['Targets'] as Record<string, unknown>[];
+        expect(targets).toEqual([
+          expect.objectContaining({ Arn: { Ref: expect.stringMatching(/^Alarms/) as unknown } }),
+        ]);
+        expect(JSON.stringify(targets[0]?.['Input'] ?? targets[0]?.['InputTransformer'])).toContain(
+          'Deploy failed',
+        );
+      }
+    });
+
+    it("tells the alarm topic when the month's AWS cost reaches the budget, or will", () => {
+      t.hasResourceProperties('AWS::Budgets::Budget', {
+        Budget: {
+          BudgetName: `listora-${environment}-monthly-cost`,
+          BudgetType: 'COST',
+          TimeUnit: 'MONTHLY',
+          BudgetLimit: { Amount: settings.monthlyCostAlarmUsd, Unit: 'USD' },
+        },
+        NotificationsWithSubscribers: ['ACTUAL', 'FORECASTED'].map((type) => ({
+          Notification: {
+            NotificationType: type,
+            ComparisonOperator: 'GREATER_THAN',
+            Threshold: 100,
+            ThresholdType: 'PERCENTAGE',
+          },
+          Subscribers: [
+            { SubscriptionType: 'SNS', Address: { Ref: Match.stringLikeRegexp('^Alarms') } },
+          ],
+        })),
+      });
+      t.hasResourceProperties('AWS::SNS::TopicPolicy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'BudgetNotifications',
+              Principal: { Service: 'budgets.amazonaws.com' },
+              Condition: { StringEquals: { 'aws:SourceAccount': target.account } },
+            }),
+          ]),
+        },
+      });
+    });
+
+    it('emails every alert and a weekly summary through SES when there is an alarm email', () => {
+      const { stacks: withEmail, target: emailTarget } = synthesize(environment, {
         ...overrides,
         alarmEmail: 'ops@example.com',
       });
-      Template.fromStack(withEmail.observability).hasResourceProperties('AWS::SNS::Subscription', {
-        Protocol: 'email',
-        Endpoint: 'ops@example.com',
+      const e = Template.fromStack(withEmail.observability);
+      const sender =
+        emailTarget.dns === undefined
+          ? { address: String(emailTarget.ownerEmail), identity: String(emailTarget.ownerEmail) }
+          : { address: `alerts@${emailTarget.dns.domain}`, identity: emailTarget.dns.domain };
+      const env = {
+        LISTORA_ENV: environment,
+        ALERT_FROM: sender.address,
+        ALERT_TO: 'ops@example.com',
+        MARKETPLACES: MARKETPLACES.join(','),
+        MONTHLY_COST_THRESHOLD_USD: String(settings.monthlyCostAlarmUsd),
+      };
+      for (const [name, handler] of [
+        ['alert-email', 'index.alert'],
+        ['weekly-summary', 'index.weeklySummary'],
+      ] as const) {
+        e.hasResourceProperties('AWS::Lambda::Function', {
+          FunctionName: `listora-${environment}-${name}`,
+          Handler: handler,
+          Runtime: 'nodejs24.x',
+          Architectures: ['arm64'],
+          Environment: { Variables: Match.objectLike(env) },
+        });
+      }
+      // Every message on the topic goes to the alert function, and no raw SNS email goes out.
+      e.resourceCountIs('AWS::SNS::Subscription', 1);
+      e.hasResourceProperties('AWS::SNS::Subscription', {
+        Protocol: 'lambda',
+        TopicArn: { Ref: Match.stringLikeRegexp('^Alarms') },
       });
+      e.hasResourceProperties('AWS::Events::Rule', {
+        Name: `listora-${environment}-weekly-summary`,
+        ScheduleExpression: 'cron(0 14 ? * MON *)',
+      });
+      // Sending only from the sender, to identities of the sender and the recipient (sandbox).
+      const identity = (name: string) =>
+        `arn:aws:ses:${emailTarget.region}:${emailTarget.account}:identity/${name}`;
+      const policies = JSON.stringify(resources(e, 'AWS::IAM::Policy'));
+      expect(policies).toContain(JSON.stringify(identity(sender.identity)));
+      expect(policies).toContain(JSON.stringify(identity('ops@example.com')));
+      expect(policies).toContain(`"ses:FromAddress":"${sender.address}"`);
+      expect(policies).not.toContain('"ses:*"');
     });
   });
 
   describe('deploy access', () => {
     const t = template(shape, 'deployAccess');
 
-    it('trusts only GitHub OIDC tokens for this repository and GitHub environment', () => {
+    it('trusts only GitHub OIDC tokens of this repository, on main, in the GitHub environment', () => {
       t.hasResourceProperties('AWS::IAM::OIDCProvider', {
         Url: 'https://token.actions.githubusercontent.com',
         ClientIdList: ['sts.amazonaws.com'],
@@ -1489,7 +1631,9 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
               Condition: {
                 StringEquals: {
                   'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-                  'token.actions.githubusercontent.com:sub': `repo:${target.githubRepository}:environment:${environment}`,
+                  // The repository's immutable subject: owner and repository by name and id.
+                  'token.actions.githubusercontent.com:sub': `repo:toniojbusiness@266634719/listora@1431894048:environment:${environment}`,
+                  'token.actions.githubusercontent.com:ref': 'refs/heads/main',
                 },
               },
             }),
@@ -1498,30 +1642,47 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       });
     });
 
-    it('can only use the CDK bootstrap roles, push the image, and run the migration task', () => {
+    it('can only use the CDK bootstrap roles, push the images, check the bootstrap, run the migration task, and roll the services', () => {
       const actions = statements(t).flatMap((statement) => asList(statement['Action']));
       expect(actions.sort()).toEqual(
         [
           'cloudformation:DescribeStacks',
+          'cloudformation:DescribeStacks',
+          'cloudformation:ListStackResources',
+          'ec2:DescribeAvailabilityZones',
           'ecr:BatchCheckLayerAvailability',
           'ecr:BatchGetImage',
           'ecr:CompleteLayerUpload',
           'ecr:DescribeImages',
           'ecr:GetAuthorizationToken',
+          'ecr:GetDownloadUrlForLayer',
           'ecr:InitiateLayerUpload',
           'ecr:PutImage',
           'ecr:UploadLayerPart',
+          'ecs:DescribeServices',
+          'ecs:DescribeTaskDefinition',
           'ecs:DescribeTasks',
           'ecs:RunTask',
+          'ecs:UpdateService',
+          'iam:GetPolicy',
+          'iam:GetPolicyVersion',
           'iam:PassRole',
+          'iam:PassRole',
+          'ses:GetEmailIdentity',
           'sts:AssumeRole',
         ].sort(),
       );
       t.resourceCountIs('AWS::IAM::ManagedPolicy', 0);
       const role = resources(t, 'AWS::IAM::Role')[0];
       expect(role?.Properties?.['ManagedPolicyArns']).toBeUndefined();
-      expect(JSON.stringify(statements(t))).toContain(
-        `role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-*-${target.account}-${target.region}`,
+      // The deploy and asset publishing roles, never the lookup role (which reads the whole
+      // account) or a wildcard.
+      const bootstrapRoles = statements(t).find((s) => s['Sid'] === 'UseCdkBootstrapRoles');
+      expect(asList(bootstrapRoles?.['Resource'])).toEqual(
+        ['deploy', 'file-publishing', 'image-publishing'].map(
+          (role) =>
+            `arn:aws:iam::${target.account}:role/cdk-${CDK_BOOTSTRAP_QUALIFIER}-${role}-role-${target.account}-${target.region}`,
+        ),
       );
     });
 
@@ -1545,6 +1706,26 @@ describe.each(PLACEHOLDER_SHAPES)('$name', ({ name: shape, environment, override
       expect(passRole).toContain('"iam:PassedToService":"ecs-tasks.amazonaws.com"');
       expect(bySid('ReadStackOutputs')).toContain(`:stack/listora-${environment}-*/*`);
     });
+
+    it('reads, never changes, the bootstrap, and rolls only the services of its own cluster', () => {
+      const bySid = (sid: string) =>
+        JSON.stringify(statements(t).find((statement) => statement['Sid'] === sid));
+      expect(bySid('CheckRestrictedBootstrap')).toContain(`:stack/CDKToolkit-listora/*`);
+      for (const policy of ['cdk-execution', 'role-boundary']) {
+        expect(bySid('CheckExecutionPolicy')).toContain(
+          `:iam::${target.account}:policy/listora-${environment}-${policy}"`,
+        );
+      }
+      expect(bySid('PassServiceRoles')).toContain(
+        `:iam::${target.account}:role/listora-${environment}-compute-*"`,
+      );
+      expect(bySid('PassServiceRoles')).toContain(
+        '"iam:PassedToService":"ecs-tasks.amazonaws.com"',
+      );
+      expect(bySid('RollServices')).toContain(
+        `:ecs:${target.region}:${target.account}:service/listora-${environment}/*`,
+      );
+    });
   });
 });
 
@@ -1561,5 +1742,43 @@ describe('the owner email identity', () => {
 
   it('is left alone when it already exists outside the stack', () => {
     expect(identities({ ownerEmailIdentity: 'existing' })).toEqual([]);
+  });
+});
+
+describe('the GitHub OIDC provider', () => {
+  const deployAccess = (overrides: Record<string, unknown>) =>
+    Template.fromStack(synthesize('personal', overrides).stacks.deployAccess);
+
+  it('is trusted as it is when the account already has one (another app may own it)', () => {
+    const t = deployAccess({ githubOidcProvider: 'existing' });
+    t.resourceCountIs('AWS::IAM::OIDCProvider', 0);
+    const trust = JSON.stringify(
+      resources(t, 'AWS::IAM::Role')[0]?.Properties?.['AssumeRolePolicyDocument'],
+    );
+    expect(trust).toContain(
+      `:iam::${String(PLACEHOLDER_CONTEXT.personal['account'])}:oidc-provider/token.actions.githubusercontent.com`,
+    );
+  });
+
+  it("is named with another repository's own ids", () => {
+    const t = deployAccess({
+      githubRepository: 'acme/shop',
+      githubOwnerId: '42',
+      githubRepositoryId: '4242',
+    });
+    t.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
+          Match.objectLike({
+            Condition: {
+              StringEquals: Match.objectLike({
+                'token.actions.githubusercontent.com:sub':
+                  'repo:acme@42/shop@4242:environment:personal',
+              }),
+            },
+          }),
+        ],
+      },
+    });
   });
 });

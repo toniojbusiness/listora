@@ -1,0 +1,98 @@
+name: Deploy personal
+
+# Deploys the personal environment with scripts/deploy-personal.sh --ci (infra/README.md,
+# Deploying from GitHub): after every CI run that passed for a push to main, and by hand from the
+# Actions tab. AWS access is short-lived OIDC role assumption; no AWS keys are stored in GitHub.
+# The deploy role trusts only this repository's main branch in the protected `personal` GitHub
+# environment. scripts/deploy-personal.sh --profile <profile> from a Mac stays the fallback.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time. A deploy that has started is never cancelled; a newer pending run
+# replaces an older pending one.
+concurrency:
+  group: deploy-personal
+  cancel-in-progress: false
+
+jobs:
+  commit:
+    name: Pick the commit
+    # A fork's pull request from a branch named main also runs CI on "main": only a passed run
+    # for a push to this repository's main counts.
+    if: >-
+      github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
+    steps:
+      # The commit CI tested (or main's head, by hand), unless main has moved past it: the newer
+      # commit's own run deploys that, so an older one never replaces it.
+      - name: Pick the commit
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTED: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          if [ "$head" = "$TESTED" ]; then
+            echo "sha=$TESTED" >>"$GITHUB_OUTPUT"
+          else
+            echo "main is at $head, past $TESTED; the run for $head deploys it"
+          fi
+
+  deploy:
+    name: Deploy personal
+    needs: commit
+    if: needs.commit.outputs.sha != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # The GitHub environment allows deployments from main only. Its name is in the OIDC subject
+    # the AWS role trusts, with the branch, so no other workflow run can assume the role.
+    environment: personal
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      LISTORA_AWS_REGION: ${{ vars.AWS_REGION }}
+      LISTORA_AVAILABILITY_ZONES: ${{ vars.AVAILABILITY_ZONES }}
+      LISTORA_ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
+      LISTORA_DOMAIN: ${{ vars.DOMAIN }}
+      LISTORA_HOSTED_ZONE_ID: ${{ vars.HOSTED_ZONE_ID }}
+      # The one person who can sign in (docs/features/auth.md). A secret only so that GitHub
+      # masks it: this repository's run logs are public.
+      LISTORA_OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.commit.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/listora-personal-github-deploy
+          role-session-name: deploy-personal-${{ github.run_id }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          mask-aws-account-id: true
+      # Everything the deploy from a Mac does, in the same order, with the deploy role: offline
+      # synthesis and template checks, the bootstrap check, images, state stacks, migrations,
+      # services, the health check and smoke test, and a rollback when either fails.
+      - name: Deploy
+        run: scripts/deploy-personal.sh --ci

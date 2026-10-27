@@ -565,7 +565,7 @@ describe('Depop automation adapter on the fake Depop site', () => {
     await expect(adapter.readListing(ref, ctx())).rejects.toThrow('element_missing');
   });
 
-  it("lists the seller's listings for sale across pages, for imports and drift checks", async () => {
+  it("reads the seller's listings for sale a page at a time, with what an import needs", async () => {
     await withSite({ pageSize: 2 }, async (fake, own) => {
       const slugs = ['Faded tee.', 'Baggy jeans.', 'Chelsea boots.'].map((description) =>
         fake.seed({ description, priceCents: 2000 }),
@@ -576,10 +576,23 @@ describe('Depop automation adapter on the fake Depop site', () => {
       const hashtagged = fake.seed({
         description: 'Cord cap.\n\nSKU: AJ-000001\n\n#vintage',
         priceCents: 1250,
+        category: ['Women', 'Dresses', 'Casual dresses'],
+        size: 'S',
+        brand: 'Zara',
+        condition: 'used_like_new',
+        photos: ['front.jpg', 'back.jpg'],
       });
 
-      const { listings, complete } = await own.listListings(ctx());
-      expect(complete).toBe(true);
+      const listings = [];
+      let cursor: string | null = null;
+      let pages = 0;
+      do {
+        const page = await own.listListings(cursor, ctx());
+        listings.push(...page.listings);
+        cursor = page.next;
+        pages += 1;
+      } while (cursor !== null);
+      expect(pages).toBeGreaterThan(1);
       expect(new Set(listings.map((listing) => listing.externalListingId))).toEqual(
         new Set([...slugs, hashtagged]),
       );
@@ -592,8 +605,19 @@ describe('Depop automation adapter on the fake Depop site', () => {
         description: 'Cord cap.',
         priceCents: 1250,
         currency: 'USD',
-        revision: fake.product(hashtagged)?.updatedAt.getTime(),
+        revision: expect.any(Number) as number,
+        details: {
+          photoUrls: [`${fake.url}/media/front.jpg`, `${fake.url}/media/back.jpg`],
+          brand: 'Zara',
+          size: 'S',
+          condition: 'pre_owned_excellent',
+          categoryRef: 'Women > Dresses > Casual dresses',
+          categoryPath: ['Women', 'Dresses', 'Casual dresses'],
+          sku: 'AJ-000001',
+        },
       });
+      // Only reads: nothing on Depop changed.
+      expect(fake.requests.filter((request) => request.method !== 'GET')).toEqual([]);
     });
   });
 

@@ -38,6 +38,7 @@
           "Version": "2012-10-17"
         },
         "Description": "Starts the schema migration task: image pull, logs, database password",
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary",
         "RoleName": "listora-personal-migrate-execution"
       }
     },
@@ -120,6 +121,7 @@
           "Version": "2012-10-17"
         },
         "Description": "Schema migration task (no AWS permissions)",
+        "PermissionsBoundary": "arn:aws:iam::333333333333:policy/listora-personal-role-boundary",
         "RoleName": "listora-personal-migrate-task"
       }
     },

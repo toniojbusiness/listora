@@ -15,18 +15,18 @@ named `listora-<env>-<name>`, tagged `project=listora` and `environment=<env>`, 
 personal (`protectData`) has CloudFormation termination protection. The table describes
 staging and prod; personal swaps a few pieces for cheaper ones (below).
 
-| Stack           | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deploy-access` | GitHub OIDC provider and the `listora-<env>-github-deploy` role. Deployed once by an administrator; the workflow does not deploy it (a convention, not an enforced limit: see [Trust boundary](#trust-boundary)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `registry`      | ECR repositories `listora/app` and `listora/runner` (the browser runner's image): immutable tags (one per commit), scan on push, the newest 50 images kept.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `network`       | VPC across two zones: `public` (ALB, NAT), `app` (Fargate tasks), `data` (RDS, no route out). One NAT gateway in staging, one per zone in prod; an S3 gateway endpoint keeps photo and image traffic off NAT. Rejected-traffic flow logs. Every security group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `secrets`       | KMS key `alias/listora-<env>-tokens` (yearly rotation, never deleted) for marketplace token envelope encryption, and the app secrets in `APP_SECRETS` (`listora/<env>/<name>`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `data`          | RDS PostgreSQL 18: encrypted, private, TLS required, daily backups (7 days staging, 30 prod), storage autoscaling, Multi-AZ and deletion protection in prod, a final snapshot on removal. The password is generated into `listora/<env>/database`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `migrate`       | The schema migration task `listora-<env>-migrate` (its own cluster, log group `/listora/<env>/migrate`, and roles): the worker's database access running `node packages/db/src/cli.ts latest` from the deployed image. Outputs the task subnets, worker security group, and public IP setting for `ecs run-task`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `storage`       | Private photo bucket (versioned, TLS only, old versions expire after 30 days, the browser runner's `automation/` screenshots after 30 days at most) and a CloudFront distribution that serves only `public/` objects by exact key, for marketplace image fetch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `email`         | SES domain identity (Easy DKIM), MX for `in.<domain>`, a receipt rule that scans each message, stores it under `inbound/` in a private bucket, and notifies an SNS topic that feeds the worker's encrypted SQS queue (with a dead-letter queue); the worker deletes each message once processed, and a lifecycle rule removes any left after 14 days. Without a domain, only the empty bucket. See docs/features/email-sales.md.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `compute`       | ECS cluster with Fargate services `api` and `worker` (one image, private subnets, CPU autoscaling, rollback on a failed deploy), an HTTPS ALB at `api.<domain>` health-checked on `/health/live`, service log groups, and a task role per service; and the browser runner's `runner` service (its own image, 0 tasks while idle, at most 1, `/listora/<env>/runner` logs).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `observability` | Alarm topic (optional email subscription) and baseline alarms: API 5xx, ALB 5xx, unhealthy tasks, p95 latency, running tasks (below desired with Container Insights, below the minimum without), CPU, and memory per service, database CPU, storage, and memory, plus RDS low-storage events (including storage autoscaling at its ceiling) and an EventBridge rule that sends unplanned ECS task stops (crash loops) to the topic. Trust alarms on the worker's metrics (namespace `Listora`): an operation unverified for 30 minutes, any failed delist, an account's AI cost today over `aiDailyCostAlarmUsd`, a connection that needs relinking (a level alarm that suits one seller; multi-seller environments should switch to alarming on increases), and per marketplace, p95 delist latency over an hour above `delistLatencyAlarmMinutes` and a verified-success rate below 90% over a day. Behind the HTTP API (personal), `api-5xx` fires on any server error in 2 of 3 five-minute periods. Log groups sit with the stacks that write them; retention is 30 days in staging and 90 in prod. |
+| Stack           | What it holds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy-access` | GitHub OIDC provider and the `listora-<env>-github-deploy` role. Deployed once by an administrator; the workflow does not deploy it (a convention, not an enforced limit: see [Trust boundary](#trust-boundary)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `registry`      | ECR repositories `listora/app` and `listora/runner` (the browser runner's image): immutable tags (one per commit), scan on push, the newest 50 images kept.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `network`       | VPC across two zones: `public` (ALB, NAT), `app` (Fargate tasks), `data` (RDS, no route out). One NAT gateway in staging, one per zone in prod; an S3 gateway endpoint keeps photo and image traffic off NAT. Rejected-traffic flow logs. Every security group.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `secrets`       | KMS key `alias/listora-<env>-tokens` (yearly rotation, never deleted) for marketplace token envelope encryption, and the app secrets in `APP_SECRETS` (`listora/<env>/<name>`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `data`          | RDS PostgreSQL 18: encrypted, private, TLS required, daily backups (7 days staging, 30 prod), storage autoscaling, Multi-AZ and deletion protection in prod, a final snapshot on removal. The password is generated into `listora/<env>/database`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `migrate`       | The schema migration task `listora-<env>-migrate` (its own cluster, log group `/listora/<env>/migrate`, and roles): the worker's database access running `node packages/db/src/cli.ts latest` from the deployed image. Outputs the task subnets, worker security group, and public IP setting for `ecs run-task`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `storage`       | Private photo bucket (versioned, TLS only, old versions expire after 30 days, the browser runner's `automation/` screenshots after 30 days at most) and a CloudFront distribution that serves only `public/` objects by exact key, for marketplace image fetch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `email`         | SES domain identity (Easy DKIM), MX for `in.<domain>`, a receipt rule that scans each message, stores it under `inbound/` in a private bucket, and notifies an SNS topic that feeds the worker's encrypted SQS queue (with a dead-letter queue); the worker deletes each message once processed, and a lifecycle rule removes any left after 14 days. Without a domain, only the empty bucket. See docs/features/email-sales.md.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `compute`       | ECS cluster with Fargate services `api` and `worker` (one image, private subnets, CPU autoscaling, rollback on a failed deploy), an HTTPS ALB at `api.<domain>` health-checked on `/health/live`, service log groups, and a task role per service; and the browser runner's `runner` service (its own image, 0 tasks while idle, at most 1, `/listora/<env>/runner` logs).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `observability` | Alarm topic, emailed through SES by the alert function with a weekly health summary (with an alarm email; docs/features/alerts.md), and baseline alarms: API 5xx, ALB 5xx, unhealthy tasks, p95 latency, running tasks (below desired with Container Insights, below the minimum without), CPU, and memory per service, database CPU, storage, and memory, plus RDS low-storage events (including storage autoscaling at its ceiling) and EventBridge rules that send unplanned ECS task stops (crash loops) and failed deploys (stack rollbacks, ECS deployment rollbacks, failed migrations) to the topic, plus the account's monthly AWS Budget (`monthlyCostAlarmUsd`). A `worker-heartbeat` alarm fires when the worker publishes no trust metrics for 15 minutes. Trust alarms on the worker's metrics (namespace `Listora`): an operation unverified for 30 minutes, any failed delist, an account's AI cost today over `aiDailyCostAlarmUsd`, a connection that needs relinking (a level alarm that suits one seller; multi-seller environments should switch to alarming on increases), and per marketplace, p95 delist latency over an hour above `delistLatencyAlarmMinutes` and a verified-success rate below 90% over a day. Behind the HTTP API (personal), `api-5xx` fires on any server error in 2 of 3 five-minute periods. Log groups sit with the stacks that write them; retention is 30 days in staging and 90 in prod. |
 
 Sizes, redundancy, retention, and the network, ingress, and service layouts per environment
 are in `ENVIRONMENT_SETTINGS` (`src/config.ts`), so a change shows up in review as a code and
@@ -191,25 +191,30 @@ Account ids and domains are never committed, except the personal account that
 context (`-c key=value`) or else an environment variable (all documented in `.env.example`),
 and fails fast, naming the missing or invalid key without printing its value.
 
-| Context key         | Environment variable         | Required | Meaning                                                          |
-| ------------------- | ---------------------------- | -------- | ---------------------------------------------------------------- |
-| `env`               | `LISTORA_ENV`                | yes      | `staging`, `prod`, or `personal`                                 |
-| `account`           | `LISTORA_AWS_ACCOUNT_ID`     | yes      | The environment's 12-digit AWS account id                        |
-| `region`            | `LISTORA_AWS_REGION`         | no       | Default `us-east-1`; SES must receive email there                |
-| `domain`            | `LISTORA_DOMAIN`             | yes      | For example `staging.listora.app`; optional for personal         |
-| `hostedZoneId`      | `LISTORA_HOSTED_ZONE_ID`     | yes      | Route 53 public hosted zone for `domain`; set with `domain`      |
-| `imageTag`          | `LISTORA_IMAGE_TAG`          | yes      | Image tag to run (the commit SHA); `latest` is refused           |
-| `alarmEmail`        | `LISTORA_ALARM_EMAIL`        | no       | Subscribed to the alarm topic                                    |
-| `ownerEmail`        | `LISTORA_OWNER_EMAIL`        | personal | The only person who can sign in (owner pool); refused elsewhere  |
-| `githubRepository`  | `LISTORA_GITHUB_REPOSITORY`  | no       | Repository allowed to deploy; default `toniojbusiness/listora`   |
-| `availabilityZones` | `LISTORA_AVAILABILITY_ZONES` | no       | Two zones of the region, comma-separated; default: the first two |
+| Context key          | Environment variable           | Required | Meaning                                                          |
+| -------------------- | ------------------------------ | -------- | ---------------------------------------------------------------- |
+| `env`                | `LISTORA_ENV`                  | yes      | `staging`, `prod`, or `personal`                                 |
+| `account`            | `LISTORA_AWS_ACCOUNT_ID`       | yes      | The environment's 12-digit AWS account id                        |
+| `region`             | `LISTORA_AWS_REGION`           | no       | Default `us-east-1`; SES must receive email there                |
+| `domain`             | `LISTORA_DOMAIN`               | yes      | For example `staging.listora.app`; optional for personal         |
+| `hostedZoneId`       | `LISTORA_HOSTED_ZONE_ID`       | yes      | Route 53 public hosted zone for `domain`; set with `domain`      |
+| `imageTag`           | `LISTORA_IMAGE_TAG`            | yes      | Image tag to run (the commit SHA); `latest` is refused           |
+| `alarmEmail`         | `LISTORA_ALARM_EMAIL`          | no       | Receives alert emails; defaults to the owner where there is one  |
+| `ownerEmail`         | `LISTORA_OWNER_EMAIL`          | personal | The only person who can sign in (owner pool); refused elsewhere  |
+| `githubRepository`   | `LISTORA_GITHUB_REPOSITORY`    | no       | Repository allowed to deploy; default `toniojbusiness/listora`   |
+| `githubOwnerId`      | `LISTORA_GITHUB_OWNER_ID`      | no       | Its owner's numeric id; default the default repository's         |
+| `githubRepositoryId` | `LISTORA_GITHUB_REPOSITORY_ID` | no       | Its numeric id; default the default repository's                 |
+| `githubOidcProvider` | `LISTORA_GITHUB_OIDC_PROVIDER` | no       | `create` (default) or `existing`: the account's GitHub provider  |
+| `availabilityZones`  | `LISTORA_AVAILABILITY_ZONES`   | no       | Two zones of the region, comma-separated; default: the first two |
 
 ## Deploying the personal environment
 
-The personal environment deploys from a Mac with one command, `scripts/deploy-personal.sh`,
-instead of the Deploy workflow: no GitHub environment, OIDC role, or `deploy-access` stack is
-involved. It deploys only to the captain's account `976033325938` (pinned in the script; any
-other account is refused) and runs the same steps in the same order as the workflow.
+The personal environment deploys with one script, `scripts/deploy-personal.sh`, which deploys
+only to the captain's account `976033325938` (pinned in the script; any other account is
+refused). GitHub runs it after every CI run that passes on `main`
+([Deploying from GitHub](#deploying-from-github)); from a Mac it is the first deploy, the
+fallback, and the way to change what only an administrator may (the bootstrap, the Anthropic
+key). Both run the same steps in the same order as the Deploy workflow.
 
 **Before the first run:** sign in to the account's AWS CLI profile (for example
 `aws sso login --profile prequal-main`; one sign-in covers the whole deploy, since `cdk` gets
@@ -245,17 +250,27 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
    in the account: qualifier `listora` and toolkit stack `CDKToolkit-listora`
    (`src/bootstrap.ts`; `cdk.json` makes every `cdk` command use them), so the account's
    default `CDKToolkit` and the apps deploying through it are never touched. The script first
-   checks `CDKToolkit-listora`: one with any other execution policy stops it before it changes
-   anything. Then it creates the managed policy `listora-personal-cdk-execution` from
-   `src/deploy/execution-policy.ts` (or makes the committed document its default version), and
-   bootstraps when `CDKToolkit-listora` does not exist yet with:
+   checks that every role of the synthesized stacks carries the role boundary, then checks
+   `CDKToolkit-listora`: one with any other execution policy stops it before it changes
+   anything. Then it creates the managed policies `listora-personal-role-boundary` and
+   `listora-personal-cdk-execution` from `src/deploy/execution-policy.ts` (or makes the
+   committed documents their default versions), and bootstraps with Listora's template
+   (`src/deploy/bootstrap-template.ts`) when `CDKToolkit-listora` does not exist yet, or was
+   made from another template (its `ListoraBootstrapTemplate` output names the template's
+   hash), with:
 
    ```sh
+   cd infra && node src/deploy/bootstrap-template.ts personal >cdk.out/bootstrap.yaml
    npx cdk bootstrap aws://976033325938/us-east-1 --profile prequal-main \
+     --template cdk.out/bootstrap.yaml \
      --qualifier listora --toolkit-stack-name CDKToolkit-listora \
      --cloudformation-execution-policies arn:aws:iam::976033325938:policy/listora-personal-cdk-execution \
      --termination-protection
    ```
+
+   plus `--force` when the stack exists (the CLI skips a toolkit stack of another template
+   otherwise, with only a warning). It then reads the output again and fails unless it names
+   the new template.
 
 6. **Deploys** the registry, builds the `app` and `runner` images for `linux/amd64` (the
    tasks run on X86_64) and pushes them (reusing an image already pushed for the commit), then
@@ -281,7 +296,11 @@ From a clean checkout of the commit to deploy (the image is tagged with it), the
    commit it last deployed), it moves the service back to the stack's task definition.
 10. **Waits for health** (`/health/ready` with the database ok, 10 minutes at most), runs the
     **smoke test**, and prints the API URL and the app client id to put in the iPhone app's
-    Prod configuration.
+    Prod configuration. A release that fails either is **rolled back**: before the services
+    move, the script records the task definition each one runs, and it moves each back to that
+    one (a rollout like any other, so the API stays up), checks health again, and fails the
+    deploy, saying whether the previous release is healthy. The first deploy has nothing to go
+    back to.
 
 **Smoke test** (`src/deploy/smoke.ts`, also runnable on its own): `/health/live` and
 `/health/ready`, a `401` for a request without a token, a sign-in with the configured driver,
@@ -361,11 +380,98 @@ deploy never takes the API down. The deploy times are in
 
 The services then run revisions that CloudFormation did not make; the stacks still describe the
 commit of the last full deploy. The next full deploy brings them back in line: it replaces the
-revisions with its own, also when its commit is the one CloudFormation already has. The Deploy
-workflow does not do that check, so after a code-only deploy, deploy personal with the script.
+revisions with its own, also when its commit is the one CloudFormation already has. The deploy
+from GitHub runs the same script, so it does that too.
+
+### Deploying from GitHub
+
+The **Deploy personal** workflow (`.github/workflows/deploy-personal.yml`) deploys personal from
+GitHub, so no deploy depends on a Mac's AWS sign-in or Docker. It runs after every CI run that
+passes for a push to `main` (and by hand from the Actions tab, on `main`), deploys the commit CI
+tested unless `main` has moved past it (the newer commit's run deploys that), and runs one
+deploy at a time without ever cancelling one that started. Its one deploy step is
+`scripts/deploy-personal.sh --ci`: the full deploy, with the same checks, health check, smoke
+test, and rollback, using the AWS credentials of the role the job assumes through OIDC (no AWS
+keys exist in GitHub). With `--ci` the script:
+
+- checks Listora's bootstrap template, execution policy, and role boundary and refuses when any
+  is not the committed one, without changing them (the role cannot): update them with the
+  deploy from a Mac;
+- needs the owner's address already verified by SES, so the first deploy (which waits for the
+  verification link to be clicked) is the one from a Mac;
+- keeps the Anthropic key stored in `listora/personal/anthropic-api-key` (the role can neither
+  read nor write it): store a new key with the deploy from a Mac;
+- masks the owner's address in the log, which is public in a public repository.
+
+**The deploy role** `listora-personal-github-deploy` (the `listora-personal-deploy-access`
+stack, `src/stacks/deploy-access-stack.ts`) trusts only a GitHub OIDC token whose subject is
+this repository, named by its immutable owner and repository ids (GitHub's immutable subject
+form, `repo:toniojbusiness@266634719/listora@1431894048:environment:personal`), in the
+`personal` GitHub environment, and whose ref is `refs/heads/main`. It may assume Listora's own
+bootstrap deploy and asset publishing roles (`cdk-listora-{deploy,file-publishing,image-publishing}-role-*`;
+never the lookup role, which reads the whole account, nor the default `CDKToolkit`'s or another
+app's), push and pull the `listora/app` and `listora/runner` images, read the
+`listora-personal-*` stacks, `CDKToolkit-listora`, the execution policy, and the role boundary,
+run the migration task, and read and roll the services of the `listora-personal` cluster. What a
+deploy can change through the bootstrap is bounded by Listora's bootstrap template (only
+`listora-personal-*` stacks) and the restricted execution policy with the role boundary
+([Trust boundary](#trust-boundary)), which exclude the deploy role itself.
+
+**One-time setup**, after the workflow is on `main`, with administrator credentials (the
+`prequal-main` profile in the examples):
+
+1. **Deploy the role.** The account already has a GitHub OIDC provider (it belongs to another
+   app, which keeps it): `githubOidcProvider=existing` trusts it as it is. The restricted
+   bootstrap cannot deploy this stack, by design, so it deploys with plain CloudFormation:
+
+   ```sh
+   cd infra
+   npx cdk synth listora-personal-deploy-access --quiet --output cdk.out/deploy-access \
+     -c env=personal -c account=976033325938 -c imageTag="$(git rev-parse HEAD)" \
+     -c ownerEmail=<owner> -c githubOidcProvider=existing
+   aws cloudformation deploy --profile prequal-main --region us-east-1 \
+     --stack-name listora-personal-deploy-access \
+     --template-file cdk.out/deploy-access/listora-personal-deploy-access.template.json \
+     --capabilities CAPABILITY_NAMED_IAM --tags project=listora environment=personal
+   aws cloudformation update-termination-protection --profile prequal-main --region us-east-1 \
+     --enable-termination-protection --stack-name listora-personal-deploy-access
+   ```
+
+   Run it again only when `deploy-access-stack.ts` changes.
+
+2. **Create the `personal` GitHub environment**, which allows deployments from `main` only, and
+   its settings. They must be the ones the deploy from a Mac uses (the `LISTORA_*` variables),
+   or the two deploys synthesize different infrastructure:
+
+   ```sh
+   gh api -X PUT repos/toniojbusiness/listora/environments/personal --input - <<'JSON'
+   {"deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
+   JSON
+   gh api -X POST repos/toniojbusiness/listora/environments/personal/deployment-branch-policies \
+     -f name=main -f type=branch
+   gh variable set AWS_ACCOUNT_ID --env personal --body 976033325938
+   gh variable set AWS_REGION --env personal --body us-east-1
+   gh secret set OWNER_EMAIL --env personal --body <owner, lowercase>
+   ```
+
+   Only when the deploy from a Mac sets them: the variables `AVAILABILITY_ZONES`,
+   `ALARM_EMAIL`, and `DOMAIN` with `HOSTED_ZONE_ID`. `OWNER_EMAIL` is a secret only so that
+   GitHub masks it in the public log. Required reviewers are optional: with them, every deploy
+   waits for an approval.
+
+3. **Check it**: run the workflow by hand (`gh workflow run deploy-personal.yml --ref main`)
+   and watch it end with `deploy-personal: deployed <commit>`.
+
+Do not deploy from a Mac while the workflow runs (or the other way round): the second deploy
+finds a stack busy and stops, changing nothing.
 
 ### Rollback
 
+- **A release that fails its health check or smoke test** is rolled back by the script itself
+  (step 10 above): the services run the previous release again, and the deploy fails. The stacks
+  still describe the failed commit, and the next deploy replaces what the services run, so fix
+  the cause and deploy again (push the fix, or check out the last good commit and run the
+  script).
 - **A failed deploy step.** The script stops at the first failure. CloudFormation rolls the
   failing stack back to its last good state by itself, and a failed migration stops the deploy
   before any new task starts, so the previous release keeps serving. Fix the cause and run the
@@ -421,12 +527,15 @@ account. The examples use staging.
    if either is `use1-az3`, pick two other zones for the `availabilityZones` setting
    (`AVAILABILITY_ZONES` in the GitHub environment). Choose them before the first deploy:
    changing zones later replaces the network and everything in it.
-2. **Bootstrap CDK** in the account and region, with the restricted execution policy: create
+2. **Bootstrap CDK** in the account and region, with Listora's template and the restricted
+   execution policy: create `listora-<env>-role-boundary` from
+   `node src/deploy/execution-policy.ts <env> <account> boundary` and
    `listora-<env>-cdk-execution` from `node src/deploy/execution-policy.ts <env> <account>`
-   (`aws iam create-policy --policy-name listora-<env>-cdk-execution --policy-document
-file://policy.json`), then from `infra/`:
-   `npx cdk bootstrap aws://<account>/us-east-1 --qualifier listora --toolkit-stack-name
-CDKToolkit-listora --cloudformation-execution-policies
+   (`aws iam create-policy --policy-name <name> --policy-document file://policy.json`), write
+   the template with `node src/deploy/bootstrap-template.ts <env> >cdk.out/bootstrap.yaml`,
+   then from `infra/`:
+   `npx cdk bootstrap aws://<account>/us-east-1 --template cdk.out/bootstrap.yaml --qualifier
+listora --toolkit-stack-name CDKToolkit-listora --cloudformation-execution-policies
 arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protection`
    (Listora's own bootstrap, beside any other app's; `src/bootstrap.ts`). The
    bootstrap's CloudFormation execution policy is the ceiling on what any deploy can change;
@@ -437,16 +546,14 @@ arn:aws:iam::<account>:policy/listora-<env>-cdk-execution --termination-protecti
    ([Deploying the personal environment](#deploying-the-personal-environment)).
 3. **Deploy access.** From `infra/`, with the settings exported (or as `-c` flags):
    `npx cdk deploy listora-staging-deploy-access`. If the account already has the GitHub OIDC
-   provider, remove it first or import it; an account can have only one per URL.
+   provider (an account can have only one per URL), set `githubOidcProvider=existing` to trust
+   it as it is. For personal, see [Deploying from GitHub](#deploying-from-github).
 4. **GitHub environment.** In the repository settings create the environment `staging` (and
-   later `prod`, or `personal` for a personal deployment) with protection rules: required
-   reviewers, and deployment branches limited to `main`. Add the environment variables
-   `AWS_ACCOUNT_ID`, `AWS_REGION`, `DOMAIN`,
-   `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL` and `AVAILABILITY_ZONES` (personal without a
-   domain leaves out `DOMAIN` and `HOSTED_ZONE_ID`; personal also needs `OWNER_EMAIL`, the one
-   person its user pool lets sign in). No secrets are needed. Deploy personal the first time
-   with `scripts/deploy-personal.sh`, which waits for the owner to click SES's verification
-   link before it deploys the user pool; the workflow's user pool step does not wait.
+   later `prod`) with protection rules: required reviewers, and deployment branches limited to
+   `main`. Add the environment variables `AWS_ACCOUNT_ID`, `AWS_REGION`, `DOMAIN`,
+   `HOSTED_ZONE_ID`, and optionally `ALARM_EMAIL` and `AVAILABILITY_ZONES`. No secrets are
+   needed. Personal deploys with its own workflow and settings
+   ([Deploying from GitHub](#deploying-from-github)), and the first time from a Mac.
 5. **Deploy.** Run the **Deploy** workflow (Actions tab) on `main` with `staging`. It tests
    and synthesizes offline, assumes the deploy role through OIDC, deploys the registry, builds
    and pushes the application and runner images tagged with the commit, deploys the state
@@ -479,27 +586,49 @@ Later deploys are step 5 only.
 
 ## Trust boundary
 
-The deploy role can assume the CDK bootstrap roles, and the bootstrap's CloudFormation
-execution role can do whatever the bootstrap's execution policy allows (`AdministratorAccess`
-unless the bootstrap restricted it). What actually bounds a deploy:
+The deploy role can assume the CDK bootstrap's deploy and publishing roles, and the bootstrap's
+CloudFormation execution role can do whatever the bootstrap's execution policy allows
+(`AdministratorAccess` unless the bootstrap restricted it). What actually bounds a deploy:
 
-- the GitHub environment's protection rules (required reviewers, `main` only), which decide
-  who can run a job that assumes the role, and
-- the bootstrap's CloudFormation execution policy, which decides what that job can change.
+- the deploy role's trust policy (this repository by its immutable ids, the GitHub environment,
+  and the `main` ref) and the GitHub environment's protection rules (required reviewers, `main`
+  only), which decide who can run a job that assumes the role,
+- Listora's bootstrap template, which decides which stacks that job can change, and
+- the bootstrap's CloudFormation execution policy and the role boundary, which decide what
+  those stacks can change.
+
+**Listora's bootstrap template** (`src/deploy/bootstrap-template.ts`) is the CDK CLI's own,
+generated from the CLI version in `package-lock.json`, with the deploy role's stack changes
+(create, update, change sets, roll back, delete, and termination protection) limited to
+`listora-<env>-*` stacks and stack refactoring removed. The default allows them on every stack
+in the account, so a deploy could delete or change another app's stack (a stack with a service
+role is deleted with that role's permissions). Generating it throws when a CDK upgrade changes
+those statements, and a test checks that nothing else differs from the CLI's template.
 
 **The restricted execution policy** (`src/deploy/execution-policy.ts`, managed policy
 `listora-<env>-cdk-execution`) replaces `AdministratorAccess`. It grants every action of the
 services the stacks use (`SERVICE_PREFIXES`; a test fails when a stack adds a resource of
 another service), IAM only on roles named `listora-<env>-*` (attaching only the listed AWS
 managed policies) and on service-linked roles, and it denies any change to the GitHub deploy
-role, the bootstrap's roles, and the bootstrap bucket's policy. It grants nothing on IAM
-users, groups, OIDC providers, Organizations, or account settings, so a deploy can no longer
-rewrite the deploy role's own permissions. Every environment bootstraps with it (step 2).
+role, the bootstrap's roles, the bootstrap bucket's policy, and its own and the boundary's
+managed policies. It grants nothing on IAM users, groups, OIDC providers, Organizations, or
+account settings, so a deploy can no longer rewrite the deploy role's own permissions. Every
+environment bootstraps with it (step 2).
 
-**Follow-up (T-33, security hardening):** a permissions boundary on every role the stacks
-create, since a stack's own role can still be given any inline permission, and scoping the
-service grants to Listora's tagged resources: they are service-wide, and the personal account
-also holds another app's stacks.
+**The role boundary** (`roleBoundaryPolicy` in the same file, managed policy
+`listora-<env>-role-boundary`) is the permissions boundary of every role the stacks create
+(`src/app.ts` sets it on every stack but `deploy-access`). It allows the services the stacks
+use, plus Cost Explorer for the cost alert (`ROLE_ONLY_SERVICES`), and nothing on IAM, STS, or
+any other service. The execution policy creates a role, sets its
+boundary, and changes its inline or attached policies only with this boundary
+(`iam:PermissionsBoundary`), and never removes a boundary, so no deploy can make a stack's role
+an administrator, whatever inline policy it gives the role. Tests check that every role carries
+it and that every action a role is given is within it.
+
+**Follow-up (T-33, security hardening):** scoping the service grants to Listora's tagged
+resources. They are service-wide (`ec2:*` on every resource), and the personal account also
+holds another app's stacks, so a reviewed template can still name another app's resource of
+those services.
 
 ## Conventions
 

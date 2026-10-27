@@ -510,7 +510,7 @@ describe('eBay automation adapter on the fake eBay site', () => {
     await expect(adapter.readListing(ref, ctx())).rejects.toThrow('element_missing');
   });
 
-  it("lists the seller's active listings across pages, for imports and drift checks", async () => {
+  it("lists the seller's active listings a page at a time", async () => {
     await withSite({ pageSize: 2 }, async (fake, own) => {
       const ids = ['Faded tee', 'Baggy jeans', 'Chelsea boots'].map((title) =>
         fake.seed({ title, priceCents: 2000 }),
@@ -519,8 +519,13 @@ describe('eBay automation adapter on the fake eBay site', () => {
       fake.seed({ title: 'Not mine', priceCents: 900, seller: 'someone-else' });
       const labeled = fake.seed({ title: 'Cord cap', priceCents: 104_550, sku: 'AJ-000001' });
 
-      const { listings, complete } = await own.listListings(ctx());
-      expect(complete).toBe(true);
+      const listings = [];
+      let cursor: string | null = null;
+      do {
+        const page = await own.listListings(cursor, ctx());
+        listings.push(...page.listings);
+        cursor = page.next;
+      } while (cursor !== null);
       expect(new Set(listings.map((listing) => listing.externalListingId))).toEqual(
         new Set([...ids, labeled]),
       );
@@ -534,6 +539,15 @@ describe('eBay automation adapter on the fake eBay site', () => {
         priceCents: 104_550,
         currency: 'USD',
         revision: null,
+        details: {
+          photoUrls: [],
+          brand: null,
+          size: null,
+          condition: null,
+          categoryRef: null,
+          categoryPath: [],
+          sku: null,
+        },
       });
     });
   });

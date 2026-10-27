@@ -23,6 +23,7 @@ let package = Package(
         .library(name: "ShareLinkFeature", targets: ["ShareLinkFeature"]),
         .library(name: "MarketplaceLinkingFeature", targets: ["MarketplaceLinkingFeature"]),
         .library(name: "PhoneExecutionFeature", targets: ["PhoneExecutionFeature"]),
+        .library(name: "ImportFeature", targets: ["ImportFeature"]),
     ],
     dependencies: [
         .package(path: "../Core"),
@@ -54,6 +55,7 @@ let package = Package(
                 "PhoneExecutionFeature",
                 "VoiceInputFeature",
                 "PhotoSignalsFeature",
+                "ImportFeature",
             ],
         ),
         .target(
@@ -100,6 +102,10 @@ let package = Package(
         .target(name: "SignInFeature", dependencies: ["DesignSystem", "APIClient"]),
         .target(
             name: "MarketplacesFeature",
+            dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
+        .target(
+            name: "ImportFeature",
             dependencies: ["Core", "DesignSystem", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .target(name: "TagReadingFeature", dependencies: ["Core"]),
@@ -182,6 +188,10 @@ let package = Package(
         .testTarget(
             name: "MarketplacesFeatureTests",
             dependencies: ["MarketplacesFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
+        ),
+        .testTarget(
+            name: "ImportFeatureTests",
+            dependencies: ["ImportFeature", "Core", "APIClient", .product(name: "ListoraAPI", package: "swift")],
         ),
         .testTarget(
             name: "TagReadingFeatureTests",

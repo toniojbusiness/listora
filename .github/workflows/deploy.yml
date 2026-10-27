@@ -3,13 +3,14 @@ name: Deploy
 # Manual only: an operator picks the environment in the Actions tab. This workflow never runs
 # on pushes or pull requests. AWS access is short-lived OIDC role assumption; no AWS keys are
 # stored in GitHub. Setup (accounts, bootstrap, GitHub environments) is in infra/README.md.
+# The personal environment deploys with its own workflow, deploy-personal.yml.
 on:
   workflow_dispatch:
     inputs:
       environment:
         description: Environment to deploy
         type: choice
-        options: [staging, prod, personal]
+        options: [staging, prod]
         required: true
 
 permissions:
@@ -41,8 +42,6 @@ jobs:
       LISTORA_HOSTED_ZONE_ID: ${{ vars.HOSTED_ZONE_ID }}
       LISTORA_ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
       LISTORA_AVAILABILITY_ZONES: ${{ vars.AVAILABILITY_ZONES }}
-      # personal only: the one person its user pool lets sign in (docs/features/auth.md).
-      LISTORA_OWNER_EMAIL: ${{ vars.OWNER_EMAIL }}
       # Images are tagged with the commit they are built from; tags are immutable in ECR.
       LISTORA_IMAGE_TAG: ${{ github.sha }}
     steps:
@@ -60,8 +59,8 @@ jobs:
           npm run infra:synth
       # The dev sign-in driver writes every sign-in code to the API log and lets anyone ask for
       # one, so no deployed environment runs it: each deploys only with AUTH_DRIVER=cognito.
-      # container-env.ts gives the API the driver of LISTORA_ENV's signIn setting: personal's
-      # owner pool now, staging and prod once they have pools (docs/features/auth.md).
+      # container-env.ts gives the API the driver of LISTORA_ENV's signIn setting: cognito for
+      # staging and prod once they have pools (T-31; docs/features/auth.md).
       - name: Refuse the dev sign-in driver
         run: |
           driver=$(node infra/src/container-env.ts api postgres://unused | sed -n 's/^AUTH_DRIVER=//p')
@@ -113,14 +112,6 @@ jobs:
             "listora-$LISTORA_ENV-storage" \
             "listora-$LISTORA_ENV-email" \
             "listora-$LISTORA_ENV-migrate"
-      # Only personal has its user pool yet (the owner pool); staging and prod get theirs with
-      # public sign-up (T-31). The pool emails its codes through the owner's SES identity in the
-      # email stack, so the owner must have clicked SES's verification link first: the first
-      # personal deploy runs scripts/deploy-personal.sh, which waits for that (infra/README.md).
-      - name: Deploy the user pool
-        if: inputs.environment == 'personal'
-        working-directory: infra
-        run: npx cdk deploy --require-approval never --no-notices "listora-$LISTORA_ENV-auth"
       # Migrations run while the previous release still serves, before any new task starts, so
       # every migration must work with the code already running (expand, then contract). The
       # deploy stops here unless the task exits 0 (scripts/run-migrations.sh, which

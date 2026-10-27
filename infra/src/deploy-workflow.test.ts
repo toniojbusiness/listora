@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
 import { ENVIRONMENT_NAMES } from './config.ts';
-import { deployRoleName } from './stacks/deploy-access-stack.ts';
+import { DEPLOY_BRANCH_REF, deployRoleName } from './stacks/deploy-access-stack.ts';
 import { MIGRATE_OUTPUTS, migrateTaskNames } from './stacks/migrate-stack.ts';
 import { stackList, synthesize } from './test-support.ts';
 
@@ -17,6 +17,8 @@ interface Step {
 }
 interface Job {
   if?: string;
+  needs?: string;
+  outputs?: Record<string, string>;
   environment?: string;
   permissions?: Record<string, string>;
   env?: Record<string, string>;
@@ -31,13 +33,13 @@ const workflow = parse(source) as {
 };
 const job = workflow.jobs['deploy'];
 if (job === undefined) throw new Error('deploy.yml has no deploy job');
+/** Personal deploys with its own workflow (deploy-personal.yml, below). */
+const DEPLOYED_HERE = ENVIRONMENT_NAMES.filter((environment) => environment !== 'personal');
 
 describe('deploy workflow', () => {
   it('runs only when dispatched by hand, never on pushes or pull requests', () => {
     expect(Object.keys(workflow.on)).toEqual(['workflow_dispatch']);
-    expect(workflow.on['workflow_dispatch']?.inputs['environment']?.options).toEqual([
-      ...ENVIRONMENT_NAMES,
-    ]);
+    expect(workflow.on['workflow_dispatch']?.inputs['environment']?.options).toEqual(DEPLOYED_HERE);
   });
 
   it('deploys only main, inside the protected GitHub environment of the same name', () => {
@@ -88,24 +90,16 @@ describe('deploy workflow', () => {
     return index;
   };
 
-  it('deploys every stack of every environment except deploy-access, which only an administrator deploys', () => {
+  it('deploys every stack of its environments except deploy-access, which only an administrator deploys', () => {
     const deployed = new Set(deploys.flatMap((deploy) => deploy.stacks));
     const expected = new Set(
-      ENVIRONMENT_NAMES.flatMap((environment) =>
+      DEPLOYED_HERE.flatMap((environment) =>
         stackList(synthesize(environment).stacks)
           .map((stack) => stack.stackName.replace(`listora-${environment}-`, ''))
           .filter((name) => name !== 'deploy-access'),
       ),
     );
     expect([...deployed].sort()).toEqual([...expected].sort());
-  });
-
-  it('deploys the user pool only in personal, after the email stack and before the services', () => {
-    const step = job.steps[deployIndex('auth')];
-    expect(step?.if).toBe("inputs.environment == 'personal'");
-    expect(deployIndex('email')).toBeLessThan(deployIndex('auth'));
-    expect(deployIndex('auth')).toBeLessThan(deployIndex('compute'));
-    expect(job.env?.['LISTORA_OWNER_EMAIL']).toBe('${{ vars.OWNER_EMAIL }}');
   });
 
   it('builds and pushes both images, application and browser runner, tagged with the commit', () => {
@@ -146,5 +140,92 @@ describe('deploy workflow', () => {
     expect(run).toMatch(/while true; do\n[\s\S]*"\$status" == STOPPED \]\]; then break; fi/);
     expect(run).toContain('.tasks[0].containers[0].exitCode');
     expect(run).toMatch(/if \[\[ "\$code" != 0 \]\]; then\n(.*\n)+?\s*exit 1/);
+  });
+});
+
+const personalSource = readFileSync(
+  new URL('../../.github/workflows/deploy-personal.yml', import.meta.url),
+  'utf8',
+);
+const personal = parse(personalSource) as {
+  on: Record<string, { workflows?: string[]; types?: string[]; branches?: string[] } | null>;
+  permissions: Record<string, string>;
+  concurrency: { group: string; 'cancel-in-progress': boolean };
+  jobs: Record<string, Job>;
+};
+const ciName = (
+  parse(readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8')) as {
+    name: string;
+  }
+).name;
+
+describe('deploy personal workflow', () => {
+  const pick = personal.jobs['commit'];
+  const deploy = personal.jobs['deploy'];
+  if (pick === undefined || deploy === undefined) {
+    throw new Error('deploy-personal.yml needs its commit and deploy jobs');
+  }
+
+  it('runs after CI on main and by hand, never on pull requests', () => {
+    expect(Object.keys(personal.on).sort()).toEqual(['workflow_dispatch', 'workflow_run']);
+    expect(personal.on['workflow_run']).toEqual({
+      workflows: [ciName],
+      types: ['completed'],
+      branches: ['main'],
+    });
+  });
+
+  it('deploys only a commit CI passed for a push to main of this repository', () => {
+    const condition = (pick.if ?? '').replace(/\s+/g, ' ');
+    expect(condition).toContain(`github.ref == '${DEPLOY_BRANCH_REF}'`);
+    for (const check of [
+      "github.event.workflow_run.conclusion == 'success'",
+      "github.event.workflow_run.event == 'push'",
+      'github.event.workflow_run.head_repository.full_name == github.repository',
+    ]) {
+      expect(condition).toContain(check);
+    }
+    expect(deploy.needs).toBe('commit');
+    expect(deploy.if).toBe("needs.commit.outputs.sha != ''");
+    // The commit CI tested, and only while it is still main's head.
+    const run = pick.steps[0]?.run ?? '';
+    expect(run).toContain('gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha');
+    expect(run).toMatch(/if \[ "\$head" = "\$TESTED" \]; then\n\s*echo "sha=\$TESTED"/);
+    const checkout = deploy.steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+    expect(checkout?.with?.['ref']).toBe('${{ needs.commit.outputs.sha }}');
+  });
+
+  it('never runs two deploys at once, and never cancels one that started', () => {
+    expect(personal.concurrency).toEqual({ group: 'deploy-personal', 'cancel-in-progress': false });
+  });
+
+  it('assumes the personal deploy role through OIDC in the personal environment, with no AWS keys', () => {
+    expect(deploy.environment).toBe('personal');
+    expect(personal.permissions).toEqual({ contents: 'read' });
+    expect(pick.permissions).toEqual({ contents: 'read' });
+    expect(deploy.permissions).toEqual({ contents: 'read', 'id-token': 'write' });
+    expect(personalSource).not.toMatch(/aws-access-key-id|aws-secret-access-key/);
+    // The one secret is the owner's address, a secret only so the public log masks it.
+    expect([...personalSource.matchAll(/secrets\.(\w+)/g)].map((match) => match[1])).toEqual([
+      'OWNER_EMAIL',
+    ]);
+    const login = deploy.steps.find((step) =>
+      step.uses?.startsWith('aws-actions/configure-aws-credentials@'),
+    );
+    expect(login?.with?.['role-to-assume']).toBe(
+      `arn:aws:iam::\${{ vars.AWS_ACCOUNT_ID }}:role/${deployRoleName('personal')}`,
+    );
+    expect(login?.with?.['allowed-account-ids']).toBe('${{ vars.AWS_ACCOUNT_ID }}');
+  });
+
+  it('pins every action to a commit', () => {
+    for (const step of [...pick.steps, ...deploy.steps]) {
+      if (step.uses !== undefined) expect(step.uses).toMatch(/@[0-9a-f]{40}$/);
+    }
+  });
+
+  it('deploys with scripts/deploy-personal.sh, as the deploy from a Mac does', () => {
+    expect(deploy.steps.at(-1)?.run?.trim()).toBe('scripts/deploy-personal.sh --ci');
+    expect(deploy.env?.['LISTORA_OWNER_EMAIL']).toBe('${{ secrets.OWNER_EMAIL }}');
   });
 });

@@ -44,6 +44,26 @@ export {
   runnerWorkWaiting,
 } from './dispatch.ts';
 export type { DispatcherOptions } from './dispatch.ts';
+export { MAX_IMPORTED_PHOTOS } from './adapter/listing-import.ts';
+export { splitSkuLine } from './adapter/sku-line.ts';
+export {
+  importErrorMessage,
+  MAX_IMPORT_PAGES,
+  prepareImportPage,
+  recordImportPage,
+  recordImportPageFailure,
+  runImportPage,
+} from './imports/read.ts';
+export type { ImportReadDependencies, PreparedImportPage } from './imports/read.ts';
+export {
+  isListingImportJobPayload,
+  LISTING_IMPORT_APPLY_TASK,
+  LISTING_IMPORT_READ_TASK,
+  queueImportApply,
+  queueImportPage,
+} from './imports/schedule.ts';
+export type { ImportPageTarget, ListingImportJobPayload } from './imports/schedule.ts';
+export { FAKE_MEDIA_PATH, fakeMediaName, fakeMediaPhoto } from './fake-photos/fake-photos.ts';
 export { FakeAutomationSite } from './fake-site/fake-site.ts';
 export type {
   FakeSiteAction,
@@ -194,8 +214,10 @@ export { AutomationConfigError, loadAutomationSettings } from './settings.ts';
 export type { AutomationSettings, SaleCheckSettings } from './settings.ts';
 export { readPhoneBundle, type PhoneBundle } from './phone/bundle-file.ts';
 export {
+  importedCategory,
   marketplaceCategories,
   type CategoryChoice,
+  type ImportedCategory,
   type MarketplaceCategories,
 } from './categories.ts';
 export { prefillItem } from './prefill/prefill.ts';
