@@ -222,6 +222,30 @@ describe('operation step executor (real Postgres)', () => {
     });
   });
 
+  it('never posts a create again when a lookup by SKU cannot find it yet', async () => {
+    // The marketplace took the listing without naming it, and its own search lags behind it
+    // (Poshmark's closet, 2026-10-27): not finding it is no proof it didn't go through.
+    const { op, payload } = await newCreate();
+    let sends = 0;
+    const adapter = stubAdapter({
+      execute: () => {
+        sends += 1;
+        return Promise.resolve({ type: 'confirmed' });
+      },
+      read: () => Promise.resolve({ found: false, authoritative: false }),
+    });
+
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+    await runOperationStep(deps(adapter), payload, new AbortController().signal);
+
+    expect(sends).toBe(1);
+    expect(await harness.operation(op.id)).toMatchObject({
+      status: 'verifying',
+      error_code: 'not_applied',
+    });
+  });
+
   it('never confirms a read older than the revision the send was confirmed with', async () => {
     const { op, payload } = await newCreate();
     const adapter = stubAdapter({
