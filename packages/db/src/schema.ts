@@ -266,6 +266,33 @@ export interface AiAnalysisTable {
   completed_at: NullableTimestamp;
 }
 
+/**
+ * The seller's answer to one of the marketplace pre-fill's questions, for the item details it was
+ * given for (docs/features/marketplace-prefill.md).
+ */
+export interface ItemPrefillAnswerTable {
+  account_id: string;
+  item_id: string;
+  /** `kidsGender`, or `<marketplace>.category` / `<marketplace>.size`. */
+  key: string;
+  value: string;
+  /** A hash of the item's category, department, and size when the seller answered. */
+  basis: string;
+  created_at: CreatedAt;
+  updated_at: UpdatedAt;
+}
+
+/** The AI's pick for one pre-fill question, so it is asked once; `value` null: no pick. */
+export interface ItemPrefillPickTable {
+  account_id: string;
+  item_id: string;
+  decision_hash: string;
+  key: string;
+  value: Nullable<string>;
+  confidence: number;
+  created_at: CreatedAt;
+}
+
 export interface AiUsageEventTable {
   id: Id;
   account_id: string;
@@ -1009,6 +1036,8 @@ export interface Database {
   upload_session: UploadSessionTable;
   upload_file: UploadFileTable;
   ai_analysis: AiAnalysisTable;
+  item_prefill_answer: ItemPrefillAnswerTable;
+  item_prefill_pick: ItemPrefillPickTable;
   ai_usage_event: AiUsageEventTable;
   ai_usage_daily: AiUsageDailyTable;
   ai_kill_switch: AiKillSwitchTable;

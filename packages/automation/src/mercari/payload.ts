@@ -71,6 +71,16 @@ export const MERCARI_LIMITS = {
   maxPhotos: 12,
 } as const;
 
+/**
+ * The variant's `Size` aspect when it is one of the size list's own labels: for a tag size the list
+ * doesn't have, the size the seller picked (or the AI read) on the review for this category
+ * (docs/features/marketplace-prefill.md). A tag size the list has always wins.
+ */
+function sizeAspect(variant: ListingVariant, labels: readonly string[]): string | null {
+  const named = variant.aspects.find((aspect) => aspect.name.toLowerCase() === 'size')?.values[0];
+  return named === undefined ? null : (labels.find((label) => label === named.trim()) ?? null);
+}
+
 export function buildMercariPayload(
   item: ItemSnapshot,
   variant: ListingVariant,
@@ -94,7 +104,8 @@ export function buildMercariPayload(
     photos: photosInOrder(item).map(({ photoId, url }) => ({ photoId, url })),
     category: category === null ? null : [...category.path],
     categoryId: category?.id ?? null,
-    size: labels.length === 0 ? null : mercariSizeLabel(item, labels),
+    size:
+      labels.length === 0 ? null : (mercariSizeLabel(item, labels) ?? sizeAspect(variant, labels)),
     sized: labels.length > 0,
     sizeExamples: labels.slice(0, 4),
     imei: category?.imei ?? false,

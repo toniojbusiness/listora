@@ -33,6 +33,10 @@ reopened item whose photos changed since its analysis was applied is analyzed ag
   editor that counts its limits. The seller's copy edits stay on this iPhone
   (`ListingCopyStore` in `Core`); the List flow starts each marketplace's draft listing from them
   ([inventory.md](inventory.md)), and from then on the listing carries the copy.
+- **On each marketplace's form.** For the marketplaces Listora lists on itself, each one's own
+  category, size, and the details its form shows, with the unisex default as a chip and the few
+  questions Listora isn't sure of as one tap on a ranked short list; Continue waits for those
+  taps ([marketplace-prefill.md](marketplace-prefill.md#the-review-iphone)).
 - **Identify harder** is prominent when the brand is missing or below 0.6, or the analysis asks
   for it, and shows the plan's premium identifications (`getUsage`); once they are used up it
   says so and is unavailable. It saves the seller's edits first, so the premium details never

@@ -8,7 +8,9 @@
  *
  * Items Listora can't place with confidence (unisex items on Mercari, and items a marketplace's
  * map has no category for) get no suggestion, so the seller picks; the likely ones (a unisex
- * item's men's and women's categories) come first.
+ * item's men's and women's categories) come first. The API's `getItemMarketplaceCategories`
+ * answers the marketplace pre-fill's category and short list instead (prefill/, which also
+ * asks the AI), and keeps `choices` from here.
  */
 import type { Marketplace } from '@listora/db';
 

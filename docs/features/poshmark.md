@@ -120,7 +120,8 @@ onto Poshmark's category and, where one fits, its subcategory, by the most speci
 prefix (`clothing/tops/blouses` → Women / Tops / Blouses). Unisex items go under Men; home items
 (`home/decor`, `home/kitchen`, `home/bedding`) go to Home whatever their department. A few
 canonical categories have no Poshmark place (men's dresses and skirts, matching sets, `other`);
-for those the seller picks one. The seller can pick any of the 747 places in the List flow
+for those the review's pre-fill asks the AI, then the seller, from a ranked short list
+([marketplace-prefill.md](marketplace-prefill.md)). The seller can pick any of the 747 places in the List flow
 (`categories.ts` offers every category and subcategory), and the listing names it in its
 `categoryRef` as `Department/Category[/Subcategory]` (`Electronics/Headphones/Over-Ear Headphones`).
 

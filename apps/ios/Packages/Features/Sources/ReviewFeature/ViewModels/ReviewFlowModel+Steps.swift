@@ -8,6 +8,9 @@ extension ReviewFlowModel {
 
     func update(_ key: ReviewFieldKey, to value: FieldValue) {
         form?.set(key, to: value)
+        if Self.prefillKeys.contains(key) {
+            prefillDetailsChanged()
+        }
     }
 
     /// Opens `key`'s in-place editor, keeping the text of the one open before.

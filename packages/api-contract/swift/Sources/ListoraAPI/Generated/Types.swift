@@ -307,6 +307,36 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/items/{itemId}/voice-corrections`.
     /// - Remark: Generated from `#/paths//v1/items/{itemId}/voice-corrections/post(interpretVoiceCorrection)`.
     func interpretVoiceCorrection(_ input: Operations.InterpretVoiceCorrection.Input) async throws -> Operations.InterpretVoiceCorrection.Output
+    /// What each marketplace's sell form will get for the item
+    ///
+    /// For Depop, Poshmark, and Mercari: the marketplace's own category, size, condition,
+    /// brand, colours, and material as Listora will fill their real forms, worked out from the
+    /// item analysis and each marketplace's own category tree and form data
+    /// (docs/features/marketplace-prefill.md). An in-between item gets the marketplace's
+    /// default (a unisex tee goes under Men on Depop), which the seller can change. When
+    /// Listora's mapping can't tell, the cheap AI picks from a ranked short list; when it is
+    /// not sure either, the field is a question (`needsAnswer`) with that short list, for the
+    /// review to ask before the seller lists. The AI is asked at most once per question
+    /// (metered, counted in the daily AI budget, no plan quota); when AI is off or over its
+    /// budget, the questions are simply asked. The detail parameters (`PrefillDetails`) carry
+    /// the review's unsaved edits.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/marketplace-prefill`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/get(getItemMarketplacePrefill)`.
+    func getItemMarketplacePrefill(_ input: Operations.GetItemMarketplacePrefill.Input) async throws -> Operations.GetItemMarketplacePrefill.Output
+    /// Answer one of the pre-fill's questions
+    ///
+    /// Records the seller's tap (or clears it) for the item's details as `details` has them,
+    /// and answers the pre-fill worked out again. An answer holds while the item's category,
+    /// department, and size stay as they were; after a change, the question is asked again.
+    /// A listing created later names the answer (`createListing`). `422` for a value the
+    /// marketplace doesn't offer.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/items/{itemId}/marketplace-prefill/answers`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/answers/put(answerItemMarketplacePrefill)`.
+    func answerItemMarketplacePrefill(_ input: Operations.AnswerItemMarketplacePrefill.Input) async throws -> Operations.AnswerItemMarketplacePrefill.Output
     /// Get price suggestions for an item
     ///
     /// Every number carries its source. Without real sold data the response has no
@@ -1404,6 +1434,56 @@ extension APIProtocol {
         body: Operations.InterpretVoiceCorrection.Input.Body
     ) async throws -> Operations.InterpretVoiceCorrection.Output {
         try await interpretVoiceCorrection(Operations.InterpretVoiceCorrection.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// What each marketplace's sell form will get for the item
+    ///
+    /// For Depop, Poshmark, and Mercari: the marketplace's own category, size, condition,
+    /// brand, colours, and material as Listora will fill their real forms, worked out from the
+    /// item analysis and each marketplace's own category tree and form data
+    /// (docs/features/marketplace-prefill.md). An in-between item gets the marketplace's
+    /// default (a unisex tee goes under Men on Depop), which the seller can change. When
+    /// Listora's mapping can't tell, the cheap AI picks from a ranked short list; when it is
+    /// not sure either, the field is a question (`needsAnswer`) with that short list, for the
+    /// review to ask before the seller lists. The AI is asked at most once per question
+    /// (metered, counted in the daily AI budget, no plan quota); when AI is off or over its
+    /// budget, the questions are simply asked. The detail parameters (`PrefillDetails`) carry
+    /// the review's unsaved edits.
+    ///
+    ///
+    /// - Remark: HTTP `GET /v1/items/{itemId}/marketplace-prefill`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/get(getItemMarketplacePrefill)`.
+    public func getItemMarketplacePrefill(
+        path: Operations.GetItemMarketplacePrefill.Input.Path,
+        query: Operations.GetItemMarketplacePrefill.Input.Query = .init(),
+        headers: Operations.GetItemMarketplacePrefill.Input.Headers = .init()
+    ) async throws -> Operations.GetItemMarketplacePrefill.Output {
+        try await getItemMarketplacePrefill(Operations.GetItemMarketplacePrefill.Input(
+            path: path,
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Answer one of the pre-fill's questions
+    ///
+    /// Records the seller's tap (or clears it) for the item's details as `details` has them,
+    /// and answers the pre-fill worked out again. An answer holds while the item's category,
+    /// department, and size stay as they were; after a change, the question is asked again.
+    /// A listing created later names the answer (`createListing`). `422` for a value the
+    /// marketplace doesn't offer.
+    ///
+    ///
+    /// - Remark: HTTP `PUT /v1/items/{itemId}/marketplace-prefill/answers`.
+    /// - Remark: Generated from `#/paths//v1/items/{itemId}/marketplace-prefill/answers/put(answerItemMarketplacePrefill)`.
+    public func answerItemMarketplacePrefill(
+        path: Operations.AnswerItemMarketplacePrefill.Input.Path,
+        headers: Operations.AnswerItemMarketplacePrefill.Input.Headers = .init(),
+        body: Operations.AnswerItemMarketplacePrefill.Input.Body
+    ) async throws -> Operations.AnswerItemMarketplacePrefill.Output {
+        try await answerItemMarketplacePrefill(Operations.AnswerItemMarketplacePrefill.Input(
             path: path,
             headers: headers,
             body: body

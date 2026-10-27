@@ -88,3 +88,20 @@ export {
   VOICE_CORRECTION_SYSTEM,
 } from './voice-correction.ts';
 export type { VoiceCorrectionAnswer, VoiceCorrectionInput } from './voice-correction.ts';
+export {
+  MARKETPLACE_PREFILL_OUTPUT,
+  MARKETPLACE_PREFILL_OUTPUT_NAME,
+  MARKETPLACE_PREFILL_PURPOSE,
+  MARKETPLACE_PREFILL_SYSTEM,
+  MAX_PREFILL_QUESTIONS,
+  pickPrefillOptions,
+  prefillPrompt,
+  readPicks,
+} from './marketplace-prefill.ts';
+export type {
+  MarketplacePrefillAnswer,
+  PrefillItemFacts,
+  PrefillPickInput,
+  PrefillQuestion,
+  PrefillQuestionPick,
+} from './marketplace-prefill.ts';

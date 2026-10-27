@@ -199,8 +199,10 @@ private struct ChoiceRow: View {
     }
 }
 
-/// The listing's category on the marketplace: the one Listora maps the item to, or the seller's
-/// pick from that marketplace's own categories when Listora can't tell (a unisex item).
+/// The listing's category on the marketplace: the one the review settled (Listora's mapping, the
+/// AI's sure pick, or the seller's tap, docs/features/marketplace-prefill.md), or, when Listora
+/// isn't sure, its ranked short list to tap one of, with every category of the marketplace behind
+/// "More categories". Never a blank picker.
 private struct CategoryRow: View {
     let marketplace: String
     let category: Components.Schemas.MarketplaceCategory?
@@ -208,23 +210,51 @@ private struct CategoryRow: View {
     let onChoose: (Components.Schemas.MarketplaceCategory) -> Void
 
     var body: some View {
-        NavigationLink {
-            CategoryPicker(marketplace: marketplace, categories: categories, onChoose: onChoose)
-        } label: {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text("\(marketplace) category")
+        if category == nil, !categories.likely.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("Which \(marketplace) category?")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.textSecondary)
-                Text(category.map { $0.path.joined(separator: " > ") } ?? "Choose one")
-                    .font(Typography.body)
-                    .foregroundStyle(category == nil ? Palette.danger : Palette.textPrimary)
-                    .multilineTextAlignment(.leading)
+                ForEach(categories.likely, id: \.ref) { choice in
+                    Button {
+                        onChoose(choice)
+                    } label: {
+                        Text(choice.path.joined(separator: " > "))
+                            .font(Typography.body)
+                            .foregroundStyle(Palette.textPrimary)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, minHeight: Layout.minimumTapTarget, alignment: .leading)
+                            .padding(.horizontal, Spacing.sm)
+                            .background(Palette.surface.color, in: RoundedRectangle(cornerRadius: Radius.medium))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("listing.category.likely.\(choice.ref)")
+                }
+                NavigationLink("More categories") {
+                    CategoryPicker(marketplace: marketplace, categories: categories, onChoose: onChoose)
+                }
+                .font(Typography.callout)
+                .accessibilityIdentifier("listing.category")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(Spacing.sm)
-            .background(Palette.surface.color, in: RoundedRectangle(cornerRadius: Radius.medium))
+        } else {
+            NavigationLink {
+                CategoryPicker(marketplace: marketplace, categories: categories, onChoose: onChoose)
+            } label: {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text("\(marketplace) category")
+                        .font(Typography.caption)
+                        .foregroundStyle(Palette.textSecondary)
+                    Text(category.map { $0.path.joined(separator: " > ") } ?? "Choose one")
+                        .font(Typography.body)
+                        .foregroundStyle(category == nil ? Palette.danger : Palette.textPrimary)
+                        .multilineTextAlignment(.leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Spacing.sm)
+                .background(Palette.surface.color, in: RoundedRectangle(cornerRadius: Radius.medium))
+            }
+            .accessibilityIdentifier("listing.category")
         }
-        .accessibilityIdentifier("listing.category")
     }
 }
 
