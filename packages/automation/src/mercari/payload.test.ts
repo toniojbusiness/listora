@@ -96,6 +96,11 @@ describe('Mercari conditions and sizes', () => {
   it('matches a size option by its own label or a label that starts with it', () => {
     expect(sizeOptionMatches('M', 'M')).toBe(true);
     expect(sizeOptionMatches('M (8-10)', 'M')).toBe(true);
+    // Mercari's women's sizes name the extended sizes 2XL and 3XL; its men's say XXL.
+    expect(sizeOptionMatches('2XL (20-22)', 'XXL')).toBe(true);
+    expect(sizeOptionMatches('XXL (50-52)', 'XXL')).toBe(true);
+    expect(sizeOptionMatches('3XL (24-26)', 'XXXL')).toBe(true);
+    expect(sizeOptionMatches('XL (16-18)', 'XXL')).toBe(false);
     expect(sizeOptionMatches('MP', 'M')).toBe(false);
     expect(sizeOptionMatches('10.5', '10')).toBe(false);
   });
