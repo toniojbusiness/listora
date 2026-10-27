@@ -34,5 +34,9 @@
     "payer": "buyer",
     "method": "prepaid_label",
     "weight": "3 lb"
+  },
+  "source": {
+    "itemCategory": "clothing/outerwear/denim_jackets",
+    "condition": "pre_owned_excellent"
   }
 }

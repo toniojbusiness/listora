@@ -40,7 +40,12 @@ Every marketplace write is a `marketplace_operation` row whose state machine the
      holds → `succeeded`; it does not → `retrying`. The request is never re-sent blindly. The
      read-back after a send with an unknown result, and the second read a `readFreshness: 'none'`
      match needs, come soon (`CHECK_SOON_MS`, 15 seconds, never later than the backoff): the
-     seller is waiting to see the listing, and nothing is sent again meanwhile.
+     seller is waiting to see the listing, and nothing is sent again meanwhile. A create or
+     relist whose send the marketplace confirmed, and that a read still can't find without the
+     marketplace saying it is gone, is read again later and never sent again: a marketplace's
+     own search, and even a new listing's own page, can lag minutes behind a listing it just took
+     (Poshmark's closet and listing page, 2026-10-27), and sending again would post it twice.
+     When its attempts run out it fails, and the seller checks.
    - `pendingUser` (assisted, or an automated step that met a check automation must not pass)
      → `needs_user_action` until the user confirms (`confirmOperationByUser`), or `failed` when
      the user dismisses the task (`dismissOperationByUser`, with a Retry that makes a new task;

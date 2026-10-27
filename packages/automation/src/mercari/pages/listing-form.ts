@@ -205,17 +205,22 @@ async function pickBrand(page: PageDriver, brand: string | null): Promise<void> 
   await expectElement(page, LISTING_FORM.brand, FORM, 'brand search');
   if (brand === null) return;
   await page.type(LISTING_FORM.brand, brand);
-  // The suggestions come as Mercari's search answers: the exact brand, else the same brand in
+  // The suggestions follow Mercari's search as it answers each keystroke, so the list read first
+  // may still be for the first letters: it is read until it offers the brand, exactly or in
   // another case. Without it the form would take no brand, so the step goes to the seller.
-  if (!(await appears(page, LISTING_FORM.brandOption))) {
-    throw changed(FORM, `lists no brand "${brand}"`);
+  const end = Date.now() + APPEAR_MS;
+  for (;;) {
+    const offered = await page.texts(LISTING_FORM.brandOption);
+    const match =
+      offered.find((option) => option === brand) ??
+      offered.find((option) => option.toLowerCase() === brand.toLowerCase());
+    if (match !== undefined) {
+      await page.click(`${LISTING_FORM.brandOption}:text-is("${quote(match)}") >> nth=0`);
+      return;
+    }
+    if (Date.now() >= end) throw changed(FORM, `lists no brand "${brand}"`);
+    await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
   }
-  const offered = await page.texts(LISTING_FORM.brandOption);
-  const match =
-    offered.find((option) => option === brand) ??
-    offered.find((option) => option.toLowerCase() === brand.toLowerCase());
-  if (match === undefined) throw changed(FORM, `lists no brand "${brand}"`);
-  await page.click(`${LISTING_FORM.brandOption}:text-is("${quote(match)}") >> nth=0`);
 }
 
 async function pickSize(page: PageDriver, size: string): Promise<void> {

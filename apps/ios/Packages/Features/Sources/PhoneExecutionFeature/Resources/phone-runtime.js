@@ -7847,12 +7847,24 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 
 // src/mercari/sizes.ts
 /**
+	* Mercari's names for the extended letter sizes where they differ by department: its women's
+	* sizes say `2XL (20-22)` and `3XL (24-26)`, its men's `XXL (50-52)` (read 2026-10-27).
+	*/
+	const LETTER_SIZE_ALIASES = {
+		XXL: "2XL",
+		"2XL": "XXL",
+		XXXL: "3XL",
+		"3XL": "XXXL",
+		XXXXL: "4XL",
+		"4XL": "XXXXL"
+	};
+	/**
 	* Whether a size option's label offers `size`: the label is the size, or the size followed by
-	* a space and more (`M (8-10)`).
+	* a space and more (`M (8-10)`), under either of its names (`XXL` is `2XL (20-22)`).
 	*/
 	function sizeOptionMatches(optionLabel, size) {
 		const label = optionLabel.trim();
-		return label === size || label.startsWith(`${size} `);
+		return [size, LETTER_SIZE_ALIASES[size.toUpperCase()]].filter((name) => name !== void 0).some((name) => label === name || label.startsWith(`${name} `));
 	}
 
 // src/mercari/pages/listing-form.ts
@@ -8001,11 +8013,17 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		await expectElement(page, LISTING_FORM.brand, FORM, "brand search");
 		if (brand === null) return;
 		await page.type(LISTING_FORM.brand, brand);
-		if (!await appears$1(page, LISTING_FORM.brandOption)) throw changed(FORM, `lists no brand "${brand}"`);
-		const offered = await page.texts(LISTING_FORM.brandOption);
-		const match = offered.find((option) => option === brand) ?? offered.find((option) => option.toLowerCase() === brand.toLowerCase());
-		if (match === void 0) throw changed(FORM, `lists no brand "${brand}"`);
-		await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}") >> nth=0`);
+		const end = Date.now() + APPEAR_MS;
+		for (;;) {
+			const offered = await page.texts(LISTING_FORM.brandOption);
+			const match = offered.find((option) => option === brand) ?? offered.find((option) => option.toLowerCase() === brand.toLowerCase());
+			if (match !== void 0) {
+				await page.click(`${LISTING_FORM.brandOption}:text-is("${quote$1(match)}") >> nth=0`);
+				return;
+			}
+			if (Date.now() >= end) throw changed(FORM, `lists no brand "${brand}"`);
+			await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS$2));
+		}
 	}
 	async function pickSize(page, size) {
 		await expectElement(page, LISTING_FORM.size, FORM, "size list");
@@ -8798,6 +8816,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		/** The form is there once its title field is: Poshmark's scripts draw it. */
 		form: "input[data-vv-name=\"title\"]",
 		photos: "input#img-file-input[type=\"file\"]",
+		/**
+		* The photos section of a new listing's form, which names the listing the form makes in
+		* `data-et-prop-listing_id` (read on the captain's session, 2026-10-27).
+		*/
+		newListing: "[data-et-name=\"listingEditorImageSection\"][data-et-prop-listing_id]",
 		title: "input[data-vv-name=\"title\"]",
 		description: "textarea[data-vv-name=\"description\"]",
 		brand: "[data-et-name=\"listingEditorBrandSection\"] input[type=\"text\"]",
@@ -8876,6 +8899,17 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (!await page.exists(FORM_SELECTORS.form)) throw new PageChangedError("Poshmark's listing form has no title field");
 		}
 		return true;
+	}
+	/**
+	* The id of the listing a new listing's form makes, or `null` when the form doesn't name it.
+	* Poshmark gives the listing its id when the form opens, and the listing keeps it once listed
+	* (read on the captain's session, 2026-10-27: a new listing's id dates from its form's opening,
+	* not from its List). So right after List the new listing is read on its own page, not looked
+	* for in the closet, which can lag minutes behind.
+	*/
+	async function newListingId(page) {
+		const id = await page.attribute(FORM_SELECTORS.newListing, "data-et-prop-listing_id");
+		return id !== null && /^[0-9a-f]{24}$/.test(id) ? id : null;
 	}
 	/** How long the cover-photo editor gets to open after the photos are picked. */
 	const EDITOR_OPENS_MS = 6e3;
@@ -9117,29 +9151,64 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 	* A listing's public page (`/listing/<title>-<id>`): the read-back of every change. It reads the
 	* listing record the page embeds (`$_listing_details.listingDetails`).
 	*
-	* A deleted listing's page answers 404 (seen on a real listing deleted from the captain's closet,
-	* 2026-10-27), and that absence is authoritative: the listing is gone. Any other page without the
-	* listing (one that is no longer published) reads as "not found, maybe not yet", never as "gone"
-	* (docs/features/marketplaces.md).
+	* A listing that isn't on the site answers 404, and its page holds Poshmark's own record of what
+	* became of it instead (`listingDetails.error`, a `PostRemovedError` whose `params.post_info`
+	* names the listing and its status; read on the captain's listings, 2026-10-27): `archived` for
+	* one its seller deleted, which is definitive (the listing is gone), and `hidden` for one Poshmark
+	* hides, as it did with a listing it removed under its rules, which is not (Poshmark can show it
+	* again). Any other page without the listing (one without that record, or no longer published)
+	* reads as "not found, maybe not yet", never as "gone" (docs/features/marketplaces.md).
 	*/
 	const PAGE = "listing page";
-	const listingPageSchema = object({ $_listing_details: object({ listingDetails: listingRecordSchema.nullable().optional() }) });
+	/** Poshmark's record of a listing that isn't on the site, on its 404 page. */
+	const removedSchema = object({ error: object({
+		errorType: string(),
+		params: object({ post_info: object({
+			id: string(),
+			status: string()
+		}).optional() }).optional()
+	}) });
+	const listingPageSchema = object({ $_listing_details: object({ listingDetails: union([listingRecordSchema, removedSchema]).nullable().optional() }) });
+	/** Opens the listing's page and reads what it shows of the listing. */
+	async function openListingPage(page, site, id) {
+		if (!isListingId(id)) return { type: "none" };
+		await page.goto(site.listing(id));
+		const missing = page.status() === 404;
+		let details;
+		try {
+			details = expectShape(listingPageSchema, await readPageState(page, PAGE), PAGE).$_listing_details.listingDetails;
+		} catch (error) {
+			if (missing && error instanceof PageChangedError) return { type: "none" };
+			throw error;
+		}
+		if (details === void 0 || details === null) return { type: "none" };
+		if ("error" in details) {
+			const info = details.error.params?.post_info;
+			if (details.error.errorType !== "PostRemovedError" || info?.id !== id) return { type: "none" };
+			if (info.status === "archived") return { type: "deleted" };
+			return info.status === "hidden" ? { type: "hidden" } : { type: "none" };
+		}
+		if (details.id !== id || details.status !== "published") return { type: "none" };
+		return {
+			type: "listing",
+			record: details
+		};
+	}
 	/** Opens the listing's page and reads it; `null` when the page shows no such listing. */
 	async function openListing(page, site, id) {
-		if (!isListingId(id)) return null;
-		await page.goto(site.listing(id));
-		if (page.status() === 404) return null;
-		const record = expectShape(listingPageSchema, await readPageState(page, PAGE), PAGE).$_listing_details.listingDetails ?? null;
-		if (record?.id !== id || record.status !== "published") return null;
-		return record;
+		const shown = await openListingPage(page, site, id);
+		return shown.type === "listing" ? shown.record : null;
 	}
 	/** The listing as a read-back. */
 	async function readListing(page, site, id) {
-		const record = await openListing(page, site, id);
-		if (record !== null) return remoteListing(record, site, PAGE);
+		return remoteState(await openListingPage(page, site, id), site);
+	}
+	/** What a listing's page shows, as a read-back: only a deleted listing is definitely gone. */
+	function remoteState(shown, site) {
+		if (shown.type === "listing") return remoteListing(shown.record, site, PAGE);
 		return {
 			found: false,
-			authoritative: isListingId(id) && page.status() === 404
+			authoritative: shown.type === "deleted"
 		};
 	}
 
@@ -9153,17 +9222,30 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		/** Without a title to search for, only listings created this recently are candidates. */
 		recentMs: 2592e5
 	};
+	/** How often, and how far apart, a listing page that shows no listing is read again. */
+	const SETTLE_LOOKS = 4;
+	const SETTLE_WAIT_MS = 3e4;
+	/** How often, and how far apart, a new listing's own page is read right after List. */
+	const NEW_LOOKS = 3;
+	const NEW_WAIT_MS = 5e3;
 	/** Closet pages read for a full closet listing (48 listings each). */
 	const CLOSET_PAGES = 50;
 	/** Sold-item pages read per sale check (48 each, the newest sales among them). */
 	const SOLD_PAGES = 5;
 	function createPoshmarkScripts(options) {
 		const { site } = options;
+		const settleWaitMs = options.settleWaitMs ?? SETTLE_WAIT_MS;
 		const skuOf = (listing) => listing.externalSku ?? listing.listingId;
 		const notListed = () => ({
 			type: "rejected",
 			code: "not_listed",
 			message: "This listing is not on Poshmark yet."
+		});
+		const hiddenListing = () => ({
+			type: "rejected",
+			code: "hidden",
+			message: "Poshmark is hiding this listing, as it does with a listing it removed under its rules.",
+			fixHint: "Check the listing in Poshmark."
 		});
 		/**
 		* The id of the seller's listing with this private SKU, or `null`. Poshmark can't search by
@@ -9275,6 +9357,39 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			};
 			return applied(step, result.path);
 		}
+		/**
+		* The listing as its page shows it, read again a few times while the page shows no listing
+		* without saying it is gone: right after a change, Poshmark's page showed none for about two
+		* minutes (read on the seller's own listing, 2026-10-27).
+		*/
+		async function settledListing(step, id) {
+			for (let look = 1;; look += 1) {
+				const shown = await step("open the listing", { mutates: false }, (page) => openListingPage(page, site, id));
+				if (shown.type === "listing" || shown.type === "deleted" || look === SETTLE_LOOKS) return shown;
+				await new Promise((resolve) => setTimeout(resolve, settleWaitMs));
+			}
+		}
+		/**
+		* A listing just listed, as its own page shows it, read again for a moment while the page
+		* shows none yet; `null` when it never shows the listing. A listing Poshmark hides is there
+		* all the same (its page names it), so its id is known; the operation's check reads it again.
+		*/
+		async function newListing(step, id) {
+			for (let look = 1; look <= NEW_LOOKS; look += 1) {
+				const shown = await step("read the new listing", { mutates: false }, (page) => openListingPage(page, site, id));
+				if (shown.type === "listing") return {
+					type: "applied",
+					externalListingId: id,
+					revision: revision(shown.record, "listing page")
+				};
+				if (shown.type === "hidden") return {
+					type: "applied",
+					externalListingId: id
+				};
+				if (look < NEW_LOOKS) await new Promise((resolve) => setTimeout(resolve, NEW_WAIT_MS));
+			}
+			return null;
+		}
 		/** Opens the listing's edit form; `false` when the listing is not there to edit. */
 		async function openEditor(step, id) {
 			return step("open the edit form", { mutates: false }, (page) => openForm(page, site.editListing(id)));
@@ -9283,7 +9398,9 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		async function changeAvailability(op, step, availability) {
 			const id = op.listing.externalListingId;
 			if (id === null) return notListed();
-			const shown = await step("open the listing", { mutates: false }, (page) => readListing(page, site, id));
+			const page = await settledListing(step, id);
+			if (page.type === "hidden") return hiddenListing();
+			const shown = remoteState(page, site);
 			if (!shown.found) {
 				if (!shown.authoritative) return notListed();
 				return availability === "not_for_sale" ? {
@@ -9322,10 +9439,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				externalListingId: existing
 			};
 			const files = await step("get the photos", { mutates: false }, (_page, signal) => Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))));
-			if (!await step("open the listing form", {
+			const opened = await step("open the listing form", {
 				mutates: false,
 				timeScale: 2
-			}, (page) => openForm(page, site.createListing()))) throw new PageChangedError("Poshmark's listing form isn't there");
+			}, async (page) => await openForm(page, site.createListing()) ? { id: await newListingId(page) } : null);
+			if (opened === null) throw new PageChangedError("Poshmark's listing form isn't there");
 			await step("add the photos", {
 				mutates: false,
 				timeScale: 2
@@ -9338,6 +9456,8 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const result = await save(step, "list");
 			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
 			try {
+				const listed = opened.id === null ? null : await newListing(step, opened.id);
+				if (listed !== null) return listed;
 				const id = await findBySku(step, sku, payload.title, { search: false });
 				if (id !== null) return {
 					...result,

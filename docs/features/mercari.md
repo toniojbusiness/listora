@@ -108,6 +108,10 @@ The mappings are static tables in the repository. Each has a test.
   - descriptions: 1,000 characters, including the SKU line
   - prices: whole dollars, from $1 to $2,000
   - photos: 1 to 12, uploaded in posting order
+- **Prohibited items**: Mercari's prohibited items include "items that are soiled with human
+  materials such as used underwear" (read 2026-10-27), so used underwear (a pre-owned item whose
+  own category is underwear) is refused before anything is sent. New underwear goes to Men or
+  Women > Other, whose form asks no size.
 
 ## Structure
 

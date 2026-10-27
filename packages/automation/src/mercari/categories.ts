@@ -66,10 +66,11 @@ const MAP: Readonly<Record<Department, Readonly<Record<string, MercariCategory>>
     'clothing/outerwear/blazers': clothing('3 lb', 'Men', 'Blazers & sport coats'),
     'clothing/activewear': clothing('1 lb', 'Men', 'Athletic apparel'),
     'clothing/swimwear': clothing('12 oz', 'Men', 'Swimwear'),
-    // Mercari has no men's sleepwear, underwear, or socks category (read 2026-10-27): Other.
-    'clothing/sleep_lounge': clothing('1 lb', 'Men', 'Other'),
-    'clothing/intimates': clothing('8 oz', 'Men', 'Other'),
-    'clothing/intimates/socks': clothing('8 oz', 'Men', 'Other'),
+    // Mercari has no men's sleepwear, underwear, or socks category (read 2026-10-27): Other,
+    // whose form asks no size.
+    'clothing/sleep_lounge': unsized('1 lb', 'Men', 'Other'),
+    'clothing/intimates': unsized('8 oz', 'Men', 'Other'),
+    'clothing/intimates/socks': unsized('8 oz', 'Men', 'Other'),
     'clothing/suits_sets': clothing('3 lb', 'Men', 'Suits'),
     shoes: shoes('3 lb', 'Men', 'Shoes'),
     'shoes/sneakers': shoes('3 lb', 'Men', 'Shoes', 'Athletic'),

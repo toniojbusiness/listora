@@ -19,6 +19,7 @@ import {
   fillBrand,
   fillPrices,
   fillText,
+  newListingId,
   openForm,
   privateSku,
   setAvailability,
@@ -26,7 +27,13 @@ import {
   submit,
   type Availability,
 } from './pages/listing-form.ts';
-import { openListing, readListing } from './pages/listing-page.ts';
+import {
+  openListing,
+  openListingPage,
+  readListing,
+  remoteState,
+  type ListingPage,
+} from './pages/listing-page.ts';
 import { cents, remoteListing, revision, type ListingRecord } from './pages/state.ts';
 import { type PoshmarkListingPayload } from './payload.ts';
 import type { PoshmarkSite } from './site.ts';
@@ -42,6 +49,13 @@ export const SKU_LOOKUP = {
   recentMs: 72 * 3_600_000,
 } as const;
 
+/** How often, and how far apart, a listing page that shows no listing is read again. */
+const SETTLE_LOOKS = 4;
+const SETTLE_WAIT_MS = 30_000;
+/** How often, and how far apart, a new listing's own page is read right after List. */
+const NEW_LOOKS = 3;
+const NEW_WAIT_MS = 5_000;
+
 /** Closet pages read for a full closet listing (48 listings each). */
 const CLOSET_PAGES = 50;
 /** Sold-item pages read per sale check (48 each, the newest sales among them). */
@@ -51,18 +65,33 @@ export interface PoshmarkScriptOptions {
   /** The site the scripts drive: Poshmark, or its stand-in in development and tests. */
   site: PoshmarkSite;
   photos: PhotoSource;
+  /**
+   * How long between looks at a listing page that shows no listing without saying it is gone
+   * (default 30 seconds, as Poshmark takes); tests shorten it.
+   */
+  settleWaitMs?: number;
 }
 
 export function createPoshmarkScripts(
   options: PoshmarkScriptOptions,
 ): AutomationScripts<PoshmarkListingPayload> {
   const { site } = options;
+  const settleWaitMs = options.settleWaitMs ?? SETTLE_WAIT_MS;
   const skuOf = (listing: ListingRef): string => listing.externalSku ?? listing.listingId;
 
   const notListed = (): WriteResult => ({
     type: 'rejected',
     code: 'not_listed',
     message: 'This listing is not on Poshmark yet.',
+  });
+  // Poshmark hides a listing it removed under its rules: nothing changes it until Poshmark
+  // shows it again.
+  const hiddenListing = (): WriteResult => ({
+    type: 'rejected',
+    code: 'hidden',
+    message:
+      'Poshmark is hiding this listing, as it does with a listing it removed under its rules.',
+    fixHint: 'Check the listing in Poshmark.',
   });
 
   /**
@@ -194,6 +223,46 @@ export function createPoshmarkScripts(
     return applied(step, result.path);
   }
 
+  /**
+   * The listing as its page shows it, read again a few times while the page shows no listing
+   * without saying it is gone: right after a change, Poshmark's page showed none for about two
+   * minutes (read on the seller's own listing, 2026-10-27).
+   */
+  async function settledListing(step: StepRunner, id: string): Promise<ListingPage> {
+    for (let look = 1; ; look += 1) {
+      const shown = await step('open the listing', { mutates: false }, (page) =>
+        openListingPage(page, site, id),
+      );
+      if (shown.type === 'listing' || shown.type === 'deleted' || look === SETTLE_LOOKS) {
+        return shown;
+      }
+      await new Promise((resolve) => setTimeout(resolve, settleWaitMs));
+    }
+  }
+
+  /**
+   * A listing just listed, as its own page shows it, read again for a moment while the page
+   * shows none yet; `null` when it never shows the listing. A listing Poshmark hides is there
+   * all the same (its page names it), so its id is known; the operation's check reads it again.
+   */
+  async function newListing(step: StepRunner, id: string): Promise<WriteResult | null> {
+    for (let look = 1; look <= NEW_LOOKS; look += 1) {
+      const shown = await step('read the new listing', { mutates: false }, (page) =>
+        openListingPage(page, site, id),
+      );
+      if (shown.type === 'listing') {
+        return {
+          type: 'applied',
+          externalListingId: id,
+          revision: revision(shown.record, 'listing page'),
+        };
+      }
+      if (shown.type === 'hidden') return { type: 'applied', externalListingId: id };
+      if (look < NEW_LOOKS) await new Promise((resolve) => setTimeout(resolve, NEW_WAIT_MS));
+    }
+    return null;
+  }
+
   /** Opens the listing's edit form; `false` when the listing is not there to edit. */
   async function openEditor(step: StepRunner, id: string): Promise<boolean> {
     return step('open the edit form', { mutates: false }, (page) =>
@@ -209,9 +278,9 @@ export function createPoshmarkScripts(
   ): Promise<WriteResult> {
     const id = op.listing.externalListingId;
     if (id === null) return notListed();
-    const shown = await step('open the listing', { mutates: false }, (page) =>
-      readListing(page, site, id),
-    );
+    const page = await settledListing(step, id);
+    if (page.type === 'hidden') return hiddenListing();
+    const shown = remoteState(page, site);
     if (!shown.found) {
       if (!shown.authoritative) return notListed();
       // A listing Poshmark says is gone is ended already (the read-back confirms it), and
@@ -256,11 +325,14 @@ export function createPoshmarkScripts(
       Promise.all(payload.photos.map((photo) => options.photos.fetch(photo.url, signal))),
     );
     // Poshmark's listing editor is a heavy page: it gets more time than a step's default.
-    const opened = await step('open the listing form', { mutates: false, timeScale: 2 }, (page) =>
-      openForm(page, site.createListing()),
+    const opened = await step(
+      'open the listing form',
+      { mutates: false, timeScale: 2 },
+      async (page) =>
+        (await openForm(page, site.createListing())) ? { id: await newListingId(page) } : null,
     );
     // Poshmark sends a seller to the form, never to a 404, so a missing one is a changed page.
-    if (!opened) throw new PageChangedError("Poshmark's listing form isn't there");
+    if (opened === null) throw new PageChangedError("Poshmark's listing form isn't there");
     await step('add the photos', { mutates: false, timeScale: 2 }, (page) =>
       addPhotos(page, files),
     );
@@ -271,9 +343,12 @@ export function createPoshmarkScripts(
     });
     const result = await save(step, 'list');
     if (result.type !== 'applied' || result.externalListingId !== undefined) return result;
-    // After List, Poshmark shows the closet: the new listing is found by its SKU in the same
-    // run, so it shows as listed at once. Not finding it yet leaves it to the operation's check.
+    // After List, Poshmark shows the closet, which doesn't name the new listing: its own page,
+    // by the id its form named, confirms it at once. Without that, it is looked for by its SKU
+    // in the same run. Not finding it yet leaves it to the operation's check.
     try {
+      const listed = opened.id === null ? null : await newListing(step, opened.id);
+      if (listed !== null) return listed;
       const id = await findBySku(step, sku, payload.title, { search: false });
       if (id !== null) return { ...result, externalListingId: id };
     } catch {
