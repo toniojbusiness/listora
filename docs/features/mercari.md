@@ -118,9 +118,10 @@ The mappings are tables in the repository, checked against the catalog by their 
     (dresses, skirts, blouses, heels, handbags, ...).
   - Kids' items: Mercari's Kids tree files them by girls or boys and by age (`0-24 mos`,
     `2T-5T`, `(4+)`). The age comes from the size (`3T`, `6M`, anything else is 4 and up). Where
-    the kind tells (a dress, swim trunks), Listora picks; otherwise validation asks the user to
-    choose, naming both (`Kids > Girls tops & t-shirts > Girls (4+)` or the boys' one), and the
-    List flow suggests nothing.
+    the kind tells (a dress, swim trunks), Listora picks; otherwise the review asks girls or boys
+    once, for every marketplace ([marketplace-prefill.md](marketplace-prefill.md)), and a listing
+    that names neither is refused by validation, naming both (`Kids > Girls tops & t-shirts >
+Girls (4+)` or the boys' one).
   - Home and other items: `Home > ...` and `Other > Other`, whatever the department.
   - A listing can name any category itself in `variant.categoryRef`: Mercari's names joined
     with `>`. Validation refuses one the catalog doesn't have. The List flow's picker offers
@@ -152,7 +153,9 @@ The mappings are tables in the repository, checked against the catalog by their 
     the label names (`34DD` is `34E (DD)`).
 
   UK shoe sizes are not mapped. A category with sizes needs one that maps; validation asks for
-  one otherwise, naming a few of the category's.
+  one otherwise, naming a few of the category's. For a tag size the list doesn't have, a `Size`
+  aspect that is one of the list's own labels is the size: the one the seller (or the AI) picked
+  on the review.
 
 - **Brand**: Mercari needs one. Once the photos are in, Mercari suggests brands as chips under
   the field and may fill one in; a suggestion that is the item's brand is kept. Otherwise the

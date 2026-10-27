@@ -86,7 +86,10 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   Each chosen marketplace's version is reviewed in turn ("Poshmark listing (2 of 2)"), starting
   from the seller's own copy for it from the review screen (`ListingCopyStore`), else the
   accepted analysis's variant for it, else the item's title and description, with the item's
-  list price; eBay's title is counted against its 80 characters. Publish (or "Create Poshmark
+  list price; eBay's title is counted against its 80 characters. Poshmark's, Mercari's, and
+  Depop's category is the one the review's pre-fill settled; while it is a question, its ranked
+  short list shows as one-tap rows, every category behind "More categories"
+  ([marketplace-prefill.md](marketplace-prefill.md#listing-with-it)). Publish (or "Create Poshmark
   task") creates the draft listing (`createListing`, or `replaceListingDraft` for a draft a
   refused publish left) and publishes it (`publishListing`); a refusal (`422`, for example "eBay
   needs at least one photo.") stays on the review with the message.

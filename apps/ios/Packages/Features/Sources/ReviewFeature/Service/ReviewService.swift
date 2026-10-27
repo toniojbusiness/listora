@@ -4,6 +4,9 @@ import ListoraAPI
 
 typealias ItemReplace = Components.Schemas.ItemReplace
 typealias Usage = Components.Schemas.Usage
+typealias MarketplacePrefill = Components.Schemas.ItemMarketplacePrefill
+typealias PrefillDetails = Components.Schemas.PrefillDetails
+typealias PrefillAnswer = Components.Schemas.PrefillAnswer
 
 /// The API calls of review and pricing, returning the contract's types and throwing
 /// ``APIFailure`` for every other answer. A protocol so the view model's tests run against a fake.
@@ -22,6 +25,14 @@ protocol ReviewService: Sendable {
     /// not parse. A proposal only: it changes nothing on the item.
     func interpretVoiceCorrection(itemID: String, transcript: String, idempotencyKey: String)
         async throws(APIFailure) -> VoiceCorrection
+    /// What each marketplace's sell form will get for the item, with the review's questions,
+    /// worked out from `details` (the review's unsaved edits over the saved item).
+    func marketplacePrefill(itemID: String, details: PrefillDetails) async throws(APIFailure) -> MarketplacePrefill
+    /// Records the seller's tap on one of the pre-fill's questions; answers the pre-fill again.
+    func answerPrefill(itemID: String, answer: PrefillAnswer) async throws(APIFailure) -> MarketplacePrefill
+    /// Every category of a marketplace, for a seller who wants one the short list doesn't have.
+    func marketplaceCategories(itemID: String, marketplace: String) async throws(APIFailure)
+        -> Components.Schemas.MarketplaceCategories
 }
 
 /// ``ReviewService`` over the generated client.
@@ -141,6 +152,58 @@ struct APIReviewService: ReviewService {
         case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
         case let .tooManyRequests(response): throw APIFailure(statusCode: 429, response: response)
         case let .serviceUnavailable(response): throw APIFailure(statusCode: 503, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func marketplacePrefill(itemID: String, details: PrefillDetails) async throws(APIFailure) -> MarketplacePrefill {
+        let query = Operations.GetItemMarketplacePrefill.Input.Query(
+            category: details.category,
+            department: details.department,
+            sizeLabel: details.sizeLabel,
+            sizeSystem: details.sizeSystem,
+            brand: details.brand,
+            condition: details.condition,
+            colors: details.colors,
+            materials: details.materials,
+        )
+        switch try await call({ try await client.getItemMarketplacePrefill(path: .init(itemId: itemID), query: query)
+        }) {
+        case let .ok(response): return try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func answerPrefill(itemID: String, answer: PrefillAnswer) async throws(APIFailure) -> MarketplacePrefill {
+        let output = try await call {
+            try await client.answerItemMarketplacePrefill(path: .init(itemId: itemID), body: .json(answer))
+        }
+        switch output {
+        case let .ok(response): return try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .unprocessableContent(response): throw APIFailure(statusCode: 422, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func marketplaceCategories(itemID: String, marketplace: String) async throws(APIFailure)
+        -> Components.Schemas.MarketplaceCategories
+    {
+        guard let known = Components.Schemas.KnownMarketplace(rawValue: marketplace) else {
+            throw APIFailure(
+                statusCode: 404,
+                code: "not_found",
+                message: "Listora has no categories for it.",
+                retryable: false,
+            )
+        }
+        let output = try await call {
+            try await client.getItemMarketplaceCategories(path: .init(itemId: itemID, marketplace: known))
+        }
+        switch output {
+        case let .ok(response): return try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
         }
     }

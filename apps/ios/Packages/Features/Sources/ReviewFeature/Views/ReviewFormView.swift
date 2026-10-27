@@ -20,6 +20,15 @@ struct ReviewFormView: View {
                         identifyHarder
                         ForEach(form.sections, id: \.section) { entry in
                             section(entry.section, keys: entry.keys, form: form)
+                            // A marketplace's question is one to check too: right after them.
+                            if entry.section == .attention, model.marketplaceQuestions > 0 {
+                                MarketplacePrefillSection(model: model)
+                            }
+                        }
+                        if !form.sections.contains(where: { $0.section == .attention }) || model
+                            .marketplaceQuestions == 0
+                        {
+                            MarketplacePrefillSection(model: model)
                         }
                         copySection
                     }
@@ -193,6 +202,22 @@ struct ReviewFormView: View {
         }
         // One row that stops growing at the first accessibility size, so Continue stays on screen.
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        continueHint(missing: missing)
+        Button("Continue to cost") {
+            Task { await model.continueToCost() }
+        }
+        .buttonStyle(.listoraPrimary)
+        .loading(model.isWorking)
+        .disabled(
+            !missing.isEmpty || model.marketplaceQuestions > 0 || model.escalation == .running
+                || voice.isListening || voice.phase == .interpreting,
+        )
+        .accessibilityIdentifier("review.continue")
+    }
+
+    /// Why Continue waits: a detail every marketplace needs, or a marketplace's question.
+    @ViewBuilder
+    private func continueHint(missing: [ReviewFieldKey]) -> some View {
         if !missing.isEmpty {
             Label(
                 "Add \(missing.map(\.inlineTitle).formatted(.list(type: .and))) to continue.",
@@ -202,14 +227,18 @@ struct ReviewFormView: View {
             .foregroundStyle(Palette.warning)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("review.missing")
+        } else if model.marketplaceQuestions > 0 {
+            Label(
+                model.marketplaceQuestions == 1
+                    ? "Pick the marketplace detail above to continue."
+                    : "Pick the \(model.marketplaceQuestions) marketplace details above to continue.",
+                systemImage: "exclamationmark.triangle.fill",
+            )
+            .font(Typography.smallEmphasis)
+            .foregroundStyle(Palette.warning)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("review.prefillQuestions")
         }
-        Button("Continue to cost") {
-            Task { await model.continueToCost() }
-        }
-        .buttonStyle(.listoraPrimary)
-        .loading(model.isWorking)
-        .disabled(!missing.isEmpty || model.escalation == .running || voice.isListening || voice.phase == .interpreting)
-        .accessibilityIdentifier("review.continue")
     }
 }
 

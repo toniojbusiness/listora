@@ -190,7 +190,8 @@ The mappings are tables in the repository, checked against the taxonomy by `mapp
   - Bras keep their band and cup (`34B`).
 
   A product type with a size list needs a size that maps; validation names a few of the sizes it
-  offers otherwise.
+  offers otherwise. For a tag size the list doesn't have, a `Size` aspect that is one of the list's
+  own labels is the size: the one the seller (or the AI) picked on the review ([marketplace-prefill.md](marketplace-prefill.md)).
 
 - **Colours and material** (`attributes.ts`): the item's colours (up to 2) and, where the product
   type offers one, its materials (up to 4), as Depop's own values (`gray` is Grey, `beige` Tan,

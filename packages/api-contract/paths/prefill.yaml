@@ -1,0 +1,103 @@
+/v1/items/{itemId}/marketplace-prefill:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  get:
+    tags: [prefill]
+    operationId: getItemMarketplacePrefill
+    summary: What each marketplace's sell form will get for the item
+    description: |
+      For Depop, Poshmark, and Mercari: the marketplace's own category, size, condition,
+      brand, colours, and material as Listora will fill their real forms, worked out from the
+      item analysis and each marketplace's own category tree and form data
+      (docs/features/marketplace-prefill.md). An in-between item gets the marketplace's
+      default (a unisex tee goes under Men on Depop), which the seller can change. When
+      Listora's mapping can't tell, the cheap AI picks from a ranked short list; when it is
+      not sure either, the field is a question (`needsAnswer`) with that short list, for the
+      review to ask before the seller lists. The AI is asked at most once per question
+      (metered, counted in the daily AI budget, no plan quota); when AI is off or over its
+      budget, the questions are simply asked. The detail parameters (`PrefillDetails`) carry
+      the review's unsaved edits.
+    parameters:
+      - name: category
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      - name: department
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: sizeLabel
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: sizeSystem
+        in: query
+        schema:
+          type: string
+          maxLength: 16
+      - name: brand
+        in: query
+        schema:
+          type: string
+          maxLength: 120
+      - name: condition
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: colors
+        in: query
+        schema:
+          type: string
+          maxLength: 300
+      - name: materials
+        in: query
+        schema:
+          type: string
+          maxLength: 300
+    responses:
+      '200':
+        description: The item's pre-fill on each marketplace.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/prefill.yaml#/ItemMarketplacePrefill'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'
+/v1/items/{itemId}/marketplace-prefill/answers:
+  parameters:
+    - $ref: '../components/parameters.yaml#/ItemId'
+  put:
+    tags: [prefill]
+    operationId: answerItemMarketplacePrefill
+    summary: Answer one of the pre-fill's questions
+    description: |
+      Records the seller's tap (or clears it) for the item's details as `details` has them,
+      and answers the pre-fill worked out again. An answer holds while the item's category,
+      department, and size stay as they were; after a change, the question is asked again.
+      A listing created later names the answer (`createListing`). `422` for a value the
+      marketplace doesn't offer.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../components/schemas/prefill.yaml#/PrefillAnswer'
+    responses:
+      '200':
+        description: The item's pre-fill with the answer.
+        content:
+          application/json:
+            schema:
+              $ref: '../components/schemas/prefill.yaml#/ItemMarketplacePrefill'
+      '404':
+        $ref: '../components/responses.yaml#/NotFound'
+      '422':
+        $ref: '../components/responses.yaml#/ValidationFailed'
+      default:
+        $ref: '../components/responses.yaml#/DefaultError'

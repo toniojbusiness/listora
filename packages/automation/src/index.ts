@@ -198,3 +198,22 @@ export {
   type CategoryChoice,
   type MarketplaceCategories,
 } from './categories.ts';
+export { prefillItem } from './prefill/prefill.ts';
+export {
+  isPrefillMarketplace,
+  PREFILL_MARKETPLACES,
+  prefillKey,
+  type ItemPrefill,
+  type MarketplacePrefill,
+  type PrefillDecision,
+  type PrefillField,
+  type PrefillFieldKey,
+  type PrefillInput,
+  type PrefillItem,
+  type PrefillListing,
+  type PrefillMarketplace,
+  type PrefillOption,
+  type PrefillPick,
+  type PrefillSource,
+} from './prefill/types.ts';
+export { AI_PICK_CONFIDENCE } from './prefill/choose.ts';

@@ -28,7 +28,11 @@ import {
 const item = sampleListingContent().item;
 
 function payload(overrides: Parameters<typeof sampleListingContent>[0] = {}) {
-  const content = sampleListingContent(overrides);
+  // Without the sample's `Size` aspect, which would name the size itself (the review's pick).
+  const content = sampleListingContent({
+    ...overrides,
+    variant: { aspects: [], ...overrides.variant },
+  });
   return buildDepopAutomationPayload(content.item, content.variant);
 }
 
@@ -361,6 +365,17 @@ describe('Depop automation payload', () => {
     expect(depopPriceField(4500)).toBe('45.00');
     expect(depopPriceField(3999)).toBe('39.99');
     expect(depopPriceField(105)).toBe('1.05');
+  });
+
+  it("takes a Size aspect that is one of the product type's labels for a tag size it doesn't have", () => {
+    const sized = (tag: string, value: string) =>
+      payload({
+        item: { sizeLabel: tag },
+        variant: { aspects: [{ name: 'Size', values: [value] }] },
+      }).size;
+    expect(sized('UK 14', 'XXL')).toBe('XXL');
+    expect(sized('M', 'XXL')).toBe('M');
+    expect(sized('UK 14', 'Huge')).toBeNull();
   });
 
   it("refuses what Depop's form refuses", () => {

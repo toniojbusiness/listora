@@ -108,6 +108,15 @@ final class ReviewFlowModel {
     var showsCost = false
     var showsPrice = false
     var showsSaved = false
+    /// What each marketplace's sell form will get for the item, with the review's questions
+    /// (docs/features/marketplace-prefill.md); nil until the server answered.
+    var prefill: MarketplacePrefill?
+    /// The details `prefill` was worked out from.
+    var prefillDetails: PrefillDetails?
+    /// A tap on one of the pre-fill's questions is being sent.
+    var isAnsweringPrefill = false
+    /// The pre-fill read that follows the seller's latest edit.
+    var prefillRefresh: Task<Void, Never>?
     private var pipeline: Task<Void, Never>?
     private var hasAppeared = false
 
@@ -308,6 +317,7 @@ final class ReviewFlowModel {
         }
         phase = .reviewing
         usage = try? await service.usage()
+        await refreshPrefill()
         if analysis.tier == .fast, let premiumID = analysis.escalationAnalysisId {
             // The server started the premium identification on its own (AI_AUTO_ESCALATE).
             followEscalation(premiumID)

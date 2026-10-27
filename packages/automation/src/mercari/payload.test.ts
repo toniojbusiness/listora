@@ -15,7 +15,11 @@ import {
 import { itemIdFromPath, MERCARI_PATHS } from './site.ts';
 
 function payload(overrides: Parameters<typeof sampleListingContent>[0] = {}) {
-  const content = sampleListingContent(overrides);
+  // Without the sample's `Size` aspect, which would name the size itself (the review's pick).
+  const content = sampleListingContent({
+    ...overrides,
+    variant: { aspects: [], ...overrides.variant },
+  });
   return buildMercariPayload(content.item, content.variant);
 }
 
@@ -27,6 +31,18 @@ describe('Mercari conditions', () => {
 });
 
 describe('Mercari payload', () => {
+  it("takes a Size aspect that is one of the category's labels for a tag size it doesn't have", () => {
+    const sized = (tag: string, value: string) =>
+      payload({
+        item: { sizeLabel: tag },
+        variant: { aspects: [{ name: 'Size', values: [value] }] },
+      }).size;
+    expect(sized('UK 14', 'XXL (50-52)')).toBe('XXL (50-52)');
+    // A tag size the list has wins, and an aspect that isn't a label is nothing.
+    expect(sized('M', 'XXL (50-52)')).toBe('M (38-40)');
+    expect(sized('UK 14', 'Huge')).toBeNull();
+  });
+
   it('builds the form fields purely from the listing content', () => {
     expect(payload()).toMatchObject({
       category: ['Men', 'Coats & jackets'],

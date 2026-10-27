@@ -3711,6 +3711,428 @@ extension Components {
             case purchaseSource = "purchaseSource"
             case listPrice = "listPrice"
         }
+        /// A `KnownPrefillFieldKey`, or a field added after this client was built. Clients show a
+        /// field they do not know by its `label` and `value`, and never ask it.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PrefillFieldKey`.
+        public struct PrefillFieldKey: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PrefillFieldKey/value1`.
+            public var value1: Components.Schemas.KnownPrefillFieldKey?
+            /// - Remark: Generated from `#/components/schemas/PrefillFieldKey/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `PrefillFieldKey`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownPrefillFieldKey? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `kids_gender` (girls or boys, for a kids' item), `category` and `size` (the
+        /// marketplace's own), and the details the form shows as Listora fills them: `condition`,
+        /// `brand`, `colors`, `material`.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownPrefillFieldKey`.
+        @frozen public enum KnownPrefillFieldKey: String, Codable, Hashable, Sendable, CaseIterable {
+            case kidsGender = "kids_gender"
+            case category = "category"
+            case size = "size"
+            case condition = "condition"
+            case brand = "brand"
+            case colors = "colors"
+            case material = "material"
+        }
+        /// A `KnownPrefillSource`, or a source added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PrefillSource`.
+        public struct PrefillSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PrefillSource/value1`.
+            public var value1: Components.Schemas.KnownPrefillSource?
+            /// - Remark: Generated from `#/components/schemas/PrefillSource/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `PrefillSource`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownPrefillSource? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Where a value comes from: `listora` (Listora's mapping onto the marketplace's own
+        /// category tree and form), `default` (the marketplace's convention for an in-between item,
+        /// such as Men for a unisex tee on Depop; the seller can change it), `ai` (the AI picked it
+        /// from the ranked list and was sure), or `you` (the seller's tap).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownPrefillSource`.
+        @frozen public enum KnownPrefillSource: String, Codable, Hashable, Sendable, CaseIterable {
+            case listora = "listora"
+            case _default = "default"
+            case ai = "ai"
+            case you = "you"
+        }
+        /// - Remark: Generated from `#/components/schemas/PrefillOption`.
+        public struct PrefillOption: Codable, Hashable, Sendable {
+            /// What an answer sends (a category's `variant.categoryRef`, a size's label, `girls`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/PrefillOption/value`.
+            public var value: Swift.String
+            /// What tells this option apart from the others on its list (`Men`, `Women`).
+            ///
+            /// - Remark: Generated from `#/components/schemas/PrefillOption/label`.
+            public var label: Swift.String
+            /// A category's names, top level first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PrefillOption/path`.
+            public var path: [Swift.String]?
+            /// Creates a new `PrefillOption`.
+            ///
+            /// - Parameters:
+            ///   - value: What an answer sends (a category's `variant.categoryRef`, a size's label, `girls`).
+            ///   - label: What tells this option apart from the others on its list (`Men`, `Women`).
+            ///   - path: A category's names, top level first.
+            public init(
+                value: Swift.String,
+                label: Swift.String,
+                path: [Swift.String]? = nil
+            ) {
+                self.value = value
+                self.label = label
+                self.path = path
+            }
+            public enum CodingKeys: String, CodingKey {
+                case value
+                case label
+                case path
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PrefillField`.
+        public struct PrefillField: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PrefillField/key`.
+            public var key: Components.Schemas.PrefillFieldKey
+            /// The field as the form names it ("Category", "Size", "Girls or boys").
+            ///
+            /// - Remark: Generated from `#/components/schemas/PrefillField/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PrefillField/value`.
+            public var value: Components.Schemas.PrefillOption?
+            /// The ranked short list, the value first (the AI's best guess first for a question);
+            /// empty when there is nothing to choose between.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PrefillField/options`.
+            public var options: [Components.Schemas.PrefillOption]
+            /// Every value the form offers, when the list is short enough to show whole (sizes).
+            ///
+            /// - Remark: Generated from `#/components/schemas/PrefillField/choices`.
+            public var choices: [Components.Schemas.PrefillOption]?
+            /// - Remark: Generated from `#/components/schemas/PrefillField/source`.
+            public var source: Components.Schemas.PrefillSource?
+            /// A question: Listora isn't sure, so the seller taps one of `options` (or another of
+            /// `choices`, or of the marketplace's categories) before listing there.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PrefillField/needsAnswer`.
+            public var needsAnswer: Swift.Bool
+            /// Why the value is what it is, when that is not obvious.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PrefillField/note`.
+            public var note: Swift.String?
+            /// Creates a new `PrefillField`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - label: The field as the form names it ("Category", "Size", "Girls or boys").
+            ///   - value:
+            ///   - options: The ranked short list, the value first (the AI's best guess first for a question);
+            ///   - choices: Every value the form offers, when the list is short enough to show whole (sizes).
+            ///   - source:
+            ///   - needsAnswer: A question: Listora isn't sure, so the seller taps one of `options` (or another of
+            ///   - note: Why the value is what it is, when that is not obvious.
+            public init(
+                key: Components.Schemas.PrefillFieldKey,
+                label: Swift.String,
+                value: Components.Schemas.PrefillOption? = nil,
+                options: [Components.Schemas.PrefillOption],
+                choices: [Components.Schemas.PrefillOption]? = nil,
+                source: Components.Schemas.PrefillSource? = nil,
+                needsAnswer: Swift.Bool,
+                note: Swift.String? = nil
+            ) {
+                self.key = key
+                self.label = label
+                self.value = value
+                self.options = options
+                self.choices = choices
+                self.source = source
+                self.needsAnswer = needsAnswer
+                self.note = note
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case label
+                case value
+                case options
+                case choices
+                case source
+                case needsAnswer
+                case note
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MarketplacePrefill`.
+        public struct MarketplacePrefill: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MarketplacePrefill/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// Whether Listora lists there itself (an API connection or a linked session).
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplacePrefill/connected`.
+            public var connected: Swift.Bool
+            /// Whether every field the form requires has a value, so a listing can go as it is.
+            ///
+            /// - Remark: Generated from `#/components/schemas/MarketplacePrefill/ready`.
+            public var ready: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/MarketplacePrefill/fields`.
+            public var fields: [Components.Schemas.PrefillField]
+            /// Creates a new `MarketplacePrefill`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - connected: Whether Listora lists there itself (an API connection or a linked session).
+            ///   - ready: Whether every field the form requires has a value, so a listing can go as it is.
+            ///   - fields:
+            public init(
+                marketplace: Components.Schemas.Marketplace,
+                connected: Swift.Bool,
+                ready: Swift.Bool,
+                fields: [Components.Schemas.PrefillField]
+            ) {
+                self.marketplace = marketplace
+                self.connected = connected
+                self.ready = ready
+                self.fields = fields
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case connected
+                case ready
+                case fields
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ItemMarketplacePrefill`.
+        public struct ItemMarketplacePrefill: Codable, Hashable, Sendable {
+            /// Questions about the item that every marketplace follows (girls or boys).
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemMarketplacePrefill/itemFields`.
+            public var itemFields: [Components.Schemas.PrefillField]
+            /// - Remark: Generated from `#/components/schemas/ItemMarketplacePrefill/marketplaces`.
+            public var marketplaces: [Components.Schemas.MarketplacePrefill]
+            /// How many fields still need the seller's tap for the marketplaces Listora lists on
+            /// itself (`connected`).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemMarketplacePrefill/questions`.
+            public var questions: Swift.Int
+            /// Creates a new `ItemMarketplacePrefill`.
+            ///
+            /// - Parameters:
+            ///   - itemFields: Questions about the item that every marketplace follows (girls or boys).
+            ///   - marketplaces:
+            ///   - questions: How many fields still need the seller's tap for the marketplaces Listora lists on
+            public init(
+                itemFields: [Components.Schemas.PrefillField],
+                marketplaces: [Components.Schemas.MarketplacePrefill],
+                questions: Swift.Int
+            ) {
+                self.itemFields = itemFields
+                self.marketplaces = marketplaces
+                self.questions = questions
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemFields
+                case marketplaces
+                case questions
+            }
+        }
+        /// The review's unsaved details the pre-fill is worked out from. Each property replaces the
+        /// item's saved value; one left out keeps the saved value, and an empty string means none.
+        /// `colors` and `materials` are canonical ids separated by commas.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/PrefillDetails`.
+        public struct PrefillDetails: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PrefillDetails/category`.
+            public var category: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PrefillDetails/department`.
+            public var department: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PrefillDetails/sizeLabel`.
+            public var sizeLabel: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PrefillDetails/sizeSystem`.
+            public var sizeSystem: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PrefillDetails/brand`.
+            public var brand: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PrefillDetails/condition`.
+            public var condition: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PrefillDetails/colors`.
+            public var colors: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PrefillDetails/materials`.
+            public var materials: Swift.String?
+            /// Creates a new `PrefillDetails`.
+            ///
+            /// - Parameters:
+            ///   - category:
+            ///   - department:
+            ///   - sizeLabel:
+            ///   - sizeSystem:
+            ///   - brand:
+            ///   - condition:
+            ///   - colors:
+            ///   - materials:
+            public init(
+                category: Swift.String? = nil,
+                department: Swift.String? = nil,
+                sizeLabel: Swift.String? = nil,
+                sizeSystem: Swift.String? = nil,
+                brand: Swift.String? = nil,
+                condition: Swift.String? = nil,
+                colors: Swift.String? = nil,
+                materials: Swift.String? = nil
+            ) {
+                self.category = category
+                self.department = department
+                self.sizeLabel = sizeLabel
+                self.sizeSystem = sizeSystem
+                self.brand = brand
+                self.condition = condition
+                self.colors = colors
+                self.materials = materials
+            }
+            public enum CodingKeys: String, CodingKey {
+                case category
+                case department
+                case sizeLabel
+                case sizeSystem
+                case brand
+                case condition
+                case colors
+                case materials
+            }
+        }
+        /// The fields a seller answers.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PrefillAnswerField`.
+        @frozen public enum PrefillAnswerField: String, Codable, Hashable, Sendable, CaseIterable {
+            case kidsGender = "kids_gender"
+            case category = "category"
+            case size = "size"
+        }
+        /// - Remark: Generated from `#/components/schemas/PrefillAnswer`.
+        public struct PrefillAnswer: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PrefillAnswer/marketplace`.
+            public var marketplace: Components.Schemas.KnownMarketplace?
+            /// - Remark: Generated from `#/components/schemas/PrefillAnswer/field`.
+            public var field: Components.Schemas.PrefillAnswerField
+            /// The chosen option's `value`; left out, it clears the answer. A `category` takes any
+            /// category of the marketplace's (`variant.categoryRef`), a `size` one of the category's
+            /// sizes, `kids_gender` `girls` or `boys`.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PrefillAnswer/value`.
+            public var value: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PrefillAnswer/details`.
+            public var details: Components.Schemas.PrefillDetails
+            /// Creates a new `PrefillAnswer`.
+            ///
+            /// - Parameters:
+            ///   - marketplace:
+            ///   - field:
+            ///   - value: The chosen option's `value`; left out, it clears the answer. A `category` takes any
+            ///   - details:
+            public init(
+                marketplace: Components.Schemas.KnownMarketplace? = nil,
+                field: Components.Schemas.PrefillAnswerField,
+                value: Swift.String? = nil,
+                details: Components.Schemas.PrefillDetails
+            ) {
+                self.marketplace = marketplace
+                self.field = field
+                self.value = value
+                self.details = details
+            }
+            public enum CodingKeys: String, CodingKey {
+                case marketplace
+                case field
+                case value
+                case details
+            }
+        }
         /// A `KnownListingStatus`, or a status added after this client was built. Clients show
         /// the listing's `statusDisplay` for an unknown status and never treat it as success.
         ///
@@ -3901,7 +4323,9 @@ extension Components {
             public var description: Swift.String
             /// - Remark: Generated from `#/components/schemas/ListingVariant/price`.
             public var price: Components.Schemas.Money
-            /// The marketplace's category id.
+            /// The marketplace's category: an eBay category id, or a Poshmark, Mercari, or Depop
+            /// category by its names (`MarketplaceCategory.ref`).
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/ListingVariant/categoryRef`.
             public var categoryRef: Swift.String?
@@ -3917,7 +4341,7 @@ extension Components {
             ///   - title: Marketplace limits (for example 80 characters on eBay) are checked at publish.
             ///   - description:
             ///   - price:
-            ///   - categoryRef: The marketplace's category id.
+            ///   - categoryRef: The marketplace's category: an eBay category id, or a Poshmark, Mercari, or Depop
             ///   - condition:
             ///   - aspects:
             ///   - hashtags:
