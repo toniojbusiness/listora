@@ -423,8 +423,7 @@ export function listingFormPage(view: ListingFormView): string {
   const shippingLabel =
     shipping === null
       ? 'Set up how you ship in your selling hub'
-      : (FAKE_DEPOP_SHIPPING[shipping as keyof typeof FAKE_DEPOP_SHIPPING] as string | undefined) ??
-        shipping;
+      : (labelOf(FAKE_DEPOP_SHIPPING, shipping) ?? shipping);
   const action = create ? '/products/create/' : `/products/edit/${escape(product.slug)}/`;
   const form = `<form method="post" action="${action}" enctype="multipart/form-data" novalidate>
 <section><h2>Photos</h2><div id="photos"></div><div id="item-info"></div></section>
@@ -753,11 +752,12 @@ function dollars(cents: number): string {
 }
 
 function conditionLabel(condition: string): string {
-  return (
-    (DEPOP_CONDITION_LABELS[condition as keyof typeof DEPOP_CONDITION_LABELS] as
-      | string
-      | undefined) ?? condition
-  );
+  return labelOf(DEPOP_CONDITION_LABELS, condition) ?? condition;
+}
+
+/** The label a table of choices has for `value`, if it has one. */
+function labelOf(labels: Readonly<Record<string, string>>, value: string): string | undefined {
+  return labels[value];
 }
 
 function firstLine(text: string): string {

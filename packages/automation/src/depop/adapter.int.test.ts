@@ -1,8 +1,9 @@
 /**
  * The Depop automation adapter's own flows on the fake Depop site, in a real headless Chromium
  * (the shared conformance suite is in adapter.conformance.int.test.ts): every field of the sell
- * form, photos in posting order, the SKU line and hashtags, delete and relist as a new listing,
- * sold listings, the seller's listings for imports, sold items for sale checks, and the stops: a
+ * form, photos in posting order, the SKU line and hashtags, a new listing found in the seller's
+ * shop by its SKU, delete and relist as a new listing, sold listings, a product Depop deleted for
+ * good (410 Gone), the seller's listings for imports, sold items for sale checks, and the stops: a
  * bot-check page, a CAPTCHA, a login code, a logged-out session, and a redesigned page. No
  * traffic goes to Depop.
  */

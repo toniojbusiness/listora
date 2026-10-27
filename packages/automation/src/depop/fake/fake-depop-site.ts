@@ -685,10 +685,7 @@ export class FakeDepopSite {
   #forSale(seller: string): FakeDepopProduct[] {
     return [...this.#products.values()]
       .filter((stored) => stored.current.seller === seller && onSale(stored))
-      .sort(
-        (a, b) =>
-          b.current.listedAt.getTime() - a.current.listedAt.getTime() || b.id - a.id,
-      )
+      .sort((a, b) => b.current.listedAt.getTime() - a.current.listedAt.getTime() || b.id - a.id)
       .map((stored) => copy(stored.current));
   }
 
