@@ -307,6 +307,20 @@ export interface DeployTarget {
   readonly imageTag: string;
   /** GitHub `owner/name` allowed to deploy through OIDC. */
   readonly githubRepository: string;
+  /**
+   * The immutable ids of `githubRepository`'s owner and of the repository itself. GitHub's OIDC
+   * tokens name the repository by both (`repo:<owner>@<owner id>/<name>@<repository id>:...`,
+   * the repository's immutable subject), so a deleted and re-created owner or repository of the
+   * same name can never deploy. They default to the default repository's ids.
+   */
+  readonly githubOwnerId: string;
+  readonly githubRepositoryId: string;
+  /**
+   * Whether the deploy-access stack creates the account's GitHub OIDC provider (`create`, the
+   * default) or trusts the one that already exists outside it (`existing`): an account can
+   * have only one provider per URL, and another app's provider is used, never changed.
+   */
+  readonly githubOidcProvider: GithubOidcProvider;
   /** Optional address subscribed to the alarm topic. */
   readonly alarmEmail: string | undefined;
   /**
@@ -334,6 +348,9 @@ export interface DeployTarget {
 
 export const OWNER_EMAIL_IDENTITIES = ['create', 'existing'] as const;
 export type OwnerEmailIdentity = (typeof OWNER_EMAIL_IDENTITIES)[number];
+
+export const GITHUB_OIDC_PROVIDERS = ['create', 'existing'] as const;
+export type GithubOidcProvider = (typeof GITHUB_OIDC_PROVIDERS)[number];
 
 /** A domain and its hosted zone, always set together. */
 export interface DnsTarget {
@@ -370,6 +387,9 @@ const SOURCES = {
   hostedZoneId: { context: 'hostedZoneId', env: 'LISTORA_HOSTED_ZONE_ID' },
   imageTag: { context: 'imageTag', env: 'LISTORA_IMAGE_TAG' },
   githubRepository: { context: 'githubRepository', env: 'LISTORA_GITHUB_REPOSITORY' },
+  githubOwnerId: { context: 'githubOwnerId', env: 'LISTORA_GITHUB_OWNER_ID' },
+  githubRepositoryId: { context: 'githubRepositoryId', env: 'LISTORA_GITHUB_REPOSITORY_ID' },
+  githubOidcProvider: { context: 'githubOidcProvider', env: 'LISTORA_GITHUB_OIDC_PROVIDER' },
   alarmEmail: { context: 'alarmEmail', env: 'LISTORA_ALARM_EMAIL' },
   ownerEmail: { context: 'ownerEmail', env: 'LISTORA_OWNER_EMAIL' },
   ownerEmailIdentity: { context: 'ownerEmailIdentity', env: 'LISTORA_OWNER_EMAIL_IDENTITY' },
@@ -380,6 +400,8 @@ const SOURCES = {
 export const DEFAULT_REGION = 'us-east-1';
 /** The repository whose workflows may deploy (a fork overrides it). */
 export const DEFAULT_GITHUB_REPOSITORY = 'toniojbusiness/listora';
+/** The immutable ids of `DEFAULT_GITHUB_REPOSITORY`'s owner and of the repository. */
+export const DEFAULT_GITHUB_IDS = { ownerId: '266634719', repositoryId: '1431894048' } as const;
 
 const ACCOUNT = /^\d{12}$/;
 const REGION = /^[a-z]{2}(-[a-z]+)+-\d$/;
@@ -388,6 +410,7 @@ const HOSTED_ZONE_ID = /^Z[A-Z0-9]{1,31}$/;
 // ECR tag rules (letters, digits, `_`, `.`, `-`; up to 128), minus `latest`, which is mutable.
 const IMAGE_TAG = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
 const GITHUB_REPOSITORY = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
+const GITHUB_ID = /^[1-9]\d{0,19}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Every environment spans two availability zones. */
@@ -470,6 +493,26 @@ export function loadDeployTarget(
   if (!GITHUB_REPOSITORY.test(githubRepository)) {
     issues.push(`${describe(SOURCES.githubRepository)} must be a GitHub owner/name`);
   }
+  // Another repository's ids are not the default's: it names its own.
+  const githubId = (source: Source, fallback: string): string => {
+    const value = read(source);
+    if (value === undefined && githubRepository === DEFAULT_GITHUB_REPOSITORY) return fallback;
+    if (value === undefined) {
+      if (GITHUB_REPOSITORY.test(githubRepository)) {
+        issues.push(`${describe(source)} is required for a repository other than the default`);
+      }
+      return '';
+    }
+    if (!GITHUB_ID.test(value)) issues.push(`${describe(source)} must be a numeric GitHub id`);
+    return value;
+  };
+  const githubOwnerId = githubId(SOURCES.githubOwnerId, DEFAULT_GITHUB_IDS.ownerId);
+  const githubRepositoryId = githubId(SOURCES.githubRepositoryId, DEFAULT_GITHUB_IDS.repositoryId);
+  const providerValue = read(SOURCES.githubOidcProvider);
+  const githubOidcProvider = GITHUB_OIDC_PROVIDERS.find((value) => value === providerValue);
+  if (providerValue !== undefined && githubOidcProvider === undefined) {
+    issues.push(`${describe(SOURCES.githubOidcProvider)} must be create or existing`);
+  }
   const alarmEmail = read(SOURCES.alarmEmail);
   if (alarmEmail !== undefined && !EMAIL.test(alarmEmail)) {
     issues.push(`${describe(SOURCES.alarmEmail)} must be an email address`);
@@ -514,6 +557,9 @@ export function loadDeployTarget(
     dns,
     imageTag,
     githubRepository,
+    githubOwnerId,
+    githubRepositoryId,
+    githubOidcProvider: githubOidcProvider ?? 'create',
     alarmEmail,
     ownerEmail,
     ownerEmailIdentity: ownerEmailIdentity ?? 'create',

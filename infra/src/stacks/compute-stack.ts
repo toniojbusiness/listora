@@ -59,6 +59,11 @@ export interface ComputeStackProps extends ListoraStackProps {
 /** Label under the environment's domain that serves the API. */
 export const API_SUBDOMAIN = 'api';
 
+/** The environment's ECS cluster, which runs every service. */
+export function clusterName(environment: string): string {
+  return `listora-${environment}`;
+}
+
 /** The browser runner's ECS service, in the environment's cluster. */
 export const RUNNER_SERVICE_NAME = 'runner';
 
@@ -135,7 +140,7 @@ export class ComputeStack extends ListoraStack {
     const environment = target.environment;
 
     this.cluster = new ecs.Cluster(this, 'Cluster', {
-      clusterName: `listora-${environment}`,
+      clusterName: clusterName(environment),
       vpc: props.vpc,
       containerInsightsV2: settings.containerInsights
         ? ecs.ContainerInsights.ENABLED
@@ -466,7 +471,7 @@ export class ComputeStack extends ListoraStack {
     return this.formatArn({
       service: 'ecs',
       resource: 'service',
-      resourceName: `listora-${environment}/${RUNNER_SERVICE_NAME}`,
+      resourceName: `${clusterName(environment)}/${RUNNER_SERVICE_NAME}`,
     });
   }
 

@@ -32,19 +32,28 @@ app in `infra/` and documented in [infra/README.md](../../infra/README.md). In s
   and a KMS key for the envelope encryption of marketplace credentials (`TOKEN_KMS_KEY_ID`:
   every task may `GenerateDataKey`; the worker may also `Decrypt` OAuth tokens, and the runner
   browser sessions, each only its own purpose).
-- **Deploys** run only from the manual Deploy workflow, on `main`, inside the protected GitHub
-  environment, with OIDC role assumption (no stored AWS keys). Images are tagged with the
+- **Deploys** run only from GitHub workflows on `main`, inside the protected GitHub
+  environment, with OIDC role assumption (no stored AWS keys): staging and prod from the manual
+  Deploy workflow, personal from Deploy personal (below). Images are tagged with the
   commit and immutable. The environment's protection rules and the CDK bootstrap's
   CloudFormation execution policy bound what a deploy can change (infra/README.md). Every
   bootstrap uses the restricted execution policy in `infra/src/deploy/execution-policy.ts`,
   never `AdministratorAccess`.
-- **Personal deploys** are one command from a Mac, `scripts/deploy-personal.sh --profile
-<profile>` (`--dry-run` checks everything offline and prints each step). It refuses any
+- **Personal deploys** run from GitHub: the Deploy personal workflow runs
+  `scripts/deploy-personal.sh --ci` after every CI run that passes on `main` (and by hand), with
+  a deploy role that trusts only this repository's `main` branch in the protected `personal`
+  GitHub environment and can touch only Listora's own stacks, bootstrap roles, images, and
+  services (infra/README.md, Deploying from GitHub). The same script is one command from a Mac,
+  `scripts/deploy-personal.sh --profile <profile>` (`--dry-run` checks everything offline and
+  prints each step), for the first deploy and as the fallback. It refuses any
   account but the captain's, bootstraps with the restricted policy, runs the workflow's steps
   in the same order, stores the Anthropic key from `~/.config/listora/anthropic.env`, and ends
   with a smoke test (`infra/src/deploy/smoke.ts`: health, that the API refuses requests
   without a token and has no dev sign-in, and with `LISTORA_SMOKE_ID_TOKEN` creating and
-  deleting an item; no AI usage). Personal signs in only with its owner pool, the auth stack
+  deleting an item; no AI usage). A release that fails the health check or the smoke test is
+  rolled back: every service returns to the task definition it ran before the deploy (with the
+  old tasks serving until the restored ones are healthy), and the deploy fails, so a failed
+  release is never reported as deployed. Personal signs in only with its owner pool, the auth stack
   (a Cognito user pool whose one user is `LISTORA_OWNER_EMAIL`; [auth.md](auth.md)): the
   script refuses the dev driver, and on the first deploy waits for the owner to click SES's
   verification link before it deploys the pool. The steps, rollback, teardown (the database's deletion protection), and how to

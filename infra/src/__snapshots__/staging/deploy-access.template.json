@@ -20,7 +20,8 @@
               "Condition": {
                 "StringEquals": {
                   "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-                  "token.actions.githubusercontent.com:sub": "repo:toniojbusiness/listora:environment:staging"
+                  "token.actions.githubusercontent.com:sub": "repo:toniojbusiness@266634719/listora@1431894048:environment:staging",
+                  "token.actions.githubusercontent.com:ref": "refs/heads/main"
                 }
               },
               "Effect": "Allow",
@@ -61,6 +62,7 @@
                 "ecr:BatchGetImage",
                 "ecr:CompleteLayerUpload",
                 "ecr:DescribeImages",
+                "ecr:GetDownloadUrlForLayer",
                 "ecr:InitiateLayerUpload",
                 "ecr:PutImage",
                 "ecr:UploadLayerPart"
@@ -73,10 +75,40 @@
               "Sid": "PushApplicationImages"
             },
             {
-              "Action": "cloudformation:DescribeStacks",
+              "Action": [
+                "cloudformation:DescribeStacks",
+                "cloudformation:ListStackResources"
+              ],
               "Effect": "Allow",
               "Resource": "arn:aws:cloudformation:us-east-1:111111111111:stack/listora-staging-*/*",
               "Sid": "ReadStackOutputs"
+            },
+            {
+              "Action": "cloudformation:DescribeStacks",
+              "Effect": "Allow",
+              "Resource": "arn:aws:cloudformation:us-east-1:111111111111:stack/CDKToolkit-listora/*",
+              "Sid": "CheckRestrictedBootstrap"
+            },
+            {
+              "Action": [
+                "iam:GetPolicy",
+                "iam:GetPolicyVersion"
+              ],
+              "Effect": "Allow",
+              "Resource": "arn:aws:iam::111111111111:policy/listora-staging-cdk-execution",
+              "Sid": "CheckExecutionPolicy"
+            },
+            {
+              "Action": "ec2:DescribeAvailabilityZones",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "CheckZones"
+            },
+            {
+              "Action": "ses:GetEmailIdentity",
+              "Effect": "Allow",
+              "Resource": "arn:aws:ses:us-east-1:111111111111:identity/*",
+              "Sid": "CheckSesIdentities"
             },
             {
               "Action": "ecs:RunTask",
@@ -94,6 +126,32 @@
               "Effect": "Allow",
               "Resource": "arn:aws:ecs:us-east-1:111111111111:task/listora-staging-migrate/*",
               "Sid": "WatchSchemaMigrations"
+            },
+            {
+              "Action": [
+                "ecs:DescribeServices",
+                "ecs:UpdateService"
+              ],
+              "Effect": "Allow",
+              "Resource": "arn:aws:ecs:us-east-1:111111111111:service/listora-staging/*",
+              "Sid": "RollServices"
+            },
+            {
+              "Action": "iam:PassRole",
+              "Condition": {
+                "StringEquals": {
+                  "iam:PassedToService": "ecs-tasks.amazonaws.com"
+                }
+              },
+              "Effect": "Allow",
+              "Resource": "arn:aws:iam::111111111111:role/listora-staging-compute-*",
+              "Sid": "PassServiceRoles"
+            },
+            {
+              "Action": "ecs:DescribeTaskDefinition",
+              "Effect": "Allow",
+              "Resource": "*",
+              "Sid": "ReadTaskDefinitions"
             },
             {
               "Action": "iam:PassRole",
