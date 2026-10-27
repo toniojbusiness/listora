@@ -5814,9 +5814,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		/** The seller's sold items, newest first. */
 		sold: (page) => `/sellinghub/sold-items/${page > 1 ? `?page=${String(page)}` : ""}`
 	};
-	/** The slug in a path that opens a product (`/products/jdoe-levis-jacket/`), else `null`. */
+	/**
+	* The slug in a path that opens a product (`/products/jdoe-levis-jacket/`, or its seller's own
+	* view, `/products/jdoe-levis-jacket/manage/`, where Depop sends them), else `null`.
+	*/
 	function slugFromPath(path) {
-		const slug = /^\/products\/([^/]+)\/?$/.exec(path)?.[1];
+		const slug = /^\/products\/([^/]+)\/(?:manage\/?)?$/.exec(path)?.[1];
 		if (slug === void 0) return null;
 		const decoded = decodeURIComponent(slug);
 		return DEPOP_SLUG.test(decoded) ? decoded : null;
@@ -6032,7 +6035,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				const named = DONE_PAGE.exec(path)?.[1];
 				return {
 					type: "posted",
-					slug: named === void 0 ? null : slugFromPath(`/products/${named}/`)
+					slug: (named === void 0 ? null : slugFromPath(`/products/${named}/`)) ?? await linkedProduct(page)
 				};
 			}
 			const shown = await messages(page);
@@ -6047,6 +6050,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			if (Date.now() >= end) throw changed$2(FORM$2, "showed no product and no message after the submit");
 			await lookAgain$1(page, LOOK_EVERY_MS$5);
 		}
+	}
+	/** The product a page links to (the Done page's link to the new listing), when it links one. */
+	async function linkedProduct(page) {
+		for (const href of await page.attributes("a[href*=\"/products/\"]", "href")) {
+			if (href === null || !URL.canParse(href, page.url())) continue;
+			const slug = slugFromPath(new URL(href, page.url()).pathname);
+			if (slug !== null) return slug;
+		}
+		return null;
 	}
 	/** Depop's messages on the form (its alerts with text). */
 	async function messages(page) {
@@ -9133,14 +9145,14 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		* SKU, so the closet is searched for the title (or, without one, its recent listings are
 		* taken), and each candidate's edit form shows its SKU. Newest first, within `SKU_LOOKUP`.
 		*/
-		async function findBySku(step, sku, title) {
+		async function findBySku(step, sku, title, { search = true } = {}) {
 			const username = await seller(step);
 			const since = Date.now() - SKU_LOOKUP.recentMs;
 			const matches = (listing) => title === void 0 ? Date.parse(listing.created_at) >= since : listing.title === title;
 			const { listings } = await closet(step, username, {
 				availability: "all",
 				newestFirst: true,
-				...title === void 0 ? {} : { query: title }
+				...title === void 0 || !search ? {} : { query: title }
 			}, {
 				maxPages: SKU_LOOKUP.closetPages,
 				enough: (found) => found.filter(matches).length >= SKU_LOOKUP.candidates
@@ -9301,7 +9313,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			const result = await save(step, "list");
 			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
 			try {
-				const id = await findBySku(step, sku, payload.title);
+				const id = await findBySku(step, sku, payload.title, { search: false });
 				if (id !== null) return {
 					...result,
 					externalListingId: id

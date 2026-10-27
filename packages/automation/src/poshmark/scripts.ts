@@ -70,15 +70,23 @@ export function createPoshmarkScripts(
    * SKU, so the closet is searched for the title (or, without one, its recent listings are
    * taken), and each candidate's edit form shows its SKU. Newest first, within `SKU_LOOKUP`.
    */
-  async function findBySku(step: StepRunner, sku: string, title?: string): Promise<string | null> {
+  async function findBySku(
+    step: StepRunner,
+    sku: string,
+    title?: string,
+    { search = true }: { search?: boolean } = {},
+  ): Promise<string | null> {
     const username = await seller(step);
     const since = Date.now() - SKU_LOOKUP.recentMs;
     const matches = (listing: ListingRecord): boolean =>
       title === undefined ? Date.parse(listing.created_at) >= since : listing.title === title;
+    // Poshmark's closet search lags behind a listing just made: right after List, its newest
+    // listings are read instead (`search: false`), where the new one already is.
+    const query = title === undefined || !search ? {} : { query: title };
     const { listings } = await closet(
       step,
       username,
-      { availability: 'all', newestFirst: true, ...(title === undefined ? {} : { query: title }) },
+      { availability: 'all', newestFirst: true, ...query },
       {
         maxPages: SKU_LOOKUP.closetPages,
         enough: (found) => found.filter(matches).length >= SKU_LOOKUP.candidates,
@@ -266,7 +274,7 @@ export function createPoshmarkScripts(
     // After List, Poshmark shows the closet: the new listing is found by its SKU in the same
     // run, so it shows as listed at once. Not finding it yet leaves it to the operation's check.
     try {
-      const id = await findBySku(step, sku, payload.title);
+      const id = await findBySku(step, sku, payload.title, { search: false });
       if (id !== null) return { ...result, externalListingId: id };
     } catch {
       // The check reads it back later.

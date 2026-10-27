@@ -185,11 +185,14 @@ export async function submitListing(page: PageDriver, button: 'post' | 'save'): 
     if (slug !== null) return { type: 'posted', slug };
     if (button === 'post' && DONE_PAGE.test(path)) {
       // Read on the captain's session (2026-10-26): after Post, Depop opens "Done - Depop" under
-      // the sell page's path, with "List another item".
+      // the sell page's path, with "List another item". It names the product in its path or
+      // links to it, so the new listing is known at once.
       const named = DONE_PAGE.exec(path)?.[1];
       return {
         type: 'posted',
-        slug: named === undefined ? null : slugFromPath(`/products/${named}/`),
+        slug:
+          (named === undefined ? null : slugFromPath(`/products/${named}/`)) ??
+          (await linkedProduct(page)),
       };
     }
     const shown = await messages(page);
@@ -203,6 +206,16 @@ export async function submitListing(page: PageDriver, button: 'post' | 'save'): 
     if (Date.now() >= end) throw changed(FORM, 'showed no product and no message after the submit');
     await lookAgain(page, LOOK_EVERY_MS);
   }
+}
+
+/** The product a page links to (the Done page's link to the new listing), when it links one. */
+async function linkedProduct(page: PageDriver): Promise<string | null> {
+  for (const href of await page.attributes('a[href*="/products/"]', 'href')) {
+    if (href === null || !URL.canParse(href, page.url())) continue;
+    const slug = slugFromPath(new URL(href, page.url()).pathname);
+    if (slug !== null) return slug;
+  }
+  return null;
 }
 
 /** Depop's messages on the form (its alerts with text). */

@@ -37,9 +37,12 @@ export const DEPOP_PATHS = {
   sold: (page: number) => `/sellinghub/sold-items/${page > 1 ? `?page=${String(page)}` : ''}`,
 } as const;
 
-/** The slug in a path that opens a product (`/products/jdoe-levis-jacket/`), else `null`. */
+/**
+ * The slug in a path that opens a product (`/products/jdoe-levis-jacket/`, or its seller's own
+ * view, `/products/jdoe-levis-jacket/manage/`, where Depop sends them), else `null`.
+ */
 export function slugFromPath(path: string): string | null {
-  const slug = /^\/products\/([^/]+)\/?$/.exec(path)?.[1];
+  const slug = /^\/products\/([^/]+)\/(?:manage\/?)?$/.exec(path)?.[1];
   if (slug === undefined) return null;
   const decoded = decodeURIComponent(slug);
   return DEPOP_SLUG.test(decoded) ? decoded : null;
