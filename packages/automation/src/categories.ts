@@ -79,7 +79,8 @@ export function marketplaceCategories(
         item,
         false,
       );
-    default:
+    case 'ebay':
+      // eBay's categories come from its own taxonomy (packages/marketplaces/src/ebay).
       return null;
   }
 }

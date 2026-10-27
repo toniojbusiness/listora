@@ -6378,7 +6378,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* product last changed, so a read has no revision, and the adapter confirms a change by reading
 	* it twice (`readFreshness: 'none'`).
 	*
-	* - Status: Depop's product status (on sale, sold, deleted).
+	* - Status: Depop's product status (on sale, sold, deleted). The seller's own product page
+	*   (Depop opens `/products/<slug>/manage/` for them) does not always carry the record: the
+	*   phone once got it without, a minute after posting (2026-10-27). Its schema.org data then
+	*   speaks for it: the whole description and the offer's availability (`InStock` is on sale,
+	*   `SoldOut` and `OutOfStock` are sold).
 	* - Absence: a deleted product's page answers 410 Gone (seen on a real listing Listora deleted,
 	*   2026-10-27), which is definitive. A 404 is not: it could be a listing not visible yet, as
 	*   Depop says of its API too ("A newly created listing can take a short time to become
@@ -6395,11 +6399,21 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		status: string(),
 		description: string()
 	});
-	const structuredDataSchema = object({ offers: object({
-		url: string(),
-		price: union([string(), number()]),
-		priceCurrency: string()
-	}) });
+	const structuredDataSchema = object({
+		description: string().optional(),
+		offers: object({
+			url: string(),
+			price: union([string(), number()]),
+			priceCurrency: string(),
+			availability: string().optional()
+		})
+	});
+	/** schema.org availability, as the page's structured data names it, by Listora's status. */
+	const AVAILABILITY = {
+		"https://schema.org/InStock": "active",
+		"https://schema.org/SoldOut": "sold",
+		"https://schema.org/OutOfStock": "sold"
+	};
 	/**
 	* Depop's product statuses, as its Selling API names them too. Deleted and banned products are
 	* `ended`, as the Depop API adapter reads them: Depop keeps them, and a listing Listora ended
@@ -6430,17 +6444,26 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 			sku: null
 		};
 		const records = findRecords(await flightRows(page), (record) => record["slug"] === slug && "status" in record && "description" in record);
-		if (records.length === 0) throw changed$2(PAGE$10, "has none of the product data Listora reads");
-		const product = expectShape$1(productRecordSchema, records[0], PAGE$10);
-		const status = STATUSES$1[product.status];
-		if (status === void 0) throw changed$2(PAGE$10, "shows a product status Listora does not know");
-		const priceCents = await offerPrice(page, slug);
-		const { description, sku } = listingCopy(product.description);
+		const offer = await structuredOffer(page, slug);
+		let status;
+		let text;
+		if (records.length > 0) {
+			const product = expectShape$1(productRecordSchema, records[0], PAGE$10);
+			status = STATUSES$1[product.status];
+			if (status === void 0) throw changed$2(PAGE$10, "shows a product status Listora does not know");
+			text = product.description;
+		} else {
+			status = offer.availability === void 0 ? void 0 : AVAILABILITY[offer.availability];
+			if (status === void 0 || offer.description === void 0) throw changed$2(PAGE$10, "has none of the product data Listora reads");
+			text = offer.description;
+		}
+		const priceCents = offer.priceCents;
+		const { description, sku } = listingCopy(text);
 		return {
 			state: {
 				found: true,
-				externalListingId: product.slug,
-				externalUrl: productUrl(site, product.slug),
+				externalListingId: slug,
+				externalUrl: productUrl(site, slug),
 				status,
 				title: null,
 				description,
@@ -6451,8 +6474,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 			sku
 		};
 	}
-	/** The product's price in cents, from the page's schema.org offer for this product. */
-	async function offerPrice(page, slug) {
+	/** The page's schema.org data for this product: its price in cents, availability, and text. */
+	async function structuredOffer(page, slug) {
 		const text = await page.text(PRODUCT_PAGE.structuredData);
 		if (text === null) throw changed$2(PAGE$10, "has no product data (structured data)");
 		let data;
@@ -6461,12 +6484,16 @@ structuredData: "script[data-testid=\"meta__jsonLd\"]" };
 		} catch {
 			throw changed$2(PAGE$10, "has structured data Listora can't parse");
 		}
-		const { offers } = expectShape$1(structuredDataSchema, data, PAGE$10);
+		const { offers, description } = expectShape$1(structuredDataSchema, data, PAGE$10);
 		if (!offers.url.includes(`/products/${slug}/`)) throw changed$2(PAGE$10, "offers a different product");
 		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$10, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
 		if (match?.[1] === void 0) throw changed$2(PAGE$10, "shows a price Listora can't read");
-		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
+		return {
+			priceCents: Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0")),
+			...offers.availability === void 0 ? {} : { availability: offers.availability },
+			...description === void 0 ? {} : { description }
+		};
 	}
 
 // src/depop/pages/selling-page.ts
@@ -9107,7 +9134,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				enough: (found) => found.filter(matches).length >= SKU_LOOKUP.candidates
 			});
 			const candidates = listings.filter(matches).sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).slice(0, SKU_LOOKUP.candidates);
-			for (const [index, candidate] of candidates.entries()) if (await step(`check the SKU of candidate ${String(index + 1)}`, { mutates: false }, async (page) => await openForm(page, site.editListing(candidate.id)) && await privateSku(page) === sku)) return candidate.id;
+			for (const [index, candidate] of candidates.entries()) if (await step(`check the SKU of candidate ${String(index + 1)}`, {
+				mutates: false,
+				timeScale: 2
+			}, async (page) => await openForm(page, site.editListing(candidate.id)) && await privateSku(page) === sku)) return candidate.id;
 			return null;
 		}
 		/** The logged-in seller's username (closets are addressed by it). */

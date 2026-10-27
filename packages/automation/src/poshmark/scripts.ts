@@ -89,9 +89,10 @@ export function createPoshmarkScripts(
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
       .slice(0, SKU_LOOKUP.candidates);
     for (const [index, candidate] of candidates.entries()) {
+      // Each candidate's SKU is on its edit form, as heavy a page as the listing form.
       const found = await step(
         `check the SKU of candidate ${String(index + 1)}`,
-        { mutates: false },
+        { mutates: false, timeScale: 2 },
         async (page) =>
           (await openForm(page, site.editListing(candidate.id))) &&
           (await privateSku(page)) === sku,

@@ -11,7 +11,11 @@
  * product last changed, so a read has no revision, and the adapter confirms a change by reading
  * it twice (`readFreshness: 'none'`).
  *
- * - Status: Depop's product status (on sale, sold, deleted).
+ * - Status: Depop's product status (on sale, sold, deleted). The seller's own product page
+ *   (Depop opens `/products/<slug>/manage/` for them) does not always carry the record: the
+ *   phone once got it without, a minute after posting (2026-10-27). Its schema.org data then
+ *   speaks for it: the whole description and the offer's availability (`InStock` is on sale,
+ *   `SoldOut` and `OutOfStock` are sold).
  * - Absence: a deleted product's page answers 410 Gone (seen on a real listing Listora deleted,
  *   2026-10-27), which is definitive. A 404 is not: it could be a listing not visible yet, as
  *   Depop says of its API too ("A newly created listing can take a short time to become
@@ -43,12 +47,21 @@ const productRecordSchema = z.object({
 });
 
 const structuredDataSchema = z.object({
+  description: z.string().optional(),
   offers: z.object({
     url: z.string(),
     price: z.union([z.string(), z.number()]),
     priceCurrency: z.string(),
+    availability: z.string().optional(),
   }),
 });
+
+/** schema.org availability, as the page's structured data names it, by Listora's status. */
+const AVAILABILITY: Readonly<Record<string, RemoteListingStatus>> = {
+  'https://schema.org/InStock': 'active',
+  'https://schema.org/SoldOut': 'sold',
+  'https://schema.org/OutOfStock': 'sold',
+};
 
 /**
  * Depop's product statuses, as its Selling API names them too. Deleted and banned products are
@@ -82,17 +95,29 @@ export async function readProduct(
     await flightRows(page),
     (record) => record['slug'] === slug && 'status' in record && 'description' in record,
   );
-  if (records.length === 0) throw changed(PAGE, 'has none of the product data Listora reads');
-  const product = expectShape(productRecordSchema, records[0], PAGE);
-  const status = STATUSES[product.status];
-  if (status === undefined) throw changed(PAGE, 'shows a product status Listora does not know');
-  const priceCents = await offerPrice(page, slug);
-  const { description, sku } = listingCopy(product.description);
+  const offer = await structuredOffer(page, slug);
+  let status: RemoteListingStatus | undefined;
+  let text: string;
+  if (records.length > 0) {
+    const product = expectShape(productRecordSchema, records[0], PAGE);
+    status = STATUSES[product.status];
+    if (status === undefined) throw changed(PAGE, 'shows a product status Listora does not know');
+    text = product.description;
+  } else {
+    // The page carries no record: its structured data speaks for the product.
+    status = offer.availability === undefined ? undefined : AVAILABILITY[offer.availability];
+    if (status === undefined || offer.description === undefined) {
+      throw changed(PAGE, 'has none of the product data Listora reads');
+    }
+    text = offer.description;
+  }
+  const priceCents = offer.priceCents;
+  const { description, sku } = listingCopy(text);
   return {
     state: {
       found: true,
-      externalListingId: product.slug,
-      externalUrl: productUrl(site, product.slug),
+      externalListingId: slug,
+      externalUrl: productUrl(site, slug),
       status,
       // Depop listings have no title.
       title: null,
@@ -105,8 +130,11 @@ export async function readProduct(
   };
 }
 
-/** The product's price in cents, from the page's schema.org offer for this product. */
-async function offerPrice(page: PageDriver, slug: string): Promise<number> {
+/** The page's schema.org data for this product: its price in cents, availability, and text. */
+async function structuredOffer(
+  page: PageDriver,
+  slug: string,
+): Promise<{ priceCents: number; availability?: string; description?: string }> {
   const text = await page.text(PRODUCT_PAGE.structuredData);
   if (text === null) throw changed(PAGE, 'has no product data (structured data)');
   let data: unknown;
@@ -115,11 +143,15 @@ async function offerPrice(page: PageDriver, slug: string): Promise<number> {
   } catch {
     throw changed(PAGE, "has structured data Listora can't parse");
   }
-  const { offers } = expectShape(structuredDataSchema, data, PAGE);
+  const { offers, description } = expectShape(structuredDataSchema, data, PAGE);
   if (!offers.url.includes(`/products/${slug}/`)) throw changed(PAGE, 'offers a different product');
   if (offers.priceCurrency !== 'USD')
     throw changed(PAGE, 'shows a price that is not in US dollars');
   const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
   if (match?.[1] === undefined) throw changed(PAGE, "shows a price Listora can't read");
-  return Number(match[1]) * 100 + Number((match[2] ?? '0').padEnd(2, '0'));
+  return {
+    priceCents: Number(match[1]) * 100 + Number((match[2] ?? '0').padEnd(2, '0')),
+    ...(offers.availability === undefined ? {} : { availability: offers.availability }),
+    ...(description === undefined ? {} : { description }),
+  };
 }

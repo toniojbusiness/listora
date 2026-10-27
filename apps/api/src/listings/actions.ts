@@ -79,7 +79,7 @@ export function registerListingActionRoutes(
   contractRoute(app, deps, 'getItemMarketplaceCategories', async ({ tenant, db, params }) => {
     const item = await findItem(db, tenant, params.itemId);
     if (!item) throw notFound('Item');
-    const categories = marketplaceCategories(params.marketplace as Marketplace, item);
+    const categories = marketplaceCategories(params.marketplace, item);
     if (categories === null) throw notFound('Marketplace categories');
     return {
       status: 200,
