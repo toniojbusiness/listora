@@ -59,6 +59,9 @@ calls are in `apps/api/src/listings` and `apps/api/src/operations`, on the opera
   marketplace Listora couldn't reach is named in the notice.
 - **Work on this iPhone**: while the phone runs a listing's change, that listing's card shows
   the step it is on, its number, and about how long is left ([phone-execution.md](phone-execution.md)).
+- **Activity**: the item's timeline, newest first: every step of every marketplace action, each
+  browser session on the iPhone or in the cloud with its steps and their times, its tasks, sales,
+  the checks that saw them, and its delists ([activity.md](activity.md)).
 
 ## Never show success the server has not confirmed
 

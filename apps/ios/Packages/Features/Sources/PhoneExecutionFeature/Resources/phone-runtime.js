@@ -9999,10 +9999,11 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		}
 		async #execute(name, script, signal, readOnly) {
 			const steps = [];
+			const stepMs = [];
 			let mutated = false;
 			let current = "start";
-			if (this.#closed !== null) return failed(steps, mutated, error("start", "aborted", "the session is closed"));
-			if (this.#challenge !== null) return failed(steps, mutated, {
+			if (this.#closed !== null) return failed(steps, stepMs, mutated, error("start", "aborted", "the session is closed"));
+			if (this.#challenge !== null) return failed(steps, stepMs, mutated, {
 				kind: "challenge",
 				challenge: this.#challenge,
 				step: "start",
@@ -10013,13 +10014,19 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				if (readOnly && options.mutates) throw new StepError("script_error", `step ${stepName} would change the listing in a read`);
 				current = stepName;
 				steps.push(stepName);
+				const index = stepMs.push(0) - 1;
 				this.#deps.onStep?.({
 					name: stepName,
 					index: steps.length
 				});
 				if (options.mutates) mutated = true;
 				const timeoutMs = options.timeoutMs ?? this.#deps.stepTimeoutMs * Math.max(1, options.timeScale ?? 1);
-				return this.#runStep(body, timeoutMs, signal, readOnly);
+				const startedAt = Date.now();
+				try {
+					return await this.#runStep(body, timeoutMs, signal, readOnly);
+				} finally {
+					stepMs[index] = Date.now() - startedAt;
+				}
 			};
 			try {
 				const value = await script(runStep);
@@ -10027,13 +10034,15 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 				if (stopped !== null) throw new PageProblemError(stopped);
 				this.#deps.logger.debug({
 					script: name,
-					steps
+					steps,
+					stepMs
 				}, "automation script finished");
 				return {
 					ok: true,
 					value,
 					mutated,
-					steps
+					steps,
+					stepMs
 				};
 			} catch (caught) {
 				const stopped = this.#stop();
@@ -10053,7 +10062,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 					mutated,
 					...this.#deps.networkSummary === void 0 ? {} : { network: this.#deps.networkSummary() }
 				}, "automation script stopped");
-				return failed(steps, mutated, failure);
+				return failed(steps, stepMs, mutated, failure);
 			}
 		}
 		async #runStep(body, timeoutMs, outer, readOnly) {
@@ -10406,12 +10415,13 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			if (this.#retired || this.#signal.aborted) throw new StepError("aborted", "the step is over");
 		}
 	};
-	function failed(steps, mutated, failure) {
+	function failed(steps, stepMs, mutated, failure) {
 		return {
 			ok: false,
 			failure,
 			mutated,
-			steps
+			steps,
+			stepMs
 		};
 	}
 	function error(step, code, message) {
@@ -10916,11 +10926,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const photos = phonePhotos(host);
 		await pacing.waitFor(input.startDelayMs, new AbortController().signal);
 		for (let handOffs = 0;; handOffs += 1) {
-			const { result, stepMs } = await runOnce(input, host, profile, pacing, photos);
+			const result = await runOnce(input, host, profile, pacing, photos);
 			if (result.ok || result.failure.kind !== "challenge") return {
 				type: "ran",
-				result,
-				stepMs
+				result
 			};
 			const check = result.failure.challenge;
 			if (!SELLER_CHECKS.includes(check)) return {
@@ -10955,7 +10964,6 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		}
 	}
 	async function runOnce(input, host, profile, pacing, photos) {
-		const started = [];
 		const session = new ScriptSession(new BridgeBackend(host), {
 			profile,
 			pacing,
@@ -10969,7 +10977,6 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			},
 			stepTimeoutMs: input.stepTimeoutMs,
 			onStep: ({ name, index }) => {
-				started.push(Date.now());
 				host.progress({
 					call: input.name,
 					index,
@@ -10982,12 +10989,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		const script = (step) => run(input.call, step);
 		const signal = AbortSignal.timeout(input.callTimeoutMs);
 		try {
-			const result = isWriteCall(input.call) ? await session.run(input.name, script, signal) : await session.read(input.name, script, signal);
-			const ended = Date.now();
-			return {
-				result,
-				stepMs: started.map((at, index) => (started[index + 1] ?? ended) - at)
-			};
+			return isWriteCall(input.call) ? await session.run(input.name, script, signal) : await session.read(input.name, script, signal);
 		} finally {
 			await session.close();
 		}

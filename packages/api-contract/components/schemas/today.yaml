@@ -13,8 +13,9 @@ KnownTodayCardKind:
     `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
     seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
     `stale_listing`: a listing live a long time with no changes, with a price drop (never below
-    the item's floor) or a relist suggested.
-  enum: [delist, ship, reconnect, review_drafts, stale_listing]
+    the item's floor) or a relist suggested. `sale_checks`: a marketplace whose sale checks fail
+    or stopped running, so its sales are not being seen.
+  enum: [delist, ship, reconnect, sale_checks, review_drafts, stale_listing]
 TodayUrgency:
   description: |
     A `KnownTodayUrgency`, or a level added after this client was built, which clients show
@@ -136,6 +137,21 @@ TodayConnection:
       maxLength: 200
     status:
       $ref: './connections.yaml#/ConnectionStatus'
+TodaySaleChecks:
+  type: object
+  description: A `sale_checks` card's connection and its problem.
+  required: [connectionId, marketplace, health, since]
+  properties:
+    connectionId:
+      $ref: './common.yaml#/Id'
+    marketplace:
+      $ref: './common.yaml#/Marketplace'
+    health:
+      $ref: './activity.yaml#/SaleCheckHealth'
+    since:
+      $ref: './common.yaml#/Timestamp'
+    lastSucceededAt:
+      $ref: './common.yaml#/Timestamp'
 TodayStaleSuggestion:
   description: |
     A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
@@ -192,7 +208,7 @@ TodayCard:
   description: |
     One thing that needs the seller. A card exists only while its work is not done, so it is
     gone from the next summary once the work is finished. The kind's own property (`shipment`,
-    `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+    `delist`, `connection`, `saleChecks`, `staleListing`, or `drafts`) carries its facts.
   required: [id, kind, urgency, title, action]
   properties:
     id:
@@ -219,6 +235,8 @@ TodayCard:
       $ref: '#/TodayDelist'
     connection:
       $ref: '#/TodayConnection'
+    saleChecks:
+      $ref: '#/TodaySaleChecks'
     staleListing:
       $ref: '#/TodayStaleListing'
     drafts:

@@ -5558,6 +5558,8 @@ extension Components {
             public var lastIssue: Components.Schemas.ConnectionIssue?
             /// - Remark: Generated from `#/components/schemas/Connection/execution`.
             public var execution: Components.Schemas.ConnectionExecution?
+            /// - Remark: Generated from `#/components/schemas/Connection/saleChecks`.
+            public var saleChecks: Components.Schemas.ConnectionSaleChecks?
             /// Creates a new `Connection`.
             ///
             /// - Parameters:
@@ -5574,6 +5576,7 @@ extension Components {
             ///   - lastCheckedAt: When Listora last checked the connection, whatever it found.
             ///   - lastIssue:
             ///   - execution:
+            ///   - saleChecks:
             public init(
                 marketplace: Components.Schemas.Marketplace,
                 mode: Components.Schemas.IntegrationMode,
@@ -5587,7 +5590,8 @@ extension Components {
                 lastOkAt: Components.Schemas.Timestamp? = nil,
                 lastCheckedAt: Components.Schemas.Timestamp? = nil,
                 lastIssue: Components.Schemas.ConnectionIssue? = nil,
-                execution: Components.Schemas.ConnectionExecution? = nil
+                execution: Components.Schemas.ConnectionExecution? = nil,
+                saleChecks: Components.Schemas.ConnectionSaleChecks? = nil
             ) {
                 self.marketplace = marketplace
                 self.mode = mode
@@ -5602,6 +5606,7 @@ extension Components {
                 self.lastCheckedAt = lastCheckedAt
                 self.lastIssue = lastIssue
                 self.execution = execution
+                self.saleChecks = saleChecks
             }
             public enum CodingKeys: String, CodingKey {
                 case marketplace
@@ -5617,6 +5622,7 @@ extension Components {
                 case lastCheckedAt
                 case lastIssue
                 case execution
+                case saleChecks
             }
         }
         /// - Remark: Generated from `#/components/schemas/ConnectionList`.
@@ -6717,7 +6723,8 @@ extension Components {
         }
         /// `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
         /// or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
-        /// a look at the seller's sold orders.
+        /// a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
+        /// history, which changes nothing.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownPhoneWorkPurpose`.
@@ -6725,6 +6732,7 @@ extension Components {
             case operation = "operation"
             case sessionCheck = "session_check"
             case saleCheck = "sale_check"
+            case saleHistory = "sale_history"
         }
         /// - Remark: Generated from `#/components/schemas/PhoneRunClaim`.
         public struct PhoneRunClaim: Codable, Hashable, Sendable {
@@ -9662,7 +9670,8 @@ extension Components {
         /// `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
         /// seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
         /// `stale_listing`: a listing live a long time with no changes, with a price drop (never below
-        /// the item's floor) or a relist suggested.
+        /// the item's floor) or a relist suggested. `sale_checks`: a marketplace whose sale checks fail
+        /// or stopped running, so its sales are not being seen.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/KnownTodayCardKind`.
@@ -9670,6 +9679,7 @@ extension Components {
             case delist = "delist"
             case ship = "ship"
             case reconnect = "reconnect"
+            case saleChecks = "sale_checks"
             case reviewDrafts = "review_drafts"
             case staleListing = "stale_listing"
         }
@@ -10033,6 +10043,49 @@ extension Components {
                 case status
             }
         }
+        /// A `sale_checks` card's connection and its problem.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TodaySaleChecks`.
+        public struct TodaySaleChecks: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TodaySaleChecks/connectionId`.
+            public var connectionId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/TodaySaleChecks/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/TodaySaleChecks/health`.
+            public var health: Components.Schemas.SaleCheckHealth
+            /// - Remark: Generated from `#/components/schemas/TodaySaleChecks/since`.
+            public var since: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/TodaySaleChecks/lastSucceededAt`.
+            public var lastSucceededAt: Components.Schemas.Timestamp?
+            /// Creates a new `TodaySaleChecks`.
+            ///
+            /// - Parameters:
+            ///   - connectionId:
+            ///   - marketplace:
+            ///   - health:
+            ///   - since:
+            ///   - lastSucceededAt:
+            public init(
+                connectionId: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                health: Components.Schemas.SaleCheckHealth,
+                since: Components.Schemas.Timestamp,
+                lastSucceededAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.connectionId = connectionId
+                self.marketplace = marketplace
+                self.health = health
+                self.since = since
+                self.lastSucceededAt = lastSucceededAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case connectionId
+                case marketplace
+                case health
+                case since
+                case lastSucceededAt
+            }
+        }
         /// A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
         /// clients show through the card's `detail` and action.
         ///
@@ -10181,7 +10234,7 @@ extension Components {
         }
         /// One thing that needs the seller. A card exists only while its work is not done, so it is
         /// gone from the next summary once the work is finished. The kind's own property (`shipment`,
-        /// `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+        /// `delist`, `connection`, `saleChecks`, `staleListing`, or `drafts`) carries its facts.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/TodayCard`.
@@ -10208,6 +10261,8 @@ extension Components {
             public var delist: Components.Schemas.TodayDelist?
             /// - Remark: Generated from `#/components/schemas/TodayCard/connection`.
             public var connection: Components.Schemas.TodayConnection?
+            /// - Remark: Generated from `#/components/schemas/TodayCard/saleChecks`.
+            public var saleChecks: Components.Schemas.TodaySaleChecks?
             /// - Remark: Generated from `#/components/schemas/TodayCard/staleListing`.
             public var staleListing: Components.Schemas.TodayStaleListing?
             /// - Remark: Generated from `#/components/schemas/TodayCard/drafts`.
@@ -10225,6 +10280,7 @@ extension Components {
             ///   - shipment:
             ///   - delist:
             ///   - connection:
+            ///   - saleChecks:
             ///   - staleListing:
             ///   - drafts:
             public init(
@@ -10238,6 +10294,7 @@ extension Components {
                 shipment: Components.Schemas.TodayShipment? = nil,
                 delist: Components.Schemas.TodayDelist? = nil,
                 connection: Components.Schemas.TodayConnection? = nil,
+                saleChecks: Components.Schemas.TodaySaleChecks? = nil,
                 staleListing: Components.Schemas.TodayStaleListing? = nil,
                 drafts: Components.Schemas.TodayDrafts? = nil
             ) {
@@ -10251,6 +10308,7 @@ extension Components {
                 self.shipment = shipment
                 self.delist = delist
                 self.connection = connection
+                self.saleChecks = saleChecks
                 self.staleListing = staleListing
                 self.drafts = drafts
             }
@@ -10265,6 +10323,7 @@ extension Components {
                 case shipment
                 case delist
                 case connection
+                case saleChecks
                 case staleListing
                 case drafts
             }
@@ -10457,6 +10516,936 @@ extension Components {
                 case enabled
                 case time
                 case timeZone
+            }
+        }
+        /// A `KnownActivitySource`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ActivitySource`.
+        public struct ActivitySource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ActivitySource/value1`.
+            public var value1: Components.Schemas.KnownActivitySource?
+            /// - Remark: Generated from `#/components/schemas/ActivitySource/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ActivitySource`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownActivitySource? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Who did it. `listora`: Listora's server (the operation engine, the sale intake, the
+        /// auto-delist). `cloud_browser`: Listora's cloud browser. `iphone`: the seller's iPhone, in
+        /// their own marketplace session. `you`: the seller. `marketplace`: the marketplace.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownActivitySource`.
+        @frozen public enum KnownActivitySource: String, Codable, Hashable, Sendable, CaseIterable {
+            case listora = "listora"
+            case cloudBrowser = "cloud_browser"
+            case iphone = "iphone"
+            case you = "you"
+            case marketplace = "marketplace"
+        }
+        /// A `KnownActivityOutcome`, or one added after this client was built (shown as `info`).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ActivityOutcome`.
+        public struct ActivityOutcome: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ActivityOutcome/value1`.
+            public var value1: Components.Schemas.KnownActivityOutcome?
+            /// - Remark: Generated from `#/components/schemas/ActivityOutcome/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ActivityOutcome`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownActivityOutcome? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// How it went. `in_progress`: still running. `waiting`: waits for the seller. `info`: nothing
+        /// to judge (a change, a sale, a cancellation).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownActivityOutcome`.
+        @frozen public enum KnownActivityOutcome: String, Codable, Hashable, Sendable, CaseIterable {
+            case succeeded = "succeeded"
+            case failed = "failed"
+            case inProgress = "in_progress"
+            case waiting = "waiting"
+            case info = "info"
+        }
+        /// A `KnownActivityKind`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ActivityKind`.
+        public struct ActivityKind: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ActivityKind/value1`.
+            public var value1: Components.Schemas.KnownActivityKind?
+            /// - Remark: Generated from `#/components/schemas/ActivityKind/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ActivityKind`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownActivityKind? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Which record it comes from. `item`: an item change. `operation`: a step of a marketplace
+        /// action. `browser_session`: one browser session in Listora's cloud browser or on the iPhone,
+        /// with its steps. `sale_check`: a sale check, or a read of the seller's sold history. `order`:
+        /// an order a marketplace reported or a check found. `sale`: a recorded sale. `delist`: the
+        /// delist after a sale. `task`: a task for the seller.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownActivityKind`.
+        @frozen public enum KnownActivityKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case item = "item"
+            case operation = "operation"
+            case browserSession = "browser_session"
+            case saleCheck = "sale_check"
+            case order = "order"
+            case sale = "sale"
+            case delist = "delist"
+            case task = "task"
+        }
+        /// One step of a browser session.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ActivityStep`.
+        public struct ActivityStep: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ActivityStep/name`.
+            public var name: Swift.String
+            /// How long it took; absent when the device did not say.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ActivityStep/durationMs`.
+            public var durationMs: Swift.Int64?
+            /// Creates a new `ActivityStep`.
+            ///
+            /// - Parameters:
+            ///   - name:
+            ///   - durationMs: How long it took; absent when the device did not say.
+            public init(
+                name: Swift.String,
+                durationMs: Swift.Int64? = nil
+            ) {
+                self.name = name
+                self.durationMs = durationMs
+            }
+            public enum CodingKeys: String, CodingKey {
+                case name
+                case durationMs
+            }
+        }
+        /// What went wrong, as a code (for support) and in the seller's words.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ActivityError`.
+        public struct ActivityError: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ActivityError/code`.
+            public var code: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ActivityError/message`.
+            public var message: Swift.String
+            /// Creates a new `ActivityError`.
+            ///
+            /// - Parameters:
+            ///   - code:
+            ///   - message:
+            public init(
+                code: Swift.String,
+                message: Swift.String
+            ) {
+                self.code = code
+                self.message = message
+            }
+            public enum CodingKeys: String, CodingKey {
+                case code
+                case message
+            }
+        }
+        /// Where support finds more: the browser session's run id, which its log lines carry, whether
+        /// it kept a redacted screenshot, and the sale check's record id.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ActivityReference`.
+        public struct ActivityReference: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ActivityReference/runId`.
+            public var runId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/ActivityReference/saleCheckId`.
+            public var saleCheckId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/ActivityReference/screenshot`.
+            public var screenshot: Swift.Bool
+            /// Creates a new `ActivityReference`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - saleCheckId:
+            ///   - screenshot:
+            public init(
+                runId: Components.Schemas.Id? = nil,
+                saleCheckId: Components.Schemas.Id? = nil,
+                screenshot: Swift.Bool
+            ) {
+                self.runId = runId
+                self.saleCheckId = saleCheckId
+                self.screenshot = screenshot
+            }
+            public enum CodingKeys: String, CodingKey {
+                case runId
+                case saleCheckId
+                case screenshot
+            }
+        }
+        /// One thing that happened, from the record that keeps it (docs/features/activity.md):
+        /// redacted, with no page content, typed values, or buyer data.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ActivityEntry`.
+        public struct ActivityEntry: Codable, Hashable, Sendable {
+            /// `<kind>:<record id>`, stable.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/at`.
+            public var at: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/kind`.
+            public var kind: Components.Schemas.ActivityKind
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/source`.
+            public var source: Components.Schemas.ActivitySource
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/outcome`.
+            public var outcome: Components.Schemas.ActivityOutcome
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace?
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/detail`.
+            public var detail: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/itemId`.
+            public var itemId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/listingId`.
+            public var listingId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/operationId`.
+            public var operationId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/saleId`.
+            public var saleId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/durationMs`.
+            public var durationMs: Swift.Int64?
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/steps`.
+            public var steps: [Components.Schemas.ActivityStep]?
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/error`.
+            public var error: Components.Schemas.ActivityError?
+            /// - Remark: Generated from `#/components/schemas/ActivityEntry/reference`.
+            public var reference: Components.Schemas.ActivityReference?
+            /// Creates a new `ActivityEntry`.
+            ///
+            /// - Parameters:
+            ///   - id: `<kind>:<record id>`, stable.
+            ///   - at:
+            ///   - kind:
+            ///   - source:
+            ///   - outcome:
+            ///   - marketplace:
+            ///   - title:
+            ///   - detail:
+            ///   - itemId:
+            ///   - listingId:
+            ///   - operationId:
+            ///   - saleId:
+            ///   - durationMs:
+            ///   - steps:
+            ///   - error:
+            ///   - reference:
+            public init(
+                id: Swift.String,
+                at: Components.Schemas.Timestamp,
+                kind: Components.Schemas.ActivityKind,
+                source: Components.Schemas.ActivitySource,
+                outcome: Components.Schemas.ActivityOutcome,
+                marketplace: Components.Schemas.Marketplace? = nil,
+                title: Swift.String,
+                detail: Swift.String? = nil,
+                itemId: Components.Schemas.Id? = nil,
+                listingId: Components.Schemas.Id? = nil,
+                operationId: Components.Schemas.Id? = nil,
+                saleId: Components.Schemas.Id? = nil,
+                durationMs: Swift.Int64? = nil,
+                steps: [Components.Schemas.ActivityStep]? = nil,
+                error: Components.Schemas.ActivityError? = nil,
+                reference: Components.Schemas.ActivityReference? = nil
+            ) {
+                self.id = id
+                self.at = at
+                self.kind = kind
+                self.source = source
+                self.outcome = outcome
+                self.marketplace = marketplace
+                self.title = title
+                self.detail = detail
+                self.itemId = itemId
+                self.listingId = listingId
+                self.operationId = operationId
+                self.saleId = saleId
+                self.durationMs = durationMs
+                self.steps = steps
+                self.error = error
+                self.reference = reference
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case at
+                case kind
+                case source
+                case outcome
+                case marketplace
+                case title
+                case detail
+                case itemId
+                case listingId
+                case operationId
+                case saleId
+                case durationMs
+                case steps
+                case error
+                case reference
+            }
+        }
+        /// Newest first.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ActivityPage`.
+        public struct ActivityPage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ActivityPage/data`.
+            public var data: [Components.Schemas.ActivityEntry]
+            /// Present when there are older entries.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ActivityPage/nextCursor`.
+            public var nextCursor: Swift.String?
+            /// Creates a new `ActivityPage`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            ///   - nextCursor: Present when there are older entries.
+            public init(
+                data: [Components.Schemas.ActivityEntry],
+                nextCursor: Swift.String? = nil
+            ) {
+                self.data = data
+                self.nextCursor = nextCursor
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+                case nextCursor
+            }
+        }
+        /// A `KnownSaleCheckRunKind`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleCheckRunKind`.
+        public struct SaleCheckRunKind: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleCheckRunKind/value1`.
+            public var value1: Components.Schemas.KnownSaleCheckRunKind?
+            /// - Remark: Generated from `#/components/schemas/SaleCheckRunKind/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SaleCheckRunKind`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSaleCheckRunKind? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// `scheduled`: a sale check, which hands new sold orders to the sale intake. `history`: a
+        /// read-only read of the seller's sold history, which changes nothing.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownSaleCheckRunKind`.
+        @frozen public enum KnownSaleCheckRunKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case scheduled = "scheduled"
+            case history = "history"
+        }
+        /// A `KnownActivityHost`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/ActivityHost`.
+        public struct ActivityHost: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ActivityHost/value1`.
+            public var value1: Components.Schemas.KnownActivityHost?
+            /// - Remark: Generated from `#/components/schemas/ActivityHost/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `ActivityHost`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownActivityHost? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Where a check ran. `runner`: Listora's cloud browser. `phone`: the seller's iPhone.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownActivityHost`.
+        @frozen public enum KnownActivityHost: String, Codable, Hashable, Sendable, CaseIterable {
+            case runner = "runner"
+            case phone = "phone"
+        }
+        /// The sale check that saw a sale.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleCheckSummary`.
+        public struct SaleCheckSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleCheckSummary/id`.
+            public var id: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/SaleCheckSummary/kind`.
+            public var kind: Components.Schemas.SaleCheckRunKind
+            /// - Remark: Generated from `#/components/schemas/SaleCheckSummary/host`.
+            public var host: Components.Schemas.ActivityHost
+            /// - Remark: Generated from `#/components/schemas/SaleCheckSummary/startedAt`.
+            public var startedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/SaleCheckSummary/finishedAt`.
+            public var finishedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/SaleCheckSummary/ordersSeen`.
+            public var ordersSeen: Swift.Int32?
+            /// - Remark: Generated from `#/components/schemas/SaleCheckSummary/newOrders`.
+            public var newOrders: Swift.Int32?
+            /// - Remark: Generated from `#/components/schemas/SaleCheckSummary/runId`.
+            public var runId: Components.Schemas.Id?
+            /// Creates a new `SaleCheckSummary`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - kind:
+            ///   - host:
+            ///   - startedAt:
+            ///   - finishedAt:
+            ///   - ordersSeen:
+            ///   - newOrders:
+            ///   - runId:
+            public init(
+                id: Components.Schemas.Id,
+                kind: Components.Schemas.SaleCheckRunKind,
+                host: Components.Schemas.ActivityHost,
+                startedAt: Components.Schemas.Timestamp,
+                finishedAt: Components.Schemas.Timestamp? = nil,
+                ordersSeen: Swift.Int32? = nil,
+                newOrders: Swift.Int32? = nil,
+                runId: Components.Schemas.Id? = nil
+            ) {
+                self.id = id
+                self.kind = kind
+                self.host = host
+                self.startedAt = startedAt
+                self.finishedAt = finishedAt
+                self.ordersSeen = ordersSeen
+                self.newOrders = newOrders
+                self.runId = runId
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case kind
+                case host
+                case startedAt
+                case finishedAt
+                case ordersSeen
+                case newOrders
+                case runId
+            }
+        }
+        /// A `KnownSaleDelistStatus`, or a value added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleDelistStatus`.
+        public struct SaleDelistStatus: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleDelistStatus/value1`.
+            public var value1: Components.Schemas.KnownSaleDelistStatus?
+            /// - Remark: Generated from `#/components/schemas/SaleDelistStatus/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SaleDelistStatus`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSaleDelistStatus? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// An operation's status (`queued` to `canceled`) for a delist Listora runs, or a task's
+        /// (`open`, `done`, `dismissed`) for one the seller does.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownSaleDelistStatus`.
+        @frozen public enum KnownSaleDelistStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case queued = "queued"
+            case running = "running"
+            case retrying = "retrying"
+            case verifying = "verifying"
+            case succeeded = "succeeded"
+            case failed = "failed"
+            case needsUserAction = "needs_user_action"
+            case canceled = "canceled"
+            case open = "open"
+            case done = "done"
+            case dismissed = "dismissed"
+        }
+        /// One delist the sale started on another marketplace, and how it ended.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleDelist`.
+        public struct SaleDelist: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/itemId`.
+            public var itemId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/listingId`.
+            public var listingId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/operationId`.
+            public var operationId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/taskId`.
+            public var taskId: Components.Schemas.Id?
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/status`.
+            public var status: Components.Schemas.SaleDelistStatus
+            /// What happened, in the seller's words.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/result`.
+            public var result: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/attempts`.
+            public var attempts: Swift.Int32?
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/error`.
+            public var error: Components.Schemas.ActivityError?
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/startedAt`.
+            public var startedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/SaleDelist/settledAt`.
+            public var settledAt: Components.Schemas.Timestamp?
+            /// Creates a new `SaleDelist`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - marketplace:
+            ///   - listingId:
+            ///   - operationId:
+            ///   - taskId:
+            ///   - status:
+            ///   - result: What happened, in the seller's words.
+            ///   - attempts:
+            ///   - error:
+            ///   - startedAt:
+            ///   - settledAt:
+            public init(
+                itemId: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                listingId: Components.Schemas.Id? = nil,
+                operationId: Components.Schemas.Id? = nil,
+                taskId: Components.Schemas.Id? = nil,
+                status: Components.Schemas.SaleDelistStatus,
+                result: Swift.String,
+                attempts: Swift.Int32? = nil,
+                error: Components.Schemas.ActivityError? = nil,
+                startedAt: Components.Schemas.Timestamp,
+                settledAt: Components.Schemas.Timestamp? = nil
+            ) {
+                self.itemId = itemId
+                self.marketplace = marketplace
+                self.listingId = listingId
+                self.operationId = operationId
+                self.taskId = taskId
+                self.status = status
+                self.result = result
+                self.attempts = attempts
+                self.error = error
+                self.startedAt = startedAt
+                self.settledAt = settledAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId
+                case marketplace
+                case listingId
+                case operationId
+                case taskId
+                case status
+                case result
+                case attempts
+                case error
+                case startedAt
+                case settledAt
+            }
+        }
+        /// Why a sale went the way it did: how Listora learned of it (which check saw it, where, and
+        /// when), when it was recorded, each delist it started on the other marketplaces and how each
+        /// ended, and the whole timeline.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleExplanation`.
+        public struct SaleExplanation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/saleId`.
+            public var saleId: Components.Schemas.Id
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/marketplace`.
+            public var marketplace: Components.Schemas.Marketplace
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/externalOrderId`.
+            public var externalOrderId: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/soldAt`.
+            public var soldAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/recordedAt`.
+            public var recordedAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/detectionSource`.
+            public var detectionSource: Components.Schemas.SaleDetectionSource
+            /// How Listora learned of it, in the seller's words.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/detection`.
+            public var detection: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/check`.
+            public var check: Components.Schemas.SaleCheckSummary?
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/reportedAt`.
+            public var reportedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/delists`.
+            public var delists: [Components.Schemas.SaleDelist]
+            /// The sale's timeline, newest first.
+            ///
+            /// - Remark: Generated from `#/components/schemas/SaleExplanation/entries`.
+            public var entries: [Components.Schemas.ActivityEntry]
+            /// Creates a new `SaleExplanation`.
+            ///
+            /// - Parameters:
+            ///   - saleId:
+            ///   - marketplace:
+            ///   - externalOrderId:
+            ///   - soldAt:
+            ///   - recordedAt:
+            ///   - detectionSource:
+            ///   - detection: How Listora learned of it, in the seller's words.
+            ///   - check:
+            ///   - reportedAt:
+            ///   - delists:
+            ///   - entries: The sale's timeline, newest first.
+            public init(
+                saleId: Components.Schemas.Id,
+                marketplace: Components.Schemas.Marketplace,
+                externalOrderId: Swift.String? = nil,
+                soldAt: Components.Schemas.Timestamp,
+                recordedAt: Components.Schemas.Timestamp,
+                detectionSource: Components.Schemas.SaleDetectionSource,
+                detection: Swift.String,
+                check: Components.Schemas.SaleCheckSummary? = nil,
+                reportedAt: Components.Schemas.Timestamp? = nil,
+                delists: [Components.Schemas.SaleDelist],
+                entries: [Components.Schemas.ActivityEntry]
+            ) {
+                self.saleId = saleId
+                self.marketplace = marketplace
+                self.externalOrderId = externalOrderId
+                self.soldAt = soldAt
+                self.recordedAt = recordedAt
+                self.detectionSource = detectionSource
+                self.detection = detection
+                self.check = check
+                self.reportedAt = reportedAt
+                self.delists = delists
+                self.entries = entries
+            }
+            public enum CodingKeys: String, CodingKey {
+                case saleId
+                case marketplace
+                case externalOrderId
+                case soldAt
+                case recordedAt
+                case detectionSource
+                case detection
+                case check
+                case reportedAt
+                case delists
+                case entries
+            }
+        }
+        /// A `KnownSaleCheckHealth`, or one added after this client was built.
+        ///
+        /// - Remark: Generated from `#/components/schemas/SaleCheckHealth`.
+        public struct SaleCheckHealth: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SaleCheckHealth/value1`.
+            public var value1: Components.Schemas.KnownSaleCheckHealth?
+            /// - Remark: Generated from `#/components/schemas/SaleCheckHealth/value2`.
+            public var value2: Swift.String?
+            /// Creates a new `SaleCheckHealth`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            public init(
+                value1: Components.Schemas.KnownSaleCheckHealth? = nil,
+                value2: Swift.String? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try decoder.decodeFromSingleValueContainer()
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                    self.value1,
+                    self.value2
+                ])
+            }
+        }
+        /// Whether a connection's sale checks work. `failing`: the last checks failed. `overdue`: the
+        /// check that was due has not run (on the phone: Listora was not opened there).
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/KnownSaleCheckHealth`.
+        @frozen public enum KnownSaleCheckHealth: String, Codable, Hashable, Sendable, CaseIterable {
+            case healthy = "healthy"
+            case failing = "failing"
+            case overdue = "overdue"
+        }
+        /// An automation connection's sale checks: whether they work, when one last ran and last
+        /// worked, when the next is due, and the last failure.
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ConnectionSaleChecks`.
+        public struct ConnectionSaleChecks: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConnectionSaleChecks/health`.
+            public var health: Components.Schemas.SaleCheckHealth
+            /// - Remark: Generated from `#/components/schemas/ConnectionSaleChecks/lastCheckedAt`.
+            public var lastCheckedAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/ConnectionSaleChecks/lastSucceededAt`.
+            public var lastSucceededAt: Components.Schemas.Timestamp?
+            /// - Remark: Generated from `#/components/schemas/ConnectionSaleChecks/nextCheckAt`.
+            public var nextCheckAt: Components.Schemas.Timestamp
+            /// - Remark: Generated from `#/components/schemas/ConnectionSaleChecks/lastError`.
+            public var lastError: Components.Schemas.ActivityError?
+            /// Creates a new `ConnectionSaleChecks`.
+            ///
+            /// - Parameters:
+            ///   - health:
+            ///   - lastCheckedAt:
+            ///   - lastSucceededAt:
+            ///   - nextCheckAt:
+            ///   - lastError:
+            public init(
+                health: Components.Schemas.SaleCheckHealth,
+                lastCheckedAt: Components.Schemas.Timestamp? = nil,
+                lastSucceededAt: Components.Schemas.Timestamp? = nil,
+                nextCheckAt: Components.Schemas.Timestamp,
+                lastError: Components.Schemas.ActivityError? = nil
+            ) {
+                self.health = health
+                self.lastCheckedAt = lastCheckedAt
+                self.lastSucceededAt = lastSucceededAt
+                self.nextCheckAt = nextCheckAt
+                self.lastError = lastError
+            }
+            public enum CodingKeys: String, CodingKey {
+                case health
+                case lastCheckedAt
+                case lastSucceededAt
+                case nextCheckAt
+                case lastError
             }
         }
     }

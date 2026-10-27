@@ -30,6 +30,7 @@ describe('API feature discovery', () => {
   it('finds every feature folder of src/', () => {
     expect(API_FEATURES.map(({ name }) => name)).toEqual([
       'account',
+      'activity',
       'analyses',
       'batches',
       'connections',

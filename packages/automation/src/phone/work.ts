@@ -36,6 +36,7 @@ import {
   type Marketplace,
   type PhoneWorkPurpose,
   type PhoneWorkTable,
+  type SaleCheckReason,
 } from '@listora/db';
 import type { SessionVault } from '@listora/connections';
 import {
@@ -60,7 +61,7 @@ import {
 import { createLogger, type Logger } from '@listora/shared';
 
 import type { AutomationSessions, SessionRequest } from '../adapter/sessions.ts';
-import { rateLimitWait, runOutcome } from '../adapter/runner-sessions.ts';
+import { rateLimitWait, runOutcome, runSteps } from '../adapter/runner-sessions.ts';
 import {
   isAutomatedMarketplace,
   standInProfile,
@@ -74,12 +75,13 @@ import {
   prepareSaleCheck,
   recordSaleCheckFailure,
   recordSaleCheckOrders,
-  type PreparedSaleCheck,
+  startSaleCheckRun,
+  type StartedSaleCheck,
 } from '../sale-checks/job.ts';
 import type { SaleCheckSettings } from '../settings.ts';
 import { prepareSessionCheck, recordSessionCheck } from '../session-checks/job.ts';
 import { queueSessionCheckForPhone } from '../session-checks/schedule.ts';
-import { readPhoneAnswer, readPhoneEvidence, readPhoneTimings } from './answers.ts';
+import { readPhoneAnswer, readPhoneEvidence } from './answers.ts';
 import { PHONE_RUNTIME_VERSION, type PhoneCallInput } from './runtime.ts';
 import {
   callKey,
@@ -166,7 +168,16 @@ type WorkRow = Selectable<PhoneWorkTable>;
 type StepState =
   | { kind: 'operation'; ref: ClaimedStepRef }
   | { kind: 'session_check'; checkId: string; attempt: number }
-  | { kind: 'sale_check'; since: string | null; checkedThrough: string | null };
+  | {
+      kind: 'sale_check';
+      /** A read of the sold history (`sale_history` work) rather than a sale check. */
+      history?: boolean;
+      /** The check's record (`sale_check_run`); absent for a claim made before records. */
+      runId?: string;
+      reason?: SaleCheckReason;
+      since: string | null;
+      checkedThrough: string | null;
+    };
 
 /** The call the phone runs now. */
 interface PendingState {
@@ -263,7 +274,7 @@ export async function answerPhoneCall(
       throw new PhoneCallConflictError();
     }
     const run = readPhoneAnswer(pending.input.call, answer.answer);
-    logAnswered(deps.logger, work, pending, run, readPhoneTimings(answer.answer));
+    logAnswered(deps.logger, work, pending, run);
     logStopped(deps.logger, work, pending, run, readPhoneEvidence(answer.answer));
     await finishRun(trx, work, pending.runId, run);
     if (run.type === 'ran' && !run.result.ok && run.result.failure.kind === 'challenge') {
@@ -442,7 +453,9 @@ async function claimStepState(
         ? null
         : { kind: 'session_check', checkId: work.check_id, attempt: prepared.attempt };
     }
-    case 'sale_check': {
+    case 'sale_check':
+    case 'sale_history': {
+      const history = work.purpose === 'sale_history';
       const prepared = await prepareSaleCheck(
         {
           db: trx,
@@ -451,14 +464,18 @@ async function claimStepState(
           logger: deps.logger,
         },
         { accountId: work.account_id, connectionId: work.connection_id },
+        history ? 'history' : 'scheduled',
       );
-      return prepared === null
-        ? null
-        : {
-            kind: 'sale_check',
-            since: prepared.since?.toISOString() ?? null,
-            checkedThrough: prepared.checkedThrough?.toISOString() ?? null,
-          };
+      if (prepared === null) return null;
+      const started = await startSaleCheckRun(trx, prepared, 'phone');
+      return {
+        kind: 'sale_check',
+        ...(history ? { history: true } : {}),
+        runId: started.runId,
+        reason: started.reason,
+        since: started.since?.toISOString() ?? null,
+        checkedThrough: started.checkedThrough?.toISOString() ?? null,
+      };
     }
     default:
       return null;
@@ -586,14 +603,18 @@ async function replay(
       const adapter = lookup(work.marketplace);
       if (connection === undefined || adapter?.listOrdersSince === undefined)
         return { type: 'gone' };
-      const prepared: PreparedSaleCheck = {
+      if (step.runId === undefined) return { type: 'gone' };
+      const prepared: StartedSaleCheck = {
         key: { accountId: work.account_id, connectionId: work.connection_id },
         marketplace: work.marketplace,
         connection,
-        adapter: adapter as PreparedSaleCheck['adapter'],
+        adapter: adapter as StartedSaleCheck['adapter'],
+        kind: step.history === true ? 'history' : 'scheduled',
+        reason: step.reason ?? 'scheduled',
         since: step.since === null ? null : new Date(step.since),
         checkedThrough: step.checkedThrough === null ? null : new Date(step.checkedThrough),
         runsOn: 'phone',
+        runId: step.runId,
       };
       let read: { orders: RemoteOrder[] } | { error: unknown };
       try {
@@ -727,9 +748,9 @@ function logAnswered(
   work: WorkRow,
   pending: PendingState,
   run: ReturnType<typeof readPhoneAnswer>,
-  stepMs: number[] | null,
 ): void {
   const result = run.type === 'ran' ? run.result : null;
+  const stepMs = result?.stepMs ?? null;
   logger.info(
     {
       host: 'phone',
@@ -803,6 +824,7 @@ async function finishRun(
             : failure.kind === 'error'
               ? failure.code
               : failure.kind,
+      steps: result === null ? null : jsonb(runSteps(result)),
     })
     .where('account_id', '=', work.account_id)
     .where('id', '=', runId)

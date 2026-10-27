@@ -16,6 +16,7 @@ private final class FakeSalesService: SalesService, @unchecked Sendable {
     private var _recorded: [(NewSale, String)] = []
     private var _changes: [(SaleChange, String)] = []
     private var _relists: [[String: [String]]] = []
+    private var _explanation: Schemas.SaleExplanation?
 
     init(sale: Schemas.Sale) {
         _sale = sale
@@ -69,6 +70,17 @@ private final class FakeSalesService: SalesService, @unchecked Sendable {
     func sale(id _: String) async throws(APIFailure) -> Schemas.Sale {
         try fail()
         return sale
+    }
+
+    /// What `explanation(saleID:)` answers; without one it fails (the screen works without it).
+    var explanation: Schemas.SaleExplanation? {
+        get { locked { _explanation } }
+        set { locked { _explanation = newValue } }
+    }
+
+    func explanation(saleID _: String) async throws(APIFailure) -> Schemas.SaleExplanation {
+        guard let explanation else { throw .networkUnavailable }
+        return explanation
     }
 
     func sellableItems(search _: String) async throws(APIFailure) -> [Schemas.ItemSummary] {
@@ -191,6 +203,18 @@ private let fast = SalesTiming(poll: .milliseconds(5), sendAttempts: 3, sendRetr
 @MainActor
 @Suite("Sales models")
 struct SalesModelsTests {
+    @Test
+    func `a sale says how Listora found it, and works without it`() async {
+        let service = FakeSalesService(sale: sale())
+        let model = SaleDetailModel(saleID: "sale-1", service: service, timing: fast)
+        await model.load()
+        #expect(model.phase == .loaded)
+        #expect(model.explanation == nil)
+        service.explanation = saleExplanation()
+        await model.load()
+        #expect(model.explanation?.detection == "Found by a sale check of Mercari on your iPhone.")
+    }
+
     @Test
     func `mark sold starts from the item and offers where it is listed first`() {
         let model = MarkSoldModel(request: request, service: FakeSalesService(sale: sale()), timing: fast, now: now)

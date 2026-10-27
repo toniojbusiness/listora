@@ -138,6 +138,12 @@ function summaryParts(cards: readonly TodayCard[]): string[] {
     parts.push(`reconnect ${joinList(names)}`);
   }
 
+  const saleChecks = of('sale_checks');
+  if (saleChecks.length > 0) {
+    const names = [...new Set(saleChecks.map((card) => MARKETPLACE_NAMES[card.marketplace]))];
+    parts.push(`see why ${joinList(names)} sales aren't being checked`);
+  }
+
   const drafts = of('review_drafts')[0];
   if (drafts !== undefined) parts.push(`review ${plural(drafts.count, 'draft')}`);
 

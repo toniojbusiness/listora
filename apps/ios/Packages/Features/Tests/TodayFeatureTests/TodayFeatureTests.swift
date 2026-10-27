@@ -190,6 +190,34 @@ struct TodayModelTests {
     private let newYork = TimeZone(identifier: "America/New_York") ?? .current
 
     @Test
+    func `a marketplace whose sale checks fail says so and opens the marketplaces`() throws {
+        let now = Date(timeIntervalSince1970: 1_792_929_600)
+        let failing = try TodayCardContent(
+            card(
+                kind: "sale_checks",
+                action: ["label": "See marketplaces", "destination": "marketplaces", "connectionId": "c"],
+                extra: ["saleChecks": [
+                    "connectionId": "c", "marketplace": "mercari", "health": "failing",
+                    "since": "2026-10-26T08:00:00Z",
+                ]],
+            ),
+            now: now,
+        )
+        #expect(failing.action?.destination == .marketplaces)
+        #expect(failing.status == .init(label: "Sale checks failing", tone: .actionNeeded))
+        #expect(failing.facts.map(\.text) == ["Mercari"])
+        #expect(failing.systemImage == "eye.slash.fill")
+        let overdue = try TodayCardContent(
+            card(kind: "sale_checks", extra: ["saleChecks": [
+                "connectionId": "c", "marketplace": "depop", "health": "overdue",
+                "since": "2026-10-26T08:00:00Z",
+            ]]),
+            now: now,
+        )
+        #expect(overdue.status?.label == "Sale checks overdue")
+    }
+
+    @Test
     func `loads the cards in the server's order, and is caught up without any`() async throws {
         let first = try today(cards: [card(id: "a", kind: "ship"), card(id: "b", kind: "reconnect")])
         let empty = try today(cards: [])

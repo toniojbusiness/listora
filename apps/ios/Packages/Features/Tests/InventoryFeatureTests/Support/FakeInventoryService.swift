@@ -20,6 +20,7 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
     private var _createdOn: [String] = []
     private var _replaced: [Schemas.ItemReplace] = []
     private var _floors: [Schemas.MarketplaceFloor] = []
+    private var _activityPages: [ActivityPage] = []
 
     private func locked<T>(_ body: () -> T) -> T {
         lock.lock()
@@ -146,6 +147,19 @@ final class FakeInventoryService: InventoryService, @unchecked Sendable {
 
     func events(operationID _: String) async throws(APIFailure) -> [Schemas.OperationEvent] {
         []
+    }
+
+    /// The item's activity, one page per call, in order.
+    var activityPages: [ActivityPage] {
+        get { locked { _activityPages } }
+        set { locked { _activityPages = newValue } }
+    }
+
+    func activity(itemID _: String, cursor: String?) async throws(APIFailure) -> ActivityPage {
+        try record("activity\(cursor.map { ":\($0)" } ?? "")")
+        return locked {
+            _activityPages.isEmpty ? ActivityPage(entries: [], nextCursor: nil) : _activityPages.removeFirst()
+        }
     }
 
     func createListing(

@@ -67,6 +67,8 @@ tags:
     description: Spoken corrections on the review screen that the app could not parse itself.
   - name: phone
     description: The seller's devices, and the marketplace work their iPhone runs (docs/features/phone-execution.md).
+  - name: activity
+    description: The activity timeline of items and marketplace actions, and how each sale was found (docs/features/activity.md).
 
 paths:
   /health/live:
@@ -215,6 +217,12 @@ paths:
     $ref: './paths/phone.yaml#/~1v1~1phone-runtime'
   /v1/phone-runs/{runId}/calls/{index}:
     $ref: './paths/phone.yaml#/~1v1~1phone-runs~1{runId}~1calls~1{index}'
+  /v1/items/{itemId}/activity:
+    $ref: './paths/activity.yaml#/~1v1~1items~1{itemId}~1activity'
+  /v1/operations/{operationId}/activity:
+    $ref: './paths/activity.yaml#/~1v1~1operations~1{operationId}~1activity'
+  /v1/sales/{saleId}/explanation:
+    $ref: './paths/activity.yaml#/~1v1~1sales~1{saleId}~1explanation'
 
 components:
   securitySchemes:
@@ -845,6 +853,8 @@ components:
       $ref: './components/schemas/today.yaml#/TodayDelist'
     TodayConnection:
       $ref: './components/schemas/today.yaml#/TodayConnection'
+    TodaySaleChecks:
+      $ref: './components/schemas/today.yaml#/TodaySaleChecks'
     TodayStaleSuggestion:
       $ref: './components/schemas/today.yaml#/TodayStaleSuggestion'
     KnownTodayStaleSuggestion:
@@ -865,3 +875,50 @@ components:
       $ref: './components/schemas/today.yaml#/TodaySummarySettings'
     TodaySummarySettingsReplace:
       $ref: './components/schemas/today.yaml#/TodaySummarySettingsReplace'
+    # ---------------------------------------------------------------- activity
+    ActivitySource:
+      $ref: './components/schemas/activity.yaml#/ActivitySource'
+    KnownActivitySource:
+      $ref: './components/schemas/activity.yaml#/KnownActivitySource'
+    ActivityOutcome:
+      $ref: './components/schemas/activity.yaml#/ActivityOutcome'
+    KnownActivityOutcome:
+      $ref: './components/schemas/activity.yaml#/KnownActivityOutcome'
+    ActivityKind:
+      $ref: './components/schemas/activity.yaml#/ActivityKind'
+    KnownActivityKind:
+      $ref: './components/schemas/activity.yaml#/KnownActivityKind'
+    ActivityStep:
+      $ref: './components/schemas/activity.yaml#/ActivityStep'
+    ActivityError:
+      $ref: './components/schemas/activity.yaml#/ActivityError'
+    ActivityReference:
+      $ref: './components/schemas/activity.yaml#/ActivityReference'
+    ActivityEntry:
+      $ref: './components/schemas/activity.yaml#/ActivityEntry'
+    ActivityPage:
+      $ref: './components/schemas/activity.yaml#/ActivityPage'
+    SaleCheckRunKind:
+      $ref: './components/schemas/activity.yaml#/SaleCheckRunKind'
+    KnownSaleCheckRunKind:
+      $ref: './components/schemas/activity.yaml#/KnownSaleCheckRunKind'
+    ActivityHost:
+      $ref: './components/schemas/activity.yaml#/ActivityHost'
+    KnownActivityHost:
+      $ref: './components/schemas/activity.yaml#/KnownActivityHost'
+    SaleCheckSummary:
+      $ref: './components/schemas/activity.yaml#/SaleCheckSummary'
+    SaleDelistStatus:
+      $ref: './components/schemas/activity.yaml#/SaleDelistStatus'
+    KnownSaleDelistStatus:
+      $ref: './components/schemas/activity.yaml#/KnownSaleDelistStatus'
+    SaleDelist:
+      $ref: './components/schemas/activity.yaml#/SaleDelist'
+    SaleExplanation:
+      $ref: './components/schemas/activity.yaml#/SaleExplanation'
+    SaleCheckHealth:
+      $ref: './components/schemas/activity.yaml#/SaleCheckHealth'
+    KnownSaleCheckHealth:
+      $ref: './components/schemas/activity.yaml#/KnownSaleCheckHealth'
+    ConnectionSaleChecks:
+      $ref: './components/schemas/activity.yaml#/ConnectionSaleChecks'

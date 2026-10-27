@@ -362,6 +362,16 @@ export class ObservabilityStack extends ListoraStack {
       1,
       { evaluationPeriods: 1 },
     );
+    // A level, like the relink alarm: the seller is told on Today and by a notification; this
+    // tells the operator that a marketplace's sales are not being seen.
+    alarm(
+      'sale-checks-unhealthy',
+      "A marketplace connection's sale checks fail or stopped running: sales there are not " +
+        'being seen, so a sold item may stay for sale elsewhere (npm run admin -- sale-checks).',
+      trust('UnhealthySaleChecks', 'Maximum'),
+      1,
+      { evaluationPeriods: 1 },
+    );
     alarm(
       'deletion-overdue',
       'An account or marketplace connection deletion is still unfinished 8 days after it was ' +

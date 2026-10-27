@@ -137,9 +137,20 @@ export type ScriptErrorCode =
    */
   | 'stopped_for_check';
 
+/**
+ * How a script went: its value or why it stopped, whether a step that changes the listing ran,
+ * the names of the steps it ran in order, and how long each one took (`stepMs`, parallel to
+ * `steps`; absent from a phone runtime older than step timings).
+ */
 export type ScriptResult<T> =
-  | { ok: true; value: T; mutated: boolean; steps: string[] }
-  | { ok: false; failure: ScriptFailure; mutated: boolean; steps: string[] };
+  | { ok: true; value: T; mutated: boolean; steps: string[]; stepMs?: number[] }
+  | {
+      ok: false;
+      failure: ScriptFailure;
+      mutated: boolean;
+      steps: string[];
+      stepMs?: number[];
+    };
 
 /** A script's body: its steps, run one after the other. */
 export type Script<T> = (step: StepRunner) => Promise<T>;

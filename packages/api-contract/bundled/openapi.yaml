@@ -67,6 +67,8 @@ tags:
     description: Spoken corrections on the review screen that the app could not parse itself.
   - name: phone
     description: The seller's devices, and the marketplace work their iPhone runs (docs/features/phone-execution.md).
+  - name: activity
+    description: The activity timeline of items and marketplace actions, and how each sale was found (docs/features/activity.md).
 paths:
   /health/live:
     get:
@@ -2483,6 +2485,85 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/items/{itemId}/activity:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    get:
+      tags:
+        - activity
+      operationId: listItemActivity
+      summary: List an item's activity
+      description: |
+        Everything that happened to the item, newest first: its changes, every step of every
+        marketplace action on its listings, each browser session that ran one (in Listora's cloud
+        browser or on the seller's iPhone, with its steps and their times), the tasks it gave the
+        seller, its sales, the checks that saw them, and the delists they started.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of the item's activity.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/operations/{operationId}/activity:
+    parameters:
+      - $ref: '#/components/parameters/OperationId'
+    get:
+      tags:
+        - activity
+      operationId: listOperationActivity
+      summary: List a marketplace action's activity
+      description: |
+        One marketplace action, newest first: each of its steps, each browser session that ran
+        one with its steps and their times, and the tasks it gave the seller.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: A page of the operation's activity.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActivityPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/DefaultError'
+  /v1/sales/{saleId}/explanation:
+    parameters:
+      - $ref: '#/components/parameters/SaleId'
+    get:
+      tags:
+        - activity
+      operationId: getSaleExplanation
+      summary: Explain how a sale was found and what it started
+      description: |
+        How Listora learned of the sale (which sale check saw it, where, and when; or the
+        marketplace's notification, a forwarded email, the seller's entry), when it was recorded,
+        each delist it started on the other marketplaces and how it ended, and its timeline.
+      responses:
+        '200':
+          description: The explanation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaleExplanation'
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/DefaultError'
 components:
@@ -5272,6 +5353,8 @@ components:
           $ref: '#/components/schemas/ConnectionIssue'
         execution:
           $ref: '#/components/schemas/ConnectionExecution'
+        saleChecks:
+          $ref: '#/components/schemas/ConnectionSaleChecks'
     ConnectionList:
       type: object
       required:
@@ -5741,11 +5824,13 @@ components:
       description: |
         `operation`: one step of a listing change (a publish, a price change, a delist, a relist,
         or its read-back). `session_check`: the check that a linked sign-in works. `sale_check`:
-        a look at the seller's sold orders.
+        a look at the seller's sold orders. `sale_history`: a read-only read of the seller's sold
+        history, which changes nothing.
       enum:
         - operation
         - session_check
         - sale_check
+        - sale_history
     PhoneRunClaim:
       type: object
       additionalProperties: false
@@ -7091,11 +7176,13 @@ components:
         `ship`: a sold item that is not shipped. `reconnect`: a marketplace connection only the
         seller can fix (`reauth_required` or `revoked`). `review_drafts`: items still in `draft`.
         `stale_listing`: a listing live a long time with no changes, with a price drop (never below
-        the item's floor) or a relist suggested.
+        the item's floor) or a relist suggested. `sale_checks`: a marketplace whose sale checks fail
+        or stopped running, so its sales are not being seen.
       enum:
         - delist
         - ship
         - reconnect
+        - sale_checks
         - review_drafts
         - stale_listing
     TodayUrgency:
@@ -7242,6 +7329,25 @@ components:
           maxLength: 200
         status:
           $ref: '#/components/schemas/ConnectionStatus'
+    TodaySaleChecks:
+      type: object
+      description: A `sale_checks` card's connection and its problem.
+      required:
+        - connectionId
+        - marketplace
+        - health
+        - since
+      properties:
+        connectionId:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        health:
+          $ref: '#/components/schemas/SaleCheckHealth'
+        since:
+          $ref: '#/components/schemas/Timestamp'
+        lastSucceededAt:
+          $ref: '#/components/schemas/Timestamp'
     TodayStaleSuggestion:
       description: |
         A `KnownTodayStaleSuggestion`, or a suggestion added after this client was built, which
@@ -7307,7 +7413,7 @@ components:
       description: |
         One thing that needs the seller. A card exists only while its work is not done, so it is
         gone from the next summary once the work is finished. The kind's own property (`shipment`,
-        `delist`, `connection`, `staleListing`, or `drafts`) carries its facts.
+        `delist`, `connection`, `saleChecks`, `staleListing`, or `drafts`) carries its facts.
       required:
         - id
         - kind
@@ -7339,6 +7445,8 @@ components:
           $ref: '#/components/schemas/TodayDelist'
         connection:
           $ref: '#/components/schemas/TodayConnection'
+        saleChecks:
+          $ref: '#/components/schemas/TodaySaleChecks'
         staleListing:
           $ref: '#/components/schemas/TodayStaleListing'
         drafts:
@@ -7445,3 +7553,365 @@ components:
           minLength: 1
           maxLength: 64
           description: An IANA time zone name, for example `America/New_York` (the device's own).
+    ActivitySource:
+      description: A `KnownActivitySource`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownActivitySource'
+        - type: string
+          maxLength: 64
+    KnownActivitySource:
+      type: string
+      description: |
+        Who did it. `listora`: Listora's server (the operation engine, the sale intake, the
+        auto-delist). `cloud_browser`: Listora's cloud browser. `iphone`: the seller's iPhone, in
+        their own marketplace session. `you`: the seller. `marketplace`: the marketplace.
+      enum:
+        - listora
+        - cloud_browser
+        - iphone
+        - you
+        - marketplace
+    ActivityOutcome:
+      description: |
+        A `KnownActivityOutcome`, or one added after this client was built (shown as `info`).
+      anyOf:
+        - $ref: '#/components/schemas/KnownActivityOutcome'
+        - type: string
+          maxLength: 64
+    KnownActivityOutcome:
+      type: string
+      description: |
+        How it went. `in_progress`: still running. `waiting`: waits for the seller. `info`: nothing
+        to judge (a change, a sale, a cancellation).
+      enum:
+        - succeeded
+        - failed
+        - in_progress
+        - waiting
+        - info
+    ActivityKind:
+      description: A `KnownActivityKind`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownActivityKind'
+        - type: string
+          maxLength: 64
+    KnownActivityKind:
+      type: string
+      description: |
+        Which record it comes from. `item`: an item change. `operation`: a step of a marketplace
+        action. `browser_session`: one browser session in Listora's cloud browser or on the iPhone,
+        with its steps. `sale_check`: a sale check, or a read of the seller's sold history. `order`:
+        an order a marketplace reported or a check found. `sale`: a recorded sale. `delist`: the
+        delist after a sale. `task`: a task for the seller.
+      enum:
+        - item
+        - operation
+        - browser_session
+        - sale_check
+        - order
+        - sale
+        - delist
+        - task
+    ActivityStep:
+      type: object
+      description: One step of a browser session.
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        durationMs:
+          type: integer
+          format: int64
+          minimum: 0
+          description: How long it took; absent when the device did not say.
+    ActivityError:
+      type: object
+      description: What went wrong, as a code (for support) and in the seller's words.
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          maxLength: 100
+        message:
+          type: string
+          maxLength: 1000
+    ActivityReference:
+      type: object
+      description: |
+        Where support finds more: the browser session's run id, which its log lines carry, whether
+        it kept a redacted screenshot, and the sale check's record id.
+      required:
+        - screenshot
+      properties:
+        runId:
+          $ref: '#/components/schemas/Id'
+        saleCheckId:
+          $ref: '#/components/schemas/Id'
+        screenshot:
+          type: boolean
+    ActivityEntry:
+      type: object
+      description: |
+        One thing that happened, from the record that keeps it (docs/features/activity.md):
+        redacted, with no page content, typed values, or buyer data.
+      required:
+        - id
+        - at
+        - kind
+        - source
+        - outcome
+        - title
+      properties:
+        id:
+          type: string
+          maxLength: 200
+          description: '`<kind>:<record id>`, stable.'
+        at:
+          $ref: '#/components/schemas/Timestamp'
+        kind:
+          $ref: '#/components/schemas/ActivityKind'
+        source:
+          $ref: '#/components/schemas/ActivitySource'
+        outcome:
+          $ref: '#/components/schemas/ActivityOutcome'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        title:
+          type: string
+          maxLength: 300
+        detail:
+          type: string
+          maxLength: 1000
+        itemId:
+          $ref: '#/components/schemas/Id'
+        listingId:
+          $ref: '#/components/schemas/Id'
+        operationId:
+          $ref: '#/components/schemas/Id'
+        saleId:
+          $ref: '#/components/schemas/Id'
+        durationMs:
+          type: integer
+          format: int64
+          minimum: 0
+        steps:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ActivityStep'
+        error:
+          $ref: '#/components/schemas/ActivityError'
+        reference:
+          $ref: '#/components/schemas/ActivityReference'
+    ActivityPage:
+      type: object
+      description: Newest first.
+      required:
+        - data
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActivityEntry'
+        nextCursor:
+          type: string
+          description: Present when there are older entries.
+    SaleCheckRunKind:
+      description: A `KnownSaleCheckRunKind`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSaleCheckRunKind'
+        - type: string
+          maxLength: 64
+    KnownSaleCheckRunKind:
+      type: string
+      description: |
+        `scheduled`: a sale check, which hands new sold orders to the sale intake. `history`: a
+        read-only read of the seller's sold history, which changes nothing.
+      enum:
+        - scheduled
+        - history
+    ActivityHost:
+      description: A `KnownActivityHost`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownActivityHost'
+        - type: string
+          maxLength: 64
+    KnownActivityHost:
+      type: string
+      description: |
+        Where a check ran. `runner`: Listora's cloud browser. `phone`: the seller's iPhone.
+      enum:
+        - runner
+        - phone
+    SaleCheckSummary:
+      type: object
+      description: The sale check that saw a sale.
+      required:
+        - id
+        - kind
+        - host
+        - startedAt
+      properties:
+        id:
+          $ref: '#/components/schemas/Id'
+        kind:
+          $ref: '#/components/schemas/SaleCheckRunKind'
+        host:
+          $ref: '#/components/schemas/ActivityHost'
+        startedAt:
+          $ref: '#/components/schemas/Timestamp'
+        finishedAt:
+          $ref: '#/components/schemas/Timestamp'
+        ordersSeen:
+          type: integer
+          format: int32
+          minimum: 0
+        newOrders:
+          type: integer
+          format: int32
+          minimum: 0
+        runId:
+          $ref: '#/components/schemas/Id'
+    SaleDelistStatus:
+      description: A `KnownSaleDelistStatus`, or a value added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSaleDelistStatus'
+        - type: string
+          maxLength: 64
+    KnownSaleDelistStatus:
+      type: string
+      description: |
+        An operation's status (`queued` to `canceled`) for a delist Listora runs, or a task's
+        (`open`, `done`, `dismissed`) for one the seller does.
+      enum:
+        - queued
+        - running
+        - retrying
+        - verifying
+        - succeeded
+        - failed
+        - needs_user_action
+        - canceled
+        - open
+        - done
+        - dismissed
+    SaleDelist:
+      type: object
+      description: One delist the sale started on another marketplace, and how it ended.
+      required:
+        - itemId
+        - marketplace
+        - status
+        - result
+        - startedAt
+      properties:
+        itemId:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        listingId:
+          $ref: '#/components/schemas/Id'
+        operationId:
+          $ref: '#/components/schemas/Id'
+        taskId:
+          $ref: '#/components/schemas/Id'
+        status:
+          $ref: '#/components/schemas/SaleDelistStatus'
+        result:
+          type: string
+          maxLength: 1000
+          description: What happened, in the seller's words.
+        attempts:
+          type: integer
+          format: int32
+          minimum: 0
+        error:
+          $ref: '#/components/schemas/ActivityError'
+        startedAt:
+          $ref: '#/components/schemas/Timestamp'
+        settledAt:
+          $ref: '#/components/schemas/Timestamp'
+    SaleExplanation:
+      type: object
+      description: |
+        Why a sale went the way it did: how Listora learned of it (which check saw it, where, and
+        when), when it was recorded, each delist it started on the other marketplaces and how each
+        ended, and the whole timeline.
+      required:
+        - saleId
+        - marketplace
+        - soldAt
+        - recordedAt
+        - detectionSource
+        - detection
+        - delists
+        - entries
+      properties:
+        saleId:
+          $ref: '#/components/schemas/Id'
+        marketplace:
+          $ref: '#/components/schemas/Marketplace'
+        externalOrderId:
+          type: string
+          maxLength: 255
+        soldAt:
+          $ref: '#/components/schemas/Timestamp'
+        recordedAt:
+          $ref: '#/components/schemas/Timestamp'
+        detectionSource:
+          $ref: '#/components/schemas/SaleDetectionSource'
+        detection:
+          type: string
+          maxLength: 300
+          description: How Listora learned of it, in the seller's words.
+        check:
+          $ref: '#/components/schemas/SaleCheckSummary'
+        reportedAt:
+          $ref: '#/components/schemas/Timestamp'
+        delists:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleDelist'
+        entries:
+          type: array
+          description: The sale's timeline, newest first.
+          items:
+            $ref: '#/components/schemas/ActivityEntry'
+    SaleCheckHealth:
+      description: A `KnownSaleCheckHealth`, or one added after this client was built.
+      anyOf:
+        - $ref: '#/components/schemas/KnownSaleCheckHealth'
+        - type: string
+          maxLength: 64
+    KnownSaleCheckHealth:
+      type: string
+      description: |
+        Whether a connection's sale checks work. `failing`: the last checks failed. `overdue`: the
+        check that was due has not run (on the phone: Listora was not opened there).
+      enum:
+        - healthy
+        - failing
+        - overdue
+    ConnectionSaleChecks:
+      type: object
+      description: |
+        An automation connection's sale checks: whether they work, when one last ran and last
+        worked, when the next is due, and the last failure.
+      required:
+        - health
+        - nextCheckAt
+      properties:
+        health:
+          $ref: '#/components/schemas/SaleCheckHealth'
+        lastCheckedAt:
+          $ref: '#/components/schemas/Timestamp'
+        lastSucceededAt:
+          $ref: '#/components/schemas/Timestamp'
+        nextCheckAt:
+          $ref: '#/components/schemas/Timestamp'
+        lastError:
+          $ref: '#/components/schemas/ActivityError'

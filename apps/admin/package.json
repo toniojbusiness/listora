@@ -8,7 +8,9 @@
     "admin": "node --env-file-if-exists=../../.env src/cli.ts"
   },
   "dependencies": {
+    "@listora/activity": "*",
     "@listora/ai": "*",
+    "@listora/automation": "*",
     "@listora/connections": "*",
     "@listora/db": "*",
     "@listora/marketplaces": "*",

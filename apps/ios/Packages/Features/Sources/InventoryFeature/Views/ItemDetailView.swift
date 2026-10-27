@@ -16,6 +16,7 @@ struct ItemDetailView: View {
     @State private var openTask: OpenTask?
     @State private var editingSize = false
     @State private var reviewing = false
+    @State private var showsActivity = false
 
     /// The assisted step whose task is open.
     private struct OpenTask: Identifiable {
@@ -63,6 +64,9 @@ struct ItemDetailView: View {
                         Task { await model.load() }
                     }
                 }
+            }
+            .navigationDestination(isPresented: $showsActivity) {
+                ItemActivityView(model: environment.makeActivityModel(itemID: model.itemID))
             }
             .navigationDestination(item: $openSale) { link in
                 environment.saleScreens?.sale(link.id)
@@ -174,6 +178,7 @@ struct ItemDetailView: View {
                 MoneySection(item: item)
                 markSoldButton(for: item)
                 DetailsSection(item: item) { editingSize = true }
+                ActivityLink { showsActivity = true }
             }
             .padding(Spacing.md)
             .frame(maxWidth: Layout.readableWidth)
@@ -271,6 +276,28 @@ struct ItemDetailView: View {
     }
 }
 
+/// Everything that happened to the item, from every marketplace action to every sale check.
+private struct ActivityLink: View {
+    let open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            ListRow(
+                "Activity",
+                subtitle: "Every step Listora took with this item, and when",
+                systemImage: "clock.arrow.circlepath",
+            ) {
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(Palette.textSecondary)
+                    .accessibilityHidden(true)
+            }
+            .cardStyle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("item.activity")
+    }
+}
+
 /// Title, SKU, status, and list price.
 private struct ItemHeader: View {
     let item: Item
@@ -353,27 +380,6 @@ extension Components.Schemas.ItemCondition {
         case .preOwnedExcellent: "Pre-owned, excellent"
         case .preOwnedGood: "Pre-owned, good"
         case .preOwnedFair: "Pre-owned, fair"
-        }
-    }
-}
-
-/// The item's photos, swipeable, cover first.
-private struct PhotoCarousel: View {
-    let photos: [Components.Schemas.Photo]
-
-    var body: some View {
-        if photos.isEmpty {
-            PhotoView(url: nil, cornerRadius: Radius.large)
-                .frame(height: 200)
-        } else {
-            TabView {
-                ForEach(photos, id: \.id) { photo in
-                    PhotoView(url: photo.urls?.listing ?? photo.urls?.thumbnail, cornerRadius: Radius.large)
-                        .accessibilityLabel("Photo \(photo.position + 1) of \(photos.count)")
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: photos.count > 1 ? .automatic : .never))
-            .frame(height: 240)
         }
     }
 }

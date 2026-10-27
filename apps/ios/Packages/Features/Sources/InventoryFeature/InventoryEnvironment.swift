@@ -130,6 +130,10 @@ public final class InventoryEnvironment {
         ItemDetailModel(itemID: itemID, service: service, timing: detailTiming)
     }
 
+    func makeActivityModel(itemID: String) -> ItemActivityModel {
+        ItemActivityModel(itemID: itemID, service: service)
+    }
+
     /// The List flow, with `marketplace` (the row the seller tapped List on) selected.
     func makeListingFlow(item: Item, marketplace: String? = nil) -> ListingFlowModel {
         ListingFlowModel(item: item, service: service, listingCopy: listingCopy, marketplace: marketplace)

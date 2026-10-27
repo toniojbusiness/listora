@@ -1,0 +1,19 @@
+{
+  "name": "@listora/activity",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The activity timeline: every operation, step, browser session, sale check, sale, delist, and task of an item, an operation, a sale, or a marketplace, in the seller's words, from the records the server, the browser runner, and the phone keep; and the sale explanation (which check saw a sale, and what its delists did).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@listora/db": "*",
+    "@listora/marketplaces": "*",
+    "@listora/shared": "*",
+    "kysely": "^0.29.7"
+  },
+  "devDependencies": {
+    "@listora/testing": "*"
+  }
+}

@@ -1,4 +1,4 @@
-export { AutomationAdapter } from './adapter/automation-adapter.ts';
+export { AutomationAdapter, AutomationReadError } from './adapter/automation-adapter.ts';
 export type {
   AutomationAdapterOptions,
   AutomationScripts,
@@ -8,7 +8,7 @@ export type {
 export { HttpPhotoSource } from './adapter/photos.ts';
 export type { PhotoSource } from './adapter/photos.ts';
 export { RunnerSessions } from './adapter/runner-sessions.ts';
-export type { RunnerSessionsOptions } from './adapter/runner-sessions.ts';
+export type { AutomationRunStep, RunnerSessionsOptions } from './adapter/runner-sessions.ts';
 export { NoBrowserSessions } from './adapter/sessions.ts';
 export type { AutomationSessions, SessionRequest, SessionRun } from './adapter/sessions.ts';
 export { createAutomationAdapters } from './adapters.ts';
@@ -151,7 +151,19 @@ export { challengeMessage, inspectPage } from './safety/challenges.ts';
 export type { PageProblem, PageSignals } from './safety/challenges.ts';
 export { Pacing } from './safety/pacing.ts';
 export { nextSaleCheckDelay, SALE_HISTORY_DAYS } from './sale-checks/interval.ts';
+export {
+  loadSaleCheckProblems,
+  runSaleCheckHealth,
+  SALE_CHECK_HEALTH_SCHEDULE,
+  SALE_CHECK_HEALTH_TASK,
+  SALE_CHECKS_CATEGORY,
+  saleCheckErrorMessage,
+  saleCheckProblemNotification,
+  saleCheckProblemWords,
+} from './sale-checks/health.ts';
+export type { SaleCheckHealthDependencies, SaleCheckProblem } from './sale-checks/health.ts';
 export { runSaleCheck } from './sale-checks/job.ts';
+export type { SaleCheckOrderRecord } from './sale-checks/job.ts';
 export { isSaleOrderJobPayload, recordSaleOrder, SALE_ORDER_TASK } from './sale-checks/orders.ts';
 export type { SaleOrderDependencies, SaleOrderJobPayload } from './sale-checks/orders.ts';
 export type { SaleCheckDependencies } from './sale-checks/job.ts';
@@ -161,6 +173,7 @@ export {
   queueSaleCheckForPhone,
   isSaleCheckJobPayload,
   requestSaleCheck,
+  requestSaleHistoryRead,
   SALE_CHECK_TASK,
   saleCheckJobKey,
   scheduleSaleCheck,

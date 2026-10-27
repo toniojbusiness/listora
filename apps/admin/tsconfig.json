@@ -7,6 +7,8 @@
   },
   "include": ["src"],
   "references": [
+    { "path": "../../packages/automation" },
+    { "path": "../../packages/activity" },
     { "path": "../../packages/ai" },
     { "path": "../../packages/connections" },
     { "path": "../../packages/db" },

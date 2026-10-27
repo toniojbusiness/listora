@@ -7,6 +7,7 @@ typealias SaleItem = Components.Schemas.SaleItem
 typealias Money = Components.Schemas.Money
 typealias KnownMarketplace = Components.Schemas.KnownMarketplace
 typealias ItemSummary = Components.Schemas.ItemSummary
+typealias SaleExplanation = Components.Schemas.SaleExplanation
 
 /// One page of the sales feed.
 struct SalePage: Equatable, Sendable {
@@ -43,6 +44,8 @@ enum SaleChange: Equatable, Sendable {
 protocol SalesService: Sendable {
     func sales(cursor: String?) async throws(APIFailure) -> SalePage
     func sale(id: String) async throws(APIFailure) -> Sale
+    /// How the sale was found, and what each delist it started did (docs/features/activity.md).
+    func explanation(saleID: String) async throws(APIFailure) -> SaleExplanation
     /// Items to add to a bundle: the seller's unsold items matching `search`.
     func sellableItems(search: String) async throws(APIFailure) -> [ItemSummary]
     func record(_ sale: NewSale, idempotencyKey: String) async throws(APIFailure) -> Sale
@@ -74,6 +77,14 @@ struct APISalesService: SalesService {
 
     func sale(id: String) async throws(APIFailure) -> Sale {
         switch try await call({ try await client.getSale(path: .init(saleId: id)) }) {
+        case let .ok(response): try body { try response.body.json }
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func explanation(saleID: String) async throws(APIFailure) -> SaleExplanation {
+        switch try await call({ try await client.getSaleExplanation(path: .init(saleId: saleID)) }) {
         case let .ok(response): try body { try response.body.json }
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)

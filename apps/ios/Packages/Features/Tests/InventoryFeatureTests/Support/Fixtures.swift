@@ -26,6 +26,31 @@ enum Fixtures {
         .init(tone: .init(value1: tone, value2: tone.rawValue), label: label, detail: detail)
     }
 
+    static func activity(
+        id: String,
+        kind: Schemas.KnownActivityKind = .operation,
+        source: Schemas.KnownActivitySource = .listora,
+        outcome: Schemas.KnownActivityOutcome = .info,
+        title: String = "End on eBay",
+        detail: String? = nil,
+        durationMs: Int64? = nil,
+        steps: [Schemas.ActivityStep]? = nil,
+    ) -> Schemas.ActivityEntry {
+        .init(
+            id: id,
+            at: date,
+            kind: .init(value1: kind, value2: kind.rawValue),
+            source: .init(value1: source, value2: source.rawValue),
+            outcome: .init(value1: outcome, value2: outcome.rawValue),
+            marketplace: marketplace(.ebay),
+            title: title,
+            detail: detail,
+            itemId: itemID,
+            durationMs: durationMs,
+            steps: steps,
+        )
+    }
+
     static func operation(
         kind: Schemas.KnownOperationKind = .end,
         status: Schemas.KnownOperationStatus,

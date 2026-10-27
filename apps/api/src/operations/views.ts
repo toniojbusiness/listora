@@ -4,8 +4,8 @@ import type {
   OperationEvent,
   Verification,
 } from '@listora/api-contract';
+import { operationEventError, operationEventMessage } from '@listora/activity';
 import type { JsonObject, Marketplace, OperationKind, OperationStatus } from '@listora/db';
-import { MARKETPLACE_NAMES } from '@listora/marketplaces';
 import {
   DEFAULT_RETRY_POLICY,
   describeOperation,
@@ -14,7 +14,6 @@ import {
   SETTLED_STATUSES,
   type PhoneWait,
 } from '@listora/operations';
-import { assertNever } from '@listora/shared';
 
 import type { OperationRow } from '../listings/repository.ts';
 
@@ -109,53 +108,17 @@ export interface EventRow {
   created_at: Date;
 }
 
-/** The error message an event's detail recorded (`transitionOperation` stores `{ error }`). */
-function detailError(detail: JsonObject): string | null {
-  const error = detail['error'];
-  if (typeof error !== 'object' || error === null || Array.isArray(error)) return null;
-  const message = error['message'];
-  return typeof message === 'string' ? message : null;
-}
-
-/** What happened at this step, in the user's words. */
-function eventMessage(event: EventRow, marketplace: Marketplace): string {
-  const name = MARKETPLACE_NAMES[marketplace];
-  const error = detailError(event.detail);
-  switch (event.to_status) {
-    case 'queued':
-      return event.from_status === 'failed' ? 'You asked Listora to try again.' : 'Queued.';
-    case 'running':
-      return `Working on it with ${name} (attempt ${String(event.attempt)}).`;
-    case 'retrying':
-      return `${error ?? `${name} didn't take the change.`} Listora will try again.`;
-    case 'verifying':
-      return error ?? `Checking the listing on ${name}.`;
-    case 'needs_user_action':
-      return `Waiting for you to finish it on ${name}.`;
-    case 'succeeded':
-      return event.detail['evidence'] === 'user_confirmation'
-        ? 'You confirmed it.'
-        : `${name} confirmed it.`;
-    case 'failed':
-      return error ?? 'It failed.';
-    case 'canceled':
-      return 'Canceled.';
-    default:
-      return assertNever(event.to_status, 'operation status');
-  }
-}
-
 /** The contract's `OperationEvent`; its detail is already redacted for storage. */
 export function eventView(
   event: EventRow,
   operation: { marketplace: Marketplace; kind: OperationKind },
 ): OperationEvent {
-  const message = eventMessage(event, operation.marketplace).slice(0, 1000);
+  const message = operationEventMessage(event, operation.marketplace).slice(0, 1000);
   const error = operationError(
     event.to_status,
     operation.kind,
     event.error_code,
-    detailError(event.detail),
+    operationEventError(event.detail),
   );
   return {
     id: event.id,

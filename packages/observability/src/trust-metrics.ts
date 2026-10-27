@@ -228,6 +228,28 @@ export async function collectCurrentState(db: Db, now: Date): Promise<MetricGrou
     values: { ConnectionsNeedingRelink: [needingRelink] },
   });
 
+  const unhealthy = await db
+    .selectFrom('sale_check_schedule as schedule')
+    .innerJoin('marketplace_connection as connection', (join) =>
+      join
+        .onRef('connection.account_id', '=', 'schedule.account_id')
+        .onRef('connection.id', '=', 'schedule.connection_id'),
+    )
+    .select((eb) => ['schedule.marketplace', eb.fn.countAll<string>().as('count')])
+    .where('schedule.health', '<>', 'healthy')
+    .where('connection.mode', '=', 'automation')
+    .where('connection.status', 'in', ['connected', 'degraded'])
+    .groupBy('schedule.marketplace')
+    .orderBy('schedule.marketplace')
+    .execute();
+  for (const { marketplace, count } of unhealthy) {
+    groups.push({
+      timestamp: now,
+      dimensions: { Marketplace: marketplace },
+      values: { UnhealthySaleChecks: [Number(count)] },
+    });
+  }
+
   const overdueBefore = new Date(now.getTime() - DELETION_COMPLETION_DEADLINE_MS);
   const overdue = await db
     .selectFrom('account_deletion')

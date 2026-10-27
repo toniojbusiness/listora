@@ -11,6 +11,13 @@ typealias OperationEvent = Components.Schemas.OperationEvent
 typealias Connection = Components.Schemas.Connection
 typealias Money = Components.Schemas.Money
 typealias KnownMarketplace = Components.Schemas.KnownMarketplace
+typealias ActivityEntry = Components.Schemas.ActivityEntry
+
+/// One page of an item's activity, newest first.
+struct ActivityPage: Equatable, Sendable {
+    var entries: [ActivityEntry]
+    var nextCursor: String?
+}
 
 /// One page of the inventory list.
 struct ItemPage: Equatable, Sendable {
@@ -44,6 +51,8 @@ protocol InventoryService: Sendable {
     func operations(listingID: String) async throws(APIFailure) -> [Operation]
     /// The operation's history, oldest first.
     func events(operationID: String) async throws(APIFailure) -> [OperationEvent]
+    /// Everything that happened to the item, newest first (docs/features/activity.md).
+    func activity(itemID: String, cursor: String?) async throws(APIFailure) -> ActivityPage
 
     func createListing(
         itemID: String,
@@ -164,6 +173,20 @@ struct APIInventoryService: InventoryService {
         }
         switch output {
         case let .ok(response): return try body { try response.body.json }.data
+        case let .badRequest(response): throw APIFailure(statusCode: 400, response: response)
+        case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
+        case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)
+        }
+    }
+
+    func activity(itemID: String, cursor: String?) async throws(APIFailure) -> ActivityPage {
+        let output = try await call {
+            try await client.listItemActivity(path: .init(itemId: itemID), query: .init(cursor: cursor, limit: 50))
+        }
+        switch output {
+        case let .ok(response):
+            let page = try body { try response.body.json }
+            return ActivityPage(entries: page.data, nextCursor: page.nextCursor)
         case let .badRequest(response): throw APIFailure(statusCode: 400, response: response)
         case let .notFound(response): throw APIFailure(statusCode: 404, response: response)
         case let .default(statusCode, response): throw APIFailure(statusCode: statusCode, response: response)

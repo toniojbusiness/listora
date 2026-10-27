@@ -135,6 +135,7 @@ export function readPhoneAnswer(call: ScriptCall, answer: unknown): SessionRun<u
           failure: failure.optional(),
           mutated: z.boolean(),
           steps: z.array(short).max(100),
+          stepMs: z.array(z.number().min(0).max(86_400_000)).max(100).optional(),
         }),
       }),
     ])
@@ -150,6 +151,7 @@ export function readPhoneAnswer(call: ScriptCall, answer: unknown): SessionRun<u
       value: value.data,
       mutated: result.mutated,
       steps: result.steps,
+      ...stepTimes(result),
     };
     return { type: 'ran', result: ok };
   }
@@ -158,10 +160,18 @@ export function readPhoneAnswer(call: ScriptCall, answer: unknown): SessionRun<u
     ok: false,
     mutated: result.mutated,
     steps: result.steps,
+    ...stepTimes(result),
     // The phone keeps no screenshots; only the runner names its own.
     failure: { ...result.failure, screenshotKey: null },
   };
   return { type: 'ran', result: stopped };
+}
+
+/** The phone's step times, when it sent one per step (a runtime older than them sends none). */
+function stepTimes(result: { steps: string[]; stepMs?: number[] | undefined }): {
+  stepMs?: number[];
+} {
+  return result.stepMs?.length === result.steps.length ? { stepMs: result.stepMs } : {};
 }
 
 /**
@@ -174,14 +184,6 @@ export function readPhoneEvidence(answer: unknown): PageEvidence | null {
     .object({ result: z.object({ failure: z.object({ evidence: pageEvidenceSchema }) }) })
     .safeParse(answer);
   return read.success ? read.data.result.failure.evidence : null;
-}
-
-/** How long each of the call's steps took on the phone, when the phone said (for the log). */
-export function readPhoneTimings(answer: unknown): number[] | null {
-  const read = z
-    .object({ stepMs: z.array(z.number().int().nonnegative()).max(100) })
-    .safeParse(answer);
-  return read.success ? read.data.stepMs : null;
 }
 
 /** An answer the server can't read: the phone's failure, and maybe a change (for a write). */

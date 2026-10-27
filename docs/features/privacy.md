@@ -83,14 +83,15 @@ attached expires from storage after 7 days.
 The daily `data_retention` job (`23 4 * * *` UTC, `runDataRetention`) deletes, in batches of 1,000
 and at most 50 batches per rule a run:
 
-| Record                                                     | Kept for                             | Notes                                                                                                                                       |
-| ---------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Operation history (`operation_event`, redacted excerpts)   | 180 days after the operation settled | The operation keeps its final status, evidence, and error. Events that recorded a listing id the engine named stay, so no id is given twice |
-| Raw marketplace notifications, poll results, parsed emails | 90 days after processing             | Unprocessed events stay. Sales keep their own row; their `inbound_event_id` is cleared                                                      |
-| AI usage events                                            | 400 days                             | Daily totals (`ai_usage_daily`) stay with the account for cost reports                                                                      |
-| A connection whose access the marketplace revoked          | 30 days unless reconnected           | Then deleted as an unlink                                                                                                                   |
-| Connect attempts (`connection_authorization`)              | 1 day after expiry                   | Starting a new attempt also prunes the account's old ones                                                                                   |
-| Deletion completion records                                | 2 years                              | No personal data                                                                                                                            |
+| Record                                                      | Kept for                             | Notes                                                                                                                                       |
+| ----------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Operation history (`operation_event`, redacted excerpts)    | 180 days after the operation settled | The operation keeps its final status, evidence, and error. Events that recorded a listing id the engine named stay, so no id is given twice |
+| Raw marketplace notifications, poll results, parsed emails  | 90 days after processing             | Unprocessed events stay. Sales keep their own row; their `inbound_event_id` is cleared                                                      |
+| Sale-check records (`sale_check_run`, what each check read) | 90 days after the check              | The schedule keeps the health; a sale keeps its detection source, and its `sale_check_run_id` is cleared ([activity.md](activity.md))       |
+| AI usage events                                             | 400 days                             | Daily totals (`ai_usage_daily`) stay with the account for cost reports                                                                      |
+| A connection whose access the marketplace revoked           | 30 days unless reconnected           | Then deleted as an unlink                                                                                                                   |
+| Connect attempts (`connection_authorization`)               | 1 day after expiry                   | Starting a new attempt also prunes the account's old ones                                                                                   |
+| Deletion completion records                                 | 2 years                              | No personal data                                                                                                                            |
 
 Kept elsewhere, by the code that writes them: automation screenshots 14 days and run records
 90 days (the automation dispatcher, [automation.md](automation.md)), idempotency records 24 hours,

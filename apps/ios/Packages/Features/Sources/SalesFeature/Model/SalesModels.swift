@@ -244,6 +244,8 @@ final class SaleDetailModel {
 
     let saleID: String
     private(set) var sale: Sale?
+    /// How Listora found the sale and what its delists did; absent until read (or if it can't be).
+    private(set) var explanation: SaleExplanation?
     private(set) var phase: Phase = .loading
     private(set) var isSending = false
     /// The last change's failure to reach the server, safe to show.
@@ -272,6 +274,10 @@ final class SaleDetailModel {
         do {
             sale = try await service.sale(id: saleID)
             phase = .loaded
+            // Best effort: the sale screen works without it.
+            if let explained = try? await service.explanation(saleID: saleID) {
+                explanation = explained
+            }
         } catch {
             if sale == nil {
                 phase = .failed(message: error.message)

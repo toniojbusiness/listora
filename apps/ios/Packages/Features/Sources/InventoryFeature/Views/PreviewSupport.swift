@@ -37,6 +37,10 @@ private struct EmptyInventoryService: InventoryService {
         []
     }
 
+    func activity(itemID _: String, cursor _: String?) async throws(APIFailure) -> ActivityPage {
+        ActivityPage(entries: [], nextCursor: nil)
+    }
+
     func createListing(
         itemID _: String,
         marketplace _: KnownMarketplace,
