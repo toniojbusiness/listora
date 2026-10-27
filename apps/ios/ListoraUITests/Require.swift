@@ -24,3 +24,24 @@ extension XCTestCase {
         }
     }
 }
+
+extension XCUIElement {
+    /// Types `text` into this empty field and checks that the field holds it, typing it again
+    /// when it doesn't. CI's simulator keyboard sometimes takes only the first keys of a
+    /// `typeText` (a task's link field once held "ht" of a whole URL, so its Done stayed off).
+    func typeChecked(_ text: String, attempts: Int = 3) -> Bool {
+        for _ in 0 ..< attempts {
+            tap()
+            let typed = (value as? String) ?? ""
+            let placeholder = placeholderValue ?? ""
+            if typed != text {
+                let length = typed == placeholder ? 0 : typed.count
+                typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: length) + text)
+            }
+            if (value as? String) == text {
+                return true
+            }
+        }
+        return false
+    }
+}
