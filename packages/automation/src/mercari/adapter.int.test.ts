@@ -250,6 +250,24 @@ describe('Mercari automation adapter on the fake Mercari site', () => {
     }
   }, 240_000);
 
+  it("picks a women's petite or tall size in its own part of the size list", async () => {
+    const shapes = [
+      ['Women > Dresses > Maxi', '4P', 'S (4-6)', 'Petite'],
+      ['Women > Skirts > Pleated', 'S Petite', 'S (4-6)', 'Petite'],
+      ['Women > Pants > Casual pants', 'XL Tall', 'XL (16-18)', 'Tall'],
+      ['Women > Shorts > Denim', '0', 'XS (0-2)', 'Standard'],
+      ['Women > Jeans > Straight leg', '27/4', '27 in.', 'Inch'],
+    ] as const;
+    for (const [categoryRef, sizeLabel, size, sizeSet] of shapes) {
+      const content = sampleListingContent({
+        item: { department: 'women', sizeLabel, sizeSystem: null, condition: 'new_with_tags' },
+        variant: { categoryRef },
+      });
+      const { ref } = await create(content);
+      expect(site.item(ref.externalListingId), sizeLabel).toMatchObject({ size, sizeSet });
+    }
+  }, 120_000);
+
   it('revises every detail on the edit page and keeps the photos', async () => {
     const { ref } = await create();
     const content = sampleListingContent({

@@ -12,6 +12,8 @@
  */
 import type { ItemSnapshot } from '@listora/marketplaces';
 
+import { readAdultSize } from '../adapter/adult-size.ts';
+
 const LETTER_SIZES: Readonly<Record<string, string>> = {
   xxxs: '3XS',
   '3xs': '3XS',
@@ -57,7 +59,33 @@ export function depopSize(item: ItemSnapshot, sizes: readonly string[]): string 
     const found = offered(candidate);
     if (found !== null) return found;
   }
+  for (const candidate of adultCandidates(label, sizes)) {
+    const found = offered(candidate);
+    if (found !== null) return found;
+  }
   return null;
+}
+
+/**
+ * An adult size written with its fit or length (`4P`, `S Petite`, `16W`, `2X`, `0S`), a waist in
+ * inches (`27"`, `27 in.`), or a waist and a size together (`27/4`), on an adult clothing list:
+ * the size itself, the fit being an item specific of its own (`attributes.ts`). The waist comes
+ * first, as the tag names it first. A women's `00` is Depop's `XXS` on a list without `00`
+ * (women's bottoms), as Mercari's own `XXS (00)` reads.
+ */
+function adultCandidates(label: string, sizes: readonly string[]): string[] {
+  const adultList = !sizes.some(
+    (size) => size.startsWith('US ') || size.includes('(adult)') || size.endsWith(' years'),
+  );
+  if (!adultList) return [];
+  if (label === '00') return ['XXS'];
+  const adult = readAdultSize(label);
+  if (adult === null) return [];
+  return [
+    ...(adult.waist === null ? [] : [`${adult.waist}"`]),
+    ...(adult.number === null ? [] : [adult.number, ...(adult.number === '00' ? ['XXS'] : [])]),
+    ...(adult.letter === null ? [] : [adult.letter]),
+  ];
 }
 
 /** What the tag size may be called in Depop's lists, most likely first. */

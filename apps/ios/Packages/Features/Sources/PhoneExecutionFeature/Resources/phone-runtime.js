@@ -8132,7 +8132,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
 		await expectElement(page, LISTING_FORM.condition(payload.condition.id), FORM, `condition "${payload.condition.label}"`);
 		await page.click(LISTING_FORM.condition(payload.condition.id));
-		if (payload.size !== null) await pickSize(page, payload.size);
+		if (payload.size !== null) await pickSize(page, payload.size, payload.sizeSet ?? null);
 		await chooseShipping(page);
 		await fillPrice(page, payload.price.amountCents);
 		await smartPricingOff(page);
@@ -8234,7 +8234,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 	function brandKey(name) {
 		return name.toLowerCase().replaceAll("&", "and").replace(/[^a-z0-9]+/g, "");
 	}
-	async function pickSize(page, size) {
+	/**
+	* Picks the size. Read on the captain's session (2026-10-27): the list heads each of its parts
+	* (`Standard`, `Petite`, `Maternity`, `Tall`), and each option's label names its part and size
+	* (`aria-label="Petite S (4-6)"`), so a size in a later part is picked by that label.
+	*/
+	async function pickSize(page, size, set) {
 		await expectElement(page, LISTING_FORM.size, FORM, "size list");
 		await page.click(LISTING_FORM.size);
 		if (!await appears$1(page, LISTING_FORM.sizeOption, 4e3)) {
@@ -8245,6 +8250,12 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		const spaced = (text) => text.replace(/\s+/g, " ").trim();
 		const label = offered.find((option) => spaced(option) === spaced(size));
 		if (label === void 0) throw changed(FORM, `offers no size "${size}" for this category`);
+		if (set !== null) {
+			const inSet = `${LISTING_FORM.sizeOption}[aria-label="${quote$1(`${set} ${spaced(label)}`)}"]`;
+			if (!await page.exists(inSet)) throw changed(FORM, `offers no size "${size}" in its ${set} sizes`);
+			await page.click(inSet);
+			return;
+		}
 		await page.click(`${LISTING_FORM.sizeOption}:text-is("${quote$1(label)}") >> nth=0`);
 	}
 	/**

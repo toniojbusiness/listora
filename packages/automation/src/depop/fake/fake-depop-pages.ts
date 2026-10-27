@@ -44,15 +44,48 @@ const MATERIALS = depopAttribute('material')?.values.map((value) => value.name) 
 
 /**
  * The category tree the form offers: every product type Depop has (its taxonomy), by the form's
- * names, with its size list and whether it offers a material.
+ * names, with its size list, whether it offers a material, and its other item specifics.
  */
-export function fakeDepopTree(): { path: string[]; sizes: string[]; material: boolean }[] {
+export function fakeDepopTree(): {
+  path: string[];
+  sizes: string[];
+  material: boolean;
+  attributes: string[];
+}[] {
   return allDepopCategories().map((entry) => ({
     path: [...entry.path],
     sizes: [...entry.sizes],
     material: entry.attributes.includes('material'),
+    attributes: [...entry.attributes],
   }));
 }
+
+/**
+ * The form's other multi-value pickers, as Depop draws them: each item specific a product type
+ * offers besides the material (`attributes.dress-length`, `attributes.body-fit`, ...), shown
+ * only for those product types, and the style, shown for every one.
+ */
+export const FAKE_DEPOP_DETAILS: readonly {
+  name: string;
+  attribute: string;
+  label: string;
+  max: number;
+  values: readonly string[];
+}[] = [...new Set(allDepopCategories().flatMap((entry) => entry.attributes)), 'style'].flatMap(
+  (attribute) => {
+    const data = attribute === 'material' ? null : depopAttribute(attribute);
+    if (data === null) return [];
+    return [
+      {
+        name: attribute === 'style' ? 'style' : `attributes.${attribute}`,
+        attribute,
+        label: data.name,
+        max: data.max,
+        values: data.values.map((value) => value.name),
+      },
+    ];
+  },
+);
 
 /**
  * What the fake fills in from a new listing's photos before the seller does. On a real session
@@ -395,6 +428,7 @@ ${picker('group', 'Category', 'category')}
 ${picker('brand', 'Brand', 'brand')}
 ${picker('condition', 'Condition', 'condition')}
 ${picker('colour', 'Color', 'colour')}
+${FAKE_DEPOP_DETAILS.map((detail, index) => `<div id="detail-${String(index)}-field" hidden>${picker(detail.name, escape(detail.label), `detail:${detail.name}`)}</div>`).join('\n')}
 <label for="priceAmount__input">Item price</label> $<input id="priceAmount__input" name="price" inputmode="decimal" value="${product === null ? '' : priceAmount(product.priceCents)}">
 <section><h2>Boost your listing</h2><label><input type="checkbox" data-testid="switch" name="boost"${view.boosted === true ? ' checked' : ''}> Promote your item in search to help it sell faster. Pay an extra 12% fee, only if you sell.</label></section>
 <p data-testid="shipping">Shipping: ${escape(shippingLabel)}</p>
@@ -409,6 +443,7 @@ ${create ? '<label><input type="checkbox" id="post-another" name="postAnother"> 
     condition: product === null ? '' : conditionLabel(product.condition),
     colours: product?.colours ?? [],
     materials: product?.materials ?? [],
+    details: product?.details ?? {},
   };
   const message =
     view.message === null
@@ -433,6 +468,7 @@ function formScript(
     condition: string;
     colours: readonly string[];
     materials: readonly string[];
+    details: Readonly<Record<string, readonly string[]>>;
   },
 ): string {
   return `(() => {
@@ -443,6 +479,7 @@ function formScript(
   const conditions = ${scriptJson(Object.entries(DEPOP_CONDITION_LABELS))};
   const colours = ${scriptJson(COLOURS)};
   const materials = ${scriptJson(MATERIALS)};
+  const detailPickers = ${scriptJson(FAKE_DEPOP_DETAILS)};
   const itemInfo = ${scriptJson(ITEM_INFO)};
   const current = ${scriptJson(current)};
   const wire = () => {
@@ -527,6 +564,12 @@ function formScript(
     };
     toggle('variants', () => undefined);
     const material = multi('attributes.material', 'material', 4, materials);
+    const details = detailPickers.map((detail) => multi(detail.name, 'detail:' + detail.name, detail.max, detail.values));
+    const showDetails = (entry) => {
+      detailPickers.forEach((detail, index) => {
+        $('detail-' + index + '-field').hidden = !(detail.name === 'style' || (entry && entry.attributes.includes(detail.attribute)));
+      });
+    };
 
     // The category: product types and categories searched for, in groups headed by department
     // and category.
@@ -539,6 +582,7 @@ function formScript(
       $('variants-input').value = '';
       renderSizes();
       $('material-field').hidden = !(entry && entry.material);
+      showDetails(entry);
     };
     const renderGroups = () => {
       const typed = $('group-input').value.trim().toLowerCase();
@@ -680,6 +724,10 @@ function formScript(
     if (current.condition) pickCondition(current.condition);
     for (const label of current.colours) colour.add(label);
     for (const label of current.materials) material.add(label);
+    detailPickers.forEach((detail, index) => {
+      for (const label of current.details[detail.name] || []) details[index].add(label);
+    });
+    showDetails(picked);
   };
   if (create) {
     setTimeout(() => {

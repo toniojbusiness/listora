@@ -64,6 +64,7 @@ import {
   emailLinkSentPage,
   expiredLinkPage,
   FAKE_DEPOP_BRANDS,
+  FAKE_DEPOP_DETAILS,
   FAKE_DEPOP_OTHER_BRAND,
   FAKE_DEPOP_SHIPPING,
   fakeDepopTree,
@@ -138,6 +139,8 @@ export interface FakeDepopProduct {
   /** The form's colour and material picks, by their labels. */
   colours: string[];
   materials: string[];
+  /** The form's other item specifics and style picks, by picker (`attributes.dress-length`). */
+  details: Record<string, string[]>;
   /** Whether "Boost your listing" was on when it was posted or saved. */
   boosted: boolean;
   shipping: string;
@@ -324,6 +327,7 @@ export class FakeDepopSite {
         condition: 'used_good',
         colours: [],
         materials: [],
+        details: {},
         boosted: false,
         shipping: 'depop_shipping',
         photos: ['photo.jpg'],
@@ -863,6 +867,7 @@ type ListingFields = Pick<
   | 'condition'
   | 'colours'
   | 'materials'
+  | 'details'
   | 'boosted'
   | 'shipping'
   | 'photos'
@@ -930,6 +935,13 @@ function listingFields(
     condition,
     colours: picks('colour'),
     materials: leaf.material ? picks('material') : [],
+    details: Object.fromEntries(
+      FAKE_DEPOP_DETAILS.flatMap((detail) => {
+        const offered = detail.name === 'style' || leaf.attributes.includes(detail.attribute);
+        const values = offered ? picks(`detail:${detail.name}`) : [];
+        return values.length === 0 ? [] : [[detail.name, values]];
+      }),
+    ),
     boosted: form?.text('boost') === 'on',
     shipping,
     photos: keptPhotos,
@@ -1001,6 +1013,9 @@ function copy(product: FakeDepopProduct): FakeDepopProduct {
     category: [...product.category],
     colours: [...product.colours],
     materials: [...product.materials],
+    details: Object.fromEntries(
+      Object.entries(product.details).map(([name, values]) => [name, [...values]]),
+    ),
     photos: [...product.photos],
     listedAt: new Date(product.listedAt),
     updatedAt: new Date(product.updatedAt),

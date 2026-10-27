@@ -43,7 +43,8 @@ size match (`prefill.test.ts`).
   jeans"; `Women > Dresses` becomes `Maxi` for a maxi dress). Every word of the subcategory that
   its parent doesn't have must be in the title, product name, or keywords, and only one
   subcategory may match, so a refinement is never a guess (a ruffle neck is no `V-neck`, and
-  "shorts" says no more than `Shorts`).
+  "shorts" says no more than `Shorts`). A name with alternatives is matched by any one of them:
+  Mercari's `Above knee, mini` for a mini dress, `Straight, pencil` for a pencil skirt.
 - **In-between items.** A unisex item goes under Men on Depop (it has no unisex department),
   Poshmark (whose men's sizes fit), and Mercari (except the kinds Mercari keeps under Women), with
   the Women category as the other chip.
@@ -171,6 +172,7 @@ Both go with their item.
 ## Not yet
 
 - eBay's category and item specifics (eBay's taxonomy is its own).
-- Depop's optional item specifics (style, occasion, fit, each category's type) are left for the
-  seller, as before.
+- Depop's item specifics (body fit, length, fit, type, style) are filled when the listing is
+  posted ([depop-automation.md](depop-automation.md)) but not shown on the review yet; its
+  occasion, source, and age are left for the seller.
 - A dress's length (`Above knee, mini`, `Knee-length`) from its description rather than its name.

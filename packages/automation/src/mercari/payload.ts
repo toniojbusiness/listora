@@ -29,7 +29,7 @@ import { matchMercariCategory, parseCategoryRef, type MercariCategory } from './
 import { mercariCondition } from './conditions.ts';
 import { prohibitedIssues } from './prohibited.ts';
 import type { MercariShipping } from './shipping.ts';
-import { mercariSizeLabel } from './sizes.ts';
+import { mercariSize } from './sizes.ts';
 
 export { listingSku, skuLine, splitSkuLine, withSkuLine } from '../adapter/sku-line.ts';
 
@@ -40,6 +40,11 @@ export interface MercariListingPayload extends AssistedListingPayload {
   categoryId: number | null;
   /** Mercari's size label to pick (`M (8-10)`); `null` when the form asks none or none fits. */
   size: string | null;
+  /**
+   * The part of the size list to pick it in (`Petite`, `Tall`), when it is not the first part
+   * with that label; absent from the payload of a phone call a server issued before it.
+   */
+  sizeSet?: string | null;
   /** Whether the category's form asks for a size. */
   sized: boolean;
   /** A few of the category's sizes, for the message that asks for one. */
@@ -94,6 +99,7 @@ export function buildMercariPayload(
     named ?? (match?.type === 'mapped' ? match.category : null);
   const group = category?.sizeGroupId ?? null;
   const labels = group === null ? [] : mercariCatalog().sizeLabels(group);
+  const size = group === null ? null : mercariSize(item, mercariCatalog().sizeSets(group));
   const condition = variant.condition ?? item.condition;
   const mercari = condition === null ? null : mercariCondition(condition);
   const brand = item.brand?.trim() ?? '';
@@ -104,8 +110,8 @@ export function buildMercariPayload(
     photos: photosInOrder(item).map(({ photoId, url }) => ({ photoId, url })),
     category: category === null ? null : [...category.path],
     categoryId: category?.id ?? null,
-    size:
-      labels.length === 0 ? null : (mercariSizeLabel(item, labels) ?? sizeAspect(variant, labels)),
+    size: size?.label ?? (labels.length === 0 ? null : sizeAspect(variant, labels)),
+    sizeSet: size?.set ?? null,
     sized: labels.length > 0,
     sizeExamples: labels.slice(0, 4),
     imei: category?.imei ?? false,

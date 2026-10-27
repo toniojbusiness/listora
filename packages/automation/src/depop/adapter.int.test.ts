@@ -303,6 +303,65 @@ describe('Depop automation adapter on the fake Depop site', () => {
     });
   });
 
+  it("fills a women's dress's and jeans' size, body fit, length, fit, type, and style", async () => {
+    const dress = sampleListingContent({
+      item: {
+        department: 'women',
+        category: 'clothing/dresses/dresses',
+        sizeLabel: '4P',
+        sizeSystem: 'numeric',
+        brand: 'Free People',
+        colors: ['orange'],
+        materials: ['rayon'],
+      },
+      variant: {
+        title: 'Free People Orange Floral Maxi Dress, A-line',
+        hashtags: ['boho', 'floral'],
+      },
+    });
+    const { ref } = await create(dress);
+    expect(site.product(ref.externalListingId)).toMatchObject({
+      category: ['Women', 'Dresses', 'Dresses'],
+      size: '4',
+      colours: ['Orange'],
+      materials: ['Rayon'],
+      details: {
+        'attributes.dress-length': ['Maxi'],
+        'attributes.dress-type': ['A-line'],
+        'attributes.body-fit': ['Petite'],
+        style: ['Boho'],
+      },
+    });
+
+    // Revised into jeans: the jeans' own details are picked, and the dress's that jeans don't
+    // offer go; a detail Listora has no value for (the style here) is left as it was.
+    const jeans = sampleListingContent({
+      item: {
+        department: 'women',
+        category: 'clothing/bottoms/jeans',
+        sizeLabel: '27/4',
+        sizeSystem: 'numeric',
+        brand: 'Free People',
+        colors: ['blue'],
+        materials: ['denim'],
+      },
+      variant: { title: "'90s Straight Ultra High Rise ripped jeans", hashtags: [] },
+    });
+    const revised = await adapter.execute(request('revise', ref, { content: jeans }), ctx());
+    expect(revised).toMatchObject({ type: 'confirmed' });
+    expect(site.product(ref.externalListingId)).toMatchObject({
+      category: ['Women', 'Bottoms', 'Jeans'],
+      size: '27"',
+      details: {
+        'attributes.bottom-style': ['High waisted', 'Straight leg'],
+        'attributes.bottom-fit': ['Ripped'],
+      },
+    });
+    expect(site.product(ref.externalListingId)?.details).not.toHaveProperty(
+      'attributes.dress-length',
+    );
+  });
+
   it('changes only the price, in dollars and cents', async () => {
     const { ref } = await create();
     const before = site.product(ref.externalListingId);

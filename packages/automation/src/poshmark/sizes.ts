@@ -11,6 +11,7 @@
  * out: nothing on an item says it is either. A kids' size that Girls and Boys both have needs
  * the size to say which (`Girls 8`); without that it is not guessed.
  */
+import { readAdultSize } from '../adapter/adult-size.ts';
 import type { PoshmarkDepartment, SizeSets } from './catalog.ts';
 
 export interface PoshmarkSize {
@@ -106,11 +107,36 @@ export function poshmarkSize(
   // Poshmark's sizes are US sizes; a UK or EU size is never converted by guesswork.
   if (system === 'uk' || system === 'eu') return null;
   if (department === 'Kids') return kidsSize(text, usable);
-  for (const candidate of candidates(text)) {
+  for (const candidate of [...candidates(text), ...adultCandidates(text)]) {
     const found = find(usable, (id) => id === candidate);
     if (found !== null) return found;
   }
   return null;
+}
+
+/**
+ * An adult size with its fit or length written another way than Poshmark's (`PS`, `Petite M`,
+ * `4S`, `0 Short`, `L Tall`), a waist in inches (`27"`, `W27`), or a waist and a size together
+ * (`27/4`), in Poshmark's spelling: a petite size in its Petite set (`SP`, `4P`, `27P`), a plus
+ * size in Plus (`16W`, `16`), and otherwise the size itself (women's sets have no Tall).
+ */
+function adultCandidates(text: string): string[] {
+  const adult = readAdultSize(text);
+  if (adult === null) return [];
+  const sizes = [adult.waist, adult.number, adult.letter].flatMap((size) =>
+    size === null ? [] : [size],
+  );
+  return sizes.flatMap((size) => {
+    switch (adult.fit) {
+      case 'petite':
+        return candidates(`${size} petite`);
+      case 'plus':
+        return /^\d+$/.test(size) ? [`${size}W`, size] : candidates(size);
+      case 'tall':
+      case null:
+        return candidates(size);
+    }
+  });
 }
 
 function sizeOf(set: SizeSets[number], index: number): PoshmarkSize | null {

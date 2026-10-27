@@ -175,7 +175,7 @@ export async function fillListing(
     `condition "${payload.condition.label}"`,
   );
   await page.click(LISTING_FORM.condition(payload.condition.id));
-  if (payload.size !== null) await pickSize(page, payload.size);
+  if (payload.size !== null) await pickSize(page, payload.size, payload.sizeSet ?? null);
   await chooseShipping(page);
   await fillPrice(page, payload.price.amountCents);
   await smartPricingOff(page);
@@ -322,7 +322,12 @@ function brandKey(name: string): string {
     .replace(/[^a-z0-9]+/g, '');
 }
 
-async function pickSize(page: PageDriver, size: string): Promise<void> {
+/**
+ * Picks the size. Read on the captain's session (2026-10-27): the list heads each of its parts
+ * (`Standard`, `Petite`, `Maternity`, `Tall`), and each option's label names its part and size
+ * (`aria-label="Petite S (4-6)"`), so a size in a later part is picked by that label.
+ */
+async function pickSize(page: PageDriver, size: string, set: string | null): Promise<void> {
   await expectElement(page, LISTING_FORM.size, FORM, 'size list');
   await page.click(LISTING_FORM.size);
   // A tap while Mercari is still redrawing the form after a photo's suggestions can miss: once
@@ -335,6 +340,14 @@ async function pickSize(page: PageDriver, size: string): Promise<void> {
   const spaced = (text: string): string => text.replace(/\s+/g, ' ').trim();
   const label = offered.find((option) => spaced(option) === spaced(size));
   if (label === undefined) throw changed(FORM, `offers no size "${size}" for this category`);
+  if (set !== null) {
+    const inSet = `${LISTING_FORM.sizeOption}[aria-label="${quote(`${set} ${spaced(label)}`)}"]`;
+    if (!(await page.exists(inSet))) {
+      throw changed(FORM, `offers no size "${size}" in its ${set} sizes`);
+    }
+    await page.click(inSet);
+    return;
+  }
   await page.click(`${LISTING_FORM.sizeOption}:text-is("${quote(label)}") >> nth=0`);
 }
 

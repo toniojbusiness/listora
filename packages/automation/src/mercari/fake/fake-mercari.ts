@@ -129,6 +129,8 @@ export interface FakeMercariItem {
   brand: string | null;
   conditionId: number;
   size: string | null;
+  /** The part of the size list the size was picked in (`Standard`, `Petite`). */
+  sizeSet: string | null;
   /** Who pays the prepaid label: `Buyer` (no free shipping) or `Seller` (free shipping). */
   shippingPayer: string;
   /** The prepaid label, the one Mercari recommends for the category (`Up to 3 lb`). */
@@ -319,6 +321,7 @@ export class FakeMercariSite {
         brand: null,
         conditionId: 3,
         size: 'M (8-10)',
+        sizeSet: 'Standard',
         shippingPayer: 'Buyer',
         shippingWeight: FAKE_MERCARI_LABEL,
         photos: ['photo.jpg'],
@@ -819,6 +822,7 @@ type ListingFields = Pick<
   | 'brand'
   | 'conditionId'
   | 'size'
+  | 'sizeSet'
   | 'shippingPayer'
   | 'shippingWeight'
   | 'photos'
@@ -846,6 +850,7 @@ function listingFields(
   const brand = text('brand');
   const condition = Number(text('condition'));
   const size = text('size');
+  const sizeSet = text('sizeSet');
   const label = text('shippingLabel');
   const freeShipping = text('freeShipping');
   const keptPhotos = photos.length === 0 && existing !== null ? existing.photos : photos;
@@ -876,7 +881,10 @@ function listingFields(
   if (!Object.values(MERCARI_CONDITIONS).some((option) => option.id === condition)) {
     return 'Select the condition.';
   }
-  if (sizes.length > 0 && !sizes.includes(size)) return 'Size can not be empty.';
+  const sets = group === null ? [] : mercariCatalog().sizeSets(group);
+  if (sizes.length > 0 && !sets.some((set) => set.name === sizeSet && set.labels.includes(size))) {
+    return 'Size can not be empty.';
+  }
   if (text('shipping') !== 'MERCARI') return 'Enter a shipping price, or choose a prepaid label.';
   if (label !== FAKE_MERCARI_LABEL) return 'Select a shipping label.';
   if (freeShipping !== 'yes' && freeShipping !== 'no') {
@@ -895,6 +903,7 @@ function listingFields(
     brand: brand === FAKE_MERCARI_NO_BRAND ? null : brand,
     conditionId: condition,
     size: sizes.length === 0 ? null : size,
+    sizeSet: sizes.length === 0 ? null : sizeSet,
     shippingPayer: freeShipping === 'yes' ? 'Seller' : 'Buyer',
     shippingWeight: label,
     photos: keptPhotos,
@@ -1191,7 +1200,7 @@ ${toggle}`;
         leaf: !category.hasChildren,
       })),
     sizes: Object.fromEntries(
-      [...mercariCatalog().sizeGroups.keys()].map((id) => [id, mercariCatalog().sizeLabels(id)]),
+      [...mercariCatalog().sizeGroups.keys()].map((id) => [id, mercariCatalog().sizeSets(id)]),
     ),
     label: FAKE_MERCARI_LABEL,
     brands: FAKE_MERCARI_BRANDS,
@@ -1199,6 +1208,7 @@ ${toggle}`;
       category: item?.category ?? [],
       brand: item?.brand ?? null,
       size: item?.size ?? null,
+      sizeSet: item?.sizeSet ?? null,
       shipping: prepaid ? 'MERCARI' : 'SHIP_ON_YOUR_OWN',
       freeShipping: item === null ? null : item.shippingPayer === 'Seller' ? 'yes' : 'no',
       smartPricing,
@@ -1249,15 +1259,20 @@ ${toggle}`;
       const input = make('input', { 'data-testid': 'Size', readonly: '', placeholder: 'Select a size' });
       input.value = state.size || '';
       input.addEventListener('click', () => {
-        sizes.replaceChildren(...config.sizes[chosen.size].map((label) => {
-          const option = make('li', { role: 'option', 'data-testid': 'Size-option' }, label);
-          option.addEventListener('click', () => {
-            state.size = label;
-            input.value = label;
-            sizes.replaceChildren();
-          });
-          return option;
-        }));
+        // Each part of the list under its own heading, its options labelled with it.
+        sizes.replaceChildren(...config.sizes[chosen.size].flatMap((set) => [
+          make('li', { role: 'presentation' }, set.name),
+          ...set.labels.map((label) => {
+            const option = make('li', { role: 'option', 'data-testid': 'Size-option', 'aria-label': set.name + ' ' + label }, label);
+            option.addEventListener('click', () => {
+              state.size = label;
+              state.sizeSet = set.name;
+              input.value = label;
+              sizes.replaceChildren();
+            });
+            return option;
+          }),
+        ]));
       });
       const label = make('label', {}, 'Size ');
       label.append(input);
@@ -1322,7 +1337,10 @@ ${toggle}`;
       const chosen = entry(path);
       state.category = path;
       categoryButton.textContent = named(path);
-      if (chosen.size === null || !config.sizes[chosen.size].includes(state.size)) state.size = null;
+      if (chosen.size === null || !config.sizes[chosen.size].some((set) => set.name === state.sizeSet && set.labels.includes(state.size))) {
+        state.size = null;
+        state.sizeSet = null;
+      }
       categories.replaceChildren();
       drawSize();
       drawImei();
@@ -1438,6 +1456,7 @@ ${toggle}`;
         brand: state.brand || '',
         condition: checked ? checked.value : '',
         size: state.size || '',
+        sizeSet: state.sizeSet || '',
         imei: find('[data-testid="IMEI"]') ? find('[data-testid="IMEI"]').value : '',
         shipping: state.shipping,
         shippingLabel: state.shipping === 'MERCARI' && chosen ? config.label : '',
