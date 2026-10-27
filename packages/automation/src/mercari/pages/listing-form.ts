@@ -57,6 +57,14 @@ export const LISTING_FORM = {
   freeShipping: '[data-testid="ShippingPayerOption"]',
   freeShippingNo: 'li[data-testid="FreeShippingNoButton"]',
   price: 'input[data-testid="Price"]',
+  /**
+   * Smart Pricing (automatic price drops, which want a lowest price), on by default on some
+   * sellers' forms (seen on the captain's phone, 2026-10-27). Listora sets no automatic price
+   * drops, so it is switched off.
+   */
+  smartPricing: 'button[data-testid="SmartPricingButton"]',
+  /** Mercari's answer to List from a seller without a card on file: add one first. */
+  paymentWarning: '[data-testid="PaymentWarningModal"]',
   list: 'button[data-testid="ListButton"]',
   save: 'button[data-testid="SaveButton"]',
   error: '[data-testid="FormError"]',
@@ -124,6 +132,20 @@ export async function fillListing(
   if (payload.size !== null) await pickSize(page, payload.size);
   await chooseShipping(page);
   await fillPrice(page, payload.price.amountCents);
+  await smartPricingOff(page);
+}
+
+/** Switches Mercari's Smart Pricing off when the form has it on. */
+async function smartPricingOff(page: PageDriver): Promise<void> {
+  if (!(await appears(page, LISTING_FORM.smartPricing, 2_000))) return;
+  const shown = (await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase();
+  if (shown !== 'ON') return;
+  await page.click(LISTING_FORM.smartPricing);
+  const end = Date.now() + APPEAR_MS;
+  while ((await page.text(LISTING_FORM.smartPricing))?.trim().toUpperCase() === 'ON') {
+    if (Date.now() >= end) throw changed(FORM, 'kept Smart Pricing on');
+    await new Promise((resolve) => setTimeout(resolve, LOOK_EVERY_MS));
+  }
 }
 
 /** Fills only the price (a price change on the edit page). */
@@ -193,8 +215,8 @@ async function chooseShipping(page: PageDriver): Promise<void> {
 }
 
 /** Whether `selector` is on the page within a moment (Mercari's scripts draw it). */
-async function appears(page: PageDriver, selector: string): Promise<boolean> {
-  const end = Date.now() + APPEAR_MS;
+async function appears(page: PageDriver, selector: string, ms = APPEAR_MS): Promise<boolean> {
+  const end = Date.now() + ms;
   for (;;) {
     if (await page.exists(selector)) return true;
     if (Date.now() >= end) return false;
@@ -230,6 +252,13 @@ export async function submitListing(page: PageDriver, button: 'list' | 'save'): 
     const path = new URL(page.url()).pathname;
     const itemId = itemIdFromPath(path);
     if (itemId !== null) return { type: 'listed', itemId };
+    if (await page.exists(LISTING_FORM.paymentWarning)) {
+      return {
+        type: 'refused',
+        message:
+          'Mercari asks for a credit or debit card on file before it lists. Add one in Mercari (Account settings > Payment methods), then list again.',
+      };
+    }
     const messages = (await page.texts(LISTING_FORM.error)).filter((text) => text !== '');
     if (messages.length > 0) return { type: 'refused', message: messages.join(' ') };
     if ((await page.count('[aria-invalid="true"]')) > 0) {
