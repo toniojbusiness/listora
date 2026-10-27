@@ -8,17 +8,18 @@
  * step is the user's task. A seller whose Depop connection uses the API is served by the Depop
  * API adapter instead (`ConnectionAwareAdapter`), never by this one.
  *
- * - Create: fill the sell form (photos in order, the listing text with Listora's SKU line,
- *   category, size, brand, condition, price), then Post; only that click mutates. A later
- *   attempt first looks for the listing by its SKU, so a create Depop already took is never
- *   posted twice.
+ * - Create: fill the sell form (the listing text with Listora's SKU line, category, size, brand,
+ *   condition, colours, material, price, and the photos in order), then Post; only that click
+ *   mutates. A later attempt first looks for the listing by its SKU, so a create Depop already
+ *   took is never posted twice.
  * - Revise and price: the edit page's form, then Save.
- * - End: Delete on the edit page. Depop keeps a deleted product readable, so the read-back
+ * - End: Delete listing on the product page; the deleted product's page answers 410 Gone, which
  *   confirms it ended. Relist: a new listing from the listing's content (Depop cannot put a
  *   deleted listing back on sale), with a new slug, as Depop's API relists with a new product.
  * - Mark sold is not automated: after a sale elsewhere the auto-delist ends Depop listings.
- * - Read-back: the product's page, with its last change time as the revision.
- * - Sale checks read the sold items page; the selling page lists the seller's listings for
+ * - Read-back: the seller's own product from Depop's web API, as its edit page reads it, with
+ *   Depop's last change time as the revision (pages/api.ts).
+ * - Sale checks read the sold items page; the web API's list of the seller's listings serves
  *   imports and drift checks.
  */
 import { createDepopAssistedAdapter } from '@listora/marketplaces';
@@ -35,7 +36,7 @@ import {
   type DepopAutomationPayload,
 } from './payload.ts';
 import { createDepopScripts } from './scripts.ts';
-import { DEPOP_SITE_URL } from './site.ts';
+import { DEPOP_SITE_URL, depopSite } from './site.ts';
 
 export interface DepopAutomationAdapterOptions {
   /** Depop's profile, as configured (pacing and limits). */
@@ -54,7 +55,7 @@ export function createDepopAutomationAdapter(
   options: DepopAutomationAdapterOptions,
 ): AutomationAdapter<DepopAutomationPayload> {
   const siteUrl = options.siteUrl ?? DEPOP_SITE_URL;
-  const site: DepopSite = { origin: new URL(siteUrl).origin };
+  const site: DepopSite = depopSite(siteUrl);
   const profile =
     options.siteUrl === undefined ? options.profile : standInProfile(options.profile, siteUrl);
 
@@ -66,8 +67,8 @@ export function createDepopAutomationAdapter(
     assisted: createDepopAssistedAdapter(),
     scripts: createDepopScripts({ site, photos: options.photos }),
     scriptSet: { name: 'depop', marketplace: 'depop', siteUrl },
-    // Depop's product pages no longer say when a product last changed (product-page.ts).
-    readFreshness: 'none',
+    // A read carries Depop's own last change time (pages/api.ts).
+    readFreshness: 'revision',
     buildPayload: buildDepopAutomationPayload,
     validate: validateDepopAutomationPayload,
     logger: options.logger,

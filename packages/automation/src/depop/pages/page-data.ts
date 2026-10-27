@@ -1,13 +1,12 @@
 /**
- * The data Depop's pages are rendered from. Depop's site is a Next.js app, and every page embeds
- * its data as JSON in `script#__NEXT_DATA__` (`props.pageProps`). Reads use it rather than the
- * visible text: it holds exact values (a decimal price, a status code, a change time) where the
- * page shows formatted ones ("$45", "Listed 2 days ago"), and its keys change far less often
- * than its markup. The keys are Listora's model of Depop's pages (docs/features/depop-automation.md,
- * "Live verification").
+ * Depop's product records as its web API gives the seller's own listings (api.ts: `slug`,
+ * `status`, the whole `description`, `price`, and `dateUpdated`), and the reads every Depop
+ * module shares: the listing's own copy and SKU from a product's text, its revision, and its
+ * price. Reads use the data rather than the visible text: exact values (a decimal price, a
+ * status code, a change time) where the page shows formatted ones ("$45", "Listed 2 days ago").
  *
- * Every shape is checked; a page whose data no longer has what Listora reads throws
- * `PageChangedError`, so the step goes to the user instead of reading a wrong value.
+ * Every shape is checked; data that no longer has what Listora reads throws `PageChangedError`,
+ * so the step goes to the user instead of reading a wrong value.
  */
 import { z } from 'zod';
 
@@ -16,27 +15,8 @@ import { splitDepopDescription } from '@listora/shared';
 
 import { splitSkuLine } from '../../adapter/sku-line.ts';
 import { PageChangedError } from '../../runner/errors.ts';
-import type { PageDriver } from '../../runner/types.ts';
 import { DEPOP_SLUG } from '../site.ts';
 import { productUrl, type DepopSite } from './common.ts';
-
-export const PAGE_DATA = 'script#__NEXT_DATA__';
-
-/** The page's `props.pageProps`; `page` names the page in errors ("product page"). */
-export async function readPageProps(driver: PageDriver, page: string): Promise<unknown> {
-  const script = await driver.text(PAGE_DATA);
-  if (script === null) {
-    throw new PageChangedError(`Depop's ${page} no longer embeds the data Listora reads`);
-  }
-  let data: unknown;
-  try {
-    data = JSON.parse(script);
-  } catch {
-    throw new PageChangedError(`Depop's ${page} embeds data Listora can't parse`);
-  }
-  return expectShape(z.object({ props: z.object({ pageProps: z.unknown() }) }), data, page).props
-    .pageProps;
-}
 
 /** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
 export function expectShape<T>(schema: z.ZodType<T>, value: unknown, page: string): T {
@@ -50,7 +30,7 @@ export function expectShape<T>(schema: z.ZodType<T>, value: unknown, page: strin
 
 const price = z.object({ priceAmount: z.string(), currencyName: z.string() });
 
-/** One product, as product pages and the selling hub embed it. */
+/** One product, as the API's list of the seller's own listings gives it. */
 export const productRecordSchema = z.object({
   slug: z.string().regex(DEPOP_SLUG),
   /** `ONSALE`, `SOLD`, `MARKED_AS_SOLD`, `DELETED`, or `BANNED` (STATUSES). */

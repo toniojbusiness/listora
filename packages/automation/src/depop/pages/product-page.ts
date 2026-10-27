@@ -8,8 +8,9 @@
  * listing `description` (copy, Listora's SKU line, hashtags). The price is in the page's
  * schema.org data (`script[data-testid="meta__jsonLd"]`, a `Product` whose `offers` has the
  * `price`, its `priceCurrency`, and the product's `url`). The page no longer says when the
- * product last changed, so a read has no revision, and the adapter confirms a change by reading
- * it twice (`readFreshness: 'none'`).
+ * product last changed, so the read takes the product from Depop's web API as the edit page
+ * does (api.ts), with its last change time as the revision; the page's own data is read only
+ * for a product the API doesn't give its seller, and then has no revision.
  *
  * - Status: Depop's product status (on sale, sold, deleted). The seller's own product page
  *   (Depop opens `/products/<slug>/manage/` for them) does not always carry the record: the
@@ -27,6 +28,7 @@ import type { RemoteListingState, RemoteListingStatus } from '@listora/marketpla
 
 import type { PageDriver } from '../../runner/types.ts';
 import { DEPOP_SLUG } from '../site.ts';
+import { readOwnProduct } from './api.ts';
 import { changed, productUrl, type DepopSite } from './common.ts';
 import { findRecords, flightRows } from './flight-data.ts';
 import { expectShape, listingCopy } from './page-data.ts';
@@ -86,7 +88,11 @@ export interface ProductPageRead {
   sku: string | null;
 }
 
-/** Opens the product's page and reads it. */
+/**
+ * Opens the product's page and reads it: its seller's own data from Depop's web API, with
+ * Depop's last change time (api.ts), or, for a product the API doesn't give its seller, the
+ * page's own data, without one.
+ */
 export async function readProduct(
   page: PageDriver,
   site: DepopSite,
@@ -95,6 +101,17 @@ export async function readProduct(
   await page.goto(productUrl(site, slug));
   if (page.status() === 410) return { state: { found: false, authoritative: true }, sku: null };
   if (page.status() === 404) return { state: { found: false, authoritative: false }, sku: null };
+  const own = await readOwnProduct(page, site, slug);
+  if (own !== null) return own;
+  return readProductPage(page, site, slug);
+}
+
+/** The product's page's own data (already open): no change time, so no revision. */
+async function readProductPage(
+  page: PageDriver,
+  site: DepopSite,
+  slug: string,
+): Promise<ProductPageRead> {
   const records = findRecords(
     await flightRows(page),
     (record) => record['slug'] === slug && 'status' in record && 'description' in record,

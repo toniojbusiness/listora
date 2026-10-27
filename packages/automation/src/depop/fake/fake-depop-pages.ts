@@ -6,8 +6,9 @@
  * on a product page). Test and development only; nothing in them leaves this machine.
  */
 import { escape } from '../../fake-site/http.ts';
-import { mappedDepopCategories, type DepopSizeKind } from '../categories.ts';
+import { allDepopCategories } from '../categories.ts';
 import { DEPOP_CONDITION_LABELS } from '../conditions.ts';
+import { depopAttribute } from '../taxonomy/taxonomy.ts';
 import type { FakeDepopProduct } from './fake-depop-site.ts';
 
 /** The brands Depop's brand search offers (a sample of its list). */
@@ -37,35 +38,21 @@ export const FAKE_DEPOP_SHIPPING = {
   ship_yourself: 'Ship it yourself',
 } as const;
 
-/** The size list of each size kind, as the form's size picker offers it. */
-export const FAKE_DEPOP_SIZES: Readonly<Record<Exclude<DepopSizeKind, 'none'>, readonly string[]>> =
-  {
-    clothing: [
-      'XXS',
-      'XS',
-      'S',
-      'M',
-      'L',
-      'XL',
-      'XXL',
-      'XXXL',
-      'One size',
-      'US 00',
-      ...Array.from({ length: 25 }, (_, index) => `US ${String(index)}`),
-      ...Array.from({ length: 27 }, (_, index) => `W${String(24 + index)}`),
-    ],
-    shoes: Array.from({ length: 21 }, (_, index) => {
-      const size = 5 + index / 2;
-      return `US ${Number.isInteger(size) ? String(size) : `${String(Math.floor(size))}.5`}`;
-    }),
-  };
+/** The colours and materials the form's pickers offer (Depop's own, from its taxonomy). */
+const COLOURS = depopAttribute('colour')?.values.map((value) => value.name) ?? [];
+const MATERIALS = depopAttribute('material')?.values.map((value) => value.name) ?? [];
 
-/** Listora's department names as the category picker heads its groups ("Men > Tops"). */
-const FORM_DEPARTMENTS: Readonly<Record<string, string>> = {
-  Menswear: 'Men',
-  Womenswear: 'Women',
-  Kidswear: 'Kids',
-};
+/**
+ * The category tree the form offers: every product type Depop has (its taxonomy), by the form's
+ * names, with its size list and whether it offers a material.
+ */
+export function fakeDepopTree(): { path: string[]; sizes: string[]; material: boolean }[] {
+  return allDepopCategories().map((entry) => ({
+    path: [...entry.path],
+    sizes: [...entry.sizes],
+    material: entry.attributes.includes('material'),
+  }));
+}
 
 /**
  * What the fake fills in from a new listing's photos before the seller does. On a real session
@@ -75,7 +62,8 @@ const FORM_DEPARTMENTS: Readonly<Record<string, string>> = {
 const ITEM_INFO = {
   brand: 'Nike',
   condition: DEPOP_CONDITION_LABELS.used_good,
-  category: 'Womenswear > Tops > T-shirts',
+  category: 'Women > Tops > T-shirts',
+  colour: 'Blue',
 } as const;
 
 /** How long Depop's own scripts take to draw a part of a page after its document is ready. */
@@ -111,23 +99,6 @@ function documentOf(title: string, head: string, body: string): string {
 /** A page without data or scripts. */
 export function plainPage(title: string, body: string): string {
   return documentOf(title, '', body);
-}
-
-/**
- * A page that still embeds its data as `script#__NEXT_DATA__` (`props.pageProps`), as the
- * selling hub's listings do in their page module (selling-page.ts, page-data.ts).
- */
-export function nextDataPage(
-  title: string,
-  body: string,
-  pageProps: Record<string, unknown>,
-): string {
-  const data = scriptJson({ props: { pageProps }, page: '/', buildId: 'fake' });
-  return documentOf(
-    title,
-    '',
-    `${body}<script id="__NEXT_DATA__" type="application/json">${data}</script>`,
-  );
 }
 
 /**
@@ -220,31 +191,6 @@ export function hubPage(viewer: string): string {
     'Selling Hub - Depop',
     viewer,
     `<main><h1>Selling hub</h1><p data-testid="sellerUsername">${escape(viewer)}</p></main>`,
-  );
-}
-
-/**
- * A seller's shop (`/<username>/`): their products for sale, newest first, as links to their
- * pages (an image and a price for each), drawn by the page's script a moment after the document.
- */
-export function shopPage(
-  username: string,
-  viewer: string,
-  products: readonly FakeDepopProduct[],
-): string {
-  const items = products
-    .map((product) => {
-      const href = `/products/${escape(product.slug)}/`;
-      return `<li><a href="${href}"><img alt="" width="160" height="160" src="${PIXEL}"></a><a href="${href}">${dollars(product.priceCents)}</a></li>`;
-    })
-    .join('');
-  return appPage(
-    `${username} | Depop`,
-    viewer,
-    `<main><h1>${escape(username)}</h1><ul id="shop-products"></ul></main>`,
-    {
-      script: `setTimeout(() => { document.getElementById('shop-products').innerHTML = ${scriptJson(items)}; }, ${String(DRAW_MS)});`,
-    },
   );
 }
 
@@ -403,19 +349,25 @@ export interface ListingFormView {
   /** Depop's message after a submit it refused. */
   message: string | null;
   viewer: string;
+  /** Whether "Boost your listing" starts on. */
+  boosted?: boolean;
 }
 
 /**
  * The listing form: the sell page (`/products/create/`), drawn by its script once the document
  * is ready and its photo input a moment later, or a listing's edit page, which has it in the
- * document. Its pickers are comboboxes (listing-form.ts): an input or a toggle button, and a
- * menu that keeps its options while closed and shows them through `--display: block`. The
- * category is searched for by product type, in groups headed by department and category; the
- * size list follows the product type; the brand search offers Depop's brands, with a clear
- * button once one is picked; the condition is a list. On the sell page, Depop fills in item info
- * from the photos and marks it. A submit without what the form needs marks those fields as
- * needing a fix and sends nothing; Depop's own checks answer the submit with the form and its
- * message.
+ * document. Its pickers are comboboxes as Depop draws them (listing-form.ts): an input that
+ * shows what is picked, a toggle button, and a menu that keeps its options while closed and
+ * shows them through `--display: block`. The category is searched for by product type or
+ * category, in groups headed by department and category (every product type in Depop's
+ * taxonomy), with a clear button once one is picked; the size list follows the product type;
+ * the brand search offers Depop's brands; the condition is a list; the colours and the material
+ * take several values, each shown with its own "Remove <value>" button. Photos show as added a
+ * moment after they are picked, and on the sell page Depop then fills in item info from them,
+ * only where a field is still empty, and marks it. "Boost your listing" is a switch, off unless
+ * `boosted`. A submit without what the form needs marks those fields as needing a fix and sends
+ * nothing; one before the photos are added gets Depop's message; Depop's own checks answer the
+ * submit with the form and its message.
  */
 export function listingFormPage(view: ListingFormView): string {
   const { product } = view;
@@ -426,30 +378,25 @@ export function listingFormPage(view: ListingFormView): string {
       ? 'Set up how you ship in your selling hub'
       : (labelOf(FAKE_DEPOP_SHIPPING, shipping) ?? shipping);
   const action = create ? '/products/create/' : `/products/edit/${escape(product.slug)}/`;
+  const picker = (name: string, label: string, field: string) =>
+    `<div><label for="${name}-input">${label}</label>
+<div class="select"><span class="picked" id="${name}-picked"></span><input id="${name}-input" role="combobox" aria-autocomplete="list" aria-controls="${name}-menu" autocomplete="off" value=""></div>
+<span id="${name}-clear"></span>
+<button type="button" id="${name}-toggle-button" aria-label="toggle menu">▾</button>
+<ul id="${name}-menu" role="listbox" class="menu" style="--display: none"></ul>
+<input type="hidden" name="${field}"></div>`;
   const form = `<form method="post" action="${action}" enctype="multipart/form-data" novalidate>
-<section><h2>Photos</h2><div id="photos"></div><div id="item-info"></div></section>
+<section><h2>Photos</h2><div id="photos"></div><div id="previews"></div><div id="item-info"></div></section>
 <label for="description">Description</label>
 <textarea id="description" name="description" rows="6">${escape(product?.description ?? '')}</textarea>
-<div><label for="group-input">Category</label> <span id="group-value"></span>
-<input id="group-input" role="combobox" aria-autocomplete="list" aria-controls="group-menu" autocomplete="off" placeholder="Search for a category">
-<button type="button" id="group-toggle-button" aria-label="Categories">▾</button>
-<ul id="group-menu" role="listbox" class="menu" style="--display: none"></ul>
-<input type="hidden" name="category"></div>
-<div><span id="variants-label">Size</span>
-<button type="button" id="variants-toggle-button" aria-labelledby="variants-label">Size</button>
-<ul id="variants-menu" role="listbox" class="menu" style="--display: none"></ul>
-<input type="hidden" name="size"></div>
-<div><label for="brand-input">Brand</label>
-<input id="brand-input" role="combobox" aria-autocomplete="list" aria-controls="brand-menu" autocomplete="off" placeholder="Search for a brand">
-<span id="brand-clear"></span>
-<button type="button" id="brand-toggle-button" aria-label="Brands">▾</button>
-<ul id="brand-menu" role="listbox" class="menu" style="--display: none"></ul>
-<input type="hidden" name="brand"></div>
-<div><span id="condition-label">Condition</span>
-<button type="button" id="condition-toggle-button" aria-labelledby="condition-label">Condition</button>
-<ul id="condition-menu" role="listbox" class="menu" style="--display: none"></ul>
-<input type="hidden" name="condition"></div>
-<label for="priceAmount__input">Price</label> $<input id="priceAmount__input" name="price" inputmode="decimal" value="${product === null ? '' : priceAmount(product.priceCents)}">
+${picker('group', 'Category', 'category')}
+<div id="material-field" hidden>${picker('attributes.material', 'Material', 'material')}</div>
+<div id="size-field" hidden>${picker('variants', 'Size', 'size')}</div>
+${picker('brand', 'Brand', 'brand')}
+${picker('condition', 'Condition', 'condition')}
+${picker('colour', 'Color', 'colour')}
+<label for="priceAmount__input">Item price</label> $<input id="priceAmount__input" name="price" inputmode="decimal" value="${product === null ? '' : priceAmount(product.priceCents)}">
+<section><h2>Boost your listing</h2><label><input type="checkbox" data-testid="switch" name="boost"${view.boosted === true ? ' checked' : ''}> Promote your item in search to help it sell faster. Pay an extra 12% fee, only if you sell.</label></section>
 <p data-testid="shipping">Shipping: ${escape(shippingLabel)}</p>
 <input type="hidden" name="shipping" value="${escape(shipping ?? '')}">
 ${create ? '<label><input type="checkbox" id="post-another" name="postAnother"> Post and add another</label>' : ''}
@@ -460,6 +407,8 @@ ${create ? '<label><input type="checkbox" id="post-another" name="postAnother"> 
     size: product?.size ?? '',
     brand: product?.brand ?? '',
     condition: product === null ? '' : conditionLabel(product.condition),
+    colours: product?.colours ?? [],
+    materials: product?.materials ?? [],
   };
   const message =
     view.message === null
@@ -477,17 +426,23 @@ ${create ? '<label><input type="checkbox" id="post-another" name="postAnother"> 
 function formScript(
   create: boolean,
   form: string,
-  current: { category: string; size: string; brand: string; condition: string },
+  current: {
+    category: string;
+    size: string;
+    brand: string;
+    condition: string;
+    colours: readonly string[];
+    materials: readonly string[];
+  },
 ): string {
-  const tree = mappedDepopCategories().map((entry) => ({ path: entry.path, size: entry.size }));
   return `(() => {
   const create = ${String(create)};
-  const tree = ${scriptJson(tree)};
-  const sizes = ${scriptJson(FAKE_DEPOP_SIZES)};
+  const tree = ${scriptJson(fakeDepopTree())};
   const brands = ${scriptJson(FAKE_DEPOP_BRANDS)};
   const other = ${scriptJson(FAKE_DEPOP_OTHER_BRAND)};
   const conditions = ${scriptJson(Object.entries(DEPOP_CONDITION_LABELS))};
-  const departments = ${scriptJson(FORM_DEPARTMENTS)};
+  const colours = ${scriptJson(COLOURS)};
+  const materials = ${scriptJson(MATERIALS)};
   const itemInfo = ${scriptJson(ITEM_INFO)};
   const current = ${scriptJson(current)};
   const wire = () => {
@@ -511,36 +466,86 @@ function formScript(
         setOpen(name, !isOpen(name));
       });
     };
-
-    // The size list of the picked product type.
-    const leaf = () => tree.find((entry) => entry.path.join(' > ') === field('category').value);
-    const pickSize = (label) => {
-      field('size').value = label;
-      $('variants-toggle-button').textContent = label || 'Size';
-      setOpen('variants', false);
+    const clearButton = (name, onClear) => {
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.dataset.testid = name + 'Button__clear';
+      clear.setAttribute('aria-label', 'clear the selected value');
+      clear.textContent = '×';
+      clear.addEventListener('click', onClear);
+      return clear;
     };
+    // A single-value picker: its input shows the pick.
+    const single = (name, fieldName) => (label) => {
+      field(fieldName).value = label;
+      $(name + '-input').value = label;
+      setOpen(name, false);
+    };
+    // A multi-value picker: each pick shows with its own Remove button, and its option takes no
+    // more clicks.
+    const multi = (name, fieldName, max, labels) => {
+      const picked = [];
+      const render = () => {
+        field(fieldName).value = picked.join('|');
+        $(name + '-picked').replaceChildren(...picked.map((label) => {
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.setAttribute('aria-label', 'Remove ' + label);
+          remove.textContent = label + ' ✕';
+          remove.addEventListener('click', () => {
+            picked.splice(picked.indexOf(label), 1);
+            render();
+          });
+          return remove;
+        }));
+        $(name + '-menu').replaceChildren(...labels.map((label) => {
+          const item = option(label, (text) => {
+            if (picked.includes(text) || picked.length >= max) return;
+            picked.push(text);
+            render();
+          });
+          if (picked.includes(label)) {
+            item.setAttribute('aria-disabled', 'true');
+            item.style.display = 'none';
+          }
+          return item;
+        }));
+      };
+      render();
+      toggle(name, () => undefined);
+      return { add: (label) => { if (!picked.includes(label)) { picked.push(label); render(); } }, picked, render };
+    };
+
+    // The size list and material of the picked product type.
+    const leaf = () => tree.find((entry) => entry.path.join(' > ') === field('category').value);
+    const pickSize = single('variants', 'size');
     const renderSizes = () => {
       const entry = leaf();
-      const labels = entry && entry.size !== 'none' ? sizes[entry.size] : [];
+      const labels = entry ? entry.sizes : [];
+      $('size-field').hidden = labels.length === 0;
       $('variants-menu').replaceChildren(...labels.map((label) => option(label, pickSize)));
     };
     toggle('variants', () => undefined);
+    const material = multi('attributes.material', 'material', 4, materials);
 
-    // The category: product types searched for, in groups headed by department and category.
-    const pickCategory = (entry) => {
-      field('category').value = entry.path.join(' > ');
-      $('group-value').textContent = entry.path.join(' > ');
-      $('group-input').value = '';
+    // The category: product types and categories searched for, in groups headed by department
+    // and category.
+    const setCategory = (entry) => {
+      field('category').value = entry ? entry.path.join(' > ') : '';
+      $('group-input').value = entry ? entry.path[2] : '';
+      $('group-clear').replaceChildren(...(entry ? [clearButton('group', () => { setCategory(null); })] : []));
       setOpen('group', false);
       pickSize('');
+      $('variants-input').value = '';
       renderSizes();
+      $('material-field').hidden = !(entry && entry.material);
     };
     const renderGroups = () => {
       const typed = $('group-input').value.trim().toLowerCase();
       const groups = new Map();
       for (const entry of tree) {
-        if (typed !== '' && !entry.path[2].toLowerCase().includes(typed)) continue;
-        const heading = (departments[entry.path[0]] || entry.path[0]) + ' > ' + entry.path[1];
+        if (typed !== '' && !entry.path[2].toLowerCase().includes(typed) && !entry.path[1].toLowerCase().includes(typed)) continue;
+        const heading = entry.path[0] + ' > ' + entry.path[1];
         groups.set(heading, [...(groups.get(heading) || []), entry]);
       }
       const shown = [...groups].map(([heading, entries]) => {
@@ -549,38 +554,32 @@ function formScript(
         const title = document.createElement('p');
         title.textContent = heading;
         head.append(title);
-        group.append(head, ...entries.map((entry) => option(entry.path[2], () => { pickCategory(entry); })));
+        group.append(head, ...entries.map((entry) => option(entry.path[2], () => { setCategory(entry); })));
         return group;
       });
       if (shown.length === 0) {
-        const none = document.createElement('li');
-        none.textContent = 'No results';
+        const none = document.createElement('p');
+        none.textContent = 'No option';
         shown.push(none);
       }
       $('group-menu').replaceChildren(...shown);
     };
     $('group-input').addEventListener('input', () => {
+      if (field('category').value !== '') setCategory(null);
       renderGroups();
       setOpen('group', true);
     });
     toggle('group', renderGroups);
 
     // The brand: a search of Depop's brands; only a pick sets it.
-    const clear = document.createElement('button');
-    clear.type = 'button';
-    clear.dataset.testid = 'brandButton__clear';
-    clear.setAttribute('aria-label', 'Clear brand');
-    clear.textContent = '×';
-    clear.addEventListener('click', () => {
-      field('brand').value = '';
-      $('brand-input').value = '';
-      $('brand-clear').replaceChildren();
-    });
+    const setBrand = single('brand', 'brand');
     const pickBrand = (name) => {
-      field('brand').value = name;
-      $('brand-input').value = name;
-      $('brand-clear').replaceChildren(clear);
-      setOpen('brand', false);
+      setBrand(name);
+      $('brand-clear').replaceChildren(clearButton('brand', () => {
+        field('brand').value = '';
+        $('brand-input').value = '';
+        $('brand-clear').replaceChildren();
+      }));
     };
     const renderBrands = () => {
       const typed = $('brand-input').value.trim().toLowerCase();
@@ -601,13 +600,17 @@ function formScript(
     const pickCondition = (label) => {
       const found = conditions.find((entry) => entry[1] === label);
       field('condition').value = found ? found[0] : '';
-      $('condition-toggle-button').textContent = label || 'Condition';
+      $('condition-input').value = found ? label : '';
       setOpen('condition', false);
     };
     $('condition-menu').replaceChildren(...conditions.map((entry) => option(entry[1], pickCondition)));
     toggle('condition', () => undefined);
 
-    // The photos; on the sell page Depop fills in item info from them, and says so.
+    const colour = multi('colour', 'colour', 2, colours);
+
+    // The photos: shown as added once Depop has them; on the sell page Depop then fills in item
+    // info from them where a field is still empty, and says so.
+    let added = !create;
     const drawPhotos = () => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -617,11 +620,22 @@ function formScript(
       input.accept = 'image/jpeg';
       input.addEventListener('change', () => {
         if (!create || input.files.length === 0) return;
+        added = false;
         setTimeout(() => {
+          $('previews').replaceChildren(...[...input.files].map(() => {
+            const preview = document.createElement('div');
+            preview.setAttribute('role', 'button');
+            const image = document.createElement('img');
+            image.src = '/photos/preview.jpg';
+            preview.append(image);
+            return preview;
+          }));
+          added = true;
           if (field('brand').value === '') pickBrand(itemInfo.brand);
           if (field('condition').value === '') pickCondition(itemInfo.condition);
+          if (colour.picked.length === 0) colour.add(itemInfo.colour);
           const suggested = tree.find((entry) => entry.path.join(' > ') === itemInfo.category);
-          if (field('category').value === '' && suggested) pickCategory(suggested);
+          if (field('category').value === '' && suggested) setCategory(suggested);
           const mark = document.createElement('p');
           mark.dataset.testid = 'Item info added';
           mark.textContent = 'Item info added';
@@ -639,21 +653,33 @@ function formScript(
       if (field('description').value.trim() === '') missing.push($('description'));
       if (field('category').value === '') missing.push($('group-input'));
       const entry = leaf();
-      if (entry && entry.size !== 'none' && field('size').value === '') missing.push($('variants-toggle-button'));
-      if (field('condition').value === '') missing.push($('condition-toggle-button'));
+      if (entry && entry.sizes.length > 0 && field('size').value === '') missing.push($('variants-input'));
+      if (field('condition').value === '') missing.push($('condition-input'));
       if (field('price').value.trim() === '') missing.push($('priceAmount__input'));
       const photos = $('upload-input__input');
       if (create && (!photos || photos.files.length === 0)) missing.push(photos || $('photos'));
       for (const element of missing) element.setAttribute('aria-invalid', 'true');
-      if (missing.length > 0) event.preventDefault();
+      if (missing.length > 0) {
+        event.preventDefault();
+        return;
+      }
+      if (!added) {
+        // Depop's own answer to a Post before its photos are in.
+        event.preventDefault();
+        const alert = document.createElement('p');
+        alert.setAttribute('role', 'alert');
+        alert.textContent = 'Please insert at least one image';
+        form.prepend(alert);
+      }
     });
 
     const picked = tree.find((entry) => entry.path.join(' > ') === current.category);
-    if (picked) pickCategory(picked);
-    renderSizes();
+    if (picked) setCategory(picked);
     if (current.size) pickSize(current.size);
     if (current.brand) pickBrand(current.brand);
     if (current.condition) pickCondition(current.condition);
+    for (const label of current.colours) colour.add(label);
+    for (const label of current.materials) material.add(label);
   };
   if (create) {
     setTimeout(() => {
@@ -664,16 +690,6 @@ function formScript(
     wire();
   }
 })();`;
-}
-
-export function sellingPage(rows: readonly FakeDepopProduct[]): string {
-  const items = rows
-    .map(
-      (product) =>
-        `<li><a href="/products/${escape(product.slug)}/">${escape(product.description.slice(0, 40))}</a> ${dollars(product.priceCents)}</li>`,
-    )
-    .join('');
-  return `<main><h1>Selling</h1><ul data-testid="sellingList">${items}</ul></main>`;
 }
 
 /** One sale, as the seller's sold items list it. */

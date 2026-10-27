@@ -5794,7 +5794,35 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	};
 
 // src/depop/site.ts
-/**
+/** Depop. Products are `/products/<slug>/`; the seller's own pages are under `/sellinghub/`. */
+	const DEPOP_SITE_URL = "https://www.depop.com";
+	/**
+	* Depop's web API, which its own pages read their data from (with the session's token, the
+	* `access_token` cookie): the reads Listora makes there are the ones the pages make
+	* (`PageDriver.apiGet`, pages/api.ts). Every change still goes through the pages.
+	*/
+	const DEPOP_API_URL = "https://webapi.depop.com";
+	/**
+	* Depop's pacing: 0.3 to 0.8 seconds before each action (agreed with the captain, 2026-10-27,
+	* against the default 0.8 to 2.5), still a person's pace and never below `PACING_FLOOR`.
+	*/
+	const DEPOP_PACING = {
+		actionDelayMs: [300, 800],
+		keystrokeDelayMs: [40, 120],
+		sessionGapMs: [5e3, 2e4]
+	};
+	/**
+	* The site a script set drives: Depop and its web API, or a stand-in in development and tests,
+	* which serves the API's reads itself.
+	*/
+	function depopSite(siteUrl) {
+		const origin = new URL(siteUrl).origin;
+		return {
+			origin,
+			api: origin === "https://www.depop.com" ? DEPOP_API_URL : origin
+		};
+	}
+	/**
 	* A Depop product slug: the seller's username and words of the listing, lowercase and joined by
 	* hyphens (`jdoe-levis-trucker-jacket`); a username may have underscores and periods
 	* (`365_nails-black-and-white-nail-set`). The Selling API addresses the same products by it
@@ -5809,8 +5837,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		sell: "/products/create/",
 		product: (slug) => `/products/${encodeURIComponent(slug)}/`,
 		edit: (slug) => `/products/edit/${encodeURIComponent(slug)}/`,
-		/** The seller's listings for sale, newest first. */
-		selling: (page) => `/sellinghub/selling/${page > 1 ? `?page=${String(page)}` : ""}`,
 		/** The seller's sold items, newest first. */
 		sold: (page) => `/sellinghub/sold-items/${page > 1 ? `?page=${String(page)}` : ""}`
 	};
@@ -5895,7 +5921,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 // src/depop/sizes.ts
 /**
 	* Whether a size option's label offers `size`: the label is the size, or the size followed by
-	* a space and more (`M (UK 12)`).
+	* a space and more (a label such as `M (UK 12)`).
 	*/
 	function sizeOptionMatches$1(optionLabel, size) {
 		const label = optionLabel.trim();
@@ -5918,9 +5944,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* drawn by Depop's scripts, with the photos input `#upload-input__input`, the description
 	* `textarea#description`, the price `#priceAmount__input`, and its pickers as comboboxes, each
 	* an input, a toggle button, and a menu of options (`#group-` for the category, `#brand-`,
-	* `#condition-`, `#colour-`, ...). How the category combobox lists Depop's categories, the size
-	* picker, the Post button's words, and Depop's validation message are confirmed from the
-	* evidence of the next run that reaches them.
+	* `#condition-`, `#colour-`, `#variants-` for the size, `#attributes.material-`, ...). Confirmed
+	* on every form shape on the captain's session (2026-10-27).
 	*/
 	const LISTING_FORM$2 = {
 		/** The form is there once its description field is. */
@@ -5936,33 +5961,40 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		error: "[role=\"alert\"]",
 		/** A field Depop marks as needing a fix. */
 		invalid: "[aria-invalid=\"true\"]",
+		clearBrand: "button[data-testid=\"brandButton__clear\"]",
+		clearCategory: "button[data-testid=\"groupButton__clear\"]",
 		/**
-		* Read on the captain's session (2026-10-26): once photos are added, Depop fills in item info
-		* from them itself (a brand, a condition, a suggested category), and says so with this mark.
+		* "Boost your listing" (an extra 12% fee when it sells): Listora never turns it on. Read on
+		* the captain's session (2026-10-27): the form's only switch.
 		*/
-		itemInfoAdded: "[data-testid=\"Item info added\"]",
-		clearBrand: "button[data-testid=\"brandButton__clear\"]"
+		boost: "input[data-testid=\"switch\"][type=\"checkbox\"]",
+		/**
+		* An added photo, once Depop has it: its preview from Depop's own image server (read on the
+		* captain's session, 2026-10-27, about 3 seconds after adding three).
+		*/
+		photoPreview: "div[role=\"button\"] > img[src]"
 	};
-	/** How long Depop gets to fill in item info from the photos before Listora fills the form. */
-	const ITEM_INFO_MS = 15e3;
 	/** Depop's Done page after a post: under the sell page's path, with one more segment. */
 	const DONE_PAGE = /^\/products\/create\/([^/]+)\/?$/;
 	/** How long Depop gets to answer a Post (its photos upload first), and how often it is looked at. */
 	const ANSWER_MS$1 = 45e3;
-	const LOOK_EVERY_MS$5 = 500;
+	const LOOK_EVERY_MS$4 = 500;
 	/**
 	* One of Depop's combobox pickers (`group` is the category, `variants` the size). Its menu keeps
 	* its options while closed and shows them through a style variable (`--display: block`), so
 	* options are only clicked in an open menu.
 	*/
 	function combo(name) {
-		const open = `ul#${name}-menu[style*="--display: block"]`;
+		const open = `ul[id="${name}-menu"][style*="--display: block"]`;
 		return {
-			input: `input#${name}-input`,
-			toggle: `button#${name}-toggle-button`,
+			input: `input[id="${name}-input"]`,
+			toggle: `button[id="${name}-toggle-button"]`,
 			open,
 			option: (text) => `${open} [role="option"]:text-is("${text.replaceAll("\"", "\\\"")}")`,
-			anyOption: `${open} [role="option"]`
+			anyOption: `${open} [role="option"]`,
+			/** A multi-value picker's picked values, each shown with its own "Remove <value>". */
+			picked: `div:has(> input[id="${name}-input"]) button[aria-label^="Remove "]`,
+			unpick: (text) => `div:has(> input[id="${name}-input"]) button[aria-label="Remove ${text.replaceAll("\"", "\\\"")}"]`
 		};
 	}
 	const FORM$2 = "listing form";
@@ -5977,20 +6009,100 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	*/
 	async function fillListing$2(page, payload, sku, photos) {
 		await awaitElement$1(page, LISTING_FORM$2.form, FORM$2, FORM$2);
+		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
+		let brand = await fillPicks(page, payload);
+		await fillPrice$2(page, payload.price.amountCents);
+		await noBoost(page);
 		if (photos !== null) {
 			await awaitElement$1(page, LISTING_FORM$2.photos, FORM$2, "photo input");
 			await page.upload(LISTING_FORM$2.photos, photos);
-			await appears$2(page, LISTING_FORM$2.itemInfoAdded, ITEM_INFO_MS);
+			await photosAdded(page, photos.length);
+			await lookAgain$1(page, PHOTO_FILL_MS);
+			if (await mismatch(page, payload, brand) !== null) brand = await fillPicks(page, payload);
 		}
-		await page.fill(LISTING_FORM$2.description, depopListingText(payload, sku));
+		await expectPicked(page, payload, brand);
+		await expectComplete(page);
+	}
+	/** How long Depop gets to fill in item info from the photos once they are added. */
+	const PHOTO_FILL_MS = 1500;
+	/** How long Depop gets to take the photos (it uploads them to its image server first). */
+	const PHOTOS_MS = 3e4;
+	/** Waits until Depop shows every photo as added: Post refuses a form whose photos are still going. */
+	async function photosAdded(page, count) {
+		if (!await appears$2(page, `${LISTING_FORM$2.photoPreview} >> nth=${String(count - 1)}`, PHOTOS_MS)) {
+			const shown = await page.count(LISTING_FORM$2.photoPreview);
+			throw changed$2(FORM$2, `shows ${String(shown)} of ${String(count)} photos as added`);
+		}
+	}
+	/** The category and every picker the payload fills; the brand the form then shows. */
+	async function fillPicks(page, payload) {
 		if (payload.category === null) throw new Error("a listing without a category passed validation");
 		await pickCategory$1(page, payload.category);
 		if (payload.size !== null) await pickSize$1(page, payload.size);
-		await pickBrand$1(page, payload.brand);
+		const brand = await pickBrand$1(page, payload.brand);
 		if (payload.condition === null) throw new Error("a listing without a condition passed validation");
 		await pick$1(page, "condition", payload.condition.label, `condition "${payload.condition.label}"`);
-		await fillPrice$2(page, payload.price.amountCents);
-		await expectComplete(page);
+		for (const detail of payload.details ?? []) await pickAll(page, detail.field, detail.values);
+		return brand;
+	}
+	/** Turns "Boost your listing" off when Depop drew it on. */
+	async function noBoost(page) {
+		if (!await page.exists(LISTING_FORM$2.boost)) return;
+		if (await checked(page)) await page.check(LISTING_FORM$2.boost, false);
+	}
+	async function checked(page) {
+		return page.exists(`${LISTING_FORM$2.boost}:checked`);
+	}
+	/**
+	* The first pick the form no longer shows (one Depop's own fill took over), in words, or
+	* `null`. `brand` is the brand Listora picked, `''` for none.
+	*/
+	async function mismatch(page, payload, brand) {
+		const shown = async (name) => (await page.value(combo(name).input))?.trim() ?? "";
+		if (brand !== "" && await shown("brand") !== brand) return `the brand "${brand}"`;
+		const type = payload.category?.[2];
+		if (type !== void 0 && await shown("group") !== type) return `the category "${type}"`;
+		if (payload.size !== null && await shown("variants") !== payload.size) return `the size "${payload.size}"`;
+		if (payload.condition !== null && await shown("condition") !== payload.condition.label) return `the condition "${payload.condition.label}"`;
+		for (const detail of payload.details ?? []) {
+			const picked = await pickedValues(page, detail.field);
+			if (picked.length !== detail.values.length || detail.values.some((v) => !picked.includes(v))) return `the ${detail.field} "${detail.values.join(", ")}"`;
+		}
+		return null;
+	}
+	/**
+	* The form still shows what Listora picked, and "Boost your listing" is off, just before the
+	* step that submits it.
+	*/
+	async function expectPicked(page, payload, brand) {
+		const missing = await mismatch(page, payload, brand);
+		if (missing !== null) throw changed$2(FORM$2, `no longer shows ${missing}`);
+		if (await page.exists(LISTING_FORM$2.boost) && await checked(page)) throw changed$2(FORM$2, "keeps \"Boost your listing\" on");
+	}
+	/**
+	* Picks exactly these values in one of the form's multi-value pickers (colours, material),
+	* leaving out any other value it had (one Depop filled in from the photos). Read on the
+	* captain's session (2026-10-27): each picked value shows in the picker with its own "Remove
+	* <value>" button, and its option in the menu no longer takes a click.
+	*/
+	async function pickAll(page, name, values) {
+		const box = combo(name);
+		if (!await page.exists(box.toggle)) throw changed$2(FORM$2, `has no ${name} picker`);
+		for (const value of await pickedValues(page, name)) if (!values.includes(value)) await page.click(box.unpick(value));
+		for (const value of values) {
+			if ((await pickedValues(page, name)).includes(value)) continue;
+			if (!await page.exists(box.open)) await page.click(box.toggle);
+			await awaitElement$1(page, box.anyOption, FORM$2, `${name} options`);
+			if (!await page.exists(box.option(value))) throw changed$2(FORM$2, `offers no ${name} "${value}"`);
+			await page.click(box.option(value));
+		}
+		if (await page.exists(box.open)) await page.click(box.toggle);
+		const picked = await pickedValues(page, name);
+		if (picked.length !== values.length || values.some((value) => !picked.includes(value))) throw changed$2(FORM$2, `shows ${name} "${picked.join(", ")}" after picking "${values.join(", ")}"`);
+	}
+	/** The values a multi-value picker shows as picked. */
+	async function pickedValues(page, name) {
+		return (await page.attributes(combo(name).picked, "aria-label")).flatMap((label) => label === null ? [] : [label.replace(/^Remove /, "").trim()]);
 	}
 	/**
 	* The filled form, before anything is submitted: no field marked as needing a fix and no
@@ -6049,7 +6161,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				message: "Depop didn't take the listing: it marked a field as needing a fix."
 			};
 			if (Date.now() >= end) throw changed$2(FORM$2, "showed no product and no message after the submit");
-			await lookAgain$1(page, LOOK_EVERY_MS$5);
+			await lookAgain$1(page, LOOK_EVERY_MS$4);
 		}
 	}
 	/** The product a page links to (the Done page's link to the new listing), when it links one. */
@@ -6076,15 +6188,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		const [department, category, type] = path;
 		if (department === void 0 || category === void 0 || type === void 0) throw new Error("a category path has a department, a category, and a product type");
 		const box = combo("group");
+		if (await page.exists(LISTING_FORM$2.clearCategory)) await page.click(LISTING_FORM$2.clearCategory);
 		await expectElement$2(page, box.input, FORM$2, "category search");
-		await page.type(box.input, type);
-		await awaitElement$1(page, box.anyOption, FORM$2, "category options");
 		const group = `${FORM_DEPARTMENTS[department] ?? department} > ${category}`;
-		const index = (await page.texts(CATEGORY_GROUP_HEADERS)).map((text) => text.replace(/\s+/g, " ").trim()).indexOf(group);
-		if (index < 0) throw changed$2(FORM$2, `has no category group "${group}"`);
-		const option = `${CATEGORY_GROUPS} >> nth=${String(index)} >> [role="option"]:text-is("${type.replaceAll("\"", "\\\"")}")`;
-		if (await page.count(option) !== 1) throw changed$2(FORM$2, `has no one "${type}" in the category group "${group}"`);
-		await page.click(option);
+		for (const search of [type, category]) {
+			await page.fill(box.input, "");
+			await page.type(box.input, search);
+			await awaitElement$1(page, box.anyOption, FORM$2, "category options");
+			const index = (await page.texts(CATEGORY_GROUP_HEADERS)).map((text) => text.replace(/\s+/g, " ").trim()).indexOf(group);
+			if (index < 0) continue;
+			const option = `${CATEGORY_GROUPS} >> nth=${String(index)} >> [role="option"]:text-is("${type.replaceAll("\"", "\\\"")}")`;
+			if (await page.count(option) !== 1) throw changed$2(FORM$2, `has no one "${type}" in the category group "${group}"`);
+			await page.click(option);
+			return;
+		}
+		throw changed$2(FORM$2, `has no category group "${group}"`);
 	}
 	/** The category picker's groups and their headers ("Men > Tops"), in the same order. */
 	const CATEGORY_GROUPS = "ul#group-menu > div";
@@ -6120,24 +6238,30 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		if (!await appears$2(page, box.toggle, SIZE_PICKER_MS)) throw changed$2(FORM$2, `has no size picker (${box.toggle})`);
 		if (!await page.exists(box.open)) await page.click(box.toggle);
 		await awaitElement$1(page, box.anyOption, FORM$2, "size options");
-		const label = (await page.texts(box.anyOption)).find((option) => sizeOptionMatches$1(option, size));
+		const offered = (await page.texts(box.anyOption)).map((option) => option.trim());
+		const label = offered.includes(size) ? size : offered.find((option) => sizeOptionMatches$1(option, size));
 		if (label === void 0) throw changed$2(FORM$2, `offers no size "${size}" for this category`);
 		await page.click(box.option(label));
 	}
 	/** Searches Depop's brand list and picks the exact brand, or leaves the brand empty. */
+	/** Picks the brand, or leaves it empty; the brand the form then shows (`''` for none). */
 	async function pickBrand$1(page, brand) {
 		const box = combo("brand");
 		if (await page.exists(LISTING_FORM$2.clearBrand)) await page.click(LISTING_FORM$2.clearBrand);
 		await expectElement$2(page, box.input, FORM$2, "brand search");
-		if (brand === null) return;
+		if (brand === null) return "";
 		await page.type(box.input, brand);
 		await awaitElement$1(page, box.anyOption, FORM$2, "brand suggestions");
-		const exact = (await page.texts(box.anyOption)).find((suggestion) => suggestion.toLowerCase() === brand.toLowerCase());
-		if (exact === void 0) {
+		const suggestions = (await page.texts(box.anyOption)).map((suggestion) => suggestion.trim());
+		const own = brand.toLowerCase();
+		const longer = suggestions.filter((suggestion) => suggestion.toLowerCase().startsWith(`${own} `));
+		const picked = suggestions.find((suggestion) => suggestion.toLowerCase() === own) ?? (longer.length === 1 ? longer[0] : void 0);
+		if (picked === void 0) {
 			await page.fill(box.input, "");
-			return;
+			return "";
 		}
-		await page.click(box.option(exact));
+		await page.click(box.option(picked));
+		return picked;
 	}
 
 // src/depop/pages/edit-page.ts
@@ -6196,6 +6320,221 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	async function openHub(page, site) {
 		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
 		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
+	}
+
+// src/depop/pages/page-data.ts
+/**
+	* Depop's product records as its web API gives the seller's own listings (api.ts: `slug`,
+	* `status`, the whole `description`, `price`, and `dateUpdated`), and the reads every Depop
+	* module shares: the listing's own copy and SKU from a product's text, its revision, and its
+	* price. Reads use the data rather than the visible text: exact values (a decimal price, a
+	* status code, a change time) where the page shows formatted ones ("$45", "Listed 2 days ago").
+	*
+	* Every shape is checked; data that no longer has what Listora reads throws `PageChangedError`,
+	* so the step goes to the user instead of reading a wrong value.
+	*/
+	/** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
+	function expectShape$1(schema, value, page) {
+		const parsed = schema.safeParse(value);
+		if (parsed.success) return parsed.data;
+		const path = parsed.error.issues[0]?.path.map(String).join(".") ?? "";
+		throw new PageChangedError(`Depop's ${page} no longer has the ${path === "" ? "data" : path} Listora reads`);
+	}
+	const price = object({
+		priceAmount: string(),
+		currencyName: string()
+	});
+	/** One product, as the API's list of the seller's own listings gives it. */
+	const productRecordSchema$1 = object({
+		slug: string().regex(DEPOP_SLUG),
+		/** `ONSALE`, `SOLD`, `MARKED_AS_SOLD`, `DELETED`, or `BANNED` (STATUSES). */
+		status: string(),
+		/** The whole listing text: copy, Listora's SKU line, hashtags. */
+		description: string(),
+		price,
+		/** Depop's last change to the product, to the second. */
+		dateUpdated: string()
+	});
+	/** One sold item, as the sold items page embeds it (no buyer details are read). */
+	const soldItemSchema = object({
+		slug: string().regex(DEPOP_SLUG),
+		description: string(),
+		price,
+		soldAt: string()
+	});
+	/**
+	* Depop's product statuses, as the Selling API names them too (`STATUS_ONSALE`, ...). Deleted
+	* and banned products are `ended`, as the Depop API adapter reads them: Depop keeps them, and a
+	* listing Listora ended stays readable as ended.
+	*/
+	const STATUSES$3 = {
+		ONSALE: "active",
+		SOLD: "sold",
+		MARKED_AS_SOLD: "sold",
+		DELETED: "ended",
+		BANNED: "ended"
+	};
+	/**
+	* A product record as a read-back: Listora's status, a cents price, the copy without the SKU
+	* line and hashtags, and a revision.
+	*/
+	function productRead(record, site, page) {
+		const status = STATUSES$3[record.status];
+		if (status === void 0) throw new PageChangedError(`Depop's ${page} shows a product status Listora doesn't know`);
+		const { description, sku } = listingCopy(record.description);
+		return {
+			listing: {
+				found: true,
+				externalListingId: record.slug,
+				externalUrl: productUrl(site, record.slug),
+				status,
+				title: null,
+				description,
+				priceCents: dollars$1(record.price, page),
+				currency: "USD",
+				revision: revision$1(record.dateUpdated, page)
+			},
+			sku
+		};
+	}
+	/** The listing's own copy and Listora's SKU from a product's text (copy, SKU line, hashtags). */
+	function listingCopy(text) {
+		return splitSkuLine(splitDepopDescription(text).description);
+	}
+	/**
+	* The listing's revision: its last change time in milliseconds. Depop keeps it to the second;
+	* Listora's own changes to one seller's listings are always more than a second apart (every
+	* change is its own browser session, and sessions are at least two seconds apart,
+	* `PACING_FLOOR`), so each one has a newer revision.
+	*/
+	function revision$1(value, page) {
+		const time = Date.parse(value);
+		if (!Number.isSafeInteger(time) || time < 0) throw new PageChangedError(`Depop's ${page} shows a change time Listora can't read`);
+		return time;
+	}
+	/** A US dollar price (`"45.00"`) in cents. */
+	function dollars$1(value, page) {
+		if (value.currencyName !== "USD") throw new PageChangedError(`Depop's ${page} shows a price that is not in US dollars`);
+		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value.priceAmount);
+		if (match?.[1] === void 0) throw new PageChangedError(`Depop's ${page} shows a price Listora can't read`);
+		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
+	}
+
+// src/depop/pages/api.ts
+/**
+	* The reads Depop's own pages make from its web API (`webapi.depop.com`), made the same way, in
+	* the page with the session's token (`PageDriver.apiGet`): faster than loading a page, and they
+	* carry what the pages no longer show, Depop's last change time (read on the captain's session,
+	* 2026-10-27, from the requests the edit page and the selling hub make):
+	*
+	* - `GET /presentation/api/v1/products/by-slug/<slug>/edit-listing/`: the seller's own product,
+	*   as the edit page loads it (its `status`, whole `description`, `pricing`, and `updated_at`).
+	*   Only its seller gets it; Depop answers 404 for one it deleted (which its product page
+	*   answers 410 for).
+	* - `GET /api/v1/shop/products/?statusFilter=selling` (and `sold`): the seller's own listings,
+	*   newest first, as the selling hub loads them, 24 at a time with a cursor; each with its
+	*   `status`, `description`, `price`, and `dateUpdated`.
+	*
+	* Only reads: every change goes through Depop's own pages. A shape Listora doesn't know throws
+	* `PageChangedError`, as a page does.
+	*/
+	/** The cookie Depop's pages send as their bearer token. */
+	const TOKEN_COOKIE = "access_token";
+	const API = "web API";
+	/** One page of the seller's own listings. */
+	const PAGE_SIZE = 24;
+	const amount = object({ amount: string() });
+	const editListingSchema = object({
+		slug: string().regex(DEPOP_SLUG),
+		status: string(),
+		description: string(),
+		updated_at: string(),
+		pricing: object({
+			currency_name: string(),
+			final_price_key: string().optional()
+		}).catchall(unknown())
+	});
+	const priceSchema = object({ price_breakdown: object({ price: amount }) });
+	const feedSchema = object({
+		meta: object({
+			cursor: string().nullable(),
+			end: boolean()
+		}),
+		products: array(unknown())
+	});
+	/** Product statuses as the API names them (as the Selling API does). */
+	const STATUSES$2 = {
+		STATUS_ONSALE: "active",
+		STATUS_SOLD: "sold",
+		STATUS_MARKED_AS_SOLD: "sold",
+		STATUS_DELETED: "ended",
+		STATUS_BANNED: "ended"
+	};
+	/** Opens a Depop page first when the tab has none, so the read goes from Depop's own page. */
+	async function onDepop(page, site) {
+		if (page.url().startsWith(`${site.origin}/`)) return;
+		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
+	}
+	/**
+	* The seller's own product, as the edit page loads it; `null` when Depop answers 404 (a product
+	* it deleted, or another seller's).
+	*/
+	async function readOwnProduct(page, site, slug) {
+		const answer = await page.apiGet(`${site.api}/presentation/api/v1/products/by-slug/${encodeURIComponent(slug)}/edit-listing/`, { bearerCookie: TOKEN_COOKIE });
+		if (answer.status === 404) return null;
+		if (answer.status !== 200) throw changed$2(API, `answered ${String(answer.status)} for a product`);
+		const product = expectShape$1(editListingSchema, answer.body, API);
+		const status = STATUSES$2[product.status];
+		if (status === void 0) throw changed$2(API, "shows a product status Listora does not know");
+		if (product.pricing.currency_name !== "USD") throw changed$2(API, "shows a price that is not in US dollars");
+		const key = product.pricing.final_price_key ?? "original_price";
+		const price = expectShape$1(priceSchema, product.pricing[key], API).price_breakdown.price.amount;
+		const { description, sku } = listingCopy(product.description);
+		return {
+			state: {
+				found: true,
+				externalListingId: product.slug,
+				externalUrl: productUrl(site, product.slug),
+				status,
+				title: null,
+				description,
+				priceCents: cents$1(price),
+				currency: "USD",
+				revision: revision$1(product.updated_at, API)
+			},
+			sku
+		};
+	}
+	/**
+	* The seller's own listings for sale (`selling`) or sold, newest first: one page of them, and
+	* the cursor of the next (`null` after the last).
+	*/
+	async function readOwnListings(page, site, filter, cursor) {
+		const query = new URLSearchParams({
+			lang: "en",
+			cursor: cursor ?? "",
+			limit: String(PAGE_SIZE),
+			statusFilter: filter
+		});
+		const answer = await page.apiGet(`${site.api}/api/v1/shop/products/?${query.toString()}`, { bearerCookie: TOKEN_COOKIE });
+		if (answer.status !== 200) throw changed$2(API, `answered ${String(answer.status)} for the seller's listings`);
+		const feed = expectShape$1(feedSchema, answer.body, API);
+		return {
+			products: feed.products.map((entry) => {
+				const read = productRead(expectShape$1(productRecordSchema$1, entry, API), site, API);
+				return {
+					state: read.listing,
+					sku: read.sku
+				};
+			}),
+			next: feed.meta.end ? null : feed.meta.cursor
+		};
+	}
+	/** A US dollar amount (`"18.00"`) in cents. */
+	function cents$1(value) {
+		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
+		if (match?.[1] === void 0) throw changed$2(API, "shows a price Listora can't read");
+		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
 	}
 
 // src/depop/pages/flight-data.ts
@@ -6265,118 +6604,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 		return found;
 	}
 
-// src/depop/pages/page-data.ts
-/**
-	* The data Depop's pages are rendered from. Depop's site is a Next.js app, and every page embeds
-	* its data as JSON in `script#__NEXT_DATA__` (`props.pageProps`). Reads use it rather than the
-	* visible text: it holds exact values (a decimal price, a status code, a change time) where the
-	* page shows formatted ones ("$45", "Listed 2 days ago"), and its keys change far less often
-	* than its markup. The keys are Listora's model of Depop's pages (docs/features/depop-automation.md,
-	* "Live verification").
-	*
-	* Every shape is checked; a page whose data no longer has what Listora reads throws
-	* `PageChangedError`, so the step goes to the user instead of reading a wrong value.
-	*/
-	const PAGE_DATA = "script#__NEXT_DATA__";
-	/** The page's `props.pageProps`; `page` names the page in errors ("product page"). */
-	async function readPageProps(driver, page) {
-		const script = await driver.text(PAGE_DATA);
-		if (script === null) throw new PageChangedError(`Depop's ${page} no longer embeds the data Listora reads`);
-		let data;
-		try {
-			data = JSON.parse(script);
-		} catch {
-			throw new PageChangedError(`Depop's ${page} embeds data Listora can't parse`);
-		}
-		return expectShape$1(object({ props: object({ pageProps: unknown() }) }), data, page).props.pageProps;
-	}
-	/** Checks `value` against `schema`; a mismatch names the page and the first missing field. */
-	function expectShape$1(schema, value, page) {
-		const parsed = schema.safeParse(value);
-		if (parsed.success) return parsed.data;
-		const path = parsed.error.issues[0]?.path.map(String).join(".") ?? "";
-		throw new PageChangedError(`Depop's ${page} no longer has the ${path === "" ? "data" : path} Listora reads`);
-	}
-	const price = object({
-		priceAmount: string(),
-		currencyName: string()
-	});
-	/** One product, as product pages and the selling hub embed it. */
-	const productRecordSchema$1 = object({
-		slug: string().regex(DEPOP_SLUG),
-		/** `ONSALE`, `SOLD`, `MARKED_AS_SOLD`, `DELETED`, or `BANNED` (STATUSES). */
-		status: string(),
-		/** The whole listing text: copy, Listora's SKU line, hashtags. */
-		description: string(),
-		price,
-		/** Depop's last change to the product, to the second. */
-		dateUpdated: string()
-	});
-	/** One sold item, as the sold items page embeds it (no buyer details are read). */
-	const soldItemSchema = object({
-		slug: string().regex(DEPOP_SLUG),
-		description: string(),
-		price,
-		soldAt: string()
-	});
-	/**
-	* Depop's product statuses, as the Selling API names them too (`STATUS_ONSALE`, ...). Deleted
-	* and banned products are `ended`, as the Depop API adapter reads them: Depop keeps them, and a
-	* listing Listora ended stays readable as ended.
-	*/
-	const STATUSES$2 = {
-		ONSALE: "active",
-		SOLD: "sold",
-		MARKED_AS_SOLD: "sold",
-		DELETED: "ended",
-		BANNED: "ended"
-	};
-	/**
-	* A product record as a read-back: Listora's status, a cents price, the copy without the SKU
-	* line and hashtags, and a revision.
-	*/
-	function productRead(record, site, page) {
-		const status = STATUSES$2[record.status];
-		if (status === void 0) throw new PageChangedError(`Depop's ${page} shows a product status Listora doesn't know`);
-		const { description, sku } = listingCopy(record.description);
-		return {
-			listing: {
-				found: true,
-				externalListingId: record.slug,
-				externalUrl: productUrl(site, record.slug),
-				status,
-				title: null,
-				description,
-				priceCents: dollars$1(record.price, page),
-				currency: "USD",
-				revision: revision$1(record.dateUpdated, page)
-			},
-			sku
-		};
-	}
-	/** The listing's own copy and Listora's SKU from a product's text (copy, SKU line, hashtags). */
-	function listingCopy(text) {
-		return splitSkuLine(splitDepopDescription(text).description);
-	}
-	/**
-	* The listing's revision: its last change time in milliseconds. Depop keeps it to the second;
-	* Listora's own changes to one seller's listings are always more than a second apart (every
-	* change is its own browser session, and sessions are at least two seconds apart,
-	* `PACING_FLOOR`), so each one has a newer revision.
-	*/
-	function revision$1(value, page) {
-		const time = Date.parse(value);
-		if (!Number.isSafeInteger(time) || time < 0) throw new PageChangedError(`Depop's ${page} shows a change time Listora can't read`);
-		return time;
-	}
-	/** A US dollar price (`"45.00"`) in cents. */
-	function dollars$1(value, page) {
-		if (value.currencyName !== "USD") throw new PageChangedError(`Depop's ${page} shows a price that is not in US dollars`);
-		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value.priceAmount);
-		if (match?.[1] === void 0) throw new PageChangedError(`Depop's ${page} shows a price Listora can't read`);
-		return Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0"));
-	}
-
 // src/depop/pages/product-page.ts
 /**
 	* A product's page (`/products/<slug>/`), as its seller sees it: the read-back every automated
@@ -6388,8 +6615,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* listing `description` (copy, Listora's SKU line, hashtags). The price is in the page's
 	* schema.org data (`script[data-testid="meta__jsonLd"]`, a `Product` whose `offers` has the
 	* `price`, its `priceCurrency`, and the product's `url`). The page no longer says when the
-	* product last changed, so a read has no revision, and the adapter confirms a change by reading
-	* it twice (`readFreshness: 'none'`).
+	* product last changed, so the read takes the product from Depop's web API as the edit page
+	* does (api.ts), with its last change time as the revision; the page's own data is read only
+	* for a product the API doesn't give its seller, and then has no revision.
 	*
 	* - Status: Depop's product status (on sale, sold, deleted). The seller's own product page
 	*   (Depop opens `/products/<slug>/manage/` for them) does not always carry the record: the
@@ -6408,7 +6636,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 	* the one that offers this slug.
 	*/
 structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application/ld+json\"]" };
-	const PAGE$10 = "product page";
+	const PAGE$9 = "product page";
 	/** The product as the page's first query loaded it. */
 	const productRecordSchema = object({
 		slug: string().regex(DEPOP_SLUG),
@@ -6443,7 +6671,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 		STATUS_DELETED: "ended",
 		STATUS_BANNED: "ended"
 	};
-	/** Opens the product's page and reads it. */
+	/**
+	* Opens the product's page and reads it: its seller's own data from Depop's web API, with
+	* Depop's last change time (api.ts), or, for a product the API doesn't give its seller, the
+	* page's own data, without one.
+	*/
 	async function readProduct(page, site, slug) {
 		await page.goto(productUrl(site, slug));
 		if (page.status() === 410) return {
@@ -6460,18 +6692,24 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			},
 			sku: null
 		};
+		const own = await readOwnProduct(page, site, slug);
+		if (own !== null) return own;
+		return readProductPage(page, site, slug);
+	}
+	/** The product's page's own data (already open): no change time, so no revision. */
+	async function readProductPage(page, site, slug) {
 		const records = findRecords(await flightRows(page), (record) => record["slug"] === slug && "status" in record && "description" in record);
 		const offer = await structuredOffer(page, slug);
 		let status;
 		let text;
 		if (records.length > 0) {
-			const product = expectShape$1(productRecordSchema, records[0], PAGE$10);
+			const product = expectShape$1(productRecordSchema, records[0], PAGE$9);
 			status = STATUSES$1[product.status];
-			if (status === void 0) throw changed$2(PAGE$10, "shows a product status Listora does not know");
+			if (status === void 0) throw changed$2(PAGE$9, "shows a product status Listora does not know");
 			text = product.description;
 		} else {
 			status = offer.availability === void 0 ? void 0 : AVAILABILITY[offer.availability];
-			if (status === void 0 || offer.description === void 0) throw changed$2(PAGE$10, "has none of the product data Listora reads");
+			if (status === void 0 || offer.description === void 0) throw changed$2(PAGE$9, "has none of the product data Listora reads");
 			text = offer.description;
 		}
 		const priceCents = offer.priceCents;
@@ -6500,140 +6738,25 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 				return [];
 			}
 		});
-		if (blocks.length === 0) throw changed$2(PAGE$10, "has no product data (structured data)");
+		if (blocks.length === 0) throw changed$2(PAGE$9, "has no product data (structured data)");
 		const own = blocks.find((block) => {
 			const read = structuredDataSchema.safeParse(block);
 			return read.success && read.data.offers.url.includes(`/products/${slug}/`);
 		});
 		if (own === void 0) {
-			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$2(PAGE$10, "offers a different product");
-			expectShape$1(structuredDataSchema, blocks[0], PAGE$10);
-			throw changed$2(PAGE$10, "has none of the product data Listora reads");
+			if (blocks.find((block) => structuredDataSchema.safeParse(block).success) !== void 0) throw changed$2(PAGE$9, "offers a different product");
+			expectShape$1(structuredDataSchema, blocks[0], PAGE$9);
+			throw changed$2(PAGE$9, "has none of the product data Listora reads");
 		}
-		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$10);
-		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$10, "shows a price that is not in US dollars");
+		const { offers, description } = expectShape$1(structuredDataSchema, own, PAGE$9);
+		if (offers.priceCurrency !== "USD") throw changed$2(PAGE$9, "shows a price that is not in US dollars");
 		const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(offers.price));
-		if (match?.[1] === void 0) throw changed$2(PAGE$10, "shows a price Listora can't read");
+		if (match?.[1] === void 0) throw changed$2(PAGE$9, "shows a price Listora can't read");
 		return {
 			priceCents: Number(match[1]) * 100 + Number((match[2] ?? "0").padEnd(2, "0")),
 			...offers.availability === void 0 ? {} : { availability: offers.availability },
 			...description === void 0 ? {} : { description }
 		};
-	}
-
-// src/depop/pages/selling-page.ts
-/**
-	* The seller's listings for sale (`/sellinghub/selling/`), newest first, a page at a time
-	* (`?page=N`). The page embeds each product as product pages do (page-data.ts), with its text,
-	* price, status, and last change, so a row reads exactly as its product page would. Listings
-	* that sold or were deleted are not on it.
-	*/
-	const PAGE$9 = "selling page";
-	const sellingPageSchema = object({
-		products: array(productRecordSchema$1),
-		hasMore: boolean()
-	});
-	/** Opens one page of the seller's listings for sale and reads it. */
-	async function readSellingPage(page, site, pageNumber) {
-		await page.goto(absolute$2(site, DEPOP_PATHS.selling(pageNumber)));
-		const props = expectShape$1(sellingPageSchema, await readPageProps(page, PAGE$9), PAGE$9);
-		return {
-			products: props.products.map((record) => productRead(record, site, PAGE$9)),
-			hasMore: props.hasMore
-		};
-	}
-
-// src/depop/pages/shop-page.ts
-	const SHOP_PAGE = {
-		userMenu: "button#userNavItem-button",
-		/** The open menu's "Your profile": a link, or a holder of one. */
-		profile: "[data-testid=\"actionMenu__nav-profileLinkButton\"]",
-		profileLink: "a[data-testid=\"actionMenu__nav-profileLinkButton\"], [data-testid=\"actionMenu__nav-profileLinkButton\"] a",
-		/** Links to products, not the header's Sell link (`/products/create/`), which every page has. */
-		productLinks: "a[href*=\"/products/\"]:not([href*=\"/products/create\"])"
-	};
-	/** A Depop username, the one segment of a shop's path. */
-	const USERNAME = /^[a-z0-9][a-z0-9._]{1,29}$/i;
-	/** Depop's own top-level pages, which a single-name path may also be. */
-	const SITE_PATHS = new Set("about app blog brand brands category checkout cookies discover download explore help legal likes login messages news privacy products safety search sell sellinghub settings shop signup sitemap terms".split(" "));
-	/** How long the menu and the shop's product list get to appear, and how often they are looked at. */
-	const APPEAR_MS$1 = 15e3;
-	/** How long the user menu gets to open before its button is clicked again. */
-	const MENU_RETRY_MS = 3e3;
-	const LOOK_EVERY_MS$4 = 500;
-	/** The signed-in seller's username, from the profile link in the header's user menu. */
-	async function findSeller(page, site) {
-		await page.goto(absolute$2(site, DEPOP_PATHS.hub));
-		await awaitElement$1(page, HUB_PAGE.signedInUser, "selling hub", "signed-in user's avatar");
-		await page.click(SHOP_PAGE.userMenu);
-		const end = Date.now() + APPEAR_MS$1;
-		let reopenAt = Date.now() + MENU_RETRY_MS;
-		for (;;) {
-			const shown = usernameOf(new URL(page.url()).pathname);
-			if (shown !== null) return shown;
-			if (await page.exists(SHOP_PAGE.profile)) {
-				const hrefs = (await page.attributes(SHOP_PAGE.profileLink, "href")).flatMap((href) => {
-					const path = href === null ? null : sitePath(href, site);
-					return path === null ? [] : [path];
-				});
-				const names = [...new Set(hrefs.map(usernameOf))];
-				if (names.length === 1 && names[0] !== null && names[0] !== void 0) return names[0];
-				if (names.length > 1) throw changed$2("user menu", `has a profile item with ${String(names.length)} shop links`);
-				return openedProfile(page);
-			}
-			if (Date.now() >= end) throw changed$2("user menu", "has no profile item");
-			if (Date.now() >= reopenAt) {
-				await page.click(SHOP_PAGE.userMenu);
-				reopenAt = Date.now() + MENU_RETRY_MS;
-			}
-			await lookAgain$1(page, LOOK_EVERY_MS$4);
-		}
-	}
-	/** Opens the menu's "Your profile" and reads the username from the address it opens. */
-	async function openedProfile(page) {
-		await page.click(SHOP_PAGE.profile);
-		const end = Date.now() + APPEAR_MS$1;
-		for (;;) {
-			const shown = usernameOf(new URL(page.url()).pathname);
-			if (shown !== null) return shown;
-			if (Date.now() >= end) throw changed$2("user menu", "profile item opened no seller's shop");
-			await lookAgain$1(page, LOOK_EVERY_MS$4);
-		}
-	}
-	/**
-	* The slugs of the newest products the seller's shop shows, newest first, at most `limit`; none
-	* for a shop with nothing for sale (or one whose list didn't come in time, so absence is never
-	* definitive).
-	*/
-	async function newestProducts(page, site, username, limit) {
-		await page.goto(absolute$2(site, `/${encodeURIComponent(username)}/`));
-		if (page.status() === 404) throw changed$2("shop page", "is not there for the signed-in seller");
-		const end = Date.now() + APPEAR_MS$1;
-		while (!await page.exists(SHOP_PAGE.productLinks) && Date.now() < end) await lookAgain$1(page, LOOK_EVERY_MS$4);
-		const slugs = [];
-		for (const href of await page.attributes(SHOP_PAGE.productLinks, "href")) {
-			const slug = href === null ? null : slugOf(href, site);
-			if (slug !== null && !slugs.includes(slug)) slugs.push(slug);
-			if (slugs.length >= limit) break;
-		}
-		return slugs;
-	}
-	/** A link's path when it is on the site, else `null`. */
-	function sitePath(href, site) {
-		if (!URL.canParse(href, site.origin)) return null;
-		const url = new URL(href, site.origin);
-		return url.origin === site.origin ? url.pathname : null;
-	}
-	function usernameOf(path) {
-		const segment = /^\/([^/]+)\/?$/.exec(path)?.[1];
-		if (segment === void 0) return null;
-		const name = decodeURIComponent(segment);
-		return USERNAME.test(name) && !SITE_PATHS.has(name.toLowerCase()) ? name : null;
-	}
-	function slugOf(href, site) {
-		if (!URL.canParse(href, site.origin)) return null;
-		const url = new URL(href, site.origin);
-		return url.origin === site.origin ? slugFromPath(url.pathname) : null;
 	}
 
 // src/depop/pages/sold-items-page.ts
@@ -6664,11 +6787,11 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 
 // src/depop/scripts.ts
 /**
-	* How many of the newest listings for sale a lookup by SKU looks through. A listing whose slug
-	* Listora never learned is one it just posted, so it is among the newest.
+	* Pages of the seller's newest listings for sale (24 each) a lookup by SKU looks through. A
+	* listing whose slug Listora never learned is one it just posted, so it is among the newest.
 	*/
-	const SKU_LOOKUP_DEPTH$2 = 8;
-	/** Pages of the selling page one read goes through at most (newest first). */
+	const SKU_LOOKUP_PAGES = 1;
+	/** Pages of the seller's listings for sale (24 each) one read goes through at most. */
 	const MAX_LISTING_PAGES$2 = 25;
 	/** Pages of sold items one sale check goes through at most (newest first). */
 	const MAX_SOLD_PAGES$2 = 5;
@@ -6692,18 +6815,23 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			fixHint: "Relist the item as a new Depop listing."
 		});
 		/**
-		* The listing the seller's newest listings for sale hold under this SKU, if any. Their shop
-		* links to them; each one's SKU is on its own page, so a listing found by SKU reads exactly as
-		* it does by its slug.
+		* The listing the seller's newest listings for sale hold under this SKU, if any: from the
+		* same list of the seller's own listings the selling hub loads (pages/api.ts), each with its
+		* text and last change time, so it reads exactly as it does by its slug.
 		*/
 		async function findBySku(step, sku) {
-			const seller = await step("find the seller", { mutates: false }, (page) => findSeller(page, site));
-			const slugs = await step("look at the newest listings", { mutates: false }, (page) => newestProducts(page, site, seller, 8));
-			for (const slug of slugs) {
-				const read = await step("read the listing", { mutates: false }, (page) => readProduct(page, site, slug));
-				if (read.sku === sku) return read;
-			}
-			return null;
+			return step("look for the listing", { mutates: false }, async (page) => {
+				await onDepop(page, site);
+				let cursor = null;
+				for (let number = 1; number <= 1; number += 1) {
+					const shown = await readOwnListings(page, site, "selling", cursor);
+					const found = shown.products.find((product) => product.sku === sku);
+					if (found !== void 0) return found;
+					if (shown.next === null) return null;
+					cursor = shown.next;
+				}
+				return null;
+			});
 		}
 		/**
 		* After a submit: Depop's refusal, or the product it opened. The product is read back by the
@@ -6728,7 +6856,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			const sku = listingSku(op.listing);
 			if (op.attempt > 1) {
 				const earlier = await findBySku(step, sku);
-				if (earlier?.state.found === true) return {
+				if (earlier !== null) return {
 					...revisionOf$1(earlier),
 					externalListingId: earlier.state.externalListingId
 				};
@@ -6749,8 +6877,8 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			if (result.type !== "applied" || result.externalListingId !== void 0) return result;
 			try {
 				const found = await findBySku(step, sku);
-				if (found?.state.found === true) return {
-					...result,
+				if (found !== null) return {
+					...revisionOf$1(found),
 					externalListingId: found.state.externalListingId
 				};
 			} catch {}
@@ -6865,13 +6993,18 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			},
 			listings: async (step) => {
 				const listings = [];
+				let cursor = null;
 				for (let number = 1; number <= 25; number += 1) {
-					const shown = await step("read the listings for sale", { mutates: false }, (page) => readSellingPage(page, site, number));
-					listings.push(...shown.products.map((product) => product.listing));
-					if (!shown.hasMore) return {
+					const shown = await step("read the listings for sale", { mutates: false }, async (page) => {
+						await onDepop(page, site);
+						return readOwnListings(page, site, "selling", cursor);
+					});
+					listings.push(...shown.products.map((product) => product.state));
+					if (shown.next === null) return {
 						listings,
 						complete: true
 					};
+					cursor = shown.next;
 				}
 				return {
 					listings,
@@ -6880,7 +7013,7 @@ structuredData: "script[data-testid=\"meta__jsonLd\"], script[type=\"application
 			}
 		};
 	}
-	/** An applied change, with the revision the product page showed after it. */
+	/** An applied change, with the revision a read showed after it. */
 	function revisionOf$1(read) {
 		return read.state.found && read.state.revision !== null ? {
 			type: "applied",
@@ -9596,10 +9729,10 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 			marketplace: "depop",
 			origins: ["https://www.depop.com", "https://depop.com"],
 			cookieDomains: ["depop.com"],
-			apiOrigins: [],
+			apiOrigins: [DEPOP_API_URL],
 			loginUrl: "https://www.depop.com/login/",
 			emailsSignInLinks: true,
-			pacing: DEFAULT_PACING,
+			pacing: DEPOP_PACING,
 			limits: DEFAULT_LIMITS,
 			challenges: DEPOP_CHALLENGE_SIGNS,
 			privateSelectors: DEPOP_PRIVATE_SELECTORS,
@@ -11233,7 +11366,7 @@ toggle: "button[data-testid=\"ActivateDeactivateButton\"]" };
 		switch (set.name) {
 			case "depop": {
 				const scripts = createDepopScripts({
-					site: { origin },
+					site: depopSite(set.siteUrl),
 					photos
 				});
 				return (call, step) => runScriptCall(scripts, call, step);

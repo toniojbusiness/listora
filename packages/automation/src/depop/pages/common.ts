@@ -10,6 +10,8 @@ import { DEPOP_PATHS } from '../site.ts';
 /** The site a script runs against: Depop's origin, or the fake Depop site's. */
 export interface DepopSite {
   readonly origin: string;
+  /** Depop's web API (`https://webapi.depop.com`), or the fake site's own origin. */
+  readonly api: string;
 }
 
 export function absolute(site: DepopSite, path: string): string {

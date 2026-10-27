@@ -5,9 +5,10 @@
     "outDir": ".tsbuild",
     "tsBuildInfoFile": ".tsbuild/tsconfig.tsbuildinfo"
   },
-  "include": ["src"],
+  "include": ["src", "src/**/*.json"],
   "references": [
     { "path": "../shared" },
+    { "path": "../analysis" },
     { "path": "../testing" },
     { "path": "../db" },
     { "path": "../storage" },
