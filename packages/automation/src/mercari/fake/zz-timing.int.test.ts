@@ -21,6 +21,22 @@ it('times the phone timeout case', async () => {
     pacing: QUICK_PACING,
   };
   const sessions = new PhoneTestSessions(site, profile, MERCARI_STEP_TIMEOUT_MS);
+  const t0 = Date.now();
+  sessions.prepare = (host) => {
+    host.defaultAnswer = 'declined';
+    for (const name of ['navigate', 'evaluate', 'settle', 'state', 'pageData'] as const) {
+      const original = (host as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>)[name]!.bind(host);
+      (host as unknown as Record<string, unknown>)[name] = async (...args: unknown[]) => {
+        const began = Date.now() - t0;
+        const what = name === 'evaluate' ? String(args[0]).split('\n').find((line) => /^\s*(const element|await waitUntil|const elements|return)/.test(line))?.trim().slice(0, 60) + ' ' + JSON.stringify(args[1]).slice(0, 80) : '';
+        try {
+          return await original(...args);
+        } finally {
+          log('host', name, began, Date.now() - t0, what);
+        }
+      };
+    }
+  };
   const adapter = createMercariAutomationAdapter({
     siteUrl: site.url,
     profile: { ...automationProfile('mercari'), pacing: QUICK_PACING },
