@@ -70,7 +70,7 @@ jobs:
         with:
           name: e2e-full-results
           path: |
-            .build/ios/E2EFull.xcresult
+            .build/ios/E2EFull*.xcresult
             .build/ios/e2e-full-logs
             .build/ios/e2e-full-summary.txt
           retention-days: 14

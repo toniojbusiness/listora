@@ -211,8 +211,12 @@ and worker logs) and the failing-test summary, and puts the summary in the job s
 failure names its test instead of a bare `** TEST FAILED **`. `iOS checks` is the one result to
 require before a merge.
 
-**Flaky test rule.** `make ios-test` (and each of its halves) retries a failing test up to twice
-(`-retry-tests-on-failure -test-iterations 3`, locally and in CI). A test that fails every try
+**Flaky test rule.** `make ios-test` (and each of its halves) retries a failing test up to twice,
+locally and in CI. The unit and package tests use xcodebuild's own retry
+(`-retry-tests-on-failure -test-iterations 3`). That retry never ran for a UI test (every UI test
+class sets `continueAfterFailure = false` in an async `setUp`, and XCTest then runs a failing test
+once), so `scripts/ios-test-run.sh` runs the failed UI tests again by themselves, in the same
+local stack, into `UI-rerun-1.xcresult` and `UI-rerun-2.xcresult`. A test that fails every try
 fails the run. A test that passes only on a retry does not block the merge, but it is still
 flaky: the summary lists it under "Flaky", and it gets a follow-up fix (open a task for it in
 the pull request description) rather than being left to retry forever.

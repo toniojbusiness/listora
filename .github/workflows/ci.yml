@@ -338,7 +338,7 @@ jobs:
         with:
           name: ios-ui-test-results-${{ matrix.shard }}
           path: |
-            .build/ios/UI.xcresult
+            .build/ios/UI*.xcresult
             .build/ios/e2e-logs
             .build/ios/test-summary.txt
           retention-days: 7

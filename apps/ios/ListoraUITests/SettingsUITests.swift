@@ -30,9 +30,12 @@ final class SettingsUITests: XCTestCase {
         app.descendants(matching: .any)[identifier].firstMatch
     }
 
-    /// Scrolls Settings until the row is built and on screen: a list builds only what it shows.
+    /// Scrolls Settings until the row is built and clear of the screen's bottom edge: a list
+    /// builds only what it shows. Hittable is not enough: a row half under the bottom edge is
+    /// hittable, and on CI the tap at its middle (the home indicator's strip) closed the sheet.
     private func reveal(_ target: XCUIElement) -> XCUIElement {
-        for _ in 0 ..< 6 where !(target.exists && target.isHittable) {
+        let bottom = app.windows.firstMatch.frame.maxY - 100
+        for _ in 0 ..< 6 where !(target.exists && target.isHittable && target.frame.maxY < bottom) {
             app.collectionViews.firstMatch.swipeUp()
         }
         return target

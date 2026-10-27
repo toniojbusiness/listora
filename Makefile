@@ -85,6 +85,8 @@ ios-check-ats: ios-generate
 # A test that hangs (a UI test waiting on a stuck simulator) fails after 5 minutes instead of
 # blocking the run. A failing test is retried up to twice: one that passes on a retry does not fail
 # the run, but the summary lists it as flaky so it gets a follow-up fix (README, CI section).
+# xcodebuild retries the unit and package tests itself; it never retried a UI test here, so the UI
+# runs go through scripts/ios-test-run.sh, which runs the failed tests again.
 IOS_TEST_LIMITS := -test-timeouts-enabled YES -default-test-execution-time-allowance 300 \
 	-retry-tests-on-failure -test-iterations 3
 # Optional file the failing-test summary of ios-unit-test or ios-ui-test is also written to (CI
@@ -115,25 +117,22 @@ ios-unit-test: ios-build-for-testing
 	@status=0; \
 	$(XCODEBUILD) test-without-building -skip-testing:ListoraUITests -parallel-testing-enabled NO \
 		$(IOS_TEST_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/Unit.xcresult || status=$$?; \
-	scripts/ios-test-summary.sh $(IOS_BUILD_DIR)/Unit.xcresult '$(IOS_TEST_SUMMARY_FILE)'; \
+	scripts/ios-test-summary.sh '$(IOS_TEST_SUMMARY_FILE)' $(IOS_BUILD_DIR)/Unit.xcresult; \
 	exit $$status
 
 ## UI tests (ListoraUITests), or the IOS_UI_SHARD shard of them. The ones that go through the
 ## backend run against the local stack (packages/e2e): the real API and worker with fakes, on a
 ## scratch database of this checkout's Postgres cluster. Its logs: .build/ios/e2e-logs.
 ios-ui-test: ios-build-for-testing ios-e2e-ready
-	rm -rf $(IOS_BUILD_DIR)/UI.xcresult $(IOS_BUILD_DIR)/e2e-logs
+	rm -rf $(IOS_BUILD_DIR)/UI*.xcresult $(IOS_BUILD_DIR)/e2e-logs
 	@if [ -n '$(IOS_UI_SHARD)' ]; then \
 		tests=$$(scripts/ios-ui-shard.sh $(subst /, ,$(IOS_UI_SHARD))) || exit 2; \
 		echo "UI test shard $(IOS_UI_SHARD):" $$(echo "$$tests" | sed 's|-only-testing:ListoraUITests/||'); \
 	else \
 		tests=-only-testing:ListoraUITests; \
 	fi; \
-	status=0; \
-	$(E2E_STACK) -- $(XCODEBUILD) test-without-building $$tests -parallel-testing-enabled NO \
-		$(IOS_TEST_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/UI.xcresult || status=$$?; \
-	scripts/ios-test-summary.sh $(IOS_BUILD_DIR)/UI.xcresult '$(IOS_TEST_SUMMARY_FILE)'; \
-	exit $$status
+	$(E2E_STACK) -- scripts/ios-test-run.sh $(IOS_BUILD_DIR)/UI.xcresult '$(IOS_TEST_SUMMARY_FILE)' -- \
+		$(XCODEBUILD) test-without-building $$tests -parallel-testing-enabled NO $(IOS_TEST_LIMITS)
 
 ## The full-stack end-to-end suite (docs/features/e2e.md): FullStackUITests on the simulator,
 ## against the full local stack (`--marketplaces all`): the API, the worker, and the browser
@@ -149,12 +148,11 @@ E2E_FULL_LIMITS := -test-timeouts-enabled YES -default-test-execution-time-allow
 
 e2e-full: ios-generate ios-simulator ios-check-ats ios-e2e-ready
 	scripts/dev-browser.sh
-	rm -rf $(IOS_BUILD_DIR)/E2EFull.xcresult $(IOS_BUILD_DIR)/e2e-full-logs
-	@status=0; \
-	$(E2E_FULL_STACK) -- $(XCODEBUILD) test -only-testing:ListoraUITests/FullStackUITests \
-		-parallel-testing-enabled NO $(E2E_FULL_LIMITS) -resultBundlePath $(IOS_BUILD_DIR)/E2EFull.xcresult || status=$$?; \
-	scripts/ios-test-summary.sh $(IOS_BUILD_DIR)/E2EFull.xcresult '$(IOS_TEST_SUMMARY_FILE)'; \
-	exit $$status
+	rm -rf $(IOS_BUILD_DIR)/E2EFull*.xcresult $(IOS_BUILD_DIR)/e2e-full-logs
+	$(XCODEBUILD) build-for-testing
+	$(E2E_FULL_STACK) -- scripts/ios-test-run.sh $(IOS_BUILD_DIR)/E2EFull.xcresult '$(IOS_TEST_SUMMARY_FILE)' -- \
+		$(XCODEBUILD) test-without-building -only-testing:ListoraUITests/FullStackUITests \
+		-parallel-testing-enabled NO $(E2E_FULL_LIMITS)
 
 ## Check that the local stack can start: backend dependencies installed, Postgres cluster running.
 ios-e2e-ready:
